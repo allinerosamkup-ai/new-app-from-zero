@@ -5,6 +5,7 @@ import { useAuthStore } from '../providers/auth_store';
 import { LucideSparkles, LucidePlus, LucideChevronLeft, LucideChevronRight, LucideLightbulb, LucideX } from 'lucide-react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
+import { appColors, appRadius, appSpacing, appTypography } from '../theme/appTheme';
 
 /**
  * PlannerScreen: Versão com Drag-and-drop fluido.
@@ -78,186 +79,423 @@ export default function PlannerScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-        {/* Date Navigator */}
-        <View className="flex-row items-center justify-between p-4 bg-white border-b border-gray-100">
-          <TouchableOpacity onPress={() => changeDate(-1)} className="p-2">
-            <LucideChevronLeft size={24} color="#374151" />
-          </TouchableOpacity>
-          
-          <View className="items-center">
-            <Text className="text-lg font-bold text-gray-800">
-              {new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR', { 
-                weekday: 'short', 
-                day: 'numeric', 
-                month: 'short' 
-              })}
-            </Text>
-            <Text className="text-xs text-gray-500 uppercase tracking-widest">
-              Timeline do Dia
-            </Text>
-          </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: appColors.background }}>
+      {/* Date Navigator */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: appSpacing.lg,
+          paddingVertical: appSpacing.md,
+          borderBottomWidth: 0,
+        }}
+      >
+        <TouchableOpacity onPress={() => changeDate(-1)} style={{ padding: appSpacing.sm }}>
+          <LucideChevronLeft size={22} color={appColors.textSecondary} />
+        </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => changeDate(1)} className="p-2">
-            <LucideChevronRight size={24} color="#374151" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Timeline View */}
-        <View className="flex-1">
-          {isLoading && blocks.length === 0 ? (
-            <View className="flex-1 justify-center items-center">
-              <ActivityIndicator size="large" color="#3b82f6" />
-            </View>
-          ) : (
-            <ScrollView 
-              className="flex-1"
-              contentContainerStyle={{ height: 24 * 60 + 100 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {/* Hour lines */}
-              {Array.from({ length: 24 }).map((_, hour) => (
-                <View 
-                  key={hour} 
-                  style={{ top: hour * 60 }}
-                  className="absolute left-0 right-0 h-[1px] bg-gray-100 flex-row items-center"
-                >
-                  <View className="w-14 items-end pr-2">
-                    <Text className="text-[10px] text-gray-400 font-medium">
-                      {hour.toString().padStart(2, '0')}:00
-                    </Text>
-                  </View>
-                  <View className="flex-1 h-[1px] bg-gray-100" />
-                </View>
-              ))}
-
-              {/* Draggable Blocks */}
-              {blocks.map((block) => (
-                <DraggableBlock 
-                  key={block.id} 
-                  block={block} 
-                  onMove={(newStartTime) => moveBlock(block.id, newStartTime)}
-                />
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
-        {/* Floating Actions Bar */}
-        <View className="absolute bottom-6 left-6 right-6 flex-row justify-between items-center">
-          <TouchableOpacity className="w-14 h-14 bg-purple-600 rounded-full items-center justify-center shadow-lg">
-            <LucideLightbulb size={24} color="white" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="w-16 h-16 bg-blue-600 rounded-full items-center justify-center shadow-xl border-4 border-white"
-            onPress={handleOpenModal}
+        <View style={{ alignItems: 'center' }}>
+          <Text
+            style={{
+              ...appTypography.subtitle,
+              color: appColors.textPrimary,
+            }}
           >
-            <LucidePlus size={32} color="white" />
-          </TouchableOpacity>
+            {new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+            })}
+          </Text>
+          <Text
+            style={{
+              fontSize: 11,
+              color: appColors.textSecondary,
+              textTransform: 'uppercase',
+              letterSpacing: 2,
+            }}
+          >
+            Timeline do Dia
+          </Text>
         </View>
 
-        {/* Modal: Novo Bloco */}
-        <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 justify-end">
-            <View className="bg-white rounded-t-3xl p-6 shadow-xl">
-              {/* Header */}
-              <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-xl font-bold text-gray-800">Novo Bloco</Text>
-                <TouchableOpacity onPress={() => setShowModal(false)} className="p-1">
-                  <LucideX size={22} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
+        <TouchableOpacity onPress={() => changeDate(1)} style={{ padding: appSpacing.sm }}>
+          <LucideChevronRight size={22} color={appColors.textSecondary} />
+        </TouchableOpacity>
+      </View>
 
-              {/* Título */}
-              <Text className="text-sm font-semibold text-gray-600 mb-1">O que você vai fazer?</Text>
-              <TextInput
-                className="bg-gray-100 rounded-xl px-4 py-3 text-gray-800 mb-4"
-                placeholder="Ex: Foco no projeto, Caminhada..."
-                value={newTitle}
-                onChangeText={setNewTitle}
+      {/* Timeline View */}
+      <View style={{ flex: 1 }}>
+        {isLoading && blocks.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={appColors.primary} />
+          </TouchableOpacity>
+          </View>
+        ) : (
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ height: 24 * 60 + 120 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Hour lines */}
+            {Array.from({ length: 24 }).map((_, hour) => (
+              <View
+                key={hour}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: hour * 60,
+                  height: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+              >
+                <View
+                  style={{
+                    width: 56,
+                    alignItems: 'flex-end',
+                    paddingRight: appSpacing.sm,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      color: appColors.textSecondary,
+                      fontWeight: '500',
+                    }}
+                  >
+                    {hour.toString().padStart(2, '0')}:00
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    backgroundColor: appColors.borderSubtle,
+                    opacity: 0.35,
+                  }}
+                />
+              </View>
+            ))}
+
+            {/* Draggable Blocks */}
+            {blocks.map((block) => (
+              <DraggableBlock
+                key={block.id}
+                block={block}
+                onMove={(newStartTime) => moveBlock(block.id, newStartTime)}
               />
+            ))}
+          </ScrollView>
+        )}
+      </View>
 
-              {/* Horários */}
-              <View className="flex-row space-x-3 mb-4">
-                <View className="flex-1">
-                  <Text className="text-sm font-semibold text-gray-600 mb-1">Início (HH:MM)</Text>
-                  <TextInput
-                    className="bg-gray-100 rounded-xl px-4 py-3 text-gray-800 text-center"
-                    placeholder="09:00"
-                    value={newStartTime}
-                    onChangeText={setNewStartTime}
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={5}
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-semibold text-gray-600 mb-1">Fim (HH:MM)</Text>
-                  <TextInput
-                    className="bg-gray-100 rounded-xl px-4 py-3 text-gray-800 text-center"
-                    placeholder="10:00"
-                    value={newEndTime}
-                    onChangeText={setNewEndTime}
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={5}
-                  />
-                </View>
+      {/* Floating Actions Bar */}
+      <View
+        style={{
+          position: 'absolute',
+          bottom: appSpacing.xl * 1.2,
+          left: appSpacing.lg,
+          right: appSpacing.lg,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <TouchableOpacity
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: appRadius.pill,
+            backgroundColor: appColors.surface,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: appColors.borderSubtle,
+          }}
+        >
+          <LucideLightbulb size={24} color={appColors.primary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: appRadius.pill,
+            backgroundColor: appColors.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 4,
+            borderColor: appColors.surfaceAlt,
+          }}
+          onPress={handleOpenModal}
+        >
+          <LucidePlus size={32} color="white" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Modal: Novo Bloco */}
+      <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+        >
+          <View
+            style={{
+              backgroundColor: appColors.surfaceAlt,
+              borderTopLeftRadius: appRadius.lg * 1.3,
+              borderTopRightRadius: appRadius.lg * 1.3,
+              padding: appSpacing.lg,
+              borderTopWidth: 1,
+              borderColor: appColors.borderSubtle,
+            }}
+          >
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: appSpacing.lg,
+              }}
+            >
+              <Text
+                style={{
+                  ...appTypography.title,
+                  fontSize: 20,
+                  color: appColors.textPrimary,
+                }}
+              >
+                Novo bloco
+              </Text>
+              <TouchableOpacity onPress={() => setShowModal(false)} style={{ padding: appSpacing.xs }}>
+                <LucideX size={22} color={appColors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Título */}
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '600',
+                color: appColors.textSecondary,
+                marginBottom: 4,
+              }}
+            >
+              O que você vai fazer?
+            </Text>
+            <TextInput
+              style={{
+                backgroundColor: appColors.surface,
+                borderRadius: appRadius.md,
+                paddingHorizontal: appSpacing.md,
+                paddingVertical: appSpacing.sm + 2,
+                color: appColors.textPrimary,
+                marginBottom: appSpacing.md,
+              }}
+              placeholder="Ex: Foco no projeto, Caminhada..."
+              placeholderTextColor={appColors.textSecondary}
+              value={newTitle}
+              onChangeText={setNewTitle}
+            />
+
+            {/* Horários */}
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: appSpacing.md,
+                marginBottom: appSpacing.md,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: appColors.textSecondary,
+                    marginBottom: 4,
+                  }}
+                >
+                  Início (HH:MM)
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: appColors.surface,
+                    borderRadius: appRadius.md,
+                    paddingHorizontal: appSpacing.md,
+                    paddingVertical: appSpacing.sm + 2,
+                    color: appColors.textPrimary,
+                    textAlign: 'center',
+                  }}
+                  placeholder="09:00"
+                  placeholderTextColor={appColors.textSecondary}
+                  value={newStartTime}
+                  onChangeText={setNewStartTime}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
               </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '600',
+                    color: appColors.textSecondary,
+                    marginBottom: 4,
+                  }}
+                >
+                  Fim (HH:MM)
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: appColors.surface,
+                    borderRadius: appRadius.md,
+                    paddingHorizontal: appSpacing.md,
+                    paddingVertical: appSpacing.sm + 2,
+                    color: appColors.textPrimary,
+                    textAlign: 'center',
+                  }}
+                  placeholder="10:00"
+                  placeholderTextColor={appColors.textSecondary}
+                  value={newEndTime}
+                  onChangeText={setNewEndTime}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                />
+              </View>
+            </View>
 
-              {/* Categoria */}
-              <Text className="text-sm font-semibold text-gray-600 mb-2">Categoria</Text>
-              <View className="flex-row flex-wrap mb-4">
-                {CATEGORIES.map((cat) => (
+            {/* Categoria */}
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '600',
+                color: appColors.textSecondary,
+                marginBottom: 6,
+              }}
+            >
+              Categoria
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                marginBottom: appSpacing.md,
+              }}
+            >
+              {CATEGORIES.map((cat) => {
+                const isActive = newCategory === cat;
+                return (
                   <TouchableOpacity
                     key={cat}
                     onPress={() => setNewCategory(cat)}
-                    className={`mr-2 mb-2 px-3 py-1.5 rounded-full border ${
-                      newCategory === cat ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
-                    }`}
+                    style={{
+                      marginRight: appSpacing.sm,
+                      marginBottom: appSpacing.sm,
+                      paddingHorizontal: appSpacing.md,
+                      paddingVertical: appSpacing.xs + 2,
+                      borderRadius: appRadius.pill,
+                      borderWidth: 1,
+                      borderColor: isActive ? appColors.primary : appColors.borderSubtle,
+                      backgroundColor: isActive ? appColors.primarySoft : 'transparent',
+                    }}
                   >
-                    <Text className={`text-xs font-semibold capitalize ${newCategory === cat ? 'text-white' : 'text-gray-600'}`}>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '600',
+                        textTransform: 'capitalize',
+                        color: isActive ? appColors.primary : appColors.textSecondary,
+                      }}
+                    >
                       {cat}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
+                );
+              })}
+            </View>
 
-              {/* Intensidade */}
-              <Text className="text-sm font-semibold text-gray-600 mb-2">Intensidade</Text>
-              <View className="flex-row space-x-3 mb-6">
-                {INTENSITIES.map(({ label, value }) => (
+            {/* Intensidade */}
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '600',
+                color: appColors.textSecondary,
+                marginBottom: 6,
+              }}
+            >
+              Intensidade
+            </Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: appSpacing.md,
+                marginBottom: appSpacing.lg,
+              }}
+            >
+              {INTENSITIES.map(({ label, value }) => {
+                const isActive = newIntensity === value;
+                return (
                   <TouchableOpacity
                     key={value}
                     onPress={() => setNewIntensity(value)}
-                    className={`flex-1 py-2 rounded-xl border items-center ${
-                      newIntensity === value ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'
-                    }`}
+                    style={{
+                      flex: 1,
+                      paddingVertical: appSpacing.sm,
+                      borderRadius: appRadius.md,
+                      borderWidth: 1,
+                      borderColor: isActive ? appColors.primary : appColors.borderSubtle,
+                      backgroundColor: isActive ? appColors.primary : 'transparent',
+                      alignItems: 'center',
+                    }}
                   >
-                    <Text className={`text-sm font-bold ${newIntensity === value ? 'text-white' : 'text-gray-600'}`}>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: '700',
+                        color: isActive ? '#0b1120' : appColors.textSecondary,
+                      }}
+                    >
                       {label}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Botão Salvar */}
-              <TouchableOpacity
-                onPress={handleSaveBlock}
-                disabled={isSaving || !newTitle.trim()}
-                className={`py-4 rounded-2xl items-center ${
-                  isSaving || !newTitle.trim() ? 'bg-gray-300' : 'bg-blue-600'
-                }`}
-              >
-                {isSaving ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text className="text-white font-bold text-base">Adicionar ao Planner</Text>
-                )}
-              </TouchableOpacity>
+                );
+              })}
             </View>
-          </KeyboardAvoidingView>
-        </Modal>
-      </SafeAreaView>
+
+            {/* Botão Salvar */}
+            <TouchableOpacity
+              onPress={handleSaveBlock}
+              disabled={isSaving || !newTitle.trim()}
+              style={{
+                paddingVertical: appSpacing.md,
+                borderRadius: appRadius.lg,
+                alignItems: 'center',
+                backgroundColor:
+                  isSaving || !newTitle.trim() ? appColors.borderSubtle : appColors.primary,
+                marginBottom: Platform.OS === 'ios' ? appSpacing.sm : 0,
+              }}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text
+                  style={{
+                    color: '#0b1120',
+                    fontWeight: '700',
+                    fontSize: 15,
+                  }}
+                >
+                  Adicionar ao planner
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -328,11 +566,11 @@ function DraggableBlock({ block, onMove }: { block: TimelineBlock; onMove: (newS
   }));
 
   const categoryColors = {
-    trabalho: 'bg-blue-100 border-blue-300',
-    pessoal: 'bg-green-100 border-green-300',
-    autocuidado: 'bg-purple-100 border-purple-300',
-    social: 'bg-orange-100 border-orange-300',
-    outro: 'bg-gray-100 border-gray-300',
+    trabalho: appColors.primarySoft,
+    pessoal: 'rgba(34,197,94,0.14)',
+    autocuidado: 'rgba(168,85,247,0.14)',
+    social: 'rgba(249,115,22,0.14)',
+    outro: 'rgba(148,163,184,0.18)',
   };
 
   return (
@@ -341,30 +579,44 @@ function DraggableBlock({ block, onMove }: { block: TimelineBlock; onMove: (newS
         style={[
           {
             position: 'absolute',
-            left: 60,
-            right: 16,
+            left: 68,
+            right: 20,
             height: initialDuration,
+            borderRadius: appRadius.md,
+            borderLeftWidth: 3,
+            borderColor: block.isAiSuggested ? appColors.primary : appColors.borderSubtle,
+            backgroundColor: categoryColors[block.category],
           },
           animatedStyle,
         ]}
-        className={`p-2 rounded-xl border-l-4 ${categoryColors[block.category]} ${
-          block.isAiSuggested ? 'border-purple-500' : ''
-        }`}
       >
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center flex-1 pr-2">
-            <Text className="font-bold text-gray-800 text-[11px]" numberOfLines={1}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: appSpacing.sm }}>
+            <Text
+              style={{
+                fontWeight: '700',
+                color: appColors.textPrimary,
+                fontSize: 11,
+              }}
+              numberOfLines={1}
+            >
               {block.title}
             </Text>
             {block.isAiSuggested && (
-              <View className="ml-1">
-                <LucideSparkles size={10} color="#9333ea" />
+              <View style={{ marginLeft: 4 }}>
+                <LucideSparkles size={10} color={appColors.primary} />
               </View>
             )}
           </View>
         </View>
-        
-        <Text className="text-[9px] text-gray-500 font-medium">
+
+        <Text
+          style={{
+            fontSize: 10,
+            color: appColors.textSecondary,
+            marginTop: 2,
+          }}
+        >
           {block.startTime} — {block.endTime}
         </Text>
       </Animated.View>

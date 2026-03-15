@@ -1,6 +1,8 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { LucideHome, LucideCalendar, LucideLineChart, LucideMessageCircle, LucideSettings } from 'lucide-react-native';
+import { View } from 'react-native';
+import { appColors, appRadius, appSpacing, appTabBarConfig } from '../theme/appTheme';
 
 // Importação das Telas (Componentes que já criamos)
 import HomeScreen from '../screens/HomeScreen';
@@ -20,21 +22,38 @@ export default function MainTabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#3b82f6',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: appColors.primary,
+        tabBarInactiveTintColor: appColors.textSecondary,
         tabBarStyle: {
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 64,
-          borderTopWidth: 1,
-          borderTopColor: '#F3F4F6',
-          elevation: 0,
-          shadowOpacity: 0,
+          position: 'absolute',
+          left: appSpacing.lg,
+          right: appSpacing.lg,
+          bottom: appSpacing.lg,
+          height: appTabBarConfig.height,
+          paddingBottom: appTabBarConfig.paddingBottom,
+          paddingTop: appTabBarConfig.paddingTop,
+          borderRadius: appRadius.lg,
+          backgroundColor: appColors.surface,
+          borderWidth: 1,
+          borderColor: appColors.borderSubtle,
+          elevation: 12,
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 8 },
+          overflow: 'hidden',
         },
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: 'bold',
-        }
+        },
+        tabBarBackground: () => (
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: appColors.surface,
+            }}
+          />
+        ),
       }}
     >
       <Tab.Screen 

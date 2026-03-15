@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useJournalStore } from '../providers/journal_store';
 import { useAuthStore } from '../providers/auth_store';
 import { LucideSend, LucideMic, LucideArrowLeft } from 'lucide-react-native';
+import { appColors, appRadius, appSpacing, appTypography } from '../theme/appTheme';
 
 /**
  * JournalChatScreen: Tela de chat de diário com IA.
@@ -66,33 +67,80 @@ export default function JournalChatScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView style={{ flex: 1, backgroundColor: appColors.background }}>
       {/* Custom Header (AppBar) */}
-      <View className="flex-row items-center justify-between p-4 bg-white border-b border-gray-200">
-        <TouchableOpacity className="p-2">
-          <LucideArrowLeft size={24} color="#374151" />
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: appSpacing.lg,
+          paddingVertical: appSpacing.md,
+          borderBottomWidth: 0,
+        }}
+      >
+        <TouchableOpacity style={{ padding: appSpacing.sm }} onPress={() => navigation.goBack()}>
+          <LucideArrowLeft size={24} color={appColors.textSecondary} />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-gray-800">Diário com IA</Text>
+        <Text
+          style={{
+            ...appTypography.subtitle,
+            color: appColors.textPrimary,
+          }}
+        >
+          Diário com IA
+        </Text>
         <TouchableOpacity onPress={handleEndSession}>
-          <Text className="text-blue-600 font-semibold">Encerrar</Text>
+          <Text
+            style={{
+              color: appColors.primary,
+              fontWeight: '600',
+            }}
+          >
+            Encerrar
+          </Text>
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        className="flex-1"
+        style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         {/* Messages List */}
         <ScrollView 
           ref={scrollRef}
-          className="flex-1 p-4"
-          contentContainerStyle={{ paddingBottom: 20 }}
+          style={{ flex: 1, paddingHorizontal: appSpacing.lg, paddingTop: appSpacing.md }}
+          contentContainerStyle={{ paddingBottom: appSpacing.xl * 2 }}
         >
           {messages.length === 0 && context && (
-            <View className="mb-4 bg-white border border-gray-200 rounded-3xl p-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-1">Boas-vindas</Text>
-              <Text className="text-gray-600">
+            <View
+              style={{
+                marginBottom: appSpacing.md,
+                backgroundColor: appColors.surface,
+                borderRadius: appRadius.lg,
+                padding: appSpacing.md,
+                borderWidth: 1,
+                borderColor: appColors.borderSubtle,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 13,
+                  fontWeight: '600',
+                  color: appColors.textPrimary,
+                  marginBottom: 4,
+                }}
+              >
+                Boas-vindas
+              </Text>
+              <Text
+                style={{
+                  color: appColors.textSecondary,
+                  fontSize: 13,
+                  lineHeight: 20,
+                }}
+              >
                 {context.checkinToday?.stateLabel
                   ? `Estou vendo que hoje parece um ${context.checkinToday.stateLabel.toLowerCase()}. `
                   : ''}
@@ -111,29 +159,72 @@ export default function JournalChatScreen() {
 
           {/* Typing Indicator */}
           {(isLoading || isStreaming) && (
-            <View className="flex-row items-center p-2">
-              <ActivityIndicator size="small" color="#9CA3AF" />
-              <Text className="text-gray-400 ml-2 italic">
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: appSpacing.sm,
+              }}
+            >
+              <ActivityIndicator size="small" color={appColors.textSecondary} />
+              <Text
+                style={{
+                  color: appColors.textSecondary,
+                  marginLeft: appSpacing.sm,
+                  fontStyle: 'italic',
+                  fontSize: 12,
+                }}
+              >
                 {userId ? (sessionId ? 'IA está respondendo...' : 'Iniciando sessão...') : 'Sessão indisponível sem login'}
               </Text>
             </View>
           )}
 
           {error && (
-            <Text className="text-red-500 text-center mt-4">{error}</Text>
+            <Text
+              style={{
+                color: appColors.danger,
+                textAlign: 'center',
+                marginTop: appSpacing.md,
+              }}
+            >
+              {error}
+            </Text>
           )}
         </ScrollView>
 
         {/* Input Area */}
-        <View className="p-4 bg-white border-t border-gray-200 shadow-sm flex-row items-center">
-          <TouchableOpacity className="p-2 mr-2">
-            <LucideMic size={24} color="#9CA3AF" />
+        <View
+          style={{
+            paddingHorizontal: appSpacing.lg,
+            paddingVertical: appSpacing.md,
+            backgroundColor: appColors.surfaceAlt,
+            borderTopWidth: 1,
+            borderColor: appColors.borderSubtle,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <TouchableOpacity style={{ padding: appSpacing.sm, marginRight: appSpacing.sm }}>
+            <LucideMic size={24} color={appColors.textSecondary} />
           </TouchableOpacity>
 
-          <View className="flex-1 bg-gray-100 rounded-2xl px-4 py-2">
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: appColors.surface,
+              borderRadius: appRadius.lg,
+              paddingHorizontal: appSpacing.md,
+              paddingVertical: appSpacing.sm,
+            }}
+          >
             <TextInput
-              className="text-gray-800 text-base"
+              style={{
+                color: appColors.textPrimary,
+                fontSize: 15,
+              }}
               placeholder="Conta o que está acontecendo hoje..."
+              placeholderTextColor={appColors.textSecondary}
               multiline
               value={inputText}
               onChangeText={setInputText}
@@ -144,9 +235,15 @@ export default function JournalChatScreen() {
           <TouchableOpacity 
             onPress={handleSend}
             disabled={inputText.trim() === '' || !sessionId || isStreaming || !userId}
-            className={`p-3 ml-2 rounded-full ${
-              inputText.trim() === '' || !sessionId || isStreaming || !userId ? 'bg-gray-200' : 'bg-blue-600'
-            }`}
+            style={{
+              padding: appSpacing.sm,
+              marginLeft: appSpacing.sm,
+              borderRadius: appRadius.pill,
+              backgroundColor:
+                inputText.trim() === '' || !sessionId || isStreaming || !userId
+                  ? appColors.borderSubtle
+                  : appColors.primary,
+            }}
           >
             <LucideSend size={20} color="white" />
           </TouchableOpacity>
@@ -161,15 +258,29 @@ export default function JournalChatScreen() {
  */
 function ChatBubble({ content, isUser }: { content: string; isUser: boolean }) {
   return (
-    <View className={`flex-row mb-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <View 
-        className={`max-w-[80%] p-4 rounded-3xl ${
-          isUser 
-            ? 'bg-blue-600 rounded-tr-sm' 
-            : 'bg-gray-200 rounded-tl-sm'
-        }`}
+    <View
+      style={{
+        flexDirection: 'row',
+        marginBottom: appSpacing.sm,
+        justifyContent: isUser ? 'flex-end' : 'flex-start',
+      }}
+    >
+      <View
+        style={{
+          maxWidth: '80%',
+          padding: appSpacing.md,
+          borderRadius: 24,
+          borderTopRightRadius: isUser ? appRadius.sm : 24,
+          borderTopLeftRadius: isUser ? 24 : appRadius.sm,
+          backgroundColor: isUser ? appColors.primary : appColors.surface,
+        }}
       >
-        <Text className={`text-base ${isUser ? 'text-white' : 'text-gray-800'}`}>
+        <Text
+          style={{
+            fontSize: 15,
+            color: isUser ? '#0b1120' : appColors.textPrimary,
+          }}
+        >
           {content}
         </Text>
       </View>

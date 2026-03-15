@@ -8,6 +8,7 @@ import CheckInResultScreen from '../screens/CheckInResultScreen';
 import AuthScreen from '../screens/AuthScreen';
 import OnboardingChatScreen from '../screens/OnboardingChatScreen';
 import { useAuthStore } from '../providers/auth_store';
+import { appColors } from '../theme/appTheme';
 
 const Stack = createNativeStackNavigator();
 
@@ -20,14 +21,28 @@ export default function RootStackNavigator() {
 
   if (!initialized && isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#1f3b32" />
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: appColors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={appColors.primary} />
       </View>
     );
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: appColors.background,
+        },
+      }}
+    >
       {!userId ? (
         <Stack.Screen name="Auth" component={AuthScreen} />
       ) : !onboardingDone ? (
