@@ -1,0 +1,20 @@
+{
+  "name": "new-app-fron-zero",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:generate": "npm run generate --workspace=@app/database",
+    "db:push": "npm run push --workspace=@app/database",
+    "db:studio": "npm run studio --workspace=@app/database"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "prisma": "^6.4.1"
+  }
+}

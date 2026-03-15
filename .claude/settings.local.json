@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Supabase__execute_sql",
+      "Bash(cd \"/c/Users/allin/new app fron zero/apps/backend\" && npx tsx src/contracts/checkin.contract.test.ts 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend\" && npx tsx --version 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend\" && npx tsx src/contracts/checkin.contract.test.ts 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend\" && npx tsx src/contracts/checkin-slot.test.ts 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend\" && npx tsx src/contracts/schema-alignment.test.ts 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend\" && npx tsx src/contracts/planner.contract.test.ts 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend\" && npx tsx src/services/ai.service.test.ts 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend\" && npx tsx src/services/journal.service.test.ts 2>&1)",
+      "Bash(cd \"C:/Users/allin/new app fron zero/apps/mobile\" && npx tsx src/services/ai_service.test.ts 2>&1)",
+      "Bash(cd \"C:/Users/allin/new app fron zero/apps/mobile\" && npx tsx src/presentation/providers/journal_store.test.ts 2>&1)",
+      "Bash(cd \"C:/Users/allin/new app fron zero/apps/backend\" && npx tsx src/index.journal.test.ts 2>&1)",
+      "Bash(cd \"C:/Users/allin/new app fron zero/apps/backend\" && npx tsx src/contracts/journal.contract.test.ts 2>&1)",
+      "Bash(cd \"C:/Users/allin/new app fron zero/apps/backend\" && npm test 2>&1)",
+      "Bash(cd \"/c/Users/allin/new app fron zero/apps/backend\" && npm test 2>&1)",
+      "mcp__claude_ai_Supabase__get_project",
+      "Bash(find 'C:\\\\Users\\\\allin\\\\new app fron zero' -type f \\\\\\(-name *.env* -o -name *.json -o -name *.ts -o -name *.tsx -o -name *.sql \\\\\\))"
+    ]
+  }
+}
