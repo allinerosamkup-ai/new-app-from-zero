@@ -49,13 +49,43 @@ export default function CheckinResultScreen() {
   const { navigate, params } = useNavigation();
   const stateType: StateType = (params.state as StateType) || 'moderado';
   const config = STATE_CONFIG[stateType];
-  const summary = 'Seu humor está estável e a energia acima da média hoje. Essa combinação favorece atividades que exigem foco e criatividade. Aproveite para avançar em tarefas importantes.';
 
-  const recommendations = [
-    'Aproveite o pico de energia para tarefas que exigem concentração.',
-    'Inclua uma pausa de 15 min no meio da tarde para manter o ritmo.',
-    'Considere uma caminhada leve no fim do dia para fechar bem.',
-  ];
+  const stateContent: Record<StateType, { summary: string; recommendations: string[] }> = {
+    leve: {
+      summary: 'Seu corpo e mente estão em ritmo tranquilo hoje. Aproveite para atividades que pedem calma e atenção aos detalhes.',
+      recommendations: [
+        'Comece com tarefas leves e aumente o ritmo aos poucos.',
+        'Hidrate-se bem e faça pequenas pausas regulares.',
+        'Uma música ambiente pode ajudar a manter o foco suave.',
+      ],
+    },
+    moderado: {
+      summary: 'Seu humor está estável e a energia acima da média hoje. Essa combinação favorece atividades que exigem foco e criatividade.',
+      recommendations: [
+        'Aproveite o pico de energia para tarefas que exigem concentração.',
+        'Inclua uma pausa de 15 min no meio da tarde para manter o ritmo.',
+        'Considere uma caminhada leve no fim do dia para fechar bem.',
+      ],
+    },
+    sensível: {
+      summary: 'Hoje pode ser um dia mais delicado. Sua energia e humor pedem cuidado extra e um ritmo mais gentil consigo.',
+      recommendations: [
+        'Priorize autocuidado e evite decisões importantes se possível.',
+        'Permita-se momentos de descanso sem culpa.',
+        'Converse com alguém de confiança se sentir necessidade.',
+      ],
+    },
+    crítico: {
+      summary: 'Seus indicadores mostram que hoje é dia de descansar e se recuperar. Não force o ritmo — respeite seus limites.',
+      recommendations: [
+        'Cancele o que puder e foque apenas no essencial.',
+        'Durma mais cedo hoje se possível.',
+        'Atividades de baixo esforço como respiração guiada podem ajudar.',
+      ],
+    },
+  };
+
+  const { summary, recommendations } = stateContent[stateType];
 
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ backgroundColor: config.bgColor }}>

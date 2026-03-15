@@ -95,6 +95,15 @@ export default function HomeScreen() {
         </div>
       )}
 
+      {hasCheckin && (
+        <button
+          onClick={() => { setHasCheckin(false); navigate('checkin'); }}
+          className="mb-4 text-blue-600 font-semibold text-sm text-center"
+        >
+          Refazer check-in
+        </button>
+      )}
+
       <div className="flex gap-4 mb-8">
         <button
           onClick={() => navigate('journal')}
