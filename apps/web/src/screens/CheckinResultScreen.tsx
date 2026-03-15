@@ -126,7 +126,7 @@ export default function CheckinResultScreen() {
 
         <button
           onClick={() => {
-            window.dispatchEvent(new Event('checkin-done'));
+            window.dispatchEvent(new CustomEvent('checkin-done', { detail: { state: stateType } }));
             navigate('home');
           }}
           className="w-full py-4.5 rounded-2xl text-center text-base font-bold"

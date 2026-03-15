@@ -5,16 +5,46 @@ import { useNavigation } from '../navigation';
 export default function HomeScreen() {
   const { navigate } = useNavigation();
   const [hasCheckin, setHasCheckin] = useState(false);
+  const [checkinState, setCheckinState] = useState('moderado');
 
   useEffect(() => {
-    const handler = () => setHasCheckin(true);
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.state) setCheckinState(detail.state);
+      setHasCheckin(true);
+    };
     window.addEventListener('checkin-done', handler);
     return () => window.removeEventListener('checkin-done', handler);
   }, []);
-  const stateType = 'moderado';
-  const stateLabel = 'Energia Radiante';
-  const analysis = 'Seu humor e energia estão em bom equilíbrio hoje. A clareza mental está acima da média, o que favorece tarefas que exigem foco.';
-  const recommendation = 'Aproveite o pico de energia para suas tarefas mais importantes antes das 14h.';
+
+  const stateData: Record<string, { label: string; analysis: string; recommendation: string }> = {
+    leve: {
+      label: 'Energia Leve',
+      analysis: 'Seu corpo e mente estão em ritmo tranquilo hoje. Aproveite para atividades que pedem calma e atenção.',
+      recommendation: 'Comece com tarefas leves e aumente o ritmo gradualmente.',
+    },
+    moderado: {
+      label: 'Energia Radiante',
+      analysis: 'Seu humor e energia estão em bom equilíbrio hoje. A clareza mental está acima da média, o que favorece tarefas que exigem foco.',
+      recommendation: 'Aproveite o pico de energia para suas tarefas mais importantes antes das 14h.',
+    },
+    sensível: {
+      label: 'Dia Sensível',
+      analysis: 'Hoje pode ser um dia mais delicado. Sua energia e humor pedem cuidado extra e ritmo mais suave.',
+      recommendation: 'Priorize autocuidado e evite decisões importantes se possível.',
+    },
+    crítico: {
+      label: 'Modo Recuperação',
+      analysis: 'Seus indicadores mostram que hoje é dia de descansar e se recuperar. Não force o ritmo.',
+      recommendation: 'Cancele o que puder e foque apenas no essencial.',
+    },
+  };
+
+  const stateType = checkinState;
+  const current = stateData[stateType] || stateData.moderado;
+  const stateLabel = current.label;
+  const analysis = current.analysis;
+  const recommendation = current.recommendation;
 
   const stateStyles: Record<string, string> = {
     leve: 'bg-green-50 border-green-200',
