@@ -17,7 +17,28 @@
       "Bash(cd \"C:/Users/allin/new app fron zero/apps/backend\" && npm test 2>&1)",
       "Bash(cd \"/c/Users/allin/new app fron zero/apps/backend\" && npm test 2>&1)",
       "mcp__claude_ai_Supabase__get_project",
-      "Bash(find 'C:\\\\Users\\\\allin\\\\new app fron zero' -type f \\\\\\(-name *.env* -o -name *.json -o -name *.ts -o -name *.tsx -o -name *.sql \\\\\\))"
+      "Bash(find 'C:\\\\Users\\\\allin\\\\new app fron zero' -type f \\\\\\(-name *.env* -o -name *.json -o -name *.ts -o -name *.tsx -o -name *.sql \\\\\\))",
+      "Bash(gh pr:*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")",
+      "Bash(tasklist /FI \"PID eq 36504\")",
+      "Bash(wmic process:*)",
+      "Bash(powershell \"Get-Process -Id 36504 | Select-Object Name,Id\")",
+      "Bash(ls \"C:\\\\Users\\\\allin\\\\new app fron zero\\\\apps\\\\backend | grep -i env; cat C:Usersallinnew\" app fron zeroappsbackend.env)",
+      "Bash('/c/Users/allin/new app:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(command -v npm)",
+      "Bash(where npm:*)",
+      "Bash(npm --version)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "mcp__Windows-MCP__Click",
+      "mcp__Windows-MCP__Type",
+      "mcp__Windows-MCP__PowerShell",
+      "Bash(python \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\\\\skill-creator\\\\scripts\\\\init_skill.py\" \"engineering-mentor\" --path \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\")",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\\\\skill-creator\\\\scripts\\\\init_skill.py\" \"engineering-mentor\" --path \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\")",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\\\\skill-creator\\\\scripts\\\\package_skill.py\" \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\\\\engineering-mentor\")",
+      "mcp__mcp-registry__search_mcp_registry",
+      "WebSearch"
     ]
   }
 }

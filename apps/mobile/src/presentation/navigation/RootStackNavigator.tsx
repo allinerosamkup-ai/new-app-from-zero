@@ -1,20 +1,22 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
+import { ActivityIndicator } from 'react-native-paper';
 import MainTabNavigator from './MainTabNavigator';
 import DailySummaryScreen from '../screens/DailySummaryScreen';
 import CheckinScreen from '../screens/CheckinScreen';
 import CheckInResultScreen from '../screens/CheckInResultScreen';
 import AuthScreen from '../screens/AuthScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import OnboardingChatScreen from '../screens/OnboardingChatScreen';
+import JournalChatScreen from '../screens/JournalChatScreen';
 import { useAuthStore } from '../providers/auth_store';
 import { appColors } from '../theme/appTheme';
 
 const Stack = createNativeStackNavigator();
 
 /**
- * RootStackNavigator: Gerencia a navegação global do App.
- * Permite alternar entre o fluxo de abas e telas de resumo/onboarding.
+ * RootStackNavigator: Gerencia a navegação global do App com UI do Paper.
  */
 export default function RootStackNavigator() {
   const { initialized, isLoading, userId, onboardingDone } = useAuthStore();
@@ -29,7 +31,7 @@ export default function RootStackNavigator() {
           backgroundColor: appColors.background,
         }}
       >
-        <ActivityIndicator size="large" color={appColors.primary} />
+        <ActivityIndicator animating size="large" color={appColors.primary} />
       </View>
     );
   }
@@ -73,6 +75,20 @@ export default function RootStackNavigator() {
           presentation: 'modal',
           animation: 'slide_from_bottom',
           gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="JournalChat"
+        component={JournalChatScreen}
+        options={{
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+        options={{
+          animation: 'slide_from_right',
         }}
       />
     </Stack.Navigator>

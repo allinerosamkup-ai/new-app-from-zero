@@ -1,18 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import {
   View,
-  Text,
-  TouchableOpacity,
   SafeAreaView,
-  ActivityIndicator,
   Alert,
+  ScrollView
 } from 'react-native';
+import { 
+  List, 
+  Avatar, 
+  Surface, 
+  Text, 
+  Divider, 
+  Button, 
+  ActivityIndicator,
+  MD3Colors
+} from 'react-native-paper';
 import { LucideUser, LucideLogOut, LucideShield, LucideChevronRight } from 'lucide-react-native';
 import { useAuthStore } from '../providers/auth_store';
 import { supabase } from '../../lib/supabase';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
 
 /**
- * ConfigScreen: Configurações de conta e acesso.
+ * ConfigScreen: Configurações de conta e acesso com UI do Paper.
  */
 export default function ConfigScreen() {
   const { fullName, signOut, isLoading } = useAuthStore();
@@ -40,60 +49,91 @@ export default function ConfigScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="p-6">
-        <Text className="text-2xl font-bold text-gray-900 mb-6">Configurações</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: appColors.background }}>
+      <ScrollView contentContainerStyle={{ padding: appSpacing.lg }}>
+        <Text variant="headlineMedium" style={{ fontWeight: '700', marginBottom: appSpacing.xl, color: appColors.textPrimary }}>
+          Configurações
+        </Text>
 
         {/* Perfil */}
-        <View className="bg-white rounded-2xl p-5 mb-4 shadow-sm">
-          <View className="flex-row items-center">
-            <View className="w-14 h-14 bg-blue-100 rounded-full items-center justify-center mr-4">
-              <LucideUser size={26} color="#0284C7" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-base font-bold text-gray-900">
-                {fullName ?? 'Usuária'}
-              </Text>
-              {email ? (
-                <Text className="text-sm text-gray-500 mt-0.5">{email}</Text>
-              ) : (
-                <View className="h-4 w-32 bg-gray-100 rounded mt-1" />
-              )}
-            </View>
+        <Surface 
+          style={{ 
+            padding: appSpacing.lg, 
+            borderRadius: appRadius.lg, 
+            backgroundColor: appColors.surface,
+            marginBottom: appSpacing.lg,
+            flexDirection: 'row',
+            alignItems: 'center',
+            elevation: 1
+          }}
+        >
+          <Avatar.Icon 
+            size={56} 
+            icon="account" 
+            backgroundColor={appColors.primarySoft} 
+            color={appColors.primary} 
+          />
+          <View style={{ flex: 1, marginLeft: appSpacing.md }}>
+            <Text variant="titleMedium" style={{ fontWeight: '700' }}>
+              {fullName ?? 'Usuária'}
+            </Text>
+            <Text variant="bodySmall" style={{ color: appColors.textSecondary }}>
+              {email ?? 'carregando...'}
+            </Text>
           </View>
-        </View>
+        </Surface>
 
-        {/* Opções */}
-        <View className="bg-white rounded-2xl mb-4 overflow-hidden">
-          <TouchableOpacity
-            className="flex-row items-center px-5 py-4 border-b border-gray-100"
-            onPress={() => Alert.alert('Em breve', 'Configurações de privacidade serão adicionadas em breve.')}
-          >
-            <LucideShield size={20} color="#64748B" />
-            <Text className="flex-1 ml-3 text-base text-gray-700">Privacidade e dados</Text>
-            <LucideChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
+        {/* Opções de Menu */}
+        <Surface 
+          style={{ 
+            borderRadius: appRadius.lg, 
+            backgroundColor: appColors.surface,
+            overflow: 'hidden',
+            elevation: 1,
+            marginBottom: appSpacing.lg
+          }}
+        >
+          <List.Item
+            title="Privacidade e dados"
+            left={props => <List.Icon {...props} icon="shield-check-outline" />}
+            right={props => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => Alert.alert('Em breve', 'Configurações de privacidade serão adicionadas.')}
+          />
+          <Divider />
+          <List.Item
+            title="Notificações"
+            left={props => <List.Icon {...props} icon="bell-outline" />}
+            right={props => <List.Icon {...props} icon="chevron-right" />}
+            onPress={() => {}}
+          />
+          <Divider />
+          <List.Item
+            title="Tema do Aplicativo"
+            description="Sistema"
+            left={props => <List.Icon {...props} icon="palette-outline" />}
+            onPress={() => {}}
+          />
+        </Surface>
 
         {/* Sair */}
-        <TouchableOpacity
+        <Button
+          mode="contained-tonal"
+          icon="logout"
           onPress={handleSignOut}
+          loading={isLoading}
           disabled={isLoading}
-          className="bg-white rounded-2xl px-5 py-4 flex-row items-center"
+          textColor={MD3Colors.error50}
+          style={{ borderRadius: appRadius.md }}
+          contentStyle={{ paddingVertical: 6 }}
         >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#EF4444" style={{ marginRight: 12 }} />
-          ) : (
-            <LucideLogOut size={20} color="#EF4444" />
-          )}
-          <Text className="ml-3 text-base font-semibold text-red-500">Sair da conta</Text>
-        </TouchableOpacity>
+          Sair da conta
+        </Button>
 
         {/* Versão */}
-        <Text className="text-center text-xs text-gray-400 mt-8">
+        <Text variant="labelSmall" style={{ textAlign: 'center', color: appColors.textSecondary, marginTop: appSpacing.xl * 2 }}>
           Mood & Energy — MVP v1.0
         </Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

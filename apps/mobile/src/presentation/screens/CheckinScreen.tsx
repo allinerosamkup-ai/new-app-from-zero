@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { 
+  Text, 
+  Card, 
+  Button, 
+  TextInput, 
+  ActivityIndicator, 
+  IconButton, 
+  MD3Colors,
+  Surface,
+  TouchableRipple
+} from 'react-native-paper';
 import { useCheckinStore } from '../providers/checkin_store';
 import { useAuthStore } from '../providers/auth_store';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
 
 /**
- * CheckinScreen: Formulário de estado diário.
+ * CheckinScreen: Formulário de estado diário com UI do Paper.
  */
 export default function CheckinScreen() {
   const navigation = useNavigation<any>();
@@ -31,108 +43,118 @@ export default function CheckinScreen() {
       note,
     });
 
-    // Navega para o resultado da IA se deu certo (sem erro no store)
     if (!useCheckinStore.getState().error) {
       navigation.navigate('CheckInResult');
     }
   };
 
   return (
-    <ScrollView className="flex-1 bg-white p-4">
-      <Text className="text-xl font-bold mb-6 text-center">
+    <ScrollView style={{ flex: 1, backgroundColor: appColors.background }} contentContainerStyle={{ padding: appSpacing.lg, paddingBottom: 40 }}>
+      <Text variant="headlineSmall" style={{ fontWeight: '700', textAlign: 'center', marginBottom: appSpacing.xl, color: appColors.textPrimary }}>
         Como você está hoje?
       </Text>
 
-      {/* Mood Selector (Substituto do _MoodSlider) */}
       <MoodSelector value={mood} onSelect={setMood} />
 
-      {/* Energy Selector (Substituto do _EnergySelector) */}
-      <ScoreSelector 
-        label="Como está seu nível de energia?" 
-        value={energy} 
-        onSelect={setEnergy} 
-      />
+      <Card style={{ marginBottom: appSpacing.lg, backgroundColor: appColors.surface }} mode="outlined">
+        <Card.Content>
+          <ScoreSelector 
+            label="Como está seu nível de energia?" 
+            value={energy} 
+            onSelect={setEnergy} 
+          />
+          
+          <View style={{ height: 1, backgroundColor: appColors.borderSubtle, marginVertical: appSpacing.md, opacity: 0.5 }} />
 
-      {/* Clarity Selector */}
-      <ScoreSelector 
-        label="Como está sua clareza mental?" 
-        value={clarity} 
-        onSelect={setClarity} 
-      />
+          <ScoreSelector 
+            label="Como está sua clareza mental?" 
+            value={clarity} 
+            onSelect={setClarity} 
+          />
 
-      {/* Irritability Selector */}
-      <ScoreSelector 
-        label="Nível de irritabilidade" 
-        value={irritability} 
-        onSelect={setIrritability} 
-      />
+          <View style={{ height: 1, backgroundColor: appColors.borderSubtle, marginVertical: appSpacing.md, opacity: 0.5 }} />
 
-      {/* Note Field */}
-      <View className="mt-6">
-        <Text className="text-gray-700 mb-2">Quer comentar algo sobre o momento?</Text>
+          <ScoreSelector 
+            label="Nível de irritabilidade" 
+            value={irritability} 
+            onSelect={setIrritability} 
+          />
+        </Card.Content>
+      </Card>
+
+      <View style={{ marginTop: appSpacing.md }}>
+        <Text variant="labelLarge" style={{ color: appColors.textSecondary, marginBottom: appSpacing.xs }}>
+          Quer comentar algo sobre o momento?
+        </Text>
         <TextInput
-          className="border border-gray-300 rounded-lg p-3 h-24 text-base"
+          mode="outlined"
           multiline
           placeholder="Ex: Dormi pouco, mas me sinto bem..."
           value={note}
           onChangeText={setNote}
-          textAlignVertical="top"
+          style={{ height: 120, backgroundColor: appColors.surface }}
         />
       </View>
 
-      {/* Submit Button */}
-      <TouchableOpacity
+      <Button
+        mode="contained"
         onPress={handleSubmit}
+        loading={isLoading}
         disabled={isLoading || !userId}
-        className={`mt-8 mb-10 p-4 rounded-xl flex-row justify-center items-center ${
-          isLoading || !userId ? 'bg-blue-300' : 'bg-blue-600'
-        }`}
+        style={{ marginTop: appSpacing.xl, borderRadius: appRadius.md }}
+        contentStyle={{ paddingVertical: 8 }}
       >
-        {isLoading ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text className="text-white font-bold text-lg">
-            {userId ? 'Confirmar check-in' : 'Entre para fazer check-in'}
-          </Text>
-        )}
-      </TouchableOpacity>
+        {userId ? 'Confirmar check-in' : 'Entre para fazer check-in'}
+      </Button>
 
       {error && (
-        <Text className="text-red-500 text-center mt-2">{error}</Text>
+        <Text variant="bodySmall" style={{ color: appColors.danger, textAlign: 'center', marginTop: appSpacing.md }}>
+          {error}
+        </Text>
       )}
     </ScrollView>
   );
 }
 
-/**
- * Seletor de Humor com Emojis (Tradução do _MoodSlider)
- */
 function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
   const emojis = ['😢', '😕', '😐', '🙂', '😄'];
   const labels = ['Muito mal', 'Mal', 'Neutro', 'Bem', 'Muito bem'];
 
   return (
-    <View className="mb-6">
-      <Text className="text-lg font-semibold mb-4">Como está seu humor agora?</Text>
-      <View className="flex-row justify-between">
+    <View style={{ marginBottom: appSpacing.xl }}>
+      <Text variant="titleMedium" style={{ fontWeight: '700', marginBottom: appSpacing.md }}>
+        Como está seu humor agora?
+      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         {emojis.map((emoji, index) => {
           const score = index + 1;
           const isSelected = value === score;
           return (
-            <TouchableOpacity
+            <Surface
               key={score}
-              onPress={() => onSelect(score)}
-              className={`items-center p-3 rounded-2xl border-2 ${
-                isSelected ? 'bg-blue-50 border-blue-500' : 'border-transparent'
-              }`}
+              style={{
+                borderRadius: appRadius.lg,
+                backgroundColor: isSelected ? appColors.primarySoft : 'transparent',
+                borderWidth: 2,
+                borderColor: isSelected ? appColors.primary : 'transparent',
+                elevation: isSelected ? 2 : 0,
+              }}
             >
-              <Text style={{ fontSize: 32 }}>{emoji}</Text>
-              {isSelected && (
-                <Text className="text-blue-600 text-xs font-bold mt-1">
-                  {labels[index]}
-                </Text>
-              )}
-            </TouchableOpacity>
+              <TouchableRipple
+                onPress={() => onSelect(score)}
+                style={{ padding: appSpacing.md, alignItems: 'center' }}
+                borderless
+              >
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32 }}>{emoji}</Text>
+                  {isSelected && (
+                    <Text variant="labelSmall" style={{ color: appColors.primary, fontWeight: '700', marginTop: 4 }}>
+                      {labels[index]}
+                    </Text>
+                  )}
+                </View>
+              </TouchableRipple>
+            </Surface>
           );
         })}
       </View>
@@ -140,27 +162,35 @@ function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number
   );
 }
 
-/**
- * Componente genérico para seletores de 1 a 5 (Substituto de Energy, Clarity, etc)
- */
 function ScoreSelector({ label, value, onSelect }: { label: string; value: number; onSelect: (v: number) => void }) {
   return (
-    <View className="mb-6">
-      <Text className="text-gray-800 font-medium mb-3">{label}</Text>
-      <View className="flex-row justify-between bg-gray-100 p-1 rounded-xl">
-        {[1, 2, 3, 4, 5].map((score) => (
-          <TouchableOpacity
-            key={score}
-            onPress={() => onSelect(score)}
-            className={`flex-1 py-3 rounded-lg items-center ${
-              value === score ? 'bg-white shadow-sm' : ''
-            }`}
-          >
-            <Text className={`font-bold ${value === score ? 'text-blue-600' : 'text-gray-500'}`}>
-              {score}
-            </Text>
-          </TouchableOpacity>
-        ))}
+    <View>
+      <Text variant="labelLarge" style={{ color: appColors.textPrimary, fontWeight: '600', marginBottom: appSpacing.sm }}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: appColors.background, borderRadius: appRadius.md, padding: 4 }}>
+        {[1, 2, 3, 4, 5].map((score) => {
+          const isSelected = value === score;
+          return (
+            <TouchableRipple
+              key={score}
+              onPress={() => onSelect(score)}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: appRadius.sm,
+                backgroundColor: isSelected ? appColors.surface : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              borderless
+            >
+              <Text style={{ fontWeight: '700', color: isSelected ? appColors.primary : appColors.textSecondary }}>
+                {score}
+              </Text>
+            </TouchableRipple>
+          );
+        })}
       </View>
     </View>
   );

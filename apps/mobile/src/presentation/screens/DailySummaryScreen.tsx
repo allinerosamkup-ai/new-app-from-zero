@@ -1,17 +1,26 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, ScrollView, SafeAreaView } from 'react-native';
+import { 
+  Text, 
+  Card, 
+  Button, 
+  Avatar, 
+  Chip, 
+  Surface,
+  IconButton,
+  MD3Colors
+} from 'react-native-paper';
 import { LucideCheckCircle2, LucideSparkles, LucideHeart, LucideLightbulb, LucideArrowRight } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
 
 /**
- * DailySummaryScreen: Tela de feedback pós-diário ou check-in.
- * Exibe o processamento da IA de forma acolhedora.
+ * DailySummaryScreen: Tela de feedback pós-diário ou check-in com UI do Paper.
  */
 export default function DailySummaryScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   
-  // Dados vindos da navegação (ou mock para o MVP)
   const summaryData = route.params?.summary || {
     text: "Hoje você trouxe reflexões profundas sobre o equilíbrio entre trabalho e descanso. Parece que reconhecer seus limites está sendo um passo importante para sua regulação de energia.",
     emotions: ["cansada", "reflexiva", "esperançosa"],
@@ -20,67 +29,95 @@ export default function DailySummaryScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <ScrollView className="flex-1 px-6 pt-8" showsVerticalScrollIndicator={false}>
-        {/* Ícone de Sucesso */}
-        <View className="items-center mb-6">
-          <View className="bg-green-100 p-4 rounded-full">
-            <LucideCheckCircle2 size={40} color="#10b981" />
-          </View>
-          <Text className="text-2xl font-bold text-gray-800 mt-4 text-center">
+    <SafeAreaView style={{ flex: 1, backgroundColor: appColors.background }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: appSpacing.lg, paddingTop: appSpacing.xl, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        
+        {/* Header de Sucesso */}
+        <View style={{ alignItems: 'center', marginBottom: appSpacing.xl }}>
+          <Avatar.Icon 
+            size={80} 
+            icon="check-circle" 
+            backgroundColor={MD3Colors.primary95} 
+            color={MD3Colors.primary40} 
+          />
+          <Text variant="headlineMedium" style={{ fontWeight: '700', marginTop: appSpacing.md, color: appColors.textPrimary }}>
             Sessão Concluída
           </Text>
-          <Text className="text-gray-500 text-center mt-1">
+          <Text variant="bodyMedium" style={{ color: appColors.textSecondary }}>
             Aqui está o que sua IA percebeu
           </Text>
         </View>
 
-        {/* Emoções Detectadas (Tags) */}
-        <View className="flex-row flex-wrap justify-center mb-8">
+        {/* Emoções Detectadas (Chips) */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginBottom: appSpacing.xl, gap: 8 }}>
           {summaryData.emotions.map((emotion: string, index: number) => (
-            <View key={index} className="bg-blue-50 px-4 py-2 rounded-full m-1 border border-blue-100 flex-row items-center">
-              <LucideHeart size={14} color="#3b82f6" />
-              <Text className="text-blue-600 font-bold ml-2 capitalize">{emotion}</Text>
-            </View>
+            <Chip 
+              key={index} 
+              icon="heart-outline" 
+              selectedColor={appColors.primary}
+              style={{ backgroundColor: appColors.primarySoft }}
+              textStyle={{ fontWeight: '700', textTransform: 'capitalize' }}
+            >
+              {emotion}
+            </Chip>
           ))}
         </View>
 
         {/* Card Principal de Resumo */}
-        <View className="bg-gray-50 p-6 rounded-3xl border border-gray-100 mb-8">
-          <View className="flex-row items-center mb-3">
-            <LucideSparkles size={20} color="#9333ea" />
-            <Text className="text-purple-700 font-bold ml-2 uppercase text-xs tracking-widest">
-              Síntese da Conversa
+        <Card style={{ marginBottom: appSpacing.xl, backgroundColor: MD3Colors.secondary99 }} mode="outlined">
+          <Card.Content>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: appSpacing.sm }}>
+              <LucideSparkles size={18} color={MD3Colors.secondary40} />
+              <Text variant="labelMedium" style={{ marginLeft: appSpacing.sm, fontWeight: '700', color: MD3Colors.secondary40, letterSpacing: 1.2 }}>
+                SÍNTESE DA CONVERSA
+              </Text>
+            </View>
+            <Text variant="titleMedium" style={{ fontStyle: 'italic', lineHeight: 26, color: appColors.textPrimary }}>
+              "{summaryData.text}"
             </Text>
-          </View>
-          <Text className="text-gray-800 text-lg leading-relaxed italic">
-            "{summaryData.text}"
-          </Text>
-        </View>
+          </Card.Content>
+        </Card>
 
-        {/* Temas e Sugestões */}
-        <View className="mb-10">
-          <View className="flex-row items-center mb-4">
-            <LucideLightbulb size={20} color="#f59e0b" />
-            <Text className="text-lg font-bold text-gray-800 ml-2">Sugestões para agora</Text>
+        {/* Sugestões */}
+        <View style={{ marginBottom: appSpacing.xl * 1.5 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: appSpacing.md }}>
+            <LucideLightbulb size={22} color={MD3Colors.tertiary50} />
+            <Text variant="titleLarge" style={{ fontWeight: '700', marginLeft: appSpacing.sm }}>
+              Sugestões para agora
+            </Text>
           </View>
           
           {summaryData.suggestions.map((suggestion: string, index: number) => (
-            <View key={index} className="bg-white border border-gray-100 p-4 rounded-2xl mb-3 shadow-sm flex-row items-center">
-              <View className="w-2 h-2 bg-yellow-400 rounded-full mr-3" />
-              <Text className="text-gray-700 flex-1">{suggestion}</Text>
-            </View>
+            <Surface 
+              key={index} 
+              style={{ 
+                padding: appSpacing.md, 
+                borderRadius: appRadius.md, 
+                backgroundColor: appColors.surface,
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: appSpacing.sm,
+                elevation: 1
+              }}
+            >
+              <Avatar.Icon size={32} icon="lightbulb-on-outline" backgroundColor={MD3Colors.tertiary95} color={MD3Colors.tertiary50} />
+              <Text variant="bodyMedium" style={{ flex: 1, marginLeft: appSpacing.md, color: appColors.textPrimary }}>
+                {suggestion}
+              </Text>
+            </Surface>
           ))}
         </View>
 
-        {/* Botão de Finalização */}
-        <TouchableOpacity 
+        {/* Botão Finalizar */}
+        <Button
+          mode="contained"
           onPress={() => navigation.navigate('MainTabs' as any)}
-          className="bg-blue-600 p-5 rounded-2xl flex-row justify-center items-center mb-10"
+          icon="home"
+          contentStyle={{ paddingVertical: 8 }}
+          style={{ borderRadius: appRadius.md }}
         >
-          <Text className="text-white font-bold text-lg">Voltar para o Início</Text>
-          <LucideArrowRight size={20} color="white" className="ml-2" />
-        </TouchableOpacity>
+          Voltar para o Início
+        </Button>
       </ScrollView>
     </SafeAreaView>
   );

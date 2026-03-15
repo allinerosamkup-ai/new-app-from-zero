@@ -1,11 +1,29 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import { DefaultTheme as NavigationDefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect } from 'react';
+import { MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native-paper';
 import RootStackNavigator from './src/presentation/navigation/RootStackNavigator';
 import { useAuthStore } from './src/presentation/providers/auth_store';
 import { appColors } from './src/presentation/theme/appTheme';
+
+const { LightTheme } = adaptNavigationTheme({
+  reactNavigationLight: NavigationDefaultTheme,
+});
+
+const theme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary: appColors.primary,
+    secondary: appColors.textSecondary,
+    background: appColors.background,
+    surface: appColors.surface,
+    outline: appColors.borderSubtle,
+    error: appColors.danger,
+  },
+};
 
 /**
  * App: Ponto de entrada do aplicativo Mobile.
@@ -19,9 +37,9 @@ export default function App() {
   }, [initialize]);
 
   const navigationTheme = {
-    ...DefaultTheme,
+    ...LightTheme,
     colors: {
-      ...DefaultTheme.colors,
+      ...LightTheme.colors,
       background: appColors.background,
       card: appColors.surface,
       text: appColors.textPrimary,
@@ -32,10 +50,12 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer theme={navigationTheme}>
-        <RootStackNavigator />
-        <StatusBar style="dark" />
-      </NavigationContainer>
+      <PaperProvider theme={theme}>
+        <NavigationContainer theme={navigationTheme}>
+          <RootStackNavigator />
+          <StatusBar style="dark" />
+        </NavigationContainer>
+      </PaperProvider>
     </GestureHandlerRootView>
   );
 }

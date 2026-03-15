@@ -4,6 +4,18 @@ import {
   JournalFinalizeResponse,
   JournalStartResponse,
 } from '../../services/ai_service';
+import api from '../../services/api_service';
+
+export interface JournalSessionItem {
+  id: string;
+  localDate: string;
+  status: 'active' | 'completed';
+  summary: string | null;
+  emotions: string[];
+  themes: string[];
+  startedAt: string;
+  finalizedAt: string | null;
+}
 
 export interface Message {
   id: string;
@@ -20,12 +32,15 @@ interface JournalState {
   isStreaming: boolean;
   context: JournalStartResponse['context'] | null;
   error: string | null;
+  sessions: JournalSessionItem[];
+  isLoadingSessions: boolean;
 
   // Actions
   startSession: (userId: string) => Promise<void>;
   sendMessage: (content: string) => Promise<void>;
   finalizeSession: () => Promise<JournalFinalizeResponse | null>;
   clearSession: () => void;
+  loadSessions: (userId: string) => Promise<void>;
 }
 
 /**
@@ -40,6 +55,8 @@ export const useJournalStore = create<JournalState>((set, get) => ({
   isStreaming: false,
   context: null,
   error: null,
+  sessions: [],
+  isLoadingSessions: false,
 
   startSession: async (userId: string) => {
     set({ isLoading: true, error: null });
@@ -175,4 +192,16 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       context: null,
       error: null,
     }),
+
+  loadSessions: async (userId: string) => {
+    set({ isLoadingSessions: true });
+    try {
+      const response = await api.get<JournalSessionItem[]>('/api/journal/sessions', {
+        params: { userId },
+      });
+      set({ sessions: response.data, isLoadingSessions: false });
+    } catch (err: any) {
+      set({ isLoadingSessions: false, error: err.message });
+    }
+  },
 }));

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
+import { View, ScrollView, SafeAreaView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Card, Text, Button, ActivityIndicator, IconButton, MD3Colors } from 'react-native-paper';
 import { useCheckinStore } from '../providers/checkin_store';
 import { usePlannerStore } from '../providers/planner_store';
 import { useAuthStore } from '../providers/auth_store';
@@ -22,14 +23,15 @@ export default function HomeScreen() {
     fetchBlocks(userId, dateStr);
   }, [userId]);
 
-  const stateColors: Record<string, string> = {
-    leve: 'bg-green-50 border-green-200 text-green-800',
-    moderado: 'bg-blue-50 border-blue-200 text-blue-800',
-    sensível: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    crítico: 'bg-red-50 border-red-200 text-red-800',
+  const stateColors: Record<string, { bg: string, border: string, text: string, icon: string }> = {
+    leve: { bg: '#F0FDF4', border: '#BBF7D0', text: '#166534', icon: '#166534' },
+    moderado: { bg: '#EFF6FF', border: '#BFDBFE', text: '#1E40AF', icon: '#1E40AF' },
+    sensível: { bg: '#FFFBEB', border: '#FEF3C7', text: '#92400E', icon: '#92400E' },
+    crítico: { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B', icon: '#991B1B' },
   };
 
   const currentType = todayCheckin?.stateLabelType || 'moderado';
+  const colors = stateColors[currentType];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: appColors.background }}>
@@ -43,138 +45,104 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header de Boas-vindas */}
-        <View
-          style={{
-            marginBottom: appSpacing.xl,
-          }}
-        >
-          <Text
-            style={{
-              color: appColors.textSecondary,
-              fontSize: 13,
-              fontWeight: '500',
-            }}
-          >
+        <View style={{ marginBottom: appSpacing.xl }}>
+          <Text variant="labelMedium" style={{ color: appColors.textSecondary }}>
             Bom dia,
           </Text>
-          <Text
-            style={{
-              ...appTypography.title,
-              color: appColors.textPrimary,
-              marginTop: 4,
-            }}
-          >
+          <Text variant="headlineMedium" style={{ color: appColors.textPrimary, fontWeight: '700' }}>
             Ciclagem & Humor
           </Text>
         </View>
 
         {/* AI State Card (Destaque Central) */}
         {todayCheckin ? (
-          <View
+          <Card
             style={{
-              padding: appSpacing.xl,
-              borderRadius: appRadius.lg * 1.2,
-              borderWidth: 1,
               marginBottom: appSpacing.xl,
+              backgroundColor: colors.bg,
+              borderWidth: 1,
+              borderColor: colors.border,
             }}
-            className={stateColors[currentType]}
+            mode="outlined"
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: appSpacing.sm }}>
-              <LucideSparkles size={20} color={currentType === 'crítico' ? '#991B1B' : '#1E40AF'} />
+            <Card.Content>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: appSpacing.sm }}>
+                <LucideSparkles size={20} color={colors.icon} />
+                <Text
+                  variant="labelLarge"
+                  style={{
+                    marginLeft: appSpacing.sm,
+                    color: colors.text,
+                    fontWeight: '700',
+                    letterSpacing: 1.2,
+                  }}
+                >
+                  {todayCheckin.stateLabel}
+                </Text>
+              </View>
               <Text
-                style={{
-                  marginLeft: appSpacing.sm,
-                  fontSize: 14,
-                  fontWeight: '700',
-                  letterSpacing: 1.6,
-                }}
-              >
-                {todayCheckin.stateLabel}
-              </Text>
-            </View>
-            <Text
-              style={{
-                color: '#111827',
-                fontSize: 14,
-                lineHeight: 20,
-                marginBottom: appSpacing.md,
-              }}
-            >
-              {todayCheckin.aiState.analysis}
-            </Text>
-            <View
-              style={{
-                backgroundColor: 'rgba(255,255,255,0.75)',
-                padding: appSpacing.sm,
-                borderRadius: appRadius.md,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 10,
-                  fontWeight: '700',
-                  color: '#6b7280',
-                  marginBottom: 4,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Sugestão IA
-              </Text>
-              <Text
+                variant="bodyMedium"
                 style={{
                   color: '#111827',
-                  fontStyle: 'italic',
-                  fontSize: 13,
+                  marginBottom: appSpacing.md,
                 }}
               >
-                "{todayCheckin.aiState.recommendations[0]}"
+                {todayCheckin.aiState.analysis}
               </Text>
-            </View>
-          </View>
-        ) : (
-          <View
-            style={{
-              backgroundColor: appColors.surface,
-              padding: appSpacing.xl,
-              borderRadius: appRadius.lg * 1.2,
-              borderWidth: 1,
-              borderColor: appColors.borderSubtle,
-              marginBottom: appSpacing.xl,
-              alignItems: 'center',
-            }}
-          >
-            <Text
-              style={{
-                color: appColors.textSecondary,
-                textAlign: 'center',
-                marginBottom: appSpacing.md,
-              }}
-            >
-              Ainda não sei como você está hoje.
-            </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Checkin')}
-              style={{
-                backgroundColor: appColors.primary,
-                paddingHorizontal: appSpacing.lg,
-                paddingVertical: appSpacing.sm + 2,
-                borderRadius: appRadius.pill,
-                flexDirection: 'row',
-                alignItems: 'center',
-              }}
-            >
-              <LucidePlusCircle size={20} color="white" />
-              <Text
+              
+              <View
                 style={{
-                  color: 'white',
-                  fontWeight: '700',
-                  marginLeft: appSpacing.sm,
+                  backgroundColor: 'rgba(255,255,255,0.7)',
+                  padding: appSpacing.sm,
+                  borderRadius: appRadius.md,
                 }}
+              >
+                <Text
+                  variant="labelSmall"
+                  style={{
+                    fontWeight: '700',
+                    color: '#6b7280',
+                    marginBottom: 2,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Sugestão IA
+                </Text>
+                <Text
+                  variant="bodySmall"
+                  style={{
+                    color: '#111827',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  "{todayCheckin.aiState.recommendations[0]}"
+                </Text>
+              </View>
+            </Card.Content>
+          </Card>
+        ) : (
+          <Card style={{ marginBottom: appSpacing.xl }} mode="contained">
+            <Card.Content style={{ alignItems: 'center', paddingVertical: appSpacing.xl }}>
+              <Text
+                variant="bodyMedium"
+                style={{
+                  color: appColors.textSecondary,
+                  textAlign: 'center',
+                  marginBottom: appSpacing.lg,
+                }}
+              >
+                Ainda não sei como você está hoje.
+              </Text>
+              <Button
+                mode="contained"
+                icon={({ size, color }) => <LucidePlusCircle size={size} color={color} />}
+                onPress={() => navigation.navigate('Checkin')}
+                contentStyle={{ paddingHorizontal: appSpacing.md }}
               >
                 Fazer Check-in
-              </Text>
-            </TouchableOpacity>
-          </View>
+              </Button>
+            </Card.Content>
+          </Card>
         )}
 
         {/* Atalhos Rápidos */}
@@ -185,52 +153,31 @@ export default function HomeScreen() {
             marginBottom: appSpacing.xl,
           }}
         >
-          <TouchableOpacity
+          <Card 
+            style={{ flex: 1, backgroundColor: appColors.surface }} 
             onPress={() => navigation.navigate('Diário')}
-            style={{
-              flex: 1,
-              backgroundColor: appColors.surface,
-              padding: appSpacing.md,
-              borderRadius: appRadius.md,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: appColors.borderSubtle,
-            }}
+            mode="outlined"
           >
-            <LucideMessageCircle size={24} color="#3b82f6" />
-            <Text
-              style={{
-                color: appColors.textPrimary,
-                fontWeight: '600',
-                marginTop: appSpacing.sm,
-              }}
-            >
-              Diário
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+            <Card.Content style={{ alignItems: 'center', padding: appSpacing.md }}>
+              <LucideMessageCircle size={24} color={appColors.primary} />
+              <Text variant="labelLarge" style={{ marginTop: appSpacing.sm, fontWeight: '600' }}>
+                Diário
+              </Text>
+            </Card.Content>
+          </Card>
+          
+          <Card 
+            style={{ flex: 1, backgroundColor: appColors.surface }} 
             onPress={() => navigation.navigate('Planner')}
-            style={{
-              flex: 1,
-              backgroundColor: appColors.surface,
-              padding: appSpacing.md,
-              borderRadius: appRadius.md,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: appColors.borderSubtle,
-            }}
+            mode="outlined"
           >
-            <LucideCalendar size={24} color="#3b82f6" />
-            <Text
-              style={{
-                color: appColors.textPrimary,
-                fontWeight: '600',
-                marginTop: appSpacing.sm,
-              }}
-            >
-              Planner
-            </Text>
-          </TouchableOpacity>
+            <Card.Content style={{ alignItems: 'center', padding: appSpacing.md }}>
+              <LucideCalendar size={24} color={appColors.primary} />
+              <Text variant="labelLarge" style={{ marginTop: appSpacing.sm, fontWeight: '600' }}>
+                Planner
+              </Text>
+            </Card.Content>
+          </Card>
         </View>
 
         {/* Preview do Planner (Agenda de Hoje) */}
@@ -243,81 +190,48 @@ export default function HomeScreen() {
               marginBottom: appSpacing.md,
             }}
           >
-            <Text
-              style={{
-                ...appTypography.subtitle,
-                color: appColors.textPrimary,
-              }}
-            >
+            <Text variant="titleMedium" style={{ color: appColors.textPrimary, fontWeight: '700' }}>
               Próximo na agenda
             </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Planner')}>
-              <Text
-                style={{
-                  color: appColors.primary,
-                  fontWeight: '600',
-                  fontSize: 13,
-                }}
-              >
-                Ver tudo
-              </Text>
-            </TouchableOpacity>
+            <Button compact mode="text" onPress={() => navigation.navigate('Planner')}>
+              Ver tudo
+            </Button>
           </View>
 
           {plannerLoading ? (
-            <ActivityIndicator color={appColors.primary} />
+            <ActivityIndicator animating color={appColors.primary} />
           ) : blocks.length > 0 ? (
             blocks.slice(0, 3).map((block) => (
-              <View
+              <Card
                 key={block.id}
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
                   marginBottom: appSpacing.sm,
                   backgroundColor: appColors.surface,
-                  padding: appSpacing.md,
-                  borderRadius: appRadius.md,
-                  borderLeftWidth: 3,
+                  borderLeftWidth: 4,
                   borderLeftColor: appColors.primary,
-                  borderWidth: 1,
-                  borderColor: appColors.borderSubtle,
                 }}
+                mode="outlined"
               >
-                <View style={{ width: 52 }}>
-                  <Text
-                    style={{
-                      color: appColors.textSecondary,
-                      fontWeight: '700',
-                      fontSize: 10,
-                    }}
-                  >
-                    {block.startTime}
-                  </Text>
-                </View>
-                <View style={{ flex: 1, paddingLeft: appSpacing.md }}>
-                  <Text
-                    style={{
-                      color: appColors.textPrimary,
-                      fontWeight: '600',
-                      marginBottom: 2,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {block.title}
-                  </Text>
-                  <Text
-                    style={{
-                      color: appColors.textSecondary,
-                      fontSize: 11,
-                    }}
-                  >
-                    Intensidade: {block.intensity}
-                  </Text>
-                </View>
-              </View>
+                <Card.Content style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: appSpacing.md }}>
+                  <View style={{ width: 60 }}>
+                    <Text variant="labelSmall" style={{ color: appColors.textSecondary, fontWeight: '700' }}>
+                      {block.startTime}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, paddingLeft: appSpacing.sm }}>
+                    <Text variant="bodyMedium" style={{ fontWeight: '600' }} numberOfLines={1}>
+                      {block.title}
+                    </Text>
+                    <Text variant="labelSmall" style={{ color: appColors.textSecondary }}>
+                      Intensidade: {block.intensity}
+                    </Text>
+                  </View>
+                </Card.Content>
+              </Card>
             ))
           ) : (
             <Text
+              variant="bodySmall"
               style={{
                 color: appColors.textSecondary,
                 fontStyle: 'italic',

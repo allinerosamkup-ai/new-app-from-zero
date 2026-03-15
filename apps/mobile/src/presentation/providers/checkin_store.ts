@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { AIService, CheckinResponse } from '../../services/ai_service';
+import api from '../../services/api_service';
 
 /**
  * Entidade de dados para o formulário de Check-in (Clean Architecture)
@@ -63,13 +64,15 @@ export const useCheckinStore = create<CheckinState>((set, get) => ({
   },
 
   /**
-   * Carrega os check-ins recentes (Placeholder para implementação futura da API)
+   * Carrega os check-ins recentes do backend (GET /api/checkins?userId=&days=)
    */
   loadRecentCheckins: async (userId: string, days = 7) => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     try {
-      // TODO: Implementar endpoint GET /api/checkins/recent no backend
-      set({ isLoading: false });
+      const response = await api.get<CheckinResponse[]>('/api/checkins', {
+        params: { userId, days },
+      });
+      set({ recentCheckins: response.data, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false, error: err.message });
     }

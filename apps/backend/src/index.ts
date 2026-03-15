@@ -59,6 +59,41 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * GET /api/checkins
+   * Retorna os check-ins recentes de um usuário (padrão: últimos 7 dias).
+   */
+  app.get('/api/checkins', async (req: Request, res: Response) => {
+    const { userId, days } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    try {
+      const daysNum = Math.min(Math.max(Number(days ?? 7), 1), 90);
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - daysNum);
+      fromDate.setHours(0, 0, 0, 0);
+
+      const checkins = await prisma.dailyCheckin.findMany({
+        where: {
+          userId: String(userId),
+          localDate: { gte: fromDate },
+        },
+        orderBy: [
+          { localDate: 'desc' },
+          { recordedAt: 'desc' },
+        ],
+      });
+
+      return res.json(checkins);
+    } catch (error: any) {
+      console.error('[checkins/list] Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch check-ins' });
+    }
+  });
+
+  /**
    * POST /api/checkins
    * Salva o check-in diário e dispara a IA para avaliação de estado.
    */
@@ -135,6 +170,44 @@ export function createApp(dependencies: AppDependencies = {}) {
     console.error('[checkins/create] Error:', error);
     return res.status(500).json({ error: 'Failed to process check-in' });
   }
+  });
+
+  /**
+   * GET /api/journal/sessions
+   * Lista sessões de diário do usuário, mais recentes primeiro.
+   */
+  app.get('/api/journal/sessions', async (req: Request, res: Response) => {
+    const { userId, limit } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    try {
+      const limitNum = Math.min(Number(limit ?? 20), 50);
+
+      const sessions = await prisma.journalSession.findMany({
+        where: { userId: String(userId) },
+        orderBy: { startedAt: 'desc' },
+        take: limitNum,
+      });
+
+      return res.json(
+        sessions.map((s) => ({
+          id: s.id,
+          localDate: s.localDate.toISOString().split('T')[0],
+          status: s.status,
+          summary: s.summary,
+          emotions: s.emotions,
+          themes: s.themes,
+          startedAt: s.startedAt.toISOString(),
+          finalizedAt: s.finalizedAt?.toISOString() ?? null,
+        }))
+      );
+    } catch (error: any) {
+      console.error('[journal/sessions] Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch journal sessions' });
+    }
   });
 
   /**
