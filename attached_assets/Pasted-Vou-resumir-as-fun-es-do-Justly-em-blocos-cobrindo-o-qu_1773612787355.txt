@@ -1,0 +1,147 @@
+Vou resumir as **funções do Justly** em blocos, cobrindo o que aparece nas stores oficiais (Apple/Play) e no dossiê que você já tem. [apps.apple](https://apps.apple.com/in/app/mood-tracker-goals-streaks/id1570951174)
+
+***
+
+## 1. Captura de entradas (como você “fala” com o app)
+
+- **Texto**: você pode simplesmente digitar, como num diário comum, mas a IA sempre entra como coach (não é só nota solta). [apps.apple](https://apps.apple.com/ae/app/ai-journal-ai-therapy-justly/id1570951174)
+- **Áudio / voz**: gravar voz e deixar o app transcrever e organizar como entrada de diário; pensado para quando a pessoa não quer ou não consegue escrever. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=en_CA)
+- **Vídeo**: possibilidade de registrar em vídeo, com transcrição e análise depois (principalmente descrito em App Store). [apps.apple](https://apps.apple.com/us/app/justly-ai-voice-video-journal/id1570951174?l=vi)
+- **Sessão guiada x sessão livre**:  
+  - Guiadas: você escolhe um template/tema (ansiedade, gratidão, relacionamentos, metas etc.) e a IA conduz com perguntas estruturadas. [apps.apple](https://apps.apple.com/kh/app/ai-journal-ai-therapy-justly/id1570951174)
+  - Livres: você só despeja pensamentos e a IA organiza depois (sem roteiro rígido). [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+***
+
+## 2. Motor de IA durante cada sessão
+
+- **Coach de IA “tipo terapeuta leve”**: a IA faz perguntas que ajudam a esclarecer o que você sente, sem precisar que você tenha as palavras certas. [apps.apple](https://apps.apple.com/in/app/mood-tracker-goals-streaks/id1570951174)
+- **Tom não clínico**: posiciona como “autoterapia guiada” / “AI journal for mental health”, não como terapia licenciada. [justly](https://justly.life/terms-conditions)
+
+Durante ou logo após cada sessão, o Justly faz:
+
+- **Resumo automático da sessão**  
+  - 1 resumo simples do que você estava realmente sentindo. [apps.apple](https://apps.apple.com/us/app/di%C3%A1rio-de-gratid%C3%A3o-ai-journal/id1570951174?l=pt-BR)
+
+- **Extração de emoções principais**  
+  - lista de 3–7 emoções (ex.: triste, ansioso, grato, confuso). [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=en_CA)
+
+- **Identificação de temas recorrentes**  
+  - categorias como trabalho, relacionamento, saúde, dinheiro, propósito etc. [apps.apple](https://apps.apple.com/ae/app/ai-journal-ai-therapy-justly/id1570951174)
+
+- **Padrões de humor e tendências emocionais**  
+  - monitora como seu humor e energia emocional mudam ao longo do tempo, a partir das entradas. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=zh)
+
+- **Fatores de estresse, vitórias e avanços**  
+  - destaca o que está pesando e o que foi progresso, não só o negativo. [apps.apple](https://apps.apple.com/us/app/di%C3%A1rio-de-gratid%C3%A3o-ai-journal/id1570951174?l=pt-BR)
+
+- **Detecção de loops de pensamento e comportamentos**  
+  - identifica padrões negativos recorrentes (ruminação, autosabotagem) e faz você notar esses loops. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+***
+
+## 3. Relatório semanal e acompanhamento
+
+- **Relatório semanal de saúde mental (“mental health report”)**  
+  - 1 digest automático mostrando:
+    - o que mais pesou na semana,  
+    - o que melhorou,  
+    - padrões que você talvez não veja,  
+    - progresso emocional ao longo do tempo,  
+    - sugestões gentis inspiradas em técnicas terapêuticas. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=en_ZA)
+
+- **Visão de progresso**  
+  - mostra tendências, não só o dia isolado (como você se sente semana a semana). [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=zh)
+
+***
+
+## 4. Estilos / personalidades de IA
+
+- **Múltiplos “jeitos” de IA** (você escolhe o estilo do coach):  
+  - Apoiador & empático.  
+  - Desafiador & honesto.  
+  - Calmo & filosófico.  
+  - Focado em relacionamentos.  
+  - Casual / leve, estilo Gen Z. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=en_ZA)
+
+- Cada estilo muda o tom, a forma de perguntar e o tipo de reflexão (mais colo, mais provocação, mais filosófico etc.). [apps.apple](https://apps.apple.com/ae/app/ai-journal-ai-therapy-justly/id1570951174)
+
+***
+
+## 5. Memória de longo prazo e contexto
+
+- **Memória de entradas anteriores**  
+  - lembra seus registros passados, inclusive dificuldades e avanços. [apps.apple](https://apps.apple.com/in/app/mood-tracker-goals-streaks/id1570951174)
+- **Lembra detalhes de vida importantes**  
+  - contexto de pessoas, temas recorrentes, marcos pessoais. [apps.apple](https://apps.apple.com/kh/app/ai-journal-ai-therapy-justly/id1570951174)
+- **Modelagem de padrões emocionais ao longo do tempo**  
+  - a IA passa a reconhecer padrões e ajusta as conversas/insights com base nisso; cada sessão “se apoia” na anterior. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=en_CA)
+
+***
+
+## 6. Templates temáticos e jornadas prontas
+
+- **Templates/jornadas para situações específicas**, por exemplo:  
+  - Ansiedade e estresse.  
+  - Raiva / anger release.  
+  - Gratidão.  
+  - Relacionamentos.  
+  - Clareza de metas e direção.  
+  - Carreira e produtividade. [apps.apple](https://apps.apple.com/kh/app/ai-journal-ai-therapy-justly/id1570951174)
+
+- Esses templates definem perguntas e estrutura da sessão (CBT‑style reflection, questionamentos cognitivos, reestruturação de pensamentos). [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+***
+
+## 7. Tracking de humor, hábitos, metas e streaks
+
+Pelos textos de loja e pelo dossiê:
+
+- **Mood tracking**: acompanha humor ao longo do tempo, atrelado às sessões. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=zh)
+- **Goals & streaks**: foco em metas pessoais e consistência (streaks de uso / hábito de refletir). [apps.apple](https://apps.apple.com/in/app/mood-tracker-goals-streaks/id1570951174)
+- **Hábitos e bem‑estar**: no case da Canopas, Justly é descrito como app de hábitos e bem‑estar com UI simples e agradável. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+(Os detalhes de metas/hábitos são menos explícitos que journaling/relatórios, mas aparecem em resumo de “goals, streaks, habit & wellness tracking”.) [apps.apple](https://apps.apple.com/in/app/mood-tracker-goals-streaks/id1570951174)
+
+***
+
+## 8. UX e jornadas principais
+
+Do material de loja + análise: [apps.apple](https://apps.apple.com/ae/app/ai-journal-ai-therapy-justly/id1570951174)
+
+- **Jornada 1 — Check‑in diário rápido (5–10 min)**  
+  - Escolhe template ou sessão livre → fala/digita → IA organiza, resume, extrai emoções/temas.
+
+- **Jornada 2 — Sessão profunda em crise**  
+  - Template específico para ansiedade, crise, conflito em relacionamento etc.  
+  - IA foca em nomear emoção, gatilhos, pensamentos automáticos, alternativas. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Jornada 3 — Revisão semanal**  
+  - Relatório com padrões, loops e progresso; sugestões leves de próximos passos.
+
+UX geral:
+
+- Interface minimalista, limpa, com foco em texto e blocos bem organizados. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+- Paleta suave, estética de bem‑estar (sem cores agressivas). [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+- Poucos elementos por tela, muita ênfase em tipografia e espaço em branco.
+
+***
+
+## 9. Plataforma, modelo de negócio e privacidade
+
+- **Multi‑plataforma**  
+  - iOS, iPadOS, macOS (via Catalyst), Apple Vision, Android; UI pensada pra ser consistente. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=en_CA)
+
+- **Modelo freemium + assinaturas**  
+  - Download grátis, planos semanais/mensais/trimestrais/anuais com diferentes SKUs, liberando uso ilimitado de IA, templates completos, relatórios profundos, personalidades e histórico mais longo. [apps.apple](https://apps.apple.com/ae/app/ai-journal-ai-therapy-justly/id1570951174)
+
+- **Privacidade & segurança**  
+  - Dados guardados em servidores seguros, criptografia em trânsito, política deixando claro que não é serviço médico e que IA pode errar; não substitui tratamento profissional. [justly](https://justly.life/terms-conditions)
+
+***
+
+### Resumo em uma frase (pra você reaproveitar em pitch)
+
+Justly é um **diário guiado com IA** que captura texto/voz/vídeo, transforma cada sessão em resumo, emoções, temas e padrões, lembra seu histórico, gera relatórios semanais de saúde mental e adapta o estilo da IA ao seu jeito (empático, desafiador, filosófico etc.), tudo em um modelo freemium multi‑plataforma. [play.google](https://play.google.com/store/apps/details?id=com.canopas.nolonely&hl=en_ZA)
+
+Se você quiser, posso agora transformar isso em uma **tabela de “função do Justly → como vamos clonar/adaptar no seu app”**.

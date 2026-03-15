@@ -4,8 +4,15 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing' });
+  }
+  return _openai;
+}
+const openai = new Proxy({} as OpenAI, {
+  get(_target, prop) { return (getOpenAI() as any)[prop]; },
 });
 
 // Aprimorado conforme as novas especificações
