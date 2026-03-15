@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigation } from '../navigation';
+import { ArrowRight, Sparkles } from 'lucide-react';
 
 type StateType = 'leve' | 'moderado' | 'sensível' | 'crítico';
 
@@ -8,7 +9,7 @@ const STATE_CONFIG: Record<StateType, {
   emoji: string;
   color: string;
   textColor: string;
-  bgColor: string;
+  bgGradient: string;
   focus: string;
 }> = {
   leve: {
@@ -16,7 +17,7 @@ const STATE_CONFIG: Record<StateType, {
     emoji: '🌱',
     color: '#9AD7B4',
     textColor: '#166534',
-    bgColor: '#F0FDF4',
+    bgGradient: 'linear-gradient(180deg, #e8f5e9 0%, #f0fdf4 50%, var(--bg-base) 100%)',
     focus: 'Foco balanceado',
   },
   moderado: {
@@ -24,7 +25,7 @@ const STATE_CONFIG: Record<StateType, {
     emoji: '✨',
     color: '#FFBE7A',
     textColor: '#92400E',
-    bgColor: '#FFFBEB',
+    bgGradient: 'linear-gradient(180deg, #fff8e1 0%, #fffbeb 50%, var(--bg-base) 100%)',
     focus: 'Foco profundo',
   },
   sensível: {
@@ -32,7 +33,7 @@ const STATE_CONFIG: Record<StateType, {
     emoji: '🌙',
     color: '#D8C8FF',
     textColor: '#5B21B6',
-    bgColor: '#FAF5FF',
+    bgGradient: 'linear-gradient(180deg, #f3e8ff 0%, #faf5ff 50%, var(--bg-base) 100%)',
     focus: 'Foco leve',
   },
   crítico: {
@@ -40,7 +41,7 @@ const STATE_CONFIG: Record<StateType, {
     emoji: '🌊',
     color: '#FF9BA5',
     textColor: '#9F1239',
-    bgColor: '#FFF1F2',
+    bgGradient: 'linear-gradient(180deg, #ffe4e6 0%, #fff1f2 50%, var(--bg-base) 100%)',
     focus: 'Descanso',
   },
 };
@@ -60,7 +61,7 @@ export default function CheckinResultScreen() {
       ],
     },
     moderado: {
-      summary: 'Seu humor está estável e a energia acima da média hoje. Essa combinação favorece atividades que exigem foco e criatividade.',
+      summary: 'Seu humor está estável e a energia acima da média. Essa combinação favorece atividades que exigem foco e criatividade.',
       recommendations: [
         'Aproveite o pico de energia para tarefas que exigem concentração.',
         'Inclua uma pausa de 15 min no meio da tarde para manter o ritmo.',
@@ -88,66 +89,53 @@ export default function CheckinResultScreen() {
   const { summary, recommendations } = stateContent[stateType];
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto" style={{ backgroundColor: config.bgColor }}>
-      <div className="flex-1 p-6">
-        <div className="flex justify-center mt-8 mb-7">
+    <div className="flex flex-col h-full overflow-y-auto" style={{ background: config.bgGradient }}>
+      <div className="flex-1 px-5 pt-6 pb-5">
+        <div className="flex justify-center mt-4 mb-6 animate-fade-in">
           <div
-            className="w-32 h-32 rounded-full flex items-center justify-center"
+            className="w-28 h-28 rounded-full flex items-center justify-center"
             style={{
-              backgroundColor: config.color,
-              boxShadow: `0 8px 30px ${config.color}73`,
+              background: `linear-gradient(135deg, ${config.color}40, ${config.color}80)`,
+              boxShadow: `0 12px 40px ${config.color}50`,
             }}
           >
-            <span className="text-[56px]">{config.emoji}</span>
+            <span className="text-[52px]">{config.emoji}</span>
           </div>
         </div>
 
         <h1
-          className="text-[28px] font-bold text-center mb-2.5"
-          style={{ color: config.textColor }}
+          className="text-[26px] font-bold text-center mb-2 animate-fade-in delay-100"
+          style={{ color: config.textColor, fontFamily: 'var(--font-heading)' }}
         >
           {config.label}
         </h1>
 
-        <div className="flex justify-center mb-5">
+        <div className="flex justify-center mb-5 animate-fade-in delay-100">
           <span
-            className="px-4 py-1.5 rounded-full text-[13px] font-semibold"
-            style={{
-              backgroundColor: config.color + '55',
-              color: config.textColor,
-              letterSpacing: '0.3px',
-            }}
+            className="px-4 py-1.5 rounded-full text-[12px] font-semibold"
+            style={{ background: `${config.color}35`, color: config.textColor }}
           >
             {config.focus}
           </span>
         </div>
 
-        <div className="bg-white/65 rounded-[20px] p-5 mb-5">
-          <p
-            className="text-base text-center leading-[26px] opacity-90"
-            style={{ color: config.textColor }}
-          >
+        <div className="glass-card rounded-[22px] p-5 mb-5 animate-fade-in delay-200">
+          <p className="text-[15px] text-center leading-[24px]" style={{ color: config.textColor, opacity: 0.85 }}>
             {summary}
           </p>
         </div>
 
-        <div className="mb-7">
-          <p
-            className="text-[13px] font-semibold uppercase tracking-wider mb-2.5 opacity-70"
-            style={{ color: config.textColor }}
-          >
-            Sugestões para hoje
-          </p>
+        <div className="mb-6 animate-fade-in delay-300">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles size={14} style={{ color: config.textColor, opacity: 0.6 }} />
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: config.textColor, opacity: 0.6 }}>
+              Sugestões para hoje
+            </p>
+          </div>
           {recommendations.map((rec, i) => (
-            <div
-              key={i}
-              className="flex items-start bg-white/65 rounded-[14px] p-3.5 mb-2"
-            >
+            <div key={i} className="glass-card rounded-[16px] p-3.5 mb-2 flex items-start">
               <span className="text-sm mr-2.5 mt-0.5">💡</span>
-              <p
-                className="text-sm flex-1 leading-[21px]"
-                style={{ color: config.textColor }}
-              >
+              <p className="text-[13px] flex-1 leading-[20px]" style={{ color: config.textColor }}>
                 {rec}
               </p>
             </div>
@@ -159,14 +147,14 @@ export default function CheckinResultScreen() {
             window.dispatchEvent(new CustomEvent('checkin-done', { detail: { state: stateType } }));
             navigate('home');
           }}
-          className="w-full py-4.5 rounded-2xl text-center text-base font-bold"
+          className="w-full py-[16px] rounded-[20px] text-center font-bold text-[15px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] animate-fade-in delay-400"
           style={{
-            backgroundColor: config.color,
+            background: config.color,
             color: config.textColor,
-            boxShadow: `0 4px 16px ${config.color}59`,
+            boxShadow: `0 6px 20px ${config.color}40`,
           }}
         >
-          Ver meu dia →
+          Ver meu dia <ArrowRight size={18} />
         </button>
       </div>
     </div>

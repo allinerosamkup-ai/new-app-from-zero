@@ -9,9 +9,11 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
       >
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[28px] bg-black rounded-b-2xl z-50" />
 
-        <div className="w-full h-full bg-white rounded-[36px] overflow-hidden relative">
-          <div className="h-[44px] flex items-end justify-center px-6 pb-1 bg-inherit z-40 relative">
-            <div className="flex items-center justify-between w-full text-[11px] font-semibold text-gray-800">
+        <div className="w-full h-full rounded-[36px] overflow-hidden relative"
+          style={{ background: 'var(--bg-base)' }}>
+          <div className="h-[44px] flex items-end justify-center px-6 pb-1 z-40 relative"
+            style={{ background: 'inherit' }}>
+            <div className="flex items-center justify-between w-full text-[11px] font-semibold text-[#1f1b16]">
               <span>9:41</span>
               <div className="flex items-center gap-1">
                 <svg width="16" height="11" viewBox="0 0 16 11" fill="currentColor"><rect x="0" y="4" width="3" height="7" rx="1" opacity="0.3"/><rect x="4.5" y="2.5" width="3" height="8.5" rx="1" opacity="0.5"/><rect x="9" y="1" width="3" height="10" rx="1" opacity="0.7"/><rect x="13" y="0" width="3" height="11" rx="1"/></svg>

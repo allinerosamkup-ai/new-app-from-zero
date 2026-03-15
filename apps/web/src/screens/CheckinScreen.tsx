@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigation } from '../navigation';
+import { ArrowLeft } from 'lucide-react';
 
 function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
   const emojis = ['😞', '😐', '🙂', '😊', '😄'];
   const labels = ['Muito mal', 'Neutro', 'Bem', 'Muito bem', 'Ótimo'];
 
   return (
-    <div className="mb-6">
-      <h3 className="text-lg font-semibold mb-4 text-gray-800">Como está seu humor agora?</h3>
-      <div className="flex justify-between">
+    <div className="mb-7 animate-fade-in delay-100">
+      <h3 className="text-[15px] font-semibold mb-4" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+        Como está seu humor agora?
+      </h3>
+      <div className="flex justify-between gap-1">
         {emojis.map((emoji, index) => {
           const score = index + 1;
           const isSelected = value === score;
@@ -16,13 +19,16 @@ function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number
             <button
               key={score}
               onClick={() => onSelect(score)}
-              className={`flex flex-col items-center p-3 rounded-2xl border-2 transition-colors ${
-                isSelected ? 'bg-blue-50 border-blue-500' : 'border-transparent hover:bg-gray-50'
-              }`}
+              className="flex flex-col items-center p-2.5 rounded-2xl transition-all duration-200"
+              style={{
+                background: isSelected ? 'rgba(31,59,50,0.08)' : 'transparent',
+                border: isSelected ? '2px solid var(--accent-green)' : '2px solid transparent',
+                transform: isSelected ? 'scale(1.1)' : 'scale(1)',
+              }}
             >
-              <span className="text-[32px]">{emoji}</span>
+              <span className="text-[28px]">{emoji}</span>
               {isSelected && (
-                <span className="text-blue-600 text-xs font-bold mt-1">{labels[index]}</span>
+                <span className="text-[10px] font-bold mt-1" style={{ color: 'var(--accent-green)' }}>{labels[index]}</span>
               )}
             </button>
           );
@@ -32,18 +38,24 @@ function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number
   );
 }
 
-function ScoreSelector({ label, value, onSelect }: { label: string; value: number; onSelect: (v: number) => void }) {
+function EnergySlider({ label, value, onSelect, icon }: { label: string; value: number; onSelect: (v: number) => void; icon: string }) {
   return (
-    <div className="mb-6">
-      <p className="text-gray-800 font-medium mb-3">{label}</p>
-      <div className="flex justify-between bg-gray-100 p-1 rounded-xl">
+    <div className="mb-6 animate-fade-in delay-200">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-lg">{icon}</span>
+        <p className="text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>{label}</p>
+      </div>
+      <div className="flex gap-2">
         {[1, 2, 3, 4, 5].map((score) => (
           <button
             key={score}
             onClick={() => onSelect(score)}
-            className={`flex-1 py-3 rounded-lg text-center font-bold transition-all ${
-              value === score ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'
-            }`}
+            className="flex-1 py-3 rounded-xl text-center font-bold text-[14px] transition-all duration-200"
+            style={{
+              background: value === score ? 'var(--bg-dark)' : 'var(--bg-glass-strong)',
+              color: value === score ? 'white' : 'var(--text-secondary)',
+              boxShadow: value === score ? 'var(--shadow-md)' : 'none',
+            }}
           >
             {score}
           </button>
@@ -68,30 +80,45 @@ export default function CheckinScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-y-auto p-4">
-      <h1 className="text-xl font-bold mb-6 text-center text-gray-800">Como você está hoje?</h1>
-
-      <MoodSelector value={mood} onSelect={setMood} />
-      <ScoreSelector label="Como está seu nível de energia?" value={energy} onSelect={setEnergy} />
-      <ScoreSelector label="Como está sua clareza mental?" value={clarity} onSelect={setClarity} />
-      <ScoreSelector label="Nível de irritabilidade" value={irritability} onSelect={setIrritability} />
-
-      <div className="mt-2">
-        <p className="text-gray-700 mb-2 text-sm">Quer comentar algo sobre o momento?</p>
-        <textarea
-          className="w-full border border-gray-300 rounded-lg p-3 h-20 text-sm resize-none outline-none focus:border-blue-400"
-          placeholder="Ex: Dormi pouco, mas me sinto bem..."
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
+    <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
+      <div className="flex items-center px-5 pt-2 pb-3">
+        <button onClick={() => navigate('home')} className="p-2 -ml-2 rounded-xl transition-colors hover:bg-black/5">
+          <ArrowLeft size={22} style={{ color: 'var(--text-primary)' }} />
+        </button>
       </div>
 
-      <button
-        onClick={handleSubmit}
-        className="mt-6 mb-6 p-4 rounded-xl bg-blue-600 text-white font-bold text-lg text-center active:bg-blue-700 transition-colors"
-      >
-        Confirmar check-in
-      </button>
+      <div className="px-5 pb-6">
+        <h1 className="text-[20px] font-bold mb-1 animate-fade-in" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+          Como você está hoje?
+        </h1>
+        <p className="text-[13px] mb-6 animate-fade-in" style={{ color: 'var(--text-muted)' }}>
+          Responda rápido, sem pensar demais. Não tem certo ou errado.
+        </p>
+
+        <MoodSelector value={mood} onSelect={setMood} />
+        <EnergySlider label="Nível de energia" value={energy} onSelect={setEnergy} icon="⚡" />
+        <EnergySlider label="Clareza mental" value={clarity} onSelect={setClarity} icon="🧠" />
+        <EnergySlider label="Irritabilidade" value={irritability} onSelect={setIrritability} icon="🌡️" />
+
+        <div className="mt-2 mb-6 animate-fade-in delay-300">
+          <p className="text-[13px] mb-2" style={{ color: 'var(--text-secondary)' }}>Quer comentar algo? (opcional)</p>
+          <textarea
+            className="w-full glass-card rounded-2xl p-4 text-[14px] resize-none outline-none h-20 transition-all focus:shadow-md"
+            placeholder="Ex: Dormi pouco, mas me sinto bem..."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            style={{ color: 'var(--text-primary)' }}
+          />
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          className="w-full py-[18px] rounded-[20px] text-white font-bold text-[16px] transition-all duration-200 active:scale-[0.98] animate-fade-in delay-400"
+          style={{ background: 'var(--bg-dark)', boxShadow: 'var(--shadow-lg)' }}
+        >
+          Confirmar check-in
+        </button>
+      </div>
     </div>
   );
 }

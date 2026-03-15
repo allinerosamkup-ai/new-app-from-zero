@@ -10,7 +10,10 @@ export type Screen =
   | 'journal'
   | 'insights'
   | 'config'
-  | 'dailySummary';
+  | 'dailySummary'
+  | 'objectives'
+  | 'harmony'
+  | 'pomodoro';
 
 type NavigationContextType = {
   screen: Screen;
@@ -41,6 +44,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
     if (s === 'journal') setActiveTab('journal');
     if (s === 'insights') setActiveTab('insights');
     if (s === 'config') setActiveTab('config');
+    if (s === 'objectives') setActiveTab('objectives');
   }, []);
 
   return (

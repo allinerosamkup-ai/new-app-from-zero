@@ -1,0 +1,132 @@
+Vou listar as **funções do Splitti (Planejador TDAH com IA)** em blocos, juntando o que aparece nas lojas (Apple/Play) com o que já está no teu dossiê. [apps.apple](https://apps.apple.com/se/app/adhd-planner-ai-task-splitti/id6473397856)
+
+***
+
+## 1. Núcleo de IA: metas → tarefas
+
+- **Definição inteligente de metas**  
+  - Você digita um objetivo grande (ex.: “entregar TCC”, “organizar mudança de casa”) e a IA **decompõe em passos menores e acionáveis**. [play.google](https://play.google.com/store/apps/details?id=com.nick.weiss.Decomposer&hl=en_GB)
+  - É vendida como “AI‑Powered Task Decomposition / Definição de Metas Inteligente”. [play.google](https://play.google.com/store/apps/details?id=com.nick.weiss.Decomposer&hl=pt_PT)
+
+- **Perfil de usuário personalizado**  
+  - Você preenche um perfil (tipo de trabalho, maiores dificuldades, horários preferidos etc.) e a IA passa a adaptar:  
+    - tamanho dos passos,  
+    - tipo de tarefa,  
+    - nível de detalhe,  
+    - dicas e priorização. [apps.apple](https://apps.apple.com/us/app/adhd-planner-ai-task-splitti/id6473397856)
+
+- **Análise profunda de tarefas**  
+  - Para cada tarefa, a IA pode:  
+    - explicar o que exatamente precisa ser feito,  
+    - sugerir subtarefas,  
+    - dar dicas sobre como abordar,  
+    - discutir bloqueios e medos (via chat). [apps.apple](https://apps.apple.com/do/app/planificador-ia-tdah-splitti/id6473397856)
+
+***
+
+## 2. Organização diária: planner, matriz e foco
+
+- **To‑do list & Daily Organizer**  
+  - Lista de tarefas + visão de dia, organizada com ajuda da IA. [play.google](https://play.google.com/store/apps/details?id=com.nick.weiss.Decomposer&hl=en)
+
+- **Matriz de Eisenhower automática**  
+  - Tarefas são colocadas automaticamente na matriz importante/urgente (4 quadrantes) **com base no seu perfil e nas informações da tarefa**, não só em flags manuais. [apps.apple](https://apps.apple.com/eg/app/adhd-planner-ai-tasks-splitti/id6473397856)
+  - Você vê visualmente o que é “importante e urgente”, “importante mas não urgente” etc.
+
+- **Timer Pomodoro integrado**  
+  - Temporizador de foco com blocos de tempo (ex.: 25/5, 50/10) ligado às tarefas. [apps.apple](https://apps.apple.com/ua/app/adhd-planner-ai-tasks-splitti/id6473397856)
+  - A IA gera dicas de produtividade durante ou entre os Pomodoros.
+
+- **Rastreamento de produtividade**  
+  - Métricas de:
+    - tempo em foco,  
+    - número de tarefas concluídas por dia e mês,  
+    - progresso em metas. [play.google](https://play.google.com/store/apps/details?id=com.nick.weiss.Decomposer&hl=es_CL)
+
+- **Planner diário + visão de metas conectadas**  
+  - Você consegue ver o “hoje” e como ele se liga às metas maiores (árvore de metas → tarefas → foco). [youtube](https://www.youtube.com/watch?v=_YXVBbBkM-A)
+
+***
+
+## 3. IA como coach de TDAH / procrastinação
+
+- **Posicionamento explícito em TDAH e procrastinação**  
+  - “ADHD Planner & Organizer”, “Planejador TDAH com IA”.  
+  - Focado em pessoas com TDAH, procrastinação crônica, estudantes e profissionais sobrecarregados. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **IA para motivação e suporte (AI Chat)**  
+  - Chat interno para:  
+    - motivação,  
+    - conselhos rápidos,  
+    - responder dúvidas,  
+    - normalizar dificuldades (“também passamos por isso”). [play.google](https://play.google.com/store/apps/details?id=com.nick.weiss.Decomposer&hl=en_GB)
+
+- **Ajuste dinâmico de prioridades**  
+  - A IA observa o que você faz ou não faz e pode reordenar a lista, mudar prioridades e sugerir foco em outras coisas. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Mensagens empáticas e linguagem acessível para TDAH**  
+  - Texto de marketing e mensagens dentro do app são pensados para quem se sente culpado por procrastinar; criadores dizem que também têm dificuldades similares. [play.google](https://play.google.com/store/apps/details?id=com.nick.weiss.Decomposer&hl=en)
+
+***
+
+## 4. UX e fluxos principais
+
+Da análise detalhada que você já tem: [play.google](https://play.google.com/store/apps/details?id=com.nick.weiss.Decomposer&hl=pt_PT)
+
+- **Fluxo 1 — Definir meta e decompor**  
+  - Usuário define meta grande → IA quebra em tarefas → tarefas vão para matriz de Eisenhower e planner diário → execuções com Pomodoro.
+
+- **Fluxo 2 — Planejamento diário integrado**  
+  - Planner + visão de humor/estado físico (na versão mais recente) + acesso ao coach de IA. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Fluxo 3 — Sessões de foco**  
+  - Timer Pomodoro ligado à tarefa → IA oferece dicas, lembra pausas, ajuda a voltar depois.
+
+- **Empty states bem trabalhados**  
+  - Quando não há metas/tarefas, o app dá exemplos e sugere o que criar (sugestões prontas). [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Onboarding para personalização**  
+  - Perguntas sobre metas, tipo de trabalho, maior dificuldade, horários preferidos → alimenta o perfil de IA. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+***
+
+## 5. Bem‑estar complementar (meditação, sons, equilíbrio)
+
+No material de marketing e na análise: [youtube](https://www.youtube.com/watch?v=_YXVBbBkM-A)
+
+- **Meditações guiadas curtas**  
+  - Focadas em foco, ansiedade e transição entre tarefas. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Sons de foco e relaxamento**  
+  - Ruído branco, sons de natureza etc., integrados com os timers de foco. [youtube](https://www.youtube.com/watch?v=_YXVBbBkM-A)
+
+- **Integração meditação + Pomodoro**  
+  - Algumas meditações/som começam/juntam com a sessão de foco, não são um módulo separado. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Roda de equilíbrio / wheel of life (algumas versões)**  
+  - Ferramenta para autoavaliar áreas da vida (trabalho, saúde, relações etc.) e ver se está tudo concentrado demais em uma área só. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+***
+
+## 6. Outras funções de produto
+
+- **Histórico e progresso de metas/tarefas**  
+  - Registro de metas/tarefas concluídas ao longo do tempo, com visão de progresso de longo prazo. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Sync multi‑dispositivo e offline** (promessa de marketing)  
+  - Sincronização automática entre dispositivos e capacidade de anotar mesmo sem internet, com sync posterior. [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/90937110/af44e408-3571-41a9-ba6a-fec91148f5b3/app-referencia.pdf)
+
+- **Modelo freemium com planos Plus/Pro**  
+  - App gratuito para baixar; planos pagos mensais/anuais que liberam:
+    - mais uso de IA,
+    - analytics mais avançado,
+    - trilhas extras de meditação/sons,
+    - possivelmente mais metas ativas simultâneas. [apps.apple](https://apps.apple.com/us/app/adhd-planner-ai-task-splitti/id6473397856)
+
+***
+
+### Frase de síntese (pra colar no teu doc de clonagem)
+
+Splitti é um **planejador TDAH com IA** que pega metas grandes e as desmonta em passos pequenos personalizados, organiza esses passos em lista diária, matriz de Eisenhower e sessões de foco Pomodoro, rastreia tempo em foco/progresso, oferece chat de IA para motivação e suporte, e ainda adiciona peças de bem‑estar (meditação, sons, roda de equilíbrio) para tratar procrastinação e sobrecarga de forma mais completa. [apps.apple](https://apps.apple.com/do/app/planificador-ia-tdah-splitti/id6473397856)
+
+Se quiser, no próximo passo eu monto um quadro **“funções do Justly x Splitti x o seu app”** com colunas pra você ver claramente o que vai clonar/combinar.

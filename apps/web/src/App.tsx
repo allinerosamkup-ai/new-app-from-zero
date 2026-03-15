@@ -12,11 +12,14 @@ import JournalScreen from './screens/JournalScreen';
 import InsightsScreen from './screens/InsightsScreen';
 import ConfigScreen from './screens/ConfigScreen';
 import DailySummaryScreen from './screens/DailySummaryScreen';
+import ObjectivesScreen from './screens/ObjectivesScreen';
+import HarmonyCircleScreen from './screens/HarmonyCircleScreen';
+import PomodoroScreen from './screens/PomodoroScreen';
 
 function ScreenRouter() {
   const { screen } = useNavigation();
 
-  const mainTabs = ['home', 'planner', 'journal', 'insights', 'config'];
+  const mainTabs = ['home', 'planner', 'journal', 'insights', 'config', 'objectives'];
   const showTabs = mainTabs.includes(screen);
 
   const renderScreen = () => {
@@ -31,6 +34,9 @@ function ScreenRouter() {
       case 'insights': return <InsightsScreen />;
       case 'config': return <ConfigScreen />;
       case 'dailySummary': return <DailySummaryScreen />;
+      case 'objectives': return <ObjectivesScreen />;
+      case 'harmony': return <HarmonyCircleScreen />;
+      case 'pomodoro': return <PomodoroScreen />;
       default: return <HomeScreen />;
     }
   };
@@ -48,7 +54,7 @@ function ScreenRouter() {
 export default function App() {
   return (
     <NavigationProvider>
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[#e8e4de]">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#e8e4de' }}>
         <PhoneFrame>
           <ScreenRouter />
         </PhoneFrame>
