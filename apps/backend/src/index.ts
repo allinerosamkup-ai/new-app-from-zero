@@ -36,7 +36,17 @@ export function createApp(dependencies: AppDependencies = {}) {
   const aiService = dependencies.aiService ?? AIService;
   const journalService = dependencies.journalService ?? JournalService;
 
-  app.use(cors());
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow Replit domains, localhost, and undefined (same-origin)
+      if (!origin || origin.includes('replit') || origin.includes('localhost') || origin.includes('replit.dev') || origin.includes('replit.app')) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Open for now — tighten when domain is fixed
+      }
+    },
+    credentials: true,
+  }));
   app.use(express.json());
 
   app.get('/health', (req: Request, res: Response) => {
