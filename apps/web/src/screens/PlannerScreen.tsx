@@ -2,20 +2,18 @@ import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Lightbulb, Sparkles } from 'lucide-react';
 
 const MOCK_BLOCKS = [
-  { id: '1', title: 'Meditação matinal', startTime: '07:00', endTime: '07:30', category: 'autocuidado' as const, intensity: 'L', isAiSuggested: true },
+  { id: '1', title: 'Meditação matinal', startTime: '07:00', endTime: '07:30', category: 'saúde' as const, intensity: 'L', isAiSuggested: true },
   { id: '2', title: 'Foco no projeto', startTime: '09:00', endTime: '11:00', category: 'trabalho' as const, intensity: 'P', isAiSuggested: false },
-  { id: '3', title: 'Almoço & descanso', startTime: '12:00', endTime: '13:00', category: 'pessoal' as const, intensity: 'L', isAiSuggested: false },
+  { id: '3', title: 'Almoço & descanso', startTime: '12:00', endTime: '13:00', category: 'lazer' as const, intensity: 'L', isAiSuggested: false },
   { id: '4', title: 'Reunião de alinhamento', startTime: '14:00', endTime: '15:00', category: 'trabalho' as const, intensity: 'M', isAiSuggested: false },
-  { id: '5', title: 'Caminhada', startTime: '17:00', endTime: '17:45', category: 'autocuidado' as const, intensity: 'L', isAiSuggested: true },
-  { id: '6', title: 'Leitura', startTime: '21:00', endTime: '22:00', category: 'pessoal' as const, intensity: 'L', isAiSuggested: false },
+  { id: '5', title: 'Caminhada', startTime: '17:00', endTime: '17:45', category: 'saúde' as const, intensity: 'L', isAiSuggested: true },
+  { id: '6', title: 'Leitura', startTime: '21:00', endTime: '22:00', category: 'lazer' as const, intensity: 'L', isAiSuggested: false },
 ];
 
 const categoryColors: Record<string, { bg: string; border: string }> = {
   trabalho: { bg: 'bg-blue-100', border: 'border-blue-300' },
-  pessoal: { bg: 'bg-green-100', border: 'border-green-300' },
-  autocuidado: { bg: 'bg-purple-100', border: 'border-purple-300' },
-  social: { bg: 'bg-orange-100', border: 'border-orange-300' },
-  outro: { bg: 'bg-gray-100', border: 'border-gray-300' },
+  saúde: { bg: 'bg-green-100', border: 'border-green-300' },
+  lazer: { bg: 'bg-purple-100', border: 'border-purple-300' },
 };
 
 export default function PlannerScreen() {

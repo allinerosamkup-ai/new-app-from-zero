@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigation } from '../navigation';
 
 function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
-  const emojis = ['😢', '😕', '😐', '🙂', '😄'];
-  const labels = ['Muito mal', 'Mal', 'Neutro', 'Bem', 'Muito bem'];
+  const emojis = ['😞', '😐', '🙂', '😊', '😄'];
+  const labels = ['Muito mal', 'Neutro', 'Bem', 'Muito bem', 'Ótimo'];
 
   return (
     <div className="mb-6">
