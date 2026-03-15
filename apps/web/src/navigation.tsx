@@ -14,9 +14,10 @@ export type Screen =
 
 type NavigationContextType = {
   screen: Screen;
-  navigate: (screen: Screen) => void;
+  navigate: (screen: Screen, params?: Record<string, unknown>) => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  params: Record<string, unknown>;
 };
 
 const NavigationContext = createContext<NavigationContextType>({
@@ -24,14 +25,17 @@ const NavigationContext = createContext<NavigationContextType>({
   navigate: () => {},
   activeTab: 'home',
   setActiveTab: () => {},
+  params: {},
 });
 
 export function NavigationProvider({ children }: { children: React.ReactNode }) {
   const [screen, setScreen] = useState<Screen>('auth');
   const [activeTab, setActiveTab] = useState('home');
+  const [params, setParams] = useState<Record<string, unknown>>({});
 
-  const navigate = useCallback((s: Screen) => {
+  const navigate = useCallback((s: Screen, p?: Record<string, unknown>) => {
     setScreen(s);
+    setParams(p || {});
     if (s === 'home') setActiveTab('home');
     if (s === 'planner') setActiveTab('planner');
     if (s === 'journal') setActiveTab('journal');
@@ -40,7 +44,7 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   return (
-    <NavigationContext.Provider value={{ screen, navigate, activeTab, setActiveTab }}>
+    <NavigationContext.Provider value={{ screen, navigate, activeTab, setActiveTab, params }}>
       {children}
     </NavigationContext.Provider>
   );

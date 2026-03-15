@@ -46,8 +46,8 @@ const STATE_CONFIG: Record<StateType, {
 };
 
 export default function CheckinResultScreen() {
-  const { navigate } = useNavigation();
-  const stateType: StateType = 'moderado';
+  const { navigate, params } = useNavigation();
+  const stateType: StateType = (params.state as StateType) || 'moderado';
   const config = STATE_CONFIG[stateType];
   const summary = 'Seu humor está estável e a energia acima da média hoje. Essa combinação favorece atividades que exigem foco e criatividade. Aproveite para avançar em tarefas importantes.';
 

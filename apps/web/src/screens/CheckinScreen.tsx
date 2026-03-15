@@ -62,7 +62,9 @@ export default function CheckinScreen() {
   const [note, setNote] = useState('');
 
   const handleSubmit = () => {
-    navigate('checkinResult');
+    const avg = (mood + energy + clarity + (6 - irritability)) / 4;
+    const state = avg >= 4 ? 'leve' : avg >= 3 ? 'moderado' : avg >= 2 ? 'sensível' : 'crítico';
+    navigate('checkinResult', { state });
   };
 
   return (

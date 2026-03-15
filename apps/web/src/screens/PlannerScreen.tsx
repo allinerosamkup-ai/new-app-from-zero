@@ -60,7 +60,7 @@ export default function PlannerScreen() {
             const [eh, em] = block.endTime.split(':').map(Number);
             const top = (sh - 6) * 60 + sm;
             const height = Math.max((eh * 60 + em) - (sh * 60 + sm), 30);
-            const colors = categoryColors[block.category] || categoryColors.outro;
+            const colors = categoryColors[block.category] || { bg: 'bg-gray-100', border: 'border-gray-300' };
 
             return (
               <div
