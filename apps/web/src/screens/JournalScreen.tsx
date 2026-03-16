@@ -114,17 +114,24 @@ export default function JournalScreen() {
 
         <button
           onClick={() => setView('template')}
-          className="w-full glass-card rounded-[22px] p-5 mb-5 flex items-center gap-3 transition-all active:scale-[0.98] animate-fade-in delay-100"
-          style={{ background: 'linear-gradient(135deg, rgba(31,59,50,0.05), rgba(45,212,191,0.08))' }}
+          className="w-full rounded-[22px] p-4 mb-5 flex items-center gap-3 transition-all active:scale-[0.98] animate-fade-in delay-100 hover:opacity-90"
+          style={{
+            background: 'rgba(99,152,169,0.11)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: '1px solid rgba(99,152,169,0.25)',
+            boxShadow: '0 2px 10px rgba(99,152,169,0.10)',
+          }}
         >
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'var(--bg-dark)' }}>
-            <Sparkles size={22} color="white" />
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(99,152,169,0.18)', border: '1px solid rgba(99,152,169,0.22)' }}>
+            <Sparkles size={18} style={{ color: '#6398A9' }} />
           </div>
           <div className="flex-1 text-left">
-            <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>Nova Sessão</p>
-            <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Escolha um tema ou fale livremente</p>
+            <p className="text-[14px] font-semibold" style={{ color: '#4A6B7A' }}>Nova Sessão</p>
+            <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Escolha um tema ou fale livremente</p>
           </div>
-          <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} />
+          <ChevronRight size={16} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
         </button>
 
         <div className="mb-3 animate-fade-in delay-200">
