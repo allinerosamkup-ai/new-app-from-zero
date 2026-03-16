@@ -9,17 +9,17 @@
   --menthe:    #96C7B3;
   --lagune:    #6398A9;
 
-  --bg-base: #FDF5EC;
-  --bg-surface: rgba(255, 248, 240, 0.72);
-  --bg-surface-solid: #fffaf4;
-  --bg-glass: rgba(255, 248, 240, 0.48);
-  --bg-glass-strong: rgba(255, 248, 240, 0.82);
+  --bg-base: #FFFCF8;
+  --bg-surface: rgba(255, 253, 250, 0.78);
+  --bg-surface-solid: #FFFDF9;
+  --bg-glass: rgba(255, 253, 250, 0.52);
+  --bg-glass-strong: rgba(255, 253, 250, 0.88);
   --bg-dark: #6398A9;
   --bg-dark-hover: #507A8E;
 
-  --text-primary: #3D3330;
-  --text-secondary: #7A6E69;
-  --text-muted: #A89F9A;
+  --text-primary: #4A3B38;
+  --text-secondary: #7D6B68;
+  --text-muted: #B0A0A0;
   --text-on-dark: #FFFFFF;
   --text-on-dark-muted: #D8ECF3;
 
@@ -68,7 +68,7 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #EDE4D8;
+  background: #F2EBE2;
 }
 
 h1, h2, h3 {

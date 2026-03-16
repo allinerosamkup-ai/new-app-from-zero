@@ -3,12 +3,12 @@ import { ArrowLeft, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useNavigation } from '../navigation';
 
 const DIMENSIONS = [
-  { id: 'humor', label: 'Humor', value: 72, prev: 65, color: '#10b981', emoji: '😊' },
-  { id: 'energia', label: 'Energia', value: 58, prev: 62, color: '#f59e0b', emoji: '⚡' },
-  { id: 'sono', label: 'Sono', value: 80, prev: 70, color: '#8b5cf6', emoji: '🌙' },
-  { id: 'foco', label: 'Foco', value: 45, prev: 50, color: '#3b82f6', emoji: '🎯' },
-  { id: 'social', label: 'Social', value: 60, prev: 55, color: '#f43f5e', emoji: '👥' },
-  { id: 'corpo', label: 'Corpo', value: 35, prev: 30, color: '#2dd4bf', emoji: '💪' },
+  { id: 'humor',   label: 'Humor',   value: 72, prev: 65, color: '#96C7B3', emoji: '😊' },
+  { id: 'energia', label: 'Energia', value: 58, prev: 62, color: '#F9B95C', emoji: '⚡' },
+  { id: 'sono',    label: 'Sono',    value: 80, prev: 70, color: '#6398A9', emoji: '🌙' },
+  { id: 'foco',    label: 'Foco',    value: 45, prev: 50, color: '#6398A9', emoji: '🎯' },
+  { id: 'social',  label: 'Social',  value: 60, prev: 55, color: '#D7897F', emoji: '👥' },
+  { id: 'corpo',   label: 'Corpo',   value: 35, prev: 30, color: '#96C7B3', emoji: '💪' },
 ];
 
 function RadarChart() {
