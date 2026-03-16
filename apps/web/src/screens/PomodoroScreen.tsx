@@ -106,7 +106,7 @@ export default function PomodoroScreen() {
               className="transition-all duration-1000" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl mb-1">{config.emoji}</span>
+
             <span className="text-[42px] font-bold tabular-nums" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
               {minutes.toString().padStart(2, '0')}:{seconds.toString().padStart(2, '0')}
             </span>
