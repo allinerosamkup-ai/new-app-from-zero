@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Mic, Send, Clock, ChevronRight, Sparkles, MicOff } from 'lucide-react';
+import { ArrowLeft, Mic, Send, Clock, ChevronRight, ChevronDown, Sparkles, MicOff } from 'lucide-react';
 import { useNavigation } from '../navigation';
 
 type Message = { id: string; role: 'user' | 'assistant'; content: string };
-type Session = { id: string; date: string; state: string; summary: string; emotions: string[] };
+type Session = { id: string; date: string; state: string; summary: string; emotions: string[]; synthesis: string };
 
 const TEMPLATES = [
   { id: 'livre', label: 'Sessão Livre', emoji: '💭', desc: 'Fale sobre o que quiser' },
@@ -24,9 +24,24 @@ const TEMPLATE_OPENERS: Record<string, string> = {
 };
 
 const PAST_SESSIONS: Session[] = [
-  { id: 'p1', date: '14 Mar', state: 'moderado', summary: 'Reflexão sobre equilíbrio trabalho/descanso', emotions: ['reflexiva', 'esperançosa'] },
-  { id: 'p2', date: '12 Mar', state: 'sensível', summary: 'Dia difícil — irritabilidade e cansaço', emotions: ['cansada', 'irritada'] },
-  { id: 'p3', date: '10 Mar', state: 'leve', summary: 'Semana começando bem, energia estável', emotions: ['tranquila', 'motivada'] },
+  {
+    id: 'p1', date: '14 Mar', state: 'moderado',
+    summary: 'Reflexão sobre equilíbrio trabalho/descanso',
+    emotions: ['reflexiva', 'esperançosa'],
+    synthesis: 'Você explorou a sensação de estar dividida entre produtividade e descanso. Reconheceu que tende a ignorar sinais de cansaço quando o trabalho está intenso. A IA identificou um padrão recorrente: queda de energia às quartas-feiras após picos de foco na semana. Sua principal conclusão foi que pausas programadas funcionam melhor do que pausas impulsivas.',
+  },
+  {
+    id: 'p2', date: '12 Mar', state: 'sensível',
+    summary: 'Dia difícil — irritabilidade e cansaço',
+    emotions: ['cansada', 'irritada'],
+    synthesis: 'Sessão em momento de maior vulnerabilidade emocional. Você relatou irritabilidade com situações pequenas, o que a IA correlacionou com a fase do ciclo e baixa qualidade de sono nos dois dias anteriores. O principal insight foi a conexão entre alimentação no dia anterior e a queda de humor. Você escolheu encerrar mais cedo para descansar — uma decisão de autocuidado reconhecida como positiva.',
+  },
+  {
+    id: 'p3', date: '10 Mar', state: 'leve',
+    summary: 'Semana começando bem, energia estável',
+    emotions: ['tranquila', 'motivada'],
+    synthesis: 'Uma das sessões mais positivas do mês. Você compartilhou sensação de clareza mental e motivação genuína. A IA reforçou que esse estado coincide com o período pós-menstrual, quando sua energia tende a ser mais estável. Você planejou aproveitar a semana para tarefas criativas e tomadas de decisão importantes, reconhecendo seu próprio ciclo como aliado.',
+  },
 ];
 
 const stateEmoji: Record<string, string> = { leve: '🌱', moderado: '✨', sensível: '🌙', crítico: '🌊' };
@@ -103,6 +118,8 @@ export default function JournalScreen() {
   };
 
   if (view === 'list') {
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+
     return (
       <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
         <div className="mb-5 animate-fade-in">
@@ -136,30 +153,70 @@ export default function JournalScreen() {
           <h2 className="text-[14px] font-bold mb-3" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
             Sessões anteriores
           </h2>
-          {PAST_SESSIONS.map((session, i) => (
-            <div key={session.id} className="glass-card rounded-[18px] p-4 mb-2.5 animate-fade-in"
-              style={{ animationDelay: `${0.25 + i * 0.08}s` }}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{stateEmoji[session.state] || '✨'}</span>
-                  <span className="text-[12px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                    <Clock size={10} className="inline mr-1" />{session.date}
-                  </span>
+          {PAST_SESSIONS.map((session, i) => {
+            const isOpen = expandedId === session.id;
+            const stateColor: Record<string, string> = {
+              leve: '#96C7B3', moderado: '#F9B95C', sensível: '#D7897F', crítico: '#E07070'
+            };
+            const color = stateColor[session.state] || '#96C7B3';
+            return (
+              <div key={session.id} className="glass-card rounded-[18px] mb-2.5 animate-fade-in overflow-hidden"
+                style={{ animationDelay: `${0.25 + i * 0.08}s` }}>
+                {/* Header clicável */}
+                <button
+                  className="w-full p-4 flex items-start gap-3 text-left transition-all active:scale-[0.99]"
+                  onClick={() => setExpandedId(isOpen ? null : session.id)}
+                >
+                  <span className="text-xl mt-0.5">{stateEmoji[session.state] || '✨'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Clock size={10} style={{ color: 'var(--text-muted)' }} />
+                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{session.date}</span>
+                    </div>
+                    <p className="text-[13px] font-semibold leading-snug" style={{ color: 'var(--text-primary)' }}>
+                      {session.summary}
+                    </p>
+                    <div className="flex gap-1.5 flex-wrap mt-2">
+                      {session.emotions.map((em, j) => (
+                        <span key={j} className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
+                          style={{ background: `${color}18`, color }}>
+                          {em}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <ChevronDown size={16} style={{
+                    color: 'var(--text-muted)',
+                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    transition: 'transform 0.25s ease',
+                    flexShrink: 0,
+                    marginTop: 2,
+                  }} />
+                </button>
+
+                {/* Síntese expandível */}
+                <div style={{
+                  maxHeight: isOpen ? '300px' : '0px',
+                  overflow: 'hidden',
+                  transition: 'max-height 0.35s ease',
+                }}>
+                  <div className="px-4 pb-4">
+                    <div className="rounded-[14px] p-3.5" style={{ background: `${color}0F`, border: `1px solid ${color}28` }}>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Sparkles size={11} style={{ color }} />
+                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
+                          Síntese da IA
+                        </span>
+                      </div>
+                      <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                        {session.synthesis}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <p className="text-[13px] font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-                {session.summary}
-              </p>
-              <div className="flex gap-1.5 flex-wrap">
-                {session.emotions.map((em, j) => (
-                  <span key={j} className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
-                    style={{ background: 'rgba(139,92,246,0.08)', color: 'var(--accent-purple)' }}>
-                    {em}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
