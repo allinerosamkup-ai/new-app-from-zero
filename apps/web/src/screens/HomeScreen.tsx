@@ -1,6 +1,140 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, MessageCircle, Calendar, PlusCircle, Brain, ArrowRight, Zap, LineChart } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageCircle, Calendar, PlusCircle, Brain, Zap, LineChart, TrendingUp, ArrowRight } from 'lucide-react';
 import { useNavigation } from '../navigation';
+
+const WEEK_DATA = [
+  { day: 'Seg', mood: 3, energy: 2, state: 'sensível' },
+  { day: 'Ter', mood: 4, energy: 4, state: 'moderado' },
+  { day: 'Qua', mood: 2, energy: 2, state: 'crítico' },
+  { day: 'Qui', mood: 4, energy: 3, state: 'moderado' },
+  { day: 'Sex', mood: 5, energy: 5, state: 'leve' },
+  { day: 'Sáb', mood: 3, energy: 4, state: 'moderado' },
+  { day: 'Hoj', mood: null, energy: null, state: null },
+];
+
+const STATE_COLOR: Record<string, string> = {
+  leve: '#22c55e',
+  moderado: '#f59e0b',
+  sensível: '#8b5cf6',
+  crítico: '#f43f5e',
+};
+
+function MoodMiniChart() {
+  const pathRef = useRef<SVGPathElement>(null);
+  const W = 280, H = 80, PAD = 16;
+  const cols = WEEK_DATA.length;
+  const xStep = (W - PAD * 2) / (cols - 1);
+
+  const pts = WEEK_DATA.map((d, i) => ({
+    x: PAD + i * xStep,
+    y: d.mood != null ? H - PAD - ((d.mood - 1) / 4) * (H - PAD * 2) : null,
+    ...d,
+  }));
+
+  const validPts = pts.filter(p => p.y != null) as Array<{ x: number; y: number; day: string; mood: number; energy: number | null; state: string | null }>;
+  let pathD = '';
+  validPts.forEach((p, i) => {
+    if (i === 0) { pathD += `M ${p.x} ${p.y}`; return; }
+    const prev = validPts[i - 1];
+    const cpX = (prev.x + p.x) / 2;
+    pathD += ` C ${cpX} ${prev.y}, ${cpX} ${p.y}, ${p.x} ${p.y}`;
+  });
+
+  useEffect(() => {
+    const el = pathRef.current;
+    if (!el) return;
+    const len = el.getTotalLength();
+    el.style.strokeDasharray = `${len}`;
+    el.style.strokeDashoffset = `${len}`;
+    requestAnimationFrame(() => {
+      el.style.transition = 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)';
+      el.style.strokeDashoffset = '0';
+    });
+  }, []);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5">
+          <TrendingUp size={14} style={{ color: 'var(--accent-green)' }} />
+          <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+            Humor da semana
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block" style={{ background: 'var(--accent-green)' }} />Humor</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-0.5 inline-block border-t-2 border-dashed" style={{ borderColor: 'var(--accent-teal)' }} />Energia</span>
+        </div>
+      </div>
+
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+        {/* Grid lines */}
+        {[1,2,3,4,5].map(v => {
+          const y = H - PAD - ((v - 1) / 4) * (H - PAD * 2);
+          return <line key={v} x1={PAD} y1={y} x2={W - PAD} y2={y}
+            stroke="rgba(0,0,0,0.06)" strokeWidth="1" strokeDasharray="3,3" />;
+        })}
+
+        {/* Energy line (dashed, teal) */}
+        {(() => {
+          const ePts = pts.filter(p => p.energy != null) as (typeof pts[0] & { energy: number })[];
+          let ep = '';
+          ePts.forEach((p, i) => {
+            const ey = H - PAD - ((p.energy - 1) / 4) * (H - PAD * 2);
+            if (i === 0) { ep += `M ${p.x} ${ey}`; return; }
+            const prev = ePts[i - 1];
+            const pey = H - PAD - ((prev.energy - 1) / 4) * (H - PAD * 2);
+            const cpX = (prev.x + p.x) / 2;
+            ep += ` C ${cpX} ${pey}, ${cpX} ${ey}, ${p.x} ${ey}`;
+          });
+          return <path d={ep} fill="none" stroke="var(--accent-teal)" strokeWidth="1.5"
+            strokeDasharray="4,3" opacity="0.6" />;
+        })()}
+
+        {/* Mood gradient fill */}
+        <defs>
+          <linearGradient id="moodGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent-green)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="var(--accent-green)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {pathD && <path d={`${pathD} L ${validPts[validPts.length-1].x} ${H} L ${validPts[0].x} ${H} Z`}
+          fill="url(#moodGrad)" />}
+
+        {/* Mood line animated */}
+        {pathD && <path ref={pathRef} d={pathD} fill="none"
+          stroke="var(--accent-green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+
+        {/* Dots per day */}
+        {pts.map((p, i) => (
+          <g key={i}>
+            {p.y != null && (
+              <>
+                <circle cx={p.x} cy={p.y} r="4" fill={p.state ? STATE_COLOR[p.state] : '#ccc'}
+                  stroke="white" strokeWidth="1.5" />
+                {i === cols - 2 && (
+                  <circle cx={p.x} cy={p.y} r="7" fill="none"
+                    stroke={p.state ? STATE_COLOR[p.state] : '#ccc'} strokeWidth="1.5" opacity="0.4">
+                    <animate attributeName="r" values="7;11;7" dur="2s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite" />
+                  </circle>
+                )}
+              </>
+            )}
+            {p.y == null && (
+              <circle cx={p.x} cy={H / 2} r="3" fill="none"
+                stroke="rgba(0,0,0,0.15)" strokeWidth="1.5" strokeDasharray="2,2" />
+            )}
+            <text x={p.x} y={H + 2} textAnchor="middle" fontSize="9"
+              fill="var(--text-muted)" fontWeight={i === cols - 1 ? '700' : '400'}>
+              {p.day}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 export default function HomeScreen() {
   const { navigate } = useNavigation();
@@ -75,7 +209,7 @@ export default function HomeScreen() {
         </h1>
       </div>
 
-      {hasCheckin ? (
+      {hasCheckin && (
         <div className="rounded-[24px] p-5 mb-5 glass-card animate-fade-in delay-100"
           style={{ background: current.gradient }}>
           <div className="flex items-center gap-2 mb-3">
@@ -95,35 +229,31 @@ export default function HomeScreen() {
             <p className="text-[13px] italic" style={{ color: current.color }}>"{current.recommendation}"</p>
           </div>
         </div>
-      ) : (
-        <div className="glass-card rounded-[24px] p-6 mb-5 flex flex-col items-center animate-fade-in delay-100">
-          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
-            style={{ background: 'rgba(31,59,50,0.08)' }}>
-            <Zap size={24} style={{ color: 'var(--accent-green)' }} />
-          </div>
-          <p className="text-center mb-4 text-[14px]" style={{ color: 'var(--text-muted)' }}>
-            Ainda não sei como você está hoje.
-          </p>
-          <button
-            onClick={() => navigate('checkin')}
-            className="px-6 py-3 rounded-full flex items-center gap-2 text-white font-bold text-[14px] transition-all duration-200 active:scale-[0.97]"
-            style={{ background: 'var(--bg-dark)', boxShadow: 'var(--shadow-md)' }}
-          >
-            <PlusCircle size={18} />
-            Fazer Check-in
-          </button>
-        </div>
       )}
 
-      {hasCheckin && (
-        <button
-          onClick={() => { setHasCheckin(false); navigate('checkin'); }}
-          className="mb-4 font-semibold text-[13px] text-center transition-opacity hover:opacity-70"
-          style={{ color: 'var(--accent-green)' }}
-        >
-          Refazer check-in
-        </button>
-      )}
+      <div className="glass-card rounded-[20px] p-4 mb-4 animate-fade-in delay-100">
+        <MoodMiniChart />
+        <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+          {!hasCheckin ? (
+            <button
+              onClick={() => navigate('checkin')}
+              className="flex-1 py-2.5 rounded-full flex items-center justify-center gap-2 text-white font-bold text-[13px] transition-all duration-200 active:scale-[0.97]"
+              style={{ background: 'var(--bg-dark)', boxShadow: 'var(--shadow-sm)' }}
+            >
+              <PlusCircle size={16} />
+              Fazer Check-in de hoje
+            </button>
+          ) : (
+            <button
+              onClick={() => { setHasCheckin(false); navigate('checkin'); }}
+              className="flex-1 py-2.5 rounded-full font-semibold text-[13px] text-center transition-opacity hover:opacity-70"
+              style={{ color: 'var(--accent-green)', border: '1px solid var(--accent-green)' }}
+            >
+              Refazer check-in
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="grid grid-cols-3 gap-2.5 mb-5 animate-fade-in delay-200">
         <button
