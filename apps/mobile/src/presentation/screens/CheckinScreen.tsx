@@ -132,75 +132,100 @@ export default function CheckinScreen() {
 
 function Emoji3D({ score, isSelected, onSelect }: { score: number; isSelected: boolean; onSelect: () => void }) {
   const labels = ['Muito mal', 'Mal', 'Neutro', 'Bem', 'Muito bem'];
-  const scale = useSharedValue(1);
-  const translateY = useSharedValue(0);
-  const rotate = useSharedValue(0);
 
-  // Float animation when selected
+  const scale     = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const rotateY   = useSharedValue(0);   // 3D horizontal spin
+  const rotateX   = useSharedValue(0);   // 3D vertical tilt
+  const shadowR   = useSharedValue(3);
+
   React.useEffect(() => {
     if (isSelected) {
+      // Coin-flip reveal when selected
+      rotateY.value = withSequence(
+        withTiming(360, { duration: 600 }),
+        withRepeat(
+          withSequence(withTiming(15, { duration: 1200 }), withTiming(-15, { duration: 1200 })),
+          -1, true
+        )
+      );
+      rotateX.value = withRepeat(
+        withSequence(withTiming(12, { duration: 900 }), withTiming(-8, { duration: 900 })),
+        -1, true
+      );
       translateY.value = withRepeat(
-        withSequence(withTiming(-6, { duration: 600 }), withTiming(0, { duration: 600 })),
-        -1,
-        true
+        withSequence(withTiming(-8, { duration: 700 }), withTiming(0, { duration: 700 })),
+        -1, true
       );
-      rotate.value = withRepeat(
-        withSequence(withTiming(-8, { duration: 400 }), withTiming(8, { duration: 400 }), withTiming(0, { duration: 400 })),
-        -1,
-        true
-      );
+      scale.value = withSpring(1.15, { damping: 6, stiffness: 180 });
+      shadowR.value = withSpring(18);
     } else {
+      rotateY.value  = withSpring(0, { damping: 8 });
+      rotateX.value  = withSpring(0, { damping: 8 });
       translateY.value = withSpring(0);
-      rotate.value = withSpring(0);
+      scale.value    = withSpring(1.0);
+      shadowR.value  = withSpring(3);
     }
   }, [isSelected]);
 
   const handlePress = () => {
+    // Quick 3D pop on tap
     scale.value = withSequence(
-      withSpring(1.35, { damping: 4, stiffness: 300 }),
-      withSpring(1.0, { damping: 6, stiffness: 200 })
+      withSpring(1.4, { damping: 3, stiffness: 400 }),
+      withSpring(isSelected ? 1.15 : 1.0, { damping: 6 })
+    );
+    rotateY.value = withSequence(
+      withTiming(180, { duration: 300 }),
+      withTiming(360, { duration: 300 })
     );
     onSelect();
   };
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [
+      { perspective: 500 },
       { scale: scale.value },
       { translateY: translateY.value },
-      { rotate: `${rotate.value}deg` },
+      { rotateY: `${rotateY.value}deg` },
+      { rotateX: `${rotateX.value}deg` },
     ],
   }));
 
+  const glowStyle = useAnimatedStyle(() => ({
+    shadowRadius: shadowR.value,
+    elevation: shadowR.value,
+  }));
+
   return (
-    <Pressable onPress={handlePress} style={{ alignItems: 'center', flex: 1 }}>
-      <Animated.View style={[animStyle, { alignItems: 'center' }]}>
-        <View style={{
-          width: 60,
-          height: 60,
-          borderRadius: 30,
+    <Pressable onPress={handlePress} style={{ alignItems: 'center', flex: 1, paddingVertical: 8 }}>
+      <Animated.View style={[
+        animStyle,
+        glowStyle,
+        {
+          width: 62,
+          height: 62,
+          borderRadius: 31,
           backgroundColor: isSelected ? appColors.primarySoft : 'rgba(0,0,0,0.04)',
           borderWidth: 2,
           borderColor: isSelected ? appColors.primary : 'transparent',
           alignItems: 'center',
           justifyContent: 'center',
-          elevation: isSelected ? 8 : 2,
           shadowColor: isSelected ? appColors.primary : '#000',
-          shadowOffset: { width: 0, height: isSelected ? 4 : 1 },
-          shadowOpacity: isSelected ? 0.35 : 0.1,
-          shadowRadius: isSelected ? 8 : 3,
-        }}>
-          <Image
-            source={{ uri: FLUENT_EMOJI_3D[score] }}
-            style={{ width: 44, height: 44 }}
-            resizeMode="contain"
-          />
-        </View>
-        {isSelected && (
-          <Text variant="labelSmall" style={{ color: appColors.primary, fontWeight: '700', marginTop: 6 }}>
-            {labels[score - 1]}
-          </Text>
-        )}
+          shadowOffset: { width: 0, height: isSelected ? 6 : 1 },
+          shadowOpacity: isSelected ? 0.4 : 0.1,
+        }
+      ]}>
+        <Image
+          source={{ uri: FLUENT_EMOJI_3D[score] }}
+          style={{ width: 46, height: 46 }}
+          resizeMode="contain"
+        />
       </Animated.View>
+      {isSelected && (
+        <Text variant="labelSmall" style={{ color: appColors.primary, fontWeight: '700', marginTop: 6 }}>
+          {labels[score - 1]}
+        </Text>
+      )}
     </Pressable>
   );
 }
