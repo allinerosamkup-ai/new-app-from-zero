@@ -13,10 +13,10 @@ const WEEK_DATA = [
 ];
 
 const STATE_COLOR: Record<string, string> = {
-  leve: '#22c55e',
-  moderado: '#f59e0b',
-  sensível: '#8b5cf6',
-  crítico: '#f43f5e',
+  leve:     '#96C7B3',
+  moderado: '#F9B95C',
+  sensível: '#D7897F',
+  crítico:  '#E07070',
 };
 
 function MoodMiniChart() {

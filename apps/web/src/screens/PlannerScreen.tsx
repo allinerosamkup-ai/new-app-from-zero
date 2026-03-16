@@ -33,10 +33,10 @@ const MOCK_BLOCKS: Block[] = [
 ];
 
 const catConfig: Record<string, { color: string; bg: string; label: string }> = {
-  trabalho: { color: 'var(--cat-trabalho)', bg: 'rgba(59,130,246,0.08)', label: 'Trabalho' },
-  saúde: { color: 'var(--cat-saude)', bg: 'rgba(16,185,129,0.08)', label: 'Saúde' },
-  lazer: { color: 'var(--cat-lazer)', bg: 'rgba(139,92,246,0.08)', label: 'Lazer' },
-  rotina: { color: 'var(--cat-rotina)', bg: 'rgba(156,163,175,0.08)', label: 'Rotina' },
+  trabalho: { color: '#6398A9', bg: 'rgba(99,152,169,0.09)',  label: 'Trabalho' },
+  saúde:    { color: '#96C7B3', bg: 'rgba(150,199,179,0.09)', label: 'Saúde' },
+  lazer:    { color: '#F9B95C', bg: 'rgba(249,185,92,0.09)',  label: 'Lazer' },
+  rotina:   { color: '#D7897F', bg: 'rgba(215,137,127,0.09)', label: 'Rotina' },
 };
 
 function Toast({ message, onClose }: { message: string; onClose: () => void }) {
@@ -59,6 +59,27 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   );
 }
 
+function useTimeProgress(startTime: string, endTime: string) {
+  const calc = () => {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const [sh, sm] = startTime.split(':').map(Number);
+    const [eh, em] = endTime.split(':').map(Number);
+    const startMin = sh * 60 + sm;
+    const endMin   = eh * 60 + em;
+    if (nowMin < startMin) return 0;
+    if (nowMin >= endMin)  return 1;
+    return (nowMin - startMin) / (endMin - startMin);
+  };
+  const [progress, setProgress] = React.useState(calc);
+  useEffect(() => {
+    setProgress(calc());
+    const id = setInterval(() => setProgress(calc()), 60_000);
+    return () => clearInterval(id);
+  }, [startTime, endTime]);
+  return progress;
+}
+
 function TimelineBlock({ block, onToggleSub, onToggleExpand, expanded, onSplit, onPomodoro }: {
   block: Block;
   onToggleSub: (blockId: string, subId: string) => void;
@@ -67,15 +88,30 @@ function TimelineBlock({ block, onToggleSub, onToggleExpand, expanded, onSplit, 
   onSplit: (blockId: string) => void;
   onPomodoro: (blockId: string) => void;
 }) {
-  const cat = catConfig[block.category] || catConfig.rotina;
+  const cat      = catConfig[block.category] || catConfig.rotina;
   const doneSubs = block.subtasks.filter(s => s.done).length;
   const totalSubs = block.subtasks.length;
+  const progress = useTimeProgress(block.startTime, block.endTime);
 
   return (
     <div
       className="glass-card rounded-[18px] p-3.5 mb-2.5 transition-all duration-200 hover:shadow-md cursor-grab active:cursor-grabbing"
-      style={{ borderLeft: `3px solid ${cat.color}` }}
+      style={{ borderLeft: '6px solid transparent', position: 'relative', overflow: 'hidden' }}
     >
+      {/* Barra lateral com progresso de tempo */}
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 6,
+        background: `rgba(${cat.color === '#6398A9' ? '99,152,169' : cat.color === '#96C7B3' ? '150,199,179' : cat.color === '#F9B95C' ? '249,185,92' : '215,137,127'}, 0.18)`,
+        borderRadius: '18px 0 0 18px',
+      }}>
+        <div style={{
+          position: 'absolute', left: 0, right: 0, top: 0,
+          height: `${progress * 100}%`,
+          background: cat.color,
+          borderRadius: progress < 0.05 ? '18px 0 0 18px' : progress > 0.95 ? '18px 0 0 18px' : '18px 0 0 0',
+          transition: 'height 1s ease',
+        }} />
+      </div>
       <div className="flex items-start gap-2">
         <div className="mt-1 opacity-30 hover:opacity-60 transition-opacity">
           <GripVertical size={14} />
@@ -190,6 +226,7 @@ export default function PlannerScreen() {
   const [newDuration, setNewDuration] = useState('60');
   const [newCategory, setNewCategory] = useState('trabalho');
   const [newIntensity, setNewIntensity] = useState<'L' | 'M' | 'P'>('M');
+  const [newNote, setNewNote] = useState('');
 
   const date = new Date();
   date.setDate(date.getDate() + dateOffset);
@@ -289,6 +326,7 @@ export default function PlannerScreen() {
     };
     setBlocks(prev => [...prev, newBlock].sort((a, b) => a.startTime.localeCompare(b.startTime)));
     setNewTitle('');
+    setNewNote('');
     setShowNewTask(false);
     setToast(`"${newBlock.title}" adicionada ao planner`);
   };
@@ -496,6 +534,20 @@ export default function PlannerScreen() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[10px] font-bold uppercase tracking-wider mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                Notas (opcional)
+              </label>
+              <textarea
+                placeholder="Adicione uma observação sobre a tarefa..."
+                value={newNote}
+                onChange={e => setNewNote(e.target.value)}
+                rows={2}
+                className="w-full glass-card rounded-2xl px-4 py-3 text-[13px] outline-none resize-none"
+                style={{ color: 'var(--text-primary)' }}
+              />
             </div>
 
             <button onClick={addTask}
