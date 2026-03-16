@@ -114,21 +114,19 @@ export default function JournalScreen() {
 
         <button
           onClick={() => setView('template')}
-          className="w-full rounded-[22px] p-4 mb-5 flex items-center gap-3 transition-all active:scale-[0.98] animate-fade-in delay-100 hover:opacity-90"
+          className="w-full rounded-[22px] p-4 mb-5 flex items-center gap-3 transition-all active:scale-[0.97] animate-fade-in delay-100"
           style={{
-            background: 'rgba(99,152,169,0.11)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid rgba(99,152,169,0.25)',
-            boxShadow: '0 2px 10px rgba(99,152,169,0.10)',
+            background: 'var(--bg-base)',
+            border: '1.5px solid rgba(99,152,169,0.22)',
+            boxShadow: '0 2px 8px rgba(99,152,169,0.08), 0 1px 2px rgba(99,152,169,0.05)',
           }}
         >
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(99,152,169,0.18)', border: '1px solid rgba(99,152,169,0.22)' }}>
-            <Sparkles size={18} style={{ color: '#6398A9' }} />
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(99,152,169,0.09)' }}>
+            <Sparkles size={16} style={{ color: '#6398A9' }} />
           </div>
           <div className="flex-1 text-left">
-            <p className="text-[14px] font-semibold" style={{ color: '#4A6B7A' }}>Nova Sessão</p>
+            <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>Nova Sessão</p>
             <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Escolha um tema ou fale livremente</p>
           </div>
           <ChevronRight size={16} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
