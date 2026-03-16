@@ -1,20 +1,34 @@
 import React, { useState } from 'react';
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, Image, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { 
-  Text, 
-  Card, 
-  Button, 
-  TextInput, 
-  ActivityIndicator, 
-  IconButton, 
-  MD3Colors,
+import {
+  Text,
+  Card,
+  Button,
+  TextInput,
   Surface,
   TouchableRipple
 } from 'react-native-paper';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withTiming,
+  withRepeat,
+} from 'react-native-reanimated';
 import { useCheckinStore } from '../providers/checkin_store';
 import { useAuthStore } from '../providers/auth_store';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+
+// Fluent Emoji 3D — Microsoft open source (MIT)
+const FLUENT_EMOJI_3D: Record<number, string> = {
+  1: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Crying%20face/3D/crying_face_3d.png',
+  2: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20frowning%20face/3D/slightly_frowning_face_3d.png',
+  3: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Neutral%20face/3D/neutral_face_3d.png',
+  4: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20smiling%20face/3D/slightly_smiling_face_3d.png',
+  5: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Beaming%20face%20with%20smiling%20eyes/3D/beaming_face_with_smiling_eyes_3d.png',
+};
 
 /**
  * CheckinScreen: Formulário de estado diário com UI do Paper.
@@ -116,47 +130,96 @@ export default function CheckinScreen() {
   );
 }
 
-function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
-  const emojis = ['😢', '😕', '😐', '🙂', '😄'];
+function Emoji3D({ score, isSelected, onSelect }: { score: number; isSelected: boolean; onSelect: () => void }) {
   const labels = ['Muito mal', 'Mal', 'Neutro', 'Bem', 'Muito bem'];
+  const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const rotate = useSharedValue(0);
 
+  // Float animation when selected
+  React.useEffect(() => {
+    if (isSelected) {
+      translateY.value = withRepeat(
+        withSequence(withTiming(-6, { duration: 600 }), withTiming(0, { duration: 600 })),
+        -1,
+        true
+      );
+      rotate.value = withRepeat(
+        withSequence(withTiming(-8, { duration: 400 }), withTiming(8, { duration: 400 }), withTiming(0, { duration: 400 })),
+        -1,
+        true
+      );
+    } else {
+      translateY.value = withSpring(0);
+      rotate.value = withSpring(0);
+    }
+  }, [isSelected]);
+
+  const handlePress = () => {
+    scale.value = withSequence(
+      withSpring(1.35, { damping: 4, stiffness: 300 }),
+      withSpring(1.0, { damping: 6, stiffness: 200 })
+    );
+    onSelect();
+  };
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateY: translateY.value },
+      { rotate: `${rotate.value}deg` },
+    ],
+  }));
+
+  return (
+    <Pressable onPress={handlePress} style={{ alignItems: 'center', flex: 1 }}>
+      <Animated.View style={[animStyle, { alignItems: 'center' }]}>
+        <View style={{
+          width: 60,
+          height: 60,
+          borderRadius: 30,
+          backgroundColor: isSelected ? appColors.primarySoft : 'rgba(0,0,0,0.04)',
+          borderWidth: 2,
+          borderColor: isSelected ? appColors.primary : 'transparent',
+          alignItems: 'center',
+          justifyContent: 'center',
+          elevation: isSelected ? 8 : 2,
+          shadowColor: isSelected ? appColors.primary : '#000',
+          shadowOffset: { width: 0, height: isSelected ? 4 : 1 },
+          shadowOpacity: isSelected ? 0.35 : 0.1,
+          shadowRadius: isSelected ? 8 : 3,
+        }}>
+          <Image
+            source={{ uri: FLUENT_EMOJI_3D[score] }}
+            style={{ width: 44, height: 44 }}
+            resizeMode="contain"
+          />
+        </View>
+        {isSelected && (
+          <Text variant="labelSmall" style={{ color: appColors.primary, fontWeight: '700', marginTop: 6 }}>
+            {labels[score - 1]}
+          </Text>
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
   return (
     <View style={{ marginBottom: appSpacing.xl }}>
       <Text variant="titleMedium" style={{ fontWeight: '700', marginBottom: appSpacing.md }}>
         Como está seu humor agora?
       </Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        {emojis.map((emoji, index) => {
-          const score = index + 1;
-          const isSelected = value === score;
-          return (
-            <Surface
-              key={score}
-              style={{
-                borderRadius: appRadius.lg,
-                backgroundColor: isSelected ? appColors.primarySoft : 'transparent',
-                borderWidth: 2,
-                borderColor: isSelected ? appColors.primary : 'transparent',
-                elevation: isSelected ? 2 : 0,
-              }}
-            >
-              <TouchableRipple
-                onPress={() => onSelect(score)}
-                style={{ padding: appSpacing.md, alignItems: 'center' }}
-                borderless
-              >
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 32 }}>{emoji}</Text>
-                  {isSelected && (
-                    <Text variant="labelSmall" style={{ color: appColors.primary, fontWeight: '700', marginTop: 4 }}>
-                      {labels[index]}
-                    </Text>
-                  )}
-                </View>
-              </TouchableRipple>
-            </Surface>
-          );
-        })}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: appSpacing.sm }}>
+        {[1, 2, 3, 4, 5].map((score) => (
+          <Emoji3D
+            key={score}
+            score={score}
+            isSelected={value === score}
+            onSelect={() => onSelect(score)}
+          />
+        ))}
       </View>
     </View>
   );
