@@ -46,7 +46,8 @@
       "Bash(find C:/Users/allin -maxdepth 4 -name *.txt -o -name *.md -o -name *.docx)",
       "Bash(find C:/Users/allin -maxdepth 3 -type d -name *alline*)",
       "Bash(npx tsc:*)",
-      "Bash(npx expo:*)"
+      "Bash(npx expo:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@app/database';
+import { requireAuth, AuthRequest } from './middleware/auth';
 import { AIService } from './services/ai.service';
 import { PlannerService } from './services/planner.service';
 import { InsightService } from './services/insight.service';
@@ -53,6 +54,9 @@ export function createApp(dependencies: AppDependencies = {}) {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Todas as rotas abaixo exigem autenticação Supabase
+  app.use('/api', requireAuth);
+
   app.post('/api/onboarding/process', async (req: Request, res: Response) => {
     try {
       const data = OnboardingProcessSchema.parse(req.body);
@@ -73,11 +77,8 @@ export function createApp(dependencies: AppDependencies = {}) {
    * Retorna os check-ins recentes de um usuário (padrão: últimos 7 dias).
    */
   app.get('/api/checkins', async (req: Request, res: Response) => {
-    const { userId, days } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const userId = (req as AuthRequest).userId;
+    const { days } = req.query;
 
     try {
       const daysNum = Math.min(Math.max(Number(days ?? 7), 1), 90);
@@ -87,7 +88,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       const checkins = await prisma.dailyCheckin.findMany({
         where: {
-          userId: String(userId),
+          userId,
           localDate: { gte: fromDate },
         },
         orderBy: [
@@ -109,7 +110,7 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.post('/api/checkins', async (req: Request, res: Response) => {
   try {
-    const data = CheckinCreateSchema.parse(req.body);
+    const data = CheckinCreateSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
     const date = new Date(data.localDate);
     const recordedAt = new Date();
     const checkinSlot = data.checkinSlot ?? deriveCheckinSlot(recordedAt);
@@ -187,17 +188,14 @@ export function createApp(dependencies: AppDependencies = {}) {
    * Lista sessões de diário do usuário, mais recentes primeiro.
    */
   app.get('/api/journal/sessions', async (req: Request, res: Response) => {
-    const { userId, limit } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
+    const userId = (req as AuthRequest).userId;
+    const { limit } = req.query;
 
     try {
       const limitNum = Math.min(Number(limit ?? 20), 50);
 
       const sessions = await prisma.journalSession.findMany({
-        where: { userId: String(userId) },
+        where: { userId },
         orderBy: { startedAt: 'desc' },
         take: limitNum,
       });
@@ -226,7 +224,7 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.post('/api/journal/start', async (req: Request, res: Response) => {
     try {
-      const data = JournalStartSchema.parse(req.body);
+      const data = JournalStartSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
       const { session, created } = await journalService.startOrResumeSession(prisma, data.userId);
       const [messages, context] = await Promise.all([
         journalService.getSessionMessages(prisma, session.id),
@@ -260,7 +258,7 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.post('/api/journal/message/stream', async (req: Request, res: Response) => {
     try {
-      const data = JournalMessageStreamSchema.parse(req.body);
+      const data = JournalMessageStreamSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
       const existingMessages = await journalService.getSessionMessages(prisma, data.sessionId);
       const context = await journalService.buildRoutineContext(prisma, data.userId);
       const userOrderIndex = journalService.nextOrderIndex(existingMessages);
@@ -342,14 +340,15 @@ export function createApp(dependencies: AppDependencies = {}) {
 
    */
   app.get('/api/insights/weekly', async (req: Request, res: Response) => {
-  const { userId, weekStart } = req.query;
+  const userId = (req as AuthRequest).userId;
+  const { weekStart } = req.query;
 
-  if (!userId || !weekStart) {
-    return res.status(400).json({ error: 'userId and weekStart (YYYY-MM-DD) are required' });
+  if (!weekStart) {
+    return res.status(400).json({ error: 'weekStart (YYYY-MM-DD) is required' });
   }
 
   try {
-    const result = await InsightService.getWeeklyInsights(String(userId), String(weekStart));
+    const result = await InsightService.getWeeklyInsights(userId, String(weekStart));
     return res.json(result);
   } catch (error: any) {
     console.error('[insights/weekly] Error:', error);
@@ -418,7 +417,7 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.post('/api/timeline', async (req: Request, res: Response) => {
   try {
-    const { userId, date, forceSave, blocks } = PlannerSyncSchema.parse(req.body);
+    const { userId, date, forceSave, blocks } = PlannerSyncSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
     const baseDate = new Date(date);
 
     // Aprimoramento: Validar conflitos ANTES de salvar, a menos que forceSave = true
@@ -486,21 +485,23 @@ export function createApp(dependencies: AppDependencies = {}) {
    * Retorna os blocos do planner para um dia específico.
    */
   app.get('/api/timeline/:date', async (req: Request, res: Response) => {
-    const { userId } = req.query;
+    const userId = (req as AuthRequest).userId;
     const { date } = req.params;
 
-    if (!userId || !date) {
-      return res.status(400).json({ error: 'userId (query) and date (path, YYYY-MM-DD) are required' });
+    if (!date) {
+      return res.status(400).json({ error: 'date (path, YYYY-MM-DD) is required' });
     }
 
     try {
-      const localDate = new Date(date);
-      if (isNaN(localDate.getTime())) {
+      // Fix timezone: busca pelo início e fim do dia em UTC para evitar dessincronização
+      const dayStart = new Date(`${date}T00:00:00.000Z`);
+      const dayEnd   = new Date(`${date}T23:59:59.999Z`);
+      if (isNaN(dayStart.getTime())) {
         return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
       }
 
       const blocks = await prisma.timelineBlock.findMany({
-        where: { userId: String(userId), localDate },
+        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
         orderBy: { startAt: 'asc' },
       });
 
