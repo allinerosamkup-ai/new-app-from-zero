@@ -38,7 +38,13 @@
       "Bash(PYTHONIOENCODING=utf-8 python \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\\\\skill-creator\\\\scripts\\\\init_skill.py\" \"engineering-mentor\" --path \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\")",
       "Bash(PYTHONIOENCODING=utf-8 python \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\\\\skill-creator\\\\scripts\\\\package_skill.py\" \"C:\\\\Users\\\\allin\\\\.claude\\\\skills\\\\engineering-mentor\")",
       "mcp__mcp-registry__search_mcp_registry",
-      "WebSearch"
+      "WebSearch",
+      "Bash(find 'C:/Users/allin/new app fron zero' -name *.env -not -path *node_modules*)",
+      "Bash(xargs grep:*)",
+      "mcp__c1fc4002-5f49-5f9d-a4e5-93c4ef5d6a75__google_drive_search",
+      "Bash(find C:/Users/allin -maxdepth 3 -name *credenc* -o -name *credential* -o -name *senha* -o -name *chave*)",
+      "Bash(find C:/Users/allin -maxdepth 4 -name *.txt -o -name *.md -o -name *.docx)",
+      "Bash(find C:/Users/allin -maxdepth 3 -type d -name *alline*)"
     ]
   }
 }

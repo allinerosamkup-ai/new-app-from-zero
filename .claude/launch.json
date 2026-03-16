@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm", "run", "dev", "--workspace=@app/backend"],
+      "port": 3001
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm", "run", "start", "--workspace=@app/mobile"],
+      "port": 8081
+    },
+    {
+      "name": "prisma-studio",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm", "run", "db:studio"],
+      "port": 5555
+    }
+  ]
+}
