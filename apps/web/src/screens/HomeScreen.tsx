@@ -157,32 +157,32 @@ export default function HomeScreen() {
       emoji: '🌱',
       analysis: 'Seu corpo e mente estão em ritmo tranquilo. Aproveite para atividades que pedem calma e atenção.',
       recommendation: 'Comece com tarefas leves e aumente o ritmo gradualmente.',
-      gradient: 'linear-gradient(135deg, rgba(154,215,180,0.3), rgba(154,215,180,0.1))',
-      color: '#166534',
+      gradient: 'linear-gradient(135deg, rgba(150,199,179,0.22), rgba(150,199,179,0.07))',
+      color: '#3A7A66',
     },
     moderado: {
       label: 'Energia Radiante',
       emoji: '✨',
       analysis: 'Humor e energia em equilíbrio. Clareza mental acima da média — ótimo para tarefas que exigem foco.',
       recommendation: 'Aproveite o pico para suas tarefas mais importantes antes das 14h.',
-      gradient: 'linear-gradient(135deg, rgba(255,190,122,0.3), rgba(255,190,122,0.1))',
-      color: '#92400E',
+      gradient: 'linear-gradient(135deg, rgba(249,185,92,0.22), rgba(249,185,92,0.07))',
+      color: '#9A6010',
     },
     sensível: {
       label: 'Dia Sensível',
       emoji: '🌙',
       analysis: 'Hoje pode ser mais delicado. Sua energia pede cuidado extra e um ritmo mais gentil consigo.',
       recommendation: 'Priorize autocuidado e evite decisões importantes se possível.',
-      gradient: 'linear-gradient(135deg, rgba(216,200,255,0.3), rgba(216,200,255,0.1))',
-      color: '#5B21B6',
+      gradient: 'linear-gradient(135deg, rgba(215,137,127,0.22), rgba(215,137,127,0.07))',
+      color: '#A04840',
     },
     crítico: {
       label: 'Modo Recuperação',
       emoji: '🌊',
       analysis: 'Seus indicadores mostram que hoje é dia de descansar. Não force o ritmo.',
       recommendation: 'Cancele o que puder e foque apenas no essencial.',
-      gradient: 'linear-gradient(135deg, rgba(255,155,165,0.3), rgba(255,155,165,0.1))',
-      color: '#9F1239',
+      gradient: 'linear-gradient(135deg, rgba(224,112,112,0.22), rgba(224,112,112,0.07))',
+      color: '#A03030',
     },
   };
 
@@ -233,21 +233,34 @@ export default function HomeScreen() {
 
       <div className="glass-card rounded-[20px] p-4 mb-4 animate-fade-in delay-100">
         <MoodMiniChart />
-        <div className="flex items-center justify-between mt-3 pt-3" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+        <div className="flex items-center justify-center mt-3 pt-3" style={{ borderTop: '1px solid rgba(215,137,127,0.12)' }}>
           {!hasCheckin ? (
             <button
               onClick={() => navigate('checkin')}
-              className="flex-1 py-2.5 rounded-full flex items-center justify-center gap-2 text-white font-bold text-[13px] transition-all duration-200 active:scale-[0.97]"
-              style={{ background: 'var(--bg-dark)', boxShadow: 'var(--shadow-sm)' }}
+              className="flex items-center gap-2 px-5 py-2 rounded-full text-[13px] font-semibold transition-all duration-200 active:scale-[0.97] hover:opacity-90"
+              style={{
+                background: 'rgba(215,137,127,0.13)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(215,137,127,0.28)',
+                color: '#C4685E',
+                boxShadow: '0 2px 8px rgba(215,137,127,0.15)',
+              }}
             >
-              <PlusCircle size={16} />
-              Fazer Check-in de hoje
+              <img
+                src="https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20smiling%20face/3D/slightly_smiling_face_3d.png"
+                alt="" style={{ width: 22, height: 22, objectFit: 'contain' }}
+              />
+              Fazer check-in de hoje
             </button>
           ) : (
             <button
               onClick={() => { setHasCheckin(false); navigate('checkin'); }}
-              className="flex-1 py-2.5 rounded-full font-semibold text-[13px] text-center transition-opacity hover:opacity-70"
-              style={{ color: 'var(--accent-green)', border: '1px solid var(--accent-green)' }}
+              className="flex items-center gap-2 px-5 py-2 rounded-full text-[13px] font-medium transition-all duration-200 hover:opacity-70"
+              style={{
+                background: 'rgba(150,199,179,0.12)',
+                border: '1px solid rgba(150,199,179,0.3)',
+                color: '#5A9E88',
+              }}
             >
               Refazer check-in
             </button>
