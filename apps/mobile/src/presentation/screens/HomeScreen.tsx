@@ -87,7 +87,7 @@ export default function HomeScreen() {
                   marginBottom: appSpacing.md,
                 }}
               >
-                {todayCheckin.aiState.analysis}
+                {todayCheckin.aiState?.analysis ?? 'Análise em processamento...'}
               </Text>
               
               <View
@@ -115,7 +115,7 @@ export default function HomeScreen() {
                     fontStyle: 'italic',
                   }}
                 >
-                  "{todayCheckin.aiState.recommendations[0]}"
+                  "{todayCheckin.aiState?.recommendations?.[0] ?? 'Continue com sua rotina habitual.'}"
                 </Text>
               </View>
             </Card.Content>

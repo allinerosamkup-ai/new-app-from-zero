@@ -44,7 +44,9 @@
       "mcp__c1fc4002-5f49-5f9d-a4e5-93c4ef5d6a75__google_drive_search",
       "Bash(find C:/Users/allin -maxdepth 3 -name *credenc* -o -name *credential* -o -name *senha* -o -name *chave*)",
       "Bash(find C:/Users/allin -maxdepth 4 -name *.txt -o -name *.md -o -name *.docx)",
-      "Bash(find C:/Users/allin -maxdepth 3 -type d -name *alline*)"
+      "Bash(find C:/Users/allin -maxdepth 3 -type d -name *alline*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx expo:*)"
     ]
   }
 }

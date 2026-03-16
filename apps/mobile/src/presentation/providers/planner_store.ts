@@ -52,13 +52,12 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   },
 
   moveBlock: async (blockId: string, newStart: string) => {
-    // Atualiza UI instantaneamente (otimista)
-    const updatedBlocks = get().blocks.map(b =>
+    const previousBlocks = get().blocks;
+    const updatedBlocks = previousBlocks.map(b =>
       b.id === blockId ? { ...b, startTime: newStart } : b
     );
-    set({ blocks: updatedBlocks });
+    set({ blocks: updatedBlocks }); // otimista
 
-    // Persiste no backend
     const { selectedDate } = get();
     const userId = useAuthStore.getState().userId;
     if (userId) {
@@ -78,7 +77,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
           })),
         });
       } catch {
-        // Falha silenciosa: UI já reflete o novo estado
+        set({ blocks: previousBlocks, error: 'Não foi possível salvar. Tente novamente.' });
       }
     }
   },
