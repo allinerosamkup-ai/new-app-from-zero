@@ -12,6 +12,7 @@ export interface CheckinFormData {
   clarityScore: number;
   irritabilityScore: number;
   note?: string;
+  address?: string;
 }
 
 /**
@@ -47,10 +48,10 @@ export const useCheckinStore = create<CheckinState>((set, get) => ({
     try {
       // Chamada via AIService (Repository Pattern)
       const result = await AIService.submitCheckin(data);
-      
-      set({ 
-        isLoading: false, 
-        todayCheckin: result 
+
+      set({
+        isLoading: false,
+        todayCheckin: { ...result, address: data.address },
       });
 
       // Aqui poderíamos disparar a navegação para a tela de resultado

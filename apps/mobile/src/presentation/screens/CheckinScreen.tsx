@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import * as Location from 'expo-location';
 import { useCheckinStore } from '../providers/checkin_store';
 import { useAuthStore } from '../providers/auth_store';
 
@@ -17,6 +18,32 @@ export default function CheckinScreen() {
   const [clarity, setClarity] = useState(3);
   const [irritability, setIrritability] = useState(3);
   const [note, setNote] = useState('');
+  const [address, setAddress] = useState<string | undefined>(undefined);
+  const [locationLoading, setLocationLoading] = useState(false);
+
+  const captureLocation = async () => {
+    setLocationLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setAddress(undefined);
+        return;
+      }
+      const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: coords.coords.latitude,
+        longitude: coords.coords.longitude,
+      });
+      if (place) {
+        const parts = [place.street, place.district, place.city, place.region].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+    } catch {
+      setAddress(undefined);
+    } finally {
+      setLocationLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!userId) return;
@@ -29,6 +56,7 @@ export default function CheckinScreen() {
       clarityScore: clarity,
       irritabilityScore: irritability,
       note,
+      address,
     });
 
     // Navega para o resultado da IA se deu certo (sem erro no store)
@@ -78,6 +106,29 @@ export default function CheckinScreen() {
           onChangeText={setNote}
           textAlignVertical="top"
         />
+      </View>
+
+      {/* Location Capture */}
+      <View className="mt-6">
+        <Text className="text-gray-700 mb-2">Onde você está agora? (opcional)</Text>
+        <TouchableOpacity
+          onPress={captureLocation}
+          disabled={locationLoading}
+          className="border border-gray-300 rounded-lg p-3 flex-row items-center"
+        >
+          {locationLoading ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Text className={address ? 'text-gray-800' : 'text-gray-400'}>
+              {address ?? 'Toque para capturar localização'}
+            </Text>
+          )}
+        </TouchableOpacity>
+        {address && (
+          <TouchableOpacity onPress={() => setAddress(undefined)} className="mt-1">
+            <Text className="text-xs text-red-400">Remover localização</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Submit Button */}

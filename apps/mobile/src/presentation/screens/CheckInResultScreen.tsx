@@ -59,6 +59,7 @@ export default function CheckInResultScreen() {
   const config = STATE_CONFIG[stateType] ?? STATE_CONFIG.leve;
   const summary = todayCheckin?.stateSummary ?? 'Seu estado de hoje foi registrado.';
   const recommendations: string[] = (todayCheckin as any)?.aiState?.recommendations ?? [];
+  const address: string | undefined = (todayCheckin as any)?.address;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: config.bgColor }}>
@@ -99,6 +100,15 @@ export default function CheckInResultScreen() {
         >
           {config.label}
         </Text>
+
+        {/* Endereço do check-in */}
+        {address && (
+          <View style={{ alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, color: config.textColor, opacity: 0.6 }}>
+              📍 {address}
+            </Text>
+          </View>
+        )}
 
         {/* Badge de foco */}
         <View style={{ alignItems: 'center', marginBottom: 20 }}>

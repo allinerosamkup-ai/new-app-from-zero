@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.99.1",
     "axios": "^1.13.6",
     "expo": "~51.0.14",
+    "expo-location": "~17.0.1",
     "expo-status-bar": "~1.12.1",
     "lucide-react-native": "^0.395.0",
     "nativewind": "^2.0.11",

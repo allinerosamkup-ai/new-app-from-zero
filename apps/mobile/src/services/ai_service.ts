@@ -8,6 +8,7 @@ export interface CheckinResponse {
   stateLabel: string;
   stateLabelType: 'leve' | 'moderado' | 'sensível' | 'crítico';
   stateSummary: string;
+  address?: string;
   aiState: {
     analysis: string;
     recommendations: string[];
@@ -115,6 +116,7 @@ export class AIService {
     clarityScore: number;
     irritabilityScore: number;
     note?: string;
+    address?: string;
   }): Promise<CheckinResponse> {
     const response = await api.post<CheckinResponse>('/api/checkins', data);
     return response.data;
