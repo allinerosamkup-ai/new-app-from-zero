@@ -32,7 +32,7 @@ export default function ConfigScreen() {
       <div className="glass-card rounded-[22px] p-4 mb-3.5 animate-fade-in delay-100">
         <div className="flex items-center">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(31,59,50,0.08)' }}>
-            <User size={22} style={{ color: 'var(--accent-green)' }} />
+            <User size={22} strokeWidth={1.5} style={{ color: 'var(--accent-green)' }} />
           </div>
           <div className="flex-1 ml-3">
             <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>{fullName ?? 'Usuário'}</p>
@@ -43,7 +43,7 @@ export default function ConfigScreen() {
 
       <div className="glass-card rounded-[22px] p-4 mb-3.5 animate-fade-in delay-200">
         <div className="flex items-center gap-2 mb-4">
-          <Clock size={14} style={{ color: 'var(--accent-green)' }} />
+          <Clock size={14} strokeWidth={1.5} style={{ color: 'var(--accent-green)' }} />
           <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
             Rotina {isSaving && <span className="font-normal normal-case tracking-normal ml-1">salvando…</span>}
           </p>
@@ -61,7 +61,7 @@ export default function ConfigScreen() {
                 value={timezone}
                 onChange={(e) => save({ timezone: e.target.value })}
                 className="w-full glass-card rounded-xl px-4 py-3 text-[13px] outline-none"
-                style={{ color: 'var(--text-primary)' }}
+                style={{ color: 'var(--text-primary)', borderColor: 'var(--accent-9)' }}
               >
                 <option value="America/Sao_Paulo">São Paulo (GMT-3)</option>
                 <option value="America/Manaus">Manaus (GMT-4)</option>
@@ -74,7 +74,7 @@ export default function ConfigScreen() {
             <div className="flex gap-3">
               <div className="flex-1">
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <Sun size={13} style={{ color: 'var(--accent-orange)' }} />
+                  <Sun size={13} strokeWidth={1.5} style={{ color: 'var(--accent-orange)' }} />
                   <label className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Acordar</label>
                 </div>
                 <input
@@ -87,7 +87,7 @@ export default function ConfigScreen() {
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <Moon size={13} style={{ color: 'var(--accent-purple)' }} />
+                  <Moon size={13} strokeWidth={1.5} style={{ color: 'var(--accent-purple)' }} />
                   <label className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Dormir</label>
                 </div>
                 <input
@@ -105,15 +105,15 @@ export default function ConfigScreen() {
 
       <div className="glass-card rounded-[22px] overflow-hidden mb-3.5 animate-fade-in delay-300">
         <button className="w-full flex items-center px-4 py-4 hover:bg-black/3 transition-colors">
-          <Heart size={18} style={{ color: 'var(--accent-purple)' }} />
+          <Heart size={18} strokeWidth={1.5} style={{ color: 'var(--accent-purple)' }} />
           <span className="flex-1 ml-3 text-[14px] text-left" style={{ color: 'var(--text-primary)' }}>Sobre ciclagem de humor</span>
-          <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+          <ChevronRight size={16} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
         </button>
-        <div style={{ height: 1, background: 'rgba(31,59,50,0.06)' }} />
+        <div style={{ borderTop: '1px solid var(--border-subtle)' }} />
         <button className="w-full flex items-center px-4 py-4 hover:bg-black/3 transition-colors">
-          <Shield size={18} style={{ color: 'var(--accent-green)' }} />
+          <Shield size={18} strokeWidth={1.5} style={{ color: 'var(--accent-green)' }} />
           <span className="flex-1 ml-3 text-[14px] text-left" style={{ color: 'var(--text-primary)' }}>Privacidade e dados</span>
-          <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+          <ChevronRight size={16} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
         </button>
       </div>
 
@@ -122,7 +122,7 @@ export default function ConfigScreen() {
         disabled={authLoading}
         className="glass-card rounded-[22px] px-4 py-4 flex items-center transition-all hover:shadow-md animate-fade-in delay-400 disabled:opacity-60"
       >
-        <LogOut size={18} style={{ color: 'var(--accent-rose)' }} />
+        <LogOut size={18} strokeWidth={1.5} style={{ color: 'var(--accent-rose)' }} />
         <span className="ml-3 text-[14px] font-semibold" style={{ color: 'var(--accent-rose)' }}>
           {authLoading ? 'Saindo...' : 'Sair da conta'}
         </span>
