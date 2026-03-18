@@ -59,7 +59,7 @@ export default function ObjectivesScreen() {
           <button onClick={() => navigate('harmony')}
             className="p-2.5 rounded-xl transition-colors"
             style={{ background: 'rgba(139,92,246,0.08)' }}>
-            <Target size={20} style={{ color: 'var(--accent-purple)' }} />
+            <Target size={20} strokeWidth={1.5} style={{ color: 'var(--accent-purple)' }} />
           </button>
         </div>
       </div>
@@ -79,7 +79,7 @@ export default function ObjectivesScreen() {
 
         {!isLoading && objectives.length === 0 && !showNew && (
           <div className="text-center py-12">
-            <Target size={36} style={{ color: 'var(--text-muted)', margin: '0 auto 12px' }} />
+            <Target size={36} strokeWidth={1.5} style={{ color: 'var(--text-muted)', margin: '0 auto 12px' }} />
             <p className="text-[14px] font-medium" style={{ color: 'var(--text-muted)' }}>Nenhum objetivo ainda</p>
             <p className="text-[12px] mt-1" style={{ color: 'var(--text-muted)' }}>Crie seu primeiro objetivo abaixo</p>
           </div>
@@ -90,13 +90,13 @@ export default function ObjectivesScreen() {
           const isExpandedObj = expanded[obj.id];
           const doneCount = obj.subgoals.filter((s) => s.done).length;
           return (
-            <div key={obj.id} className="glass-card rounded-[22px] p-4 mb-3 animate-fade-in"
-              style={{ animationDelay: `${i * 0.08}s` }}>
+            <div key={obj.id} className="glass-card interactive-card rounded-[22px] p-4 mb-3 animate-fade-in"
+              style={{ animationDelay: `${i * 0.08}s`, borderLeft: `4px solid ${cat.color}` }}>
               <button onClick={() => toggleExpand(obj.id)} className="w-full text-left">
                 <div className="flex items-start gap-3">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
                     style={{ background: cat.bg }}>
-                    <Target size={18} style={{ color: cat.color }} />
+                    <Target size={18} strokeWidth={1.5} style={{ color: cat.color }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-bold truncate" style={{ color: 'var(--text-primary)' }}>{obj.title}</p>
@@ -112,8 +112,8 @@ export default function ObjectivesScreen() {
                     </div>
                   </div>
                   <div className="mt-1">
-                    {isExpandedObj ? <ChevronUp size={16} style={{ color: 'var(--text-muted)' }} /> :
-                      <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} />}
+                    {isExpandedObj ? <ChevronUp size={16} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} /> :
+                      <ChevronDown size={16} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />}
                   </div>
                 </div>
               </button>
@@ -124,7 +124,7 @@ export default function ObjectivesScreen() {
                     <div className="rounded-[14px] p-3 mb-3"
                       style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.05), rgba(45,212,191,0.05))' }}>
                       <div className="flex items-center gap-1.5 mb-1">
-                        <Brain size={11} style={{ color: 'var(--accent-purple)' }} />
+                        <Brain size={11} strokeWidth={1.5} style={{ color: 'var(--accent-purple)' }} />
                         <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-purple)' }}>
                           Insight IA
                         </span>
@@ -147,7 +147,7 @@ export default function ObjectivesScreen() {
                           background: sub.done ? 'var(--accent-green)' : 'transparent',
                           border: sub.done ? 'none' : '2px solid var(--text-muted)',
                         }}>
-                        {sub.done && <Check size={12} color="white" strokeWidth={3} />}
+                        {sub.done && <Check size={12} color="white" strokeWidth={2.5} />}
                       </div>
                       <span className="text-[12px] flex-1" style={{
                         color: sub.done ? 'var(--text-muted)' : 'var(--text-primary)',
@@ -155,13 +155,13 @@ export default function ObjectivesScreen() {
                       }}>
                         {sub.title}
                       </span>
-                      {sub.aiGenerated && <Sparkles size={10} style={{ color: 'var(--accent-purple)', opacity: 0.5 }} />}
+                      {sub.aiGenerated && <Sparkles size={10} strokeWidth={1.5} style={{ color: 'var(--accent-purple)', opacity: 0.5 }} />}
                     </button>
                   ))}
 
                   <button onClick={() => remove(obj.id)}
                     className="flex items-center gap-1.5 mt-3 p-2 rounded-xl transition-all hover:bg-black/3">
-                    <Trash2 size={13} style={{ color: 'var(--accent-rose)' }} />
+                    <Trash2 size={13} strokeWidth={1.5} style={{ color: 'var(--accent-rose)' }} />
                     <span className="text-[12px]" style={{ color: 'var(--accent-rose)' }}>Remover objetivo</span>
                   </button>
                 </div>
@@ -171,10 +171,10 @@ export default function ObjectivesScreen() {
         })}
 
         <button onClick={() => setShowNew(true)}
-          className="w-full glass-card rounded-[20px] p-4 flex items-center justify-center gap-2 transition-all active:scale-[0.98] hover:shadow-md animate-fade-in"
-          style={{ borderStyle: 'dashed', borderWidth: 2, borderColor: 'rgba(31,59,50,0.12)', background: 'transparent' }}>
-          <Plus size={18} style={{ color: 'var(--accent-green)' }} />
-          <span className="text-[14px] font-semibold" style={{ color: 'var(--accent-green)' }}>Novo objetivo</span>
+          className="w-full btn-aura rounded-[20px] p-4 flex items-center justify-center gap-2 transition-all active:scale-[0.98] hover:shadow-md animate-fade-in"
+          style={{ background: 'var(--accent-9)' }}>
+          <Plus size={18} strokeWidth={1.5} style={{ color: 'white' }} />
+          <span className="text-[14px] font-semibold" style={{ color: 'white' }}>Novo objetivo</span>
         </button>
       </div>
 
@@ -229,7 +229,7 @@ export default function ObjectivesScreen() {
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} /> Criar objetivo
+                  <Sparkles size={18} strokeWidth={1.5} /> Criar objetivo
                 </>
               )}
             </button>
