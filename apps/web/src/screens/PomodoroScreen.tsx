@@ -1,22 +1,47 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Play, Pause, RotateCcw, SkipForward, Coffee, Brain } from 'lucide-react';
+import { ArrowLeft, Play, Pause, RotateCcw, SkipForward, Brain } from 'lucide-react';
 import { useNavigation } from '../navigation';
 
 type Phase = 'focus' | 'break' | 'longBreak';
 
-const PHASE_CONFIG: Record<Phase, { label: string; duration: number; color: string; emoji: string; bg: string }> = {
-  focus: { label: 'Foco', duration: 25 * 60, color: 'var(--accent-green)', emoji: '🎯', bg: 'rgba(31,59,50,0.06)' },
-  break: { label: 'Pausa Curta', duration: 5 * 60, color: 'var(--accent-teal)', emoji: '☕', bg: 'rgba(45,212,191,0.06)' },
-  longBreak: { label: 'Pausa Longa', duration: 15 * 60, color: 'var(--accent-purple)', emoji: '🌿', bg: 'rgba(139,92,246,0.06)' },
+const PHASE_CONFIG: Record<Phase, { label: string; duration: number; color: string; bg: string }> = {
+  focus: { label: 'Foco', duration: 25 * 60, color: 'var(--accent-green)', bg: 'rgba(31,59,50,0.06)' },
+  break: { label: 'Pausa Curta', duration: 5 * 60, color: 'var(--accent-teal)', bg: 'rgba(45,212,191,0.06)' },
+  longBreak: { label: 'Pausa Longa', duration: 15 * 60, color: 'var(--accent-purple)', bg: 'rgba(139,92,246,0.06)' },
 };
+
+const STORAGE_KEY = 'pomodoro_state';
+const MAX_AGE_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+interface PersistedState {
+  phase: Phase;
+  timeLeft: number;
+  completedCycles: number;
+  totalFocusTime: number;
+  savedAt: number;
+}
+
+function loadPersisted(): Partial<PersistedState> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const s: PersistedState = JSON.parse(raw);
+    if (Date.now() - s.savedAt > MAX_AGE_MS) return {};
+    return s;
+  } catch {
+    return {};
+  }
+}
 
 export default function PomodoroScreen() {
   const { navigate, params } = useNavigation();
-  const [phase, setPhase] = useState<Phase>('focus');
-  const [timeLeft, setTimeLeft] = useState(PHASE_CONFIG.focus.duration);
+  const persisted = useRef(loadPersisted()).current;
+
+  const [phase, setPhase] = useState<Phase>(persisted.phase ?? 'focus');
+  const [timeLeft, setTimeLeft] = useState(persisted.timeLeft ?? PHASE_CONFIG.focus.duration);
   const [isRunning, setIsRunning] = useState(false);
-  const [completedCycles, setCompletedCycles] = useState(0);
-  const [totalFocusTime, setTotalFocusTime] = useState(0);
+  const [completedCycles, setCompletedCycles] = useState(persisted.completedCycles ?? 0);
+  const [totalFocusTime, setTotalFocusTime] = useState(persisted.totalFocusTime ?? 0);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
 
   const taskName = (params.taskName as string) || 'Sessão de foco';
@@ -32,6 +57,13 @@ export default function PomodoroScreen() {
     setTimeLeft(PHASE_CONFIG[newPhase].duration);
     setIsRunning(false);
   }, []);
+
+  // Persist state to localStorage whenever it changes (but not while running — save on pause/phase-switch)
+  useEffect(() => {
+    if (isRunning) return; // only persist when paused
+    const s: PersistedState = { phase, timeLeft, completedCycles, totalFocusTime, savedAt: Date.now() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  }, [phase, timeLeft, isRunning, completedCycles, totalFocusTime]);
 
   useEffect(() => {
     if (isRunning) {
@@ -63,6 +95,7 @@ export default function PomodoroScreen() {
   const reset = () => {
     setTimeLeft(config.duration);
     setIsRunning(false);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   const circleRadius = 100;

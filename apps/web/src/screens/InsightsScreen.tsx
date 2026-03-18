@@ -1,44 +1,51 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Zap, Smile, CheckCircle2, BrainCircuit, ArrowRight, TrendingUp, AlertTriangle } from 'lucide-react';
-
-const weeklyData = {
-  summary: {
-    avgMood: 3.8,
-    avgEnergy: 3.5,
-    checkinCount: 5,
-    tasksCompleted: 12,
-    tasksTotal: 15,
-    journalSessions: 3,
-  },
-  moodByDay: [
-    { day: 'Seg', mood: 4, energy: 4 },
-    { day: 'Ter', mood: 3, energy: 3 },
-    { day: 'Qua', mood: 2, energy: 2 },
-    { day: 'Qui', mood: 3, energy: 3 },
-    { day: 'Sex', mood: 4, energy: 4 },
-    { day: 'Sáb', mood: 4, energy: 3 },
-    { day: 'Dom', mood: 5, energy: 4 },
-  ],
-  patterns: [
-    { type: 'Ciclagem', description: 'Sua energia tende a cair nas quartas-feiras — pode estar ligado ao acúmulo de demandas do início da semana.', severity: 'high' },
-    { type: 'Pico', description: 'Energia mais alta pela manhã (antes das 11h) e queda consistente após as 15h.', severity: 'medium' },
-    { type: 'Sono', description: 'Noites com sono acima de 7h correlacionam com humor +0.8 no dia seguinte.', severity: 'low' },
-  ],
-  recommendations: [
-    { category: 'Rotina', text: 'Agende tarefas criativas pela manhã e administrativas à tarde.' },
-    { category: 'Autocuidado', text: 'Adicione uma pausa de 15 min entre 14h-15h para recuperar energia.' },
-  ],
-  aiAnalysis: 'Sua semana mostrou um padrão de ciclagem característico: energia alta no início e fim da semana, com uma queda no meio. A consistência nos check-ins está ajudando a mapear sua ciclagem com mais precisão.',
-};
+import { useAuthStore } from '../stores/auth_store';
+import { useCheckinStore } from '../stores/checkin_store';
+import { useInsightStore } from '../stores/insight_store';
 
 const severityColors: Record<string, { bg: string; border: string; text: string }> = {
-  high: { bg: 'rgba(244,63,94,0.06)', border: 'var(--accent-rose)', text: 'var(--accent-rose)' },
-  medium: { bg: 'rgba(245,158,11,0.06)', border: 'var(--accent-orange)', text: 'var(--accent-orange)' },
-  low: { bg: 'rgba(16,185,129,0.06)', border: 'var(--cat-saude)', text: 'var(--cat-saude)' },
+  high:   { bg: 'rgba(244,63,94,0.06)',   border: 'var(--accent-rose)',   text: 'var(--accent-rose)' },
+  medium: { bg: 'rgba(245,158,11,0.06)',  border: 'var(--accent-orange)', text: 'var(--accent-orange)' },
+  low:    { bg: 'rgba(16,185,129,0.06)',  border: 'var(--cat-saude)',     text: 'var(--cat-saude)' },
+};
+
+const catLabel: Record<string, string> = {
+  planning: 'Planejamento',
+  'self-care': 'Autocuidado',
+  social: 'Social',
 };
 
 export default function InsightsScreen() {
-  const maxBar = 5;
+  const { userId } = useAuthStore();
+  const { recentCheckins, load: loadCheckins } = useCheckinStore();
+  const { weeklyInsight, isLoading, load: loadInsights } = useInsightStore();
+
+  useEffect(() => {
+    if (!userId) return;
+    void loadCheckins(userId);
+    void loadInsights(userId);
+  }, [userId, loadCheckins, loadInsights]);
+
+  // Build bar chart data from recentCheckins (last 7 days)
+  const dayLabels = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const chartDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return { date: d.toISOString().slice(0, 10), label: dayLabels[d.getDay()] };
+  });
+  const byDate = Object.fromEntries(recentCheckins.map((c) => [c.local_date, c]));
+
+  const patterns = weeklyInsight?.insights?.patterns ?? [];
+  const recommendations = weeklyInsight?.insights?.recommendations ?? [];
+  const aiAnalysis = weeklyInsight?.insights?.aiAnalysis ?? null;
+
+  // Prefer DB values, fall back to computing from recent checkins
+  const avgMood = weeklyInsight?.avg_mood
+    ?? (recentCheckins.length > 0 ? recentCheckins.reduce((s, c) => s + c.mood_score, 0) / recentCheckins.length : null);
+  const avgEnergy = weeklyInsight?.avg_energy
+    ?? (recentCheckins.length > 0 ? recentCheckins.reduce((s, c) => s + c.energy_score, 0) / recentCheckins.length : null);
+  const checkinCount = weeklyInsight?.checkin_count ?? recentCheckins.length;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
@@ -49,33 +56,37 @@ export default function InsightsScreen() {
         </h1>
       </div>
 
+      {/* Bar chart */}
       <div className="glass-card rounded-[22px] p-4 mb-4 animate-fade-in delay-100">
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp size={14} style={{ color: 'var(--accent-green)' }} />
           <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Humor & Energia</p>
         </div>
         <div className="flex items-end justify-between gap-1.5 h-24 mb-2">
-          {weeklyData.moodByDay.map((d, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex flex-col items-center gap-0.5" style={{ height: 80 }}>
-                <div className="w-full rounded-t-lg transition-all" style={{
-                  height: `${(d.mood / maxBar) * 100}%`,
-                  background: 'var(--accent-green)',
-                  opacity: 0.7,
-                }} />
-                <div className="w-full rounded-b-lg transition-all" style={{
-                  height: `${(d.energy / maxBar) * 100}%`,
-                  background: 'var(--accent-teal)',
-                  opacity: 0.5,
-                }} />
+          {chartDays.map((d, i) => {
+            const c = byDate[d.date];
+            return (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <div className="w-full flex flex-col items-center gap-0.5" style={{ height: 80 }}>
+                  <div className="w-full rounded-t-lg transition-all" style={{
+                    height: c ? `${(c.mood_score / 5) * 100}%` : '4%',
+                    background: 'var(--accent-green)',
+                    opacity: c ? 0.7 : 0.15,
+                  }} />
+                  <div className="w-full rounded-b-lg transition-all" style={{
+                    height: c ? `${(c.energy_score / 5) * 100}%` : '4%',
+                    background: 'var(--accent-teal)',
+                    opacity: c ? 0.5 : 0.1,
+                  }} />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="flex justify-between">
-          {weeklyData.moodByDay.map((d, i) => (
+          {chartDays.map((d, i) => (
             <div key={i} className="flex-1 text-center">
-              <span className="text-[9px] font-medium" style={{ color: 'var(--text-muted)' }}>{d.day}</span>
+              <span className="text-[9px] font-medium" style={{ color: 'var(--text-muted)' }}>{d.label}</span>
             </div>
           ))}
         </div>
@@ -91,11 +102,12 @@ export default function InsightsScreen() {
         </div>
       </div>
 
+      {/* Summary stats */}
       <div className="flex gap-2.5 mb-4 animate-fade-in delay-200">
         {[
-          { label: 'Humor', value: `${weeklyData.summary.avgMood}/5`, icon: <Smile size={16} />, color: 'var(--cat-saude)' },
-          { label: 'Energia', value: `${weeklyData.summary.avgEnergy}/5`, icon: <Zap size={16} />, color: 'var(--accent-orange)' },
-          { label: 'Check-ins', value: weeklyData.summary.checkinCount.toString(), icon: <CheckCircle2 size={16} />, color: 'var(--accent-blue)' },
+          { label: 'Humor',     value: avgMood    != null ? `${avgMood.toFixed(1)}/5`    : '—', icon: <Smile size={16} />,       color: 'var(--cat-saude)' },
+          { label: 'Energia',   value: avgEnergy  != null ? `${avgEnergy.toFixed(1)}/5`  : '—', icon: <Zap size={16} />,         color: 'var(--accent-orange)' },
+          { label: 'Check-ins', value: checkinCount > 0   ? checkinCount.toString()       : '0', icon: <CheckCircle2 size={16} />, color: 'var(--accent-blue)' },
         ].map((stat, i) => (
           <div key={i} className="flex-1 glass-card rounded-[18px] p-3.5">
             <div className="mb-2" style={{ color: stat.color }}>{stat.icon}</div>
@@ -105,58 +117,88 @@ export default function InsightsScreen() {
         ))}
       </div>
 
-      <div className="mb-4 animate-fade-in delay-300">
-        <div className="flex items-center gap-2 mb-3">
-          <BrainCircuit size={16} style={{ color: 'var(--text-primary)' }} />
-          <h2 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
-            Padrões de Ciclagem
-          </h2>
+      {/* No data state */}
+      {!isLoading && checkinCount === 0 && (
+        <div className="glass-card rounded-[22px] p-6 mb-4 text-center animate-fade-in delay-300">
+          <p className="text-[28px] mb-2">🌱</p>
+          <p className="text-[15px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Ainda sem dados essa semana</p>
+          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Faça seu primeiro check-in para começar a mapear sua ciclagem.</p>
         </div>
-        {weeklyData.patterns.map((pattern, i) => {
-          const sev = severityColors[pattern.severity] || severityColors.low;
-          return (
-            <div key={i} className="glass-card rounded-[18px] p-4 mb-2.5"
-              style={{ borderLeft: `3px solid ${sev.border}` }}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <AlertTriangle size={11} style={{ color: sev.text }} />
-                <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: sev.text }}>{pattern.type}</span>
-              </div>
-              <p className="text-[13px] font-medium leading-[20px]" style={{ color: 'var(--text-primary)' }}>{pattern.description}</p>
-            </div>
-          );
-        })}
-      </div>
+      )}
 
-      <div className="mb-4 animate-fade-in delay-400">
-        <div className="flex items-center gap-2 mb-3">
-          <CheckCircle2 size={16} style={{ color: 'var(--text-primary)' }} />
-          <h2 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
-            Ações Recomendadas
-          </h2>
-        </div>
-        {weeklyData.recommendations.map((rec, i) => (
-          <div key={i} className="rounded-[18px] p-4 mb-2.5 flex items-center" style={{ background: 'var(--bg-dark)' }}>
-            <div className="flex-1">
-              <p className="text-[10px] font-bold uppercase mb-1" style={{ color: 'var(--accent-teal)', opacity: 0.7 }}>{rec.category}</p>
-              <p className="text-white font-semibold text-[13px]">{rec.text}</p>
-            </div>
-            <ArrowRight size={18} color="white" className="ml-2 opacity-50" />
+      {/* Patterns */}
+      {patterns.length > 0 && (
+        <div className="mb-4 animate-fade-in delay-300">
+          <div className="flex items-center gap-2 mb-3">
+            <BrainCircuit size={16} style={{ color: 'var(--text-primary)' }} />
+            <h2 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+              Padrões de Ciclagem
+            </h2>
           </div>
-        ))}
-      </div>
+          {patterns.map((pattern, i) => {
+            const sev = severityColors[pattern.confidence] || severityColors.low;
+            return (
+              <div key={i} className="glass-card rounded-[18px] p-4 mb-2.5"
+                style={{ borderLeft: `3px solid ${sev.border}` }}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <AlertTriangle size={11} style={{ color: sev.text }} />
+                  <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: sev.text }}>
+                    {pattern.type}
+                  </span>
+                </div>
+                <p className="text-[13px] font-medium leading-[20px]" style={{ color: 'var(--text-primary)' }}>
+                  {pattern.description}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-      <div className="glass-card rounded-[22px] p-5 mb-4 animate-fade-in delay-400"
-        style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(45,212,191,0.06))' }}>
-        <div className="flex items-center gap-2 mb-2">
-          <BrainCircuit size={14} style={{ color: 'var(--accent-purple)' }} />
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-purple)' }}>
-            Resumo da IA
+      {/* Recommendations */}
+      {recommendations.length > 0 && (
+        <div className="mb-4 animate-fade-in delay-400">
+          <div className="flex items-center gap-2 mb-3">
+            <CheckCircle2 size={16} style={{ color: 'var(--text-primary)' }} />
+            <h2 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+              Ações Recomendadas
+            </h2>
+          </div>
+          {recommendations.map((rec, i) => (
+            <div key={i} className="rounded-[18px] p-4 mb-2.5 flex items-center" style={{ background: 'var(--bg-dark)' }}>
+              <div className="flex-1">
+                <p className="text-[10px] font-bold uppercase mb-1" style={{ color: 'var(--accent-teal)', opacity: 0.7 }}>
+                  {catLabel[rec.category] ?? rec.category}
+                </p>
+                <p className="text-white font-semibold text-[13px]">{rec.text}</p>
+              </div>
+              <ArrowRight size={18} color="white" className="ml-2 opacity-50" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* AI Analysis */}
+      {aiAnalysis && (
+        <div className="glass-card rounded-[22px] p-5 mb-4 animate-fade-in delay-400"
+          style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(45,212,191,0.06))' }}>
+          <div className="flex items-center gap-2 mb-2">
+            <BrainCircuit size={14} style={{ color: 'var(--accent-purple)' }} />
+            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-purple)' }}>
+              Resumo da IA
+            </p>
+          </div>
+          <p className="text-[14px] leading-[22px] italic" style={{ color: 'var(--text-primary)' }}>
+            "{aiAnalysis}"
           </p>
         </div>
-        <p className="text-[14px] leading-[22px] italic" style={{ color: 'var(--text-primary)' }}>
-          "{weeklyData.aiAnalysis}"
-        </p>
-      </div>
+      )}
+
+      {isLoading && (
+        <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-[13px]">Carregando seus dados...</p>
+        </div>
+      )}
     </div>
   );
 }

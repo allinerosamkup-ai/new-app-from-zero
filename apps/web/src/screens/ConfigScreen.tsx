@@ -1,10 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { User, LogOut, Shield, ChevronRight, Clock, Sun, Moon, Heart } from 'lucide-react';
+import { useNavigation } from '../navigation';
+import { useAuthStore } from '../stores/auth_store';
+import { usePrefsStore } from '../stores/preferences_store';
 
 export default function ConfigScreen() {
-  const [timezone, setTimezone] = useState('America/Sao_Paulo');
-  const [wakeTime, setWakeTime] = useState('07:00');
-  const [sleepTime, setSleepTime] = useState('23:00');
+  const { navigate } = useNavigation();
+  const { fullName, email, signOut, isLoading: authLoading } = useAuthStore();
+  const { prefs, isLoading, isSaving, load, save } = usePrefsStore();
+
+  useEffect(() => { load(); }, []);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('auth');
+  };
+
+  const timezone = prefs?.timezone ?? 'America/Sao_Paulo';
+  const wakeTime = prefs?.wakeTime ?? '07:00';
+  const sleepTime = prefs?.sleepTime ?? '23:00';
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
@@ -21,8 +35,8 @@ export default function ConfigScreen() {
             <User size={22} style={{ color: 'var(--accent-green)' }} />
           </div>
           <div className="flex-1 ml-3">
-            <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>Ana Silva</p>
-            <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-muted)' }}>ana.silva@email.com</p>
+            <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>{fullName ?? 'Usuário'}</p>
+            <p className="text-[12px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{email ?? ''}</p>
           </div>
         </div>
       </div>
@@ -30,53 +44,63 @@ export default function ConfigScreen() {
       <div className="glass-card rounded-[22px] p-4 mb-3.5 animate-fade-in delay-200">
         <div className="flex items-center gap-2 mb-4">
           <Clock size={14} style={{ color: 'var(--accent-green)' }} />
-          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Rotina</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Rotina {isSaving && <span className="font-normal normal-case tracking-normal ml-1">salvando…</span>}
+          </p>
         </div>
 
-        <div className="mb-4">
-          <label className="text-[12px] font-medium mb-1.5 block" style={{ color: 'var(--text-secondary)' }}>Fuso horário</label>
-          <select
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            className="w-full glass-card rounded-xl px-4 py-3 text-[13px] outline-none"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            <option value="America/Sao_Paulo">São Paulo (GMT-3)</option>
-            <option value="America/Manaus">Manaus (GMT-4)</option>
-            <option value="America/Bahia">Bahia (GMT-3)</option>
-            <option value="America/Recife">Recife (GMT-3)</option>
-            <option value="America/Fortaleza">Fortaleza (GMT-3)</option>
-          </select>
-        </div>
+        {isLoading ? (
+          <div className="text-center py-4" style={{ color: 'var(--text-muted)' }}>
+            <div className="text-[12px]">Carregando…</div>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <label className="text-[12px] font-medium mb-1.5 block" style={{ color: 'var(--text-secondary)' }}>Fuso horário</label>
+              <select
+                value={timezone}
+                onChange={(e) => save({ timezone: e.target.value })}
+                className="w-full glass-card rounded-xl px-4 py-3 text-[13px] outline-none"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                <option value="America/Sao_Paulo">São Paulo (GMT-3)</option>
+                <option value="America/Manaus">Manaus (GMT-4)</option>
+                <option value="America/Bahia">Bahia (GMT-3)</option>
+                <option value="America/Recife">Recife (GMT-3)</option>
+                <option value="America/Fortaleza">Fortaleza (GMT-3)</option>
+              </select>
+            </div>
 
-        <div className="flex gap-3">
-          <div className="flex-1">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Sun size={13} style={{ color: 'var(--accent-orange)' }} />
-              <label className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Acordar</label>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Sun size={13} style={{ color: 'var(--accent-orange)' }} />
+                  <label className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Acordar</label>
+                </div>
+                <input
+                  type="time"
+                  value={wakeTime}
+                  onChange={(e) => save({ wakeTime: e.target.value })}
+                  className="w-full glass-card rounded-xl px-4 py-3 text-[13px] outline-none"
+                  style={{ color: 'var(--text-primary)' }}
+                />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Moon size={13} style={{ color: 'var(--accent-purple)' }} />
+                  <label className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Dormir</label>
+                </div>
+                <input
+                  type="time"
+                  value={sleepTime}
+                  onChange={(e) => save({ sleepTime: e.target.value })}
+                  className="w-full glass-card rounded-xl px-4 py-3 text-[13px] outline-none"
+                  style={{ color: 'var(--text-primary)' }}
+                />
+              </div>
             </div>
-            <input
-              type="time"
-              value={wakeTime}
-              onChange={(e) => setWakeTime(e.target.value)}
-              className="w-full glass-card rounded-xl px-4 py-3 text-[13px] outline-none"
-              style={{ color: 'var(--text-primary)' }}
-            />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Moon size={13} style={{ color: 'var(--accent-purple)' }} />
-              <label className="text-[12px] font-medium" style={{ color: 'var(--text-secondary)' }}>Dormir</label>
-            </div>
-            <input
-              type="time"
-              value={sleepTime}
-              onChange={(e) => setSleepTime(e.target.value)}
-              className="w-full glass-card rounded-xl px-4 py-3 text-[13px] outline-none"
-              style={{ color: 'var(--text-primary)' }}
-            />
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       <div className="glass-card rounded-[22px] overflow-hidden mb-3.5 animate-fade-in delay-300">
@@ -93,9 +117,15 @@ export default function ConfigScreen() {
         </button>
       </div>
 
-      <button className="glass-card rounded-[22px] px-4 py-4 flex items-center transition-all hover:shadow-md animate-fade-in delay-400">
+      <button
+        onClick={handleSignOut}
+        disabled={authLoading}
+        className="glass-card rounded-[22px] px-4 py-4 flex items-center transition-all hover:shadow-md animate-fade-in delay-400 disabled:opacity-60"
+      >
         <LogOut size={18} style={{ color: 'var(--accent-rose)' }} />
-        <span className="ml-3 text-[14px] font-semibold" style={{ color: 'var(--accent-rose)' }}>Sair da conta</span>
+        <span className="ml-3 text-[14px] font-semibold" style={{ color: 'var(--accent-rose)' }}>
+          {authLoading ? 'Saindo...' : 'Sair da conta'}
+        </span>
       </button>
 
       <p className="text-center text-[11px] mt-6" style={{ color: 'var(--text-muted)' }}>

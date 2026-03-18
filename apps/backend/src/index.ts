@@ -481,6 +481,170 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * GET /api/preferences
+   * Retorna as preferências do usuário (ou padrões se ainda não existirem).
+   */
+  app.get('/api/preferences', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const prefs = await prisma.userPreference.findUnique({ where: { userId } });
+      return res.json(prefs ?? {
+        timezone: 'America/Sao_Paulo',
+        wakeTime: null,
+        sleepTime: null,
+        notificationsOn: true,
+        aiTone: 'warm',
+      });
+    } catch (error: any) {
+      console.error('[preferences/get] Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch preferences' });
+    }
+  });
+
+  /**
+   * PATCH /api/preferences
+   * Cria ou atualiza as preferências do usuário.
+   */
+  app.patch('/api/preferences', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const PrefsSchema = z.object({
+      timezone: z.string().optional(),
+      wakeTime: z.string().nullable().optional(),
+      sleepTime: z.string().nullable().optional(),
+      notificationsOn: z.boolean().optional(),
+      aiTone: z.string().optional(),
+    });
+    try {
+      const data = PrefsSchema.parse(req.body);
+      const prefs = await prisma.userPreference.upsert({
+        where: { userId },
+        update: data,
+        create: { userId, ...data },
+      });
+      return res.json(prefs);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[preferences/patch] Error:', error);
+      return res.status(500).json({ error: 'Failed to update preferences' });
+    }
+  });
+
+  /**
+   * GET /api/objectives
+   * Lista objetivos ativos do usuário.
+   */
+  app.get('/api/objectives', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const objectives = await prisma.objective.findMany({
+        where: { userId, archived: false },
+        orderBy: { createdAt: 'asc' },
+      });
+      return res.json(objectives.map((o) => ({
+        id: o.id,
+        title: o.title,
+        description: o.description,
+        category: o.category,
+        progress: o.progress,
+        subgoals: o.subgoals,
+        aiInsight: o.aiInsight,
+        createdAt: o.createdAt.toISOString(),
+      })));
+    } catch (error: any) {
+      console.error('[objectives/list] Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch objectives' });
+    }
+  });
+
+  /**
+   * POST /api/objectives
+   * Cria um novo objetivo.
+   */
+  app.post('/api/objectives', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const Schema = z.object({
+      title: z.string().min(1),
+      description: z.string().optional(),
+      category: z.string().default('geral'),
+      subgoals: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        done: z.boolean(),
+        aiGenerated: z.boolean(),
+      })).default([]),
+    });
+    try {
+      const data = Schema.parse(req.body);
+      const obj = await prisma.objective.create({
+        data: { userId, ...data, subgoals: data.subgoals as any },
+      });
+      return res.status(201).json({ id: obj.id, title: obj.title, category: obj.category, progress: obj.progress, subgoals: obj.subgoals, createdAt: obj.createdAt.toISOString() });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/create] Error:', error);
+      return res.status(500).json({ error: 'Failed to create objective' });
+    }
+  });
+
+  /**
+   * PATCH /api/objectives/:id
+   * Atualiza título, progresso ou sub-metas de um objetivo.
+   */
+  app.patch('/api/objectives/:id', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const Schema = z.object({
+      title: z.string().min(1).optional(),
+      description: z.string().optional(),
+      category: z.string().optional(),
+      progress: z.number().int().min(0).max(100).optional(),
+      subgoals: z.array(z.object({
+        id: z.string(),
+        title: z.string(),
+        done: z.boolean(),
+        aiGenerated: z.boolean(),
+      })).optional(),
+      aiInsight: z.string().nullable().optional(),
+      archived: z.boolean().optional(),
+    });
+    try {
+      const data = Schema.parse(req.body);
+      const obj = await prisma.objective.updateMany({
+        where: { id, userId },
+        data: { ...data, subgoals: data.subgoals as any },
+      });
+      if (obj.count === 0) return res.status(404).json({ error: 'Objective not found' });
+      const updated = await prisma.objective.findUnique({ where: { id } });
+      return res.json(updated);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/patch] Error:', error);
+      return res.status(500).json({ error: 'Failed to update objective' });
+    }
+  });
+
+  /**
+   * DELETE /api/objectives/:id
+   * Arquiva (soft-delete) um objetivo.
+   */
+  app.delete('/api/objectives/:id', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    try {
+      await prisma.objective.updateMany({
+        where: { id, userId },
+        data: { archived: true },
+      });
+      return res.status(204).send();
+    } catch (error: any) {
+      console.error('[objectives/delete] Error:', error);
+      return res.status(500).json({ error: 'Failed to archive objective' });
+    }
+  });
+
+  /**
    * GET /api/timeline/:date
    * Retorna os blocos do planner para um dia específico.
    */

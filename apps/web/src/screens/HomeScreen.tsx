@@ -1,16 +1,22 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Calendar, PlusCircle, Brain, Zap, LineChart, TrendingUp, ArrowRight } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { MessageCircle, Calendar, Brain, LineChart, TrendingUp, ArrowRight } from 'lucide-react';
 import { useNavigation } from '../navigation';
+import { useAuthStore } from '../stores/auth_store';
+import { useCheckinStore, type DailyCheckinRow } from '../stores/checkin_store';
 
-const WEEK_DATA = [
-  { day: 'Seg', mood: 3, energy: 2, state: 'sensível' },
-  { day: 'Ter', mood: 4, energy: 4, state: 'moderado' },
-  { day: 'Qua', mood: 2, energy: 2, state: 'crítico' },
-  { day: 'Qui', mood: 4, energy: 3, state: 'moderado' },
-  { day: 'Sex', mood: 5, energy: 5, state: 'leve' },
-  { day: 'Sáb', mood: 3, energy: 4, state: 'moderado' },
-  { day: 'Hoj', mood: null, energy: null, state: null },
-];
+// Build an ordered array of the last 7 days (Mon→today)
+function buildWeekDays() {
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push({
+      date: d.toISOString().slice(0, 10),
+      label: i === 0 ? 'Hoj' : ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()],
+    });
+  }
+  return days;
+}
 
 const STATE_COLOR: Record<string, string> = {
   leve:     '#96C7B3',
@@ -19,30 +25,41 @@ const STATE_COLOR: Record<string, string> = {
   crítico:  '#E07070',
 };
 
-function MoodMiniChart() {
+function MoodMiniChart({ checkins }: { checkins: DailyCheckinRow[] }) {
   const pathRef = useRef<SVGPathElement>(null);
   const W = 280, H = 80, PAD = 16;
-  const cols = WEEK_DATA.length;
+  const weekDays = buildWeekDays();
+  const cols = weekDays.length;
   const xStep = (W - PAD * 2) / (cols - 1);
 
-  const pts = WEEK_DATA.map((d, i) => ({
-    x: PAD + i * xStep,
-    y: d.mood != null ? H - PAD - ((d.mood - 1) / 4) * (H - PAD * 2) : null,
-    ...d,
-  }));
+  const byDate = Object.fromEntries(checkins.map((c) => [c.local_date, c]));
 
-  const validPts = pts.filter(p => p.y != null) as Array<{ x: number; y: number; day: string; mood: number; energy: number | null; state: string | null }>;
+  const pts = weekDays.map((d, i) => {
+    const c = byDate[d.date];
+    return {
+      x: PAD + i * xStep,
+      mood: c?.mood_score ?? null,
+      energy: c?.energy_score ?? null,
+      state: c?.state_label_type ?? null,
+      label: d.label,
+      isToday: i === cols - 1,
+    };
+  });
+
+  const moodPts = pts.filter((p) => p.mood != null) as (typeof pts[0] & { mood: number })[];
   let pathD = '';
-  validPts.forEach((p, i) => {
-    if (i === 0) { pathD += `M ${p.x} ${p.y}`; return; }
-    const prev = validPts[i - 1];
+  moodPts.forEach((p, i) => {
+    const y = H - PAD - ((p.mood - 1) / 4) * (H - PAD * 2);
+    if (i === 0) { pathD += `M ${p.x} ${y}`; return; }
+    const prev = moodPts[i - 1];
+    const py = H - PAD - ((prev.mood - 1) / 4) * (H - PAD * 2);
     const cpX = (prev.x + p.x) / 2;
-    pathD += ` C ${cpX} ${prev.y}, ${cpX} ${p.y}, ${p.x} ${p.y}`;
+    pathD += ` C ${cpX} ${py}, ${cpX} ${y}, ${p.x} ${y}`;
   });
 
   useEffect(() => {
     const el = pathRef.current;
-    if (!el) return;
+    if (!el || !pathD) return;
     const len = el.getTotalLength();
     el.style.strokeDasharray = `${len}`;
     el.style.strokeDashoffset = `${len}`;
@@ -50,7 +67,7 @@ function MoodMiniChart() {
       el.style.transition = 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)';
       el.style.strokeDashoffset = '0';
     });
-  }, []);
+  }, [pathD]);
 
   return (
     <div>
@@ -68,14 +85,13 @@ function MoodMiniChart() {
       </div>
 
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
-        {/* Grid lines */}
         {[1,2,3,4,5].map(v => {
           const y = H - PAD - ((v - 1) / 4) * (H - PAD * 2);
           return <line key={v} x1={PAD} y1={y} x2={W - PAD} y2={y}
             stroke="rgba(0,0,0,0.06)" strokeWidth="1" strokeDasharray="3,3" />;
         })}
 
-        {/* Energy line (dashed, teal) */}
+        {/* Energy dashed line */}
         {(() => {
           const ePts = pts.filter(p => p.energy != null) as (typeof pts[0] & { energy: number })[];
           let ep = '';
@@ -87,112 +103,108 @@ function MoodMiniChart() {
             const cpX = (prev.x + p.x) / 2;
             ep += ` C ${cpX} ${pey}, ${cpX} ${ey}, ${p.x} ${ey}`;
           });
-          return <path d={ep} fill="none" stroke="var(--accent-teal)" strokeWidth="1.5"
-            strokeDasharray="4,3" opacity="0.6" />;
+          return ep ? <path d={ep} fill="none" stroke="var(--accent-teal)" strokeWidth="1.5"
+            strokeDasharray="4,3" opacity="0.6" /> : null;
         })()}
 
-        {/* Mood gradient fill */}
         <defs>
           <linearGradient id="moodGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--accent-green)" stopOpacity="0.25" />
             <stop offset="100%" stopColor="var(--accent-green)" stopOpacity="0" />
           </linearGradient>
         </defs>
-        {pathD && <path d={`${pathD} L ${validPts[validPts.length-1].x} ${H} L ${validPts[0].x} ${H} Z`}
+        {pathD && <path d={`${pathD} L ${moodPts[moodPts.length-1].x} ${H} L ${moodPts[0].x} ${H} Z`}
           fill="url(#moodGrad)" />}
-
-        {/* Mood line animated */}
         {pathD && <path ref={pathRef} d={pathD} fill="none"
           stroke="var(--accent-green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
 
-        {/* Dots per day */}
-        {pts.map((p, i) => (
-          <g key={i}>
-            {p.y != null && (
-              <>
-                <circle cx={p.x} cy={p.y} r="4" fill={p.state ? STATE_COLOR[p.state] : '#ccc'}
-                  stroke="white" strokeWidth="1.5" />
-                {i === cols - 2 && (
-                  <circle cx={p.x} cy={p.y} r="7" fill="none"
-                    stroke={p.state ? STATE_COLOR[p.state] : '#ccc'} strokeWidth="1.5" opacity="0.4">
-                    <animate attributeName="r" values="7;11;7" dur="2s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite" />
-                  </circle>
-                )}
-              </>
-            )}
-            {p.y == null && (
-              <circle cx={p.x} cy={H / 2} r="3" fill="none"
-                stroke="rgba(0,0,0,0.15)" strokeWidth="1.5" strokeDasharray="2,2" />
-            )}
-            <text x={p.x} y={H + 2} textAnchor="middle" fontSize="9"
-              fill="var(--text-muted)" fontWeight={i === cols - 1 ? '700' : '400'}>
-              {p.day}
-            </text>
-          </g>
-        ))}
+        {pts.map((p, i) => {
+          const y = p.mood != null ? H - PAD - ((p.mood - 1) / 4) * (H - PAD * 2) : null;
+          const dotColor = p.state ? STATE_COLOR[p.state] : '#ccc';
+          return (
+            <g key={i}>
+              {y != null ? (
+                <>
+                  <circle cx={p.x} cy={y} r="4" fill={dotColor} stroke="white" strokeWidth="1.5" />
+                  {p.isToday && (
+                    <circle cx={p.x} cy={y} r="7" fill="none" stroke={dotColor} strokeWidth="1.5" opacity="0.4">
+                      <animate attributeName="r" values="7;11;7" dur="2s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.4;0;0.4" dur="2s" repeatCount="indefinite" />
+                    </circle>
+                  )}
+                </>
+              ) : (
+                <circle cx={p.x} cy={H / 2} r="3" fill="none"
+                  stroke="rgba(0,0,0,0.15)" strokeWidth="1.5" strokeDasharray="2,2" />
+              )}
+              <text x={p.x} y={H + 2} textAnchor="middle" fontSize="9"
+                fill="var(--text-muted)" fontWeight={p.isToday ? '700' : '400'}>
+                {p.label}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
 }
 
+const stateData: Record<string, { label: string; emoji: string; analysis: string; recommendation: string; gradient: string; color: string }> = {
+  leve: {
+    label: 'Energia Leve',
+    emoji: '🌱',
+    analysis: 'Seu corpo e mente estão em ritmo tranquilo. Aproveite para atividades que pedem calma e atenção.',
+    recommendation: 'Comece com tarefas leves e aumente o ritmo gradualmente.',
+    gradient: 'linear-gradient(135deg, rgba(150,199,179,0.22), rgba(150,199,179,0.07))',
+    color: '#3A7A66',
+  },
+  moderado: {
+    label: 'Energia Radiante',
+    emoji: '✨',
+    analysis: 'Humor e energia em equilíbrio. Clareza mental acima da média — ótimo para tarefas que exigem foco.',
+    recommendation: 'Aproveite o pico para suas tarefas mais importantes antes das 14h.',
+    gradient: 'linear-gradient(135deg, rgba(249,185,92,0.22), rgba(249,185,92,0.07))',
+    color: '#9A6010',
+  },
+  sensível: {
+    label: 'Dia Sensível',
+    emoji: '🌙',
+    analysis: 'Hoje pode ser mais delicado. Sua energia pede cuidado extra e um ritmo mais gentil consigo.',
+    recommendation: 'Priorize autocuidado e evite decisões importantes se possível.',
+    gradient: 'linear-gradient(135deg, rgba(215,137,127,0.22), rgba(215,137,127,0.07))',
+    color: '#A04840',
+  },
+  crítico: {
+    label: 'Modo Recuperação',
+    emoji: '🌊',
+    analysis: 'Seus indicadores mostram que hoje é dia de descansar. Não force o ritmo.',
+    recommendation: 'Cancele o que puder e foque apenas no essencial.',
+    gradient: 'linear-gradient(135deg, rgba(224,112,112,0.22), rgba(224,112,112,0.07))',
+    color: '#A03030',
+  },
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia,';
+  if (h < 18) return 'Boa tarde,';
+  return 'Boa noite,';
+}
+
 export default function HomeScreen() {
   const { navigate } = useNavigation();
-  const [hasCheckin, setHasCheckin] = useState(false);
-  const [checkinState, setCheckinState] = useState('moderado');
+  const { userId, fullName } = useAuthStore();
+  const { todayCheckin, recentCheckins, load } = useCheckinStore();
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.state) setCheckinState(detail.state);
-      setHasCheckin(true);
-    };
-    window.addEventListener('checkin-done', handler);
-    return () => window.removeEventListener('checkin-done', handler);
-  }, []);
+    if (userId) void load(userId);
+  }, [userId, load]);
 
-  const stateData: Record<string, { label: string; emoji: string; analysis: string; recommendation: string; gradient: string; color: string }> = {
-    leve: {
-      label: 'Energia Leve',
-      emoji: '🌱',
-      analysis: 'Seu corpo e mente estão em ritmo tranquilo. Aproveite para atividades que pedem calma e atenção.',
-      recommendation: 'Comece com tarefas leves e aumente o ritmo gradualmente.',
-      gradient: 'linear-gradient(135deg, rgba(150,199,179,0.22), rgba(150,199,179,0.07))',
-      color: '#3A7A66',
-    },
-    moderado: {
-      label: 'Energia Radiante',
-      emoji: '✨',
-      analysis: 'Humor e energia em equilíbrio. Clareza mental acima da média — ótimo para tarefas que exigem foco.',
-      recommendation: 'Aproveite o pico para suas tarefas mais importantes antes das 14h.',
-      gradient: 'linear-gradient(135deg, rgba(249,185,92,0.22), rgba(249,185,92,0.07))',
-      color: '#9A6010',
-    },
-    sensível: {
-      label: 'Dia Sensível',
-      emoji: '🌙',
-      analysis: 'Hoje pode ser mais delicado. Sua energia pede cuidado extra e um ritmo mais gentil consigo.',
-      recommendation: 'Priorize autocuidado e evite decisões importantes se possível.',
-      gradient: 'linear-gradient(135deg, rgba(215,137,127,0.22), rgba(215,137,127,0.07))',
-      color: '#A04840',
-    },
-    crítico: {
-      label: 'Modo Recuperação',
-      emoji: '🌊',
-      analysis: 'Seus indicadores mostram que hoje é dia de descansar. Não force o ritmo.',
-      recommendation: 'Cancele o que puder e foque apenas no essencial.',
-      gradient: 'linear-gradient(135deg, rgba(224,112,112,0.22), rgba(224,112,112,0.07))',
-      color: '#A03030',
-    },
-  };
+  const stateKey = todayCheckin?.state_label_type ?? null;
+  const current = stateKey ? stateData[stateKey] : null;
 
-  const current = stateData[checkinState] || stateData.moderado;
-
-  const blocks = [
-    { id: '1', title: 'Foco no projeto', startTime: '09:00', category: 'trabalho', intensity: 'P' },
-    { id: '2', title: 'Caminhada leve', startTime: '12:00', category: 'saúde', intensity: 'L' },
-    { id: '3', title: 'Revisão de emails', startTime: '14:00', category: 'trabalho', intensity: 'L' },
-  ];
+  // Use AI recommendation if available, else fallback
+  const aiRec = stateKey && (todayCheckin?.ai_state as any)?.recommendations?.[0];
 
   const catColors: Record<string, string> = {
     trabalho: 'var(--cat-trabalho)',
@@ -203,13 +215,13 @@ export default function HomeScreen() {
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
       <div className="mb-5 animate-fade-in">
-        <p className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>Bom dia,</p>
+        <p className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>{greeting()}</p>
         <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
-          Ciclagem & Humor
+          {fullName ? fullName.split(' ')[0] : 'Ciclagem & Humor'}
         </h1>
       </div>
 
-      {hasCheckin && (
+      {current && (
         <div className="rounded-[24px] p-5 mb-5 glass-card animate-fade-in delay-100"
           style={{ background: current.gradient }}>
           <div className="flex items-center gap-2 mb-3">
@@ -226,15 +238,17 @@ export default function HomeScreen() {
               <Brain size={12} style={{ color: current.color }} />
               <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: current.color, opacity: 0.6 }}>Sugestão IA</p>
             </div>
-            <p className="text-[13px] italic" style={{ color: current.color }}>"{current.recommendation}"</p>
+            <p className="text-[13px] italic" style={{ color: current.color }}>
+              "{aiRec || current.recommendation}"
+            </p>
           </div>
         </div>
       )}
 
       <div className="glass-card rounded-[20px] p-4 mb-4 animate-fade-in delay-100">
-        <MoodMiniChart />
+        <MoodMiniChart checkins={recentCheckins} />
         <div className="flex items-center justify-center mt-3 pt-3" style={{ borderTop: '1px solid rgba(215,137,127,0.12)' }}>
-          {!hasCheckin ? (
+          {!todayCheckin ? (
             <button
               onClick={() => navigate('checkin')}
               className="flex items-center gap-2 px-5 py-2 rounded-full text-[13px] font-semibold transition-all duration-200 active:scale-[0.97] hover:opacity-90"
@@ -254,7 +268,7 @@ export default function HomeScreen() {
             </button>
           ) : (
             <button
-              onClick={() => { setHasCheckin(false); navigate('checkin'); }}
+              onClick={() => navigate('checkin')}
               className="flex items-center gap-2 px-5 py-2 rounded-full text-[13px] font-medium transition-all duration-200 hover:opacity-70"
               style={{
                 background: 'rgba(150,199,179,0.12)',
@@ -311,25 +325,9 @@ export default function HomeScreen() {
             Ver tudo <ArrowRight size={14} />
           </button>
         </div>
-
-        {blocks.map((block, i) => (
-          <div key={block.id} className={`flex items-center mb-2.5 glass-card p-3.5 rounded-[18px] animate-fade-in`}
-            style={{ animationDelay: `${0.35 + i * 0.08}s`, borderLeft: `3px solid ${catColors[block.category] || 'var(--cat-rotina)'}` }}>
-            <div className="w-12">
-              <span className="text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>{block.startTime}</span>
-            </div>
-            <div className="flex-1 pl-3">
-              <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{block.title}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] font-medium capitalize" style={{ color: catColors[block.category] || 'var(--text-muted)' }}>{block.category}</span>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>•</span>
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  {block.intensity === 'P' ? '🔴 Pesada' : block.intensity === 'M' ? '🟡 Média' : '🟢 Leve'}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
+        <div className="glass-card rounded-[18px] p-4 text-center" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-[13px]">Abra o Planner para ver e adicionar blocos do seu dia.</p>
+        </div>
       </div>
     </div>
   );

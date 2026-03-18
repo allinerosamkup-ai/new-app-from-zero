@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationProvider, useNavigation } from './navigation';
+import { useAuthStore } from './stores/auth_store';
 import { PhoneFrame } from './components/PhoneFrame';
 import { TabBar } from './components/TabBar';
 import AuthScreen from './screens/AuthScreen';
@@ -51,9 +52,16 @@ function ScreenRouter() {
   );
 }
 
+function AuthInitializer() {
+  const { initialize } = useAuthStore();
+  useEffect(() => { void initialize(); }, [initialize]);
+  return null;
+}
+
 export default function App() {
   return (
     <NavigationProvider>
+      <AuthInitializer />
       <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#e8e4de' }}>
         <PhoneFrame>
           <ScreenRouter />

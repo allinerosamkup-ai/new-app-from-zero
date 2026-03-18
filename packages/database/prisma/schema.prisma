@@ -22,6 +22,7 @@ model Profile {
   journalMessages JournalMessage[]
   timelineBlocks  TimelineBlock[]
   weeklyInsights  WeeklyInsight[]
+  objectives      Objective[]
 
   @@map("profiles")
 }
@@ -176,6 +177,25 @@ model TimelineBlock {
 
   @@index([userId, localDate, startAt], name: "idx_timeline_user_date_time")
   @@map("timeline_blocks")
+}
+
+model Objective {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  title       String
+  description String?  @db.Text
+  category    String   @default("geral")
+  progress    Int      @default(0)
+  subgoals    Json     @default("[]")
+  aiInsight   String?  @map("ai_insight") @db.Text
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, archived, createdAt(sort: Desc)], name: "idx_objectives_user")
+  @@map("objectives")
 }
 
 model WeeklyInsight {

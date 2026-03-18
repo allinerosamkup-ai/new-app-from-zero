@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "previewbridge": {
+      "command": "uvx.exe",
+      "args": [
+        "mcpower-proxy==0.0.87",
+        "--wrapped-config",
+        "{\r\n      \"type\": \"stdio\",\r\n      \"command\": \"node\",\r\n      \"args\": [\r\n        \"C:\\\\Users\\\\allin\\\\previewbridge\\\\dist\\\\mcp-server.js\"\r\n      ]\r\n    }",
+        "--name",
+        "previewbridge"
+      ]
+    }
+  }
+}

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigation } from '../navigation';
+import { useAuthStore } from '../stores/auth_store';
 
 type AuthMode = 'signin' | 'signup';
 
 export default function AuthScreen() {
   const { navigate } = useNavigation();
+  const { signIn, signUp, isLoading, error, infoMessage, clearMessages } = useAuthStore();
   const [mode, setMode] = useState<AuthMode>('signin');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -12,11 +14,14 @@ export default function AuthScreen() {
 
   const isSignup = mode === 'signup';
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    clearMessages();
     if (isSignup) {
-      navigate('onboarding');
+      const ok = await signUp({ fullName, email, password });
+      if (ok && !useAuthStore.getState().infoMessage) navigate('onboarding');
     } else {
-      navigate('home');
+      const ok = await signIn(email, password);
+      if (ok) navigate('home');
     }
   };
 
@@ -38,7 +43,7 @@ export default function AuthScreen() {
 
           <div className="mt-5 flex rounded-2xl p-1 glass-strong animate-fade-in delay-100">
             <button
-              onClick={() => setMode('signin')}
+              onClick={() => { setMode('signin'); clearMessages(); }}
               className="flex-1 rounded-xl px-4 py-3 text-center font-semibold text-sm transition-all duration-300"
               style={{
                 background: mode === 'signin' ? 'var(--bg-dark)' : 'transparent',
@@ -48,7 +53,7 @@ export default function AuthScreen() {
               Entrar
             </button>
             <button
-              onClick={() => setMode('signup')}
+              onClick={() => { setMode('signup'); clearMessages(); }}
               className="flex-1 rounded-xl px-4 py-3 text-center font-semibold text-sm transition-all duration-300"
               style={{
                 background: mode === 'signup' ? 'var(--bg-dark)' : 'transparent',
@@ -103,15 +108,28 @@ export default function AuthScreen() {
               />
             </div>
           </div>
+
+          {(error || infoMessage) && (
+            <div
+              className="mt-4 rounded-2xl px-4 py-3 text-[13px] animate-fade-in"
+              style={{
+                background: error ? 'rgba(220,80,80,0.08)' : 'rgba(31,59,50,0.08)',
+                color: error ? 'var(--accent-rose)' : 'var(--accent-green)',
+              }}
+            >
+              {error || infoMessage}
+            </div>
+          )}
         </div>
 
         <div className="pb-2 animate-fade-in delay-300">
           <button
             onClick={handleSubmit}
-            className="w-full rounded-[24px] px-6 py-[18px] text-center text-[16px] font-bold text-white transition-all duration-200 active:scale-[0.98]"
+            disabled={isLoading}
+            className="w-full rounded-[24px] px-6 py-[18px] text-center text-[16px] font-bold text-white transition-all duration-200 active:scale-[0.98] disabled:opacity-60"
             style={{ background: 'var(--bg-dark)', boxShadow: 'var(--shadow-lg)' }}
           >
-            {isSignup ? 'Criar conta e continuar' : 'Entrar e continuar'}
+            {isLoading ? 'Aguarde...' : isSignup ? 'Criar conta e continuar' : 'Entrar e continuar'}
           </button>
           <p className="mt-4 text-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
             {isSignup

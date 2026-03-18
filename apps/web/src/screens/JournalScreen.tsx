@@ -1,50 +1,58 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Mic, Send, Clock, ChevronRight, ChevronDown, Sparkles, MicOff } from 'lucide-react';
+import { ArrowLeft, Send, Clock, ChevronRight, ChevronDown, Sparkles } from 'lucide-react';
 import { useNavigation } from '../navigation';
-
-type Message = { id: string; role: 'user' | 'assistant'; content: string };
-type Session = { id: string; date: string; state: string; summary: string; emotions: string[]; synthesis: string };
+import { useJournalStore, type JournalSession } from '../stores/journal_store';
 
 const TEMPLATES = [
-  { id: 'livre', label: 'Sessão Livre', emoji: '💭', desc: 'Fale sobre o que quiser' },
-  { id: 'queda', label: 'Queda de Energia', emoji: '🔋', desc: 'Entender por que a energia caiu' },
-  { id: 'alta', label: 'Dia de Alta', emoji: '⚡', desc: 'Como não se sobrecarregar' },
-  { id: 'irritabilidade', label: 'Irritabilidade', emoji: '🌡️', desc: 'Explorar gatilhos e aliviar' },
-  { id: 'clareza', label: 'Clareza no Caos', emoji: '🧠', desc: 'Organizar pensamentos' },
-  { id: 'ciclo', label: 'Ciclo Hormonal', emoji: '🌸', desc: 'Mapear o momento do ciclo' },
+  { id: 'livre',         label: 'Sessão Livre',      emoji: '💭', desc: 'Fale sobre o que quiser' },
+  { id: 'queda',         label: 'Queda de Energia',  emoji: '🔋', desc: 'Entender por que a energia caiu' },
+  { id: 'alta',          label: 'Dia de Alta',        emoji: '⚡', desc: 'Como não se sobrecarregar' },
+  { id: 'irritabilidade',label: 'Irritabilidade',     emoji: '🌡️', desc: 'Explorar gatilhos e aliviar' },
+  { id: 'clareza',       label: 'Clareza no Caos',   emoji: '🧠', desc: 'Organizar pensamentos' },
+  { id: 'ciclo',         label: 'Ciclo Hormonal',    emoji: '🌸', desc: 'Mapear o momento do ciclo' },
 ];
 
-const TEMPLATE_OPENERS: Record<string, string> = {
-  livre: 'Estou aqui com você. Pode me contar como está se sentindo agora, sem pressa. Não precisa ter as palavras certas.',
-  queda: 'Percebo que sua energia está mais baixa. Vamos entender juntos o que pode ter contribuído. Como foi seu sono ontem?',
-  alta: 'Parece que hoje é um dia de mais energia! Isso é ótimo, mas vamos cuidar para não exagerar. O que você tem vontade de fazer hoje?',
-  irritabilidade: 'Entendo que está se sentindo mais irritada. Isso faz parte da ciclagem e não é culpa sua. Consegue identificar quando começou?',
-  clareza: 'Quando tudo parece confuso, às vezes ajuda colocar para fora. Qual é a coisa que mais está ocupando sua cabeça agora?',
-  ciclo: 'Vamos mapear como você está se sentindo em relação ao seu ciclo. Em que fase você acha que está? Tem notado mudanças nos últimos dias?',
+const stateEmoji: Record<string, string> = {
+  leve: '🌱', moderado: '✨', sensível: '🌙', crítico: '🌊',
 };
 
-const PAST_SESSIONS: Session[] = [
-  {
-    id: 'p1', date: '14 Mar', state: 'moderado',
-    summary: 'Reflexão sobre equilíbrio trabalho/descanso',
-    emotions: ['reflexiva', 'esperançosa'],
-    synthesis: 'Você explorou a sensação de estar dividida entre produtividade e descanso. Reconheceu que tende a ignorar sinais de cansaço quando o trabalho está intenso. A IA identificou um padrão recorrente: queda de energia às quartas-feiras após picos de foco na semana. Sua principal conclusão foi que pausas programadas funcionam melhor do que pausas impulsivas.',
-  },
-  {
-    id: 'p2', date: '12 Mar', state: 'sensível',
-    summary: 'Dia difícil — irritabilidade e cansaço',
-    emotions: ['cansada', 'irritada'],
-    synthesis: 'Sessão em momento de maior vulnerabilidade emocional. Você relatou irritabilidade com situações pequenas, o que a IA correlacionou com a fase do ciclo e baixa qualidade de sono nos dois dias anteriores. O principal insight foi a conexão entre alimentação no dia anterior e a queda de humor. Você escolheu encerrar mais cedo para descansar — uma decisão de autocuidado reconhecida como positiva.',
-  },
-  {
-    id: 'p3', date: '10 Mar', state: 'leve',
-    summary: 'Semana começando bem, energia estável',
-    emotions: ['tranquila', 'motivada'],
-    synthesis: 'Uma das sessões mais positivas do mês. Você compartilhou sensação de clareza mental e motivação genuína. A IA reforçou que esse estado coincide com o período pós-menstrual, quando sua energia tende a ser mais estável. Você planejou aproveitar a semana para tarefas criativas e tomadas de decisão importantes, reconhecendo seu próprio ciclo como aliado.',
-  },
-];
+// Builds a context-aware opener from the session's context data
+function buildOpener(
+  templateId: string,
+  context: { checkinToday: { moodScore: number; energyScore: number; stateLabel?: string; stateLabelType?: string } | null; topThemes: string[] } | null,
+): string {
+  const checkin = context?.checkinToday;
+  const themes = context?.topThemes ?? [];
 
-const stateEmoji: Record<string, string> = { leve: '🌱', moderado: '✨', sensível: '🌙', crítico: '🌊' };
+  // Context-aware prefix based on real user data
+  let contextPrefix = '';
+  if (checkin) {
+    const stateMap: Record<string, string> = {
+      leve: 'num ritmo mais tranquilo hoje',
+      moderado: 'com energia radiante hoje',
+      sensível: 'num dia mais delicado hoje',
+      crítico: 'em modo de recuperação hoje',
+    };
+    contextPrefix = stateMap[checkin.stateLabelType ?? ''] ?? '';
+  }
+
+  if (themes.length > 0 && !contextPrefix) {
+    contextPrefix = `com temas de "${themes[0]}" recorrentes nas últimas sessões`;
+  }
+
+  const contextNote = contextPrefix ? ` Percebi que você está ${contextPrefix}.` : '';
+
+  const openers: Record<string, string> = {
+    livre:          `Olá! Estou aqui com você.${contextNote} Pode me contar como está se sentindo agora, sem pressa.`,
+    queda:          `Vamos entender juntos o que pode estar contribuindo para essa queda de energia.${contextNote} Como foi seu sono recentemente?`,
+    alta:           `Parece que hoje é um dia de mais energia!${contextNote} Vamos cuidar para aproveitar bem sem se sobrecarregar. O que você tem vontade de fazer?`,
+    irritabilidade: `Entendo que está se sentindo mais irritada.${contextNote} Isso faz parte da ciclagem. Consegue identificar quando começou?`,
+    clareza:        `Quando tudo parece confuso, colocar para fora ajuda.${contextNote} Qual é a coisa que mais está ocupando sua cabeça agora?`,
+    ciclo:          `Vamos mapear como você está em relação ao seu ciclo.${contextNote} Em que fase você acha que está? Tem notado mudanças nos últimos dias?`,
+  };
+
+  return openers[templateId] ?? openers.livre;
+}
 
 function ChatBubble({ content, isUser }: { content: string; isUser: boolean }) {
   return (
@@ -65,61 +73,80 @@ function ChatBubble({ content, isUser }: { content: string; isUser: boolean }) {
   );
 }
 
+function StreamingBubble({ content }: { content: string }) {
+  return (
+    <div className="flex mb-3 justify-start">
+      <div
+        className="max-w-[80%] px-4 py-3.5 text-[14px] leading-relaxed"
+        style={{
+          background: 'var(--bg-glass-strong)',
+          color: 'var(--text-primary)',
+          borderRadius: '22px 22px 22px 6px',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.5)',
+        }}
+      >
+        {content || <span style={{ opacity: 0.4 }}>●●●</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function JournalScreen() {
   const { navigate } = useNavigation();
+  const {
+    sessionId, messages, streamingContent, context,
+    isStarting, isStreaming,
+    sessions, isLoadingSessions,
+    startSession, sendMessage, loadSessions, clearSession, addLocalMessage,
+    error,
+  } = useJournalStore();
+
   const [view, setView] = useState<'list' | 'template' | 'chat'>('list');
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState('livre');
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Load past sessions on mount
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
+
+  // Auto-scroll on new messages
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, streamingContent]);
 
-  const startSession = (templateId: string) => {
-    const opener = TEMPLATE_OPENERS[templateId] || TEMPLATE_OPENERS.livre;
-    setMessages([{ id: '1', role: 'assistant', content: opener }]);
+  const handlePickTemplate = async (templateId: string) => {
+    setSelectedTemplate(templateId);
+    clearSession();
     setView('chat');
-  };
-
-  const handleSend = () => {
-    if (!input.trim()) return;
-    const newMsg: Message = { id: Date.now().toString(), role: 'user', content: input.trim() };
-    setMessages(prev => [...prev, newMsg]);
-    setInput('');
-
-    setTimeout(() => {
-      const replies = [
-        'Entendo o que você está dizendo. Isso parece estar ligado ao seu padrão de ciclagem — nos últimos dias sua energia tem variado bastante. O que você acha que pode estar contribuindo?',
-        'Obrigada por compartilhar. Vou guardar isso para cruzar com seus check-ins. Você percebe algum padrão quando se sente assim?',
-        'Faz total sentido. Baseado no que você me contou nas últimas sessões, parece que esse tipo de situação costuma aparecer quando sua energia está em queda. Vamos pensar em como proteger seu dia?',
-      ];
-      const aiReply: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: replies[Math.floor(Math.random() * replies.length)],
-      };
-      setMessages(prev => [...prev, aiReply]);
-    }, 1200);
-  };
-
-  const toggleRecording = () => {
-    if (isRecording) {
-      setIsRecording(false);
-      setInput(prev => prev + ' [transcrição de áudio simulada]');
-    } else {
-      setIsRecording(true);
-      setTimeout(() => {
-        setIsRecording(false);
-        setInput('Estou me sentindo meio cansada hoje, mas não sei exatamente por quê...');
-      }, 2500);
+    await startSession();
+    // After session starts, inject context-aware opener if session is new
+    const state = useJournalStore.getState();
+    if (state.messages.length === 0) {
+      const opener = buildOpener(templateId, state.context);
+      addLocalMessage({ id: 'opener', role: 'assistant', content: opener, createdAt: new Date().toISOString() });
     }
   };
 
-  if (view === 'list') {
-    const [expandedId, setExpandedId] = useState<string | null>(null);
+  const handleSend = async () => {
+    const content = input.trim();
+    if (!content || isStreaming) return;
+    setInput('');
+    await sendMessage(content);
+  };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      void handleSend();
+    }
+  };
+
+  // ─── LIST VIEW ────────────────────────────────────────────────────────────
+  if (view === 'list') {
     return (
       <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
         <div className="mb-5 animate-fade-in">
@@ -135,11 +162,10 @@ export default function JournalScreen() {
           style={{
             background: 'var(--bg-base)',
             border: '1.5px solid rgba(99,152,169,0.22)',
-            boxShadow: '0 2px 8px rgba(99,152,169,0.08), 0 1px 2px rgba(99,152,169,0.05)',
+            boxShadow: '0 2px 8px rgba(99,152,169,0.08)',
           }}
         >
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(99,152,169,0.09)' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,152,169,0.09)' }}>
             <Sparkles size={16} style={{ color: '#6398A9' }} />
           </div>
           <div className="flex-1 text-left">
@@ -153,67 +179,65 @@ export default function JournalScreen() {
           <h2 className="text-[14px] font-bold mb-3" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
             Sessões anteriores
           </h2>
-          {PAST_SESSIONS.map((session, i) => {
+
+          {isLoadingSessions && (
+            <p className="text-[13px] text-center py-4" style={{ color: 'var(--text-muted)' }}>Carregando...</p>
+          )}
+
+          {!isLoadingSessions && sessions.length === 0 && (
+            <div className="glass-card rounded-[18px] p-5 text-center">
+              <p className="text-[28px] mb-2">💭</p>
+              <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Nenhuma sessão ainda. Comece uma conversa com a IA.</p>
+            </div>
+          )}
+
+          {sessions.map((session: JournalSession, i: number) => {
             const isOpen = expandedId === session.id;
             const stateColor: Record<string, string> = {
-              leve: '#96C7B3', moderado: '#F9B95C', sensível: '#D7897F', crítico: '#E07070'
+              leve: '#96C7B3', moderado: '#F9B95C', sensível: '#D7897F', crítico: '#E07070',
             };
-            const color = stateColor[session.state] || '#96C7B3';
+            // Detect state from emotions or fallback
+            const color = '#96C7B3';
+            const dateLabel = new Date(session.startedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+
             return (
               <div key={session.id} className="glass-card rounded-[18px] mb-2.5 animate-fade-in overflow-hidden"
                 style={{ animationDelay: `${0.25 + i * 0.08}s` }}>
-                {/* Header clicável */}
                 <button
                   className="w-full p-4 flex items-start gap-3 text-left transition-all active:scale-[0.99]"
                   onClick={() => setExpandedId(isOpen ? null : session.id)}
                 >
-                  <span className="text-xl mt-0.5">{stateEmoji[session.state] || '✨'}</span>
+                  <span className="text-xl mt-0.5">✨</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1">
                       <Clock size={10} style={{ color: 'var(--text-muted)' }} />
-                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{session.date}</span>
+                      <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{dateLabel}</span>
                     </div>
                     <p className="text-[13px] font-semibold leading-snug" style={{ color: 'var(--text-primary)' }}>
-                      {session.summary}
+                      {session.summary ?? 'Sessão de diário'}
                     </p>
                     <div className="flex gap-1.5 flex-wrap mt-2">
-                      {session.emotions.map((em, j) => (
-                        <span key={j} className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full"
-                          style={{ background: `${color}18`, color }}>
-                          {em}
+                      {session.emotions.slice(0, 3).map((e, j) => (
+                        <span key={j} className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                          style={{ background: `${color}22`, color }}>
+                          {e}
                         </span>
                       ))}
                     </div>
                   </div>
-                  <ChevronDown size={16} style={{
-                    color: 'var(--text-muted)',
-                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.25s ease',
-                    flexShrink: 0,
-                    marginTop: 2,
-                  }} />
+                  <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </button>
 
-                {/* Síntese expandível */}
-                <div style={{
-                  maxHeight: isOpen ? '300px' : '0px',
-                  overflow: 'hidden',
-                  transition: 'max-height 0.35s ease',
-                }}>
+                {isOpen && session.summary && (
                   <div className="px-4 pb-4">
-                    <div className="rounded-[14px] p-3.5" style={{ background: `${color}0F`, border: `1px solid ${color}28` }}>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Sparkles size={11} style={{ color }} />
-                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
-                          Síntese da IA
-                        </span>
-                      </div>
-                      <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-                        {session.synthesis}
+                    <div className="rounded-[14px] p-3.5" style={{ background: 'rgba(99,152,169,0.06)', border: '1px solid rgba(99,152,169,0.12)' }}>
+                      <p className="text-[11px] font-bold uppercase mb-1.5" style={{ color: '#6398A9' }}>Síntese da IA</p>
+                      <p className="text-[13px] leading-[20px] italic" style={{ color: 'var(--text-primary)' }}>
+                        {session.summary}
                       </p>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
@@ -222,36 +246,36 @@ export default function JournalScreen() {
     );
   }
 
+  // ─── TEMPLATE VIEW ────────────────────────────────────────────────────────
   if (view === 'template') {
     return (
       <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
-        <div className="flex items-center mb-5">
-          <button onClick={() => setView('list')} className="p-2 -ml-2 rounded-xl hover:bg-black/5">
-            <ArrowLeft size={22} style={{ color: 'var(--text-primary)' }} />
+        <div className="flex items-center gap-3 mb-5 animate-fade-in">
+          <button onClick={() => setView('list')} className="w-9 h-9 rounded-2xl flex items-center justify-center glass-card">
+            <ArrowLeft size={16} style={{ color: 'var(--text-secondary)' }} />
           </button>
-          <h1 className="text-[18px] font-bold ml-2" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
-            Escolha um tema
-          </h1>
+          <div>
+            <p className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>Nova Sessão</p>
+            <h1 className="text-[18px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+              Escolha um tema
+            </h1>
+          </div>
         </div>
 
-        <p className="text-[13px] mb-5" style={{ color: 'var(--text-muted)' }}>
-          Escolha um tema para a IA conduzir a sessão. Todos são adaptados ao seu estado de ciclagem.
-        </p>
-
         <div className="space-y-2.5">
-          {TEMPLATES.map((tmpl, i) => (
+          {TEMPLATES.map((t, i) => (
             <button
-              key={tmpl.id}
-              onClick={() => startSession(tmpl.id)}
-              className="w-full glass-card rounded-[18px] p-4 flex items-center gap-3 text-left transition-all active:scale-[0.98] hover:shadow-md animate-fade-in"
+              key={t.id}
+              onClick={() => void handlePickTemplate(t.id)}
+              className="w-full glass-card rounded-[18px] p-4 flex items-center gap-3 text-left transition-all active:scale-[0.97] hover:shadow-md animate-fade-in"
               style={{ animationDelay: `${i * 0.06}s` }}
             >
-              <span className="text-2xl">{tmpl.emoji}</span>
+              <span className="text-2xl">{t.emoji}</span>
               <div className="flex-1">
-                <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>{tmpl.label}</p>
-                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{tmpl.desc}</p>
+                <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>{t.label}</p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.desc}</p>
               </div>
-              <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
+              <ChevronRight size={14} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
             </button>
           ))}
         </div>
@@ -259,69 +283,67 @@ export default function JournalScreen() {
     );
   }
 
+  // ─── CHAT VIEW ────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-base)' }}>
-      <div className="flex items-center justify-between px-4 pt-2 pb-2 glass-strong"
-        style={{ borderBottom: '1px solid rgba(31,59,50,0.06)' }}>
-        <button onClick={() => setView('list')} className="p-2 rounded-xl hover:bg-black/5">
-          <ArrowLeft size={22} style={{ color: 'var(--text-primary)' }} />
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(31,59,50,0.06)' }}>
+        <button
+          onClick={() => { clearSession(); setView('list'); void loadSessions(); }}
+          className="w-9 h-9 rounded-2xl flex items-center justify-center glass-card"
+        >
+          <ArrowLeft size={16} style={{ color: 'var(--text-secondary)' }} />
         </button>
-        <h1 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
-          Diário com IA
-        </h1>
-        <button onClick={() => navigate('dailySummary')} className="text-[13px] font-semibold px-3 py-1.5 rounded-full"
-          style={{ color: 'var(--accent-green)', background: 'rgba(31,59,50,0.06)' }}>
-          Encerrar
-        </button>
+        <div className="flex-1">
+          <h1 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+            Diário com IA
+          </h1>
+          {isStreaming && (
+            <p className="text-[11px]" style={{ color: 'var(--accent-teal)' }}>Escrevendo...</p>
+          )}
+        </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3">
+        {isStarting && (
+          <div className="flex justify-center py-8">
+            <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Iniciando sessão...</p>
+          </div>
+        )}
+
         {messages.map((msg) => (
           <ChatBubble key={msg.id} content={msg.content} isUser={msg.role === 'user'} />
         ))}
-      </div>
 
-      <div className="px-4 py-3 glass-strong" style={{ borderTop: '1px solid rgba(31,59,50,0.06)' }}>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggleRecording}
-            className="p-2.5 rounded-full transition-all"
-            style={{
-              background: isRecording ? 'var(--accent-rose)' : 'rgba(31,59,50,0.06)',
-            }}
-          >
-            {isRecording ? <MicOff size={20} color="white" /> : <Mic size={20} style={{ color: 'var(--text-muted)' }} />}
-          </button>
+        {isStreaming && <StreamingBubble content={streamingContent} />}
 
-          <div className="flex-1 glass-card rounded-2xl px-4 py-2.5">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={isRecording ? 'Gravando...' : 'Conta o que está acontecendo...'}
-              className="w-full bg-transparent text-[14px] outline-none"
-              style={{ color: 'var(--text-primary)' }}
-              disabled={isRecording}
-            />
-          </div>
-
-          <button
-            onClick={handleSend}
-            disabled={!input.trim()}
-            className="p-2.5 rounded-full transition-all"
-            style={{
-              background: input.trim() ? 'var(--bg-dark)' : 'rgba(31,59,50,0.06)',
-            }}
-          >
-            <Send size={18} color={input.trim() ? 'white' : '#9b9489'} />
-          </button>
-        </div>
-        {isRecording && (
-          <div className="flex items-center gap-2 mt-2 ml-12">
-            <div className="w-2 h-2 rounded-full animate-pulse-soft" style={{ background: 'var(--accent-rose)' }} />
-            <span className="text-[11px] font-medium" style={{ color: 'var(--accent-rose)' }}>Gravando áudio...</span>
+        {error && (
+          <div className="text-center py-2">
+            <p className="text-[12px]" style={{ color: 'var(--accent-rose)' }}>{error}</p>
           </div>
         )}
+      </div>
+
+      {/* Input */}
+      <div className="flex-shrink-0 px-4 py-3 flex items-end gap-2" style={{ borderTop: '1px solid rgba(31,59,50,0.06)' }}>
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Conta o que está acontecendo..."
+          rows={1}
+          className="flex-1 glass-card rounded-2xl px-4 py-3 text-[14px] outline-none resize-none"
+          style={{ color: 'var(--text-primary)', maxHeight: 100 }}
+        />
+        <button
+          onClick={() => void handleSend()}
+          disabled={!input.trim() || isStreaming || isStarting}
+          className="w-10 h-10 rounded-2xl flex items-center justify-center transition-all disabled:opacity-40"
+          style={{ background: 'var(--bg-dark)' }}
+        >
+          <Send size={16} color="white" />
+        </button>
       </div>
     </div>
   );
