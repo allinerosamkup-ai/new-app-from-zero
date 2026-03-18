@@ -79,6 +79,17 @@ Ordem sugerida (começar pelas com mais delta visual):
 12. `HarmonyCircleScreen.tsx` — radar chart
 13. `DailySummaryScreen.tsx` — emotion chips, synthesis card
 
+### Variantes do CheckinResult (seção ⑤-B no mockup)
+| Estado | Cor dominante | BG topo | Círculo |
+|--------|--------------|---------|---------|
+| Radiante ✨ | Nectarine | `#F5E9E7` | `rgba(215,137,127,…)` |
+| Em Equilíbrio 😌 | Menthe | `#E6F2EC` | `rgba(150,199,179,…)` |
+| No Fluxo 🔥 | Lagune | `#E2EBF3` | `rgba(99,152,169,…)` |
+| Ansiosa 😰 | Warm sand | `#F2EAD8` | `rgba(184,160,112,…)` |
+| Cansada 😴 | Lavender | `#EAE5F2` | `rgba(176,160,200,…)` |
+| Sensível 🌸 | Nectarine suave | `#F3E8E5` | `rgba(215,137,127,…)` leve |
+| Dia Difícil 😤 | Rose muted | `#F0E4E2` | `rgba(210,100,100,…)` |
+
 ### Referência visual
 Para cada tela: consultar `mockup-aura-v2.html` antes de editar o `.tsx`.
 Regra: **gradientes de fundo usam cores OPACAS** (não rgba sobre #111).
