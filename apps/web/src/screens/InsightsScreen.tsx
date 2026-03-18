@@ -57,9 +57,9 @@ export default function InsightsScreen() {
       </div>
 
       {/* Bar chart */}
-      <div className="glass-card rounded-[22px] p-4 mb-4 animate-fade-in delay-100">
+      <div className="glass-card interactive-card rounded-[22px] p-4 mb-4 animate-fade-in delay-100">
         <div className="flex items-center gap-2 mb-3">
-          <TrendingUp size={14} style={{ color: 'var(--accent-green)' }} />
+          <TrendingUp size={14} strokeWidth={1.5} style={{ color: 'var(--accent-green)' }} />
           <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Humor & Energia</p>
         </div>
         <div className="flex items-end justify-between gap-1.5 h-24 mb-2">
@@ -75,7 +75,7 @@ export default function InsightsScreen() {
                   }} />
                   <div className="w-full rounded-b-lg transition-all" style={{
                     height: c ? `${(c.energy_score / 5) * 100}%` : '4%',
-                    background: 'var(--accent-teal)',
+                    background: 'var(--accent-9)',
                     opacity: c ? 0.5 : 0.1,
                   }} />
                 </div>
@@ -96,7 +96,7 @@ export default function InsightsScreen() {
             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Humor</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-sm" style={{ background: 'var(--accent-teal)', opacity: 0.5 }} />
+            <div className="w-2.5 h-2.5 rounded-sm" style={{ background: 'var(--accent-9)', opacity: 0.5 }} />
             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Energia</span>
           </div>
         </div>
@@ -105,11 +105,11 @@ export default function InsightsScreen() {
       {/* Summary stats */}
       <div className="flex gap-2.5 mb-4 animate-fade-in delay-200">
         {[
-          { label: 'Humor',     value: avgMood    != null ? `${avgMood.toFixed(1)}/5`    : '—', icon: <Smile size={16} />,       color: 'var(--cat-saude)' },
-          { label: 'Energia',   value: avgEnergy  != null ? `${avgEnergy.toFixed(1)}/5`  : '—', icon: <Zap size={16} />,         color: 'var(--accent-orange)' },
-          { label: 'Check-ins', value: checkinCount > 0   ? checkinCount.toString()       : '0', icon: <CheckCircle2 size={16} />, color: 'var(--accent-blue)' },
+          { label: 'Humor',     value: avgMood    != null ? `${avgMood.toFixed(1)}/5`    : '—', icon: <Smile size={16} strokeWidth={1.5} />,       color: 'var(--cat-saude)' },
+          { label: 'Energia',   value: avgEnergy  != null ? `${avgEnergy.toFixed(1)}/5`  : '—', icon: <Zap size={16} strokeWidth={1.5} />,         color: 'var(--accent-orange)' },
+          { label: 'Check-ins', value: checkinCount > 0   ? checkinCount.toString()       : '0', icon: <CheckCircle2 size={16} strokeWidth={1.5} />, color: 'var(--accent-blue)' },
         ].map((stat, i) => (
-          <div key={i} className="flex-1 glass-card rounded-[18px] p-3.5">
+          <div key={i} className="flex-1 glass-card interactive-card rounded-[18px] p-3.5">
             <div className="mb-2" style={{ color: stat.color }}>{stat.icon}</div>
             <p className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{stat.label}</p>
             <p className="text-[18px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>{stat.value}</p>
@@ -119,7 +119,7 @@ export default function InsightsScreen() {
 
       {/* No data state */}
       {!isLoading && checkinCount === 0 && (
-        <div className="glass-card rounded-[22px] p-6 mb-4 text-center animate-fade-in delay-300">
+        <div className="glass-card interactive-card rounded-[22px] p-6 mb-4 text-center animate-fade-in delay-300">
           <p className="text-[28px] mb-2">🌱</p>
           <p className="text-[15px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Ainda sem dados essa semana</p>
           <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Faça seu primeiro check-in para começar a mapear sua ciclagem.</p>
@@ -130,7 +130,7 @@ export default function InsightsScreen() {
       {patterns.length > 0 && (
         <div className="mb-4 animate-fade-in delay-300">
           <div className="flex items-center gap-2 mb-3">
-            <BrainCircuit size={16} style={{ color: 'var(--text-primary)' }} />
+            <BrainCircuit size={16} strokeWidth={1.5} style={{ color: 'var(--text-primary)' }} />
             <h2 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
               Padrões de Ciclagem
             </h2>
@@ -138,10 +138,10 @@ export default function InsightsScreen() {
           {patterns.map((pattern, i) => {
             const sev = severityColors[pattern.confidence] || severityColors.low;
             return (
-              <div key={i} className="glass-card rounded-[18px] p-4 mb-2.5"
+              <div key={i} className="glass-card interactive-card rounded-[18px] p-4 mb-2.5"
                 style={{ borderLeft: `3px solid ${sev.border}` }}>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <AlertTriangle size={11} style={{ color: sev.text }} />
+                  <AlertTriangle size={11} strokeWidth={1.5} style={{ color: sev.text }} />
                   <span className="text-[10px] font-bold uppercase tracking-tight" style={{ color: sev.text }}>
                     {pattern.type}
                   </span>
@@ -159,7 +159,7 @@ export default function InsightsScreen() {
       {recommendations.length > 0 && (
         <div className="mb-4 animate-fade-in delay-400">
           <div className="flex items-center gap-2 mb-3">
-            <CheckCircle2 size={16} style={{ color: 'var(--text-primary)' }} />
+            <CheckCircle2 size={16} strokeWidth={1.5} style={{ color: 'var(--text-primary)' }} />
             <h2 className="text-[15px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
               Ações Recomendadas
             </h2>
@@ -172,7 +172,7 @@ export default function InsightsScreen() {
                 </p>
                 <p className="text-white font-semibold text-[13px]">{rec.text}</p>
               </div>
-              <ArrowRight size={18} color="white" className="ml-2 opacity-50" />
+              <ArrowRight size={18} strokeWidth={1.5} color="white" className="ml-2 opacity-50" />
             </div>
           ))}
         </div>
@@ -180,10 +180,10 @@ export default function InsightsScreen() {
 
       {/* AI Analysis */}
       {aiAnalysis && (
-        <div className="glass-card rounded-[22px] p-5 mb-4 animate-fade-in delay-400"
+        <div className="glass-card interactive-card rounded-[22px] p-5 mb-4 animate-fade-in delay-400"
           style={{ background: 'linear-gradient(135deg, rgba(139,92,246,0.06), rgba(45,212,191,0.06))' }}>
           <div className="flex items-center gap-2 mb-2">
-            <BrainCircuit size={14} style={{ color: 'var(--accent-purple)' }} />
+            <BrainCircuit size={14} strokeWidth={1.5} style={{ color: 'var(--accent-purple)' }} />
             <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-purple)' }}>
               Resumo da IA
             </p>
