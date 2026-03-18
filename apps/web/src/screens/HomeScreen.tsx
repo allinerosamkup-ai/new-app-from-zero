@@ -3,6 +3,7 @@ import { MessageCircle, Calendar, Brain, LineChart, TrendingUp, ArrowRight } fro
 import { useNavigation } from '../navigation';
 import { useAuthStore } from '../stores/auth_store';
 import { useCheckinStore, type DailyCheckinRow } from '../stores/checkin_store';
+import { apiGet } from '../lib/api';
 
 // Build an ordered array of the last 7 days (Mon→today)
 function buildWeekDays() {
@@ -73,7 +74,7 @@ function MoodMiniChart({ checkins }: { checkins: DailyCheckinRow[] }) {
     <div>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-1.5">
-          <TrendingUp size={14} style={{ color: 'var(--accent-green)' }} />
+          <TrendingUp size={14} strokeWidth={1.5} style={{ color: 'var(--accent-green)' }} />
           <span className="text-[12px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
             Humor da semana
           </span>
@@ -196,6 +197,27 @@ export default function HomeScreen() {
   const { userId, fullName } = useAuthStore();
   const { todayCheckin, recentCheckins, load } = useCheckinStore();
 
+  const [nextBlock, setNextBlock] = React.useState<{ title: string; startTime: string; endTime: string; category: string } | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    apiGet<any[]>(`/api/timeline/${dateStr}`)
+      .then((blocks) => {
+        const nowMin = today.getHours() * 60 + today.getMinutes();
+        const upcoming = blocks
+          .map((b) => {
+            const [h, m] = b.startTime.split(':').map(Number);
+            return { ...b, startMin: h * 60 + m };
+          })
+          .filter((b) => b.startMin >= nowMin)
+          .sort((a, b) => a.startMin - b.startMin);
+        setNextBlock(upcoming[0] ?? null);
+      })
+      .catch(() => setNextBlock(null));
+  }, [userId]);
+
   useEffect(() => {
     if (userId) void load(userId);
   }, [userId, load]);
@@ -206,17 +228,11 @@ export default function HomeScreen() {
   // Use AI recommendation if available, else fallback
   const aiRec = stateKey && (todayCheckin?.ai_state as any)?.recommendations?.[0];
 
-  const catColors: Record<string, string> = {
-    trabalho: 'var(--cat-trabalho)',
-    saúde: 'var(--cat-saude)',
-    lazer: 'var(--cat-lazer)',
-  };
-
   return (
     <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
-      <div className="mb-5 animate-fade-in">
-        <p className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>{greeting()}</p>
-        <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
+      <div className="mb-5 animate-fade-in rounded-[20px] px-4 py-4" style={{ background: 'var(--accent-9)' }}>
+        <p className="text-[13px] font-medium" style={{ color: 'rgba(255,255,255,0.75)' }}>{greeting()}</p>
+        <h1 className="text-[22px] font-bold" style={{ color: '#fff', fontFamily: 'var(--font-heading)' }}>
           {fullName ? fullName.split(' ')[0] : 'Ciclagem & Humor'}
         </h1>
       </div>
@@ -235,7 +251,7 @@ export default function HomeScreen() {
           </p>
           <div className="glass-strong rounded-2xl p-3">
             <div className="flex items-center gap-1.5 mb-1">
-              <Brain size={12} style={{ color: current.color }} />
+              <Brain size={12} strokeWidth={1.5} style={{ color: current.color }} />
               <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: current.color, opacity: 0.6 }}>Sugestão IA</p>
             </div>
             <p className="text-[13px] italic" style={{ color: current.color }}>
@@ -285,30 +301,30 @@ export default function HomeScreen() {
       <div className="grid grid-cols-3 gap-2.5 mb-5 animate-fade-in delay-200">
         <button
           onClick={() => navigate('journal')}
-          className="glass-card p-3.5 rounded-[18px] flex flex-col items-center transition-all duration-200 active:scale-[0.97] hover:shadow-md"
+          className="glass-card interactive-card p-3.5 rounded-[18px] flex flex-col items-center transition-all duration-200 active:scale-[0.97] hover:shadow-md"
         >
           <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-1.5" style={{ background: 'rgba(139,92,246,0.1)' }}>
-            <MessageCircle size={18} style={{ color: 'var(--accent-purple)' }} />
+            <MessageCircle size={18} strokeWidth={1.5} style={{ color: 'var(--accent-purple)' }} />
           </div>
           <span className="font-bold text-[12px]" style={{ color: 'var(--text-primary)' }}>Diário</span>
           <span className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Falar com IA</span>
         </button>
         <button
           onClick={() => navigate('planner')}
-          className="glass-card p-3.5 rounded-[18px] flex flex-col items-center transition-all duration-200 active:scale-[0.97] hover:shadow-md"
+          className="glass-card interactive-card p-3.5 rounded-[18px] flex flex-col items-center transition-all duration-200 active:scale-[0.97] hover:shadow-md"
         >
           <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-1.5" style={{ background: 'rgba(59,130,246,0.1)' }}>
-            <Calendar size={18} style={{ color: 'var(--accent-blue)' }} />
+            <Calendar size={18} strokeWidth={1.5} style={{ color: 'var(--accent-teal)' }} />
           </div>
           <span className="font-bold text-[12px]" style={{ color: 'var(--text-primary)' }}>Planner</span>
           <span className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Organizar dia</span>
         </button>
         <button
           onClick={() => navigate('insights')}
-          className="glass-card p-3.5 rounded-[18px] flex flex-col items-center transition-all duration-200 active:scale-[0.97] hover:shadow-md"
+          className="glass-card interactive-card p-3.5 rounded-[18px] flex flex-col items-center transition-all duration-200 active:scale-[0.97] hover:shadow-md"
         >
           <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-1.5" style={{ background: 'rgba(16,185,129,0.1)' }}>
-            <LineChart size={18} style={{ color: 'var(--cat-saude)' }} />
+            <LineChart size={18} strokeWidth={1.5} style={{ color: 'var(--cat-saude)' }} />
           </div>
           <span className="font-bold text-[12px]" style={{ color: 'var(--text-primary)' }}>Padrões</span>
           <span className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Ciclagem</span>
@@ -322,12 +338,27 @@ export default function HomeScreen() {
           </h2>
           <button onClick={() => navigate('planner')} className="flex items-center gap-1 text-[13px] font-semibold"
             style={{ color: 'var(--accent-green)' }}>
-            Ver tudo <ArrowRight size={14} />
+            Ver tudo <ArrowRight size={14} strokeWidth={1.5} />
           </button>
         </div>
-        <div className="glass-card rounded-[18px] p-4 text-center" style={{ color: 'var(--text-muted)' }}>
-          <p className="text-[13px]">Abra o Planner para ver e adicionar blocos do seu dia.</p>
-        </div>
+        {nextBlock ? (
+          <button
+            onClick={() => navigate('planner')}
+            className="glass-card rounded-[18px] p-4 w-full text-left transition-all active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                {nextBlock.startTime} — {nextBlock.endTime}
+              </span>
+              <ArrowRight size={14} strokeWidth={1.5} style={{ color: 'var(--accent-green)' }} />
+            </div>
+            <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>{nextBlock.title}</p>
+          </button>
+        ) : (
+          <div className="glass-card rounded-[18px] p-4 text-center" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[13px]">Nenhum bloco agendado para hoje.</p>
+          </div>
+        )}
       </div>
     </div>
   );
