@@ -106,7 +106,7 @@ export default function PomodoroScreen() {
     <div className="flex flex-col h-full" style={{ background: 'var(--bg-base)' }}>
       <div className="flex items-center px-5 pt-2 pb-3">
         <button onClick={() => navigate('planner')} className="p-2 -ml-2 rounded-xl hover:bg-black/5">
-          <ArrowLeft size={22} style={{ color: 'var(--text-primary)' }} />
+          <ArrowLeft size={22} strokeWidth={1.5} style={{ color: 'var(--text-primary)' }} />
         </button>
         <div className="ml-2 flex-1">
           <h1 className="text-[18px] font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}>
@@ -134,7 +134,7 @@ export default function PomodoroScreen() {
         <div className="relative animate-fade-in">
           <svg width="240" height="240" className="transform -rotate-90">
             <circle cx="120" cy="120" r={circleRadius} fill="none" stroke="rgba(31,59,50,0.06)" strokeWidth="8" />
-            <circle cx="120" cy="120" r={circleRadius} fill="none" stroke={config.color} strokeWidth="8"
+            <circle cx="120" cy="120" r={circleRadius} fill="none" stroke="var(--accent-9)" strokeWidth="8"
               strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
               className="transition-all duration-1000" />
           </svg>
@@ -149,15 +149,15 @@ export default function PomodoroScreen() {
 
         <div className="flex items-center gap-4 mt-8 animate-fade-in delay-100">
           <button onClick={reset}
-            className="w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-[0.9]"
+            className="btn-aura w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-[0.9]"
             style={{ background: 'rgba(31,59,50,0.06)' }}>
-            <RotateCcw size={20} style={{ color: 'var(--text-muted)' }} />
+            <RotateCcw size={20} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
           </button>
 
           <button onClick={() => setIsRunning(!isRunning)}
-            className="w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-[0.9]"
-            style={{ background: config.color, boxShadow: `0 6px 20px ${config.color}40` }}>
-            {isRunning ? <Pause size={28} color="white" /> : <Play size={28} color="white" className="ml-1" />}
+            className="btn-aura w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-[0.9]"
+            style={{ background: 'var(--accent-9)', boxShadow: '0 6px 20px rgba(215,137,127,0.4)' }}>
+            {isRunning ? <Pause size={28} strokeWidth={1.5} color="white" /> : <Play size={28} strokeWidth={1.5} color="white" className="ml-1" />}
           </button>
 
           <button onClick={() => {
@@ -167,9 +167,9 @@ export default function PomodoroScreen() {
               switchPhase('focus');
             }
           }}
-            className="w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-[0.9]"
+            className="btn-aura w-12 h-12 rounded-full flex items-center justify-center transition-all active:scale-[0.9]"
             style={{ background: 'rgba(31,59,50,0.06)' }}>
-            <SkipForward size={20} style={{ color: 'var(--text-muted)' }} />
+            <SkipForward size={20} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
           </button>
         </div>
       </div>
@@ -203,7 +203,7 @@ export default function PomodoroScreen() {
           {completedCycles > 0 && (
             <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(31,59,50,0.06)' }}>
               <div className="flex items-center gap-1.5">
-                <Brain size={11} style={{ color: 'var(--accent-purple)' }} />
+                <Brain size={11} strokeWidth={1.5} style={{ color: 'var(--accent-purple)' }} />
                 <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'var(--accent-purple)' }}>Sugestão IA</p>
               </div>
               <p className="text-[12px] mt-1 italic" style={{ color: 'var(--text-secondary)' }}>
