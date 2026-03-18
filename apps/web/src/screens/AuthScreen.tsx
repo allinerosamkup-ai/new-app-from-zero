@@ -75,7 +75,7 @@ export default function AuthScreen() {
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Como você quer ser chamada?"
                   className="w-full rounded-2xl px-4 py-4 text-[15px] outline-none transition-all duration-200 glass-card focus:shadow-md"
-                  style={{ color: 'var(--text-primary)' }}
+                  style={{ color: 'var(--text-primary)', borderColor: 'var(--border-interactive)' }}
                 />
               </div>
             )}
@@ -90,7 +90,7 @@ export default function AuthScreen() {
                 placeholder="voce@exemplo.com"
                 type="email"
                 className="w-full rounded-2xl px-4 py-4 text-[15px] outline-none transition-all duration-200 glass-card focus:shadow-md"
-                style={{ color: 'var(--text-primary)' }}
+                style={{ color: 'var(--text-primary)', borderColor: 'var(--border-interactive)' }}
               />
             </div>
 
@@ -104,7 +104,7 @@ export default function AuthScreen() {
                 placeholder="Sua senha"
                 type="password"
                 className="w-full rounded-2xl px-4 py-4 text-[15px] outline-none transition-all duration-200 glass-card focus:shadow-md"
-                style={{ color: 'var(--text-primary)' }}
+                style={{ color: 'var(--text-primary)', borderColor: 'var(--border-interactive)' }}
               />
             </div>
           </div>
@@ -126,8 +126,8 @@ export default function AuthScreen() {
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="w-full rounded-[24px] px-6 py-[18px] text-center text-[16px] font-bold text-white transition-all duration-200 active:scale-[0.98] disabled:opacity-60"
-            style={{ background: 'var(--bg-dark)', boxShadow: 'var(--shadow-lg)' }}
+            className="btn-aura w-full rounded-[24px] px-6 py-[18px] text-center text-[16px] font-bold text-white transition-all duration-200 active:scale-[0.98] disabled:opacity-60"
+            style={{ background: 'var(--accent-9)', boxShadow: '0 4px 14px rgba(215,137,127,.35)' }}
           >
             {isLoading ? 'Aguarde...' : isSignup ? 'Criar conta e continuar' : 'Entrar e continuar'}
           </button>
