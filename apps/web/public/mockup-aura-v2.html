@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mood Energy — Mockup Aura Design v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─── Aura × Nectarine tokens ─── */
+:root {
+  --nectarine:     #D7897F;
+  --nectarine-10:  #C46B60;
+  --nectarine-11:  #A8544A;
+  --nectarine-a3:  rgba(215,137,127,.13);
+  --nectarine-a5:  rgba(215,137,127,.22);
+  --menthe:        #96C7B3;
+  --lagune:        #6398A9;
+  --peche:         #F9B95C;
+  --warm-bg:       #FAF6F2;
+  --warm-surface:  #FFFDF9;
+  --warm-border:   rgba(215,137,127,.14);
+  --warm-border-2: rgba(215,137,127,.24);
+  --text-1:        #3A2E2B;
+  --text-2:        #7D6B68;
+  --text-3:        #B5A5A2;
+  /* Aura spacing unit */
+  --a: 13px;
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: #E8DDD5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  padding: 40px 20px 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 60px;
+  min-height: 100vh;
+}
+
+/* ─── Page title ─── */
+.page-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: #9A8A87; text-align: center;
+}
+.page-title span { color: var(--nectarine); }
+
+/* ─── Phone frames ─── */
+.phones-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  justify-content: center;
+  align-items: flex-start;
+}
+.phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.screen-label {
+  font-size: 11px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: #9A8A87;
+}
+.phone {
+  width: 320px;
+  background: #111;
+  border-radius: 44px;
+  padding: 12px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.28), 0 0 0 1px rgba(255,255,255,.06) inset;
+}
+.phone-inner {
+  width: 100%;
+  border-radius: 32px;
+  overflow: hidden;
+  background: var(--warm-bg);
+  position: relative;
+  min-height: 620px;
+}
+/* notch */
+.phone-inner::before {
+  content: '';
+  display: block;
+  height: 28px;
+  background: #111;
+  border-radius: 0 0 16px 16px;
+  width: 90px;
+  margin: 0 auto;
+  position: absolute;
+  top: 0; left: 50%; transform: translateX(-50%);
+  z-index: 10;
+}
+.phone-status {
+  height: 44px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 20px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.status-icons { display: flex; align-items: center; gap: 4px; }
+.status-icons svg { opacity: .7; }
+.screen-content { padding: 8px 16px 20px; }
+
+/* ─── Aura design tokens ─── */
+
+/* Inputs - Aura style */
+.aura-input-wrap { margin-bottom: calc(var(--a) * 1.5); }
+.aura-input-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+.aura-input {
+  width: 100%;
+  height: calc(var(--a) * 4); /* 52px */
+  background: rgba(255,255,255,.72);
+  border: 1.5px solid var(--warm-border-2);
+  border-radius: calc(var(--a) * 0.5); /* 6.5px — tight, Aura native */
+  padding: 0 calc(var(--a) * 1.5);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: var(--text-1);
+  outline: none;
+  backdrop-filter: blur(10px);
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.aura-input:focus {
+  border-color: var(--nectarine);
+  box-shadow: 0 0 0 3px var(--nectarine-a3);
+}
+.aura-input::placeholder { color: var(--text-3); font-size: 13px; }
+
+/* Buttons - Aura style */
+.aura-btn-primary {
+  width: 100%;
+  height: calc(var(--a) * 4); /* 52px */
+  background: var(--nectarine);
+  color: #fff;
+  border: none;
+  border-radius: calc(var(--a) * 0.5); /* 6.5px */
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(215,137,127,.38), 0 1px 3px rgba(215,137,127,.2);
+  transition: transform 250ms cubic-bezier(.2,.8,.4,1), box-shadow 250ms;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.aura-btn-primary:hover { transform: scale(1.025); box-shadow: 0 6px 20px rgba(215,137,127,.44); }
+
+.aura-btn-pill {
+  height: calc(var(--a) * 3.5); /* ~45px */
+  padding: 0 calc(var(--a) * 2);
+  background: transparent;
+  color: var(--nectarine);
+  border: 1.5px solid var(--nectarine-a5);
+  border-radius: 999px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 250ms, background 200ms;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.aura-btn-pill:hover { background: var(--nectarine-a3); transform: scale(1.02); }
+
+.aura-btn-ghost {
+  height: calc(var(--a) * 3.5);
+  padding: 0 calc(var(--a) * 1.5);
+  background: transparent;
+  color: var(--text-2);
+  border: 1.5px solid var(--warm-border-2);
+  border-radius: calc(var(--a) * 0.5);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 250ms, border-color 200ms;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.aura-btn-ghost:hover { border-color: var(--nectarine-a5); transform: scale(1.02); }
+
+/* Cards */
+.aura-card {
+  background: rgba(255,253,249,.85);
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: calc(var(--a) * 1.5); /* 19.5px */
+  backdrop-filter: blur(20px);
+  box-shadow: 0 2px 8px rgba(215,137,127,.07), 0 1px 2px rgba(215,137,127,.04);
+  padding: calc(var(--a) * 1.2);
+  transition: transform 250ms cubic-bezier(.4,0,.6,1), box-shadow 250ms;
+}
+.aura-card:hover { transform: scale(1.012); }
+
+/* Section dividers */
+.aura-divider {
+  height: 1px;
+  background: var(--warm-border);
+  margin: calc(var(--a) * 0.75) 0;
+}
+
+/* Chip tags */
+.aura-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  background: var(--nectarine-a3);
+  color: var(--nectarine-11);
+  border: 1px solid var(--nectarine-a5);
+}
+
+/* Nav tab (bottom or top tab switcher) */
+.aura-tabs {
+  display: flex;
+  background: rgba(255,253,249,.88);
+  border: 1px solid var(--warm-border-2);
+  border-radius: calc(var(--a) * 1.2);
+  padding: 3px;
+  backdrop-filter: blur(20px);
+  margin-bottom: calc(var(--a) * 1.2);
+}
+.aura-tab {
+  flex: 1;
+  text-align: center;
+  padding: 9px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: calc(var(--a) * 1);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 200ms;
+}
+.aura-tab.active {
+  background: var(--nectarine);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(215,137,127,.3);
+}
+
+/* Icon container */
+.icon-badge {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Section title */
+.section-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 15px; font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -.01em;
+}
+.section-sub {
+  font-size: 11px; font-weight: 500;
+  color: var(--text-3);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+/* ─── SCREEN: AUTH ─── */
+.auth-hero {
+  background: var(--nectarine);
+  border-radius: calc(var(--a) * 2);
+  padding: calc(var(--a) * 1.5) calc(var(--a) * 1.5) calc(var(--a) * 1.8);
+  margin-bottom: calc(var(--a) * 1.2);
+  position: relative;
+  overflow: hidden;
+}
+.auth-hero::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 140% 80% at 120% -10%, rgba(255,255,255,.18), transparent 60%);
+}
+.auth-hero-eyebrow {
+  font-size: 10px; font-weight: 800;
+  letter-spacing: .18em; text-transform: uppercase;
+  color: rgba(255,255,255,.65);
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 5px;
+}
+.auth-hero-eyebrow::before {
+  content: ''; display: inline-block;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(255,255,255,.55);
+}
+.auth-hero h1 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 21px; font-weight: 800; line-height: 1.28;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.auth-hero p {
+  font-size: 13px; line-height: 1.65;
+  color: rgba(255,255,255,.72);
+}
+
+/* ─── SCREEN: HOME ─── */
+.home-header {
+  background: var(--nectarine);
+  border-radius: calc(var(--a) * 1.5);
+  padding: calc(var(--a) * 1.2) calc(var(--a) * 1.2) calc(var(--a) * 1.3);
+  margin-bottom: calc(var(--a) * 1);
+  position: relative; overflow: hidden;
+}
+.home-header::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 120% 100% at 110% -20%, rgba(255,255,255,.15), transparent 55%);
+}
+.home-header-eyebrow {
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,.7);
+  margin-bottom: 2px;
+}
+.home-header h1 {
+  font-family: 'Poppins', sans-serif;
+  font-size: 22px; font-weight: 800;
+  color: #fff;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: calc(var(--a));
+}
+.shortcut-card {
+  background: rgba(255,253,249,.82);
+  border: 1px solid rgba(255,255,255,.68);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 2px 8px rgba(215,137,127,.06);
+  padding: 12px 8px 10px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 250ms cubic-bezier(.4,0,.6,1), box-shadow 250ms;
+}
+.shortcut-card:hover { transform: scale(1.025); box-shadow: 0 6px 18px rgba(215,137,127,.14); }
+.shortcut-label { font-size: 11px; font-weight: 700; color: var(--text-1); }
+.shortcut-sub   { font-size: 9.5px; color: var(--text-3); }
+
+.mini-chart-area {
+  background: rgba(255,253,249,.82);
+  border: 1px solid rgba(255,255,255,.68);
+  border-radius: 18px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 2px 8px rgba(215,137,127,.06);
+  padding: 14px;
+  margin-bottom: calc(var(--a));
+}
+.chart-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.chart-title { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.chart-legend { display: flex; align-items: center; gap: 10px; }
+.legend-item { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--text-3); }
+.chart-checkin-btn {
+  width: 100%;
+  margin-top: 12px;
+  height: 38px;
+  background: var(--nectarine-a3);
+  border: 1.5px solid var(--nectarine-a5);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  color: var(--nectarine-11);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer;
+  transition: transform 200ms, background 200ms;
+}
+.chart-checkin-btn:hover { background: rgba(215,137,127,.18); transform: scale(1.02); }
+
+/* ─── SCREEN: CHECKIN ─── */
+.checkin-slider-wrap { margin-bottom: calc(var(--a) * 1.2); }
+.checkin-slider-label {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.checkin-slider-label .title { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.checkin-slider-label .val {
+  font-size: 15px; font-weight: 800;
+  color: var(--nectarine);
+  font-family: 'Poppins', sans-serif;
+}
+.slider-track {
+  width: 100%; height: 6px;
+  background: var(--nectarine-a3);
+  border-radius: 999px;
+  position: relative;
+}
+.slider-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--menthe), var(--nectarine));
+}
+.slider-thumb {
+  width: 20px; height: 20px;
+  background: #fff;
+  border: 2px solid var(--nectarine);
+  border-radius: 50%;
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  box-shadow: 0 2px 8px rgba(215,137,127,.25);
+}
+.emotion-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 7px; margin-bottom: calc(var(--a) * 1.2);
+}
+.emotion-chip {
+  padding: 8px 4px;
+  border-radius: 12px;
+  border: 1.5px solid var(--warm-border-2);
+  background: rgba(255,253,249,.7);
+  backdrop-filter: blur(10px);
+  text-align: center;
+  font-size: 10px; font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 200ms;
+}
+.emotion-chip.active {
+  border-color: var(--nectarine);
+  background: var(--nectarine-a3);
+  color: var(--nectarine-11);
+}
+.emotion-chip .emoji { font-size: 18px; display: block; margin-bottom: 3px; }
+
+/* ─── SCREEN: JOURNAL ─── */
+.chat-wrap {
+  display: flex; flex-direction: column; gap: 10px;
+  padding-bottom: 10px;
+}
+.bubble { max-width: 82%; }
+.bubble-ai {
+  background: rgba(215,137,127,.09);
+  border: 1px solid rgba(215,137,127,.16);
+  border-radius: 18px 18px 18px 4px;
+  padding: 11px 13px;
+  font-size: 13px; line-height: 1.6;
+  color: var(--text-1);
+}
+.bubble-user {
+  align-self: flex-end;
+  background: var(--nectarine);
+  border-radius: 18px 18px 4px 18px;
+  padding: 11px 13px;
+  font-size: 13px; line-height: 1.6;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(215,137,127,.28);
+}
+.bubble-name {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-3);
+  margin-bottom: 4px;
+}
+.journal-input-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255,253,249,.9);
+  border: 1px solid var(--warm-border-2);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  margin-top: 10px;
+}
+.journal-input {
+  flex: 1;
+  background: transparent; border: none; outline: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; color: var(--text-1);
+}
+.journal-input::placeholder { color: var(--text-3); }
+.journal-send {
+  width: 32px; height: 32px;
+  background: var(--nectarine);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(215,137,127,.32);
+  flex-shrink: 0;
+}
+
+/* ─── SCREEN: PLANNER ─── */
+.timeline-slot {
+  display: flex; gap: 10px;
+  align-items: flex-start;
+  padding: 6px 0;
+}
+.timeline-time {
+  font-size: 10px; font-weight: 600;
+  color: var(--text-3); min-width: 38px; padding-top: 13px;
+}
+.timeline-line {
+  width: 1px; background: var(--warm-border); flex-shrink: 0;
+  align-self: stretch; margin: 0 4px;
+}
+.timeline-block-card {
+  flex: 1;
+  border-radius: 13px;
+  padding: 12px 13px;
+  background: rgba(255,253,249,.82);
+  border: 1px solid rgba(255,255,255,.68);
+  border-left-width: 4px;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 2px 8px rgba(215,137,127,.06);
+  cursor: pointer;
+  transition: transform 250ms, box-shadow 250ms;
+}
+.timeline-block-card:hover { transform: scale(1.012); box-shadow: 0 5px 16px rgba(215,137,127,.12); }
+.block-title { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.block-meta { font-size: 10.5px; color: var(--text-3); margin-top: 2px; }
+.block-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 18px; padding: 0 7px;
+  border-radius: 999px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; margin-top: 6px;
+}
+
+/* ─── SCREEN: CONFIG ─── */
+.config-section { margin-bottom: calc(var(--a) * 1.2); }
+.config-section-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text-3); margin-bottom: 8px; padding: 0 2px;
+}
+.config-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 14px;
+  background: rgba(255,253,249,.82);
+  border: 1px solid rgba(255,255,255,.65);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 1px 3px rgba(215,137,127,.04);
+}
+.config-row:first-of-type { border-radius: 13px 13px 3px 3px; }
+.config-row:last-of-type  { border-radius: 3px 3px 13px 13px; }
+.config-row + .config-row { border-top: none; }
+.config-row-label {
+  display: flex; align-items: center; gap: 10px;
+}
+.config-row-label .icon-bg {
+  width: 30px; height: 30px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.config-row-text { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.config-row-sub  { font-size: 11px; color: var(--text-3); }
+
+/* Toggle */
+.toggle {
+  width: 40px; height: 22px;
+  border-radius: 999px; position: relative;
+  cursor: pointer; flex-shrink: 0;
+  transition: background 200ms;
+}
+.toggle.on  { background: var(--nectarine); }
+.toggle.off { background: rgba(180,160,160,.3); }
+.toggle-knob {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  position: absolute; top: 2px;
+  transition: left 200ms;
+}
+.toggle.on .toggle-knob  { left: 20px; }
+.toggle.off .toggle-knob { left: 2px; }
+
+/* ─── BOTTOM NAV ─── */
+.bottom-nav {
+  display: flex; align-items: center; justify-content: space-around;
+  padding: 10px 16px 16px;
+  background: rgba(255,253,249,.92);
+  border-top: 1px solid var(--warm-border);
+  backdrop-filter: blur(24px);
+}
+.nav-item {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer; padding: 4px 10px;
+  border-radius: 12px;
+  transition: background 200ms;
+}
+.nav-item.active { background: var(--nectarine-a3); }
+.nav-item svg { opacity: .55; }
+.nav-item.active svg { opacity: 1; }
+.nav-label { font-size: 9.5px; font-weight: 600; color: var(--text-3); }
+.nav-item.active .nav-label { color: var(--nectarine-11); font-weight: 700; }
+
+/* ─── SVG icons (lucide style) ─── */
+svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
+
+/* ─── Comparison legend ─── */
+.compare-row {
+  display: flex; gap: 12px;
+  flex-wrap: wrap; justify-content: center;
+  margin-top: -20px; margin-bottom: 20px;
+}
+.compare-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: #9A8A87;
+  display: flex; align-items: center; gap: 5px;
+}
+.compare-tag::before {
+  content: ''; width: 10px; height: 10px; border-radius: 3px;
+}
+.compare-tag.before::before { background: #c0b0aa; }
+.compare-tag.after::before  { background: var(--nectarine); }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Mood Energy — <span>Aura Design v2</span> — Mockup Completo</h1>
+<p style="font-size:12px;color:#9A8A87;text-align:center;margin-top:-40px;">Todas as telas com: tipografia fluida · ícones 20px/1.5px · inputs Aura · botões Aura · cards texturizados</p>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- AUTH SCREEN                                  -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">① Auth Screen</div>
+  <div class="phones-row">
+
+    <!-- AUTH — Entrar -->
+    <div class="phone-wrap">
+      <div class="screen-label">Entrar</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>9:41</span>
+            <div class="status-icons">
+              <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><rect x="0" y="3" width="3" height="8" rx="1" fill="#3A2E2B" opacity=".35"/><rect x="4.5" y="2" width="3" height="9" rx="1" fill="#3A2E2B" opacity=".55"/><rect x="9" y="0" width="3" height="11" rx="1" fill="#3A2E2B" opacity=".75"/><rect x="13.5" y="0" width="2.5" height="11" rx="1" fill="#3A2E2B"/></svg>
+              <svg width="15" height="11" viewBox="0 0 15 11" fill="none"><path d="M7.5 2.5C9.5 2.5 11.3 3.3 12.6 4.6L14 3.2C12.3 1.6 10 0.5 7.5 0.5C5 0.5 2.7 1.6 1 3.2L2.4 4.6C3.7 3.3 5.5 2.5 7.5 2.5Z" fill="#3A2E2B"/><path d="M7.5 5.5C8.8 5.5 10 6 10.9 6.8L12.3 5.4C11 4.2 9.4 3.5 7.5 3.5C5.6 3.5 4 4.2 2.7 5.4L4.1 6.8C5 6 6.2 5.5 7.5 5.5Z" fill="#3A2E2B"/><circle cx="7.5" cy="9.5" r="1.5" fill="#3A2E2B"/></svg>
+              <svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/><path d="M23 3.5V7.5C23.8 7.2 24.5 6.4 24.5 5.5C24.5 4.6 23.8 3.8 23 3.5Z" fill="#3A2E2B" opacity=".4"/></svg>
+            </div>
+          </div>
+          <div class="screen-content">
+            <div class="auth-hero">
+              <div class="auth-hero-eyebrow">Mood Energy</div>
+              <h1>Seu ritmo merece um ponto de partida mais gentil.</h1>
+              <p>Acompanhe humor, energia e rotina em um fluxo que respeita sua ciclagem.</p>
+            </div>
+
+            <div class="aura-tabs">
+              <div class="aura-tab active">Entrar</div>
+              <div class="aura-tab">Criar conta</div>
+            </div>
+
+            <div class="aura-input-wrap">
+              <label class="aura-input-label">Email</label>
+              <div class="aura-input" style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+                voce@exemplo.com
+              </div>
+            </div>
+            <div class="aura-input-wrap" style="margin-bottom:20px;">
+              <label class="aura-input-label">Senha</label>
+              <div class="aura-input" style="display:flex;align-items:center;justify-content:space-between;color:var(--text-3);font-size:13px;">
+                <span style="display:flex;align-items:center;gap:8px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  ••••••••
+                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.45"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </div>
+            </div>
+            <button class="aura-btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              Entrar e continuar
+            </button>
+            <p style="font-size:11px;color:var(--text-3);text-align:center;margin-top:12px;line-height:1.5;">Depois do login, seguimos direto para seu dia.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUTH — Criar Conta -->
+    <div class="phone-wrap">
+      <div class="screen-label">Criar conta</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>9:41</span>
+            <div class="status-icons">
+              <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><rect x="0" y="3" width="3" height="8" rx="1" fill="#3A2E2B" opacity=".35"/><rect x="4.5" y="2" width="3" height="9" rx="1" fill="#3A2E2B" opacity=".55"/><rect x="9" y="0" width="3" height="11" rx="1" fill="#3A2E2B" opacity=".75"/><rect x="13.5" y="0" width="2.5" height="11" rx="1" fill="#3A2E2B"/></svg>
+              <svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg>
+            </div>
+          </div>
+          <div class="screen-content">
+            <div class="auth-hero">
+              <div class="auth-hero-eyebrow">Mood Energy</div>
+              <h1>Seu ritmo merece um ponto de partida mais gentil.</h1>
+            </div>
+
+            <div class="aura-tabs">
+              <div class="aura-tab">Entrar</div>
+              <div class="aura-tab active">Criar conta</div>
+            </div>
+
+            <div class="aura-input-wrap">
+              <label class="aura-input-label">Seu nome</label>
+              <div class="aura-input" style="display:flex;align-items:center;gap:8px;color:var(--text-1);font-size:14px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Maria
+              </div>
+            </div>
+            <div class="aura-input-wrap">
+              <label class="aura-input-label">Email</label>
+              <div class="aura-input" style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/></svg>
+                voce@exemplo.com
+              </div>
+            </div>
+            <div class="aura-input-wrap" style="margin-bottom:18px;">
+              <label class="aura-input-label">Senha</label>
+              <div class="aura-input" style="display:flex;align-items:center;gap:8px;color:var(--text-3);font-size:13px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Crie uma senha segura
+              </div>
+            </div>
+            <button class="aura-btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+              Criar conta e continuar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /phones-row -->
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- HOME SCREEN                                  -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">② Home Screen</div>
+  <div class="phones-row">
+
+    <div class="phone-wrap">
+      <div class="screen-label">Com check-in</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status">
+            <span>9:41</span>
+            <div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div>
+          </div>
+          <div class="screen-content">
+            <div class="home-header">
+              <p class="home-header-eyebrow">Bom dia,</p>
+              <h1>Maria ✨</h1>
+            </div>
+
+            <!-- Estado atual -->
+            <div class="aura-card" style="margin-bottom:calc(var(--a));background:linear-gradient(135deg,var(--nectarine-a3),rgba(215,137,127,.04));">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                <span style="font-size:20px;">✨</span>
+                <span style="font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--nectarine-11);">Energia Radiante</span>
+                <div class="aura-chip" style="margin-left:auto;background:var(--nectarine-a3);color:var(--nectarine-11);border-color:var(--nectarine-a5);">Moderado</div>
+              </div>
+              <p style="font-size:12.5px;line-height:1.6;color:var(--nectarine-11);opacity:.85;margin-bottom:10px;">Humor e energia em equilíbrio. Clareza mental acima da média.</p>
+              <div class="aura-divider"></div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:8px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine-10)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span style="font-size:11.5px;font-style:italic;color:var(--nectarine-11);">Aproveite o pico para suas tarefas mais importantes antes das 14h.</span>
+              </div>
+            </div>
+
+            <!-- Mini chart -->
+            <div class="mini-chart-area">
+              <div class="chart-header">
+                <div style="display:flex;align-items:center;gap:5px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+                  <span class="chart-title">Humor da Semana</span>
+                </div>
+                <div class="chart-legend">
+                  <div class="legend-item"><span style="width:8px;height:8px;border-radius:50%;background:var(--menthe);display:inline-block;"></span>Humor</div>
+                  <div class="legend-item"><span style="width:10px;height:2px;background:var(--menthe);opacity:.6;display:inline-block;border-top:2px dashed var(--menthe);"></span>Energia</div>
+                </div>
+              </div>
+              <!-- SVG chart placeholder -->
+              <svg width="100%" viewBox="0 0 280 72" style="overflow:visible;">
+                <line x1="16" y1="12" x2="264" y2="12" stroke="rgba(0,0,0,.04)" stroke-width="1" stroke-dasharray="3,3"/>
+                <line x1="16" y1="29" x2="264" y2="29" stroke="rgba(0,0,0,.04)" stroke-width="1" stroke-dasharray="3,3"/>
+                <line x1="16" y1="46" x2="264" y2="46" stroke="rgba(0,0,0,.04)" stroke-width="1" stroke-dasharray="3,3"/>
+                <line x1="16" y1="63" x2="264" y2="63" stroke="rgba(0,0,0,.04)" stroke-width="1" stroke-dasharray="3,3"/>
+                <!-- mood line -->
+                <path d="M16 52 C50 52 60 20 80 24 C100 28 110 38 140 32 C170 26 190 18 220 20 C240 21 256 28 264 24" fill="none" stroke="var(--menthe)" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M16 52 C50 52 60 20 80 24 C100 28 110 38 140 32 C170 26 190 18 220 20 C240 21 256 28 264 24 L264 72 L16 72 Z" fill="url(#moodg)" opacity=".5"/>
+                <!-- energy dashed -->
+                <path d="M16 56 C50 56 60 30 80 34 C100 38 110 44 140 40 C170 36 190 26 220 30 C240 32 256 36 264 32" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-dasharray="4,3" opacity=".6"/>
+                <!-- dots -->
+                <circle cx="264" cy="24" r="4" fill="var(--nectarine)" stroke="white" stroke-width="1.5"/>
+                <circle cx="264" cy="24" r="8" fill="none" stroke="var(--nectarine)" stroke-width="1.5" opacity=".35">
+                  <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite"/>
+                  <animate attributeName="opacity" values=".35;0;.35" dur="2s" repeatCount="indefinite"/>
+                </circle>
+                <circle cx="220" cy="20" r="3.5" fill="var(--menthe)" stroke="white" stroke-width="1.5"/>
+                <circle cx="140" cy="32" r="3.5" fill="#D7897F" stroke="white" stroke-width="1.5"/>
+                <circle cx="80" cy="24" r="3.5" fill="var(--menthe)" stroke="white" stroke-width="1.5"/>
+                <!-- day labels -->
+                <text x="16" y="74" text-anchor="middle" font-size="9" fill="var(--text-3)">Qui</text>
+                <text x="56" y="74" text-anchor="middle" font-size="9" fill="var(--text-3)">Sex</text>
+                <text x="96" y="74" text-anchor="middle" font-size="9" fill="var(--text-3)">Sáb</text>
+                <text x="140" y="74" text-anchor="middle" font-size="9" fill="var(--text-3)">Dom</text>
+                <text x="180" y="74" text-anchor="middle" font-size="9" fill="var(--text-3)">Seg</text>
+                <text x="220" y="74" text-anchor="middle" font-size="9" fill="var(--text-3)">Ter</text>
+                <text x="264" y="74" text-anchor="middle" font-size="9" fill="var(--text-1)" font-weight="700">Hoj</text>
+                <defs>
+                  <linearGradient id="moodg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="var(--menthe)" stop-opacity=".25"/>
+                    <stop offset="100%" stop-color="var(--menthe)" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="aura-divider" style="margin-top:14px;"></div>
+              <button class="chart-checkin-btn">
+                <span style="font-size:16px;">😊</span>
+                Fazer check-in de hoje
+              </button>
+            </div>
+
+            <!-- Atalhos -->
+            <div class="shortcut-grid">
+              <div class="shortcut-card">
+                <div class="icon-badge" style="background:var(--nectarine-a3);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <span class="shortcut-label">Diário</span>
+                <span class="shortcut-sub">Falar com IA</span>
+              </div>
+              <div class="shortcut-card">
+                <div class="icon-badge" style="background:rgba(99,152,169,.12);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--lagune)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <span class="shortcut-label">Planner</span>
+                <span class="shortcut-sub">Organizar dia</span>
+              </div>
+              <div class="shortcut-card">
+                <div class="icon-badge" style="background:rgba(150,199,179,.12);">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                </div>
+                <span class="shortcut-label">Padrões</span>
+                <span class="shortcut-sub">Ciclagem</span>
+              </div>
+            </div>
+
+            <!-- Próximo na agenda -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <span class="section-title" style="font-size:14px;">Próximo na agenda</span>
+              <button style="font-size:12px;font-weight:600;color:var(--nectarine);display:flex;align-items:center;gap:3px;background:none;border:none;cursor:pointer;">
+                Ver tudo
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+            <div class="aura-card" style="padding:12px 14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+                <span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);">14:00 — 15:00</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </div>
+              <p style="font-size:13px;font-weight:700;color:var(--text-1);">Reunião de planejamento</p>
+              <div class="block-chip" style="background:rgba(99,152,169,.12);color:#4A7A8E;border:1px solid rgba(99,152,169,.2);">
+                <span style="width:6px;height:6px;border-radius:50%;background:var(--lagune);"></span>
+                Trabalho
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /phone -->
+
+  </div><!-- /phones-row -->
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- CHECKIN + PLANNER                           -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">③ Check-in &amp; Planner</div>
+  <div class="phones-row">
+
+    <!-- CHECKIN -->
+    <div class="phone-wrap">
+      <div class="screen-label">Check-in</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="15" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:calc(var(--a)*1.2);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              <div>
+                <h2 style="font-family:'Poppins';font-size:17px;font-weight:800;color:var(--text-1);">Como você está?</h2>
+                <p style="font-size:11px;color:var(--text-3);">Registro de hoje, 18 de março</p>
+              </div>
+            </div>
+
+            <!-- Sliders -->
+            <div class="checkin-slider-wrap">
+              <div class="checkin-slider-label">
+                <span class="title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:-2px"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                  Humor
+                </span>
+                <span class="val">4</span>
+              </div>
+              <div class="slider-track">
+                <div class="slider-fill" style="width:75%;"></div>
+                <div class="slider-thumb" style="left:75%;"></div>
+              </div>
+            </div>
+            <div class="checkin-slider-wrap">
+              <div class="checkin-slider-label">
+                <span class="title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--lagune)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:-2px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  Energia
+                </span>
+                <span class="val" style="color:var(--lagune);">3</span>
+              </div>
+              <div class="slider-track" style="background:rgba(99,152,169,.12);">
+                <div class="slider-fill" style="width:50%;background:linear-gradient(90deg,var(--lagune),var(--menthe));"></div>
+                <div class="slider-thumb" style="left:50%;border-color:var(--lagune);"></div>
+              </div>
+            </div>
+
+            <div class="aura-divider"></div>
+
+            <div style="margin:calc(var(--a)*0.8) 0 calc(var(--a)*0.8);">
+              <p style="font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:8px;">Como está se sentindo?</p>
+              <div class="emotion-grid">
+                <div class="emotion-chip active"><span class="emoji">✨</span>Radiante</div>
+                <div class="emotion-chip"><span class="emoji">😌</span>Calma</div>
+                <div class="emotion-chip"><span class="emoji">😰</span>Ansiosa</div>
+                <div class="emotion-chip"><span class="emoji">😴</span>Cansada</div>
+                <div class="emotion-chip"><span class="emoji">🔥</span>Focada</div>
+                <div class="emotion-chip"><span class="emoji">😢</span>Triste</div>
+                <div class="emotion-chip"><span class="emoji">😤</span>Irritada</div>
+                <div class="emotion-chip"><span class="emoji">🌙</span>Sensível</div>
+              </div>
+            </div>
+
+            <div class="aura-input-wrap">
+              <label class="aura-input-label">Nota livre (opcional)</label>
+              <div style="width:100%;min-height:68px;background:rgba(255,255,255,.72);border:1.5px solid var(--warm-border-2);border-radius:calc(var(--a)*0.5);padding:12px 14px;font-size:13px;color:var(--text-3);line-height:1.6;">
+                Como foi o seu dia até agora?
+              </div>
+            </div>
+
+            <button class="aura-btn-primary" style="margin-top:8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Registrar check-in
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLANNER -->
+    <div class="phone-wrap">
+      <div class="screen-label">Planner</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <!-- Header -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:calc(var(--a));">
+              <button style="background:none;border:none;cursor:pointer;padding:6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <div style="text-align:center;">
+                <p style="font-family:'Poppins';font-size:16px;font-weight:700;color:var(--text-1);">Qua., 18 De Mar.</p>
+                <p style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);">Timeline do Dia</p>
+              </div>
+              <button style="background:none;border:none;cursor:pointer;padding:6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+
+            <!-- Timeline blocks -->
+            <div class="timeline-slot">
+              <span class="timeline-time">08:00</span>
+              <div class="timeline-line"></div>
+              <div class="timeline-block-card" style="border-left-color:#96C7B3;">
+                <div class="block-title">Meditação matinal</div>
+                <div class="block-meta">08:00 — 08:30 · 30 min</div>
+                <div class="block-chip" style="background:rgba(150,199,179,.12);color:#3A7A66;border:1px solid rgba(150,199,179,.25);">
+                  <span style="width:6px;height:6px;border-radius:50%;background:#96C7B3;"></span> Autocuidado
+                </div>
+              </div>
+            </div>
+
+            <div class="timeline-slot">
+              <span class="timeline-time">09:30</span>
+              <div class="timeline-line"></div>
+              <div class="timeline-block-card" style="border-left-color:#6398A9;">
+                <div class="block-title">Reunião de equipe</div>
+                <div class="block-meta">09:30 — 10:30 · 1h</div>
+                <div class="block-chip" style="background:rgba(99,152,169,.12);color:#4A7A8E;border:1px solid rgba(99,152,169,.25);">
+                  <span style="width:6px;height:6px;border-radius:50%;background:#6398A9;"></span> Trabalho
+                </div>
+              </div>
+            </div>
+
+            <div class="timeline-slot">
+              <span class="timeline-time">12:00</span>
+              <div class="timeline-line"></div>
+              <div class="timeline-block-card" style="border-left-color:var(--menthe);">
+                <div class="block-title">Almoço com amigas</div>
+                <div class="block-meta">12:00 — 13:30 · 1h30</div>
+                <div class="block-chip" style="background:rgba(150,199,179,.12);color:#3D7A67;border:1px solid rgba(150,199,179,.3);">
+                  <span style="width:6px;height:6px;border-radius:50%;background:var(--menthe);"></span> Social
+                </div>
+              </div>
+            </div>
+
+            <div class="timeline-slot">
+              <span class="timeline-time">14:00</span>
+              <div class="timeline-line"></div>
+              <div class="timeline-block-card" style="border-left-color:#6398A9;opacity:.7;">
+                <div class="block-title">Análise de dados</div>
+                <div class="block-meta">14:00 — 16:00 · 2h</div>
+                <div class="block-chip" style="background:rgba(99,152,169,.12);color:#4A7A8E;border:1px solid rgba(99,152,169,.25);">
+                  <span style="width:6px;height:6px;border-radius:50%;background:#6398A9;"></span> Trabalho
+                </div>
+              </div>
+            </div>
+
+            <!-- Botão + -->
+            <div style="text-align:center;margin-top:calc(var(--a));">
+              <button class="aura-btn-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Novo bloco
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- JOURNAL + CONFIG                            -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">④ Diário IA &amp; Configurações</div>
+  <div class="phones-row">
+
+    <!-- JOURNAL -->
+    <div class="phone-wrap">
+      <div class="screen-label">Diário IA</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:calc(var(--a)*1.2);padding-bottom:calc(var(--a));border-bottom:1px solid var(--warm-border);">
+              <div style="width:36px;height:36px;border-radius:50%;background:var(--nectarine-a3);border:1.5px solid var(--nectarine-a5);display:flex;align-items:center;justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <div>
+                <p style="font-family:'Poppins';font-size:15px;font-weight:700;color:var(--text-1);">Diário com IA</p>
+                <p style="font-size:11px;color:var(--menthe);display:flex;align-items:center;gap:4px;">
+                  <span style="width:6px;height:6px;border-radius:50%;background:var(--menthe);display:inline-block;animation:pulse 2s infinite;"></span>
+                  Online · Processando seu estado
+                </p>
+              </div>
+            </div>
+
+            <div class="chat-wrap">
+              <div class="bubble">
+                <div class="bubble-name">Aura IA</div>
+                <div class="bubble-ai">Bom dia, Maria! Como você acordou hoje? Percebi que seu histórico de energia desta semana está consistente. Quer conversar sobre como está se sentindo? 💫</div>
+              </div>
+              <div class="bubble" style="align-self:flex-end;">
+                <div class="bubble-user">Acordei bem, mas com aquela sensação de querer um dia mais leve. Não sei se consigo focar em tarefas pesadas.</div>
+              </div>
+              <div class="bubble">
+                <div class="bubble-name">Aura IA</div>
+                <div class="bubble-ai">Faz sentido! Seu padrão indica que terças e quartas costumam ser seus dias mais suaves. Que tal ajustar o planner para tarefas criativas e mais leves de manhã, deixando as tarefas analíticas para depois do almoço?</div>
+              </div>
+            </div>
+
+            <div class="journal-input-row">
+              <input class="journal-input" placeholder="Escreva aqui..." />
+              <div class="journal-send">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONFIG -->
+    <div class="phone-wrap">
+      <div class="screen-label">Configurações</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <div style="margin-bottom:calc(var(--a)*1.5);">
+              <div style="width:52px;height:52px;border-radius:16px;background:var(--nectarine);display:flex;align-items:center;justify-content:center;margin-bottom:10px;box-shadow:0 4px 14px rgba(215,137,127,.3);">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <p style="font-family:'Poppins';font-size:18px;font-weight:800;color:var(--text-1);">Maria</p>
+              <p style="font-size:12px;color:var(--text-3);">maria@exemplo.com</p>
+            </div>
+
+            <div class="config-section">
+              <p class="config-section-title">Preferências</p>
+              <div class="config-row">
+                <div class="config-row-label">
+                  <div class="icon-bg" style="background:var(--nectarine-a3);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </div>
+                  <div>
+                    <p class="config-row-text">Notificações</p>
+                    <p class="config-row-sub">Lembretes de check-in</p>
+                  </div>
+                </div>
+                <div class="toggle on"><div class="toggle-knob"></div></div>
+              </div>
+              <div class="config-row">
+                <div class="config-row-label">
+                  <div class="icon-bg" style="background:rgba(150,199,179,.15);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  </div>
+                  <div>
+                    <p class="config-row-text">Modo Tranquilo</p>
+                    <p class="config-row-sub">Sem notificações de 22h–8h</p>
+                  </div>
+                </div>
+                <div class="toggle on"><div class="toggle-knob"></div></div>
+              </div>
+              <div class="config-row">
+                <div class="config-row-label">
+                  <div class="icon-bg" style="background:var(--nectarine-a3);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+                  </div>
+                  <div>
+                    <p class="config-row-text">Tema claro</p>
+                    <p class="config-row-sub">Aparência do app</p>
+                  </div>
+                </div>
+                <div class="toggle off"><div class="toggle-knob"></div></div>
+              </div>
+            </div>
+
+            <div class="config-section">
+              <p class="config-section-title">Conta</p>
+              <div class="config-row">
+                <div class="config-row-label">
+                  <div class="icon-bg" style="background:rgba(99,152,169,.12);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--lagune)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </div>
+                  <div><p class="config-row-text">Editar perfil</p></div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+              <div class="config-row">
+                <div class="config-row-label">
+                  <div class="icon-bg" style="background:rgba(224,112,112,.1);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E07070" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                  </div>
+                  <div><p class="config-row-text" style="color:#C05858;">Sair da conta</p></div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- CHECKIN RESULT + INSIGHTS                   -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">⑤ Resultado Check-in &amp; Insights</div>
+  <div class="phones-row">
+
+    <!-- CHECKIN RESULT -->
+    <div class="phone-wrap">
+      <div class="screen-label">Resultado — Radiante</div>
+      <div class="phone">
+        <div class="phone-inner" style="background:linear-gradient(180deg,#F5E9E7 0%,#FAF2F0 45%,#FAF6F2 100%);">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <!-- Emoji circle -->
+            <div style="display:flex;justify-content:center;margin:16px 0 20px;">
+              <div style="width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg,rgba(215,137,127,.35),rgba(215,137,127,.65));box-shadow:0 12px 40px rgba(215,137,127,.35);display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:52px;">✨</span>
+              </div>
+            </div>
+            <h1 style="font-family:'Poppins';font-size:24px;font-weight:800;text-align:center;color:var(--nectarine-11);margin-bottom:8px;">Energia Radiante</h1>
+            <div style="display:flex;justify-content:center;margin-bottom:18px;">
+              <div class="aura-chip" style="background:var(--nectarine-a3);color:var(--nectarine-11);border-color:var(--nectarine-a5);height:28px;padding:0 14px;font-size:11px;">✦ Foco profundo</div>
+            </div>
+
+            <!-- Summary card -->
+            <div class="aura-card" style="margin-bottom:14px;text-align:center;padding:16px;">
+              <p style="font-size:13.5px;line-height:1.65;color:var(--nectarine-11);opacity:.88;">Humor e energia em equilíbrio. Clareza mental acima da média — ótimo para tarefas que exigem foco e criatividade.</p>
+            </div>
+
+            <!-- Suggestions -->
+            <div style="margin-bottom:16px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine-10)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.7"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--nectarine-10);opacity:.7;">Sugestões para hoje</span>
+              </div>
+              <div class="aura-card" style="margin-bottom:8px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;">
+                <span style="font-size:16px;">💡</span>
+                <p style="font-size:12.5px;line-height:1.55;color:var(--text-1);flex:1;">Aproveite o pico de energia para tarefas que exigem concentração.</p>
+              </div>
+              <div class="aura-card" style="margin-bottom:8px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px;">
+                <span style="font-size:16px;">💡</span>
+                <p style="font-size:12.5px;line-height:1.55;color:var(--text-1);flex:1;">Inclua uma pausa de 15 min no meio da tarde para manter o ritmo.</p>
+              </div>
+            </div>
+
+            <button class="aura-btn-primary" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+              Ver meu dia
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INSIGHTS -->
+    <div class="phone-wrap">
+      <div class="screen-label">Insights</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <p style="font-size:12px;color:var(--text-3);margin-bottom:2px;">Sua Ciclagem</p>
+            <h1 style="font-family:'Poppins';font-size:20px;font-weight:800;color:var(--text-1);margin-bottom:14px;">Padrões da Semana</h1>
+
+            <!-- Bar chart card -->
+            <div class="aura-card" style="margin-bottom:12px;padding:14px;">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/></svg>
+                <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);">Humor &amp; Energia</span>
+              </div>
+              <!-- Bar chart -->
+              <div style="display:flex;align-items:flex-end;justify-content:space-between;height:72px;gap:5px;margin-bottom:8px;">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+                  <div style="width:100%;border-radius:4px 4px 0 0;background:var(--menthe);opacity:.55;height:45%;"></div>
+                  <div style="width:100%;border-radius:0 0 3px 3px;background:var(--nectarine);opacity:.45;height:38%;"></div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+                  <div style="width:100%;border-radius:4px 4px 0 0;background:var(--menthe);opacity:.55;height:70%;"></div>
+                  <div style="width:100%;border-radius:0 0 3px 3px;background:var(--nectarine);opacity:.45;height:55%;"></div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+                  <div style="width:100%;border-radius:4px 4px 0 0;background:var(--menthe);opacity:.15;height:10%;"></div>
+                  <div style="width:100%;border-radius:0 0 3px 3px;background:var(--nectarine);opacity:.1;height:8%;"></div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+                  <div style="width:100%;border-radius:4px 4px 0 0;background:var(--menthe);opacity:.55;height:60%;"></div>
+                  <div style="width:100%;border-radius:0 0 3px 3px;background:var(--nectarine);opacity:.45;height:50%;"></div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+                  <div style="width:100%;border-radius:4px 4px 0 0;background:var(--menthe);opacity:.55;height:80%;"></div>
+                  <div style="width:100%;border-radius:0 0 3px 3px;background:var(--nectarine);opacity:.45;height:65%;"></div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+                  <div style="width:100%;border-radius:4px 4px 0 0;background:var(--menthe);opacity:.55;height:90%;"></div>
+                  <div style="width:100%;border-radius:0 0 3px 3px;background:var(--nectarine);opacity:.45;height:75%;"></div>
+                </div>
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;">
+                  <div style="width:100%;border-radius:4px 4px 0 0;background:var(--menthe);opacity:.7;height:80%;"></div>
+                  <div style="width:100%;border-radius:0 0 3px 3px;background:var(--nectarine);opacity:.6;height:60%;border:2px solid var(--nectarine-a5);"></div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;">
+                <span style="font-size:9px;color:var(--text-3);">Dom</span><span style="font-size:9px;color:var(--text-3);">Seg</span><span style="font-size:9px;color:var(--text-3);">Ter</span><span style="font-size:9px;color:var(--text-3);">Qua</span><span style="font-size:9px;color:var(--text-3);">Qui</span><span style="font-size:9px;color:var(--text-3);">Sex</span><span style="font-size:9px;font-weight:700;color:var(--text-1);">Sáb</span>
+              </div>
+              <div class="aura-divider" style="margin:10px 0 8px;"></div>
+              <div style="display:flex;gap:14px;justify-content:center;">
+                <span style="display:flex;align-items:center;gap:4px;font-size:9.5px;color:var(--text-3);"><span style="width:10px;height:10px;border-radius:3px;background:var(--menthe);opacity:.6;display:inline-block;"></span>Humor</span>
+                <span style="display:flex;align-items:center;gap:4px;font-size:9.5px;color:var(--text-3);"><span style="width:10px;height:10px;border-radius:3px;background:var(--nectarine);opacity:.5;display:inline-block;"></span>Energia</span>
+              </div>
+            </div>
+
+            <!-- Stats row -->
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <div class="aura-card" style="flex:1;padding:12px;text-align:center;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:4px;"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                <p style="font-size:9px;color:var(--text-3);margin:2px 0;">Humor</p>
+                <p style="font-size:17px;font-weight:800;color:var(--text-1);font-family:'Poppins';">4.2</p>
+              </div>
+              <div class="aura-card" style="flex:1;padding:12px;text-align:center;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--lagune)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <p style="font-size:9px;color:var(--text-3);margin:2px 0;">Energia</p>
+                <p style="font-size:17px;font-weight:800;color:var(--text-1);font-family:'Poppins';">3.8</p>
+              </div>
+              <div class="aura-card" style="flex:1;padding:12px;text-align:center;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--lagune)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:4px;"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <p style="font-size:9px;color:var(--text-3);margin:2px 0;">Check-ins</p>
+                <p style="font-size:17px;font-weight:800;color:var(--text-1);font-family:'Poppins';">6</p>
+              </div>
+            </div>
+
+            <!-- Pattern card -->
+            <div class="aura-card" style="margin-bottom:10px;padding:13px;border-left:3px solid var(--nectarine);">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <span style="font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--nectarine);">Energia</span>
+              </div>
+              <p style="font-size:12.5px;font-weight:600;line-height:1.55;color:var(--text-1);">Energia mais baixa às quartas — considere tarefas criativas nesse dia.</p>
+            </div>
+
+            <!-- Recommendation -->
+            <div style="border-radius:13px;padding:13px 14px;background:var(--nectarine);display:flex;align-items:center;gap:10px;">
+              <div style="flex:1;">
+                <p style="font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.65);margin-bottom:4px;">Autocuidado</p>
+                <p style="font-size:12.5px;font-weight:600;color:white;line-height:1.5;">Reserve 20 min por dia para uma prática de descanso ativo.</p>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" style="opacity:.6;flex-shrink:0;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- OBJECTIVES + POMODORO                       -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">⑥ Metas &amp; Objetivos · Pomodoro</div>
+  <div class="phones-row">
+
+    <!-- OBJECTIVES -->
+    <div class="phone-wrap">
+      <div class="screen-label">Objetivos</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <div>
+                <p style="font-size:12px;color:var(--text-3);">Seus objetivos</p>
+                <h1 style="font-family:'Poppins';font-size:20px;font-weight:800;color:var(--text-1);">Metas &amp; Objetivos</h1>
+              </div>
+              <div style="width:38px;height:38px;border-radius:12px;background:var(--nectarine-a3);border:1.5px solid var(--nectarine-a5);display:flex;align-items:center;justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+              </div>
+            </div>
+
+            <!-- Objective 1 — expanded -->
+            <div class="aura-card" style="margin-bottom:10px;padding:14px;border-left:4px solid var(--lagune);">
+              <div style="display:flex;align-items:flex-start;gap:10px;">
+                <div style="width:36px;height:36px;border-radius:11px;background:rgba(99,152,169,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--lagune)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </div>
+                <div style="flex:1;min-width:0;">
+                  <p style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Ler 30 min por dia</p>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="flex:1;height:5px;border-radius:999px;background:rgba(99,152,169,.12);overflow:hidden;">
+                      <div style="height:100%;width:75%;border-radius:999px;background:var(--lagune);"></div>
+                    </div>
+                    <span style="font-size:11px;font-weight:800;color:var(--lagune);">75%</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
+              </div>
+              <!-- Subtasks -->
+              <div style="margin-top:10px;margin-left:46px;">
+                <p style="font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px;">Subtarefas (3/4)</p>
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+                  <div style="width:18px;height:18px;border-radius:6px;background:var(--menthe);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <span style="font-size:11.5px;color:var(--text-3);text-decoration:line-through;">Definir meta específica</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+                  <div style="width:18px;height:18px;border-radius:6px;background:var(--menthe);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <span style="font-size:11.5px;color:var(--text-3);text-decoration:line-through;">Identificar primeiro passo</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+                  <div style="width:18px;height:18px;border-radius:6px;background:var(--menthe);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <span style="font-size:11.5px;color:var(--text-3);text-decoration:line-through;">Agendar no planner</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
+                  <div style="width:18px;height:18px;border-radius:6px;border:1.5px solid var(--text-3);flex-shrink:0;"></div>
+                  <span style="font-size:11.5px;color:var(--text-1);">Revisar progresso em 7 dias</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Objective 2 — collapsed -->
+            <div class="aura-card" style="margin-bottom:14px;padding:14px;border-left:4px solid var(--menthe);">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:36px;height:36px;border-radius:11px;background:rgba(150,199,179,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                </div>
+                <div style="flex:1;min-width:0;">
+                  <p style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Meditar 10 min diários</p>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="flex:1;height:5px;border-radius:999px;background:rgba(150,199,179,.12);overflow:hidden;">
+                      <div style="height:100%;width:25%;border-radius:999px;background:var(--menthe);"></div>
+                    </div>
+                    <span style="font-size:11px;font-weight:800;color:var(--menthe);">25%</span>
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+            </div>
+
+            <button class="aura-btn-primary" style="height:50px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Novo objetivo
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POMODORO -->
+    <div class="phone-wrap">
+      <div class="screen-label">Pomodoro</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content">
+            <!-- Header -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <div style="width:34px;height:34px;border-radius:11px;background:rgba(0,0,0,.04);display:flex;align-items:center;justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" stroke-width="1.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </div>
+              <div>
+                <h1 style="font-family:'Poppins';font-size:17px;font-weight:800;color:var(--text-1);">Pomodoro</h1>
+                <p style="font-size:10.5px;color:var(--text-3);">Reunião de planejamento</p>
+              </div>
+            </div>
+
+            <!-- Phase tabs -->
+            <div class="aura-tabs" style="margin-bottom:18px;">
+              <div class="aura-tab active" style="font-size:11.5px;">Foco</div>
+              <div class="aura-tab" style="font-size:11.5px;">Pausa Curta</div>
+              <div class="aura-tab" style="font-size:11.5px;">Pausa Longa</div>
+            </div>
+
+            <!-- Timer circle -->
+            <div style="display:flex;justify-content:center;margin-bottom:28px;">
+              <div style="position:relative;width:220px;height:220px;">
+                <svg width="220" height="220" style="transform:rotate(-90deg);">
+                  <circle cx="110" cy="110" r="96" fill="none" stroke="rgba(215,137,127,.1)" stroke-width="9"/>
+                  <circle cx="110" cy="110" r="96" fill="none" stroke="var(--nectarine)" stroke-width="9"
+                    stroke-linecap="round"
+                    stroke-dasharray="603" stroke-dashoffset="150"
+                    style="filter:drop-shadow(0 0 6px rgba(215,137,127,.4))"/>
+                </svg>
+                <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                  <span style="font-family:'Poppins';font-size:40px;font-weight:800;color:var(--text-1);letter-spacing:-.02em;">20:47</span>
+                  <span style="font-size:11px;font-weight:600;color:var(--nectarine);margin-top:2px;">Foco</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Controls -->
+            <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:22px;">
+              <div style="width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.05);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.31"/></svg>
+              </div>
+              <div style="width:60px;height:60px;border-radius:50%;background:var(--nectarine);box-shadow:0 6px 20px rgba(215,137,127,.42);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+              <div style="width:46px;height:46px;border-radius:50%;background:rgba(0,0,0,.05);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+              </div>
+            </div>
+
+            <!-- Stats card -->
+            <div class="aura-card" style="padding:14px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                <div style="text-align:center;">
+                  <p style="font-family:'Poppins';font-size:20px;font-weight:800;color:var(--text-1);">2</p>
+                  <p style="font-size:9.5px;color:var(--text-3);">Ciclos</p>
+                </div>
+                <div style="width:1px;height:32px;background:var(--warm-border);"></div>
+                <div style="text-align:center;">
+                  <p style="font-family:'Poppins';font-size:20px;font-weight:800;color:var(--text-1);">50m</p>
+                  <p style="font-size:9.5px;color:var(--text-3);">Foco total</p>
+                </div>
+                <div style="display:flex;gap:5px;align-items:center;">
+                  <div style="width:12px;height:12px;border-radius:50%;background:var(--nectarine);"></div>
+                  <div style="width:12px;height:12px;border-radius:50%;background:var(--nectarine);"></div>
+                  <div style="width:12px;height:12px;border-radius:50%;background:rgba(215,137,127,.15);"></div>
+                  <div style="width:12px;height:12px;border-radius:50%;background:rgba(215,137,127,.15);"></div>
+                </div>
+              </div>
+              <div class="aura-divider"></div>
+              <div style="display:flex;align-items:flex-start;gap:6px;margin-top:8px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top:1px;flex-shrink:0;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <p style="font-size:11.5px;font-style:italic;color:var(--text-2);line-height:1.5;">"Bom ritmo! Sua energia está no pico — aproveite para as tarefas mais exigentes."</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- ONBOARDING + HARMONY CIRCLE                 -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">⑦ Onboarding &amp; Círculo de Harmonia</div>
+  <div class="phones-row">
+
+    <!-- ONBOARDING -->
+    <div class="phone-wrap">
+      <div class="screen-label">Onboarding</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content" style="padding-top:10px;">
+            <!-- Header -->
+            <div style="margin-bottom:14px;">
+              <p style="font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--nectarine);margin-bottom:6px;">Onboarding</p>
+              <h1 style="font-family:'Poppins';font-size:18px;font-weight:800;color:var(--text-1);">Vamos conhecer sua ciclagem.</h1>
+              <!-- Progress bar -->
+              <div style="height:6px;border-radius:999px;background:rgba(215,137,127,.1);margin-top:10px;overflow:hidden;">
+                <div style="height:100%;width:50%;border-radius:999px;background:var(--nectarine);"></div>
+              </div>
+              <p style="font-size:11px;color:var(--text-3);margin-top:5px;">3 / 6</p>
+            </div>
+
+            <!-- Conversation -->
+            <div class="chat-wrap">
+              <div class="bubble">
+                <div class="bubble-name">Aura IA</div>
+                <div class="bubble-ai">Vou te fazer 6 perguntas rápidas para entender sua rotina e ciclagem de humor. 💫</div>
+              </div>
+              <div class="bubble">
+                <div class="bubble-name">Aura IA</div>
+                <div class="bubble-ai">Como você está se sentindo agora?</div>
+              </div>
+              <div class="bubble" style="align-self:flex-end;">
+                <div class="bubble-user">Cansada mas esperançosa com o novo app!</div>
+              </div>
+              <div class="bubble">
+                <div class="bubble-name">Aura IA</div>
+                <div class="bubble-ai">Como tem sido seu sono ultimamente?</div>
+              </div>
+              <div class="bubble" style="align-self:flex-end;">
+                <div class="bubble-user">Irregular, acordo no meio da noite às vezes.</div>
+              </div>
+              <div class="bubble">
+                <div class="bubble-name">Aura IA</div>
+                <div class="bubble-ai">Qual horário você costuma acordar e dormir?</div>
+              </div>
+            </div>
+
+            <!-- Input area -->
+            <div style="margin-top:12px;border-top:1px solid var(--warm-border);padding-top:12px;">
+              <div style="display:flex;gap:10px;margin-bottom:10px;">
+                <div style="flex:1;">
+                  <label class="aura-input-label">Acordar</label>
+                  <div class="aura-input" style="display:flex;align-items:center;gap:6px;font-size:14px;color:var(--text-1);">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    07:00
+                  </div>
+                </div>
+                <div style="flex:1;">
+                  <label class="aura-input-label">Dormir</label>
+                  <div class="aura-input" style="display:flex;align-items:center;gap:6px;font-size:14px;color:var(--text-1);">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    23:00
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;">
+                <button class="aura-btn-pill">Salvar horário →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HARMONY CIRCLE -->
+    <div class="phone-wrap">
+      <div class="screen-label">Círculo de Harmonia</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content" style="padding-top:8px;">
+            <!-- Header -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+              <div style="width:34px;height:34px;border-radius:11px;background:rgba(0,0,0,.04);display:flex;align-items:center;justify-content:center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" stroke-width="1.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </div>
+              <div>
+                <h1 style="font-family:'Poppins';font-size:17px;font-weight:800;color:var(--text-1);">Círculo de Harmonia</h1>
+                <p style="font-size:10.5px;color:var(--text-3);">Médias dos últimos 7 dias</p>
+              </div>
+            </div>
+
+            <!-- Radar card -->
+            <div class="aura-card" style="margin-bottom:12px;display:flex;flex-direction:column;align-items:center;padding:16px;">
+              <!-- SVG Radar -->
+              <svg viewBox="0 0 280 280" width="200" height="200">
+                <!-- Grid -->
+                <polygon points="140,42 218,91 218,189 140,238 62,189 62,91" fill="none" stroke="rgba(0,0,0,.06)" stroke-width="1"/>
+                <polygon points="140,75 196,108 196,172 140,205 84,172 84,108" fill="none" stroke="rgba(0,0,0,.06)" stroke-width="1"/>
+                <polygon points="140,108 174,125 174,155 140,172 106,155 106,125" fill="none" stroke="rgba(0,0,0,.06)" stroke-width="1"/>
+                <!-- Axes -->
+                <line x1="140" y1="42" x2="140" y2="140" stroke="rgba(0,0,0,.05)" stroke-width="1"/>
+                <line x1="218" y1="91" x2="140" y2="140" stroke="rgba(0,0,0,.05)" stroke-width="1"/>
+                <line x1="218" y1="189" x2="140" y2="140" stroke="rgba(0,0,0,.05)" stroke-width="1"/>
+                <line x1="140" y1="238" x2="140" y2="140" stroke="rgba(0,0,0,.05)" stroke-width="1"/>
+                <line x1="62" y1="189" x2="140" y2="140" stroke="rgba(0,0,0,.05)" stroke-width="1"/>
+                <line x1="62" y1="91" x2="140" y2="140" stroke="rgba(0,0,0,.05)" stroke-width="1"/>
+                <!-- Baseline 50% (dashed) -->
+                <polygon points="140,90 183,115 183,165 140,190 97,165 97,115" fill="rgba(0,0,0,.02)" stroke="rgba(0,0,0,.12)" stroke-width="1" stroke-dasharray="4,2"/>
+                <!-- Data polygon -->
+                <polygon points="140,60 204,100 210,175 140,215 85,178 75,102" fill="rgba(150,199,179,.12)" stroke="var(--menthe)" stroke-width="2"/>
+                <!-- Dots -->
+                <circle cx="140" cy="60" r="4.5" fill="#96C7B3" stroke="white" stroke-width="2"/>
+                <circle cx="204" cy="100" r="4.5" fill="#6398A9" stroke="white" stroke-width="2"/>
+                <circle cx="210" cy="175" r="4.5" fill="#6398A9" stroke="white" stroke-width="2"/>
+                <circle cx="140" cy="215" r="4.5" fill="#D7897F" stroke="white" stroke-width="2"/>
+                <circle cx="85" cy="178" r="4.5" fill="#96C7B3" stroke="white" stroke-width="2"/>
+                <circle cx="75" cy="102" r="4.5" fill="#B8A0D7" stroke="white" stroke-width="2"/>
+                <!-- Emoji labels -->
+                <text x="140" y="34" text-anchor="middle" font-size="14">😊</text>
+                <text x="228" y="94" text-anchor="middle" font-size="14">⚡</text>
+                <text x="228" y="196" text-anchor="middle" font-size="14">🎯</text>
+                <text x="140" y="254" text-anchor="middle" font-size="14">👥</text>
+                <text x="50" y="196" text-anchor="middle" font-size="14">💪</text>
+                <text x="50" y="94" text-anchor="middle" font-size="14">🌙</text>
+              </svg>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                <span style="font-family:'Poppins';font-size:26px;font-weight:800;color:var(--nectarine);">72%</span>
+                <span style="font-size:12px;color:var(--text-3);">equilíbrio geral</span>
+              </div>
+              <div style="display:flex;gap:16px;margin-top:6px;">
+                <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3);">
+                  <span style="width:14px;height:2px;border-radius:999px;background:var(--menthe);display:inline-block;"></span> Atual
+                </span>
+                <span style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text-3);">
+                  <span style="width:14px;height:2px;border-radius:999px;background:rgba(0,0,0,.3);display:inline-block;opacity:.4;"></span> Base (50%)
+                </span>
+              </div>
+            </div>
+
+            <!-- Dimensions list -->
+            <p style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:8px;">Detalhes por dimensão</p>
+            <div style="display:flex;flex-direction:column;gap:7px;">
+              <div class="aura-card" style="padding:10px 13px;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:18px;">😊</span>
+                <div style="flex:1;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                    <span style="font-size:12.5px;font-weight:600;color:var(--text-1);">Humor</span>
+                    <span style="font-size:13px;font-weight:800;color:#96C7B3;">80%</span>
+                  </div>
+                  <div style="height:5px;border-radius:999px;background:rgba(150,199,179,.12);overflow:hidden;">
+                    <div style="height:100%;width:80%;border-radius:999px;background:#96C7B3;"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="aura-card" style="padding:10px 13px;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:18px;">⚡</span>
+                <div style="flex:1;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                    <span style="font-size:12.5px;font-weight:600;color:var(--text-1);">Energia</span>
+                    <span style="font-size:13px;font-weight:800;color:var(--lagune);">72%</span>
+                  </div>
+                  <div style="height:5px;border-radius:999px;background:rgba(99,152,169,.12);overflow:hidden;">
+                    <div style="height:100%;width:72%;border-radius:999px;background:var(--lagune);"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- DAILY SUMMARY                               -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="text-align:center">
+  <div class="page-title" style="margin-bottom:20px;">⑧ Resumo Diário</div>
+  <div class="phones-row">
+
+    <div class="phone-wrap">
+      <div class="screen-label">Sessão Concluída</div>
+      <div class="phone">
+        <div class="phone-inner">
+          <div class="phone-status"><span>9:41</span><div class="status-icons"><svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" stroke-opacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg></div></div>
+          <div class="screen-content" style="display:flex;flex-direction:column;align-items:center;padding-top:16px;">
+            <!-- Icon -->
+            <div style="width:64px;height:64px;border-radius:50%;background:rgba(150,199,179,.12);border:2px solid rgba(150,199,179,.3);display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+            <h1 style="font-family:'Poppins';font-size:21px;font-weight:800;color:var(--text-1);text-align:center;margin-bottom:4px;">Sessão Concluída</h1>
+            <p style="font-size:12px;color:var(--text-3);text-align:center;margin-bottom:18px;">O que sua IA percebeu sobre sua ciclagem</p>
+
+            <!-- Emotion chips -->
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:16px;width:100%;">
+              <div style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;background:rgba(255,253,249,.82);border:1px solid rgba(255,255,255,.68);box-shadow:0 2px 6px rgba(215,137,127,.06);">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span style="font-size:11.5px;font-weight:700;color:var(--nectarine);">Esperançosa</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;background:rgba(255,253,249,.82);border:1px solid rgba(255,255,255,.68);box-shadow:0 2px 6px rgba(150,199,179,.06);">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" stroke-width="1.5" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span style="font-size:11.5px;font-weight:700;color:var(--menthe);">Focada</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;background:rgba(255,253,249,.82);border:1px solid rgba(255,255,255,.68);box-shadow:0 2px 6px var(--nectarine-a3);">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span style="font-size:11.5px;font-weight:700;color:var(--nectarine);">Curiosa</span>
+              </div>
+            </div>
+
+            <!-- Theme tags -->
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin-bottom:16px;width:100%;">
+              <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(215,137,127,.08);color:var(--text-2);">#rotina</span>
+              <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(215,137,127,.08);color:var(--text-2);">#energia</span>
+              <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:999px;background:rgba(215,137,127,.08);color:var(--text-2);">#autocuidado</span>
+            </div>
+
+            <!-- Summary card -->
+            <div class="aura-card" style="width:100%;margin-bottom:16px;padding:15px 16px;background:linear-gradient(135deg,rgba(215,137,127,.06),rgba(150,199,179,.04));">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" stroke-width="1.5" stroke-linecap="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--nectarine);">Síntese da Conversa</span>
+              </div>
+              <p style="font-size:13px;line-height:1.65;font-style:italic;color:var(--text-1);">"Maria demonstra consciência da própria ciclagem e disposição para criar hábitos mais gentis. O padrão de cansaço noturno sugere ajustar atividades exigentes para antes das 15h."</p>
+            </div>
+
+            <!-- Action buttons -->
+            <div style="display:flex;gap:10px;width:100%;">
+              <button class="aura-btn-ghost" style="flex:1;border-radius:14px;height:46px;justify-content:center;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Planner
+              </button>
+              <button class="aura-btn-primary" style="flex:1;height:46px;border-radius:14px;">
+                Início
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!-- DESIGN TOKENS LEGEND                        -->
+<!-- ═══════════════════════════════════════════ -->
+
+<div style="max-width:700px;width:100%;background:rgba(255,253,249,.85);border:1px solid rgba(255,255,255,.7);border-radius:20px;padding:28px 32px;backdrop-filter:blur(20px);box-shadow:0 4px 20px rgba(215,137,127,.08);">
+  <h2 style="font-family:'Poppins';font-size:15px;font-weight:800;color:var(--text-1);margin-bottom:20px;letter-spacing:-.01em;">🎨 O que muda no Aura Design v2</h2>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;">
+
+    <div style="padding:16px;background:var(--nectarine-a3);border:1px solid var(--nectarine-a5);border-radius:14px;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--nectarine-11);margin-bottom:8px;">Botões</div>
+      <p style="font-size:12px;line-height:1.6;color:var(--text-1);">• Altura padrão <strong>52px</strong> (4 × 13px)<br>• <strong>Border-radius 6.5px</strong> — mais preciso<br>• <strong>Border 1.5px solid</strong> tonal<br>• Shadow nectarine + scale hover</p>
+    </div>
+
+    <div style="padding:16px;background:rgba(150,199,179,.1);border:1px solid rgba(150,199,179,.25);border-radius:14px;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#3A7A66;margin-bottom:8px;">Inputs</div>
+      <p style="font-size:12px;line-height:1.6;color:var(--text-1);">• Altura <strong>52px</strong> padrão Aura<br>• Ícone contextual interno<br>• <strong>Focus ring</strong> nectarine (outline 3px)<br>• Border-radius <strong>6.5px</strong> consistente</p>
+    </div>
+
+    <div style="padding:16px;background:rgba(99,152,169,.1);border:1px solid rgba(99,152,169,.2);border-radius:14px;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#4A7A8E;margin-bottom:8px;">Ícones</div>
+      <p style="font-size:12px;line-height:1.6;color:var(--text-1);">• <strong>20px</strong> × <strong>strokeWidth 1.5</strong> universal<br>• Cor semântica por contexto<br>• Badge colorido nos atalhos<br>• Ícones dentro dos inputs</p>
+    </div>
+
+    <div style="padding:16px;background:var(--nectarine-a3);border:1px solid var(--nectarine-a5);border-radius:14px;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--nectarine-11);margin-bottom:8px;">Tipografia</div>
+      <p style="font-size:12px;line-height:1.6;color:var(--text-1);">• Line-height <strong>1.21</strong> Aura nativo<br>• <strong>optimizeLegibility</strong> ativo<br>• Labels <strong>10px / 700 / tracking</strong><br>• Hierarchy mais clara h1→label</p>
+    </div>
+
+    <div style="padding:16px;background:rgba(215,137,127,.07);border:1px solid rgba(215,137,127,.18);border-radius:14px;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--nectarine-11);margin-bottom:8px;">Cards / Textura</div>
+      <p style="font-size:12px;line-height:1.6;color:var(--text-1);">• Glass <strong>rgba(255,253,249,.82)</strong><br>• Border <strong>rgba(255,255,255,.68)</strong><br>• Border-radius <strong>18–20px</strong><br>• Shadow tonal nectarine</p>
+    </div>
+
+    <div style="padding:16px;background:rgba(215,137,127,.05);border:1px solid rgba(215,137,127,.14);border-radius:14px;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--nectarine-11);margin-bottom:8px;">Linhas</div>
+      <p style="font-size:12px;line-height:1.6;color:var(--text-1);">• Divider <strong>1px var(--warm-border)</strong><br>• Planner blocks <strong>4px left border</strong><br>• Input border <strong>1.5px tonal</strong><br>• Focus ring <strong>3px nectarine soft</strong></p>
+    </div>
+
+  </div>
+</div>
+
+<p style="font-size:11px;color:#9A8A87;text-align:center;margin-top:-20px;">Aprove este mockup para implementar tela por tela · Mood Energy × Aura Design v2</p>
+
+</body>
+</html>
