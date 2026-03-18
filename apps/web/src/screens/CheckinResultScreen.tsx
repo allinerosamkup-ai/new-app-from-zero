@@ -1,10 +1,12 @@
 import React from 'react';
 import { useNavigation } from '../navigation';
 import { ArrowRight, Sparkles } from 'lucide-react';
+import { useCheckinStore } from '../stores/checkin_store';
+import { useAuthStore } from '../stores/auth_store';
 
-type StateType = 'leve' | 'moderado' | 'sensível' | 'crítico';
+type StateLabelType = 'radiant' | 'stable' | 'sensitive' | 'overloaded';
 
-const STATE_CONFIG: Record<StateType, {
+const STATE_CONFIG: Record<StateLabelType, {
   label: string;
   emoji: string;
   color: string;
@@ -12,15 +14,7 @@ const STATE_CONFIG: Record<StateType, {
   bgGradient: string;
   focus: string;
 }> = {
-  leve: {
-    label: 'Energia Leve',
-    emoji: '🌱',
-    color: '#96C7B3',
-    textColor: '#3A7A66',
-    bgGradient: 'linear-gradient(180deg, rgba(150,199,179,0.22) 0%, rgba(150,199,179,0.06) 55%, var(--bg-base) 100%)',
-    focus: 'Foco balanceado',
-  },
-  moderado: {
+  radiant: {
     label: 'Energia Radiante',
     emoji: '✨',
     color: '#F9B95C',
@@ -28,7 +22,15 @@ const STATE_CONFIG: Record<StateType, {
     bgGradient: 'linear-gradient(180deg, rgba(249,185,92,0.22) 0%, rgba(249,185,92,0.06) 55%, var(--bg-base) 100%)',
     focus: 'Foco profundo',
   },
-  sensível: {
+  stable: {
+    label: 'Dia Estável',
+    emoji: '🌱',
+    color: '#96C7B3',
+    textColor: '#3A7A66',
+    bgGradient: 'linear-gradient(180deg, rgba(150,199,179,0.22) 0%, rgba(150,199,179,0.06) 55%, var(--bg-base) 100%)',
+    focus: 'Foco balanceado',
+  },
+  sensitive: {
     label: 'Dia Sensível',
     emoji: '🌙',
     color: '#D7897F',
@@ -36,7 +38,7 @@ const STATE_CONFIG: Record<StateType, {
     bgGradient: 'linear-gradient(180deg, rgba(215,137,127,0.22) 0%, rgba(215,137,127,0.06) 55%, var(--bg-base) 100%)',
     focus: 'Foco leve',
   },
-  crítico: {
+  overloaded: {
     label: 'Modo Recuperação',
     emoji: '🌊',
     color: '#E07070',
@@ -46,47 +48,59 @@ const STATE_CONFIG: Record<StateType, {
   },
 };
 
+// Fallback recommendations por tipo, usados se a IA não retornar
+const FALLBACK_RECS: Record<StateLabelType, string[]> = {
+  radiant: [
+    'Aproveite o pico de energia para tarefas que exigem concentração.',
+    'Inclua uma pausa de 15 min no meio da tarde para manter o ritmo.',
+    'Considere uma caminhada leve no fim do dia para fechar bem.',
+  ],
+  stable: [
+    'Comece com tarefas leves e aumente o ritmo aos poucos.',
+    'Hidrate-se bem e faça pequenas pausas regulares.',
+    'Uma música ambiente pode ajudar a manter o foco suave.',
+  ],
+  sensitive: [
+    'Priorize autocuidado e evite decisões importantes se possível.',
+    'Permita-se momentos de descanso sem culpa.',
+    'Converse com alguém de confiança se sentir necessidade.',
+  ],
+  overloaded: [
+    'Cancele o que puder e foque apenas no essencial.',
+    'Durma mais cedo hoje se possível.',
+    'Atividades de baixo esforço como respiração guiada podem ajudar.',
+  ],
+};
+
 export default function CheckinResultScreen() {
   const { navigate, params } = useNavigation();
-  const stateType: StateType = (params.state as StateType) || 'moderado';
+  const { userId } = useAuthStore();
+  const { load } = useCheckinStore();
+
+  // Checkin completo vindo do POST /api/checkins
+  const checkin = params.checkin as any;
+
+  // Resolve stateLabelType — backend usa radiant/stable/sensitive/overloaded
+  const rawType: string = checkin?.stateLabelType ?? checkin?.aiState?.stateLabelType ?? 'stable';
+  const stateType: StateLabelType = (['radiant', 'stable', 'sensitive', 'overloaded'].includes(rawType)
+    ? rawType
+    : 'stable') as StateLabelType;
+
   const config = STATE_CONFIG[stateType];
 
-  const stateContent: Record<StateType, { summary: string; recommendations: string[] }> = {
-    leve: {
-      summary: 'Seu corpo e mente estão em ritmo tranquilo hoje. Aproveite para atividades que pedem calma e atenção aos detalhes.',
-      recommendations: [
-        'Comece com tarefas leves e aumente o ritmo aos poucos.',
-        'Hidrate-se bem e faça pequenas pausas regulares.',
-        'Uma música ambiente pode ajudar a manter o foco suave.',
-      ],
-    },
-    moderado: {
-      summary: 'Seu humor está estável e a energia acima da média. Essa combinação favorece atividades que exigem foco e criatividade.',
-      recommendations: [
-        'Aproveite o pico de energia para tarefas que exigem concentração.',
-        'Inclua uma pausa de 15 min no meio da tarde para manter o ritmo.',
-        'Considere uma caminhada leve no fim do dia para fechar bem.',
-      ],
-    },
-    sensível: {
-      summary: 'Hoje pode ser um dia mais delicado. Sua energia e humor pedem cuidado extra e um ritmo mais gentil consigo.',
-      recommendations: [
-        'Priorize autocuidado e evite decisões importantes se possível.',
-        'Permita-se momentos de descanso sem culpa.',
-        'Converse com alguém de confiança se sentir necessidade.',
-      ],
-    },
-    crítico: {
-      summary: 'Seus indicadores mostram que hoje é dia de descansar e se recuperar. Não force o ritmo — respeite seus limites.',
-      recommendations: [
-        'Cancele o que puder e foque apenas no essencial.',
-        'Durma mais cedo hoje se possível.',
-        'Atividades de baixo esforço como respiração guiada podem ajudar.',
-      ],
-    },
-  };
+  // Dados reais da IA
+  const aiState = checkin?.aiState as any;
+  const summary: string = checkin?.stateSummary ?? aiState?.analysis ?? '';
+  const recommendations: string[] = aiState?.recommendations ?? FALLBACK_RECS[stateType];
+  const focusSuggestion: string = aiState?.focusSuggestion ?? config.focus;
+  const stateLabel: string = checkin?.stateLabel ?? config.label;
 
-  const { summary, recommendations } = stateContent[stateType];
+  const handleDone = () => {
+    // Recarrega os check-ins do store para que HomeScreen reflita o novo dado
+    if (userId) load(userId);
+    window.dispatchEvent(new CustomEvent('checkin-done'));
+    navigate('home');
+  };
 
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: config.bgGradient }}>
@@ -107,7 +121,7 @@ export default function CheckinResultScreen() {
           className="text-[26px] font-bold text-center mb-2 animate-fade-in delay-100"
           style={{ color: config.textColor, fontFamily: 'var(--font-heading)' }}
         >
-          {config.label}
+          {stateLabel || config.label}
         </h1>
 
         <div className="flex justify-center mb-5 animate-fade-in delay-100">
@@ -115,38 +129,39 @@ export default function CheckinResultScreen() {
             className="px-4 py-1.5 rounded-full text-[12px] font-semibold"
             style={{ background: `${config.color}35`, color: config.textColor }}
           >
-            {config.focus}
+            {focusSuggestion}
           </span>
         </div>
 
-        <div className="glass-card rounded-[22px] p-5 mb-5 animate-fade-in delay-200">
-          <p className="text-[15px] text-center leading-[24px]" style={{ color: config.textColor, opacity: 0.85 }}>
-            {summary}
-          </p>
-        </div>
-
-        <div className="mb-6 animate-fade-in delay-300">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles size={14} style={{ color: config.textColor, opacity: 0.6 }} />
-            <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: config.textColor, opacity: 0.6 }}>
-              Sugestões para hoje
+        {summary ? (
+          <div className="glass-card interactive-card rounded-[22px] p-5 mb-5 animate-fade-in delay-200">
+            <p className="text-[15px] text-center leading-[24px]" style={{ color: config.textColor, opacity: 0.85 }}>
+              {summary}
             </p>
           </div>
-          {recommendations.map((rec, i) => (
-            <div key={i} className="glass-card rounded-[16px] p-3.5 mb-2 flex items-start">
-              <span className="text-sm mr-2.5 mt-0.5">💡</span>
-              <p className="text-[13px] flex-1 leading-[20px]" style={{ color: config.textColor }}>
-                {rec}
+        ) : null}
+
+        {recommendations.length > 0 && (
+          <div className="mb-6 animate-fade-in delay-300">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={14} strokeWidth={1.5} style={{ color: config.textColor, opacity: 0.6 }} />
+              <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: config.textColor, opacity: 0.6 }}>
+                Sugestões para hoje
               </p>
             </div>
-          ))}
-        </div>
+            {recommendations.map((rec: string, i: number) => (
+              <div key={i} className="glass-card interactive-card rounded-[16px] p-3.5 mb-2 flex items-start">
+                <span className="text-sm mr-2.5 mt-0.5">💡</span>
+                <p className="text-[13px] flex-1 leading-[20px]" style={{ color: config.textColor }}>
+                  {rec}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <button
-          onClick={() => {
-            window.dispatchEvent(new CustomEvent('checkin-done', { detail: { state: stateType } }));
-            navigate('home');
-          }}
+          onClick={handleDone}
           className="w-full py-[16px] rounded-[20px] text-center font-bold text-[15px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] animate-fade-in delay-400"
           style={{
             background: config.color,
@@ -154,7 +169,7 @@ export default function CheckinResultScreen() {
             boxShadow: `0 6px 20px ${config.color}40`,
           }}
         >
-          Ver meu dia <ArrowRight size={18} />
+          Ver meu dia <ArrowRight size={18} strokeWidth={1.5} />
         </button>
       </div>
     </div>

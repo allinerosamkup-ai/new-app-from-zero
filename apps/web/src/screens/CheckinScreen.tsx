@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigation } from '../navigation';
 import { ArrowLeft } from 'lucide-react';
+import { apiFetch } from '../lib/api';
+import { useAuthStore } from '../stores/auth_store';
 
 function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
   const emojis = ['😞', '😐', '🙂', '😊', '😄'];
@@ -65,25 +67,57 @@ function EnergySlider({ label, value, onSelect, icon }: { label: string; value: 
   );
 }
 
+function todayLocalDate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function CheckinScreen() {
   const { navigate } = useNavigation();
+  const { userId } = useAuthStore();
   const [mood, setMood] = useState(3);
   const [energy, setEnergy] = useState(3);
   const [clarity, setClarity] = useState(3);
   const [irritability, setIrritability] = useState(2);
   const [note, setNote] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = () => {
-    const avg = (mood + energy + clarity + (6 - irritability)) / 4;
-    const state = avg >= 4 ? 'leve' : avg >= 3 ? 'moderado' : avg >= 2 ? 'sensível' : 'crítico';
-    navigate('checkinResult', { state });
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch('/api/checkins', {
+        method: 'POST',
+        body: JSON.stringify({
+          localDate: todayLocalDate(),
+          moodScore: mood,
+          energyScore: energy,
+          clarityScore: clarity,
+          irritabilityScore: irritability,
+          note: note.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Erro ${res.status}`);
+      }
+
+      const checkin = await res.json();
+      navigate('checkinResult', { checkin });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não foi possível salvar o check-in. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: 'var(--bg-base)' }}>
       <div className="flex items-center px-5 pt-2 pb-3">
         <button onClick={() => navigate('home')} className="p-2 -ml-2 rounded-xl transition-colors hover:bg-black/5">
-          <ArrowLeft size={22} style={{ color: 'var(--text-primary)' }} />
+          <ArrowLeft size={22} strokeWidth={1.5} style={{ color: 'var(--text-primary)' }} />
         </button>
       </div>
 
@@ -107,16 +141,30 @@ export default function CheckinScreen() {
             placeholder="Ex: Dormi pouco, mas me sinto bem..."
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: 'var(--text-primary)', outlineColor: 'var(--accent-9)' }}
           />
         </div>
 
+        {error && (
+          <div className="mb-4 px-4 py-3 rounded-2xl text-[13px]" style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--accent-rose)' }}>
+            {error}
+          </div>
+        )}
+
         <button
           onClick={handleSubmit}
-          className="w-full py-[18px] rounded-[20px] text-white font-bold text-[16px] transition-all duration-200 active:scale-[0.98] animate-fade-in delay-400"
-          style={{ background: 'var(--bg-dark)', boxShadow: 'var(--shadow-lg)' }}
+          disabled={isLoading}
+          className="btn-aura w-full py-[18px] rounded-[20px] text-white font-bold text-[16px] transition-all duration-200 active:scale-[0.98] animate-fade-in delay-400 flex items-center justify-center gap-3 disabled:opacity-70"
+          style={{ background: 'var(--accent-9)', boxShadow: 'var(--shadow-lg)' }}
         >
-          Confirmar check-in
+          {isLoading ? (
+            <>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              IA analisando seu estado...
+            </>
+          ) : (
+            'Confirmar check-in'
+          )}
         </button>
       </div>
     </div>
