@@ -60,9 +60,9 @@ function ChatBubble({ content, isUser }: { content: string; isUser: boolean }) {
       <div
         className="max-w-[80%] px-4 py-3.5 text-[14px] leading-relaxed"
         style={{
-          background: isUser ? 'var(--bg-dark)' : 'var(--bg-glass-strong)',
-          color: isUser ? 'white' : 'var(--text-primary)',
-          borderRadius: isUser ? '22px 22px 6px 22px' : '22px 22px 22px 6px',
+          background: isUser ? 'var(--accent-9)' : 'var(--accent-surface)',
+          color: isUser ? '#fff' : 'var(--text-primary)',
+          borderRadius: 18,
           backdropFilter: isUser ? 'none' : 'blur(20px)',
           border: isUser ? 'none' : '1px solid rgba(255,255,255,0.5)',
         }}
@@ -79,9 +79,9 @@ function StreamingBubble({ content }: { content: string }) {
       <div
         className="max-w-[80%] px-4 py-3.5 text-[14px] leading-relaxed"
         style={{
-          background: 'var(--bg-glass-strong)',
+          background: 'var(--accent-surface)',
           color: 'var(--text-primary)',
-          borderRadius: '22px 22px 22px 6px',
+          borderRadius: 18,
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(255,255,255,0.5)',
         }}
@@ -166,13 +166,13 @@ export default function JournalScreen() {
           }}
         >
           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(99,152,169,0.09)' }}>
-            <Sparkles size={16} style={{ color: '#6398A9' }} />
+            <Sparkles size={16} strokeWidth={1.5} style={{ color: '#6398A9' }} />
           </div>
           <div className="flex-1 text-left">
             <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>Nova Sessão</p>
             <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Escolha um tema ou fale livremente</p>
           </div>
-          <ChevronRight size={16} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
+          <ChevronRight size={16} strokeWidth={1.5} style={{ color: 'var(--text-muted)', opacity: 0.6 }} />
         </button>
 
         <div className="mb-3 animate-fade-in delay-200">
@@ -210,7 +210,7 @@ export default function JournalScreen() {
                   <span className="text-xl mt-0.5">✨</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1">
-                      <Clock size={10} style={{ color: 'var(--text-muted)' }} />
+                      <Clock size={10} strokeWidth={1.5} style={{ color: 'var(--text-muted)' }} />
                       <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{dateLabel}</span>
                     </div>
                     <p className="text-[13px] font-semibold leading-snug" style={{ color: 'var(--text-primary)' }}>
@@ -225,7 +225,7 @@ export default function JournalScreen() {
                       ))}
                     </div>
                   </div>
-                  <ChevronDown size={14} style={{ color: 'var(--text-muted)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                  <ChevronDown size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                 </button>
 
                 {isOpen && session.summary && (
@@ -252,7 +252,7 @@ export default function JournalScreen() {
       <div className="flex flex-col h-full overflow-y-auto px-5 pt-3 pb-4" style={{ background: 'var(--bg-base)' }}>
         <div className="flex items-center gap-3 mb-5 animate-fade-in">
           <button onClick={() => setView('list')} className="w-9 h-9 rounded-2xl flex items-center justify-center glass-card">
-            <ArrowLeft size={16} style={{ color: 'var(--text-secondary)' }} />
+            <ArrowLeft size={16} strokeWidth={1.5} style={{ color: 'var(--text-secondary)' }} />
           </button>
           <div>
             <p className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>Nova Sessão</p>
@@ -275,7 +275,7 @@ export default function JournalScreen() {
                 <p className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>{t.label}</p>
                 <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.desc}</p>
               </div>
-              <ChevronRight size={14} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+              <ChevronRight size={14} strokeWidth={1.5} style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
             </button>
           ))}
         </div>
@@ -334,7 +334,7 @@ export default function JournalScreen() {
           placeholder="Conta o que está acontecendo..."
           rows={1}
           className="flex-1 glass-card rounded-2xl px-4 py-3 text-[14px] outline-none resize-none"
-          style={{ color: 'var(--text-primary)', maxHeight: 100 }}
+          style={{ color: 'var(--text-primary)', maxHeight: 100, borderColor: 'var(--border-interactive)' }}
         />
         <button
           onClick={() => void handleSend()}
@@ -342,7 +342,7 @@ export default function JournalScreen() {
           className="w-10 h-10 rounded-2xl flex items-center justify-center transition-all disabled:opacity-40"
           style={{ background: 'var(--bg-dark)' }}
         >
-          <Send size={16} color="white" />
+          <Send size={16} strokeWidth={1.5} color="var(--accent-9)" />
         </button>
       </div>
     </div>
