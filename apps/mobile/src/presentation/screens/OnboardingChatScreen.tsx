@@ -10,6 +10,7 @@ import {
   Text, 
   TextInput, 
   Button, 
+  Card,
   ProgressBar, 
   Surface, 
   Avatar, 

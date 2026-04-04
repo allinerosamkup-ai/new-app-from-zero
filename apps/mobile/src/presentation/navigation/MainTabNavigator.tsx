@@ -1,9 +1,9 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { CommonActions } from '@react-navigation/native';
+import { Text } from 'react-native';
 import { BottomNavigation } from 'react-native-paper';
-import { LucideHome, LucideCalendar, LucideLineChart, LucideMessageCircle, LucideSettings } from 'lucide-react-native';
-import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { appColors } from '../theme/appTheme';
 
 // Importação das Telas
 import HomeScreen from '../screens/HomeScreen';
@@ -27,12 +27,13 @@ export default function MainTabNavigator() {
         <BottomNavigation.Bar
           navigationState={state}
           safeAreaInsets={insets}
-          onTabPress={({ route, focused, preventDefault }) => {
+          onTabPress={({ route }) => {
             const event = navigation.emit({
               type: 'tabPress',
               target: route.key,
               canPreventDefault: true,
             });
+            const focused = state.routes[state.index]?.key === route.key;
 
             if (!focused && !event.defaultPrevented) {
               navigation.dispatch({
@@ -55,7 +56,7 @@ export default function MainTabNavigator() {
                 ? options.tabBarLabel
                 : options.title !== undefined
                 ? options.title
-                : route.title;
+                : route.name;
 
             return label as string;
           }}
@@ -73,7 +74,7 @@ export default function MainTabNavigator() {
         component={HomeScreen} 
         options={{
           tabBarLabel: 'Início',
-          tabBarIcon: ({ color, size }) => <LucideHome size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Text style={{ color, fontSize: size }}>○</Text>,
         }}
       />
       <Tab.Screen 
@@ -81,7 +82,7 @@ export default function MainTabNavigator() {
         component={PlannerScreen} 
         options={{
           tabBarLabel: 'Planner',
-          tabBarIcon: ({ color, size }) => <LucideCalendar size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Text style={{ color, fontSize: size }}>▦</Text>,
         }}
       />
       <Tab.Screen
@@ -89,7 +90,7 @@ export default function MainTabNavigator() {
         component={JournalHubScreen}
         options={{
           tabBarLabel: 'Diário',
-          tabBarIcon: ({ color, size }) => <LucideMessageCircle size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Text style={{ color, fontSize: size }}>✎</Text>,
         }}
       />
       <Tab.Screen
@@ -97,7 +98,7 @@ export default function MainTabNavigator() {
         component={WeeklyInsightsScreen}
         options={{
           tabBarLabel: 'Análise',
-          tabBarIcon: ({ color, size }) => <LucideLineChart size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Text style={{ color, fontSize: size }}>≈</Text>,
         }}
       />
       <Tab.Screen
@@ -105,7 +106,7 @@ export default function MainTabNavigator() {
         component={ConfigScreen}
         options={{
           tabBarLabel: 'Ajustes',
-          tabBarIcon: ({ color, size }) => <LucideSettings size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Text style={{ color, fontSize: size }}>⚙</Text>,
         }}
       />
     </Tab.Navigator>

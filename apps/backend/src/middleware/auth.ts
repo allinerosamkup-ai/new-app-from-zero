@@ -1,10 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY!,
-);
+// Lazy singleton — criado na primeira requisição, quando dotenv já carregou os env vars
+let _client: SupabaseClient | null = null;
+function getClient(): SupabaseClient {
+  if (!_client) {
+    // Always use ANON_KEY for user token verification (getUser).
+    // SERVICE_ROLE_KEY bypasses RLS and should NOT be used here.
+    _client = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY!,
+    );
+  }
+  return _client;
+}
 
 export interface AuthRequest extends Request {
   userId: string;
@@ -26,7 +35,7 @@ export async function requireAuth(
   }
 
   const token = authHeader.slice(7);
-  const { data, error } = await supabase.auth.getUser(token);
+  const { data, error } = await getClient().auth.getUser(token);
 
   if (error || !data.user) {
     res.status(401).json({ error: 'Token inválido ou expirado.' });

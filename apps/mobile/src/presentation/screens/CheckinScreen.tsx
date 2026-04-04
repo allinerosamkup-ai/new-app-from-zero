@@ -20,6 +20,8 @@ import Animated, {
 import { useCheckinStore } from '../providers/checkin_store';
 import { useAuthStore } from '../providers/auth_store';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { MenstrualCycleWidget } from '../components/MenstrualCycleWidget';
+import { MenstrualPhase, PhysicalSymptom } from '../../domain/entities/checkin';
 
 // Fluent Emoji 3D — Microsoft open source (MIT)
 const FLUENT_EMOJI_3D: Record<number, string> = {
@@ -44,6 +46,27 @@ export default function CheckinScreen() {
   const [irritability, setIrritability] = useState(3);
   const [note, setNote] = useState('');
 
+  // Estados Saúde Feminina
+  const [menstrualPhase, setMenstrualPhase] = useState<MenstrualPhase | undefined>();
+  const [selectedSymptoms, setSelectedSymptoms] = useState<PhysicalSymptom[]>([]);
+  // Fluxo
+  const [isFlowing, setIsFlowing] = useState<boolean | undefined>();
+  const [flowDay, setFlowDay] = useState<number | undefined>();
+  const [flowIntensity, setFlowIntensity] = useState<import('../../domain/entities/checkin').FlowIntensity | undefined>();
+  const [symptomLevels, setSymptomLevels] = useState<Partial<Record<import('../../domain/entities/checkin').GradedSymptom, import('../../domain/entities/checkin').SymptomLevel>>>({});
+
+  function handleSymptomLevel(symptom: import('../../domain/entities/checkin').GradedSymptom, level: import('../../domain/entities/checkin').SymptomLevel) {
+    setSymptomLevels(prev => ({ ...prev, [symptom]: level }));
+  }
+
+  const toggleSymptom = (symptom: PhysicalSymptom) => {
+    setSelectedSymptoms(prev =>
+      prev.includes(symptom)
+        ? prev.filter(s => s !== symptom)
+        : [...prev, symptom]
+    );
+  };
+
   const handleSubmit = async () => {
     if (!userId) return;
 
@@ -55,6 +78,13 @@ export default function CheckinScreen() {
       clarityScore: clarity,
       irritabilityScore: irritability,
       note,
+      // Novos campos
+      menstrualPhase,
+      physicalSymptoms: selectedSymptoms,
+      isFlowing,
+      flowDay,
+      flowIntensity,
+      symptomLevels,
     });
 
     if (!useCheckinStore.getState().error) {
@@ -69,6 +99,21 @@ export default function CheckinScreen() {
       </Text>
 
       <MoodSelector value={mood} onSelect={setMood} />
+
+      <MenstrualCycleWidget
+        phase={menstrualPhase}
+        onPhaseSelect={setMenstrualPhase}
+        selectedSymptoms={selectedSymptoms}
+        onToggleSymptom={toggleSymptom}
+        isFlowing={isFlowing}
+        onFlowingChange={setIsFlowing}
+        flowDay={flowDay}
+        onFlowDayChange={setFlowDay}
+        flowIntensity={flowIntensity}
+        onFlowIntensityChange={setFlowIntensity}
+        symptomLevels={symptomLevels}
+        onSymptomLevelChange={handleSymptomLevel}
+      />
 
       <Card style={{ marginBottom: appSpacing.lg, backgroundColor: appColors.surface }} mode="outlined">
         <Card.Content>

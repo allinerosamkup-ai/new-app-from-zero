@@ -1,0 +1,142 @@
+import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import React, { useState } from 'react';
+import { Mail, Lock, Eye, User, LogIn, UserPlus } from 'lucide-react';
+
+export const AuthV2Page = () => {
+  const [activeTab, setActiveTab] = useState('entrar'); // 'entrar' ou 'criar'
+
+  const colors = {
+    primary: '#D68E82', // Cor salmão/terracota das telas
+    bg: '#F4EFE9',      // Cor de fundo levemente creme
+    inputBg: '#FFFFFF',
+    textDark: '#4A4A4A',
+    textLight: '#9E9E9E'
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: '#E5DED5' }}>
+      {/* Mockup do Celular */}
+      <div className="w-full max-w-[380px] bg-white rounded-[3rem] shadow-2xl overflow-hidden border-[8px] border-black relative aspect-[9/19.5]">
+        
+        {/* Status Bar Mockup */}
+        <div className="h-10 flex justify-between items-center px-8 pt-4">
+          <span className="text-xs font-bold">9:41</span>
+          <div className="flex gap-1 items-center">
+             <div className="w-4 h-2 bg-black rounded-full"></div>
+             <div className="w-4 h-4 bg-black rounded-full"></div>
+          </div>
+        </div>
+
+        {/* Conteúdo com Scroll */}
+        <div className="p-6 h-full overflow-y-auto" style={{ backgroundColor: colors.bg }}>
+          
+          {/* Card de Cabeçalho */}
+          <div className="rounded-[2rem] p-8 text-white mb-6" style={{ backgroundColor: colors.primary }}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-white rounded-full"></div>
+              <span className="text-[10px] tracking-widest font-bold uppercase">Mood Energy</span>
+            </div>
+            <h1 className="text-2xl font-black leading-tight mb-4">
+              Seu ritmo merece um ponto de partida mais gentil.
+            </h1>
+            {activeTab === 'entrar' && (
+              <p className="text-xs opacity-90 leading-relaxed">
+                Acompanhe humor, energia e rotina em um fluxo que respeita sua ciclagem.
+              </p>
+            )}
+          </div>
+
+          {/* Seletor de Abas (Tabs) */}
+          <div className="bg-white rounded-full p-1 flex mb-8 border border-orange-100">
+            <AuraButtonV2 
+              onClick={() => setActiveTab('entrar')}
+              className={`flex-1 py-3 rounded-full text-sm font-bold transition-all ${activeTab === 'entrar' ? 'text-white shadow-md' : 'text-gray-500'}`}
+              style={{ backgroundColor: activeTab === 'entrar' ? colors.primary : 'transparent' }}
+            >
+              Entrar
+            </AuraButtonV2>
+            <AuraButtonV2 
+              onClick={() => setActiveTab('criar')}
+              className={`flex-1 py-3 rounded-full text-sm font-bold transition-all ${activeTab === 'criar' ? 'text-white shadow-md' : 'text-gray-500'}`}
+              style={{ backgroundColor: activeTab === 'criar' ? colors.primary : 'transparent' }}
+            >
+              Criar conta
+            </AuraButtonV2>
+          </div>
+
+          {/* Formulário */}
+          <div className="space-y-5">
+            {activeTab === 'criar' && (
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: colors.textLight }}>Seu Nome</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Maria" 
+                    className="w-full bg-white border border-orange-100 rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:ring-1"
+                    style={{ borderColor: '#F3E9E2' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: colors.textLight }}>Email</label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input 
+                  type="email" 
+                  placeholder="voce@exemplo.com" 
+                  className="w-full bg-white border border-orange-100 rounded-xl py-4 pl-12 pr-4 focus:outline-none"
+                  style={{ borderColor: '#F3E9E2' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: colors.textLight }}>Senha</label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input 
+                  type="password" 
+                  placeholder={activeTab === 'entrar' ? "••••••••" : "Crie uma senha segura"}
+                  className="w-full bg-white border border-orange-100 rounded-xl py-4 pl-12 pr-12 focus:outline-none"
+                  style={{ borderColor: '#F3E9E2' }}
+                />
+                <Eye className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 cursor-pointer" />
+              </div>
+            </div>
+          </div>
+
+          {/* Botão de Ação */}
+          <AuraButtonV2 
+            className="w-full mt-10 py-5 rounded-2xl text-white font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform"
+            style={{ backgroundColor: colors.primary }}
+          >
+            {activeTab === 'entrar' ? (
+              <>
+                <LogIn size={20} /> Entrar e continuar
+              </>
+            ) : (
+              <>
+                <UserPlus size={20} /> Criar conta e continuar
+              </>
+            )}
+          </AuraButtonV2>
+
+          {/* Rodapé */}
+          {activeTab === 'entrar' && (
+            <p className="text-center text-[11px] mt-6 text-gray-400">
+              Depois do login, seguimos direto para seu dia.
+            </p>
+          )}
+          
+        </div>
+
+        {/* Home Indicator */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-black/10 rounded-full"></div>
+      </div>
+    </div>
+  );
+};

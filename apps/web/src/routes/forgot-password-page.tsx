@@ -1,0 +1,163 @@
+// Forgot Password — recuperação de senha com timer 60s
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
+import "../styles/aura.css";
+
+export function ForgotPasswordPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (timer <= 0) return;
+    const id = setInterval(() => setTimer(t => t - 1), 1000);
+    return () => clearInterval(id);
+  }, [timer]);
+
+  async function handleSend() {
+    if (!email.trim()) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (err) throw err;
+      setSent(true);
+      setTimer(60);
+    } catch (err: any) {
+      setError(err?.message || "Erro ao enviar link.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (timer > 0) return;
+    setSent(false);
+    setTimer(0);
+    await handleSend();
+  }
+
+  return (
+    <div className="aura-page-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", padding: "48px 24px 32px" }}>
+      {/* Back */}
+      <button
+        onClick={() => navigate(-1)}
+        style={{ background: "none", border: "none", cursor: "pointer", alignSelf: "flex-start", padding: 0, marginBottom: 32, display: "flex", alignItems: "center", gap: 6, color: "var(--text-2)", fontSize: 14 }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Voltar
+      </button>
+
+      {/* Icon */}
+      <div style={{
+        width: 64, height: 64, borderRadius: 20,
+        background: "var(--nectarine-a3)",
+        border: "1px solid var(--nectarine-a5)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 28, marginBottom: 20,
+      }}>
+        🔑
+      </div>
+
+      <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", marginBottom: 8 }}>
+        Esqueceu a senha?
+      </h1>
+      <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 32 }}>
+        Informe seu e-mail e enviaremos um link para redefinir sua senha.
+      </p>
+
+      {!sent ? (
+        <>
+          <div className="aura-input-wrap">
+            <label className="aura-input-label">Seu e-mail</label>
+            <div className="aura-input aura-inline-field">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <rect x="2" y="4" width="20" height="16" rx="3" />
+                <path d="m2 7 10 7 10-7" />
+              </svg>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="voce@exemplo.com"
+                onKeyDown={e => e.key === "Enter" && handleSend()}
+                className="aura-inline-input"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p className="aura-banner-error">
+              {error}
+            </p>
+          )}
+
+          <button
+            onClick={handleSend}
+            disabled={loading || !email.trim()}
+            style={{
+              width: "100%", height: 46,
+              background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
+              color: "#fff", border: "none", borderRadius: 16,
+              fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
+              cursor: loading || !email.trim() ? "not-allowed" : "pointer",
+              opacity: loading || !email.trim() ? 0.6 : 1,
+              boxShadow: "0 12px 24px rgba(243,176,140,.24)",
+              transition: "all 150ms",
+            }}
+          >
+            {loading ? "Enviando..." : "Enviar link de recuperação"}
+          </button>
+        </>
+      ) : (
+        /* Sucesso */
+        <div style={{
+          background: "rgba(255,255,255,.62)",
+          border: "1px solid rgba(255,255,255,.82)",
+          borderRadius: 18, padding: 24, textAlign: "center",
+          backdropFilter: "blur(18px)",
+          boxShadow: "0 14px 32px rgba(243,176,140,.08)",
+        }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+          <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--text-1)", marginBottom: 8 }}>
+            Link enviado!
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 20 }}>
+            Verifique sua caixa de entrada em <strong>{email}</strong> e clique no link para redefinir.
+          </p>
+
+          <button
+            onClick={handleResend}
+            disabled={timer > 0}
+            style={{
+              background: "none", border: "none", cursor: timer > 0 ? "default" : "pointer",
+              fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 600,
+              color: timer > 0 ? "var(--text-3)" : "var(--nectarine-11)",
+            }}
+          >
+            {timer > 0 ? `Reenviar em ${timer}s` : "Reenviar link"}
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={() => navigate("/login")}
+        style={{
+          background: "none", border: "none", cursor: "pointer",
+          fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)",
+          marginTop: 24, textAlign: "center",
+        }}
+      >
+        Lembrei a senha — <span style={{ color: "var(--nectarine-11)", fontWeight: 600 }}>Entrar</span>
+      </button>
+    </div>
+  );
+}

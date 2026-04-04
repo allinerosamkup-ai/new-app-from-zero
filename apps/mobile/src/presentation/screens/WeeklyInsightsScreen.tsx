@@ -50,7 +50,7 @@ export default function WeeklyInsightsScreen() {
   if (error) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: appSpacing.lg, backgroundColor: appColors.background }}>
-        <Avatar.Icon size={64} icon="alert-circle-outline" backgroundColor={MD3Colors.error95} color={MD3Colors.error40} />
+        <Avatar.Icon size={64} icon="alert-circle-outline" style={{ backgroundColor: MD3Colors.error95 }} color={MD3Colors.error40} />
         <Text variant="bodyMedium" style={{ color: appColors.danger, textAlign: 'center', marginVertical: appSpacing.md }}>
           {error}
         </Text>
@@ -76,7 +76,7 @@ export default function WeeklyInsightsScreen() {
               Insights da semana
             </Text>
           </View>
-          <Avatar.Icon size={48} icon="chart-line" backgroundColor={appColors.primarySoft} color={appColors.primary} />
+          <Avatar.Icon size={48} icon="chart-line" style={{ backgroundColor: appColors.primarySoft }} color={appColors.primary} />
         </View>
 
         {/* Resumo Numérico (Grid) */}

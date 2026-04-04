@@ -1,12 +1,55 @@
 import { z } from 'zod';
 
+const CATEGORY_ALIASES: Record<string, 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'outro'> = {
+  trabalho: 'trabalho',
+  work: 'trabalho',
+  pessoal: 'pessoal',
+  personal: 'pessoal',
+  geral: 'pessoal',
+  rotina: 'pessoal',
+  social: 'social',
+  saude: 'autocuidado',
+  saúde: 'autocuidado',
+  autocuidado: 'autocuidado',
+  selfcare: 'autocuidado',
+  outro: 'outro',
+};
+
+const INTENSITY_ALIASES: Record<string, 'L' | 'M' | 'P'> = {
+  l: 'L',
+  leve: 'L',
+  m: 'M',
+  media: 'M',
+  média: 'M',
+  p: 'P',
+  pesada: 'P',
+  pesado: 'P',
+  alta: 'P',
+};
+
+function normalizeCategory(value: unknown) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  return CATEGORY_ALIASES[value.trim().toLowerCase()] ?? value;
+}
+
+function normalizeIntensity(value: unknown) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  return INTENSITY_ALIASES[value.trim().toLowerCase()] ?? value;
+}
+
 export const TimelineBlockSchema = z.object({
   id: z.string().uuid().optional().nullable(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/), // HH:mm
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),   // HH:mm
   title: z.string().min(1),
-  category: z.enum(['trabalho', 'pessoal', 'autocuidado', 'social', 'outro']),
-  intensity: z.enum(['L', 'M', 'P']), // Leve, Média, Pesada
+  category: z.preprocess(normalizeCategory, z.enum(['trabalho', 'pessoal', 'autocuidado', 'social', 'outro'])),
+  intensity: z.preprocess(normalizeIntensity, z.enum(['L', 'M', 'P'])), // Leve, Média, Pesada
   status: z.enum(['planned', 'completed', 'postponed']).default('planned'),
 });
 
@@ -25,7 +68,7 @@ export class PlannerService {
   static parseTimeToDate(date: Date, timeStr: string): Date {
     const [hours, minutes] = timeStr.split(':').map(Number);
     const newDate = new Date(date);
-    newDate.setHours(hours, minutes, 0, 0);
+    newDate.setUTCHours(hours, minutes, 0, 0);
     return newDate;
   }
 

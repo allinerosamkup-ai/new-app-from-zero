@@ -10,17 +10,17 @@ import {
   Button, 
   ActivityIndicator, 
   IconButton, 
-  MD3Colors,
   Card,
   SegmentedButtons,
   Chip
 } from 'react-native-paper';
 import { usePlannerStore, TimelineBlock } from '../providers/planner_store';
 import { useAuthStore } from '../providers/auth_store';
-import { LucideSparkles, LucidePlus, LucideChevronLeft, LucideChevronRight, LucideLightbulb, LucideX } from 'lucide-react-native';
+import { useCheckinStore } from '../providers/checkin_store';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
-import { appColors, appRadius, appSpacing, appTypography } from '../theme/appTheme';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { resolveAdaptiveGuidance } from '../../../../../packages/domain/src/adaptive-guidance';
 
 /**
  * PlannerScreen: Versão com Drag-and-drop fluido e UI baseada no Paper.
@@ -49,6 +49,7 @@ export default function PlannerScreen() {
     syncBlocks,
   } = usePlannerStore();
   const { userId } = useAuthStore();
+  const { todayCheckin } = useCheckinStore();
 
   const [showModal, setShowModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -57,12 +58,35 @@ export default function PlannerScreen() {
   const [newCategory, setNewCategory] = useState<TimelineBlock['category']>('trabalho');
   const [newIntensity, setNewIntensity] = useState<TimelineBlock['intensity']>('M');
   const [isSaving, setIsSaving] = useState(false);
+  const support = resolveAdaptiveGuidance({
+    moodLabelType: todayCheckin?.stateLabelType ?? null,
+    energyScore:
+      todayCheckin?.aiState?.suggestedIntensity === 'L'
+        ? 2
+        : todayCheckin?.aiState?.suggestedIntensity === 'P'
+          ? 4
+          : 3,
+  });
 
   useEffect(() => {
     if (userId) {
       fetchBlocks(userId, selectedDate);
     }
   }, [selectedDate, userId, fetchBlocks]);
+
+  useEffect(() => {
+    if (support.mode === 'recovery' || support.mode === 'protection') {
+      setNewIntensity('L');
+      return;
+    }
+
+    if (support.mode === 'momentum') {
+      setNewIntensity('P');
+      return;
+    }
+
+    setNewIntensity('M');
+  }, [support.mode]);
 
   const changeDate = (days: number) => {
     const current = new Date(selectedDate);
@@ -100,8 +124,8 @@ export default function PlannerScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: appColors.background }}>
-      <Appbar.Header mode="center-aligned" style={{ backgroundColor: 'transparent' }}>
-        <Appbar.Action icon={() => <LucideChevronLeft size={24} color={appColors.textSecondary} />} onPress={() => changeDate(-1)} />
+        <Appbar.Header mode="center-aligned" style={{ backgroundColor: 'transparent' }}>
+        <Appbar.Action icon="chevron-left" onPress={() => changeDate(-1)} />
         <Appbar.Content 
           title={new Date(selectedDate + 'T00:00:00').toLocaleDateString('pt-BR', {
             weekday: 'short',
@@ -110,10 +134,32 @@ export default function PlannerScreen() {
           })} 
           titleStyle={{ fontSize: 18, fontWeight: '700' }}
         />
-        <Appbar.Action icon={() => <LucideChevronRight size={24} color={appColors.textSecondary} />} onPress={() => changeDate(1)} />
+        <Appbar.Action icon="chevron-right" onPress={() => changeDate(1)} />
       </Appbar.Header>
 
       <View style={{ flex: 1 }}>
+        <Card
+          style={{
+            marginHorizontal: appSpacing.lg,
+            marginBottom: appSpacing.md,
+            backgroundColor: appColors.surface,
+            borderRadius: appRadius.lg,
+          }}
+          mode="outlined"
+        >
+          <Card.Content>
+            <Text variant="labelSmall" style={{ color: appColors.primaryStrong ?? appColors.primary, fontWeight: '700', letterSpacing: 1.2 }}>
+              PLANNER ADAPTATIVO
+            </Text>
+            <Text variant="titleMedium" style={{ color: appColors.textPrimary, fontWeight: '700', marginTop: 6 }}>
+              {support.title}
+            </Text>
+            <Text variant="bodySmall" style={{ color: appColors.textSecondary, marginTop: 6, lineHeight: 20 }}>
+              {support.summary}
+            </Text>
+          </Card.Content>
+        </Card>
+
         {isLoading && blocks.length === 0 ? (
           <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator animating size="large" color={appColors.primary} />
@@ -189,7 +235,6 @@ export default function PlannerScreen() {
       <FAB
         icon="plus"
         label="Novo bloco"
-        extended
         style={{
           position: 'absolute',
           margin: 16,
@@ -280,7 +325,7 @@ export default function PlannerScreen() {
               disabled={isSaving || !newTitle.trim()}
               contentStyle={{ paddingVertical: 6 }}
             >
-              Adicionar ao planner
+              {support.mode === 'recovery' || support.mode === 'protection' ? 'Adicionar bloco leve' : 'Adicionar ao planner'}
             </Button>
           </KeyboardAvoidingView>
         </Modal>
@@ -379,7 +424,7 @@ function DraggableBlock({ block, onMove }: { block: TimelineBlock; onMove: (newS
           <Text variant="labelSmall" style={{ fontWeight: '700', color: appColors.textPrimary }} numberOfLines={1}>
             {block.title}
           </Text>
-          {block.isAiSuggested && <LucideSparkles size={12} color={appColors.primary} />}
+          {block.isAiSuggested && <Text style={{ color: appColors.primary, fontSize: 12 }}>✦</Text>}
         </View>
         <Text variant="labelSmall" style={{ color: appColors.textSecondary, fontSize: 9 }}>
           {block.startTime} — {block.endTime}

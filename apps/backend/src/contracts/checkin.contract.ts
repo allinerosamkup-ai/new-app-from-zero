@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const CheckinSlotSchema = z.enum(['morning', 'midday', 'evening']);
 
+const SymptomLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+
 export const CheckinCreateSchema = z.object({
   userId: z.string().uuid(),
   localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -12,7 +14,16 @@ export const CheckinCreateSchema = z.object({
   irritabilityScore: z.number().min(1).max(5),
   physicalScore: z.number().min(1).max(5).optional(),
   socialScore: z.number().min(1).max(5).optional(),
+  sleepScore: z.number().min(1).max(5).optional(),
   note: z.string().optional(),
+  // Módulo de Saúde Feminina
+  isFlowing: z.boolean().optional(),
+  flowDay: z.number().int().min(1).max(7).optional(),
+  flowIntensity: z.enum(['leve', 'moderado', 'intenso']).optional(),
+  symptomLevels: z.object({
+    colica: SymptomLevelSchema.optional(),
+    dorCabeca: SymptomLevelSchema.optional(),
+  }).optional(),
 });
 
 export type CheckinCreateInput = z.infer<typeof CheckinCreateSchema>;

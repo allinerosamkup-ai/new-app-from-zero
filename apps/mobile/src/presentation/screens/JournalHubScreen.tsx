@@ -193,7 +193,6 @@ export default function JournalHubScreen() {
         <FAB
           icon="plus"
           label="Nova sessão"
-          extended
           onPress={handleNewSession}
           style={{
             position: 'absolute',

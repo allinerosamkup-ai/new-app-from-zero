@@ -28,8 +28,8 @@ export default function ConfigScreen() {
   const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? null);
+    supabase.auth.getUser().then((result: Awaited<ReturnType<typeof supabase.auth.getUser>>) => {
+      setEmail(result.data.user?.email ?? null);
     });
   }, []);
 
@@ -70,7 +70,7 @@ export default function ConfigScreen() {
           <Avatar.Icon 
             size={56} 
             icon="account" 
-            backgroundColor={appColors.primarySoft} 
+            style={{ backgroundColor: appColors.primarySoft }} 
             color={appColors.primary} 
           />
           <View style={{ flex: 1, marginLeft: appSpacing.md }}>

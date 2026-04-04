@@ -9,6 +9,14 @@ import CheckInResultScreen from '../screens/CheckInResultScreen';
 import AuthScreen from '../screens/AuthScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import OnboardingChatScreen from '../screens/OnboardingChatScreen';
+import HrvTestScreen from '../screens/HrvTestScreen';
+import HrvResultScreen from '../screens/HrvResultScreen';
+import CycleCalendarScreen from '../screens/CycleCalendarScreen';
+import DailyAgendaScreen from '../screens/DailyAgendaScreen';
+import EnergyMapScreen from '../screens/EnergyMapScreen';
+import PlansScreen from '../screens/PlansScreen';
+import PaymentSuccessScreen from '../screens/PaymentSuccessScreen';
+import GoogleCalendarScreen from '../screens/GoogleCalendarScreen';
 import JournalChatScreen from '../screens/JournalChatScreen';
 import { useAuthStore } from '../providers/auth_store';
 import { appColors } from '../theme/appTheme';
@@ -90,6 +98,52 @@ export default function RootStackNavigator() {
         options={{
           animation: 'slide_from_right',
         }}
+      />
+      <Stack.Screen
+        name="HrvTest"
+        component={HrvTestScreen}
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="HrvResult"
+        component={HrvResultScreen}
+        options={{
+          animation: 'slide_from_right',
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="CycleCalendar"
+        component={CycleCalendarScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="DailyAgenda"
+        component={DailyAgendaScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="EnergyMap"
+        component={EnergyMapScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Plans"
+        component={PlansScreen}
+        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="PaymentSuccess"
+        component={PaymentSuccessScreen}
+        options={{ animation: 'slide_from_right', gestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="GoogleCalendar"
+        component={GoogleCalendarScreen}
+        options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

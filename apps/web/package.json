@@ -4,16 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 5000",
+    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.2",
+    "@types/node": "^20.19.37",
+    "clsx": "^2.1.1",
     "lucide-react": "^0.395.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "zustand": "^4.5.7"
+    "react-router-dom": "^7.13.1",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

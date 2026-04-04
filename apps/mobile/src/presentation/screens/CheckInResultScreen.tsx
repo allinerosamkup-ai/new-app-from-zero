@@ -12,6 +12,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useCheckinStore } from '../providers/checkin_store';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { resolveAdaptiveGuidance } from '../../../../../packages/domain/src/adaptive-guidance';
 
 type StateType = 'leve' | 'moderado' | 'sensível' | 'crítico';
 
@@ -73,6 +74,15 @@ export default function CheckInResultScreen() {
   const config = STATE_CONFIG[stateType] ?? STATE_CONFIG.leve;
   const summary = todayCheckin?.stateSummary ?? 'Seu estado de hoje foi registrado.';
   const recommendations: string[] = (todayCheckin as any)?.aiState?.recommendations ?? [];
+  const support = resolveAdaptiveGuidance({
+    moodLabelType: todayCheckin?.stateLabelType ?? null,
+    energyScore:
+      todayCheckin?.aiState?.suggestedIntensity === 'L'
+        ? 2
+        : todayCheckin?.aiState?.suggestedIntensity === 'P'
+          ? 4
+          : 3,
+  });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: config.bgColor }}>
@@ -144,6 +154,52 @@ export default function CheckInResultScreen() {
           </Card.Content>
         </Card>
 
+        <Card
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.72)',
+            marginBottom: appSpacing.lg,
+            borderWidth: 0,
+          }}
+          mode="contained"
+        >
+          <Card.Content>
+            <Text
+              variant="labelLarge"
+              style={{
+                color: config.textColor,
+                textTransform: 'uppercase',
+                fontWeight: '700',
+                opacity: 0.72,
+                letterSpacing: 1.1,
+              }}
+            >
+              Modo do dia
+            </Text>
+            <Text variant="titleMedium" style={{ color: config.textColor, fontWeight: '700', marginTop: 8 }}>
+              {support.title}
+            </Text>
+            <Text variant="bodyMedium" style={{ color: config.textColor, marginTop: 8, lineHeight: 22 }}>
+              {support.summary}
+            </Text>
+
+            <Surface
+              style={{
+                marginTop: appSpacing.md,
+                padding: appSpacing.md,
+                borderRadius: appRadius.md,
+                backgroundColor: 'rgba(255,255,255,0.82)',
+              }}
+            >
+              <Text variant="labelMedium" style={{ color: config.textColor, fontWeight: '700' }}>
+                Proximo passo sugerido
+              </Text>
+              <Text variant="bodyMedium" style={{ color: config.textColor, marginTop: 6 }}>
+                {support.primaryAction}
+              </Text>
+            </Surface>
+          </Card.Content>
+        </Card>
+
         {/* Recomendações da IA */}
         {recommendations.length > 0 && (
           <View style={{ marginBottom: appSpacing.xl }}>
@@ -173,7 +229,7 @@ export default function CheckInResultScreen() {
                   marginBottom: appSpacing.sm,
                 }}
               >
-                <Avatar.Icon size={32} icon="lightbulb-outline" backgroundColor={config.color + '44'} color={config.textColor} />
+                <Avatar.Icon size={32} icon="lightbulb-outline" style={{ backgroundColor: config.color + '44' }} color={config.textColor} />
                 <Text
                   variant="bodyMedium"
                   style={{
@@ -205,7 +261,7 @@ export default function CheckInResultScreen() {
           icon="arrow-right"
           contentStyle={{ flexDirection: 'row-reverse' }}
         >
-          Ver meu dia
+          {support.mode === 'recovery' || support.mode === 'protection' ? 'Ver meu plano leve de hoje' : 'Ver meu dia'}
         </Button>
       </ScrollView>
     </SafeAreaView>

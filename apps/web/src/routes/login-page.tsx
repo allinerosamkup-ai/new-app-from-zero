@@ -1,0 +1,284 @@
+import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { useState, type KeyboardEvent } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuraStore } from "../features/aura/store";
+import { supabase } from "../lib/supabase";
+import "../styles/aura.css";
+
+type Tab = "entrar" | "criar";
+
+export function LoginPage() {
+  const navigate = useNavigate();
+  const { state, setName, setEmail } = useAuraStore();
+  const [tab, setTab] = useState<Tab>("entrar");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleEnterSubmit = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter" || loading) return;
+    event.preventDefault();
+    void handleLogin();
+  };
+
+  const handleLogin = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      if (tab === "entrar") {
+        const { error: err } = await supabase.auth.signInWithPassword({
+          email: state.email,
+          password,
+        });
+        if (err) throw err;
+      } else {
+        const { error: err } = await supabase.auth.signUp({
+          email: state.email,
+          password,
+          options: { data: { full_name: state.name } },
+        });
+        if (err) throw err;
+      }
+      navigate("/home");
+    } catch (err: any) {
+      const msg = err?.message || "Erro ao autenticar";
+      if (msg.includes("Invalid login credentials")) setError("Email ou senha incorretos.");
+      else if (msg.includes("already registered")) setError("Email já cadastrado. Tente entrar.");
+      else if (msg.includes("Password should be")) setError("Senha muito curta — mínimo 6 caracteres.");
+      else setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="aura-page-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* Status bar simulada */}
+      <div className="phone-status">
+        <span>9:41</span>
+        <div className="status-icons">
+          {/* Signal */}
+          <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+            <rect x="0" y="6" width="2" height="4" rx="1" fill="currentColor" />
+            <rect x="3" y="4" width="2" height="6" rx="1" fill="currentColor" />
+            <rect x="6" y="2" width="2" height="8" rx="1" fill="currentColor" />
+            <rect x="9" y="0" width="2" height="10" rx="1" fill="currentColor" />
+          </svg>
+          {/* WiFi */}
+          <svg width="14" height="11" viewBox="0 0 14 11" fill="none">
+            <path d="M7 9.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z" fill="currentColor" />
+            <path d="M4.2 7.3a4 4 0 0 1 5.6 0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+            <path d="M1.8 4.9a7 7 0 0 1 10.4 0" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+          </svg>
+          {/* Battery */}
+          <svg width="20" height="11" viewBox="0 0 20 11" fill="none">
+            <rect x="0.5" y="0.5" width="16" height="10" rx="2.5" stroke="currentColor" />
+            <rect x="2" y="2" width="11" height="7" rx="1.5" fill="currentColor" />
+            <path d="M17.5 3.5v4a1.5 1.5 0 0 0 0-4Z" fill="currentColor" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Conteúdo principal */}
+      <div className="screen-content" style={{ flex: 1 }}>
+        {/* Hero card */}
+        <div className="auth-hero">
+          <div className="auth-hero-eyebrow">Mood Energy</div>
+          <h1>Seu ritmo merece um ponto de partida mais gentil.</h1>
+          <p>Acompanhe humor, energia e rotina em um fluxo que respeita sua ciclagem.</p>
+        </div>
+
+        {/* Tab switcher */}
+        <div className="aura-tabs">
+          <div
+            className={`aura-tab${tab === "entrar" ? " active" : ""}`}
+            onClick={() => setTab("entrar")}
+          >
+            Entrar
+          </div>
+          <div
+            className={`aura-tab${tab === "criar" ? " active" : ""}`}
+            onClick={() => setTab("criar")}
+          >
+            Criar conta
+          </div>
+        </div>
+
+        {/* Tab: Entrar */}
+        {tab === "entrar" && (
+          <>
+            <div className="aura-input-wrap">
+              <label className="aura-input-label">Email</label>
+              <div className="aura-input aura-inline-field">
+                {/* Ícone email */}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <rect x="2" y="4" width="20" height="16" rx="3" />
+                  <path d="m2 7 10 7 10-7" />
+                </svg>
+                <input
+                  type="email"
+                  value={state.email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={handleEnterSubmit}
+                  placeholder="voce@exemplo.com"
+                  className="aura-inline-input"
+                />
+              </div>
+            </div>
+
+            <div className="aura-input-wrap" style={{ marginBottom: 20 }}>
+              <label className="aura-input-label">Senha</label>
+              <div
+                className="aura-input"
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+              >
+                <div className="aura-inline-field">
+                  {/* Ícone lock */}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleEnterSubmit}
+                    placeholder="••••••••"
+                    className="aura-inline-input"
+                  />
+                </div>
+                {/* Ícone eye */}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </div>
+            </div>
+
+            <div style={{ textAlign: "right", marginBottom: 16 }}>
+              <Link to="/forgot-password" className="aura-muted-link">
+                Esqueci minha senha
+              </Link>
+            </div>
+
+            {error && (
+              <p className="aura-banner-error">
+                {error}
+              </p>
+            )}
+
+            <AuraButtonV2 className="aura-btn-primary" onClick={handleLogin} disabled={loading}>
+              {loading ? "Entrando..." : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                    <polyline points="10 17 15 12 10 7" />
+                    <line x1="15" y1="12" x2="3" y2="12" />
+                  </svg>
+                  Entrar e continuar
+                </>
+              )}
+            </AuraButtonV2>
+
+            <p style={{ fontSize: 11, color: "var(--text-3)", textAlign: "center", marginTop: 12 }}>
+              Depois do login, seguimos direto para seu dia.
+            </p>
+          </>
+        )}
+
+        {/* Tab: Criar conta */}
+        {tab === "criar" && (
+          <>
+            <div className="aura-input-wrap">
+              <label className="aura-input-label">Seu nome</label>
+              <div className="aura-input aura-inline-field">
+                {/* Ícone user */}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <circle cx="12" cy="7" r="4" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+                <input
+                  type="text"
+                  value={state.name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={handleEnterSubmit}
+                  placeholder="Como quer ser chamado(a)?"
+                  className="aura-inline-input"
+                />
+              </div>
+            </div>
+
+            <div className="aura-input-wrap">
+              <label className="aura-input-label">Email</label>
+              <div className="aura-input aura-inline-field">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <rect x="2" y="4" width="20" height="16" rx="3" />
+                  <path d="m2 7 10 7 10-7" />
+                </svg>
+                <input
+                  type="email"
+                  value={state.email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={handleEnterSubmit}
+                  placeholder="voce@exemplo.com"
+                  className="aura-inline-input"
+                />
+              </div>
+            </div>
+
+            <div className="aura-input-wrap" style={{ marginBottom: 20 }}>
+              <label className="aura-input-label">Senha</label>
+              <div
+                className="aura-input"
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
+              >
+                <div className="aura-inline-field">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <rect x="3" y="11" width="18" height="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handleEnterSubmit}
+                    placeholder="••••••••"
+                    className="aura-inline-input"
+                  />
+                </div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </div>
+            </div>
+
+            {error && (
+              <p className="aura-banner-error">
+                {error}
+              </p>
+            )}
+
+            <AuraButtonV2 className="aura-btn-primary" onClick={handleLogin} disabled={loading}>
+              {loading ? "Criando conta..." : (
+                <>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <line x1="19" y1="8" x2="19" y2="14" />
+                    <line x1="16" y1="11" x2="22" y2="11" />
+                  </svg>
+                  Criar conta e continuar
+                </>
+              )}
+            </AuraButtonV2>
+
+            <p style={{ fontSize: 11, color: "var(--text-3)", textAlign: "center", marginTop: 12 }}>
+              Depois do login, seguimos direto para seu dia.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

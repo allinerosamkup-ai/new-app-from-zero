@@ -1,9 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
-import dotenv from 'dotenv';
 import { PrismaClient } from '@app/database';
-
-dotenv.config();
+import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {

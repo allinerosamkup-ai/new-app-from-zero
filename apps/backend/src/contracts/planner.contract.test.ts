@@ -33,4 +33,23 @@ const validPayload = {
   assert.equal(result.success, true);
 }
 
+{
+  const result = PlannerSyncSchema.safeParse({
+    ...validPayload,
+    blocks: [
+      {
+        ...validPayload.blocks[0],
+        category: 'geral',
+        intensity: 'media',
+      },
+    ],
+  });
+
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.blocks[0].category, 'pessoal');
+    assert.equal(result.data.blocks[0].intensity, 'M');
+  }
+}
+
 console.log('planner.contract tests passed');

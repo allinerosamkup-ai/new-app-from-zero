@@ -1,13 +1,16 @@
 export const appColors = {
-  background: '#f5f5f7',
-  surface: '#ffffff',
-  surfaceAlt: '#f1f5f9',
-  primary: '#38bdf8',
-  primarySoft: 'rgba(56, 189, 248, 0.12)',
-  textPrimary: '#0f172a',
-  textSecondary: '#64748b',
-  borderSubtle: '#e2e8f0',
-  danger: '#ef4444',
+  background: '#fffaf0',
+  surface: 'rgba(255,255,255,0.82)',
+  surfaceAlt: 'rgba(255,248,242,0.92)',
+  primary: '#f3b08c',
+  primaryStrong: '#e39a73',
+  primarySoft: 'rgba(243,176,140,0.16)',
+  textPrimary: '#4a443f',
+  textSecondary: '#8d7b68',
+  borderSubtle: 'rgba(192,143,117,0.22)',
+  success: '#96C7B3',
+  info: '#6398A9',
+  danger: '#c05a55',
 };
 
 export const appSpacing = {
@@ -44,9 +47,13 @@ export const appTypography = {
   },
 };
 
+export const appGlass = {
+  cardBorder: 'rgba(255,255,255,0.55)',
+  cardShadow: '#cb997e22',
+};
+
 export const appTabBarConfig = {
   height: 72,
   paddingBottom: 10,
   paddingTop: 10,
 };
-

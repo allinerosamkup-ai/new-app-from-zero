@@ -7,10 +7,8 @@ import {
   Avatar, 
   Chip, 
   Surface,
-  IconButton,
   MD3Colors
 } from 'react-native-paper';
-import { LucideCheckCircle2, LucideSparkles, LucideHeart, LucideLightbulb, LucideArrowRight } from 'lucide-react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
 
@@ -34,11 +32,11 @@ export default function DailySummaryScreen() {
         
         {/* Header de Sucesso */}
         <View style={{ alignItems: 'center', marginBottom: appSpacing.xl }}>
-          <Avatar.Icon 
-            size={80} 
-            icon="check-circle" 
-            backgroundColor={MD3Colors.primary95} 
-            color={MD3Colors.primary40} 
+          <Avatar.Icon
+            size={80}
+            icon="check-circle"
+            style={{ backgroundColor: MD3Colors.primary95 }}
+            color={MD3Colors.primary40}
           />
           <Text variant="headlineMedium" style={{ fontWeight: '700', marginTop: appSpacing.md, color: appColors.textPrimary }}>
             Sessão Concluída
@@ -67,7 +65,7 @@ export default function DailySummaryScreen() {
         <Card style={{ marginBottom: appSpacing.xl, backgroundColor: MD3Colors.secondary99 }} mode="outlined">
           <Card.Content>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: appSpacing.sm }}>
-              <LucideSparkles size={18} color={MD3Colors.secondary40} />
+              <Text style={{ color: MD3Colors.secondary40, fontSize: 18 }}>✦</Text>
               <Text variant="labelMedium" style={{ marginLeft: appSpacing.sm, fontWeight: '700', color: MD3Colors.secondary40, letterSpacing: 1.2 }}>
                 SÍNTESE DA CONVERSA
               </Text>
@@ -81,7 +79,7 @@ export default function DailySummaryScreen() {
         {/* Sugestões */}
         <View style={{ marginBottom: appSpacing.xl * 1.5 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: appSpacing.md }}>
-            <LucideLightbulb size={22} color={MD3Colors.tertiary50} />
+            <Text style={{ color: MD3Colors.tertiary50, fontSize: 22 }}>✦</Text>
             <Text variant="titleLarge" style={{ fontWeight: '700', marginLeft: appSpacing.sm }}>
               Sugestões para agora
             </Text>
@@ -100,7 +98,7 @@ export default function DailySummaryScreen() {
                 elevation: 1
               }}
             >
-              <Avatar.Icon size={32} icon="lightbulb-on-outline" backgroundColor={MD3Colors.tertiary95} color={MD3Colors.tertiary50} />
+              <Avatar.Icon size={32} icon="lightbulb-on-outline" style={{ backgroundColor: MD3Colors.tertiary95 }} color={MD3Colors.tertiary50} />
               <Text variant="bodyMedium" style={{ flex: 1, marginLeft: appSpacing.md, color: appColors.textPrimary }}>
                 {suggestion}
               </Text>

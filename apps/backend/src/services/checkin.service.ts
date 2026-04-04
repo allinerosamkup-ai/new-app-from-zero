@@ -1,8 +1,6 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -38,38 +36,28 @@ export class CheckinService {
     irritabilityScore: number;
     physicalScore?: number;
     socialScore?: number;
+    sleepScore?: number;
     note?: string;
   }): Promise<CheckinState> {
     const prompt = `
-      Você é um assistente especializado em bem-estar e regulação de energia.
-      Analise os dados de check-in do usuário e retorne um estado humanizado.
+Analise os dados de check-in e retorne um estado humanizado.
 
-      DADOS DO USUÁRIO:
-      - Momento do check-in: ${data.checkinSlot || 'não informado'}
-      - Humor: ${data.moodScore}/5
-      - Energia Psíquica: ${data.energyScore}/5
-      - Clareza Mental: ${data.clarityScore}/5
-      - Irritabilidade: ${data.irritabilityScore}/5
-      - Estado Físico: ${data.physicalScore ?? 'não informado'}/5
-      - Estado Social: ${data.socialScore ?? 'não informado'}/5
-      - Nota do Usuário: ${data.note || 'Nenhuma'}
+DADOS:
+- Momento: ${data.checkinSlot || 'não informado'}
+- Humor: ${data.moodScore}/5 | Energia: ${data.energyScore}/5 | Clareza: ${data.clarityScore}/5
+- Irritabilidade: ${data.irritabilityScore}/5 | Físico: ${data.physicalScore ?? 'não informado'}/5
+- Social: ${data.socialScore ?? 'não informado'}/5 | Sono: ${data.sleepScore ?? 'não informado'}/5
+- Nota: ${data.note || 'Nenhuma'}
 
-      DIRETRIZES:
-      - Nunca faça diagnósticos médicos.
-      - Use linguagem acolhedora, não clínica.
-      - Baseie-se apenas nos dados fornecidos.
-      - Responda em português do Brasil.
-      - SuggestedIntensity deve ser: 'L' (Leve), 'M' (Médio) ou 'P' (Pesado).
+DIRETRIZES:
+- Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
+- stateLabel: nome humanizado do estado (ex: "Dia Sensível", "Energia Alta", "Momento de Descanso")
+- analysis: 1-2 frases sobre o estado energético atual (tom Aura: gentil, observador, sem julgamento)
+- recommendations: 2-3 micro-ações gentis baseadas nos dados (terapia de exposição + hábitos gentis: passos pequenos)
+- suggestedIntensity: 'L' (energia baixa/sensível), 'M' (equilibrada), 'P' (energia alta/focada)
 
-      Retorne APENAS um JSON puro no formato:
-      {
-        "stateLabel": "string",
-        "stateLabelType": "leve|moderado|sensível|crítico",
-        "analysis": "string",
-        "recommendations": ["string"],
-        "suggestedIntensity": "L|M|P",
-        "rationale": "string"
-      }
+JSON APENAS:
+{"stateLabel":"...","stateLabelType":"leve|moderado|sensível|crítico","analysis":"...","recommendations":["..."],"suggestedIntensity":"L|M|P","rationale":"..."}
     `;
 
     const response = await openai.chat.completions.create({

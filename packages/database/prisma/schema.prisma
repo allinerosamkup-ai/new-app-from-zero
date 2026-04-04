@@ -64,6 +64,8 @@ model UserPreference {
   eveningReviewTime  String?  @map("evening_review_time")
   notificationsOn    Boolean  @default(true) @map("notifications_on")
   aiTone             String   @default("warm") @map("ai_tone")
+  gcalAccessToken    String?  @map("gcal_access_token") @db.Text
+  gcalRefreshToken   String?  @map("gcal_refresh_token") @db.Text
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -102,6 +104,19 @@ model DailyCheckin {
   irritabilityScore Int      @map("irritability_score")
   physicalScore     Int      @map("physical_score")
   socialScore       Int      @map("social_score")
+  sleepScore        Int?     @map("sleep_score")
+  
+  // Módulo de Saúde Feminina (Plus)
+  menstrualPhase    String?  @map("menstrual_phase")
+  cycleDay          Int?     @map("cycle_day")
+  physicalSymptoms  String[] @default([]) @map("physical_symptoms")
+  
+  isFlowing         Boolean? @map("is_flowing")
+  flowDay           Int?     @map("flow_day")
+  flowIntensity     String?  @map("flow_intensity")
+  symptomColica     Int?     @map("symptom_colica")
+  symptomDorCabeca  Int?     @map("symptom_dor_cabeca")
+  
   note              String?  @db.Text
   stateLabel        String?  @map("state_label")
   stateLabelType    String?  @map("state_label_type")

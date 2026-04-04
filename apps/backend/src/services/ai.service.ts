@@ -1,16 +1,14 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
-import dotenv from 'dotenv';
 import { OnboardingAiOutputSchema, type OnboardingAiOutput } from '../contracts/onboarding-ai.contract';
-
-dotenv.config();
+import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || 'missing',
-    });
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) throw new Error('OPENAI_API_KEY is not set in environment variables');
+    _openai = new OpenAI({ apiKey: key });
   }
   return _openai;
 }
@@ -40,6 +38,7 @@ export type JournalPromptContext = {
   promptSummary: string;
   topThemes: string[];
   topPlannerCategories: string[];
+  moodCycleContext?: string | null;
   checkinToday?: {
     moodScore: number;
     energyScore: number;
@@ -65,11 +64,15 @@ export class AIService {
   private static readonly CONTEXT_LIMIT = 50;
 
   private static buildJournalPrompt(context: JournalPromptContext): string {
+    const cycleCtx = context.moodCycleContext 
+      ? `\n\nCICLO DE HUMOR ATUAL:\n${context.moodCycleContext}`
+      : '';
+
     return `
       Você é um assistente de diário emocional com foco em acolhimento, autorregulação e organização prática da rotina.
 
       CONTEXTO DA PESSOA:
-      ${context.promptSummary}
+      ${context.promptSummary}${cycleCtx}
 
       REGRAS:
       - Responda em português do Brasil.

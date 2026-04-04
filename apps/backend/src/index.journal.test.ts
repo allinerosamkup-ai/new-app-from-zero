@@ -11,6 +11,23 @@ async function run() {
   const savedMessages: any[] = [];
 
   const prisma = {
+    profile: {
+      findUnique: async () => ({ fullName: 'Teste Aura' }),
+    },
+    onboardingResponse: {
+      findUnique: async () => ({ aiProfileSummary: 'Perfil resumido.' }),
+    },
+    dailyCheckin: {
+      findFirst: async () => ({
+        localDate: new Date('2026-03-13T00:00:00.000Z'),
+        moodScore: 3,
+        energyScore: 2,
+        sleepScore: 2,
+        stateLabel: 'Dia sensível',
+        stateLabelType: 'sensível',
+        stateSummary: 'Energia mais baixa no começo do dia.',
+      }),
+    },
     journalMessage: {
       create: async ({ data }: any) => {
         savedMessages.push(data);
@@ -24,6 +41,10 @@ async function run() {
   };
 
   const app = createApp({
+    authMiddleware: (req: any, _res: any, next: any) => {
+      req.userId = req.body?.userId ?? '550e8400-e29b-41d4-a716-446655440000';
+      next();
+    },
     prisma: prisma as any,
     aiService: {
       summarizeJournalSession: async () => ({
@@ -63,6 +84,9 @@ async function run() {
       nextOrderIndex: (messages: Array<{ orderIndex: number }>) =>
         messages.length === 0 ? 0 : Math.max(...messages.map((message) => message.orderIndex)) + 1,
     } as any,
+    generateJournalSuggestedTasks: async () => ([
+      { title: 'Separar uma tarefa pequena', category: 'rotina', time: '09:00' },
+    ]),
   });
 
   const server = http.createServer(app);
@@ -109,6 +133,7 @@ async function run() {
     const streamBody = await readResponseText(streamResponse);
 
     assert.match(streamBody, /event: assistant\.delta/);
+    assert.match(streamBody, /event: assistant\.suggested_tasks/);
     assert.match(streamBody, /event: assistant\.completed/);
     assert.equal(savedMessages.length, 2);
     assert.equal(savedMessages[0].role, 'user');

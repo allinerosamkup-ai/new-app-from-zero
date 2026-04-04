@@ -12,3 +12,7 @@ build/
 
 # Expo
 .expo/
+vite.config.previewbridge.js
+
+# D.U.M.M.Y. OS memory
+.dummy/

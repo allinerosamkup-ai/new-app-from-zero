@@ -12,6 +12,18 @@ export interface CheckinFormData {
   energyScore: number;
   clarityScore: number;
   irritabilityScore: number;
+  physicalScore?: number;
+  socialScore?: number;
+  menstrualPhase?: string;
+  cycleDay?: number;
+  physicalSymptoms?: string[];
+  isFlowing?: boolean;
+  flowDay?: number;
+  flowIntensity?: 'leve' | 'moderado' | 'intenso';
+  symptomLevels?: {
+    colica?: 1 | 2 | 3;
+    dorCabeca?: 1 | 2 | 3;
+  };
   note?: string;
 }
 
