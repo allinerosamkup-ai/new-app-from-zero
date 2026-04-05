@@ -424,3 +424,20 @@ export function getStabilityLabel(score: number): string {
   if (score >= 20) return "Instável";
   return "Muito instável";
 }
+
+// ── Streak — dias consecutivos com check-in ─────────────────
+// Conta de hoje para trás quantos dias seguidos têm entrada no histórico.
+export function computeStreak(history: CheckinEntry[]): number {
+  if (history.length === 0) return 0;
+  const dateSet = new Set(history.map(h => h.date));
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const iso = d.toISOString().split("T")[0];
+    if (dateSet.has(iso)) streak++;
+    else break;
+  }
+  return streak;
+}

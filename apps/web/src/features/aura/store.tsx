@@ -199,8 +199,11 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (!session) return;
 
         try {
+          const hour = new Date().getHours();
+          const checkinSlot = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 18 ? 'midday' : 'evening';
           await api.post('/checkins', {
             localDate: today,
+            checkinSlot,
             moodScore: entry.humor,
             energyScore: entry.energia,
             clarityScore: 3,

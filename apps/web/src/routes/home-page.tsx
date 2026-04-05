@@ -7,7 +7,7 @@ import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
 import { useToast } from "../components/Toast";
-import { computeMoodCycle, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { computeMoodCycle, computeStreak, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
 import { 
   MessageSquareText, 
   LayoutDashboard, 
@@ -149,6 +149,7 @@ export function HomePage() {
     () => computeMoodCycle(state.checkinHistory || []),
     [state.checkinHistory]
   );
+  const streak = useMemo(() => computeStreak(state.checkinHistory || []), [state.checkinHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
 
   // ── Sparkline — últimos 7 dias reais ─────────────────────
@@ -419,10 +420,21 @@ export function HomePage() {
             {/* Fase atual */}
             <div className="home-cycle-phase">
               <span className="home-cycle-emoji">{cycleReport.phaseEmoji}</span>
-              <div>
-                <p className="home-cycle-title">
-                  {cycleReport.phaseLabel}
-                </p>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <p className="home-cycle-title" style={{ margin: 0 }}>
+                    {cycleReport.phaseLabel}
+                  </p>
+                  {streak >= 2 && (
+                    <span style={{
+                      fontSize: "10px", fontWeight: 800, padding: "2px 8px",
+                      borderRadius: "999px", background: "var(--nectarine)",
+                      color: "#fff", letterSpacing: ".04em", flexShrink: 0,
+                    }}>
+                      🔥 {streak} dias
+                    </span>
+                  )}
+                </div>
                 {cycleReport.phase !== "insufficient_data" && (
                   <p className="home-cycle-subtitle">
                     {cycleReport.daysInPhase} dia{cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase

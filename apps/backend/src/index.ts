@@ -1096,18 +1096,20 @@ Sem texto fora do JSON.`;
       } else if (type === 'checkin-response') {
         const moodLabel = context.moodLabel || 'Equilíbrio';
         const nota = context.nota ? `Nota de ${userName}: "${context.nota}"` : '';
+        const crStreak = typeof context.streak === 'number' ? context.streak : 0;
         const crHistory = (context.checkinHistory || []) as Array<{date:string;humor:number;energia:number}>;
         const crHistoryLines = crHistory.slice(0, 5).map((h: any) =>
           `- ${h.date}: humor=${h.humor}/5, energia=${h.energia}/5`
         ).join('\n');
-        const prevEntry = crHistory[1]; // yesterday or last entry before today
+        const prevEntry = crHistory[1];
         const trend = prevEntry
           ? crHistory[0]?.humor > prevEntry.humor ? 'humor subindo em relação ao check-in anterior'
             : crHistory[0]?.humor < prevEntry.humor ? 'humor caindo em relação ao check-in anterior'
             : 'humor estável em relação ao check-in anterior'
           : '';
+        const streakCtx = crStreak >= 3 ? `\nSequência atual: ${crStreak} dias consecutivos de check-in — ${userName} está mantendo o ritmo.` : '';
         prompt = `${userName} acabou de fazer um check-in. Estado agora: "${moodLabel}" (${context.mood}).
-${trend ? `Tendência: ${trend}.` : ''}
+${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
 ${nota}
 
@@ -1115,6 +1117,7 @@ Responda como Aura — acolhedora, próxima, como amiga íntima que CONHECE ${us
 
 REGRAS:
 - Reference o padrão real do histórico se relevante (ex: "nos últimos dias você estava...")
+- Se streak ≥ 3 dias, mencione a sequência de forma encorajadora e natural (1 vez, sem exagero)
 - NÃO use frases genéricas de autoajuda
 - NÃO repita o estado de volta de forma óbvia
 - A sugestão deve ser micro-ação de 5-10min, não uma tarefa grande

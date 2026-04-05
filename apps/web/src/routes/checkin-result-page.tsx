@@ -3,7 +3,7 @@ import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
-import { computeMoodCycle } from '../utils/mood-cycle-engine';
+import { computeMoodCycle, computeStreak } from '../utils/mood-cycle-engine';
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
@@ -107,6 +107,7 @@ export function CheckinResultPage() {
     () => (state.checkinHistory || []).slice(0, 7).map(h => ({ date: h.date, humor: h.humor, energia: h.energia, sono: h.sono })),
     [state.checkinHistory]
   );
+  const streak = useMemo(() => computeStreak(state.checkinHistory || []), [state.checkinHistory]);
   const goalTitles = useMemo(
     () => (state.goals || []).filter(g => g.completedPct < 100).map(g => g.title),
     [state.goals]
@@ -122,6 +123,7 @@ export function CheckinResultPage() {
         moodLabel: v.label,
         moodCycleContext: cycleReport.aiContext,
         checkinHistory: recentHistory,
+        streak,
       },
     }).then((res: any) => {
       try {

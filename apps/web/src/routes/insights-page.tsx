@@ -43,9 +43,17 @@ export function InsightsPage() {
   const [insightPhase, setInsightPhase] = useState<InsightPhase>("idle");
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
   const [taskAdded, setTaskAdded] = useState(false);
+  const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
 
   // Derive data from checkinHistory (fallback to empty if missing)
-  const history = state.checkinHistory || [];
+  const allHistory = state.checkinHistory || [];
+  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+  const history = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - periodDays);
+    const cutoffIso = cutoff.toISOString().split('T')[0];
+    return allHistory.filter(h => h.date >= cutoffIso);
+  }, [allHistory, periodDays]);
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
   const phaseColor = getPhaseColor(cycleReport.phase);
@@ -173,10 +181,29 @@ export function InsightsPage() {
         {/* ── Header ── */}
         <div className="aura-page-header insights-header">
           <p className="aura-page-kicker">Sua Ciclagem</p>
-          <h1 className="aura-page-title insights-title">Padrões da Semana</h1>
-          <p className="aura-page-subtitle">
-            Veja como humor e energia estao se organizando ao longo da semana.
-          </p>
+          <h1 className="aura-page-title insights-title">Padrões</h1>
+          {/* Seletor de período */}
+          <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
+            {(['7d', '30d', '90d'] as const).map(p => {
+              const label = p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias';
+              const active = period === p;
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  style={{
+                    padding: "5px 14px", borderRadius: "999px", fontSize: "12px", fontWeight: 700,
+                    fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer",
+                    border: active ? "1.5px solid var(--nectarine)" : "1.5px solid var(--warm-border-2)",
+                    background: active ? "var(--nectarine)" : "rgba(255,255,255,.62)",
+                    color: active ? "#fff" : "var(--text-2)",
+                    backdropFilter: "blur(14px)",
+                    transition: "all 150ms",
+                  }}
+                >{label}</button>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── Bar chart card ── */}
