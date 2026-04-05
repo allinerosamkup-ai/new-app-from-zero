@@ -6,7 +6,6 @@ import {
   type AuraCommandResponse,
 } from '../contracts/aura-command.contract';
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
-import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {

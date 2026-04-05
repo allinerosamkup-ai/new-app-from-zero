@@ -17,7 +17,7 @@ import { OnboardingProcessSchema } from './contracts/onboarding.contract';
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
-import { buildAuraSystemPrompt, getFirstName, type AuraPromptDomain } from './lib/aura-prompt';
+import { buildAuraSystemPrompt, getFirstName, humanizeScore, type AuraPromptDomain } from './lib/aura-prompt';
 import {
   AuraCommandMessageStreamSchema,
   AuraCommandStartSchema,
@@ -285,6 +285,36 @@ function getSuggestPromptDomain(type: string): AuraPromptDomain {
   }
 
   return 'planning';
+}
+
+/** Retorna a intenção de busca vetorial específica para cada superfície de IA. */
+function getRagIntent(type: string, context: any): string {
+  switch (type) {
+    case 'home-messages':
+      return `padrões de humor e energia no período ${context.periodo || ''} para ${context.moodLabel || 'estado atual'}`;
+    case 'checkin-response':
+      return `experiências anteriores e padrões similares ao estado ${context.moodLabel || 'atual'}`;
+    case 'day-tasks':
+      return `metas ativas, hábitos e rotina real da pessoa`;
+    case 'agenda-blocks':
+      return `preferências de rotina, horários e padrões de produtividade`;
+    case 'ai-goals':
+      return `objetivos de vida, valores, interesses pessoais e contexto atual`;
+    case 'weekly-insight':
+      return `padrões de humor, energia e comportamento ao longo das semanas`;
+    case 'stability-analysis':
+      return `episódios de instabilidade emocional, gatilhos e períodos críticos`;
+    case 'phase-transition':
+      return `como a pessoa reagiu à fase ${context.toPhase || ''} em momentos anteriores`;
+    case 'follow-up':
+      return `comprometimento, resistência e padrões de adesão a sugestões`;
+    case 'goal-subtasks':
+      return `micro-ações anteriores e como a pessoa prefere executar tarefas`;
+    case 'journal-tasks':
+      return `temas emocionais recorrentes e o que a pessoa valoriza no diário`;
+    default:
+      return context.moodCycleContext || context.moodLabel || 'estado emocional e rotina do momento';
+  }
 }
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -636,11 +666,16 @@ export function createApp(dependencies: AppDependencies = {}) {
         sessionId: data.sessionId,
       });
 
+      // Shared Brain: busca memórias relevantes para enriquecer a presença no diário
+      const journalMemories = await memoryService.retrieve(data.userId, data.message, 3).catch(() => []);
+      const journalRagContext = memoryService.formatForPrompt(journalMemories);
+
       const assistantContent = await aiService.streamJournalReply({
         context: {
           ...context,
           userName: runtimeContext.userName,
           userProfileSummary: runtimeContext.userProfileSummary,
+          ragContext: journalRagContext,
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
@@ -767,12 +802,17 @@ export function createApp(dependencies: AppDependencies = {}) {
         sessionId: data.sessionId,
       });
 
+      // Shared Brain: busca memórias relevantes antes de interpretar o comando
+      const commandMemories = await memoryService.retrieve(data.userId, data.message, 3).catch(() => []);
+      const commandRagContext = memoryService.formatForPrompt(commandMemories);
+
       const commandResponse = await auraCommandService.interpretCommand({
         message: data.message,
         history: data.history,
         userName: runtimeContext.userName,
         profileSummary: runtimeContext.userProfileSummary,
         moodCycleContext: runtimeContext.moodCycleContext,
+        ragContext: commandRagContext,
       });
 
       writeSseEvent(res, 'assistant.completed', {
@@ -1250,18 +1290,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       ]);
       const { userName, moodCycleContext, userProfileSummary } = await resolveAiRuntimeContext(prisma, userId, context);
 
-      // RAG: busca memórias relevantes para tipos que se beneficiam de contexto histórico
-      const ragTypes = new Set(['checkin-response', 'day-tasks', 'home-messages', 'journal-tasks']);
-      let ragContext = '';
-      if (ragTypes.has(type)) {
-        const ragQuery = typeof context.moodCycleContext === 'string'
-          ? context.moodCycleContext
-          : typeof context.moodLabel === 'string'
-            ? context.moodLabel
-            : 'estado emocional atual';
-        const memories = await memoryService.retrieve(userId, ragQuery, 3).catch(() => []);
-        ragContext = memoryService.formatForPrompt(memories);
-      }
+      // Shared Brain: todas as superfícies de IA buscam memória vetorial com intenção específica
+      const ragQuery = getRagIntent(type, context);
+      const ragMemories = await memoryService.retrieve(userId, ragQuery, 3).catch(() => []);
+      const ragContext = memoryService.formatForPrompt(ragMemories);
 
       let prompt = '';
       if (type === 'task-notes') {
@@ -1273,7 +1305,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       } else if (type === 'day-tasks') {
         const dtHistory = (context.checkinHistory || []) as Array<{date:string;humor:number;energia:number;sono?:number}>;
         const dtHistoryLines = dtHistory.slice(0, 7).map((h: any) =>
-          `- ${h.date}: humor=${h.humor}/5, energia=${h.energia}/5${h.sono != null ? `, sono=${h.sono}/5` : ''}`
+          `- ${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}${h.sono != null ? `, sono ${humanizeScore(h.sono, 'sleep')}` : ''}`
         ).join('\n');
         const dtGoals = (context.goals as string[] | undefined) || [];
         const dtGoalsCtx = dtGoals.length ? `\nMetas ativas de ${userName}: ${dtGoals.map((g, i) => `${i+1}. "${g}"`).join(', ')}` : '';
@@ -1321,8 +1353,8 @@ Retorne SOMENTE um array JSON de strings. Sem explicação.`;
         prompt = `${userName} precisa de uma leitura semanal realmente útil, como uma assistente pessoal autônoma que acompanha o ciclo ao longo do tempo.
 
 Dados da semana:
-- Humor médio: ${context.avgHumor}/5
-- Energia média: ${context.avgEnergia}/5
+- Humor predominante: ${humanizeScore(context.avgHumor, 'mood')} (média dos últimos 7 dias)
+- Energia predominante: ${humanizeScore(context.avgEnergia, 'energy')}
 - Check-ins realizados: ${context.totalCheckins}
 - Dia de pico de humor: ${context.peakHumorDay || 'não identificado'}
 - Dia de menor energia: ${context.lowEnergyDay || 'não identificado'}
@@ -1343,7 +1375,7 @@ Retorne SOMENTE JSON: {"insight":"2 frases personalizadas e úteis sobre o padr�
       } else if (type === 'stability-analysis') {
         const history = (context.history || []) as Array<{date:string;humor:number;energia:number;sono?:number;fisico?:number;social?:number}>;
         const historyLines = history.map((h: any) =>
-          `- ${h.date}: humor=${h.humor}/5, energia=${h.energia}/5${h.sono != null ? `, sono=${h.sono}/5` : ''}${h.fisico != null ? `, físico=${h.fisico}/5` : ''}${h.social != null ? `, social=${h.social}/5` : ''}`
+          `- ${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}${h.sono != null ? `, sono ${humanizeScore(h.sono, 'sleep')}` : ''}${h.fisico != null ? `, físico ${humanizeScore(h.fisico, 'generic')}` : ''}${h.social != null ? `, social ${humanizeScore(h.social, 'generic')}` : ''}`
         ).join('\n');
         const humorVals = history.map((h: any) => h.humor);
         const avgH = humorVals.reduce((a: number, b: number) => a + b, 0) / humorVals.length;
@@ -1419,13 +1451,13 @@ JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..
         const wakeTime = context.wakeTime || '07:00';
         const sleepTime = context.sleepTime || '22:00';
         const history = (context.history || []).slice(0, 3).map((h: any) =>
-          `${h.date}: humor=${h.humor}/5, energia=${h.energia}/5`
+          `${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}`
         ).join('; ');
-        prompt = `Você é uma assistente pessoal carinhosa ("babá digital") que organiza a rotina completa de ${userName} como uma amiga organizada. Monte a agenda personalizada do dia de hoje.
+        prompt = `Você é a Aura, uma concierge pessoal e assistente de rotina sofisticada de ${userName}. Monte a agenda personalizada do dia de hoje.
 
-Estado de ${userName}: ${moodLabel} (${mood}), energia=${energia}/5.
+Estado atual: ${moodLabel} (${humanizeScore(context.humor, 'mood')}), energia ${humanizeScore(energia, 'energy')}.
 Horário acordar: ${wakeTime} | Dormir: ${sleepTime}.
-Histórico recente: ${history || 'sem dados'}.
+Padrão recente: ${history || 'iniciando agora'}.
 
 Monte uma rotina completa e equilibrada:
 - Crie 6-8 blocos cobrindo o dia inteiro de ${wakeTime} a ${sleepTime}
@@ -1446,7 +1478,7 @@ Sem texto fora do JSON.`;
         const crStreak = typeof context.streak === 'number' ? context.streak : 0;
         const crHistory = (context.checkinHistory || []) as Array<{date:string;humor:number;energia:number}>;
         const crHistoryLines = crHistory.slice(0, 5).map((h: any) =>
-          `- ${h.date}: humor=${h.humor}/5, energia=${h.energia}/5`
+          `- ${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}`
         ).join('\n');
         const prevEntry = crHistory[1];
         const trend = prevEntry

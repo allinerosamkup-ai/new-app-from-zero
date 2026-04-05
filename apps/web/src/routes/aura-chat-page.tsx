@@ -218,7 +218,7 @@ export function AuraChatPage() {
   const [messages, setMessages] = useState<Message[]>([{
     role: "assistant",
     content:
-      "Sou a Aura. Posso transformar pedidos soltos em tarefas, checklists, metas e blocos no planner. Me diga o que você precisa organizar.",
+      "Tudo pronto por aqui. Se quiser organizar o dia ou apenas descarregar o que está na mente, estou te ouvindo.",
   }]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -728,7 +728,7 @@ export function AuraChatPage() {
                 send(input);
               }
             }}
-            placeholder="Peça uma tarefa, checklist, meta ou agenda"
+            placeholder="O que vamos organizar agora?"
             rows={1}
             style={{
               flex: 1,

@@ -1,3 +1,5 @@
+import { humanizeScore } from '../lib/aura-prompt';
+
 type JournalSessionRecord = {
   id: string;
   userId: string;
@@ -80,7 +82,7 @@ function buildPromptSummary(input: {
 
   if (input.checkinToday?.stateLabel) {
     parts.push(
-      `Estado atual: ${input.checkinToday.stateLabel} (humor ${input.checkinToday.moodScore}/5, energia ${input.checkinToday.energyScore}/5).`,
+      `Estado atual: ${input.checkinToday.stateLabel} (humor ${humanizeScore(input.checkinToday.moodScore, 'mood')}, energia ${humanizeScore(input.checkinToday.energyScore, 'energy')}).`,
     );
   }
 

@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
-import { buildAuraSystemPrompt } from '../lib/aura-prompt';
-import '../lib/load-env';
+import { buildAuraSystemPrompt, humanizeScore } from '../lib/aura-prompt';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {

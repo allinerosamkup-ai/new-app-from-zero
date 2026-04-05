@@ -2,7 +2,6 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { OnboardingAiOutputSchema, type OnboardingAiOutput } from '../contracts/onboarding-ai.contract';
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
-import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -42,6 +41,7 @@ export type JournalPromptContext = {
   topThemes: string[];
   topPlannerCategories: string[];
   moodCycleContext?: string | null;
+  ragContext?: string;
   checkinToday?: {
     moodScore: number;
     energyScore: number;
@@ -66,22 +66,6 @@ export class AIService {
   private static readonly MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
   private static readonly CONTEXT_LIMIT = 50;
 
-  private static buildJournalPrompt(context: JournalPromptContext): string {
-    const cycleCtx = context.moodCycleContext 
-      ? `\n\nCICLO DE HUMOR ATUAL:\n${context.moodCycleContext}`
-      : '';
-
-    return `
-      CONTEXTO DA PESSOA:
-      ${context.promptSummary}${cycleCtx}
-
-      REGRAS:
-      - Use este contexto como pano de fundo da resposta, sem repeti-lo inteiro para a pessoa.
-      - Responda em português do Brasil.
-      - Quando fizer sentido, conecte a conversa com rotina, energia e organização do dia.
-      - Prefira respostas concisas, naturais e úteis.
-    `.trim();
-  }
 
   private static buildOnboardingPrompt(input: OnboardingProfileInput): string {
     return `
@@ -130,7 +114,6 @@ export class AIService {
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<string> {
     const recentHistory = input.history.slice(-10);
-    const systemPrompt = this.buildJournalPrompt(input.context);
 
     const stream = await client.chat.completions.create({
       model: this.MODEL,
@@ -140,19 +123,20 @@ export class AIService {
           role: 'system',
           content: buildAuraSystemPrompt({
             userName: input.context.userName,
-            profileSummary: input.context.userProfileSummary,
+            profileSummary: input.context.userProfileSummary || input.context.promptSummary,
             moodCycleContext: input.context.moodCycleContext,
             domain: 'journal-live',
-            extraInstructions: input.closingMode
-              ? [
-                  'A pessoa está encerrando a sessão agora.',
-                  'Responda com um fechamento curto, acolhedor e conclusivo em no máximo 3 frases.',
-                  'Não faça pergunta aberta e não sugira tarefas aqui.',
-                ]
-              : undefined,
+            extraInstructions: [
+              'Seja uma presença lenta. Use frases que respirem.',
+              input.closingMode
+                ? 'A pessoa está saindo. Apenas valide e deixe a porta aberta para amanhã. Sem tarefas.'
+                : 'Não sugira NADA. Apenas reflita o que foi dito ou pergunte sobre como o corpo está reagindo a isso.',
+              ...(input.context.ragContext
+                ? [`MEMÓRIAS RELEVANTES DO HISTÓRICO DE ${input.context.userName ?? 'você'}:\n${input.context.ragContext}`]
+                : []),
+            ],
           }),
         },
-        { role: 'user', content: systemPrompt },
         ...recentHistory.map((message) => ({
           role: message.role,
           content: message.content,

@@ -1,8 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { PrismaClient } from '@app/database';
-import { buildAuraSystemPrompt, getFirstName } from '../lib/aura-prompt';
-import '../lib/load-env';
+import { buildAuraSystemPrompt, getFirstName, humanizeScore } from '../lib/aura-prompt';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
