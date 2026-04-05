@@ -14,15 +14,16 @@ model Profile {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  onboarding      OnboardingResponse?
-  preferences     UserPreference?
-  consents        Consent[]
-  checkins        DailyCheckin[]
-  journalSessions JournalSession[]
-  journalMessages JournalMessage[]
-  timelineBlocks  TimelineBlock[]
-  weeklyInsights  WeeklyInsight[]
-  objectives      Objective[]
+  onboarding       OnboardingResponse?
+  preferences      UserPreference?
+  consents         Consent[]
+  checkins         DailyCheckin[]
+  journalSessions  JournalSession[]
+  journalMessages  JournalMessage[]
+  timelineBlocks   TimelineBlock[]
+  weeklyInsights   WeeklyInsight[]
+  objectives       Objective[]
+  memoryEmbeddings MemoryEmbedding[]
 
   @@map("profiles")
 }
@@ -52,6 +53,22 @@ model OnboardingResponse {
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("onboarding_responses")
+}
+
+/// Memórias vetorizadas da Aura (RAG)
+model MemoryEmbedding {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  contentType String   @map("content_type") // journal | checkin_note | goal | insight
+  contentId   String?  @map("content_id")
+  content     String   @db.Text
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("memory_embeddings")
 }
 
 model UserPreference {

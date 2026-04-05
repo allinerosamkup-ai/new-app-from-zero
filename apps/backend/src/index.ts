@@ -14,6 +14,7 @@ import { PlannerSyncSchema } from './contracts/planner.contract';
 import { JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { OnboardingProcessSchema } from './contracts/onboarding.contract';
 import { JournalService } from './services/journal.service';
+import { MemoryService } from './services/memory.service';
 import { z } from 'zod';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env'), override: true });
@@ -214,6 +215,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const aiService = dependencies.aiService ?? AIService;
   const journalService = dependencies.journalService ?? JournalService;
   const journalSuggestedTasksGenerator = dependencies.generateJournalSuggestedTasks ?? generateJournalSuggestedTasks;
+  const memoryService = new MemoryService(prisma);
 
   app.use(cors({
     origin: (origin, callback) => {
@@ -388,6 +390,22 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
     });
 
+    // 4. Vetorizar nota do check-in (assíncrono — não bloqueia resposta)
+    if (data.note && data.note.trim().length >= 10) {
+      memoryService.store({
+        userId: data.userId,
+        contentType: 'checkin_note',
+        contentId: checkin.id,
+        content: `${data.localDate}: ${data.note.trim()}`,
+        metadata: {
+          moodScore: data.moodScore,
+          energyScore: data.energyScore,
+          date: data.localDate,
+          stateLabel: aiState.stateLabel,
+        },
+      }).catch(() => {}); // fire-and-forget
+    }
+
     return res.json(updatedCheckin);
 
   } catch (error: any) {
@@ -494,6 +512,20 @@ export function createApp(dependencies: AppDependencies = {}) {
           orderIndex: userOrderIndex,
         },
       });
+
+      // Vetoriza mensagem do usuário (fire-and-forget) — mínimo 20 chars para ter valor semântico
+      if (data.message.trim().length >= 20) {
+        memoryService.store({
+          userId: data.userId,
+          contentType: 'journal',
+          contentId: `${data.sessionId}-${userOrderIndex}`,
+          content: data.message.trim(),
+          metadata: {
+            sessionId: data.sessionId,
+            moodCycleContext: data.moodCycleContext ?? null,
+          },
+        }).catch(() => {});
+      }
 
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -841,6 +873,14 @@ export function createApp(dependencies: AppDependencies = {}) {
       const obj = await prisma.objective.create({
         data: { userId, ...data, subgoals: data.subgoals as any },
       });
+      // Vetoriza a meta (fire-and-forget)
+      memoryService.store({
+        userId,
+        contentType: 'goal',
+        contentId: obj.id,
+        content: `Meta: ${data.title}${data.description ? `. ${data.description}` : ''}`,
+        metadata: { category: data.category, objectiveId: obj.id },
+      }).catch(() => {});
       return res.status(201).json({ id: obj.id, title: obj.title, category: obj.category, progress: obj.progress, subgoals: obj.subgoals, createdAt: obj.createdAt.toISOString() });
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -954,6 +994,43 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
   });
 
+  // ── Endpoints de Memória RAG ────────────────────────────────────────────────
+
+  /**
+   * POST /api/memory/store
+   * Vetoriza e armazena um fragmento de memória manualmente (metas, insights).
+   */
+  app.post('/api/memory/store', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { contentType, contentId, content, metadata } = req.body;
+    if (!content || !contentType) return res.status(400).json({ error: 'content and contentType required' });
+    await memoryService.store({ userId, contentType, contentId, content, metadata });
+    return res.json({ stored: true });
+  });
+
+  /**
+   * GET /api/memory/relevant?query=...
+   * Busca as memórias mais semanticamente relevantes para uma query.
+   */
+  app.get('/api/memory/relevant', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const query = String(req.query.query || '');
+    const limit = Math.min(Number(req.query.limit ?? 4), 10);
+    if (!query) return res.json({ memories: [] });
+    const memories = await memoryService.retrieve(userId, query, limit);
+    return res.json({ memories });
+  });
+
+  /**
+   * DELETE /api/memory
+   * Apaga todas as memórias do usuário (GDPR / privacidade).
+   */
+  app.delete('/api/memory', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    await memoryService.deleteAll(userId);
+    return res.json({ deleted: true });
+  });
+
   /**
    * POST /api/ai/suggest
    * Gera sugestões de IA para campos do planner (título, notas, checklist).
@@ -986,6 +1063,20 @@ export function createApp(dependencies: AppDependencies = {}) {
         'follow-up',
       ]);
       const { userName, moodCycleContext, userProfileSummary } = await resolveAiRuntimeContext(prisma, userId, context);
+
+      // RAG: busca memórias relevantes para tipos que se beneficiam de contexto histórico
+      const ragTypes = new Set(['checkin-response', 'day-tasks', 'home-messages', 'journal-tasks']);
+      let ragContext = '';
+      if (ragTypes.has(type)) {
+        const ragQuery = typeof context.moodCycleContext === 'string'
+          ? context.moodCycleContext
+          : typeof context.moodLabel === 'string'
+            ? context.moodLabel
+            : 'estado emocional atual';
+        const memories = await memoryService.retrieve(userId, ragQuery, 3).catch(() => []);
+        ragContext = memoryService.formatForPrompt(memories);
+      }
+
       let prompt = '';
       if (type === 'task-notes') {
         prompt = `Você é uma assistente pessoal carinhosa e organizada. Escreva observações práticas e motivadoras (2-3 frases) para a tarefa "${context.title}" (categoria: ${context.category}). Tom acolhedor, como uma amiga organizada ajudando. Responda diretamente.`;
@@ -1005,7 +1096,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         prompt = `Você é Aura, copiloto de humor de ${userName}. Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ESTA pessoa.
 
 ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}
-${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}
+${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${ragContext}
 
 REGRAS INVIOLÁVEIS:
 1. Use o histórico e as metas acima — as tarefas devem ser relevantes ao que ${userName} realmente faz, não inventadas
@@ -1057,7 +1148,7 @@ Retorne SOMENTE um array JSON de strings. Sem explicação.`;
         const taskCount = context.taskCount ?? 0;
         const hour = context.hour ?? new Date().getHours();
         const periodo = hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';
-        prompt = `Estado de ${userName}: "${moodLabel}" (${moodKey}) | Período: ${periodo} | Tarefas hoje: ${taskCount}.
+        prompt = `Estado de ${userName}: "${moodLabel}" (${moodKey}) | Período: ${periodo} | Tarefas hoje: ${taskCount}.${ragContext}
 
 Gere para ${userName} AGORA — específico ao estado e período:
 1. "motivacional": 1-2 frases de encorajamento. Use o nome se soar natural.
@@ -1111,7 +1202,7 @@ Sem texto fora do JSON.`;
         prompt = `${userName} acabou de fazer um check-in. Estado agora: "${moodLabel}" (${context.mood}).
 ${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
-${nota}
+${nota}${ragContext}
 
 Responda como Aura — acolhedora, próxima, como amiga íntima que CONHECE ${userName} e os padrões dela.
 
