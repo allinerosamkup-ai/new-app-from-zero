@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { PrismaClient } from '@app/database';
+import { buildAuraSystemPrompt, getFirstName } from '../lib/aura-prompt';
 import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
@@ -59,7 +60,7 @@ export class InsightService {
     });
 
     // 2. Buscar Dados Brutos da Semana
-    const [checkins, journalSessions, timeline] = await Promise.all([
+    const [checkins, journalSessions, timeline, profile, onboarding] = await Promise.all([
       prisma.dailyCheckin.findMany({
         where: { userId, localDate: { gte: weekStart, lt: weekEnd } },
         orderBy: { localDate: 'asc' }
@@ -71,7 +72,15 @@ export class InsightService {
       prisma.timelineBlock.findMany({
         where: { userId, localDate: { gte: weekStart, lt: weekEnd } },
         orderBy: { localDate: 'asc' }
-      })
+      }),
+      prisma.profile.findUnique({
+        where: { id: userId },
+        select: { fullName: true },
+      }),
+      prisma.onboardingResponse.findUnique({
+        where: { userId },
+        select: { aiProfileSummary: true },
+      }),
     ]);
 
     const rawData = {
@@ -101,10 +110,19 @@ export class InsightService {
       tasksCompleted,
       tasksTotal: timeline.length
     };
+    const latestCheckin = checkins[checkins.length - 1];
+    const moodCycleContext = latestCheckin
+      ? [
+          latestCheckin.stateLabel ? `Ultimo estado: ${latestCheckin.stateLabel}.` : null,
+          `Humor ${latestCheckin.moodScore}/5 e energia ${latestCheckin.energyScore}/5.`,
+          latestCheckin.stateSummary ? `Leitura atual: ${latestCheckin.stateSummary}` : null,
+        ].filter(Boolean).join(' ')
+      : null;
+    const userName = getFirstName(profile?.fullName) ?? 'você';
 
     // 4. Chamada OpenAI para Análise de Padrões
     const prompt = `
-      Analise os dados semanais de um usuário para identificar padrões de humor e energia.
+      Analise os dados semanais para identificar padrões de humor e energia.
       
       DADOS DA SEMANA:
       - Médias: Humor ${summary.avgMood}/5, Energia ${summary.avgEnergy}/5.
@@ -122,7 +140,18 @@ export class InsightService {
 
     const response = await openai.chat.completions.create({
       model: this.MODEL,
-      messages: [{ role: 'system', content: prompt }],
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName,
+            profileSummary: onboarding?.aiProfileSummary ?? null,
+            moodCycleContext,
+            domain: 'insight',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
       response_format: { type: 'json_object' },
     });
 

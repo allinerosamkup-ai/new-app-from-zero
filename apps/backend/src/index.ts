@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -14,54 +15,30 @@ import { PlannerSyncSchema } from './contracts/planner.contract';
 import { JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { OnboardingProcessSchema } from './contracts/onboarding.contract';
 import { JournalService } from './services/journal.service';
+import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
+import { buildAuraSystemPrompt, getFirstName, type AuraPromptDomain } from './lib/aura-prompt';
+import {
+  AuraCommandMessageStreamSchema,
+  AuraCommandStartSchema,
+} from './contracts/aura-command.contract';
 import { z } from 'zod';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env'), override: true });
 
 const port = process.env.PORT || 3000;
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
-const defaultAllowed = ['localhost', '127.0.0.1', 'replit', 'replit.dev', 'replit.app'];
+const defaultAllowed = ['localhost', '127.0.0.1', 'replit', 'replit.dev', 'replit.app', 'airia.pro'];
 const defaultPrisma = new PrismaClient();
 
 type AppDependencies = {
   prisma?: PrismaClient;
   aiService?: Pick<typeof AIService, 'summarizeJournalSession' | 'streamJournalReply' | 'generateOnboardingProfile'>;
   journalService?: Pick<typeof JournalService, 'startOrResumeSession' | 'getSessionMessages' | 'buildRoutineContext' | 'nextOrderIndex'>;
+  auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
 };
-
-// ── Aura System Prompt ────────────────────────────────────────────────────────
-// Encapsula a persona, metodologia e perfil aprendido do usuário.
-// profileSummary = texto do onboarding (pode ser null se o usuário ainda não fez).
-function buildAuraSystemPrompt(
-  userName: string,
-  profileSummary?: string | null,
-  moodCycleContext?: string | null
-): string {
-  const profile = profileSummary
-    ? `\nO QUE SEI SOBRE ${userName.toUpperCase()}:\n${profileSummary}`
-    : '';
-  const cycleCtx = moodCycleContext
-    ? `\nCICLO DE HUMOR ATUAL DE ${userName.toUpperCase()}:\n${moodCycleContext}`
-    : '';
-  return `Você é Aura, assistente pessoal de ciclagem de humor e copiloto de vida de ${userName}.
-
-IDENTIDADE DO APP: Este é um app de ciclagem de humor — não um planner genérico. O ciclo de humor é o eixo central. Toda sugestão deve levar em conta ONDE a pessoa está no ciclo (fase elevada, fluindo, estável, descendo, baixa, esgotamento, recuperação, instável). O ciclo menstrual, quando presente, é apenas um modulador biológico secundário que pode amplificar estados do ciclo de humor.
-
-CONTEXTO CLÍNICO: Usuárias típicas têm TDAH, ciclotimia, transtorno depressivo ou bipolar tipo II. A disregulação emocional e a variabilidade de humor são realidades — não fraquezas. Nunca patologizar. Sempre normalizar o ciclo.
-
-METODOLOGIA:
-• Adaptar ao ciclo: fase elevada → aproveitar com estrutura; fase baixa → restaurar, não produzir; fase instável → rotina como âncora; recuperação → passos mínimos celebrados.
-• Terapia de Exposição: exposição gradual ao que a pessoa evita. Pequenos passos. Celebrar micro-avanços.
-• Psicologia somática: inércia ≠ preguiça — é sinal biológico. Movimento pequeno libera.
-• Autocompaixão: zero culpa. Zero "você deveria". A fase passa — ela sempre passou.
-• Copiloto proativo: antecipar o que a fase pede, não só reagir ao que foi perguntado.${cycleCtx}${profile}
-
-TOM: Acolhedor, próximo, como amiga íntima que ENTENDE ciclagem de humor. Use o nome. Frases curtas. Sem julgamento.
-REGRAS INVIOLÁVEIS: O ciclo de humor direciona o plano, não a força de vontade. Algo não feito → fase errada, não pessoa errada. "Meu ciclo tem ritmo próprio."`;
-}
 
 function writeSseEvent(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\n`);
@@ -95,12 +72,6 @@ function extractJsonValue(raw: string): unknown {
   }
 
   throw new Error('AI response contained incomplete JSON');
-}
-
-function getFirstName(fullName?: string | null): string | null {
-  if (!fullName) return null;
-  const firstName = fullName.trim().split(/\s+/)[0];
-  return firstName || null;
 }
 
 async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, context: Record<string, unknown>) {
@@ -196,7 +167,7 @@ REGRAS:
     ],
     temperature: 0.4,
     response_format: { type: 'json_object' },
-    max_tokens: 300,
+    max_completion_tokens: 300,
   });
 
   const content = completion.choices[0]?.message?.content?.trim() || '';
@@ -209,21 +180,137 @@ REGRAS:
   return rawTasks.map((task) => SuggestedTaskSchema.parse(task)).slice(0, 3);
 }
 
+function normalizeFreeText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isJournalClosingMessage(message: string): boolean {
+  const normalized = normalizeFreeText(message);
+  const markers = [
+    'por hoje e isso',
+    'ja terminei',
+    'ja acabei',
+    'acho que ja terminei',
+    'vou parar por aqui',
+    'vou ficando por aqui',
+    'encerrar sessao',
+    'finalizar sessao',
+    'tchau',
+    'ate mais',
+    'ate logo',
+    'isso e tudo por hoje',
+    'era isso por hoje',
+  ];
+
+  return markers.some((marker) => normalized.includes(marker));
+}
+
+async function finalizeJournalSession(args: {
+  prisma: PrismaClient;
+  aiService: Pick<typeof AIService, 'summarizeJournalSession'>;
+  journalSuggestedTasksGenerator: typeof generateJournalSuggestedTasks;
+  userId: string;
+  sessionId: string;
+  messages: Array<{ role: string; content: string }>;
+  userName: string;
+  profileSummary?: string | null;
+  moodCycleContext?: string | null;
+}) {
+  const summary = await args.aiService.summarizeJournalSession(args.messages);
+
+  let suggestedTasks: SuggestedTask[] = [];
+  try {
+    suggestedTasks = await args.journalSuggestedTasksGenerator({
+      systemPrompt: buildAuraSystemPrompt({
+        userName: args.userName,
+        profileSummary: args.profileSummary,
+        moodCycleContext: args.moodCycleContext,
+        domain: 'journal-finalize',
+      }),
+      userName: args.userName,
+      moodCycleContext: args.moodCycleContext,
+      recentMessages: args.messages
+        .filter((message) => message.role === 'user' || message.role === 'assistant')
+        .map((message) => ({
+          role: message.role as 'user' | 'assistant',
+          content: message.content,
+        })),
+    });
+  } catch (error) {
+    console.warn('[journal/finalize] Failed to generate suggested tasks:', error);
+  }
+
+  const updatedSession = await args.prisma.journalSession.update({
+    where: { id: args.sessionId },
+    data: {
+      status: 'completed',
+      summary: summary.summary,
+      emotions: summary.emotions,
+      themes: summary.themes,
+      suggestions: summary.suggestions || [],
+      finalizedAt: new Date(),
+    },
+  });
+
+  return {
+    updatedSession,
+    summary,
+    suggestedTasks,
+  };
+}
+
+function getSuggestPromptDomain(type: string): AuraPromptDomain {
+  if (type === 'checkin-response') {
+    return 'checkin';
+  }
+
+  if (type === 'home-messages') {
+    return 'home';
+  }
+
+  if (type === 'journal-tasks') {
+    return 'journal-finalize';
+  }
+
+  if (type === 'goal-subtasks' || type === 'goal-route' || type === 'gtd-clarify' || type === 'ai-goals') {
+    return 'goal-execution';
+  }
+
+  if (type === 'weekly-insight' || type === 'stability-analysis' || type === 'phase-transition' || type === 'follow-up') {
+    return 'longitudinal-insight';
+  }
+
+  return 'planning';
+}
+
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const prisma = dependencies.prisma ?? defaultPrisma;
   const aiService = dependencies.aiService ?? AIService;
   const journalService = dependencies.journalService ?? JournalService;
+  const auraCommandService = dependencies.auraCommandService ?? AuraCommandService;
   const journalSuggestedTasksGenerator = dependencies.generateJournalSuggestedTasks ?? generateJournalSuggestedTasks;
   const memoryService = new MemoryService(prisma);
+
+  const matchesAllowedHost = (origin: string, allowed: string) => {
+    try {
+      const { hostname, host } = new URL(origin);
+      return hostname === allowed || hostname.endsWith(`.${allowed}`) || host === allowed;
+    } catch {
+      return false;
+    }
+  };
 
   app.use(cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true); // same-origin or server-to-server
 
-      const originHost = origin.replace(/^https?:\/\//, '');
-      const isDefault = defaultAllowed.some((host) => originHost.includes(host));
-      const isExplicit = allowedOriginsEnv.some((allowed) => origin.includes(allowed));
+      const isDefault = defaultAllowed.some((host) => matchesAllowedHost(origin, host));
+      const isExplicit = allowedOriginsEnv.some((allowed) => origin === allowed || matchesAllowedHost(origin, allowed));
 
       if (isDefault || isExplicit) {
         callback(null, true);
@@ -236,6 +323,14 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use(express.json());
 
   app.get('/health', (req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Healthcheck público para monitoramento externo do domínio.
+  app.get('/api/health', (req: Request, res: Response) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -367,6 +462,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     });
 
     // 2. Chamar IA para Avaliar Estado
+    const checkinRuntimeContext = await resolveAiRuntimeContext(prisma, data.userId, {});
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -376,7 +472,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       physicalScore: data.physicalScore,
       socialScore: data.socialScore,
       sleepScore: data.sleepScore,
-      note: data.note
+      note: data.note,
+      userName: checkinRuntimeContext.userName,
+      profileSummary: checkinRuntimeContext.userProfileSummary,
+      moodCycleContext: checkinRuntimeContext.moodCycleContext,
     });
 
     // 3. Atualizar com Resultado da IA
@@ -501,6 +600,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       const routineCtx = await journalService.buildRoutineContext(prisma, data.userId);
       const runtimeContext = await resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext });
       const context = { ...routineCtx, moodCycleContext: runtimeContext.moodCycleContext };
+      const isClosingMessage = isJournalClosingMessage(data.message);
       const userOrderIndex = journalService.nextOrderIndex(existingMessages);
 
       await prisma.journalMessage.create({
@@ -537,12 +637,17 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
 
       const assistantContent = await aiService.streamJournalReply({
-        context,
+        context: {
+          ...context,
+          userName: runtimeContext.userName,
+          userProfileSummary: runtimeContext.userProfileSummary,
+        },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
           content: message.content,
         })),
         message: data.message,
+        closingMode: isClosingMessage,
         onDelta: (chunk) => {
           writeSseEvent(res, 'assistant.delta', { chunk });
         },
@@ -559,31 +664,6 @@ export function createApp(dependencies: AppDependencies = {}) {
         },
       });
 
-      try {
-        const suggestedTasks = await journalSuggestedTasksGenerator({
-          systemPrompt: buildAuraSystemPrompt(runtimeContext.userName, runtimeContext.userProfileSummary, runtimeContext.moodCycleContext),
-          userName: runtimeContext.userName,
-          moodCycleContext: runtimeContext.moodCycleContext,
-          recentMessages: [
-            ...existingMessages.map((message) => ({
-              role: message.role as 'user' | 'assistant',
-              content: message.content,
-            })),
-            { role: 'user', content: data.message },
-            { role: 'assistant', content: assistantContent },
-          ],
-        });
-
-        if (suggestedTasks.length > 0) {
-          writeSseEvent(res, 'assistant.suggested_tasks', {
-            sessionId: data.sessionId,
-            suggestedTasks,
-          });
-        }
-      } catch (error) {
-        console.warn('[journal/message/stream] Failed to generate suggested tasks:', error);
-      }
-
       writeSseEvent(res, 'assistant.completed', {
         sessionId: data.sessionId,
         message: {
@@ -593,6 +673,39 @@ export function createApp(dependencies: AppDependencies = {}) {
           createdAt: assistantMessage.createdAt?.toISOString?.() ?? new Date().toISOString(),
         },
       });
+
+      if (isClosingMessage) {
+        const finalization = await finalizeJournalSession({
+          prisma,
+          aiService,
+          journalSuggestedTasksGenerator,
+          userId: data.userId,
+          sessionId: data.sessionId,
+          messages: [
+            ...existingMessages.map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
+            { role: 'user', content: data.message },
+            { role: 'assistant', content: assistantContent },
+          ],
+          userName: runtimeContext.userName,
+          profileSummary: runtimeContext.userProfileSummary,
+          moodCycleContext: runtimeContext.moodCycleContext,
+        });
+
+        writeSseEvent(res, 'session.finalized', {
+          sessionId: finalization.updatedSession.id,
+          sessionStatus: 'completed',
+          summary: {
+            text: finalization.summary.summary,
+            emotions: finalization.summary.emotions,
+            themes: finalization.summary.themes,
+            suggestions: finalization.summary.suggestions,
+          },
+          suggestedTasks: finalization.suggestedTasks,
+        });
+      }
 
       return res.end();
     } catch (error: any) {
@@ -607,6 +720,79 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       writeSseEvent(res, 'error', {
         error: error instanceof Error ? error.message : 'Failed to stream journal message',
+      });
+
+      return res.end();
+    }
+  });
+
+  /**
+   * POST /api/aura/command/start
+   * Inicia uma sessão operacional da Aura central.
+   */
+  app.post('/api/aura/command/start', async (req: Request, res: Response) => {
+    try {
+      AuraCommandStartSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+
+      return res.json({
+        sessionId: randomUUID(),
+        sessionStatus: 'ready',
+        startedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+
+      console.error('[aura/command/start] Error:', error);
+      return res.status(500).json({ error: 'Failed to start Aura command session' });
+    }
+  });
+
+  /**
+   * POST /api/aura/command/stream
+   * Processa um comando operacional da Aura via SSE.
+   */
+  app.post('/api/aura/command/stream', async (req: Request, res: Response) => {
+    try {
+      const data = AuraCommandMessageStreamSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+      const runtimeContext = await resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext });
+
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+
+      writeSseEvent(res, 'session.started', {
+        sessionId: data.sessionId,
+      });
+
+      const commandResponse = await auraCommandService.interpretCommand({
+        message: data.message,
+        history: data.history,
+        userName: runtimeContext.userName,
+        profileSummary: runtimeContext.userProfileSummary,
+        moodCycleContext: runtimeContext.moodCycleContext,
+      });
+
+      writeSseEvent(res, 'assistant.completed', {
+        sessionId: data.sessionId,
+        response: commandResponse,
+      });
+
+      return res.end();
+    } catch (error: any) {
+      if (!res.headersSent) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ error: 'Validation failed', details: error.errors });
+        }
+
+        console.error('[aura/command/stream] Error:', error);
+        return res.status(500).json({ error: 'Failed to process Aura command' });
+      }
+
+      writeSseEvent(res, 'error', {
+        error: error instanceof Error ? error.message : 'Failed to process Aura command',
       });
 
       return res.end();
@@ -643,7 +829,7 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   const JournalFinalizeSchema = z.object({ sessionId: z.string().uuid() });
 
-  app.post('/api/journal/finalize', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/journal/finalize', async (req: Request, res: Response) => {
   const userId = (req as AuthRequest).userId;
 
   let sessionId: string;
@@ -671,28 +857,28 @@ export function createApp(dependencies: AppDependencies = {}) {
       return res.status(404).json({ error: 'No messages found for this session' });
     }
 
-    const summary = await AIService.summarizeJournalSession(messages);
-
-    const updatedSession = await prisma.journalSession.update({
-      where: { id: sessionId },
-      data: {
-        status: 'completed',
-        summary: summary.summary,
-        emotions: summary.emotions,
-        themes: summary.themes,
-        suggestions: summary.suggestions || [],
-        finalizedAt: new Date(),
-      },
+    const runtimeContext = await resolveAiRuntimeContext(prisma, userId, {});
+    const finalization = await finalizeJournalSession({
+      prisma,
+      aiService,
+      journalSuggestedTasksGenerator,
+      userId,
+      sessionId,
+      messages,
+      userName: runtimeContext.userName,
+      profileSummary: runtimeContext.userProfileSummary,
+      moodCycleContext: runtimeContext.moodCycleContext,
     });
 
     return res.json({
-      sessionId: updatedSession.id,
+      sessionId: finalization.updatedSession.id,
       summary: {
-        text: summary.summary,
-        emotions: summary.emotions,
-        themes: summary.themes,
-        suggestions: summary.suggestions,
+        text: finalization.summary.summary,
+        emotions: finalization.summary.emotions,
+        themes: finalization.summary.themes,
+        suggestions: finalization.summary.suggestions,
       },
+      suggestedTasks: finalization.suggestedTasks,
       sessionStatus: 'completed',
     });
   } catch (error: any) {
@@ -1093,7 +1279,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         const dtGoalsCtx = dtGoals.length ? `\nMetas ativas de ${userName}: ${dtGoals.map((g, i) => `${i+1}. "${g}"`).join(', ')}` : '';
         const dtHour = context.hour ?? new Date().getHours();
         const dtPeriodo = dtHour < 12 ? 'manhã' : dtHour < 18 ? 'tarde' : 'noite';
-        prompt = `Você é Aura, copiloto de humor de ${userName}. Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ESTA pessoa.
+        prompt = `Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ${userName}.
 
 ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}
 ${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${ragContext}
@@ -1113,7 +1299,7 @@ Retorne SOMENTE array JSON: [{"title":"título específico e real","category":"t
         prompt = `Você é uma assistente pessoal carinhosa. Com base nessa conversa de diário:\n\n${context.messages}\n\nSugira 2-3 tarefas práticas e gentis que a pessoa pode fazer hoje para apoiar o que foi discutido. Tom encorajador. Retorne SOMENTE um array JSON: [{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
       } else if (type === 'goal-subtasks') {
         const existing = context.existingSubtasks?.length ? `\nSubtarefas já existentes: ${context.existingSubtasks.join(', ')}` : '';
-        prompt = `Você é a Aura, assistente de ${userName} especializada em ciclagem de humor. ${userName} pode estar com energia baixa — pense em alguém com depressão ou TDAH que precisa de cada micro-passo explicado.
+        prompt = `${userName} pode estar com energia baixa ou oscilante. Gere micro-passos sem carga cognitiva e sem abstrações.
 
 Meta: "${context.goalTitle}"${existing}
 
@@ -1126,9 +1312,34 @@ Gere 4-5 MICRO-AÇÕES físicas e hiper-específicas. Regras OBRIGATÓRIAS:
 
 Exemplos para "ir à praia": ["Abrir o calendário e marcar um dia nos próximos 7 dias", "Verificar a previsão do tempo no celular para esse dia", "Separar o biquíni/sunga e o protetor solar agora", "Mandar mensagem para alguém: 'Vamos à praia [dia]?'", "Abrir Google Maps e ver quanto tempo leva para chegar"]
 
+- As ações não podem se repetir de forma disfarçada.
+- A primeira ação deve ser a mais fácil de começar em menos de 2 minutos.
+- Se já houver subtarefas parecidas, evite duplicar.
+
 Retorne SOMENTE um array JSON de strings. Sem explicação.`;
       } else if (type === 'weekly-insight') {
-        prompt = `Você é uma assistente pessoal carinhosa que cuida da rotina e bem-estar de ${userName}. Dados da semana:\n- Humor médio: ${context.avgHumor}/5\n- Energia média: ${context.avgEnergia}/5\n- Check-ins realizados: ${context.totalCheckins}\n- Dia de pico de humor: ${context.peakHumorDay || 'não identificado'}\n- Dia de menor energia: ${context.lowEnergyDay || 'não identificado'}\n\nGere um insight personalizado e acolhedor sobre os padrões da semana de ${userName} + uma ação concreta para a próxima. Tom motivador e carinhoso como uma amiga organizada.\nRetorne SOMENTE JSON: {"insight":"2 frases personalizadas e acolhedoras sobre o padrão identificado","action":"1 ação concreta e gentil para a próxima semana","category":"energia|humor|rotina|autocuidado","actionTitle":"título curto da ação (máx 40 chars)"}. Sem texto fora do JSON.`;
+        prompt = `${userName} precisa de uma leitura semanal realmente útil, como uma assistente pessoal autônoma que acompanha o ciclo ao longo do tempo.
+
+Dados da semana:
+- Humor médio: ${context.avgHumor}/5
+- Energia média: ${context.avgEnergia}/5
+- Check-ins realizados: ${context.totalCheckins}
+- Dia de pico de humor: ${context.peakHumorDay || 'não identificado'}
+- Dia de menor energia: ${context.lowEnergyDay || 'não identificado'}
+
+Gere:
+1. "insight": 2 frases que mostrem o padrão mais importante da semana sem soar genérico.
+2. "action": 1 ação concreta e preventiva para a próxima semana.
+3. "category": energia|humor|rotina|autocuidado.
+4. "actionTitle": título curto, específico e acionável.
+
+REGRAS:
+- Leia padrão e implicação prática; não faça só resumo bonito.
+- Soe como quem conhece o histórico e consegue antecipar necessidade.
+- Evite autoajuda vazia, clichê e elogio sem utilidade.
+- A ação precisa ser pequena, estratégica e claramente derivada do padrão.
+
+Retorne SOMENTE JSON: {"insight":"2 frases personalizadas e úteis sobre o padrão identificado","action":"1 ação concreta e preventiva para a próxima semana","category":"energia|humor|rotina|autocuidado","actionTitle":"título curto da ação (máx 40 chars)"}. Sem texto fora do JSON.`;
       } else if (type === 'stability-analysis') {
         const history = (context.history || []) as Array<{date:string;humor:number;energia:number;sono?:number;fisico?:number;social?:number}>;
         const historyLines = history.map((h: any) =>
@@ -1137,25 +1348,70 @@ Retorne SOMENTE um array JSON de strings. Sem explicação.`;
         const humorVals = history.map((h: any) => h.humor);
         const avgH = humorVals.reduce((a: number, b: number) => a + b, 0) / humorVals.length;
         const variance = humorVals.reduce((a: number, b: number) => a + Math.pow(b - avgH, 2), 0) / humorVals.length;
-        prompt = `Você é uma assistente pessoal carinhosa ("babá digital") que cuida da rotina e saúde emocional de ${userName}, especializada em ciclagem de humor. Analise os dados dos últimos ${history.length} dias:\n\n${historyLines}\n\nVariância de humor: ${variance.toFixed(2)} (>1.5 = alta labilidade afetiva).\n\nCom base em IPSRT, DBT e ritmo social:\n1. Score de estabilidade 0-100 (100 = muito estável)\n2. Tendência atual (stable/rising/falling/alert)\n3. Padrões detectados de forma acolhedora\n4. 2-3 micro-ações gentis e práticas para ${userName}\n\nTom carinhoso, próximo, como uma amiga organizada que cuida dela.\nRetorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases acolhedoras sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"ação gentil e prática","category":"sono|rotina|mindfulness|autocuidado|foco","why":"razão breve"}]}. Sem texto fora do JSON.`;
+        prompt = `Analise os dados dos últimos ${history.length} dias de ${userName} como uma assistente pessoal autônoma especializada em ciclagem de humor.
+
+${historyLines}
+
+Variância de humor: ${variance.toFixed(2)} (>1.5 = alta labilidade afetiva).
+
+Com base em IPSRT, DBT e ritmo social, retorne:
+1. Score de estabilidade 0-100.
+2. Tendência atual (stable/rising/falling/alert).
+3. "pattern": 2 frases mostrando o que está se repetindo de verdade.
+4. "insight": 1 frase curta que traduza o risco ou oportunidade do momento.
+5. 2-3 ações pequenas, preventivas e práticas.
+
+REGRAS:
+- Não descreva só o óbvio; identifique implicação prática.
+- Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
+- As ações devem reduzir atrito, estabilizar rotina ou proteger energia.
+- Evite linguagem clínica pesada, mas mantenha raciocínio técnico por trás.
+
+Retorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases úteis sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"ação gentil e prática","category":"sono|rotina|mindfulness|autocuidado|foco","why":"razão breve"}]}. Sem texto fora do JSON.`;
       } else if (type === 'ai-goals') {
         const mood = context.mood || 'equilibrada';
         const existing = (context.existingGoals || []).join(', ') || 'nenhuma ainda';
-        prompt = `Você é uma assistente pessoal carinhosa que cuida da rotina de ${userName}. Estado emocional: "${mood}". Metas atuais: ${existing}.\n\nSugira 3 metas pessoais significativas, alcançáveis e motivadoras — mistura de casa, autocuidado, trabalho e desenvolvimento pessoal. Metas específicas e realistas para o momento atual de ${userName}.\nRetorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta 3"]. Sem explicação.`;
+        prompt = `${userName} quer novas metas. Estado atual: "${mood}". Metas já existentes: ${existing}.
+
+Gere 3 metas com cara de resultado real, não slogan.
+
+REGRAS:
+- Misture vida prática, autocuidado e avanço pessoal ou profissional.
+- Cada meta deve soar concluível em dias ou poucas semanas.
+- Evite qualquer meta genérica como "ser mais organizada", "ter foco" ou "cuidar de mim".
+- Prefira resultados observáveis como "Montar rotina de sono para dormir antes de 23h" ou "Fechar portfólio com 3 projetos publicados".
+- Não repita metas muito parecidas entre si nem copie metas já existentes.
+
+Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta 3"]. Sem explicação.`;
       } else if (type === 'home-messages') {
         const moodLabel = context.moodLabel || 'Em Equilíbrio';
         const moodKey = context.mood || 'equilibrada';
         const taskCount = context.taskCount ?? 0;
         const hour = context.hour ?? new Date().getHours();
         const periodo = hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';
-        prompt = `Estado de ${userName}: "${moodLabel}" (${moodKey}) | Período: ${periodo} | Tarefas hoje: ${taskCount}.${ragContext}
+        prompt = `${userName} está abrindo a home agora.
 
-Gere para ${userName} AGORA — específico ao estado e período:
-1. "motivacional": 1-2 frases de encorajamento. Use o nome se soar natural.
-2. "autocuidado": 4 sugestões práticas com emojis. Específicas, não genéricas. Ex: "🫧 Lavar o rosto com água gelada".
-3. "proactive": 1 ação gentil e concreta para fazer AGORA.
+SINAIS DO MOMENTO:
+- Estado percebido: "${moodLabel}" (${moodKey})
+- Período do dia: ${periodo}
+- Tarefas ativas hoje: ${taskCount}
+${ragContext}
 
-JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","...","..."],"proactive":{"emoji":"🎯","title":"...","desc":"1-2 frases","actionPath":"rota da app ou null (ex: /checkin, /goals, /planner, /insights, /journal)"}}`;
+Gere uma presença de home que pareça real, não texto de chatbot.
+
+OBJETIVO:
+1. "motivacional": 1-2 frases curtas que mostrem leitura do momento + direção suave. Não use clichês como "você consegue", "vá com calma" ou "um passo de cada vez" sem contexto.
+2. "autocuidado": 4 ações diferentes entre si, rápidas, concretas e específicas. Cada item deve começar com emoji e ter 3-10 palavras. Varie entre corpo, ambiente, foco e descanso.
+3. "proactive": 1 ação para fazer AGORA dentro do app. "title" com 2-5 palavras. "desc" com 1 frase dizendo por que isso faz sentido neste momento. "actionPath" deve ser uma rota real ou null.
+
+REGRAS:
+- Não repita literalmente o estado na primeira frase.
+- Use o nome no máximo uma vez.
+- Se o estado indicar proteção ou baixa energia, reduza atrito e puxe para cuidado ou clareza.
+- Se houver energia boa e poucas tarefas, puxe para movimento e ação.
+- Nada aqui pode servir igual para qualquer pessoa em qualquer horário.
+
+JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","...","..."],"proactive":{"emoji":"🎯","title":"...","desc":"...","actionPath":"rota da app ou null (ex: /checkin, /goals, /planner, /insights, /journal)"}}`;
       } else if (type === 'agenda-blocks') {
         const mood = context.mood || 'equilibrada';
         const moodLabel = context.moodLabel || 'Em Equilíbrio';
@@ -1204,15 +1460,17 @@ ${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
 ${nota}${ragContext}
 
-Responda como Aura — acolhedora, próxima, como amiga íntima que CONHECE ${userName} e os padrões dela.
+Responda como Aura, com leitura específica e útil para este momento.
 
 REGRAS:
-- Reference o padrão real do histórico se relevante (ex: "nos últimos dias você estava...")
-- Se streak ≥ 3 dias, mencione a sequência de forma encorajadora e natural (1 vez, sem exagero)
-- NÃO use frases genéricas de autoajuda
-- NÃO repita o estado de volta de forma óbvia
-- A sugestão deve ser micro-ação de 5-10min, não uma tarefa grande
-- Use o nome de forma natural (não em toda frase)
+- "message" deve ter 2-3 frases curtas. A primeira precisa ler um padrão, contraste ou nuance do momento; não repita o rótulo do estado como eco.
+- Se o histórico ajudar, cite o padrão real de forma natural (ex: "nos últimos dias..." ou "hoje veio mais baixo que ontem...").
+- Se streak ≥ 3 dias, mencione a sequência no máximo uma vez e só se encaixar organicamente.
+- NÃO use frases genéricas de autoajuda.
+- NÃO use sermão, diagnóstico ou tom maternal demais.
+- "suggestion" deve ser uma micro-ação de 5-10 minutos que caiba nas próximas 2 horas.
+- A sugestão deve ser específica o bastante para a pessoa começar sem precisar planejar mais nada.
+- Use o nome de forma natural, no máximo uma vez.
 
 JSON APENAS: {"message":"2-3 frases acolhedoras e específicas sobre este momento","suggestionEmoji":"emoji","suggestion":"micro-ação concreta para as próximas 2 horas"}`;
       } else if (type === 'gtd-clarify') {
@@ -1239,6 +1497,10 @@ Regras GTD:
 - referencia: informação útil, sem ação necessária
 - algum_dia: seria bom fazer, sem comprometimento agora
 - deletar: irrelevante ou já resolvido
+- Nunca marque como proxima_acao se o texto ainda depender de decidir, pesquisar amplamente, organizar ou "pensar melhor".
+- Se "proxima_acao" ou "projeto" forem escolhidos, "proxima_acao" deve começar com verbo físico e concreto.
+- "titulo" deve ficar limpo, curto e acionável; sem floreio.
+- "razao" deve ser breve e específica, não genérica.
 
 Sem texto fora do JSON.`;
       } else if (type === 'goal-route') {
@@ -1261,32 +1523,46 @@ Regras de classificação:
 - "meta": qualquer coisa que exige 2+ ações para concluir (ex: "ir à praia", "aprender inglês", "organizar o quarto", "fazer exercício") — se tem sub-etapas, é meta
 - "proxima_acao": 1 ação física ÚNICA e imediata, ligada a uma meta já existente (ex: "mandar email para Maria", "comprar protetor solar")
 - "inbox": texto vago, emoção, ideia sem contexto claro
-
-Na dúvida entre "meta" e "proxima_acao": escolha SEMPRE "meta" — melhor quebrar em subtarefas do que deixar como ação vaga.
+- Nunca use "proxima_acao" se o texto ainda estiver abstrato, emocional, amplo ou dependente de decisão.
+- Se escolher "meta", "titulo" deve soar como resultado ou projeto claro, não frase solta.
+- Se escolher "proxima_acao", "titulo" deve começar com verbo físico.
+- Na dúvida entre "meta" e "proxima_acao": escolha SEMPRE "meta" — melhor quebrar em subtarefas do que deixar como ação vaga.
 
 Sem texto fora do JSON.`;
       } else if (type === 'phase-transition') {
         const { fromPhase, toPhase, fromLabel, toLabel } = context as any;
-        prompt = `Você é a Aura, assistente pessoal de ${userName} especializada em ciclagem de humor.
+        prompt = `Você é a Aura, assistente pessoal autônoma de ${userName}, especializada em ciclagem de humor.
 
 A fase de humor de ${userName} acabou de mudar: de "${fromLabel}" (${fromPhase}) → "${toLabel}" (${toPhase}).
 
 Estado atual do ciclo: ${moodCycleContext || 'sem dados adicionais'}.
 
 Reaja a essa transição de fase:
-1. "message": 2-3 frases acolhedoras e específicas sobre ESTA transição. Use o nome. Seja empática com a mudança — sem julgamento. Explique o que essa fase significa no ciclo dela.
-2. "tip": 1 ação concreta e gentil para os próximas horas adaptada a esta fase.
+1. "message": 2-3 frases sobre ESTA transição, mostrando que você percebeu a mudança e já está recalibrando a rota.
+2. "tip": 1 ação concreta e preventiva para as próximas horas adaptada a esta nova fase.
+
+REGRAS:
+- Não descreva a transição como evento abstrato; trate como mudança operacional real na forma de conduzir o dia.
+- Soe proativa: você viu a mudança e já está orientando o próximo ajuste.
+- Não use tom dramático nem genérico.
+- A tip deve ajudar a proteger estabilidade, aproveitar janela boa ou reduzir dano, conforme a fase.
 
 JSON APENAS: {"message":"...","tip":"..."}`;
       } else if (type === 'follow-up') {
         const { suggestionTitle, suggestionCategory } = context as any;
-        prompt = `Você é a Aura, assistente pessoal de ${userName}.
+        prompt = `Você é a Aura, assistente pessoal autônoma de ${userName}.
 
 Algumas horas atrás, você sugeriu para ${userName}: "${suggestionTitle}" (categoria: ${suggestionCategory}).
 
 Estado atual: ${moodCycleContext || 'sem dados'}.
 
-Escreva uma mensagem de acompanhamento carinhosa e curta para perguntar como foi. Tom próximo, sem pressão. 1-2 frases apenas.
+Escreva uma mensagem curta de acompanhamento que mostre memória, iniciativa e baixa pressão.
+
+REGRAS:
+- Soe como quem acompanha o processo de verdade, não como lembrete automático.
+- Pode perguntar como foi, mas com suavidade e utilidade.
+- Se fizer sentido, ofereça uma bifurcação simples: continuar, reduzir, adiar ou ajustar.
+- 1-2 frases apenas. Sem cobrança, sem culpa, sem discurso motivacional vazio.
 
 JSON APENAS: {"message":"..."}`;
       } else {
@@ -1299,10 +1575,18 @@ JSON APENAS: {"message":"..."}`;
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         messages: [
-          { role: 'system' as const, content: buildAuraSystemPrompt(userName, userProfileSummary, moodCycleContext) },
+          {
+            role: 'system' as const,
+            content: buildAuraSystemPrompt({
+              userName,
+              profileSummary: userProfileSummary,
+              moodCycleContext,
+              domain: getSuggestPromptDomain(type),
+            }),
+          },
           { role: 'user' as const, content: prompt },
         ],
-        max_tokens: maxTokens,
+        max_completion_tokens: maxTokens,
         temperature: plainTextTypes.has(type) ? 0.7 : 0.4,
         ...(jsonObjectTypes.has(type) ? { response_format: { type: 'json_object' as const } } : {}),
       });
@@ -1360,7 +1644,15 @@ JSON APENAS: {"message":"..."}`;
         messages: [
           {
             role: 'system',
-            content: buildAuraSystemPrompt(firstName, existingSummary, moodCycleContext),
+            content: buildAuraSystemPrompt({
+              userName: firstName,
+              profileSummary: existingSummary,
+              moodCycleContext,
+              domain: 'insight',
+              extraInstructions: [
+                'Atualize o perfil com base em padroes recorrentes, nao em um episodio isolado.',
+              ],
+            }),
           },
           {
             role: 'user',
@@ -1393,7 +1685,7 @@ JSON APENAS: {"profileSummary":"..."}`,
         ],
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         response_format: { type: 'json_object' },
-        max_tokens: 300,
+        max_completion_tokens: 300,
         temperature: 0.4,
       } as any);
 
@@ -1438,7 +1730,8 @@ JSON APENAS: {"profileSummary":"..."}`,
     const redirectUri = `${process.env.API_URL || 'http://localhost:3001'}/api/gcal/callback`;
     const scopes = 'https://www.googleapis.com/auth/calendar.readonly';
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&access_type=offline&prompt=consent&state=${(req as AuthRequest).userId}`;
-    return res.json({ authUrl });
+    // Keep both keys for compatibility with the current frontend and future callers.
+    return res.json({ url: authUrl, authUrl });
   });
 
   app.get('/api/gcal/callback', async (req: Request, res: Response) => {

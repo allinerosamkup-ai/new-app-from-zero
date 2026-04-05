@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { api } from "../lib/api";
-import { parseAiSuggestion } from "../lib/ai";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../components/Toast";
 import "../styles/aura.css";
@@ -84,7 +83,6 @@ export function JournalPage() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [suggestedTasks, setSuggestedTasks] = useState<AiTask[]>([]);
-  const [streamSuggestedTasks, setStreamSuggestedTasks] = useState<AiTask[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [acceptedIdx, setAcceptedIdx] = useState<Set<number>>(new Set());
   const [rejectedIdx, setRejectedIdx] = useState<Set<number>>(new Set());
@@ -183,6 +181,7 @@ export function JournalPage() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistantMsg = "";
+      let autoFinalized = false;
 
       setMessages(prev => [...prev, { role: "assistant", content: "" }]);
 
@@ -207,12 +206,19 @@ export function JournalPage() {
                   newMsgs[newMsgs.length - 1] = data.message;
                   return newMsgs;
                 });
-              } else if (data.suggestedTasks && Array.isArray(data.suggestedTasks)) {
-                setStreamSuggestedTasks(data.suggestedTasks);
+              } else if (data.sessionStatus === "completed") {
+                autoFinalized = true;
+                setSuggestedTasks(Array.isArray(data.suggestedTasks) ? data.suggestedTasks.slice(0, 3) : []);
+                setSuggestionsLoading(false);
+                setPhase("suggestions");
               }
             } catch (_) { /* ignore partial JSON */ }
           }
         }
+      }
+
+      if (autoFinalized) {
+        showSuccess("Sessão finalizada e sugestões preparadas.");
       }
     } catch (err) {
       console.error("Chat error:", err);
@@ -225,28 +231,16 @@ export function JournalPage() {
 
   async function finalizeSession() {
     if (!sessionId) return;
-    try {
-      await api.post('/journal/finalize', { sessionId });
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel finalizar a sessao.");
-    }
-    // Ask AI for task suggestions based on journal conversation
     setSuggestionsLoading(true);
     setPhase("suggestions");
     try {
-      if (streamSuggestedTasks.length > 0) {
-        setSuggestedTasks(streamSuggestedTasks.slice(0, 3));
-      } else {
-        const lastMessages = messages.slice(-6).map(m => `${m.role === 'user' ? 'Usuário' : 'IA'}: ${m.content}`).join('\n');
-        const res = await api.post('/ai/suggest', {
-          type: 'journal-tasks',
-          context: { method: selectedMethod?.id ?? 'free', messages: lastMessages, mood: state.mood, moodCycleContext: cycleReport.aiContext },
-        }) as any;
-        const parsed = parseAiSuggestion<AiTask[]>(res.suggestion);
-        if (Array.isArray(parsed)) setSuggestedTasks(parsed.slice(0, 3));
-      }
+      const result = await api.post('/journal/finalize', { sessionId }) as {
+        suggestedTasks?: AiTask[];
+      };
+      setSuggestedTasks(Array.isArray(result?.suggestedTasks) ? result.suggestedTasks.slice(0, 3) : []);
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel gerar sugestoes do diario.");
+      showError(error instanceof Error ? error.message : "Nao foi possivel finalizar a sessao.");
+      setSuggestedTasks([]);
     }
     setSuggestionsLoading(false);
   }

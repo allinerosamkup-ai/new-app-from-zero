@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
+import { buildAuraSystemPrompt } from '../lib/aura-prompt';
 import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
@@ -38,9 +39,12 @@ export class CheckinService {
     socialScore?: number;
     sleepScore?: number;
     note?: string;
-  }): Promise<CheckinState> {
+    userName?: string;
+    profileSummary?: string | null;
+    moodCycleContext?: string | null;
+  }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState> {
     const prompt = `
-Analise os dados de check-in e retorne um estado humanizado.
+Analise os dados de check-in e retorne uma leitura humanizada, específica e útil.
 
 DADOS:
 - Momento: ${data.checkinSlot || 'não informado'}
@@ -51,18 +55,33 @@ DADOS:
 
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
-- stateLabel: nome humanizado do estado (ex: "Dia Sensível", "Energia Alta", "Momento de Descanso")
-- analysis: 1-2 frases sobre o estado energético atual (tom Aura: gentil, observador, sem julgamento)
-- recommendations: 2-3 micro-ações gentis baseadas nos dados (terapia de exposição + hábitos gentis: passos pequenos)
-- suggestedIntensity: 'L' (energia baixa/sensível), 'M' (equilibrada), 'P' (energia alta/focada)
+- stateLabel: nome curto, humano e sóbrio do estado; evite rótulos dramáticos.
+- analysis: 1-2 frases que leiam o momento sem repetir os números de forma óbvia.
+- recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si e sem clichês.
+- suggestedIntensity: 'L' (energia baixa/sensível), 'M' (equilibrada), 'P' (energia alta/focada).
+- rationale: explicação interna curta e técnica, sem linguagem clínica pesada.
+- Evite frases genéricas como "vá com calma", "um passo de cada vez" ou "você consegue" sem contexto.
+- Se sono, corpo e energia estiverem baixos juntos, puxe para proteção e redução de carga.
+- Se clareza estiver alta com energia boa, puxe para foco e estrutura.
 
 JSON APENAS:
 {"stateLabel":"...","stateLabelType":"leve|moderado|sensível|crítico","analysis":"...","recommendations":["..."],"suggestedIntensity":"L|M|P","rationale":"..."}
     `;
 
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: this.MODEL,
-      messages: [{ role: 'system', content: prompt }],
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: data.userName,
+            profileSummary: data.profileSummary,
+            moodCycleContext: data.moodCycleContext,
+            domain: 'checkin',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
       response_format: { type: 'json_object' },
     });
 

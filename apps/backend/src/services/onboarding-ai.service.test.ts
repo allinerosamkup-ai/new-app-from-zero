@@ -3,28 +3,32 @@ import assert from 'node:assert/strict';
 import { AIService } from './ai.service';
 
 async function run() {
+  let capturedMessages: Array<{ role: string; content: string }> = [];
   const fakeClient = {
     chat: {
       completions: {
-        create: async () => ({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  profileSummary: 'Pessoa em fase de reorganização da rotina com sensação atual de sobrecarga e busca de mais previsibilidade.',
-                  routineSummaryNormalized: 'Acorda às 07:00, dorme às 23:00 e sente mais peso no fim da tarde em dias de trabalho intenso.',
-                  initialStateSummary: 'Chega ao app se sentindo cansada, com sono instável recente e necessidade de um dia mais gentil.',
-                  topThemes: ['sono', 'rotina', 'trabalho'],
-                  initialSuggestions: [
-                    'Comece os próximos dias com blocos leves antes das tarefas mais exigentes.',
-                    'Observe se noites curtas antecedem as quedas de energia da tarde.',
-                    'Deixe espaço de respiro entre tarefas importantes.',
-                  ],
-                }),
+        create: async ({ messages }: any) => {
+          capturedMessages = messages;
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    profileSummary: 'Pessoa em fase de reorganização da rotina com sensação atual de sobrecarga e busca de mais previsibilidade.',
+                    routineSummaryNormalized: 'Acorda às 07:00, dorme às 23:00 e sente mais peso no fim da tarde em dias de trabalho intenso.',
+                    initialStateSummary: 'Chega ao app se sentindo cansada, com sono instável recente e necessidade de um dia mais gentil.',
+                    topThemes: ['sono', 'rotina', 'trabalho'],
+                    initialSuggestions: [
+                      'Comece os próximos dias com blocos leves antes das tarefas mais exigentes.',
+                      'Observe se noites curtas antecedem as quedas de energia da tarde.',
+                      'Deixe espaço de respiro entre tarefas importantes.',
+                    ],
+                  }),
+                },
               },
-            },
-          ],
-        }),
+            ],
+          };
+        },
       },
     },
   };
@@ -48,6 +52,11 @@ async function run() {
   assert.match(result.profileSummary, /reorganização da rotina/i);
   assert.equal(result.topThemes[0], 'sono');
   assert.equal(result.initialSuggestions.length, 3);
+  assert.equal(capturedMessages[0]?.role, 'system');
+  assert.match(capturedMessages[0]?.content || '', /Você é Aura/i);
+  assert.match(capturedMessages[0]?.content || '', /ONBOARDING/i);
+  assert.equal(capturedMessages[1]?.role, 'user');
+  assert.match(capturedMessages[1]?.content || '', /DADOS DO USUÁRIO/i);
 }
 
 run()

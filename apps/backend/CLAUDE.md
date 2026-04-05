@@ -8,9 +8,9 @@
 - Supabase Auth (JWT)
 
 ## Core Functions
-### `buildAuraSystemPrompt(userName, profileSummary?, moodCycleContext?)`
-Arquivo: `src/index.ts`
-Gera o prompt de sistema unificado para a Aura. O `moodCycleContext` deve ser injetado para que a IA saiba em qual fase do ciclo de humor o usuário se encontra.
+### `buildAuraSystemPrompt({ userName?, profileSummary?, moodCycleContext?, domain?, extraInstructions? })`
+Arquivo: `src/lib/aura-prompt.ts`
+Gera o prompt de sistema unificado para a Aura. O `domain` define a policy da superfície (`journal-live`, `journal-finalize`, `aura-command`, `checkin`, `planning`, `home`, `insight`, `summary`, etc.) e o `moodCycleContext` deve ser injetado quando houver contexto de fase.
 
 ### `AIService.streamJournalReply({ context, history, message, onDelta })`
 Arquivo: `src/services/ai.service.ts`

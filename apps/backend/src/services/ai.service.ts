@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { OnboardingAiOutputSchema, type OnboardingAiOutput } from '../contracts/onboarding-ai.contract';
+import { buildAuraSystemPrompt } from '../lib/aura-prompt';
 import '../lib/load-env';
 
 let _openai: OpenAI | null = null;
@@ -34,6 +35,8 @@ export type JournalStreamHistoryMessage = {
 };
 
 export type JournalPromptContext = {
+  userName?: string;
+  userProfileSummary?: string | null;
   routineSummary?: string;
   promptSummary: string;
   topThemes: string[];
@@ -69,16 +72,12 @@ export class AIService {
       : '';
 
     return `
-      Você é um assistente de diário emocional com foco em acolhimento, autorregulação e organização prática da rotina.
-
       CONTEXTO DA PESSOA:
       ${context.promptSummary}${cycleCtx}
 
       REGRAS:
+      - Use este contexto como pano de fundo da resposta, sem repeti-lo inteiro para a pessoa.
       - Responda em português do Brasil.
-      - Use tom acolhedor, claro e não clínico.
-      - Nunca faça diagnósticos médicos ou psiquiátricos.
-      - Não invente memórias; use apenas o contexto e o histórico fornecidos.
       - Quando fizer sentido, conecte a conversa com rotina, energia e organização do dia.
       - Prefira respostas concisas, naturais e úteis.
     `.trim();
@@ -86,9 +85,7 @@ export class AIService {
 
   private static buildOnboardingPrompt(input: OnboardingProfileInput): string {
     return `
-      Você é um assistente de onboarding de um app de humor, energia e rotina.
-
-      Sua tarefa é ler as respostas iniciais do usuário e devolver um resumo estruturado e útil para iniciar a personalização do app.
+      Leia as respostas iniciais do usuário e devolva um resumo estruturado e útil para iniciar a personalização do app.
 
       DADOS DO USUÁRIO:
       - Nome de uso: ${input.fullName}
@@ -127,6 +124,7 @@ export class AIService {
       context: JournalPromptContext;
       history: JournalStreamHistoryMessage[];
       message: string;
+      closingMode?: boolean;
       onDelta?: (chunk: string) => void;
     },
     client: Pick<OpenAI, 'chat'> = openai,
@@ -138,7 +136,23 @@ export class AIService {
       model: this.MODEL,
       stream: true,
       messages: [
-        { role: 'system', content: systemPrompt },
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: input.context.userName,
+            profileSummary: input.context.userProfileSummary,
+            moodCycleContext: input.context.moodCycleContext,
+            domain: 'journal-live',
+            extraInstructions: input.closingMode
+              ? [
+                  'A pessoa está encerrando a sessão agora.',
+                  'Responda com um fechamento curto, acolhedor e conclusivo em no máximo 3 frases.',
+                  'Não faça pergunta aberta e não sugira tarefas aqui.',
+                ]
+              : undefined,
+          }),
+        },
+        { role: 'user', content: systemPrompt },
         ...recentHistory.map((message) => ({
           role: message.role,
           content: message.content,
@@ -175,7 +189,16 @@ export class AIService {
 
     const response = await client.chat.completions.create({
       model: this.MODEL,
-      messages: [{ role: 'system', content: prompt }],
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: input.fullName,
+            domain: 'onboarding',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
       response_format: { type: 'json_object' },
     } as any);
 
@@ -196,7 +219,6 @@ export class AIService {
       .join('\n');
 
     const prompt = `
-      Você é um assistente especializado em acolhimento emocional.
       Analise a sessão de diário fornecida e extraia um resumo estruturado.
 
       CONVERSA:
@@ -224,7 +246,15 @@ export class AIService {
 
     const response = await openai.chat.completions.create({
       model: this.MODEL,
-      messages: [{ role: 'system', content: prompt }],
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            domain: 'summary',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
       response_format: { type: 'json_object' },
     });
 

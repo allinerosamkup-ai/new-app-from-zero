@@ -4,20 +4,24 @@ import { AIService } from './ai.service';
 
 async function run() {
   const deltas: string[] = [];
+  let capturedMessages: Array<{ role: string; content: string }> = [];
 
   const fakeClient = {
     chat: {
       completions: {
-        create: async () => ({
-          async *[Symbol.asyncIterator]() {
-            yield {
-              choices: [{ delta: { content: 'Olá, ' } }],
-            };
-            yield {
-              choices: [{ delta: { content: 'vamos organizar isso juntas.' } }],
-            };
-          },
-        }),
+        create: async ({ messages }: any) => {
+          capturedMessages = messages;
+          return {
+            async *[Symbol.asyncIterator]() {
+              yield {
+                choices: [{ delta: { content: 'Olá, ' } }],
+              };
+              yield {
+                choices: [{ delta: { content: 'vamos organizar isso juntas.' } }],
+              };
+            },
+          };
+        },
       },
     },
   };
@@ -29,6 +33,8 @@ async function run() {
         promptSummary: 'Rotina percebida: Costuma trabalhar melhor no fim da manhã.',
         topThemes: ['trabalho'],
         topPlannerCategories: ['trabalho'],
+        userName: 'Ana',
+        userProfileSummary: 'Prefere blocos mais leves quando acorda cansada.',
         checkinToday: {
           moodScore: 3,
           energyScore: 2,
@@ -48,6 +54,12 @@ async function run() {
 
   assert.equal(result, 'Olá, vamos organizar isso juntas.');
   assert.deepEqual(deltas, ['Olá, ', 'vamos organizar isso juntas.']);
+  assert.equal(capturedMessages[0]?.role, 'system');
+  assert.match(capturedMessages[0]?.content || '', /Você é Aura/i);
+  assert.match(capturedMessages[0]?.content || '', /DIARIO AO VIVO/i);
+  assert.match(capturedMessages[0]?.content || '', /Não presuma diagnósticos/i);
+  assert.equal(capturedMessages[1]?.role, 'user');
+  assert.match(capturedMessages[1]?.content || '', /CONTEXTO DA PESSOA/i);
 }
 
 run()
