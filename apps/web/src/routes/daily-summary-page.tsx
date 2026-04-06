@@ -51,7 +51,7 @@ export function DailySummaryPage() {
 
   function confirmTasks() {
     Promise.all(
-      tasks.filter((t) => !t.discarded).map((task) => addTask(task.title, task.time, task.category))
+      tasks.filter((t) => !t.discarded).map((task) => addTask(task.title, task.time, task.category, { forceSave: true }))
     )
       .then(() => {
         setSaved(true);

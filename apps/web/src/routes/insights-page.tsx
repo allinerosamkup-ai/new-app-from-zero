@@ -208,7 +208,7 @@ export function InsightsPage() {
 
   function applyAction() {
     if (!aiInsight) return;
-    addTask(aiInsight.actionTitle, "09:00", aiInsight.category)
+    addTask(aiInsight.actionTitle, "09:00", aiInsight.category, { forceSave: true })
       .then(() => {
         setTaskAdded(true);
         showSuccess("Acao adicionada ao planner.");

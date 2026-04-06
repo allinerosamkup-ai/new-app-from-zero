@@ -94,6 +94,45 @@ function minutesToTime(m: number) {
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
+function agendaTaskKey(blockIndex: number, taskIndex: number) {
+  return `${blockIndex}:${taskIndex}`;
+}
+
+function dedupeAgendaBlocks(blocks: AgendaBlock[]): AgendaBlock[] {
+  const seenTasks = new Set<string>();
+
+  return blocks.map((block) => {
+    const uniqueTasks = block.tarefas_sugeridas
+      .map((task) => task.trim())
+      .filter(Boolean)
+      .filter((task) => {
+        const key = task.toLowerCase();
+        if (seenTasks.has(key)) return false;
+        seenTasks.add(key);
+        return true;
+      });
+
+    return {
+      ...block,
+      tarefas_sugeridas: uniqueTasks,
+    };
+  });
+}
+
+function buildAgendaSelection(blocks: AgendaBlock[]) {
+  const selected = new Set<string>();
+
+  blocks.forEach((block, blockIndex) => {
+    const isSkip = block.tipo === "descanso" || block.tipo === "refeicao";
+    if (isSkip) return;
+    block.tarefas_sugeridas.forEach((_, taskIndex) => {
+      selected.add(agendaTaskKey(blockIndex, taskIndex));
+    });
+  });
+
+  return selected;
+}
+
 function valueToChartY(value: number) {
   const Y_TOP = 12;
   const Y_BOTTOM = 63;
@@ -193,7 +232,7 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
 };
 
 export function HomePage() {
-  const { state, addTask, setPendingFollowUp, setProactiveNudge } = useAuraStore();
+  const { state, addTask, refreshData, setPendingFollowUp, setProactiveNudge } = useAuraStore();
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());
@@ -202,7 +241,9 @@ export function HomePage() {
   // Agenda por blocos
   const [agendaPhase, setAgendaPhase] = useState<"idle" | "loading" | "preview" | "approved">("idle");
   const [agendaBlocks, setAgendaBlocks] = useState<AgendaBlock[]>([]);
-  const [approvedBlockIds, setApprovedBlockIds] = useState<Set<number>>(new Set());
+  const [selectedAgendaTaskKeys, setSelectedAgendaTaskKeys] = useState<Set<string>>(new Set());
+  const [savedAgendaTaskKeys, setSavedAgendaTaskKeys] = useState<Set<string>>(new Set());
+  const [agendaSaving, setAgendaSaving] = useState(false);
 
   const mood = moodMap[state.mood] ?? moodMap.equilibrada;
   const dayContext = useMemo(() => getClientDayContext(), []);
@@ -218,6 +259,14 @@ export function HomePage() {
   );
   const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
+  const goalTitles = useMemo(
+    () => (state.goals || []).filter((goal) => goal.completedPct < 100).map((goal) => goal.title),
+    [state.goals],
+  );
+  const pendingTaskTitles = useMemo(
+    () => (state.tasks || []).filter((task) => !task.done).slice(0, 6).map((task) => task.title),
+    [state.tasks],
+  );
 
   // ── Gráfico semanal — média diária dos últimos 7 dias ─────────────────────
   const weeklyCheckinData = useMemo<ChartPoint[]>(() => {
@@ -308,6 +357,8 @@ export function HomePage() {
             mood: state.mood,
             moodLabel: mood.label,
             taskCount: state.tasks.length,
+            pendingTaskTitles,
+            goals: goalTitles,
             hour: dayContext.hour,
             partOfDay: dayContext.partOfDay,
             weekday: dayContext.weekday,
@@ -326,7 +377,7 @@ export function HomePage() {
       }
     }, 800);
     return () => clearTimeout(timer);
-  }, [cycleReport.aiContext]);
+  }, [cycleReport.aiContext, dayContext.hour, dayContext.localDate, dayContext.partOfDay, dayContext.weekday, goalTitles, mood.label, pendingTaskTitles, state.mood, state.tasks.length]);
 
   // Mensagem motivacional — apenas IA
   const motivacionalFinal = homeAiMsg?.motivacional ?? null;
@@ -341,18 +392,27 @@ export function HomePage() {
   async function fetchAgenda() {
     setAgendaPhase("loading");
     try {
-      const res = await api.post("/ai/suggest", {
-        type: "agenda-blocks",
-        context: {
-          mood: state.mood,
-          moodLabel: mood.label,
-          energia: state.energia,
-          history: (state.checkinHistory || []).slice(0, 3),
-          moodCycleContext: cycleReport.aiContext,
-        },
-      });
+        const res = await api.post("/ai/suggest", {
+          type: "agenda-blocks",
+          context: {
+            mood: state.mood,
+            moodLabel: mood.label,
+            energia: state.energia,
+            history: (state.checkinHistory || []).slice(0, 3),
+            moodCycleContext: cycleReport.aiContext,
+            goals: goalTitles,
+            pendingTaskTitles,
+            hour: dayContext.hour,
+            partOfDay: dayContext.partOfDay,
+            weekday: dayContext.weekday,
+            localDate: dayContext.localDate,
+          },
+        });
       const parsed = parseAiSuggestion<AgendaBlock[]>(res.suggestion);
-      setAgendaBlocks(Array.isArray(parsed) ? parsed : []);
+      const normalizedBlocks = dedupeAgendaBlocks(Array.isArray(parsed) ? parsed : []);
+      setAgendaBlocks(normalizedBlocks);
+      setSelectedAgendaTaskKeys(buildAgendaSelection(normalizedBlocks));
+      setSavedAgendaTaskKeys(new Set());
       setAgendaPhase("preview");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel montar a agenda com IA.");
@@ -361,27 +421,74 @@ export function HomePage() {
   }
 
   async function approveAgenda() {
+    if (agendaSaving) return;
     const SKIP_TYPES = new Set(["descanso", "refeicao"]);
-    const toCreate: Array<{ title: string; time: string; category: string }> = [];
+    const today = new Date().toISOString().split("T")[0];
+    const toCreate: Array<{ title: string; startTime: string; endTime: string; category: string; intensity: "M" }> = [];
+    const savedKeys = new Set<string>();
+    const seenTitles = new Set<string>();
 
-    agendaBlocks.forEach((block) => {
+    agendaBlocks.forEach((block, blockIndex) => {
       if (SKIP_TYPES.has(block.tipo)) return;
       const cfg = BLOCK_CONFIG[block.tipo] ?? BLOCK_CONFIG.flexivel;
       const startMin = timeToMinutes(block.horario_inicio);
       const endMin = timeToMinutes(block.horario_fim);
-      const tasks = block.tarefas_sugeridas;
+      const tasks = block.tarefas_sugeridas.filter((_, taskIndex) => selectedAgendaTaskKeys.has(agendaTaskKey(blockIndex, taskIndex)));
       if (tasks.length === 0) return;
-      const duration = Math.round((endMin - startMin) / tasks.length);
+      const totalDuration = Math.max(endMin - startMin, tasks.length * 20);
+      const duration = Math.max(15, Math.floor(totalDuration / tasks.length));
       tasks.forEach((title, i) => {
-        toCreate.push({ title, time: minutesToTime(startMin + i * duration), category: cfg.category });
+        const normalizedTitle = title.trim().toLowerCase();
+        if (!normalizedTitle || seenTitles.has(normalizedTitle)) return;
+        seenTitles.add(normalizedTitle);
+        const taskIndex = block.tarefas_sugeridas.findIndex((task) => task === title);
+        if (taskIndex >= 0) {
+          savedKeys.add(agendaTaskKey(blockIndex, taskIndex));
+        }
+        const itemStart = startMin + i * duration;
+        toCreate.push({
+          title,
+          startTime: minutesToTime(itemStart),
+          endTime: minutesToTime(itemStart + duration),
+          category: cfg.category,
+          intensity: "M",
+        });
       });
     });
 
-    await Promise.all(toCreate.map((t) => addTask(t.title, t.time, t.category)));
-    setApprovedBlockIds(new Set(agendaBlocks.map((_, i) => i)));
-    setAgendaPhase("approved");
+    if (toCreate.length === 0) {
+      showError("Selecione pelo menos uma sugestao para entrar no planner.");
+      return;
+    }
+
+    setAgendaSaving(true);
+    try {
+      await api.post("/timeline", {
+        date: today,
+        forceSave: true,
+        blocks: toCreate,
+      });
+      await refreshData();
+      setSavedAgendaTaskKeys(savedKeys);
+      setAgendaPhase("approved");
+      showSuccess(`${toCreate.length} sugest${toCreate.length > 1 ? "oes foram" : "ao foi"} adicionada${toCreate.length > 1 ? "s" : ""} ao planner.`);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel enviar a agenda ao planner.");
+    } finally {
+      setAgendaSaving(false);
+    }
+  }
+  function toggleAgendaTaskSelection(blockIndex: number, taskIndex: number) {
+    const key = agendaTaskKey(blockIndex, taskIndex);
+    setSelectedAgendaTaskKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
   const nextTask = state.tasks.find((t) => !t.done) ?? state.tasks[0];
+  const selectedAgendaCount = selectedAgendaTaskKeys.size;
   const importantAlerts = useMemo(() => {
     const alerts: ImportantAlert[] = [];
     const nowMinutes = clockTime.getHours() * 60 + clockTime.getMinutes();
@@ -1009,18 +1116,26 @@ export function HomePage() {
                               </div>
                               <button
                                 onClick={async () => {
-                                  await addTask(action.title, "09:00", action.category);
-                                  setAddedActionIdx(prev => new Set([...prev, idx]));
-                                  const scheduledFor = new Date(Date.now() + 2 * 3600_000).toISOString();
-                                  const followUp: FollowUpPending = {
-                                    suggestionTitle: action.title,
-                                    suggestionCategory: action.category,
-                                    scheduledFor,
-                                    response: null,
-                                    followUpMessage: null,
-                                    source: "autonomous",
-                                  };
-                                  setPendingFollowUp(followUp);
+                                  try {
+                                    const saved = await addTask(action.title, "09:00", action.category, { forceSave: true });
+                                    if (!saved) {
+                                      throw new Error("A sugestao nao entrou no planner.");
+                                    }
+                                    setAddedActionIdx(prev => new Set([...prev, idx]));
+                                    showSuccess("Sugestao adicionada ao planner.");
+                                    const scheduledFor = new Date(Date.now() + 2 * 3600_000).toISOString();
+                                    const followUp: FollowUpPending = {
+                                      suggestionTitle: action.title,
+                                      suggestionCategory: action.category,
+                                      scheduledFor,
+                                      response: null,
+                                      followUpMessage: null,
+                                      source: "autonomous",
+                                    };
+                                    setPendingFollowUp(followUp);
+                                  } catch (error) {
+                                    showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao no planner.");
+                                  }
                                 }}
                                 disabled={added}
                                 style={{
@@ -1212,6 +1327,11 @@ export function HomePage() {
             {agendaPhase === "approved" && (
               <span style={{ fontSize: "11px", color: "var(--menthe)", fontWeight: 600 }}>✓ No Planner</span>
             )}
+            {agendaPhase === "preview" && (
+              <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>
+                {selectedAgendaCount} selecionada{selectedAgendaCount !== 1 ? "s" : ""}
+              </span>
+            )}
             {agendaPhase === "idle" && (
               <AuraButtonV2 variant="primary" size="sm" onClick={fetchAgenda} useAuraIcon>
                 Montar com IA
@@ -1241,7 +1361,7 @@ export function HomePage() {
               {agendaBlocks.map((block, idx) => {
                 const cfg = BLOCK_CONFIG[block.tipo] ?? BLOCK_CONFIG.flexivel;
                 const isSkip = block.tipo === "descanso" || block.tipo === "refeicao";
-                const isApproved = approvedBlockIds.has(idx);
+                const savedCount = block.tarefas_sugeridas.filter((_, taskIndex) => savedAgendaTaskKeys.has(agendaTaskKey(idx, taskIndex))).length;
                 return (
                   <div key={idx} style={{
                     display: "flex", gap: 10, padding: "10px 13px",
@@ -1260,17 +1380,38 @@ export function HomePage() {
                       <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
                         <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
                         <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{block.label}</p>
-                        {isApproved && !isSkip && (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: cfg.cor, background: cfg.bg, padding: "2px 6px", borderRadius: 999, border: `1px solid ${cfg.cor}40` }}>✓ salvo</span>
+                        {savedCount > 0 && !isSkip && (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: cfg.cor, background: cfg.bg, padding: "2px 6px", borderRadius: 999, border: `1px solid ${cfg.cor}40` }}>✓ {savedCount} salva{savedCount > 1 ? "s" : ""}</span>
                         )}
                       </div>
                       {block.tarefas_sugeridas.length > 0 && !isSkip && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 3 }}>
                           {block.tarefas_sugeridas.map((t, ti) => (
-                            <span key={ti} style={{
-                              fontSize: 10, color: "var(--text-2)", background: cfg.bg,
-                              border: `1px solid ${cfg.cor}30`, borderRadius: 6, padding: "2px 7px",
-                            }}>{t}</span>
+                            <button
+                              key={ti}
+                              type="button"
+                              onClick={() => agendaPhase === "preview" && toggleAgendaTaskSelection(idx, ti)}
+                              style={{
+                                fontSize: 10,
+                                color: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor : "var(--text-2)",
+                                background: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? `${cfg.cor}18` : cfg.bg,
+                                border: `1px solid ${selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor + "70" : cfg.cor + "30"}`,
+                                borderRadius: 6,
+                                padding: "2px 7px",
+                                cursor: agendaPhase === "preview" ? "pointer" : "default",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                opacity: agendaPhase === "approved" && !savedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? 0.45 : 1,
+                              }}
+                            >
+                              {agendaPhase === "preview" && (
+                                <span style={{ fontSize: 9 }}>
+                                  {selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? "✓" : "○"}
+                                </span>
+                              )}
+                              {t}
+                            </button>
                           ))}
                         </div>
                       )}
@@ -1288,10 +1429,10 @@ export function HomePage() {
                   <button
                     className="btn btn-ghost"
                     style={{ flex: 1 }}
-                    onClick={() => { setAgendaPhase("idle"); setAgendaBlocks([]); }}
+                    onClick={() => { setAgendaPhase("idle"); setAgendaBlocks([]); setSelectedAgendaTaskKeys(new Set()); setSavedAgendaTaskKeys(new Set()); }}
                   >Refazer</button>
-                  <AuraButtonV2 variant="primary" size="sm" style={{ flex: 2 }} onClick={approveAgenda}>
-                    Aprovar e adicionar ao Planner
+                  <AuraButtonV2 variant="primary" size="sm" style={{ flex: 2 }} onClick={approveAgenda} disabled={selectedAgendaCount === 0 || agendaSaving}>
+                    {agendaSaving ? "Enviando..." : `Adicionar ${selectedAgendaCount > 0 ? selectedAgendaCount : ""} ao Planner`}
                   </AuraButtonV2>
                 </div>
               )}

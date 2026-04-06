@@ -1475,7 +1475,8 @@ JSON APENAS:
         prompt = `Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ${userName}.
 
 ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}${dtWeekday}${dtLocalDate}
-${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${ragContext}
+${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}
+${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : ''}${ragContext}
 
 REGRAS INVIOLÁVEIS:
 1. Use o histórico e as metas acima — as tarefas devem ser relevantes ao que ${userName} realmente faz, não inventadas
@@ -1536,6 +1537,8 @@ REGRAS:
 Retorne SOMENTE JSON: {"insight":"2 frases personalizadas e úteis sobre o padrão identificado","action":"1 ação concreta e preventiva para a próxima semana","category":"energia|humor|rotina|autocuidado","actionTitle":"título curto da ação (máx 40 chars)"}. Sem texto fora do JSON.`;
       } else if (type === 'stability-analysis') {
         const history = (context.history || []) as Array<{date:string;humor:number;energia:number;sono?:number;fisico?:number;social?:number}>;
+        const goals = (context.goals as string[] | undefined) || [];
+        const pendingTasks = (context.pendingTasks as string[] | undefined) || [];
         const historyLines = history.map((h: any) =>
           `- ${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}${h.sono != null ? `, sono ${humanizeScore(h.sono, 'sleep')}` : ''}${h.fisico != null ? `, físico ${humanizeScore(h.fisico, 'generic')}` : ''}${h.social != null ? `, social ${humanizeScore(h.social, 'generic')}` : ''}`
         ).join('\n');
@@ -1545,6 +1548,11 @@ Retorne SOMENTE JSON: {"insight":"2 frases personalizadas e úteis sobre o padr�
         prompt = `Analise os dados dos últimos ${history.length} dias de ${userName} como uma assistente pessoal autônoma especializada em ciclagem de humor.
 
 ${historyLines}
+
+CONTEXTO VIVO DO USUÁRIO:
+${context.moodCycleContext || 'Sem contexto adicional.'}
+${goals.length ? `\nMetas ativas: ${goals.join(' | ')}` : ''}
+${pendingTasks.length ? `\nCompromissos pendentes: ${pendingTasks.join(' | ')}` : ''}
 
 Variância de humor: ${variance.toFixed(2)} (>1.5 = alta labilidade afetiva).
 
@@ -1559,6 +1567,7 @@ REGRAS:
 - Não descreva só o óbvio; identifique implicação prática.
 - Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
 - As sugestões devem nascer dos sinais reais do histórico, não de conselhos genéricos.
+- Se houver metas, pendências ou temas recorrentes no contexto vivo, use isso para deixar as ações concretas e pessoais.
 - Misture quando fizer sentido: micro-ação regulatória, tarefa prática curta e compromisso simples/agendável.
 - As sugestões devem reduzir atrito, estabilizar rotina, proteger energia ou conter impulsividade.
 - Prefira intervenções concretas de regulação: proteger sono, reduzir carga social, fracionar tarefa, cortar estímulo, ancorar rotina, criar pausa antes de agir no automático.
@@ -1586,6 +1595,8 @@ Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta
         const moodLabel = context.moodLabel || 'Em Equilíbrio';
         const moodKey = context.mood || 'equilibrada';
         const taskCount = context.taskCount ?? 0;
+        const pendingTaskTitles = (context.pendingTaskTitles as string[] | undefined) || [];
+        const goals = (context.goals as string[] | undefined) || [];
         const hour = context.hour ?? new Date().getHours();
         const periodo = context.partOfDay || (hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite');
         const weekday = context.weekday || 'hoje';
@@ -1597,6 +1608,9 @@ SINAIS DO MOMENTO:
 - Período do dia: ${periodo}
 - Dia: ${weekday}${localDate}
 - Tarefas ativas hoje: ${taskCount}
+${pendingTaskTitles.length ? `- Pendências abertas: ${pendingTaskTitles.join(' | ')}` : ''}
+${goals.length ? `- Metas ativas: ${goals.join(' | ')}` : ''}
+${context.moodCycleContext ? `- Contexto vivo recente: ${context.moodCycleContext}` : ''}
 ${ragContext}
 
 Gere uma presença de home que pareça real, não texto de chatbot.
@@ -1612,6 +1626,8 @@ REGRAS:
 - Se o estado indicar proteção ou baixa energia, reduza atrito e puxe para cuidado ou clareza.
 - Se houver energia boa e poucas tarefas, puxe para movimento e ação.
 - Se houver sinais recorrentes no diário ou na memória recente, aproveite isso com discrição para deixar as ações mais pessoais.
+- Se houver pendências abertas ou metas ativas, conecte pelo menos 1 movimento a algo real que já exista no app.
+- As 3 ações de "autocuidado" devem ser diferentes entre si e não podem reciclar a mesma ideia com palavras diferentes.
 - Evite frases que sirvam igual para qualquer pessoa em qualquer horário.
 - Nada aqui pode servir igual para qualquer pessoa em qualquer horário.
 
@@ -1620,6 +1636,8 @@ JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..
         const mood = context.mood || 'equilibrada';
         const moodLabel = context.moodLabel || 'Em Equilíbrio';
         const energia = context.energia ?? 3;
+        const goals = (context.goals as string[] | undefined) || [];
+        const pendingTaskTitles = (context.pendingTaskTitles as string[] | undefined) || [];
         const wakeTime = context.wakeTime || '07:00';
         const sleepTime = context.sleepTime || '22:00';
         const history = (context.history || []).slice(0, 3).map((h: any) =>
@@ -1627,9 +1645,13 @@ JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..
         ).join('; ');
         prompt = `Você é a Aura, uma concierge pessoal e assistente de rotina sofisticada de ${userName}. Monte a agenda personalizada do dia de hoje.
 
-Estado atual: ${moodLabel} (${humanizeScore(context.humor, 'mood')}), energia ${humanizeScore(energia, 'energy')}.
+Estado atual: ${moodLabel} (${mood}), energia ${humanizeScore(energia, 'energy')}.
 Horário acordar: ${wakeTime} | Dormir: ${sleepTime}.
 Padrão recente: ${history || 'iniciando agora'}.
+${context.moodCycleContext ? `Contexto vivo recente: ${context.moodCycleContext}.` : ''}
+${goals.length ? `Metas ativas: ${goals.join(' | ')}.` : ''}
+${pendingTaskTitles.length ? `Pendências já abertas no planner: ${pendingTaskTitles.join(' | ')}.` : ''}
+${ragContext}
 
 Monte uma rotina completa e equilibrada:
 - Crie 6-8 blocos cobrindo o dia inteiro de ${wakeTime} a ${sleepTime}
@@ -1638,7 +1660,10 @@ Monte uma rotina completa e equilibrada:
 - Balanceie: trabalho + casa + autocuidado + descanso
 - Se energia baixa/tensa → mais autocuidado e descanso, menos trabalho
 - Se focada → trabalho no pico da manhã (8h-12h)
-- Tarefas concretas e específicas (não genéricas)
+- Tarefas concretas e específicas, sem repetir títulos entre blocos
+- Se já houver pendências abertas ou metas ativas, complemente ou destrave isso; não replique com frases genéricas
+- "tarefas_sugeridas" não pode repetir a mesma ação nem a mesma ideia em blocos diferentes
+- Evite absolutamente: "organizar documentos", "planejar a semana", "fazer lista", "revisar prioridades", "alinhamento geral", "colocar a vida em ordem"
 - razao_ia: frase carinhosa e motivadora explicando o bloco
 
 Retorne SOMENTE array JSON:
@@ -1667,6 +1692,7 @@ Sem texto fora do JSON.`;
 Período atual: ${crPartOfDay}. ${crWeekday} ${crLocalDate}
 ${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
+${context.moodCycleContext ? `\nContexto vivo recente:\n${context.moodCycleContext}` : ''}
 ${nota}${ragContext}
 
 Responda como Aura, com leitura específica e útil para este momento.
@@ -1674,6 +1700,7 @@ Responda como Aura, com leitura específica e útil para este momento.
 REGRAS:
 - "message" deve ter 2-3 frases curtas. A primeira precisa ler um padrão, contraste ou nuance do momento; não repita o rótulo do estado como eco.
 - Se o histórico ajudar, cite o padrão real de forma natural (ex: "nos últimos dias..." ou "hoje veio mais baixo que ontem...").
+- Se houver contexto vivo do diário ou da rotina, use pelo menos 1 detalhe concreto disso quando for relevante.
 - Se streak ≥ 3 dias, mencione a sequência no máximo uma vez e só se encaixar organicamente.
 - NÃO use frases genéricas de autoajuda.
 - NÃO use sermão, diagnóstico ou tom maternal demais.

@@ -126,6 +126,7 @@ export function CheckinResultPage() {
         moodLabel: v.label,
         moodCycleContext: cycleReport.aiContext,
         checkinHistory: recentHistory,
+        nota: state.journal,
         streak,
         hour: dayContext.hour,
         partOfDay: dayContext.partOfDay,
@@ -164,6 +165,7 @@ export function CheckinResultPage() {
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
           goals: goalTitles,
+          nota: state.journal,
           hour: dayContext.hour,
           partOfDay: dayContext.partOfDay,
           weekday: dayContext.weekday,
@@ -190,6 +192,7 @@ export function CheckinResultPage() {
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
           goals: goalTitles,
+          nota: state.journal,
           hour: dayContext.hour,
           partOfDay: dayContext.partOfDay,
           weekday: dayContext.weekday,
@@ -225,9 +228,11 @@ export function CheckinResultPage() {
 
     for (const task of accepted) {
       try {
-        const saved = await addTask(task.title, task.time, task.category);
+        const saved = await addTask(task.title, task.time, task.category, { forceSave: true });
         if (saved) {
           savedCount += 1;
+        } else {
+          lastError = new Error("A tarefa nao foi aceita pelo planner.");
         }
       } catch (error) {
         lastError = error;

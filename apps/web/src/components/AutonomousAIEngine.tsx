@@ -118,12 +118,16 @@ export function AutonomousAIEngine() {
     void runStabilityAnalysis(
       recentHistory,
       cycleReport.aiContext,
+      state.goals?.filter((goal) => goal.completedPct < 100).map((goal) => goal.title) ?? [],
+      state.tasks?.filter((task) => !task.done).slice(0, 5).map((task) => task.title) ?? [],
       setAutonomousInsight
     ).finally(() => {
       stabilityInFlightRef.current = false;
     });
   }, [
     state.checkinHistory,
+    state.goals,
+    state.tasks,
     state.autonomousInsight?.generatedAt,
     state.phaseTransitionAlert,
     setAutonomousInsight,
@@ -271,6 +275,8 @@ export function AutonomousAIEngine() {
 async function runStabilityAnalysis(
   history: CheckinEntry[],
   moodCycleContext: string,
+  goals: string[],
+  pendingTasks: string[],
   setInsight: (i: AutonomousInsight | null) => void
 ) {
   try {
@@ -279,6 +285,8 @@ async function runStabilityAnalysis(
       context: {
         history: history.slice(0, 7),
         moodCycleContext,
+        goals,
+        pendingTasks,
       },
     });
 

@@ -73,7 +73,12 @@ type AuraStoreContextValue = {
   setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
   toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<void>;
   removeGoal: (goalId: string | number) => Promise<void>;
-  addTask: (title: string, time: string, category?: string) => Promise<{ id: string | number; title: string; time: string; endTime: string; done: boolean; category?: string; intensity?: string } | null>;
+  addTask: (
+    title: string,
+    time: string,
+    category?: string,
+    options?: { date?: string; forceSave?: boolean }
+  ) => Promise<{ id: string | number; title: string; time: string; endTime: string; done: boolean; category?: string; intensity?: string } | null>;
   updateTask: (id: string | number, updates: { title?: string; time?: string; category?: string }) => Promise<void>;
   removeTask: (id: string | number) => Promise<void>;
   reorderTasks: (fromIdx: number, toIdx: number) => void;
@@ -308,12 +313,13 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         await api.delete(`/objectives/${goalId}`);
         await refreshData();
       },
-      addTask: async (title, time, category = 'geral') => {
-        const today = new Date().toISOString().split('T')[0];
+      addTask: async (title, time, category = 'geral', options) => {
+        const today = options?.date ?? new Date().toISOString().split('T')[0];
         const normalizedCategory = normalizeTaskCategory(category);
         const endTime = addMinutesToTime(time, 30);
         const result = await api.post('/timeline', {
           date: today,
+          forceSave: options?.forceSave ?? false,
           blocks: [{
             title,
             startTime: time,
@@ -322,7 +328,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             intensity: 'M'
           }]
         });
-        await refreshData();
+        if (today === new Date().toISOString().split('T')[0]) {
+          await refreshData();
+        }
         const savedBlock = Array.isArray((result as any)?.savedBlocks) ? (result as any).savedBlocks[0] : null;
         return savedBlock
           ? {
