@@ -17,7 +17,6 @@ import {
   Timer,
   TrendingUp,
   MessageCircle,
-  Plus
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
@@ -29,8 +28,6 @@ const STATE_CONFIG = {
   alert:   { emoji: "⚠️", label: "Atenção",   color: "#A17D6C",          bg: "rgba(161,125,108,.08)"  },
 } as const;
 
-type AiTask = { title: string; category: string; time?: string };
-
 type AgendaBlock = {
   horario_inicio: string;
   horario_fim: string;
@@ -38,6 +35,15 @@ type AgendaBlock = {
   label: string;
   tarefas_sugeridas: string[];
   razao_ia: string;
+};
+
+type ImportantAlert = {
+  key: string;
+  title: string;
+  description: string;
+  tone: "info" | "warning" | "critical";
+  actionLabel?: string;
+  actionPath?: string;
 };
 
 const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string; category: string }> = {
@@ -48,6 +54,27 @@ const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string; cat
   descanso:     { cor: "var(--menthe)",   bg: "rgba(180,185,169,.08)",   emoji: "😴", category: "autocuidado" },
   refeicao:     { cor: "var(--nectarine)", bg: "rgba(197,165,147,.08)", emoji: "🍽️", category: "rotina" },
   flexivel:     { cor: "var(--lagune)",   bg: "rgba(176,180,196,.08)",    emoji: <AuraIcon size={13} />, category: "pessoal" },
+};
+
+const IMPORTANT_ALERT_CONFIG: Record<ImportantAlert["tone"], { accent: string; bg: string; border: string; emoji: string }> = {
+  info: {
+    accent: "var(--lagune)",
+    bg: "rgba(176,180,196,.08)",
+    border: "rgba(176,180,196,.22)",
+    emoji: "ℹ️",
+  },
+  warning: {
+    accent: "var(--nectarine)",
+    bg: "rgba(197,165,147,.08)",
+    border: "rgba(197,165,147,.26)",
+    emoji: "⚠️",
+  },
+  critical: {
+    accent: "#A17D6C",
+    bg: "rgba(161,125,108,.10)",
+    border: "rgba(161,125,108,.28)",
+    emoji: "🚨",
+  },
 };
 
 function timeToMinutes(t: string) {
@@ -133,11 +160,6 @@ export function HomePage() {
   const [insightDismissed, setInsightDismissed] = useState(false);
   const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());
 
-  const [aiTasks, setAiTasks] = useState<AiTask[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiTriggered, setAiTriggered] = useState(false);
-  const [addedIdx, setAddedIdx] = useState<Set<number>>(new Set());
-
   // Agenda por blocos
   const [agendaPhase, setAgendaPhase] = useState<"idle" | "loading" | "preview" | "approved">("idle");
   const [agendaBlocks, setAgendaBlocks] = useState<AgendaBlock[]>([]);
@@ -209,7 +231,6 @@ export function HomePage() {
   const [homeAiMsg, setHomeAiMsg] = useState<HomeAiMsg | null>(null);
   const [homeAiLoading, setHomeAiLoading] = useState(true);
   const homeMsgRan = useRef(false);
-  const autoAiTasksRan = useRef(false);
   const dayContext = useMemo(() => getClientDayContext(), []);
 
   useEffect(() => {
@@ -231,7 +252,7 @@ export function HomePage() {
           },
         });
         const parsed = tryParseAiSuggestion<HomeAiMsg>(res.suggestion);
-        if (parsed?.motivacional && parsed?.autocuidado && parsed?.proactive) {
+        if (parsed?.motivacional && Array.isArray(parsed?.autocuidado)) {
           setHomeAiMsg(parsed);
         }
       } catch {
@@ -243,16 +264,6 @@ export function HomePage() {
     return () => clearTimeout(timer);
   }, [cycleReport.aiContext]);
 
-  // Proactive suggestion — apenas IA, sem fallback estático
-  const proactive = homeAiMsg?.proactive
-    ? {
-        emoji: homeAiMsg.proactive.emoji,
-        title: homeAiMsg.proactive.title,
-        desc: homeAiMsg.proactive.desc,
-        action: homeAiMsg.proactive.actionPath ?? null,
-      }
-    : null;
-
   // Mensagem motivacional — apenas IA
   const motivacionalFinal = homeAiMsg?.motivacional ?? null;
   // Autocuidado — apenas IA
@@ -262,48 +273,6 @@ export function HomePage() {
   const totalTasks = state.tasks.length;
   const doneTasks = state.tasks.filter(t => t.done).length;
   const pendingTasks = state.tasks.filter(t => !t.done).length;
-
-  useEffect(() => {
-    if (autoAiTasksRan.current || homeAiLoading || aiTriggered || aiLoading) return;
-    autoAiTasksRan.current = true;
-    void loadAiTasks();
-  }, [homeAiLoading, aiTriggered, aiLoading]);
-
-  async function loadAiTasks() {
-    if (aiLoading) return;
-    setAiTriggered(true);
-    setAiLoading(true);
-    try {
-      const res: any = await api.post('/ai/suggest', { 
-        type: 'day-tasks', 
-        context: { 
-          mood: state.mood, 
-          moodLabel: mood.label,
-          moodCycleContext: cycleReport.aiContext,
-          hour: dayContext.hour,
-          partOfDay: dayContext.partOfDay,
-          weekday: dayContext.weekday,
-          localDate: dayContext.localDate,
-        } 
-      });
-      const parsed = parseAiSuggestion<AiTask[]>(res.suggestion);
-      if (Array.isArray(parsed)) setAiTasks(parsed.slice(0, 3));
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel gerar sugestoes agora.");
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
-  async function handleAddAiTask(task: AiTask, idx: number) {
-    try {
-      await addTask(task.title, task.time ?? "09:00", task.category);
-      setAddedIdx(prev => new Set([...prev, idx]));
-      showSuccess("Sugestao adicionada ao planner.");
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel adicionar a sugestao.");
-    }
-  }
 
   async function fetchAgenda() {
     setAgendaPhase("loading");
@@ -349,6 +318,85 @@ export function HomePage() {
     setAgendaPhase("approved");
   }
   const nextTask = state.tasks.find((t) => !t.done) ?? state.tasks[0];
+  const importantAlerts = useMemo(() => {
+    const alerts: ImportantAlert[] = [];
+    const nowMinutes = clockTime.getHours() * 60 + clockTime.getMinutes();
+    const overdueTasks = state.tasks.filter((task) => !task.done && timeToMinutes(task.time) + 45 < nowMinutes);
+    const stagnantGoals = state.goals.filter((goal) => goal.completedPct === 0 && goal.subtasks.length > 0);
+    const insightText = `${state.autonomousInsight?.pattern ?? ""} ${state.autonomousInsight?.insight ?? ""}`.toLowerCase();
+    const hasCompulsionSignal = /(compuls|impuls|compra|comprando|gasto|excesso)/i.test(insightText);
+
+    if (overdueTasks.length > 0) {
+      const firstTask = overdueTasks[0];
+      alerts.push({
+        key: "overdue-tasks",
+        title: overdueTasks.length === 1 ? "Um compromisso ficou para trás" : `${overdueTasks.length} compromissos ficaram para trás`,
+        description:
+          overdueTasks.length === 1
+            ? `"${firstTask.title}" já passou do horário e ainda está pendente.`
+            : `Existem ${overdueTasks.length} itens do planner fora do horário hoje. Vale reorganizar antes que virem peso acumulado.`,
+        tone: overdueTasks.length >= 3 ? "critical" : "warning",
+        actionLabel: "Abrir planner",
+        actionPath: "/planner",
+      });
+    }
+
+    if (stagnantGoals.length > 0) {
+      alerts.push({
+        key: "stagnant-goals",
+        title: stagnantGoals.length === 1 ? "Uma meta está parada" : `${stagnantGoals.length} metas estão paradas`,
+        description:
+          stagnantGoals.length === 1
+            ? `"${stagnantGoals[0].title}" ainda não saiu do lugar, mesmo já tendo próximos passos definidos.`
+            : "Há metas com próximos passos definidos, mas sem avanço real. Talvez seja hora de reduzir o escopo ou destravar a primeira ação.",
+        tone: "warning",
+        actionLabel: "Ver metas",
+        actionPath: "/goals",
+      });
+    }
+
+    if (cycleReport.warningFlags.includes("sustained_low") || cycleReport.warningFlags.includes("rapid_drop") || cycleReport.stabilityScore <= 35) {
+      const sustainedLow = cycleReport.warningFlags.includes("sustained_low");
+      const rapidDrop = cycleReport.warningFlags.includes("rapid_drop");
+      alerts.push({
+        key: "mood-risk",
+        title: sustainedLow
+          ? "Seu humor está caindo há vários dias"
+          : rapidDrop
+            ? "Houve uma queda brusca no humor"
+            : "Sua estabilidade ficou baixa",
+        description: sustainedLow
+          ? "O padrão recente sugere risco de aprofundamento do rebaixamento. Vale registrar isso no diário e diminuir a carga de hoje."
+          : rapidDrop
+            ? "A mudança nas últimas 48h pede proteção de energia e leitura mais cuidadosa do que está pesando agora."
+            : "Seu ciclo entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
+        tone: sustainedLow || cycleReport.stabilityScore <= 30 ? "critical" : "warning",
+        actionLabel: "Abrir diário",
+        actionPath: "/journal",
+      });
+    }
+
+    if (hasCompulsionSignal) {
+      alerts.push({
+        key: "compulsion-signal",
+        title: "A Aura percebeu sinal de impulso ou compulsão",
+        description: "O padrão recente sugere comportamento mais automático do que o normal. Vale pausar estímulos e nomear isso no diário antes de agir.",
+        tone: "critical",
+        actionLabel: "Registrar agora",
+        actionPath: "/journal",
+      });
+    }
+
+    return alerts.slice(0, 4);
+  }, [
+    clockTime,
+    cycleReport.stabilityScore,
+    cycleReport.warningFlags,
+    state.autonomousInsight?.insight,
+    state.autonomousInsight?.pattern,
+    state.goals,
+    state.tasks,
+  ]);
   const displayName = state.name
     ? state.name.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
     : "você";
@@ -834,7 +882,7 @@ export function HomePage() {
                   <span style={{ fontSize: 16 }}>{isUrgent ? "🚨" : cfg.emoji}</span>
                   <div>
                     <p className="home-ai-card-title" style={{ color: cfg.color }}>
-                      {isUrgent ? "ATENÇÃO — AURA DETECTOU" : "ANÁLISE AUTÔNOMA DA IA"}
+                      {isUrgent ? "ATENÇÃO — AURA DETECTOU" : "ANÁLISE E AUTONOMIA"}
                     </p>
                     <p className="home-ai-card-subtitle">
                       Estabilidade {score}% · {cfg.label}
@@ -972,62 +1020,6 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* ── Pensei em você... ── */}
-        <div className="home-panel" style={{ border: "1.5px solid var(--nectarine-a5)" }}>
-          <div className="home-panel-header">
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine)", margin: 0 }}>
-                Pensei em voce
-              </p>
-              {homeAiLoading && (
-                <span style={{ fontSize: 9, color: "var(--text-3)", fontStyle: "italic" }}>gerando...</span>
-              )}
-              {proactive && !homeAiLoading && (
-                <span style={{ fontSize: 9, background: "var(--nectarine-a3)", color: "var(--nectarine-11)", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
-              )}
-            </div>
-            {homeAiLoading ? (
-              <div style={{ display: "flex", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--nectarine-a3)", flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ height: 11, width: "60%", background: "rgba(0,0,0,.07)", borderRadius: 6, marginBottom: 8 }} />
-                  <div style={{ height: 9, width: "95%", background: "rgba(0,0,0,.05)", borderRadius: 5, marginBottom: 5 }} />
-                  <div style={{ height: 9, width: "75%", background: "rgba(0,0,0,.05)", borderRadius: 5 }} />
-                </div>
-              </div>
-            ) : proactive ? (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                <span style={{ fontSize: 18, flexShrink: 0 }}>{proactive.emoji}</span>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 3px" }}>{proactive.title}</p>
-                  <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, margin: 0 }}>{proactive.desc}</p>
-                </div>
-              </div>
-              ) : (
-              <p className="home-panel-subcopy" style={{ margin: 0 }}>
-                Faça um check-in para receber uma sugestão personalizada.
-              </p>
-            )}
-          </div>
-          {proactive && !homeAiLoading && (
-            <div style={{ padding: "10px 14px", display: "flex", gap: 8, alignItems: "center", justifyContent: "center" }}>
-              <AuraButtonV2
-                variant="primary"
-                size="sm"
-                onClick={() => proactive.action ? navigate(proactive.action) : undefined}
-                leftIcon={<Plus size={14} />}
-              >
-                Vou tentar!
-              </AuraButtonV2>
-            </div>
-          )}
-          <div style={{ padding: "0 14px 10px" }}>
-            <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0, fontStyle: "italic" }}>
-              Sugestao gerada pela Aura com base no seu estado atual
-            </p>
-          </div>
-        </div>
-
         {/* ── Momento de Autocuidado ── */}
         <div className="home-panel" style={{ border: "1.5px solid rgba(161,140,120,.25)" }}>
           <div className="home-panel-header">
@@ -1065,7 +1057,7 @@ export function HomePage() {
         </div>
 
         {/* ── Alertas Importantes ── */}
-        {state.autonomousInsight && state.autonomousInsight.actions.length > 0 && !insightDismissed && (
+        {importantAlerts.length > 0 && (
           <div className="home-panel" style={{ border: "1.5px solid rgba(161,140,120,.3)" }}>
             <div className="home-panel-header">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1075,23 +1067,45 @@ export function HomePage() {
               </div>
             </div>
             <div className="home-panel-body" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {state.autonomousInsight.actions.map((action, i) => (
-                <div key={i} className="home-soft-row" style={{ alignItems: "flex-start", background: "rgba(161,140,120,.06)", border: "1px solid rgba(161,140,120,.2)" }}>
-                  <span style={{ fontSize: 13, flexShrink: 0, color: "var(--nectarine-11)" }}>!</span>
-                  <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{action.title}</p>
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: "0 14px 12px", display: "flex", gap: 8 }}>
-              <div style={{
-                flex: 1, padding: "7px 12px", borderRadius: 9,
-                background: "rgba(161,140,120,.06)", border: "1px solid var(--earth-a5)",
-              }}>
-                <p style={{ fontSize: 9, fontWeight: 700, color: "var(--earth-11)", margin: "0 0 2px", letterSpacing: ".1em" }}>CRIADO PELA IA AUTONOMA</p>
-                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0, lineHeight: 1.4 }}>
-                  Esta análise foi criada automaticamente baseada no seu perfil e comportamento.
-                </p>
-              </div>
+              {importantAlerts.map((alert) => {
+                const cfg = IMPORTANT_ALERT_CONFIG[alert.tone];
+                return (
+                  <div
+                    key={alert.key}
+                    className="home-soft-row"
+                    style={{
+                      alignItems: "flex-start",
+                      gap: 10,
+                      background: cfg.bg,
+                      border: `1px solid ${cfg.border}`,
+                      padding: "11px 12px",
+                    }}
+                  >
+                    <span style={{ fontSize: 14, flexShrink: 0 }}>{cfg.emoji}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: cfg.accent, margin: "0 0 4px" }}>{alert.title}</p>
+                      <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{alert.description}</p>
+                      {alert.actionPath && alert.actionLabel && (
+                        <button
+                          onClick={() => navigate(alert.actionPath!)}
+                          style={{
+                            marginTop: 8,
+                            border: "none",
+                            background: "transparent",
+                            padding: 0,
+                            cursor: "pointer",
+                            color: cfg.accent,
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {alert.actionLabel} →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1297,76 +1311,6 @@ export function HomePage() {
             </p>
           </div>
         )}
-
-        {/* Sugestões da IA — sempre visível */}
-        <div style={{ marginTop: "calc(var(--a) * 1.2)" }}>
-          <div className="home-section-row">
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <AuraIcon size={13} style={{ color: "var(--nectarine)" }} />
-              <span className="section-title" style={{ fontSize: "14px" }}>Sugestoes da IA</span>
-            </div>
-            {aiTasks.length > 0 && (
-              <button
-                onClick={() => { setAiTasks([]); setAiTriggered(false); }}
-                style={{ background: "none", border: "none", fontSize: 11, color: "var(--text-3)", cursor: "pointer" }}
-              >Atualizar</button>
-            )}
-          </div>
-
-          {!aiTriggered && !aiLoading && aiTasks.length === 0 && (
-            <div style={{ display: "flex", justifyContent: "center", marginTop: "10px" }}>
-              <AuraButtonV2 variant="primary" onClick={loadAiTasks}>
-                Sugestões para hoje
-              </AuraButtonV2>
-            </div>
-          )}
-
-          {aiLoading && (
-            <div style={{ padding: "14px", textAlign: "center", fontSize: "12px", color: "var(--text-3)", background: "rgba(255,253,249,.9)", borderRadius: 10, border: "1px solid var(--warm-border)" }}>
-              <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
-              Gerando sugestões personalizadas...
-            </div>
-          )}
-
-          {!aiLoading && aiTriggered && aiTasks.length === 0 && (
-            <div style={{ padding: "14px", textAlign: "center", fontSize: "12px", color: "var(--text-3)", background: "rgba(255,253,249,.9)", borderRadius: 10, border: "1px solid var(--warm-border)" }}>
-              Não foi possível gerar sugestões agora.{" "}
-              <button onClick={loadAiTasks} style={{ background: "none", border: "none", color: "var(--nectarine)", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Tentar novamente</button>
-            </div>
-          )}
-
-          {aiTasks.map((task, idx) => (
-            <div
-              key={idx}
-              className="aura-card"
-              style={{ padding: "11px 14px", marginBottom: "8px", display: "flex", alignItems: "center", gap: "10px" }}
-            >
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{task.title}</p>
-                {task.time && (
-                  <p style={{ fontSize: "11px", color: "var(--text-3)", margin: "2px 0 0" }}>{task.category} · {task.time}</p>
-                )}
-              </div>
-              <button
-                onClick={() => handleAddAiTask(task, idx)}
-                disabled={addedIdx.has(idx)}
-                style={{
-                  width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
-                  border: "1.5px solid var(--nectarine)", cursor: addedIdx.has(idx) ? "default" : "pointer",
-                  background: addedIdx.has(idx) ? "var(--nectarine)" : "transparent",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                {addedIdx.has(idx) ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                )}
-              </button>
-            </div>
-          ))}
-        </div>
-
       </div>
     </div>
   );

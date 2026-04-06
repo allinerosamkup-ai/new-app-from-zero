@@ -1535,12 +1535,16 @@ Com base em IPSRT, DBT e ritmo social, retorne:
 2. Tendência atual (stable/rising/falling/alert).
 3. "pattern": 2 frases mostrando o que está se repetindo de verdade.
 4. "insight": 1 frase curta que traduza o risco ou oportunidade do momento.
-5. 2-3 ações pequenas, preventivas e práticas.
+5. 2-3 micro-ações baseadas em evidência, preventivas e práticas.
 
 REGRAS:
 - Não descreva só o óbvio; identifique implicação prática.
 - Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
-- As ações devem reduzir atrito, estabilizar rotina ou proteger energia.
+- As ações devem nascer dos sinais reais do histórico, não de conselhos genéricos.
+- As ações devem reduzir atrito, estabilizar rotina, proteger energia ou conter impulsividade.
+- Prefira intervenções concretas de regulação: proteger sono, reduzir carga social, fracionar tarefa, cortar estímulo, ancorar rotina, criar pausa antes de agir no automático.
+- Se houver sinal de queda sustentada, impulsividade, compulsão, isolamento ou sobrecarga, nomeie isso no "pattern" ou no "insight" sem dramatizar.
+- Cada "why" deve explicar qual risco ou padrão a ação está tentando conter.
 - Evite linguagem clínica pesada, mas mantenha raciocínio técnico por trás.
 
 Retorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases úteis sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"ação gentil e prática","category":"sono|rotina|mindfulness|autocuidado|foco","why":"razão breve"}]}. Sem texto fora do JSON.`;
