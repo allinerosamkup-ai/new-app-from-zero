@@ -7,7 +7,7 @@ import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
 import { useToast } from "../components/Toast";
-import { computeMoodCycle, computeStreak, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { aggregateCheckinsByDay, computeMoodCycle, computeStreak, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
 import { getClientDayContext } from "../utils/day-context";
 import { 
   MessageSquareText, 
@@ -16,7 +16,6 @@ import {
   Target, 
   Timer,
   TrendingUp,
-  MessageCircle,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
@@ -44,6 +43,14 @@ type ImportantAlert = {
   tone: "info" | "warning" | "critical";
   actionLabel?: string;
   actionPath?: string;
+};
+
+type ChartPoint = {
+  x: number;
+  humorY: number | null;
+  energiaY: number | null;
+  label: string;
+  isHighlight?: boolean;
 };
 
 const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string; category: string }> = {
@@ -85,6 +92,38 @@ function minutesToTime(m: number) {
   const h = Math.floor(m / 60) % 24;
   const min = m % 60;
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+function valueToChartY(value: number) {
+  const Y_TOP = 12;
+  const Y_BOTTOM = 63;
+  const Y_RANGE = Y_BOTTOM - Y_TOP;
+  return Y_BOTTOM - ((value - 1) / 4) * Y_RANGE;
+}
+
+function getCheckinMoment(entry: { recordedAt?: string; checkinSlot?: string }) {
+  if (entry.recordedAt) {
+    const stamp = new Date(entry.recordedAt).getTime();
+    if (!Number.isNaN(stamp)) return stamp;
+  }
+  if (entry.checkinSlot?.startsWith("morning")) return 0;
+  if (entry.checkinSlot?.startsWith("midday")) return 1;
+  if (entry.checkinSlot?.startsWith("evening")) return 2;
+  return 99;
+}
+
+function formatCheckinMomentLabel(entry: { recordedAt?: string; checkinSlot?: string }) {
+  if (entry.recordedAt) {
+    const stamp = new Date(entry.recordedAt);
+    if (!Number.isNaN(stamp.getTime())) {
+      return stamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+  }
+
+  if (entry.checkinSlot?.startsWith("morning")) return "Manhã";
+  if (entry.checkinSlot?.startsWith("midday")) return "Tarde";
+  if (entry.checkinSlot?.startsWith("evening")) return "Noite";
+  return "Agora";
 }
 
 // ── Helpers de tempo ──────────────────────────────────────
@@ -157,8 +196,8 @@ export function HomePage() {
   const { state, addTask, setPendingFollowUp, setProactiveNudge } = useAuraStore();
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
-  const [insightDismissed, setInsightDismissed] = useState(false);
   const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());
+  const [checkinChartMode, setCheckinChartMode] = useState<"week" | "day">("week");
 
   // Agenda por blocos
   const [agendaPhase, setAgendaPhase] = useState<"idle" | "loading" | "preview" | "approved">("idle");
@@ -166,40 +205,65 @@ export function HomePage() {
   const [approvedBlockIds, setApprovedBlockIds] = useState<Set<number>>(new Set());
 
   const mood = moodMap[state.mood] ?? moodMap.equilibrada;
+  const dayContext = useMemo(() => getClientDayContext(), []);
+  const aggregatedCheckinHistory = useMemo(
+    () => aggregateCheckinsByDay(state.checkinHistory || []),
+    [state.checkinHistory]
+  );
 
   // ── Motor de Ciclagem de Humor ────────────────────────────
   const cycleReport = useMemo(
-    () => computeMoodCycle(state.checkinHistory || []),
-    [state.checkinHistory]
+    () => computeMoodCycle(aggregatedCheckinHistory),
+    [aggregatedCheckinHistory]
   );
-  const streak = useMemo(() => computeStreak(state.checkinHistory || []), [state.checkinHistory]);
+  const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
 
-  // ── Sparkline — últimos 7 dias reais ─────────────────────
-  const sparklineData = useMemo(() => {
-    const history = state.checkinHistory || [];
+  // ── Gráfico semanal — média diária dos últimos 7 dias ─────────────────────
+  const weeklyCheckinData = useMemo<ChartPoint[]>(() => {
+    const history = aggregatedCheckinHistory;
     const today = new Date();
-    const X_START = 16, X_END = 264, Y_TOP = 12, Y_BOTTOM = 63;
+    const X_START = 16, X_END = 264;
     const X_STEP = (X_END - X_START) / 6;
-    const Y_RANGE = Y_BOTTOM - Y_TOP;
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(today);
       d.setDate(today.getDate() - (6 - i));
       const dateStr = d.toISOString().split("T")[0];
       const entry = history.find(h => h.date === dateStr);
       const x = X_START + i * X_STEP;
-      if (!entry) return { x, humorY: null, energiaY: null, isToday: i === 6 };
+      if (!entry) return { x, humorY: null, energiaY: null, label: DIAS_SEMANA[d.getDay()].slice(0, 3), isHighlight: i === 6 };
       return {
         x,
-        humorY: Y_BOTTOM - ((entry.humor - 1) / 4) * Y_RANGE,
-        energiaY: Y_BOTTOM - ((entry.energia - 1) / 4) * Y_RANGE,
-        isToday: i === 6,
+        humorY: valueToChartY(entry.humor),
+        energiaY: valueToChartY(entry.energia),
+        label: DIAS_SEMANA[d.getDay()].slice(0, 3),
+        isHighlight: i === 6,
       };
     });
-  }, [state.checkinHistory]);
+  }, [aggregatedCheckinHistory]);
 
-  function buildSparkPath(getter: (p: typeof sparklineData[0]) => number | null): string {
-    const valid = sparklineData
+  const todayCheckinData = useMemo<ChartPoint[]>(() => {
+    const todayEntries = [...(state.checkinHistory || [])]
+      .filter((entry) => entry.date === dayContext.localDate)
+      .sort((a, b) => getCheckinMoment(a) - getCheckinMoment(b));
+
+    if (todayEntries.length === 0) return [];
+
+    const X_START = 40;
+    const X_END = 240;
+    const step = todayEntries.length > 1 ? (X_END - X_START) / (todayEntries.length - 1) : 0;
+
+    return todayEntries.map((entry, index) => ({
+      x: todayEntries.length === 1 ? 140 : X_START + step * index,
+      humorY: valueToChartY(entry.humor),
+      energiaY: valueToChartY(entry.energia),
+      label: formatCheckinMomentLabel(entry),
+      isHighlight: index === todayEntries.length - 1,
+    }));
+  }, [dayContext.localDate, state.checkinHistory]);
+
+  function buildSparkPath(points: ChartPoint[], getter: (p: ChartPoint) => number | null): string {
+    const valid = points
       .map(p => ({ x: p.x, y: getter(p) }))
       .filter((p): p is { x: number; y: number } => p.y !== null);
     if (valid.length === 0) return "";
@@ -213,7 +277,8 @@ export function HomePage() {
     return path;
   }
 
-  const hasSparkData = sparklineData.some(p => p.humorY !== null);
+  const activeChartData = checkinChartMode === "week" ? weeklyCheckinData : todayCheckinData;
+  const hasActiveChartData = activeChartData.some((point) => point.humorY !== null);
 
   // Clock
   const [clockTime, setClockTime] = useState(() => new Date());
@@ -231,7 +296,6 @@ export function HomePage() {
   const [homeAiMsg, setHomeAiMsg] = useState<HomeAiMsg | null>(null);
   const [homeAiLoading, setHomeAiLoading] = useState(true);
   const homeMsgRan = useRef(false);
-  const dayContext = useMemo(() => getClientDayContext(), []);
 
   useEffect(() => {
     if (homeMsgRan.current) return;
@@ -398,7 +462,7 @@ export function HomePage() {
     state.tasks,
   ]);
   const displayName = state.name
-    ? state.name.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
+    ? state.name.split(/\s+/)[0].charAt(0).toUpperCase() + state.name.split(/\s+/)[0].slice(1).toLowerCase()
     : "você";
 
   return (
@@ -451,6 +515,194 @@ export function HomePage() {
           }}>
             <span style={{ fontSize: 13 }}>{mood.emoji}</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{mood.chipLabel}</span>
+          </div>
+        </div>
+
+        {/* ── Gráfico de check-ins ── */}
+        <div className="mini-chart-area">
+          <div className="chart-header" style={{ alignItems: "flex-start" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+              <TrendingUp size={13} color="var(--horizon)" />
+              <div>
+                <span className="chart-title">Humor e energia</span>
+                <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--text-3)" }}>
+                  {checkinChartMode === "week"
+                    ? "Média diária dos últimos 7 dias"
+                    : todayCheckinData.length > 0
+                      ? `${todayCheckinData.length} check-in${todayCheckinData.length > 1 ? "s" : ""} hoje`
+                      : "Hoje ainda não há check-ins registrados"}
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ display: "flex", padding: 3, borderRadius: 999, background: "rgba(255,255,255,.82)", border: "1px solid var(--warm-border)" }}>
+                {[
+                  { id: "week", label: "Semana", disabled: false },
+                  { id: "day", label: "Hoje", disabled: todayCheckinData.length === 0 },
+                ].map((option) => {
+                  const active = checkinChartMode === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => !option.disabled && setCheckinChartMode(option.id as "week" | "day")}
+                      disabled={option.disabled}
+                      style={{
+                        border: "none",
+                        background: active ? "var(--nectarine)" : "transparent",
+                        color: active ? "#fff" : "var(--text-2)",
+                        opacity: option.disabled ? 0.45 : 1,
+                        borderRadius: 999,
+                        padding: "5px 10px",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: option.disabled ? "default" : "pointer",
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="chart-legend">
+                <div className="legend-item">
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: "var(--horizon)",
+                      display: "inline-block",
+                    }}
+                  />
+                  Humor
+                </div>
+                <div className="legend-item">
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "2px",
+                      background: "var(--buttercup)",
+                      opacity: 0.6,
+                      display: "inline-block",
+                    }}
+                  />
+                  Energia
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {!hasActiveChartData ? (
+            <div style={{
+              height: 72, display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--text-3)", fontSize: "0.82rem", fontStyle: "italic",
+            }}>
+              Faça seu primeiro check-in para ver o gráfico
+            </div>
+          ) : (
+            <>
+              <svg width="100%" viewBox="0 0 280 72" style={{ overflow: "visible" }}>
+                <defs>
+                  <linearGradient id="moodLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="var(--horizon)" />
+                    <stop offset="50%" stopColor="var(--sweet-mint)" />
+                    <stop offset="100%" stopColor="var(--atomic-tangerine)" />
+                  </linearGradient>
+                  <linearGradient id="moodFillGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--horizon)" stopOpacity={0.18} />
+                    <stop offset="100%" stopColor="var(--horizon)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+
+                {[12, 29, 46, 63].map(y => (
+                  <line key={y} x1="16" y1={y} x2="264" y2={y} stroke="rgba(0,0,0,.04)" strokeWidth="1" strokeDasharray="3,3" />
+                ))}
+
+                {buildSparkPath(activeChartData, (point) => point.energiaY) && (
+                  <path
+                    d={buildSparkPath(activeChartData, (point) => point.energiaY)}
+                    fill="none"
+                    stroke="var(--olive)"
+                    strokeWidth="1.5"
+                    strokeDasharray="4,3"
+                    opacity={0.5}
+                    strokeLinecap="round"
+                  />
+                )}
+
+                {buildSparkPath(activeChartData, (point) => point.humorY) && (
+                  <>
+                    <path
+                      d={buildSparkPath(activeChartData, (point) => point.humorY)}
+                      fill="none"
+                      stroke="url(#moodLineGradient)"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                    />
+                    {(() => {
+                      const linePath = buildSparkPath(activeChartData, (point) => point.humorY);
+                      const validPts = activeChartData.filter((point) => point.humorY !== null);
+                      if (validPts.length < 2) return null;
+                      const first = validPts[0];
+                      const last = validPts[validPts.length - 1];
+                      return (
+                        <path
+                          d={`${linePath} L ${last.x} 72 L ${first.x} 72 Z`}
+                          fill="url(#moodFillGradient)"
+                          opacity={0.35}
+                        />
+                      );
+                    })()}
+                  </>
+                )}
+
+                {activeChartData.map((point, index) => {
+                  if (point.humorY === null) return null;
+                  return point.isHighlight ? (
+                    <g key={index}>
+                      <circle cx={point.x} cy={point.humorY} r="4.5" fill="var(--atomic-tangerine)" stroke="white" strokeWidth="2" />
+                      <circle cx={point.x} cy={point.humorY} r="9" fill="none" stroke="var(--atomic-tangerine)" strokeWidth="1.5" opacity={0.35}>
+                        <animate attributeName="r" values="9;14;9" dur="2.5s" repeatCount="indefinite" />
+                        <animate attributeName="opacity" values=".4;0;.4" dur="2.5s" repeatCount="indefinite" />
+                      </circle>
+                    </g>
+                  ) : (
+                    <circle key={index} cx={point.x} cy={point.humorY} r="3.5" fill="var(--horizon)" stroke="white" strokeWidth="1.5" opacity={0.75} />
+                  );
+                })}
+              </svg>
+
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 8, paddingInline: 6 }}>
+                {activeChartData.map((point, index) => (
+                  <div key={`${point.label}-${index}`} style={{ flex: 1, textAlign: "center" }}>
+                    <span style={{ fontSize: 10, fontWeight: point.isHighlight ? 700 : 500, color: point.isHighlight ? "var(--text-1)" : "var(--text-3)" }}>
+                      {point.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="aura-divider" style={{ marginTop: "14px" }} />
+          <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
+            <AuraButtonV2
+              variant="primary"
+              size="md"
+              onClick={() => navigate("/checkin")}
+              leftIcon={
+                <span style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: "22px", height: "22px", background: "rgba(255,255,255,0.25)",
+                  borderRadius: "50%", boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                  fontSize: "12px", marginRight: "4px"
+                }}>
+                  😊
+                </span>
+              }
+            >
+              Check-in
+            </AuraButtonV2>
           </div>
         </div>
 
@@ -561,6 +813,46 @@ export function HomePage() {
           </div>
         </div>
 
+        {/* ── Acesso Rápido ── */}
+        <p className="aura-section-kicker">Acesso rapido</p>
+        <div className="shortcut-grid">
+          <button className="shortcut-card" onClick={() => navigate("/journal")}>
+            <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.15)" }}>
+              <MessageSquareText size={18} color="var(--terracotta)" />
+            </div>
+            <span className="shortcut-label">Diário</span>
+            <span className="shortcut-sub">Falar com IA</span>
+          </button>
+          <button className="shortcut-card" onClick={() => navigate("/planner")}>
+            <div className="icon-badge" style={{ background: "rgba(var(--horizon-rgb), 0.15)" }}>
+              <LayoutDashboard size={18} color="var(--horizon)" />
+            </div>
+            <span className="shortcut-label">Planner</span>
+            <span className="shortcut-sub">Organizar</span>
+          </button>
+          <button className="shortcut-card" onClick={() => navigate("/insights")}>
+            <div className="icon-badge" style={{ background: "rgba(var(--atomic-tangerine-rgb), 0.15)" }}>
+              <Activity size={18} color="var(--atomic-tangerine)" />
+            </div>
+            <span className="shortcut-label">Padrões</span>
+            <span className="shortcut-sub">Harmonia</span>
+          </button>
+          <button className="shortcut-card" onClick={() => navigate("/goals")}>
+            <div className="icon-badge" style={{ background: "rgba(var(--sweet-mint-rgb), 0.15)" }}>
+              <Target size={18} color="var(--sweet-mint)" />
+            </div>
+            <span className="shortcut-label">Objetivos</span>
+            <span className="shortcut-sub">Suas metas</span>
+          </button>
+          <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
+            <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.1)" }}>
+              <Timer size={18} color="var(--terracotta)" />
+            </div>
+            <span className="shortcut-label">Pomodoro</span>
+            <span className="shortcut-sub">Foco</span>
+          </button>
+        </div>
+
         {/* ── Nudge proativo da Aura ──────────────────────────── */}
         {state.proactiveNudge && (() => {
           const nudge = state.proactiveNudge!;
@@ -617,352 +909,148 @@ export function HomePage() {
           );
         })()}
 
-        {/* Mini chart area */}
-        <div className="mini-chart-area">
-          <div className="chart-header">
-            <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-              <TrendingUp size={13} color="var(--horizon)" />
-              <span className="chart-title">Humor da Semana</span>
-            </div>
-            <div className="chart-legend">
-              <div className="legend-item">
-                <span
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    background: "var(--horizon)",
-                    display: "inline-block",
-                  }}
-                />
-                Humor
-              </div>
-              <div className="legend-item">
-                <span
-                  style={{
-                    width: "10px",
-                    height: "2px",
-                    background: "var(--buttercup)",
-                    opacity: 0.6,
-                    display: "inline-block",
-                  }}
-                />
-                Energia
-              </div>
-            </div>
-          </div>
-
-          {/* SVG sparkline — dados reais dos últimos 7 dias */}
-          {!hasSparkData ? (
-            <div style={{
-              height: 72, display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--text-3)", fontSize: "0.82rem", fontStyle: "italic",
-            }}>
-              Faça seu primeiro check-in para ver o gráfico
-            </div>
-          ) : (
-            <svg width="100%" viewBox="0 0 280 72" style={{ overflow: "visible" }}>
-              <defs>
-                <linearGradient id="moodLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="var(--horizon)" />
-                  <stop offset="50%" stopColor="var(--sweet-mint)" />
-                  <stop offset="100%" stopColor="var(--atomic-tangerine)" />
-                </linearGradient>
-                <linearGradient id="moodFillGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--horizon)" stopOpacity={0.18} />
-                  <stop offset="100%" stopColor="var(--horizon)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-
-              {/* Grid horizontal */}
-              {[12, 29, 46, 63].map(y => (
-                <line key={y} x1="16" y1={y} x2="264" y2={y} stroke="rgba(0,0,0,.04)" strokeWidth="1" strokeDasharray="3,3" />
-              ))}
-
-              {/* Energia — linha tracejada */}
-              {buildSparkPath(p => p.energiaY) && (
-                <path
-                  d={buildSparkPath(p => p.energiaY)}
-                  fill="none"
-                  stroke="var(--olive)"
-                  strokeWidth="1.5"
-                  strokeDasharray="4,3"
-                  opacity={0.5}
-                  strokeLinecap="round"
-                />
-              )}
-
-              {/* Humor — área preenchida */}
-              {buildSparkPath(p => p.humorY) && (
-                <>
-                  <path
-                    d={buildSparkPath(p => p.humorY)}
-                    fill="none"
-                    stroke="url(#moodLineGradient)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  />
-                  {(() => {
-                    const linePath = buildSparkPath(p => p.humorY);
-                    const validPts = sparklineData.filter(p => p.humorY !== null);
-                    if (validPts.length < 2) return null;
-                    const first = validPts[0];
-                    const last = validPts[validPts.length - 1];
-                    return (
-                      <path
-                        d={`${linePath} L ${last.x} 72 L ${first.x} 72 Z`}
-                        fill="url(#moodFillGradient)"
-                        opacity={0.35}
-                      />
-                    );
-                  })()}
-                </>
-              )}
-
-              {/* Dots — só onde há dados */}
-              {sparklineData.map((p, i) => {
-                if (p.humorY === null) return null;
-                return p.isToday ? (
-                  <g key={i}>
-                    <circle cx={p.x} cy={p.humorY} r="4.5" fill="var(--atomic-tangerine)" stroke="white" strokeWidth="2" />
-                    <circle cx={p.x} cy={p.humorY} r="9" fill="none" stroke="var(--atomic-tangerine)" strokeWidth="1.5" opacity={0.35}>
-                      <animate attributeName="r" values="9;14;9" dur="2.5s" repeatCount="indefinite" />
-                      <animate attributeName="opacity" values=".4;0;.4" dur="2.5s" repeatCount="indefinite" />
-                    </circle>
-                  </g>
-                ) : (
-                  <circle key={i} cx={p.x} cy={p.humorY} r="3.5" fill="var(--horizon)" stroke="white" strokeWidth="1.5" opacity={0.75} />
-                );
-              })}
-            </svg>
-          )}
-
-          <div className="aura-divider" style={{ marginTop: "14px" }} />
-          <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
-            <AuraButtonV2
-              variant="primary"
-              size="md"
-              onClick={() => navigate("/checkin")}
-              leftIcon={
-                <span style={{ 
-                  display: "flex", alignItems: "center", justifyContent: "center", 
-                  width: "22px", height: "22px", background: "rgba(255,255,255,0.25)", 
-                  borderRadius: "50%", boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  fontSize: "12px", marginRight: "4px" 
-                }}>
-                  😊
-                </span>
-              }
-            >
-              Check-in
-            </AuraButtonV2>
-          </div>
-        </div>
-
-        {/* Estado atual - card com gradiente */}
-        <div
-          className="aura-card"
-          style={{
-            marginBottom: "calc(var(--a))",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              marginBottom: "8px",
-            }}
-          >
-            <span style={{ fontSize: "20px" }}>{mood.emoji}</span>
-            <span
-              style={{
-                fontSize: "11px",
-                fontWeight: 800,
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                color: "var(--primary)",
-              }}
-            >
-              {mood.label}
-            </span>
-            <div className="aura-chip" style={{ marginLeft: "auto" }}>
-              {mood.chipLabel}
-            </div>
-          </div>
-          <p
-            style={{
-              fontSize: "12.5px",
-              lineHeight: 1.6,
-              color: "var(--text-2)",
-              opacity: 0.85,
-              marginBottom: "10px",
-            }}
-          >
-            {mood.description}
-          </p>
-          <div className="aura-divider" />
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              marginTop: "8px",
-            }}
-          >
-            <MessageCircle size={13} color="var(--primary)" />
-            <span
-              style={{
-                fontSize: "11.5px",
-                fontStyle: "italic",
-                color: "var(--text-3)",
-              }}
-            >
-              {mood.tip}
-            </span>
-          </div>
-        </div>
-
-        {/* ── Acesso Rápido ── */}
-        <p className="aura-section-kicker">Acesso rapido</p>
-        <div className="shortcut-grid">
-          <button className="shortcut-card" onClick={() => navigate("/journal")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.15)" }}>
-              <MessageSquareText size={18} color="var(--terracotta)" />
-            </div>
-            <span className="shortcut-label">Diário</span>
-            <span className="shortcut-sub">Falar com IA</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/planner")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--horizon-rgb), 0.15)" }}>
-              <LayoutDashboard size={18} color="var(--horizon)" />
-            </div>
-            <span className="shortcut-label">Planner</span>
-            <span className="shortcut-sub">Organizar</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/insights")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--atomic-tangerine-rgb), 0.15)" }}>
-              <Activity size={18} color="var(--atomic-tangerine)" />
-            </div>
-            <span className="shortcut-label">Padrões</span>
-            <span className="shortcut-sub">Harmonia</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/goals")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--sweet-mint-rgb), 0.15)" }}>
-              <Target size={18} color="var(--sweet-mint)" />
-            </div>
-            <span className="shortcut-label">Objetivos</span>
-            <span className="shortcut-sub">Suas metas</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.1)" }}>
-              <Timer size={18} color="var(--terracotta)" />
-            </div>
-            <span className="shortcut-label">Pomodoro</span>
-            <span className="shortcut-sub">Foco</span>
-          </button>
-        </div>
-
         {/* ── Card de Insight Autônomo da IA (#3 — urgente quando score < 40) ── */}
-        {state.autonomousInsight && !insightDismissed && (() => {
-          const ins = state.autonomousInsight!;
-          const cfg = STATE_CONFIG[ins.state] ?? STATE_CONFIG.stable;
-          const score = ins.stabilityScore;
-          const isUrgent = score < 40;  // #3 — modo urgente
+        {(() => {
+          const ins = state.autonomousInsight;
+          const hasInsight = Boolean(ins);
+          const cfg = hasInsight ? (STATE_CONFIG[ins!.state] ?? STATE_CONFIG.stable) : STATE_CONFIG.stable;
+          const score = hasInsight ? ins!.stabilityScore : 0;
+          const isUrgent = hasInsight && score < 40;  // #3 — modo urgente
 
           return (
             <div className="home-ai-card" style={{
-              border: isUrgent ? `2px solid ${cfg.color}66` : `1.5px solid ${cfg.color}33`,
-              background: isUrgent ? cfg.bg : "rgba(255,253,249,.97)",
-              ...(isUrgent ? { boxShadow: `0 0 0 3px ${cfg.color}15` } : {}),
+              border: hasInsight
+                ? isUrgent ? `2px solid ${cfg.color}66` : `1.5px solid ${cfg.color}33`
+                : `1.5px solid ${cfg.color}22`,
+              background: hasInsight && isUrgent ? cfg.bg : "rgba(255,253,249,.97)",
+              ...(hasInsight && isUrgent ? { boxShadow: `0 0 0 3px ${cfg.color}15` } : {}),
             }}>
-              {/* Header — urgente recebe badge vermelho */}
-              <div className="home-ai-card-header" style={{ background: isUrgent ? `${cfg.bg}` : cfg.bg, borderBottom: `1px solid ${cfg.color}22` }}>
+              <div className="home-ai-card-header" style={{ background: cfg.bg, borderBottom: `1px solid ${cfg.color}22` }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ fontSize: 16 }}>{isUrgent ? "🚨" : cfg.emoji}</span>
+                  <span style={{ fontSize: 16, color: cfg.color }}>{hasInsight ? (isUrgent ? "🚨" : "♡") : "♡"}</span>
                   <div>
                     <p className="home-ai-card-title" style={{ color: cfg.color }}>
-                      {isUrgent ? "ATENÇÃO — AURA DETECTOU" : "ANÁLISE E AUTONOMIA"}
+                      {hasInsight && isUrgent ? "ATENÇÃO — AURA DETECTOU" : "ANÁLISE E AUTONOMIA"}
                     </p>
-                    <p className="home-ai-card-subtitle">
-                      Estabilidade {score}% · {cfg.label}
-                      {isUrgent && <span style={{ color: cfg.color, fontWeight: 800 }}> · Precisa de cuidado agora</span>}
+                    <p className="home-ai-card-subtitle" style={{ color: cfg.color }}>
+                      {hasInsight ? (
+                        <>
+                          Estabilidade {score}% · {cfg.label}
+                          {isUrgent && <span style={{ color: cfg.color, fontWeight: 800 }}> · Precisa de cuidado agora</span>}
+                        </>
+                      ) : (
+                        "Espaço reservado para a leitura autônoma da Aura"
+                      )}
                     </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
+                      <span
+                        className="aura-chip"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          background: "rgba(255,255,255,.72)",
+                          border: `1px solid ${cfg.color}44`,
+                          color: cfg.color,
+                        }}
+                      >
+                        <span style={{ fontSize: 12 }}>{mood.emoji}</span>
+                        {mood.label}
+                      </span>
+                      <span
+                        className="aura-chip"
+                        style={{
+                          background: "rgba(255,255,255,.72)",
+                          border: `1px solid ${cfg.color}44`,
+                          color: cfg.color,
+                        }}
+                      >
+                        {mood.chipLabel}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ width: 48, height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
-                    <div style={{ width: `${score}%`, height: "100%", borderRadius: 999, background: cfg.color }} />
+                {hasInsight ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ width: 48, height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                      <div style={{ width: `${score}%`, height: "100%", borderRadius: 999, background: cfg.color }} />
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setInsightDismissed(true)}
-                    style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid rgba(0,0,0,.08)", background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "var(--text-3)" }}
-                  >✕</button>
-                </div>
+                ) : null}
               </div>
 
-              {/* Corpo */}
               <div className="home-ai-card-body">
-                <p className="home-ai-quote" style={isUrgent ? { fontSize: 13, fontWeight: 600, color: cfg.color } : {}}>
-                  "{ins.insight}"
-                </p>
-                <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5, marginBottom: ins.actions.length > 0 ? 10 : 0 }}>
-                  {ins.pattern}
-                </p>
-
-                {/* Ações sugeridas — aceitar schedula follow-up #7 */}
-                {ins.actions.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-                      MICRO-AÇÕES BASEADAS EM EVIDÊNCIA
+                {hasInsight ? (
+                  <>
+                    <p className="home-ai-quote" style={isUrgent ? { fontSize: 13, fontWeight: 600, color: cfg.color } : {}}>
+                      "{ins!.insight}"
                     </p>
-                    {ins.actions.map((action, idx) => {
-                      const added = addedActionIdx.has(idx);
-                      return (
-                        <div key={idx} style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          padding: "8px 10px", borderRadius: 9,
-                          background: "var(--warm-bg)",
-                          border: `1px solid ${cfg.color}30`,
-                        }}>
-                          <div style={{ flex: 1 }}>
-                            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
-                            <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
-                          </div>
-                          <button
-                            onClick={async () => {
-                              await addTask(action.title, "09:00", action.category);
-                              setAddedActionIdx(prev => new Set([...prev, idx]));
-                              // #7 — schedula follow-up para 2h depois
-                              const scheduledFor = new Date(Date.now() + 2 * 3600_000).toISOString();
-                              const followUp: FollowUpPending = {
-                                suggestionTitle: action.title,
-                                suggestionCategory: action.category,
-                                scheduledFor,
-                                response: null,
-                                followUpMessage: null,
-                                source: "autonomous",
-                              };
-                              setPendingFollowUp(followUp);
-                            }}
-                            disabled={added}
-                            style={{
-                              width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-                              border: `1.5px solid ${added ? cfg.color : cfg.color + "60"}`,
-                              background: added ? cfg.color : "transparent",
-                              cursor: added ? "default" : "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          >
-                            {added
-                              ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
-                              : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                            }
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5, marginBottom: ins!.actions.length > 0 ? 10 : 0 }}>
+                      {ins!.pattern}
+                    </p>
+
+                    {ins!.actions.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
+                          PRÓXIMOS MOVIMENTOS SUGERIDOS
+                        </p>
+                        {ins!.actions.map((action, idx) => {
+                          const added = addedActionIdx.has(idx);
+                          return (
+                            <div key={idx} style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              padding: "8px 10px", borderRadius: 9,
+                              background: "var(--warm-bg)",
+                              border: `1px solid ${cfg.color}30`,
+                            }}>
+                              <div style={{ flex: 1 }}>
+                                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
+                                <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  await addTask(action.title, "09:00", action.category);
+                                  setAddedActionIdx(prev => new Set([...prev, idx]));
+                                  const scheduledFor = new Date(Date.now() + 2 * 3600_000).toISOString();
+                                  const followUp: FollowUpPending = {
+                                    suggestionTitle: action.title,
+                                    suggestionCategory: action.category,
+                                    scheduledFor,
+                                    response: null,
+                                    followUpMessage: null,
+                                    source: "autonomous",
+                                  };
+                                  setPendingFollowUp(followUp);
+                                }}
+                                disabled={added}
+                                style={{
+                                  width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                                  border: `1.5px solid ${added ? cfg.color : cfg.color + "60"}`,
+                                  background: added ? cfg.color : "transparent",
+                                  cursor: added ? "default" : "pointer",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                }}
+                              >
+                                {added
+                                  ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                  : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                }
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="home-ai-quote">
+                      "Esse espaço continua reservado para a leitura autônoma da Aura."
+                    </p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5, marginBottom: 0 }}>
+                      Assim que houver sinais suficientes, a análise e autonomia volta a aparecer aqui com o padrão detectado e os próximos movimentos sugeridos.
+                    </p>
+                  </>
                 )}
               </div>
             </div>
@@ -1025,7 +1113,7 @@ export function HomePage() {
           <div className="home-panel-header">
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <p className="home-panel-title" style={{ color: "var(--earth-11)" }}>
-                  Momento de Autocuidado
+                  Cuidados para agora
                 </p>
               {autocuidadoFinal && !homeAiLoading && (
                 <span style={{ fontSize: 9, background: "rgba(161,140,120,.15)", color: "var(--earth-11)", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
@@ -1033,7 +1121,7 @@ export function HomePage() {
             </div>
             {!homeAiLoading && autocuidadoFinal && (
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: "4px 0 0", fontStyle: "italic" }}>
-                Sugestões personalizadas para você agora:
+                Leituras suaves para este momento:
               </p>
             )}
           </div>

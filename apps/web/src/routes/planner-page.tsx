@@ -93,6 +93,13 @@ function formatDateLabel(date: Date) {
   return `${DIAS[date.getDay() === 0 ? 6 : date.getDay() - 1]}, ${date.getDate()} de ${MESES[date.getMonth()]}`;
 }
 
+function formatDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function CalendarIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--text-1)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
@@ -507,7 +514,7 @@ function RecurringSection({ recurring, setRecurring }: {
 
 // ─── main page ───────────────────────────────────────────────
 export function PlannerPage() {
-  const { state, addTask, updateTask, removeTask, reorderTasks } = useAuraStore();
+  const { state, refreshData } = useAuraStore();
   const navigate = useNavigate();
   const location = useLocation();
   const { showError, showSuccess } = useToast();
@@ -527,9 +534,13 @@ export function PlannerPage() {
   const isDraggingRef = useRef(false);
 
   const [aiTitleLoading, setAiTitleLoading] = useState(false);
+  const [plannerTasks, setPlannerTasks] = useState<typeof state.tasks>([]);
+  const [plannerLoading, setPlannerLoading] = useState(false);
 
   const dataAtual = new Date(dataBase);
   dataAtual.setDate(dataBase.getDate() + offsetDias);
+  const selectedDateKey = formatDateKey(dataAtual);
+  const isTodaySelected = selectedDateKey === formatDateKey(new Date());
 
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
 
@@ -613,19 +624,51 @@ export function PlannerPage() {
     phaseAtLoad &&
     phaseAtLoad !== cycleReport.phase &&
     cycleReport.phase !== "insufficient_data" &&
-    state.tasks.length > 0;
+    plannerTasks.length > 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    setPlannerLoading(true);
+
+    api.get(`/timeline/${selectedDateKey}`)
+      .then((timeline: any[]) => {
+        if (cancelled) return;
+        setPlannerTasks(
+          (timeline || []).map((task) => ({
+            id: task.id,
+            title: task.title,
+            time: task.startTime,
+            endTime: task.endTime,
+            done: task.status === "completed",
+            category: task.category,
+            intensity: task.intensity,
+          })),
+        );
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("[planner] Failed to fetch selected date timeline", error);
+        showError("Nao foi possivel carregar os blocos deste dia.");
+      })
+      .finally(() => {
+        if (!cancelled) setPlannerLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDateKey, showError]);
 
   useEffect(() => {
     const openTaskId = (location.state as any)?.openTaskId;
-    if (openTaskId) {
-      const task = state.tasks.find(t => t.id === openTaskId);
-      if (task) openEditSheet(task.id);
-      navigate("/planner", { replace: true, state: {} });
-    }
-  }, [location.state, state.tasks]);
+    if (!openTaskId || plannerLoading) return;
+    const task = plannerTasks.find(t => t.id === openTaskId);
+    if (task) openEditSheet(task.id);
+    navigate("/planner", { replace: true, state: {} });
+  }, [location.state, plannerTasks, plannerLoading, navigate]);
 
   function openEditSheet(id: string | number) {
-    const task = state.tasks.find((entry) => entry.id === id);
+    const task = plannerTasks.find((entry) => entry.id === id);
     if (!task) return;
     const meta = getTaskMeta(id);
     const categoryOption = getCategoryOption(task.category, task.title);
@@ -645,7 +688,39 @@ export function PlannerPage() {
 
   async function handleSaveEdit() {
     if (!editingTaskId) return;
-    await updateTask(editingTaskId, { title: editForm.title.trim() || editForm.title, time: editForm.time, category: editForm.category });
+    const currentTask = plannerTasks.find((task) => task.id === editingTaskId);
+    if (!currentTask) return;
+    const startTime = editForm.time;
+    const endTime = addMinutesToTime(startTime, diffMinutes(currentTask.time, currentTask.endTime));
+
+    await api.post("/timeline", {
+      date: selectedDateKey,
+      blocks: [{
+        id: String(editingTaskId),
+        title: editForm.title.trim() || currentTask.title,
+        startTime,
+        endTime,
+        category: normalizePlannerCategory(editForm.category),
+        intensity: currentTask.intensity ?? "M",
+        status: currentTask.done ? "completed" : "planned",
+      }],
+    });
+
+    const timeline: any[] = await api.get(`/timeline/${selectedDateKey}`);
+    setPlannerTasks(
+      (timeline || []).map((task) => ({
+        id: task.id,
+        title: task.title,
+        time: task.startTime,
+        endTime: task.endTime,
+        done: task.status === "completed",
+        category: task.category,
+        intensity: task.intensity,
+      })),
+    );
+    if (isTodaySelected) {
+      await refreshData();
+    }
     setTaskMeta(editingTaskId, { 
       noteMode: resolveStoredNoteMode(editForm.note, editForm.checklist), 
       note: editForm.note, 
@@ -658,7 +733,22 @@ export function PlannerPage() {
 
   async function handleDeleteTask() {
     if (!editingTaskId) return;
-    await removeTask(editingTaskId);
+    await api.delete(`/timeline/${editingTaskId}`);
+    const timeline: any[] = await api.get(`/timeline/${selectedDateKey}`);
+    setPlannerTasks(
+      (timeline || []).map((task) => ({
+        id: task.id,
+        title: task.title,
+        time: task.startTime,
+        endTime: task.endTime,
+        done: task.status === "completed",
+        category: task.category,
+        intensity: task.intensity,
+      })),
+    );
+    if (isTodaySelected) {
+      await refreshData();
+    }
     setEditingTaskId(null);
   }
 
@@ -666,7 +756,28 @@ export function PlannerPage() {
     const title = newForm.title.trim();
     if (!title) return;
     try {
-      const createdTask = await addTask(title, newForm.time, newForm.category);
+      const result: any = await api.post("/timeline", {
+        date: selectedDateKey,
+        blocks: [{
+          title,
+          startTime: newForm.time,
+          endTime: addMinutesToTime(newForm.time, 30),
+          category: normalizePlannerCategory(newForm.category),
+          intensity: "M",
+        }],
+      });
+      const savedBlock = Array.isArray(result?.savedBlocks) ? result.savedBlocks[0] : null;
+      const createdTask = savedBlock
+        ? {
+            id: savedBlock.id,
+            title: savedBlock.title,
+            time: savedBlock.startTime ?? newForm.time,
+            endTime: savedBlock.endTime ?? addMinutesToTime(newForm.time, 30),
+            done: savedBlock.status === "completed",
+            category: savedBlock.category,
+            intensity: savedBlock.intensity,
+          }
+        : null;
       if (createdTask) {
         setTaskMeta(createdTask.id, { 
           noteMode: resolveStoredNoteMode(newForm.note, newForm.checklist), 
@@ -675,6 +786,21 @@ export function PlannerPage() {
           recurring: newForm.recurring,
           energyLevel: newForm.energyLevel,
         });
+      }
+      const timeline: any[] = await api.get(`/timeline/${selectedDateKey}`);
+      setPlannerTasks(
+        (timeline || []).map((task) => ({
+          id: task.id,
+          title: task.title,
+          time: task.startTime,
+          endTime: task.endTime,
+          done: task.status === "completed",
+          category: task.category,
+          intensity: task.intensity,
+        })),
+      );
+      if (isTodaySelected) {
+        await refreshData();
       }
       setNewForm({ ...EMPTY_FORM });
       setShowNewForm(false);
@@ -696,13 +822,20 @@ export function PlannerPage() {
   }
 
   function handlePointerUp() {
-    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) reorderTasks(dragIdx, dragOverIdx);
+    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
+      setPlannerTasks((current) => {
+        const next = [...current];
+        const [moved] = next.splice(dragIdx, 1);
+        next.splice(dragOverIdx, 0, moved);
+        return next;
+      });
+    }
     setDragIdx(null);
     setDragOverIdx(null);
     isDraggingRef.current = false;
   }
 
-  const blocos = (state.tasks || []).map((task) => {
+  const blocos = plannerTasks.map((task) => {
     const area = getCategoryOption(task.category, task.title);
     return {
       id: task.id,
@@ -1096,9 +1229,14 @@ export function PlannerPage() {
 
       {/* Timeline */}
       <div className="screen-content" style={{ paddingTop: "14px", paddingBottom: "100px", display: "flex", flexDirection: "column", gap: 0 }}>
-        {blocos.length === 0 && (
+        {plannerLoading && (
+          <div style={{ textAlign: "center", padding: "22px 16px", color: "var(--text-3)", fontSize: "12px" }}>
+            Carregando agenda de {formatDateLabel(dataAtual).toLowerCase()}...
+          </div>
+        )}
+        {!plannerLoading && blocos.length === 0 && (
           <div style={{ textAlign: "center", padding: "40px 16px", color: "var(--text-3)", fontSize: "13px" }}>
-            Nenhum bloco para hoje. Toque em "+ Novo bloco".
+            Nenhum bloco para {isTodaySelected ? "hoje" : formatDateLabel(dataAtual).toLowerCase()}. Toque em "+ Novo bloco".
           </div>
         )}
         {blocos.map((bloco, idx) => {

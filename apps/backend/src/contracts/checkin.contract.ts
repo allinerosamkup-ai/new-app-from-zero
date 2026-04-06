@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const CheckinSlotSchema = z.enum(['morning', 'midday', 'evening']);
+export const CheckinSlotSchema = z.string().regex(/^(morning|midday|evening)(-[a-zA-Z0-9:_-]+)?$/);
 
 const SymptomLevelSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 

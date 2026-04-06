@@ -35,6 +35,8 @@ export type CheckinEntry = {
   humor: number;
   energia: number;
   emotion: string;
+  recordedAt?: string;
+  checkinSlot?: 'morning' | 'midday' | 'evening' | string;
   sono?: number;
   fisico?: number;
   social?: number;

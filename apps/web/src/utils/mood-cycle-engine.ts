@@ -185,13 +185,68 @@ function ewma(values: number[], alpha = 0.3): number {
   return result;
 }
 
+const SLOT_ORDER: Record<string, number> = {
+  morning: 0,
+  midday: 1,
+  evening: 2,
+};
+
+function averageDefined(values: Array<number | undefined>): number | undefined {
+  const present = values.filter((value): value is number => typeof value === "number");
+  if (present.length === 0) return undefined;
+  return Number(mean(present).toFixed(2));
+}
+
+function getCheckinMoment(entry: CheckinEntry): number {
+  if (entry.recordedAt) {
+    const stamp = new Date(entry.recordedAt).getTime();
+    if (!Number.isNaN(stamp)) return stamp;
+  }
+  if (entry.checkinSlot?.startsWith("morning")) return SLOT_ORDER.morning;
+  if (entry.checkinSlot?.startsWith("midday")) return SLOT_ORDER.midday;
+  if (entry.checkinSlot?.startsWith("evening")) return SLOT_ORDER.evening;
+  return 0;
+}
+
+export function aggregateCheckinsByDay(history: CheckinEntry[]): CheckinEntry[] {
+  const grouped = new Map<string, CheckinEntry[]>();
+
+  for (const entry of history) {
+    if (!grouped.has(entry.date)) grouped.set(entry.date, []);
+    grouped.get(entry.date)!.push(entry);
+  }
+
+  return Array.from(grouped.entries())
+    .map(([date, entries]) => {
+      const ordered = [...entries].sort((a, b) => getCheckinMoment(a) - getCheckinMoment(b));
+      const latest = ordered[ordered.length - 1];
+
+      return {
+        date,
+        humor: Number(mean(ordered.map((entry) => entry.humor)).toFixed(2)),
+        energia: Number(mean(ordered.map((entry) => entry.energia)).toFixed(2)),
+        emotion: latest?.emotion ?? ordered[0]?.emotion ?? "calm",
+        recordedAt: latest?.recordedAt,
+        checkinSlot: latest?.checkinSlot,
+        sono: averageDefined(ordered.map((entry) => entry.sono)),
+        fisico: averageDefined(ordered.map((entry) => entry.fisico)),
+        social: averageDefined(ordered.map((entry) => entry.social)),
+        cyclePhase: latest?.cyclePhase,
+        cycleDay: latest?.cycleDay,
+        isFlowing: latest?.isFlowing,
+        flowDay: latest?.flowDay,
+        flowIntensity: latest?.flowIntensity,
+        symptomLevels: latest?.symptomLevels,
+      } satisfies CheckinEntry;
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
 // ── Motor principal ────────────────────────────────────────
 
 export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // Ordenar por data (mais antigo → mais recente)
-  const sorted = [...history].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
+  const sorted = aggregateCheckinsByDay(history);
 
   // Dados insuficientes
   if (sorted.length < 3) {

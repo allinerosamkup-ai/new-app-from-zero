@@ -145,6 +145,7 @@ export function CheckinResultPage() {
   const [phase, setPhase] = useState<AiPhase>("idle");
   const [tasks, setTasks] = useState<AiTask[]>([]);
   const [regenIdx, setRegenIdx] = useState<number | null>(null);
+  const [savingTasks, setSavingTasks] = useState(false);
 
   useEffect(() => {
     if (autoTasksRan.current || auraMsgLoading || phase !== "idle") return;
@@ -214,16 +215,43 @@ export function CheckinResultPage() {
     );
   }
 
-  function confirmTasks() {
+  async function confirmTasks() {
     const accepted = tasks.filter((t) => !t.discarded);
-    Promise.all(accepted.map((task) => addTask(task.title, task.time, task.category)))
-      .then(() => {
-        setPhase("done");
-        showSuccess("Sugestoes adicionadas ao planner.");
-      })
-      .catch((error) => {
-        showError(error instanceof Error ? error.message : "Nao foi possivel salvar as sugestoes.");
-      });
+    if (accepted.length === 0 || savingTasks) return;
+
+    setSavingTasks(true);
+    let savedCount = 0;
+    let lastError: unknown = null;
+
+    for (const task of accepted) {
+      try {
+        const saved = await addTask(task.title, task.time, task.category);
+        if (saved) {
+          savedCount += 1;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    setSavingTasks(false);
+
+    if (savedCount > 0) {
+      setPhase("done");
+      showSuccess(
+        savedCount === accepted.length
+          ? "Sugestoes adicionadas ao planner."
+          : `${savedCount} sugest${savedCount > 1 ? "oes foram" : "ao foi"} adicionada${savedCount > 1 ? "s" : ""} ao planner.`,
+      );
+    }
+
+    if (savedCount < accepted.length) {
+      showError(
+        lastError instanceof Error
+          ? lastError.message
+          : "Algumas sugestoes nao puderam ser salvas no planner.",
+      );
+    }
   }
 
   const acceptedCount = tasks.filter((t) => !t.discarded).length;
@@ -424,9 +452,11 @@ export function CheckinResultPage() {
                   className={`btn ${isMenuthe ? "btn-menthe" : "btn-primary"}`}
                   style={{ flex: 2 }}
                   onClick={confirmTasks}
-                  disabled={acceptedCount === 0}
+                  disabled={acceptedCount === 0 || savingTasks}
                 >
-                  Adicionar {acceptedCount > 0 ? `${acceptedCount} tarefa${acceptedCount > 1 ? "s" : ""}` : ""} ao Planner
+                  {savingTasks
+                    ? "Salvando..."
+                    : `Adicionar ${acceptedCount > 0 ? `${acceptedCount} tarefa${acceptedCount > 1 ? "s" : ""}` : ""} ao Planner`}
                 </AuraButtonV2>
               </div>
             )}

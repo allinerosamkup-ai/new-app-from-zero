@@ -29,7 +29,7 @@ export class CheckinService {
   private static readonly MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
   static async evaluateDayState(data: {
-    checkinSlot?: 'morning' | 'midday' | 'evening';
+    checkinSlot?: string;
     moodScore: number;
     energyScore: number;
     clarityScore: number;
@@ -42,11 +42,12 @@ export class CheckinService {
     profileSummary?: string | null;
     moodCycleContext?: string | null;
   }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState> {
+    const checkinMoment = data.checkinSlot?.split('-')[0] || 'não informado';
     const prompt = `
 Analise os dados de check-in e retorne uma leitura humanizada, específica e útil.
 
 DADOS:
-- Momento: ${data.checkinSlot || 'não informado'}
+- Momento: ${checkinMoment}
 - Humor ${humanizeScore(data.moodScore, 'mood')}, energia ${humanizeScore(data.energyScore, 'energy')} e clareza ${humanizeScore(data.clarityScore, 'generic')}
 - Irritabilidade ${humanizeScore(data.irritabilityScore, 'generic')}, estado físico ${humanizeScore(data.physicalScore, 'generic')}
 - Social ${humanizeScore(data.socialScore, 'generic')} e sono ${humanizeScore(data.sleepScore, 'sleep')}

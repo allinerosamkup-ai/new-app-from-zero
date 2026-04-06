@@ -67,6 +67,17 @@ const SEVERITY_CONFIG = {
   critical: { color: "#A17D6C",          bg: "rgba(161,125,108,.10)", border: "rgba(161,125,108,.3)", emoji: "🌙" },
 };
 
+const PHASE_ALERT_CONFIG: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
+  elevated: { color: "var(--lagune)", bg: "rgba(176,180,196,.14)", border: "rgba(176,180,196,.34)", emoji: "🚀" },
+  flowing: { color: "var(--menthe)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "✨" },
+  stable: { color: "var(--menthe)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "💚" },
+  falling: { color: "var(--nectarine)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "📉" },
+  low: { color: "var(--nectarine-10)", bg: "rgba(215,137,127,.14)", border: "rgba(215,137,127,.36)", emoji: "🌙" },
+  depleted: { color: "var(--nectarine-11)", bg: "rgba(161,125,108,.12)", border: "rgba(161,125,108,.34)", emoji: "😴" },
+  recovering: { color: "var(--menthe)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "🌱" },
+  mixed: { color: "var(--nectarine)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "⚡" },
+};
+
 export function AuraLayout() {
   const { hydrated, refreshData, state, dismissPhaseTransitionAlert, resolveFollowUp } = useAuraStore();
   const navigate = useNavigate();
@@ -121,7 +132,7 @@ export function AuraLayout() {
       {/* ── #2: Phase Transition Alert — banner fixo topo ── */}
       {state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed && (() => {
         const alert = state.phaseTransitionAlert!;
-        const cfg = SEVERITY_CONFIG[alert.severity];
+        const cfg = PHASE_ALERT_CONFIG[alert.toPhase] ?? SEVERITY_CONFIG[alert.severity];
         return (
           <div style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 500,

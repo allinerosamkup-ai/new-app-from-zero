@@ -21,6 +21,14 @@ function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'aut
   return 'outro';
 }
 
+function deriveCheckinSlotToken(recordedAt: Date): string {
+  const hour = recordedAt.getHours();
+  const minute = recordedAt.getMinutes();
+  const second = recordedAt.getSeconds();
+  const baseSlot = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 18 ? 'midday' : 'evening';
+  return `${baseSlot}-${String(hour).padStart(2, '0')}${String(minute).padStart(2, '0')}${String(second).padStart(2, '0')}`;
+}
+
 function addMinutesToTime(time: string, minutesToAdd: number): string {
   const [hours, minutes] = time.split(':').map(Number);
   const totalMinutes = hours * 60 + minutes + minutesToAdd;
@@ -104,8 +112,11 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
 
       setState(current => ({
         ...current,
+        name: preferences.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
         checkinHistory: checkins.map((c: any) => ({
           date: c.localDate.split('T')[0],
+          recordedAt: c.recordedAt,
+          checkinSlot: c.checkinSlot,
           humor: c.moodScore,
           energia: c.energyScore,
           emotion: c.stateLabelType || 'calm',
@@ -212,13 +223,16 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         })),
       addCheckin: async (entry) => {
         const today = new Date().toISOString().split('T')[0];
+        const recordedAtDate = new Date();
+        const recordedAt = recordedAtDate.toISOString();
+        const checkinSlot = deriveCheckinSlotToken(recordedAtDate);
 
         // Atualiza estado local para o fluxo seguir mesmo sem sessão/sem backend
         setState((current) => ({
           ...current,
           checkinHistory: [
-            { date: today, ...entry },
-            ...current.checkinHistory.filter((c) => c.date !== today),
+            { date: today, recordedAt, checkinSlot, ...entry },
+            ...current.checkinHistory.filter((c) => !(c.date === today && c.checkinSlot === checkinSlot)),
           ],
         }));
 
@@ -226,8 +240,6 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (!session) return;
 
         try {
-          const hour = new Date().getHours();
-          const checkinSlot = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 18 ? 'midday' : 'evening';
           await api.post('/checkins', {
             localDate: today,
             checkinSlot,

@@ -86,7 +86,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     ? context.moodCycleContext.trim()
     : null;
 
-  const [profile, onboarding, latestCheckin] = await Promise.all([
+  const [profile, onboarding, latestCheckin, routineContext] = await Promise.all([
     prisma.profile.findUnique({
       where: { id: userId },
       select: { fullName: true },
@@ -111,6 +111,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
         stateSummary: true,
       },
     }).catch(() => null),
+    JournalService.buildRoutineContext(prisma, userId).catch(() => null),
   ]);
 
   const derivedUserName = getFirstName(profile?.fullName);
@@ -122,10 +123,16 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
         latestCheckin.stateSummary ? `Leitura atual: ${sanitizePromptContent(latestCheckin.stateSummary)}` : null,
       ].filter(Boolean).join(' ')
     : null;
+  const routinePromptSummary = sanitizePromptContent(routineContext?.promptSummary ?? null);
+  const sharedMoodCycleContext = [
+    explicitMoodCycle,
+    fallbackMoodCycleContext,
+    routinePromptSummary,
+  ].filter(Boolean).join(' ').trim();
 
   return {
     userName: explicitUserName ?? derivedUserName ?? 'você',
-    moodCycleContext: explicitMoodCycle ?? fallbackMoodCycleContext,
+    moodCycleContext: sharedMoodCycleContext || null,
     userProfileSummary: sanitizePromptContent(onboarding?.aiProfileSummary ?? null),
   };
 }
@@ -223,6 +230,7 @@ async function finalizeJournalSession(args: {
   prisma: PrismaClient;
   aiService: Pick<typeof AIService, 'summarizeJournalSession'>;
   journalSuggestedTasksGenerator: typeof generateJournalSuggestedTasks;
+  memoryService?: Pick<MemoryService, 'store'>;
   userId: string;
   sessionId: string;
   messages: Array<{ role: string; content: string }>;
@@ -266,6 +274,20 @@ async function finalizeJournalSession(args: {
     },
   });
 
+  if (summary.summary.trim().length > 0) {
+    void args.memoryService?.store({
+      userId: args.userId,
+      contentType: 'journal',
+      contentId: args.sessionId,
+      content: `Resumo do diário: ${summary.summary}. Temas: ${(summary.themes || []).join(', ') || 'sem tema destacado'}. Emoções: ${(summary.emotions || []).join(', ') || 'sem emoção destacada'}.`,
+      metadata: {
+        sessionId: args.sessionId,
+        themes: summary.themes || [],
+        emotions: summary.emotions || [],
+      },
+    }).catch(() => {});
+  }
+
   return {
     updatedSession,
     summary,
@@ -276,6 +298,7 @@ async function finalizeJournalSession(args: {
 async function persistAuraJournalSummary(args: {
   prisma: PrismaClient;
   aiService: Pick<typeof AIService, 'summarizeJournalSession'>;
+  memoryService?: Pick<MemoryService, 'store'>;
   userId: string;
   history: Array<{ role: string; content: string }>;
   latestUserMessage: string;
@@ -326,6 +349,20 @@ async function persistAuraJournalSummary(args: {
       finalizedAt: new Date(),
     },
   });
+
+  if (summary.summary.trim().length > 0) {
+    void args.memoryService?.store({
+      userId: args.userId,
+      contentType: 'journal',
+      contentId: finalized.id,
+      content: `Resumo do diário: ${summary.summary}. Temas: ${(summary.themes || []).join(', ') || 'sem tema destacado'}. Emoções: ${(summary.emotions || []).join(', ') || 'sem emoção destacada'}.`,
+      metadata: {
+        sessionId: finalized.id,
+        themes: summary.themes || [],
+        emotions: summary.emotions || [],
+      },
+    }).catch(() => {});
+  }
 
   return {
     sessionId: finalized.id,
@@ -799,6 +836,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           prisma,
           aiService,
           journalSuggestedTasksGenerator,
+          memoryService,
           userId: data.userId,
           sessionId: data.sessionId,
           messages: [
@@ -906,6 +944,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         const journalEntry = await persistAuraJournalSummary({
           prisma,
           aiService,
+          memoryService,
           userId: data.userId,
           history: data.history,
           latestUserMessage: data.message,
@@ -1011,6 +1050,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       prisma,
       aiService,
       journalSuggestedTasksGenerator,
+      memoryService,
       userId,
       sessionId,
       messages,
@@ -1115,13 +1155,19 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.get('/api/preferences', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     try {
-      const prefs = await prisma.userPreference.findUnique({ where: { userId } });
-      return res.json(prefs ?? {
-        timezone: 'America/Sao_Paulo',
-        wakeTime: null,
-        sleepTime: null,
-        notificationsOn: true,
-        aiTone: 'warm',
+      const [prefs, profile] = await Promise.all([
+        prisma.userPreference.findUnique({ where: { userId } }),
+        prisma.profile.findUnique({ where: { id: userId }, select: { fullName: true } }),
+      ]);
+      return res.json({
+        ...(prefs ?? {
+          timezone: 'America/Sao_Paulo',
+          wakeTime: null,
+          sleepTime: null,
+          notificationsOn: true,
+          aiTone: 'warm',
+        }),
+        fullName: profile?.fullName ?? null,
       });
     } catch (error: any) {
       console.error('[preferences/get] Error:', error);
@@ -1535,19 +1581,20 @@ Com base em IPSRT, DBT e ritmo social, retorne:
 2. Tendência atual (stable/rising/falling/alert).
 3. "pattern": 2 frases mostrando o que está se repetindo de verdade.
 4. "insight": 1 frase curta que traduza o risco ou oportunidade do momento.
-5. 2-3 micro-ações baseadas em evidência, preventivas e práticas.
+5. 2-3 sugestões baseadas em evidência, preventivas e práticas. Elas podem ser micro-ações, uma tarefa objetiva ou um compromisso concreto para hoje.
 
 REGRAS:
 - Não descreva só o óbvio; identifique implicação prática.
 - Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
-- As ações devem nascer dos sinais reais do histórico, não de conselhos genéricos.
-- As ações devem reduzir atrito, estabilizar rotina, proteger energia ou conter impulsividade.
+- As sugestões devem nascer dos sinais reais do histórico, não de conselhos genéricos.
+- Misture quando fizer sentido: micro-ação regulatória, tarefa prática curta e compromisso simples/agendável.
+- As sugestões devem reduzir atrito, estabilizar rotina, proteger energia ou conter impulsividade.
 - Prefira intervenções concretas de regulação: proteger sono, reduzir carga social, fracionar tarefa, cortar estímulo, ancorar rotina, criar pausa antes de agir no automático.
 - Se houver sinal de queda sustentada, impulsividade, compulsão, isolamento ou sobrecarga, nomeie isso no "pattern" ou no "insight" sem dramatizar.
 - Cada "why" deve explicar qual risco ou padrão a ação está tentando conter.
 - Evite linguagem clínica pesada, mas mantenha raciocínio técnico por trás.
 
-Retorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases úteis sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"ação gentil e prática","category":"sono|rotina|mindfulness|autocuidado|foco","why":"razão breve"}]}. Sem texto fora do JSON.`;
+Retorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases úteis sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"sugestão prática","category":"trabalho|social|autocuidado|rotina|foco|pessoal","why":"razão breve"}]}. Sem texto fora do JSON.`;
       } else if (type === 'ai-goals') {
         const mood = context.mood || 'equilibrada';
         const existing = (context.existingGoals || []).join(', ') || 'nenhuma ainda';
@@ -1584,7 +1631,7 @@ Gere uma presença de home que pareça real, não texto de chatbot.
 
 OBJETIVO:
 1. "motivacional": 1-2 frases curtas que mostrem leitura do momento + direção suave. Não use clichês como "você consegue", "vá com calma" ou "um passo de cada vez" sem contexto.
-2. "autocuidado": 4 ações diferentes entre si, rápidas, concretas e específicas. Cada item deve começar com emoji e ter 3-10 palavras. Varie entre corpo, ambiente, foco e descanso.
+2. "autocuidado": 3 ações diferentes entre si, concretas e situadas no momento atual. Cada item deve começar com emoji e ter 4-12 palavras. Use micro-passos ligados ao corpo, ao ambiente imediato, ao foco ou a uma decisão prática leve.
 3. "proactive": 1 ação para fazer AGORA dentro do app. "title" com 2-5 palavras. "desc" com 1 frase dizendo por que isso faz sentido neste momento. "actionPath" deve ser uma rota real ou null.
 
 REGRAS:
@@ -1592,9 +1639,11 @@ REGRAS:
 - Use o nome no máximo uma vez.
 - Se o estado indicar proteção ou baixa energia, reduza atrito e puxe para cuidado ou clareza.
 - Se houver energia boa e poucas tarefas, puxe para movimento e ação.
+- Se houver sinais recorrentes no diário ou na memória recente, aproveite isso com discrição para deixar as ações mais pessoais.
+- Evite frases que sirvam igual para qualquer pessoa em qualquer horário.
 - Nada aqui pode servir igual para qualquer pessoa em qualquer horário.
 
-JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","...","..."],"proactive":{"emoji":"🎯","title":"...","desc":"...","actionPath":"rota da app ou null (ex: /checkin, /goals, /planner, /insights, /journal)"}}`;
+JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..."],"proactive":{"emoji":"🎯","title":"...","desc":"...","actionPath":"rota da app ou null (ex: /checkin, /goals, /planner, /insights, /journal)"}}`;
       } else if (type === 'agenda-blocks') {
         const mood = context.mood || 'equilibrada';
         const moodLabel = context.moodLabel || 'Em Equilíbrio';

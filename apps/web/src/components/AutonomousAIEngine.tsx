@@ -12,7 +12,7 @@ import { useEffect, useRef } from "react";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { tryParseAiSuggestion } from "../lib/ai";
-import { computeMoodCycle } from "../utils/mood-cycle-engine";
+import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import type { AutonomousInsight, CheckinEntry, FollowUpPending, PhaseTransitionAlert, ProactiveNudge } from "../features/aura/types";
 
 const MIN_CHECKINS = 3;
@@ -59,7 +59,7 @@ export function AutonomousAIEngine() {
 
   // ── #1 + #2: Stability analysis + Phase Transition ────────────────────────
   useEffect(() => {
-    const history = state.checkinHistory || [];
+    const history = aggregateCheckinsByDay(state.checkinHistory || []);
     if (history.length < MIN_CHECKINS) return;
 
     const recentHistory = history.slice(0, 7);
@@ -70,17 +70,22 @@ export function AutonomousAIEngine() {
     // #1 — Computa fase com engine completo para ter aiContext rico
     const cycleReport = computeMoodCycle(history);
     const currentPhase = cycleReport.phase;
+    const latestHistoryDate = history[history.length - 1]?.date ?? null;
 
     // #2 — Detecta transição de fase
     const storedPhase = localStorage.getItem("aura_last_phase");
+    const storedPhaseDate = localStorage.getItem("aura_last_phase_date");
     const prevPhase = lastPhaseRef.current ?? storedPhase;
+    const prevPhaseDate = storedPhaseDate;
+    const hasNewDailySnapshot = Boolean(latestHistoryDate && latestHistoryDate !== prevPhaseDate);
 
     if (
       prevPhase &&
+      hasNewDailySnapshot &&
       prevPhase !== currentPhase &&
       currentPhase !== "insufficient_data" &&
       !transitionInFlightRef.current &&
-      !state.phaseTransitionAlert
+      (!state.phaseTransitionAlert || state.phaseTransitionAlert.dismissed)
     ) {
       transitionInFlightRef.current = true;
       void runPhaseTransitionAlert(
@@ -95,6 +100,9 @@ export function AutonomousAIEngine() {
     }
     lastPhaseRef.current = currentPhase;
     localStorage.setItem("aura_last_phase", currentPhase);
+    if (latestHistoryDate) {
+      localStorage.setItem("aura_last_phase_date", latestHistoryDate);
+    }
 
     // #1 — Stability analysis com moodCycleContext completo
     if (state.autonomousInsight) {
@@ -124,7 +132,7 @@ export function AutonomousAIEngine() {
 
   // ── #5: Profile auto-update ────────────────────────────────────────────────
   useEffect(() => {
-    const history = state.checkinHistory || [];
+    const history = aggregateCheckinsByDay(state.checkinHistory || []);
     if (history.length < 7 || profileInFlightRef.current) return;
 
     const lastUpdate = state.lastProfileUpdate;
