@@ -24,6 +24,7 @@ import {
   sanitizePromptContent,
   type AuraPromptDomain,
 } from './lib/aura-prompt';
+import { extractJsonValue } from './lib/extract-json';
 import {
   AuraCommandMessageStreamSchema,
   AuraCommandStartSchema,
@@ -49,35 +50,6 @@ type AppDependencies = {
 function writeSseEvent(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\n`);
   res.write(`data: ${JSON.stringify(data)}\n\n`);
-}
-
-function extractJsonValue(raw: string): unknown {
-  const trimmed = raw.trim();
-
-  if (!trimmed) {
-    throw new Error('AI returned an empty response');
-  }
-
-  const firstBrace = trimmed.search(/[\[{]/);
-  if (firstBrace === -1) {
-    throw new Error('AI response did not contain JSON');
-  }
-
-  const startChar = trimmed[firstBrace];
-  const endChar = startChar === '{' ? '}' : ']';
-  let depth = 0;
-
-  for (let index = firstBrace; index < trimmed.length; index++) {
-    const current = trimmed[index];
-    if (current === startChar) depth++;
-    if (current === endChar) depth--;
-
-    if (depth === 0) {
-      return JSON.parse(trimmed.slice(firstBrace, index + 1));
-    }
-  }
-
-  throw new Error('AI response contained incomplete JSON');
 }
 
 async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, context: Record<string, unknown>) {

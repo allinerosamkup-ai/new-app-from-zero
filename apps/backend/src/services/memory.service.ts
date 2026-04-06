@@ -31,6 +31,8 @@ interface RelevantMemory {
 export class MemoryService {
   private openai: OpenAI;
   private prisma: PrismaClient;
+  private vectorSearchAvailable = true;
+  private vectorSearchWarningShown = false;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
@@ -92,6 +94,10 @@ export class MemoryService {
 
   // ── Busca memórias relevantes por similaridade ───────────────
   async retrieve(userId: string, query: string, limit = 4): Promise<RelevantMemory[]> {
+    if (!this.vectorSearchAvailable) {
+      return [];
+    }
+
     try {
       const queryEmbedding = await this.embed(query);
       const vectorLiteral = `[${queryEmbedding.join(',')}]`;
@@ -107,6 +113,16 @@ export class MemoryService {
 
       return rows;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('match_memories')) {
+        this.vectorSearchAvailable = false;
+        if (!this.vectorSearchWarningShown) {
+          this.vectorSearchWarningShown = true;
+          console.warn('[MemoryService.retrieve] match_memories indisponível neste ambiente; seguindo sem RAG vetorial.');
+        }
+        return [];
+      }
+
       console.error('[MemoryService.retrieve] Error:', err);
       return [];
     }
