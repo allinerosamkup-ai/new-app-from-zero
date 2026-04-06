@@ -6,11 +6,11 @@ import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
+import { buildTimelineBlocks, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
-const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 type Message = {
   role: "user" | "assistant";
@@ -41,15 +41,6 @@ type AuraCommandResponse = {
   needsConfirmation: boolean;
   needsClarification: boolean;
   clarifyingQuestion: string | null;
-};
-
-type TimelineBlock = {
-  date: string;
-  title: string;
-  startTime: string;
-  endTime: string;
-  category: "trabalho" | "pessoal" | "autocuidado" | "social" | "outro";
-  intensity: "L" | "M" | "P";
 };
 
 type ActionCard = {
@@ -107,109 +98,6 @@ function extractStringList(source: Record<string, unknown>, keys: string[]): str
   return [];
 }
 
-function normalizeCategory(category?: string): TimelineBlock["category"] {
-  const value = (category ?? "pessoal").trim().toLowerCase();
-
-  if (value === "trabalho") return "trabalho";
-  if (value === "social") return "social";
-  if (value === "autocuidado" || value === "saude" || value === "saúde") return "autocuidado";
-  if (value === "geral" || value === "rotina" || value === "pessoal") return "pessoal";
-  return "outro";
-}
-
-function normalizeTime(value: unknown, fallback: string): string {
-  if (typeof value === "string" && TIME_PATTERN.test(value.trim())) {
-    return value.trim();
-  }
-
-  return fallback;
-}
-
-function normalizeDate(value: unknown, fallback: string): string {
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-    return value.trim();
-  }
-
-  return fallback;
-}
-
-function addMinutes(time: string, minutes: number): string {
-  const [hours, mins] = time.split(":").map(Number);
-  const totalMinutes = hours * 60 + mins + minutes;
-  const normalized = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
-  const nextHours = Math.floor(normalized / 60);
-  const nextMinutes = normalized % 60;
-
-  return `${String(nextHours).padStart(2, "0")}:${String(nextMinutes).padStart(2, "0")}`;
-}
-
-function normalizeIntensity(value: unknown): TimelineBlock["intensity"] {
-  if (typeof value !== "string") return "M";
-
-  const normalized = value.trim().toUpperCase();
-  if (normalized === "L" || normalized === "M" || normalized === "P") {
-    return normalized;
-  }
-
-  if (normalized.startsWith("LEVE")) return "L";
-  if (normalized.startsWith("PES")) return "P";
-  return "M";
-}
-
-function buildTimelineBlocks(payload: Record<string, unknown>): TimelineBlock[] {
-  const defaultDate = normalizeDate(
-    payload.date ?? payload.localDate ?? payload.day,
-    new Date().toISOString().split("T")[0],
-  );
-  const collection =
-    ["items", "tasks", "blocks", "agenda", "entries"]
-      .map((key) => payload[key])
-      .find(Array.isArray) ?? null;
-
-  if (Array.isArray(collection) && collection.length > 0) {
-    return collection
-      .map((entry, index) => {
-        if (!isRecord(entry)) return null;
-
-        const defaultStart = addMinutes("09:00", index * 60);
-        const title = pickString(entry, ["title", "text", "name"]);
-        if (!title) return null;
-
-        const date = normalizeDate(entry.date ?? entry.localDate ?? entry.day, defaultDate);
-        const startTime = normalizeTime(entry.startTime ?? entry.time ?? entry.at, defaultStart);
-        const endTime = normalizeTime(entry.endTime, addMinutes(startTime, 60));
-
-        return {
-          date,
-          title,
-          startTime,
-          endTime,
-          category: normalizeCategory(
-            typeof entry.category === "string" ? entry.category : undefined,
-          ),
-          intensity: normalizeIntensity(entry.intensity),
-        } satisfies TimelineBlock;
-      })
-      .filter((entry): entry is TimelineBlock => Boolean(entry));
-  }
-
-  const title = pickString(payload, ["title", "taskTitle", "name", "text"]);
-  if (!title) return [];
-
-  const date = defaultDate;
-  const startTime = normalizeTime(payload.time ?? payload.startTime ?? payload.at, "09:00");
-  const endTime = normalizeTime(payload.endTime, addMinutes(startTime, 60));
-
-  return [{
-    date,
-    title,
-    startTime,
-    endTime,
-    category: normalizeCategory(typeof payload.category === "string" ? payload.category : undefined),
-    intensity: normalizeIntensity(payload.intensity),
-  }];
-}
-
 function buildObjectiveInput(payload: Record<string, unknown>, fallbackTitle: string) {
   const title =
     pickString(payload, ["title", "goalTitle", "name", "text"]) ??
@@ -225,17 +113,6 @@ function buildObjectiveInput(payload: Record<string, unknown>, fallbackTitle: st
       aiGenerated: true,
     })),
   };
-}
-
-function formatDateLabel(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-  });
-}
-
-function formatTimelineBlock(block: TimelineBlock): string {
-  return `${block.title} · ${formatDateLabel(block.date)} · ${block.startTime}`;
 }
 
 export function AuraChatPage() {
@@ -324,40 +201,27 @@ export function AuraChatPage() {
 
   async function executeAuraAction(response: AuraCommandResponse): Promise<string | null> {
     try {
-      if (response.action === "create_task") {
+      if (response.action === "create_task" || response.action === "create_agenda") {
         const blocks = buildTimelineBlocks(response.payload);
-        if (blocks.length === 0) return null;
+        if (blocks.length === 0) {
+          return "Ainda não consegui transformar isso em datas reais no planner. Me diga os dias da semana e o horário, ou peça para eu revisar a recorrência.";
+        }
 
         if (response.needsConfirmation) {
-          setPendingTaskConfirmation({ blocks: [blocks[0]] });
+          setPendingTaskConfirmation({ blocks });
           return null;
         }
 
-        await syncTimelineBlocks([blocks[0]]);
-        setActionCard({
-          eyebrow: "Planner atualizado",
-          title: "1 tarefa criada",
-          items: [formatTimelineBlock(blocks[0])],
-          ctaLabel: "Abrir planner",
-          ctaPath: "/planner",
-        });
-        showSuccess("Tarefa adicionada ao planner.");
-        return null;
-      }
-
-      if (response.action === "create_agenda") {
-        const blocks = buildTimelineBlocks(response.payload);
-        if (blocks.length === 0) return null;
-
         await syncTimelineBlocks(blocks);
+        const isMultiple = blocks.length > 1 || response.action === "create_agenda";
         setActionCard({
-          eyebrow: "Agenda criada",
-          title: `${blocks.length} bloco${blocks.length > 1 ? "s" : ""} organizados`,
+          eyebrow: isMultiple ? "Agenda criada" : "Planner atualizado",
+          title: isMultiple ? `${blocks.length} bloco${blocks.length > 1 ? "s" : ""} organizados` : "1 tarefa criada",
           items: blocks.slice(0, 4).map(formatTimelineBlock),
           ctaLabel: "Ver planner",
           ctaPath: "/planner",
         });
-        showSuccess("Agenda enviada para o planner.");
+        showSuccess(isMultiple ? "Agenda enviada para o planner." : "Tarefa adicionada ao planner.");
         return null;
       }
 
@@ -516,12 +380,17 @@ export function AuraChatPage() {
 
     const recognition = new SR();
     recognition.lang = "pt-BR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-      inputRef.current?.focus();
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) transcript += event.results[i][0].transcript;
+      }
+      if (transcript) {
+        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        inputRef.current?.focus();
+      }
     };
     recognition.onend = () => setIsRecording(false);
     recognition.onerror = () => setIsRecording(false);
@@ -536,19 +405,25 @@ export function AuraChatPage() {
     setIsApplyingPendingAction(true);
     try {
       await syncTimelineBlocks(pendingTaskConfirmation.blocks);
+      const total = pendingTaskConfirmation.blocks.length;
       setActionCard({
-        eyebrow: "Compromisso confirmado",
-        title: "1 compromisso salvo",
-        items: pendingTaskConfirmation.blocks.map(formatTimelineBlock),
+        eyebrow: total > 1 ? "Agenda confirmada" : "Compromisso confirmado",
+        title: total > 1 ? `${total} compromissos salvos` : "1 compromisso salvo",
+        items: pendingTaskConfirmation.blocks.slice(0, 6).map(formatTimelineBlock),
         ctaLabel: "Abrir planner",
         ctaPath: "/planner",
       });
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Pronto. Deixei esse compromisso salvo no seu planner." },
+        {
+          role: "assistant",
+          content: total > 1
+            ? "Pronto. Deixei esses compromissos salvos no seu planner."
+            : "Pronto. Deixei esse compromisso salvo no seu planner.",
+        },
       ]);
       setPendingTaskConfirmation(null);
-      showSuccess("Compromisso confirmado.");
+      showSuccess(total > 1 ? "Compromissos confirmados." : "Compromisso confirmado.");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Não foi possível confirmar o compromisso.");
     } finally {

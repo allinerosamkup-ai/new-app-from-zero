@@ -10,6 +10,7 @@ import { initialAuraState, labelMood } from "./data";
 import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodOption, PhaseTransitionAlert, ProactiveNudge } from "./types";
 import { api } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
+import { getLocalDateKey } from "../../utils/day-context";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -107,7 +108,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
     }
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getLocalDateKey();
       const [checkins, timeline, objectives, preferences] = await Promise.all([
         api.get('/checkins?days=7'),
         api.get(`/timeline/${today}`),
@@ -179,7 +180,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (!task) return;
         
         const newStatus = !task.done ? 'completed' : 'planned';
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateKey();
         await api.post('/timeline', {
           date: today,
           blocks: [{
@@ -227,7 +228,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             `Hoje me sinto ${labelMood(current.mood).toLowerCase()} e quero organizar meu dia com mais gentileza.`,
         })),
       addCheckin: async (entry) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateKey();
         const recordedAtDate = new Date();
         const recordedAt = recordedAtDate.toISOString();
         const checkinSlot = deriveCheckinSlotToken(recordedAtDate);
@@ -277,8 +278,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       addSubGoals: async (goalId, titles) => {
         const goal = state.goals.find(g => g.id === goalId);
         if (!goal) return;
-        const existing = goal.subtasks.map(s => ({ id: String(s.id), title: s.title, done: s.done }));
-        const newSubs = titles.map((t, i) => ({ id: `ai-${Date.now()}-${i}`, title: t, done: false }));
+        const existing = goal.subtasks.map(s => ({ id: String(s.id), title: s.title, done: s.done, aiGenerated: false }));
+        const newSubs = titles.map((t, i) => ({ id: `ai-${Date.now()}-${i}`, title: t, done: false, aiGenerated: true }));
         const merged = [...existing, ...newSubs];
         const pct = merged.length > 0 ? Math.round(merged.filter(s => s.done).length / merged.length * 100) : 0;
         await api.patch(`/objectives/${goalId}`, { progress: pct, subgoals: merged });
@@ -314,7 +315,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         await refreshData();
       },
       addTask: async (title, time, category = 'geral', options) => {
-        const today = options?.date ?? new Date().toISOString().split('T')[0];
+        const today = options?.date ?? getLocalDateKey();
         const normalizedCategory = normalizeTaskCategory(category);
         const endTime = addMinutesToTime(time, 30);
         const result = await api.post('/timeline', {
@@ -328,7 +329,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             intensity: 'M'
           }]
         });
-        if (today === new Date().toISOString().split('T')[0]) {
+        if (today === getLocalDateKey()) {
           await refreshData();
         }
         const savedBlock = Array.isArray((result as any)?.savedBlocks) ? (result as any).savedBlocks[0] : null;
@@ -345,7 +346,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           : null;
       },
       updateTask: async (id, updates) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getLocalDateKey();
         const task = state.tasks.find(t => t.id === id);
         if (!task) return;
         const startTime = updates.time ?? task.time;

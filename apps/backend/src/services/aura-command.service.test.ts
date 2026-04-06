@@ -119,6 +119,8 @@ async function run() {
   assert.match(userPrompt, /reflective_handoff/i);
   assert.match(userPrompt, /ask_clarification/i);
   assert.match(userPrompt, /needsConfirmation/i);
+  assert.match(userPrompt, /recorrent/i);
+  assert.match(userPrompt, /nunca diga que j[aá] salvou|n[aã]o diga que j[aá] salvou/i);
 }
 
 run()

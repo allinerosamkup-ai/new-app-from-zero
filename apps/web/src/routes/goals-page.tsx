@@ -415,10 +415,20 @@ export function GoalsPage() {
         type: "goal-subtasks",
         context: { goalTitle: goal.title, existingSubtasks: goal.subtasks.map(s => s.title) },
       });
-      const parsed = parseAiSuggestion<string[]>(res.suggestion);
-      if (Array.isArray(parsed) && parsed.length > 0) await addSubGoals(goalId, parsed);
-    } catch {
-      showError("Erro ao gerar próximas ações.");
+      const parsed = parseAiSuggestion<{ items?: string[] } | string[]>(res.suggestion);
+      const items = Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.items)
+          ? parsed.items
+          : [];
+
+      if (items.length > 0) {
+        await addSubGoals(goalId, items);
+      } else {
+        showError("A Aura não conseguiu gerar subtarefas agora.");
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Erro ao gerar próximas ações.");
     } finally {
       setLoadingBreakdown(null);
     }

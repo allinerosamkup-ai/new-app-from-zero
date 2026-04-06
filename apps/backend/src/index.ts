@@ -24,7 +24,9 @@ import {
   sanitizePromptContent,
   type AuraPromptDomain,
 } from './lib/aura-prompt';
+import { normalizeAiSuggestion, usesJsonObjectResponse } from './lib/ai-suggest-response';
 import { extractJsonValue } from './lib/extract-json';
+import { ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
 import {
   AuraCommandMessageStreamSchema,
   AuraCommandStartSchema,
@@ -377,7 +379,7 @@ function getSuggestPromptDomain(type: string): AuraPromptDomain {
 function getRagIntent(type: string, context: any): string {
   switch (type) {
     case 'home-messages':
-      return `padrões de humor e energia no período ${context.periodo || ''} para ${context.moodLabel || 'estado atual'}`;
+      return `padrões de humor e energia no período ${context.partOfDay || context.periodo || ''} para ${context.moodLabel || 'estado atual'}`;
     case 'checkin-response':
       return `experiências anteriores e padrões similares ao estado ${context.moodLabel || 'atual'}`;
     case 'day-tasks':
@@ -1214,12 +1216,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       title: z.string().min(1),
       description: z.string().optional(),
       category: z.string().default('geral'),
-      subgoals: z.array(z.object({
-        id: z.string(),
-        title: z.string(),
-        done: z.boolean(),
-        aiGenerated: z.boolean(),
-      })).default([]),
+      subgoals: ObjectiveSubgoalsSchema.default([]),
     });
     try {
       const data = Schema.parse(req.body);
@@ -1254,12 +1251,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       description: z.string().optional(),
       category: z.string().optional(),
       progress: z.number().int().min(0).max(100).optional(),
-      subgoals: z.array(z.object({
-        id: z.string(),
-        title: z.string(),
-        done: z.boolean(),
-        aiGenerated: z.boolean(),
-      })).optional(),
+      subgoals: ObjectiveSubgoalsSchema.optional(),
       aiInsight: z.string().nullable().optional(),
       archived: z.boolean().optional(),
     });
@@ -1405,18 +1397,6 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const userId = (req as AuthRequest).userId;
       const plainTextTypes = new Set(['task-notes', 'task-title']);
-      const jsonObjectTypes = new Set([
-        'task-content',
-        'task-split',
-        'weekly-insight',
-        'stability-analysis',
-        'home-messages',
-        'checkin-response',
-        'gtd-clarify',
-        'goal-route',
-        'phase-transition',
-        'follow-up',
-      ]);
       const { userName, moodCycleContext, userProfileSummary } = await resolveAiRuntimeContext(prisma, userId, context);
 
       // Shared Brain: todas as superfícies de IA buscam memória vetorial com intenção específica
@@ -1511,7 +1491,7 @@ Exemplos para "ir à praia": ["Abrir o calendário e marcar um dia nos próximos
 - A primeira ação deve ser a mais fácil de começar em menos de 2 minutos.
 - Se já houver subtarefas parecidas, evite duplicar.
 
-Retorne SOMENTE um array JSON de strings. Sem explicação.`;
+JSON APENAS: {"items":["micro-ação 1","micro-ação 2","micro-ação 3","micro-ação 4"]}`;
       } else if (type === 'weekly-insight') {
         prompt = `${userName} precisa de uma leitura semanal realmente útil, como uma assistente pessoal autônoma que acompanha o ciclo ao longo do tempo.
 
@@ -1597,6 +1577,8 @@ Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta
         const taskCount = context.taskCount ?? 0;
         const pendingTaskTitles = (context.pendingTaskTitles as string[] | undefined) || [];
         const goals = (context.goals as string[] | undefined) || [];
+        const previousAutocuidado = (context.previousAutocuidado as string[] | undefined) || [];
+        const previousMotivacional = typeof context.previousMotivacional === 'string' ? context.previousMotivacional : '';
         const hour = context.hour ?? new Date().getHours();
         const periodo = context.partOfDay || (hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite');
         const weekday = context.weekday || 'hoje';
@@ -1610,6 +1592,8 @@ SINAIS DO MOMENTO:
 - Tarefas ativas hoje: ${taskCount}
 ${pendingTaskTitles.length ? `- Pendências abertas: ${pendingTaskTitles.join(' | ')}` : ''}
 ${goals.length ? `- Metas ativas: ${goals.join(' | ')}` : ''}
+${previousMotivacional ? `- Última mensagem recente para NÃO reciclar: ${previousMotivacional}` : ''}
+${previousAutocuidado.length ? `- Micro-ações recentes para NÃO repetir: ${previousAutocuidado.join(' | ')}` : ''}
 ${context.moodCycleContext ? `- Contexto vivo recente: ${context.moodCycleContext}` : ''}
 ${ragContext}
 
@@ -1628,6 +1612,7 @@ REGRAS:
 - Se houver sinais recorrentes no diário ou na memória recente, aproveite isso com discrição para deixar as ações mais pessoais.
 - Se houver pendências abertas ou metas ativas, conecte pelo menos 1 movimento a algo real que já exista no app.
 - As 3 ações de "autocuidado" devem ser diferentes entre si e não podem reciclar a mesma ideia com palavras diferentes.
+- Se existir conteúdo recente acima, mude de verdade: não repita nem parafraseie a mesma frase, o mesmo gesto ou a mesma micro-ação.
 - Evite frases que sirvam igual para qualquer pessoa em qualquer horário.
 - Nada aqui pode servir igual para qualquer pessoa em qualquer horário.
 
@@ -1638,6 +1623,9 @@ JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..
         const energia = context.energia ?? 3;
         const goals = (context.goals as string[] | undefined) || [];
         const pendingTaskTitles = (context.pendingTaskTitles as string[] | undefined) || [];
+        const previousAgendaLabels = (context.previousAgendaLabels as string[] | undefined) || [];
+        const previousAgendaTasks = (context.previousAgendaTasks as string[] | undefined) || [];
+        const previousAutocuidado = (context.previousAutocuidado as string[] | undefined) || [];
         const wakeTime = context.wakeTime || '07:00';
         const sleepTime = context.sleepTime || '22:00';
         const history = (context.history || []).slice(0, 3).map((h: any) =>
@@ -1651,6 +1639,10 @@ Padrão recente: ${history || 'iniciando agora'}.
 ${context.moodCycleContext ? `Contexto vivo recente: ${context.moodCycleContext}.` : ''}
 ${goals.length ? `Metas ativas: ${goals.join(' | ')}.` : ''}
 ${pendingTaskTitles.length ? `Pendências já abertas no planner: ${pendingTaskTitles.join(' | ')}.` : ''}
+${previousAgendaLabels.length ? `Blocos recentes para NÃO reciclar: ${previousAgendaLabels.join(' | ')}.` : ''}
+${previousAgendaTasks.length ? `Tarefas recentes para NÃO repetir: ${previousAgendaTasks.join(' | ')}.` : ''}
+${previousAutocuidado.length ? `Micro-ações recentes da home: ${previousAutocuidado.join(' | ')}.` : ''}
+${context.requestVariant ? `Tentativa atual de geração: ${context.requestVariant}. Se for maior que 1, trate como "refazer" e entregue uma alternativa materialmente diferente.` : ''}
 ${ragContext}
 
 Monte uma rotina completa e equilibrada:
@@ -1663,6 +1655,8 @@ Monte uma rotina completa e equilibrada:
 - Tarefas concretas e específicas, sem repetir títulos entre blocos
 - Se já houver pendências abertas ou metas ativas, complemente ou destrave isso; não replique com frases genéricas
 - "tarefas_sugeridas" não pode repetir a mesma ação nem a mesma ideia em blocos diferentes
+- Se esta for uma nova tentativa, mude pelo menos 60% dos títulos e das tarefas em relação à tentativa anterior
+- Não repita nem reescreva superficialmente itens das listas recentes acima
 - Evite absolutamente: "organizar documentos", "planejar a semana", "fazer lista", "revisar prioridades", "alinhamento geral", "colocar a vida em ordem"
 - razao_ia: frase carinhosa e motivadora explicando o bloco
 
@@ -1823,11 +1817,18 @@ JSON APENAS: {"message":"..."}`;
           { role: 'user' as const, content: prompt },
         ],
         max_completion_tokens: maxTokens,
-        temperature: plainTextTypes.has(type) ? 0.7 : 0.4,
-        ...(jsonObjectTypes.has(type) ? { response_format: { type: 'json_object' as const } } : {}),
+        temperature:
+          type === 'home-messages'
+            ? 0.85
+            : type === 'agenda-blocks'
+              ? 0.9
+              : plainTextTypes.has(type)
+                ? 0.7
+                : 0.4,
+        ...(usesJsonObjectResponse(type) ? { response_format: { type: 'json_object' as const } } : {}),
       });
       const rawSuggestion = completion.choices[0]?.message?.content?.trim() || '';
-      const suggestion = plainTextTypes.has(type) ? rawSuggestion : extractJsonValue(rawSuggestion);
+      const suggestion = plainTextTypes.has(type) ? rawSuggestion : normalizeAiSuggestion(type, rawSuggestion);
       return res.json({ suggestion });
     } catch (error: any) {
       console.error('[ai/suggest] Error:', error);

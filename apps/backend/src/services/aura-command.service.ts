@@ -67,23 +67,17 @@ ACTIONS PERMITIDAS:
 
 REGRAS:
 - Se o pedido já estiver claro e executável, escolha a ação direta.
-- Se for compromisso/agendamento com data ou horário, use create_task e marque "needsConfirmation": true.
-- Se for tarefa simples ou meta clara, "needsConfirmation" deve ser false.
-- Se houver vários passos implícitos, prefira checklist ou meta/projeto.
-- Se a pessoa estiver pedindo processamento emocional ou desabafo, use reflective_handoff.
-- Se faltar um dado crítico, use ask_clarification e faça apenas uma pergunta curta.
-- assistantMessage deve ser curta, clara e em português do Brasil.
-- payload deve conter apenas os campos úteis para a ação escolhida.
-- Retorne APENAS JSON no formato:
-{
-  "assistantMessage": "string",
-  "intent": "planner_task|checklist|goal_project|agenda_plan|clarify|reflective_handoff",
-  "action": "create_task|create_checklist|create_goal|create_agenda|ask_clarification|handoff_to_journal",
-  "payload": {},
-  "needsConfirmation": false,
-  "needsClarification": true,
-  "clarifyingQuestion": "string|null"
-}`;
+- Se for compromisso/agendamento com data ou horário (ex: "amanhã", "quarta", "às 14h"), use create_task e marque "needsConfirmation": true.
+- Se for uma sequência de tarefas para o dia (ex: "organize meu dia", "planeje minha manhã"), use create_agenda.
+- Se o pedido for recorrente ou cobrir um intervalo de datas (ex: "3 vezes por semana em abril", "toda segunda", "de 01/04 até 30/04"), use create_agenda e marque "needsConfirmation": true.
+- Para pedidos recorrentes, NUNCA invente dias/horários ausentes. Se faltar detalhe suficiente para transformar em datas reais, use ask_clarification.
+- Se for tarefa simples ou meta clara (ex: "lembrar de beber água"), "needsConfirmation" deve ser false.
+- Se houver vários passos implícitos, prefira create_checklist ou create_goal.
+- assistantMessage deve ser curta. Se "needsConfirmation" for true, diga que a proposta está pronta para revisão e NUNCA diga que já salvou no planner.
+- payload para create_task DEVE conter: { "title": string, "date": "YYYY-MM-DD", "startTime": "HH:MM", "category": string }.
+- payload para create_agenda DEVE conter OU { "blocks": [ { "title": string, "date": "YYYY-MM-DD", "startTime": "HH:MM", "category": string } ] } OU { "title": string, "category": string, "recurrence": { "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weekdays": ["seg","ter","qua","qui","sex","sab","dom"], "startTime": "HH:MM" } }.
+- Retorne APENAS JSON.
+`;
 
     const response = await client.chat.completions.create({
       model: this.MODEL,

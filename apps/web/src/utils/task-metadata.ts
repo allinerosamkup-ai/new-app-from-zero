@@ -1,4 +1,5 @@
 // Task metadata — notes, checklist, recurring (stored in localStorage)
+import { getLocalDateKey } from "./day-context";
 
 export type ChecklistItem = {
   id: string;
@@ -54,7 +55,7 @@ function saveAll(data: Record<string, TaskMeta>) {
 }
 
 function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
+  return getLocalDateKey();
 }
 
 export function getTaskMeta(taskId: string | number): TaskMeta {

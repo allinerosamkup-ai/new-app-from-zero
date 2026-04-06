@@ -8,7 +8,16 @@ import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { aggregateCheckinsByDay, computeMoodCycle, computeStreak, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
-import { getClientDayContext } from "../utils/day-context";
+import { getClientDayContext, getLocalDateKey } from "../utils/day-context";
+import {
+  type AgendaBlock,
+  type HomeAiMsg,
+  buildHomeAiRequestKey,
+  buildQuarterHourRefreshBucket,
+  dedupeAgendaBlocks,
+  extractAgendaRepeatContext,
+  extractHomeRepeatContext,
+} from "./home-page.helpers";
 import { 
   MessageSquareText, 
   LayoutDashboard, 
@@ -26,15 +35,6 @@ const STATE_CONFIG = {
   falling: { emoji: "📉", label: "Caindo",    color: "var(--nectarine)", bg: "rgba(197,165,147,.10)" },
   alert:   { emoji: "⚠️", label: "Atenção",   color: "#A17D6C",          bg: "rgba(161,125,108,.08)"  },
 } as const;
-
-type AgendaBlock = {
-  horario_inicio: string;
-  horario_fim: string;
-  tipo: "trabalho" | "autocuidado" | "casa" | "social" | "descanso" | "refeicao" | "flexivel";
-  label: string;
-  tarefas_sugeridas: string[];
-  razao_ia: string;
-};
 
 type ImportantAlert = {
   key: string;
@@ -96,27 +96,6 @@ function minutesToTime(m: number) {
 
 function agendaTaskKey(blockIndex: number, taskIndex: number) {
   return `${blockIndex}:${taskIndex}`;
-}
-
-function dedupeAgendaBlocks(blocks: AgendaBlock[]): AgendaBlock[] {
-  const seenTasks = new Set<string>();
-
-  return blocks.map((block) => {
-    const uniqueTasks = block.tarefas_sugeridas
-      .map((task) => task.trim())
-      .filter(Boolean)
-      .filter((task) => {
-        const key = task.toLowerCase();
-        if (seenTasks.has(key)) return false;
-        seenTasks.add(key);
-        return true;
-      });
-
-    return {
-      ...block,
-      tarefas_sugeridas: uniqueTasks,
-    };
-  });
 }
 
 function buildAgendaSelection(blocks: AgendaBlock[]) {
@@ -232,7 +211,7 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
 };
 
 export function HomePage() {
-  const { state, addTask, refreshData, setPendingFollowUp, setProactiveNudge } = useAuraStore();
+  const { state, addTask, refreshData, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());
@@ -244,9 +223,30 @@ export function HomePage() {
   const [selectedAgendaTaskKeys, setSelectedAgendaTaskKeys] = useState<Set<string>>(new Set());
   const [savedAgendaTaskKeys, setSavedAgendaTaskKeys] = useState<Set<string>>(new Set());
   const [agendaSaving, setAgendaSaving] = useState(false);
+  const agendaRequestCountRef = useRef(0);
+  const [clockTime, setClockTime] = useState(() => new Date());
 
   const mood = moodMap[state.mood] ?? moodMap.equilibrada;
-  const dayContext = useMemo(() => getClientDayContext(), []);
+  const dayContext = useMemo(
+    () => getClientDayContext(clockTime),
+    [
+      clockTime.getFullYear(),
+      clockTime.getMonth(),
+      clockTime.getDate(),
+      clockTime.getHours(),
+      clockTime.getMinutes(),
+    ],
+  );
+  const refreshBucket = useMemo(
+    () => buildQuarterHourRefreshBucket(clockTime),
+    [
+      clockTime.getFullYear(),
+      clockTime.getMonth(),
+      clockTime.getDate(),
+      clockTime.getHours(),
+      clockTime.getMinutes(),
+    ],
+  );
   const aggregatedCheckinHistory = useMemo(
     () => aggregateCheckinsByDay(state.checkinHistory || []),
     [state.checkinHistory]
@@ -277,7 +277,7 @@ export function HomePage() {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(today);
       d.setDate(today.getDate() - (6 - i));
-      const dateStr = d.toISOString().split("T")[0];
+      const dateStr = getLocalDateKey(d);
       const entry = history.find(h => h.date === dateStr);
       const x = X_START + i * X_STEP;
       if (!entry) return { x, humorY: null, energiaY: null, label: DIAS_SEMANA[d.getDay()].slice(0, 3), isHighlight: i === 6 };
@@ -329,26 +329,55 @@ export function HomePage() {
   const activeChartData = checkinChartMode === "week" ? weeklyCheckinData : todayCheckinData;
   const hasActiveChartData = activeChartData.some((point) => point.humorY !== null);
 
-  // Clock
-  const [clockTime, setClockTime] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setClockTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // ── AI Home Messages (babá digital) ──────────────────────
-  type HomeAiMsg = {
-    motivacional: string;
-    autocuidado: string[];
-    proactive: { emoji: string; title: string; desc: string; actionPath: string | null };
-  };
   const [homeAiMsg, setHomeAiMsg] = useState<HomeAiMsg | null>(null);
   const [homeAiLoading, setHomeAiLoading] = useState(true);
-  const homeMsgRan = useRef(false);
+  const previousHomeAiMsgRef = useRef<HomeAiMsg | null>(null);
+  const lastHomeAiRequestKeyRef = useRef<string | null>(null);
+  const latestCheckinKey = useMemo(() => {
+    const history = state.checkinHistory || [];
+    if (history.length === 0) return null;
+
+    return [...history]
+      .sort((a, b) => getCheckinMoment(b) - getCheckinMoment(a))
+      .map((entry) => entry.recordedAt || `${entry.date}:${entry.checkinSlot || "agora"}`)[0] || null;
+  }, [state.checkinHistory]);
+  const homeAiRequestKey = useMemo(
+    () =>
+      buildHomeAiRequestKey({
+        localDate: dayContext.localDate,
+        partOfDay: dayContext.partOfDay,
+        mood: state.mood,
+        taskCount: state.tasks.length,
+        goalTitles,
+        pendingTaskTitles,
+        latestCheckinKey,
+        refreshBucket,
+      }),
+    [
+      dayContext.localDate,
+      dayContext.partOfDay,
+      goalTitles,
+      latestCheckinKey,
+      pendingTaskTitles,
+      refreshBucket,
+      state.mood,
+      state.tasks.length,
+    ],
+  );
 
   useEffect(() => {
-    if (homeMsgRan.current) return;
-    homeMsgRan.current = true;
+    if (!hydrated) return;
+    if (lastHomeAiRequestKeyRef.current === homeAiRequestKey) return;
+
+    let cancelled = false;
+    const previousHomeContext = extractHomeRepeatContext(previousHomeAiMsgRef.current);
+    setHomeAiLoading(true);
+
     const timer = setTimeout(async () => {
       try {
         const res: any = await api.post("/ai/suggest", {
@@ -364,20 +393,44 @@ export function HomePage() {
             weekday: dayContext.weekday,
             localDate: dayContext.localDate,
             moodCycleContext: cycleReport.aiContext,
+            previousMotivacional: previousHomeContext.previousMotivacional,
+            previousAutocuidado: previousHomeContext.previousAutocuidado,
+            refreshBucket,
           },
         });
         const parsed = tryParseAiSuggestion<HomeAiMsg>(res.suggestion);
-        if (parsed?.motivacional && Array.isArray(parsed?.autocuidado)) {
+        if (!cancelled && parsed?.motivacional && Array.isArray(parsed?.autocuidado)) {
+          previousHomeAiMsgRef.current = parsed;
+          lastHomeAiRequestKeyRef.current = homeAiRequestKey;
           setHomeAiMsg(parsed);
         }
       } catch {
         /* IA indisponível — sem fallback estático */
       } finally {
-        setHomeAiLoading(false);
+        if (!cancelled) {
+          setHomeAiLoading(false);
+        }
       }
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [cycleReport.aiContext, dayContext.hour, dayContext.localDate, dayContext.partOfDay, dayContext.weekday, goalTitles, mood.label, pendingTaskTitles, state.mood, state.tasks.length]);
+    }, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    cycleReport.aiContext,
+    dayContext.hour,
+    dayContext.localDate,
+    dayContext.partOfDay,
+    dayContext.weekday,
+    goalTitles,
+    homeAiRequestKey,
+    hydrated,
+    mood.label,
+    pendingTaskTitles,
+    refreshBucket,
+    state.mood,
+    state.tasks.length,
+  ]);
 
   // Mensagem motivacional — apenas IA
   const motivacionalFinal = homeAiMsg?.motivacional ?? null;
@@ -392,6 +445,9 @@ export function HomePage() {
   async function fetchAgenda() {
     setAgendaPhase("loading");
     try {
+        agendaRequestCountRef.current += 1;
+        const previousAgendaContext = extractAgendaRepeatContext(agendaBlocks);
+        const previousHomeContext = extractHomeRepeatContext(homeAiMsg);
         const res = await api.post("/ai/suggest", {
           type: "agenda-blocks",
           context: {
@@ -406,6 +462,10 @@ export function HomePage() {
             partOfDay: dayContext.partOfDay,
             weekday: dayContext.weekday,
             localDate: dayContext.localDate,
+            previousAgendaLabels: previousAgendaContext.previousLabels,
+            previousAgendaTasks: previousAgendaContext.previousTasks,
+            previousAutocuidado: previousHomeContext.previousAutocuidado,
+            requestVariant: agendaRequestCountRef.current,
           },
         });
       const parsed = parseAiSuggestion<AgendaBlock[]>(res.suggestion);
@@ -423,7 +483,7 @@ export function HomePage() {
   async function approveAgenda() {
     if (agendaSaving) return;
     const SKIP_TYPES = new Set(["descanso", "refeicao"]);
-    const today = new Date().toISOString().split("T")[0];
+    const today = getLocalDateKey();
     const toCreate: Array<{ title: string; startTime: string; endTime: string; category: string; intensity: "M" }> = [];
     const savedKeys = new Set<string>();
     const seenTitles = new Set<string>();
