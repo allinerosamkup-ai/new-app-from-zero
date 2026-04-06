@@ -21,6 +21,29 @@ function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'aut
   return 'outro';
 }
 
+function addMinutesToTime(time: string, minutesToAdd: number): string {
+  const [hours, minutes] = time.split(':').map(Number);
+  const totalMinutes = hours * 60 + minutes + minutesToAdd;
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const nextHours = Math.floor(normalized / 60).toString().padStart(2, '0');
+  const nextMinutes = (normalized % 60).toString().padStart(2, '0');
+  return `${nextHours}:${nextMinutes}`;
+}
+
+function diffMinutes(startTime: string, endTime?: string | null): number {
+  if (!endTime) {
+    return 30;
+  }
+
+  const [startHours, startMinutes] = startTime.split(':').map(Number);
+  const [endHours, endMinutes] = endTime.split(':').map(Number);
+  const startTotal = startHours * 60 + startMinutes;
+  const endTotal = endHours * 60 + endMinutes;
+  const delta = endTotal - startTotal;
+
+  return delta > 0 ? delta : 30;
+}
+
 type AuraStoreContextValue = {
   state: AuraState;
   hydrated: boolean;
@@ -42,7 +65,7 @@ type AuraStoreContextValue = {
   setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
   toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<void>;
   removeGoal: (goalId: string | number) => Promise<void>;
-  addTask: (title: string, time: string, category?: string) => Promise<void>;
+  addTask: (title: string, time: string, category?: string) => Promise<{ id: string | number; title: string; time: string; endTime: string; done: boolean; category?: string; intensity?: string } | null>;
   updateTask: (id: string | number, updates: { title?: string; time?: string; category?: string }) => Promise<void>;
   removeTask: (id: string | number) => Promise<void>;
   reorderTasks: (fromIdx: number, toIdx: number) => void;
@@ -94,7 +117,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           id: t.id,
           title: t.title,
           time: t.startTime,
-          done: t.status === 'completed'
+          endTime: t.endTime,
+          done: t.status === 'completed',
+          category: t.category,
+          intensity: t.intensity,
         })),
         goals: objectives.map((o: any) => ({
           id: o.id,
@@ -137,15 +163,16 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (!task) return;
         
         const newStatus = !task.done ? 'completed' : 'planned';
-        // Encontrar os dados originais do bloco para o sync
         const today = new Date().toISOString().split('T')[0];
         await api.post('/timeline', {
           date: today,
           blocks: [{
-            id: id,
+            id: String(id),
             title: task.title,
             startTime: task.time,
-            endTime: task.time, // Simplificação para o MVP
+            endTime: task.endTime ?? addMinutesToTime(task.time, 30),
+            category: normalizeTaskCategory(task.category),
+            intensity: task.intensity ?? 'M',
             status: newStatus
           }]
         });
@@ -271,31 +298,47 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       },
       addTask: async (title, time, category = 'geral') => {
         const today = new Date().toISOString().split('T')[0];
-        await api.post('/timeline', {
+        const normalizedCategory = normalizeTaskCategory(category);
+        const endTime = addMinutesToTime(time, 30);
+        const result = await api.post('/timeline', {
           date: today,
           blocks: [{
             title,
             startTime: time,
-            endTime: time,
-            category: normalizeTaskCategory(category),
+            endTime,
+            category: normalizedCategory,
             intensity: 'M'
           }]
         });
         await refreshData();
+        const savedBlock = Array.isArray((result as any)?.savedBlocks) ? (result as any).savedBlocks[0] : null;
+        return savedBlock
+          ? {
+              id: savedBlock.id,
+              title,
+              time,
+              endTime,
+              done: false,
+              category: normalizedCategory,
+              intensity: 'M',
+            }
+          : null;
       },
       updateTask: async (id, updates) => {
         const today = new Date().toISOString().split('T')[0];
         const task = state.tasks.find(t => t.id === id);
         if (!task) return;
+        const startTime = updates.time ?? task.time;
+        const endTime = addMinutesToTime(startTime, diffMinutes(task.time, task.endTime));
         await api.post('/timeline', {
           date: today,
           blocks: [{
             id: String(id),
             title: updates.title ?? task.title,
-            startTime: updates.time ?? task.time,
-            endTime: updates.time ?? task.time,
-            category: normalizeTaskCategory(updates.category),
-            intensity: 'M'
+            startTime,
+            endTime,
+            category: normalizeTaskCategory(updates.category ?? task.category),
+            intensity: task.intensity ?? 'M'
           }]
         });
         await refreshData();

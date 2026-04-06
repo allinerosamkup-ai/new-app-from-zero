@@ -35,6 +35,25 @@ const STAT_ACCENT: Record<string, string> = {
   "Check-ins": "var(--nectarine)",
 };
 
+const toPoint = (angle: number, r: number, cx = 120, cy = 120) => ({
+  x: cx + r * Math.cos(angle),
+  y: cy + r * Math.sin(angle),
+});
+
+const harmonyAngles = Array.from(
+  { length: 6 },
+  (_, i) => -Math.PI / 2 + (2 * Math.PI * i) / 6
+);
+
+function polygonPoints(r: number): string {
+  return harmonyAngles
+    .map((angle) => {
+      const point = toPoint(angle, r);
+      return `${point.x},${point.y}`;
+    })
+    .join(" ");
+}
+
 export function InsightsPage() {
   const { state, addTask } = useAuraStore();
   const navigate = useNavigate();
@@ -44,6 +63,7 @@ export function InsightsPage() {
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
   const [taskAdded, setTaskAdded] = useState(false);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
+  const goals = state.goals || [];
 
   // Derive data from checkinHistory (fallback to empty if missing)
   const allHistory = state.checkinHistory || [];
@@ -118,6 +138,30 @@ export function InsightsPage() {
     return { dayAvgs, bestDay, worstDay, streak, lowDays, highDays, stableDays, total, checkinDaysAvg };
   }, [history]);
 
+  function avg(values: number[]): number {
+    return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  }
+
+  const avgHarmonyMood = history.length > 0 ? avg(history.map((entry) => entry.humor)) / 5 : null;
+  const avgHarmonyEnergy = history.length > 0 ? avg(history.map((entry) => entry.energia)) / 5 : null;
+  const avgGoalPct = goals.length > 0 ? goals.reduce((sum, goal) => sum + goal.completedPct, 0) / goals.length / 100 : null;
+  const socialVals = history.filter((entry) => entry.social != null).map((entry) => entry.social!);
+  const fisicoVals = history.filter((entry) => entry.fisico != null).map((entry) => entry.fisico!);
+  const sonoVals = history.filter((entry) => entry.sono != null).map((entry) => entry.sono!);
+  const avgHarmonySocial = socialVals.length > 0 ? avg(socialVals) / 5 : null;
+  const avgHarmonyFisico = fisicoVals.length > 0 ? avg(fisicoVals) / 5 : null;
+  const avgHarmonySono = sonoVals.length > 0 ? avg(sonoVals) / 5 : null;
+  const harmonyValues = [avgHarmonyMood, avgHarmonyEnergy, avgGoalPct, avgHarmonySocial, avgHarmonyFisico, avgHarmonySono].filter((value): value is number => value !== null);
+  const overallHarmonyPct = harmonyValues.length > 0 ? Math.round((harmonyValues.reduce((sum, value) => sum + value, 0) / harmonyValues.length) * 100) : 0;
+  const harmonyDimensions = [
+    { emoji: "😊", label: "Humor", cor: "var(--sweet-mint)", valor: avgHarmonyMood ?? 0, noData: avgHarmonyMood === null },
+    { emoji: "⚡", label: "Energia", cor: "var(--atomic-tangerine)", valor: avgHarmonyEnergy ?? 0, noData: avgHarmonyEnergy === null },
+    { emoji: "🎯", label: "Metas", cor: "var(--lagune)", valor: avgGoalPct ?? 0, noData: avgGoalPct === null },
+    { emoji: "👥", label: "Social", cor: "var(--horizon)", valor: avgHarmonySocial ?? 0, noData: avgHarmonySocial === null },
+    { emoji: "💪", label: "Força", cor: "var(--terracotta)", valor: avgHarmonyFisico ?? 0, noData: avgHarmonyFisico === null },
+    { emoji: "🌙", label: "Sono", cor: "var(--aquamarine)", valor: avgHarmonySono ?? 0, noData: avgHarmonySono === null },
+  ];
+
   const avgHumorNum = history.length > 0
     ? history.reduce((s, h) => s + h.humor, 0) / history.length
     : 0;
@@ -181,7 +225,7 @@ export function InsightsPage() {
         {/* ── Header ── */}
         <div className="aura-page-header insights-header">
           <p className="aura-page-kicker">Sua Ciclagem</p>
-          <h1 className="aura-page-title insights-title">Padrões</h1>
+          <h1 className="aura-page-title insights-title">Padrões e Harmonia</h1>
           {/* Seletor de período */}
           <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
             {(['7d', '30d', '90d'] as const).map(p => {
@@ -264,6 +308,147 @@ export function InsightsPage() {
               />
               <span className="insights-stat-label">{label}</span>
               <span className="insights-stat-value">{value}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="aura-page-header" style={{ marginBottom: 12 }}>
+          <p className="aura-page-kicker">Leitura integrada</p>
+          <h2 className="aura-page-title" style={{ fontSize: "24px", marginBottom: 4 }}>Harmonia do período</h2>
+          <p className="aura-page-subtitle">O mesmo recorte acima alimenta o radar abaixo, então os dois blocos contam a mesma história.</p>
+        </div>
+
+        <div className="harmony-radar-shell">
+          <div className="harmony-radar-container">
+            <svg width="240" height="240" viewBox="0 0 240 240">
+              {[22.5, 45, 67.5].map((radius) => (
+                <polygon
+                  key={radius}
+                  points={polygonPoints(radius)}
+                  fill="none"
+                  stroke="rgba(0,0,0,.06)"
+                  strokeWidth={1}
+                />
+              ))}
+
+              <polygon
+                points={polygonPoints(45)}
+                fill="rgba(0,0,0,.02)"
+                stroke="rgba(var(--text-3-rgb), 0.15)"
+                strokeWidth={1}
+                strokeDasharray="4,2"
+              />
+
+              {harmonyAngles.map((angle, index) => {
+                const point = toPoint(angle, 90);
+                return (
+                  <line
+                    key={index}
+                    x1={120}
+                    y1={120}
+                    x2={point.x}
+                    y2={point.y}
+                    stroke="rgba(0,0,0,.06)"
+                    strokeWidth={1}
+                  />
+                );
+              })}
+
+              <defs>
+                <radialGradient id="radarGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                  <stop offset="0%" stopColor="var(--sweet-mint)" stopOpacity="0.4" />
+                  <stop offset="70%" stopColor="var(--atomic-tangerine)" stopOpacity="0.15" />
+                  <stop offset="100%" stopColor="var(--atomic-tangerine)" stopOpacity="0.05" />
+                </radialGradient>
+              </defs>
+
+              <path
+                d={harmonyDimensions.reduce((path, dimension, index) => {
+                  const point = toPoint(harmonyAngles[index], 90 * dimension.valor);
+                  return path + (index === 0 ? `M ${point.x} ${point.y}` : ` L ${point.x} ${point.y}`) + (index === harmonyDimensions.length - 1 ? " Z" : "");
+                }, "")}
+                fill="url(#radarGradient)"
+                stroke="var(--atomic-tangerine)"
+                strokeWidth={2.5}
+                strokeLinejoin="round"
+                className="harmony-data-path"
+              />
+
+              {harmonyDimensions.map((dimension, index) => {
+                const point = toPoint(harmonyAngles[index], 90 * dimension.valor);
+                return (
+                  <circle
+                    key={dimension.label}
+                    cx={point.x}
+                    cy={point.y}
+                    r={5}
+                    fill={dimension.cor}
+                    stroke="white"
+                    strokeWidth={2}
+                    className="harmony-dot"
+                  />
+                );
+              })}
+
+              {harmonyDimensions.map((dimension, index) => {
+                const point = toPoint(harmonyAngles[index], 112);
+                return (
+                  <text
+                    key={`${dimension.label}-emoji`}
+                    x={point.x}
+                    y={point.y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={15}
+                    className="harmony-emoji-label"
+                  >
+                    {dimension.emoji}
+                  </text>
+                );
+              })}
+            </svg>
+          </div>
+          <div className="harmony-radar-caption">Base de comparação: 50%</div>
+        </div>
+
+        <div className="harmony-summary">
+          <div className="harmony-summary-top">
+            <span className="harmony-percent">{overallHarmonyPct}%</span>
+            <span className="harmony-label">equilíbrio geral</span>
+          </div>
+          <div className="harmony-legend">
+            <span className="harmony-legend-item">
+              <span className="harmony-legend-line" />
+              Atual
+            </span>
+            <span className="harmony-legend-item">
+              <span className="harmony-legend-line dashed" />
+              Base (50%)
+            </span>
+          </div>
+          <div onClick={() => navigate("/goals")} className="harmony-goals-link">
+            Ver detalhes das metas →
+          </div>
+        </div>
+
+        <h2 className="harmony-section-title">Dimensões correlacionadas</h2>
+        <div className="harmony-dim-grid">
+          {harmonyDimensions.map((dimension) => (
+            <div key={dimension.label} className="harmony-dim-card">
+              <div className="harmony-dim-top">
+                <span className="harmony-dim-label">{dimension.label}</span>
+                <span className="harmony-dim-value">{Math.round(dimension.valor * 100)}%</span>
+              </div>
+              <div className="harmony-progress-track">
+                <div
+                  className="harmony-progress-fill"
+                  style={{
+                    width: `${dimension.valor * 100}%`,
+                    background: dimension.cor,
+                  }}
+                />
+              </div>
+              {dimension.noData && <span className="harmony-dim-note">sem dados</span>}
             </div>
           ))}
         </div>
@@ -498,14 +683,6 @@ export function InsightsPage() {
             )}
           </div>
         )}
-
-        {/* Link to Harmony */}
-        <AuraButtonV2
-          onClick={() => navigate("/harmony")}
-          className="btn btn-ghost btn-full insights-ghost-btn"
-        >
-          Harmonia
-        </AuraButtonV2>
 
       </div>
     </div>

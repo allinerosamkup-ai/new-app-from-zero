@@ -7,10 +7,13 @@ export type MoodOption =
   | "sobrecarregada";
 
 export type Task = {
-  id: number;
+  id: string | number;
   title: string;
   time: string;
+  endTime?: string;
   done: boolean;
+  category?: string;
+  intensity?: string;
 };
 
 export type SubGoal = {

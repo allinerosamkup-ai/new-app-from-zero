@@ -33,6 +33,7 @@ export class AuraCommandService {
       userName?: string | null;
       profileSummary?: string | null;
       moodCycleContext?: string | null;
+      ragContext?: string | null;
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<AuraCommandResponse> {
@@ -47,6 +48,7 @@ PEDIDO ATUAL:
 "${input.message}"
 
 ${historyBlock ? `HISTÓRICO RECENTE:\n${historyBlock}\n` : 'HISTÓRICO RECENTE: sem contexto anterior relevante.\n'}
+${input.ragContext ? `MEMÓRIAS RELEVANTES:\n${input.ragContext}\n` : ''}
 INTENTS PERMITIDOS:
 - planner_task
 - checklist
@@ -65,6 +67,8 @@ ACTIONS PERMITIDAS:
 
 REGRAS:
 - Se o pedido já estiver claro e executável, escolha a ação direta.
+- Se for compromisso/agendamento com data ou horário, use create_task e marque "needsConfirmation": true.
+- Se for tarefa simples ou meta clara, "needsConfirmation" deve ser false.
 - Se houver vários passos implícitos, prefira checklist ou meta/projeto.
 - Se a pessoa estiver pedindo processamento emocional ou desabafo, use reflective_handoff.
 - Se faltar um dado crítico, use ask_clarification e faça apenas uma pergunta curta.
@@ -76,6 +80,7 @@ REGRAS:
   "intent": "planner_task|checklist|goal_project|agenda_plan|clarify|reflective_handoff",
   "action": "create_task|create_checklist|create_goal|create_agenda|ask_clarification|handoff_to_journal",
   "payload": {},
+  "needsConfirmation": false,
   "needsClarification": true,
   "clarifyingQuestion": "string|null"
 }`;

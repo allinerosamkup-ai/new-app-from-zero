@@ -38,11 +38,13 @@ type AuraCommandResponse = {
   intent: AuraCommandIntent;
   action: AuraCommandAction;
   payload: Record<string, unknown>;
+  needsConfirmation: boolean;
   needsClarification: boolean;
   clarifyingQuestion: string | null;
 };
 
 type TimelineBlock = {
+  date: string;
   title: string;
   startTime: string;
   endTime: string;
@@ -56,6 +58,10 @@ type ActionCard = {
   items: string[];
   ctaLabel?: string;
   ctaPath?: string;
+};
+
+type PendingTaskConfirmation = {
+  blocks: TimelineBlock[];
 };
 
 const QUICK_ACTIONS = [
@@ -119,6 +125,14 @@ function normalizeTime(value: unknown, fallback: string): string {
   return fallback;
 }
 
+function normalizeDate(value: unknown, fallback: string): string {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+
+  return fallback;
+}
+
 function addMinutes(time: string, minutes: number): string {
   const [hours, mins] = time.split(":").map(Number);
   const totalMinutes = hours * 60 + mins + minutes;
@@ -143,6 +157,10 @@ function normalizeIntensity(value: unknown): TimelineBlock["intensity"] {
 }
 
 function buildTimelineBlocks(payload: Record<string, unknown>): TimelineBlock[] {
+  const defaultDate = normalizeDate(
+    payload.date ?? payload.localDate ?? payload.day,
+    new Date().toISOString().split("T")[0],
+  );
   const collection =
     ["items", "tasks", "blocks", "agenda", "entries"]
       .map((key) => payload[key])
@@ -157,10 +175,12 @@ function buildTimelineBlocks(payload: Record<string, unknown>): TimelineBlock[] 
         const title = pickString(entry, ["title", "text", "name"]);
         if (!title) return null;
 
+        const date = normalizeDate(entry.date ?? entry.localDate ?? entry.day, defaultDate);
         const startTime = normalizeTime(entry.startTime ?? entry.time ?? entry.at, defaultStart);
         const endTime = normalizeTime(entry.endTime, addMinutes(startTime, 60));
 
         return {
+          date,
           title,
           startTime,
           endTime,
@@ -176,10 +196,12 @@ function buildTimelineBlocks(payload: Record<string, unknown>): TimelineBlock[] 
   const title = pickString(payload, ["title", "taskTitle", "name", "text"]);
   if (!title) return [];
 
+  const date = defaultDate;
   const startTime = normalizeTime(payload.time ?? payload.startTime ?? payload.at, "09:00");
   const endTime = normalizeTime(payload.endTime, addMinutes(startTime, 60));
 
   return [{
+    date,
     title,
     startTime,
     endTime,
@@ -205,8 +227,15 @@ function buildObjectiveInput(payload: Record<string, unknown>, fallbackTitle: st
   };
 }
 
+function formatDateLabel(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
 function formatTimelineBlock(block: TimelineBlock): string {
-  return `${block.title}${block.startTime ? ` · ${block.startTime}` : ""}`;
+  return `${block.title} · ${formatDateLabel(block.date)} · ${block.startTime}`;
 }
 
 export function AuraChatPage() {
@@ -224,6 +253,8 @@ export function AuraChatPage() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [actionCard, setActionCard] = useState<ActionCard | null>(null);
+  const [pendingTaskConfirmation, setPendingTaskConfirmation] = useState<PendingTaskConfirmation | null>(null);
+  const [isApplyingPendingAction, setIsApplyingPendingAction] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -249,20 +280,29 @@ export function AuraChatPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, actionCard]);
+  }, [messages, isTyping, actionCard, pendingTaskConfirmation]);
 
   async function syncTimelineBlocks(blocks: TimelineBlock[]) {
-    const today = new Date().toISOString().split("T")[0];
-    await api.post("/timeline", {
-      date: today,
-      blocks: blocks.map((block) => ({
-        title: block.title,
-        startTime: block.startTime,
-        endTime: block.endTime,
-        category: block.category,
-        intensity: block.intensity,
-      })),
-    });
+    const groups = blocks.reduce((acc, block) => {
+      const current = acc.get(block.date) ?? [];
+      current.push(block);
+      acc.set(block.date, current);
+      return acc;
+    }, new Map<string, TimelineBlock[]>());
+
+    for (const [date, dateBlocks] of groups.entries()) {
+      await api.post("/timeline", {
+        date,
+        blocks: dateBlocks.map((block) => ({
+          title: block.title,
+          startTime: block.startTime,
+          endTime: block.endTime,
+          category: block.category,
+          intensity: block.intensity,
+        })),
+      });
+    }
+
     await refreshData();
   }
 
@@ -287,6 +327,11 @@ export function AuraChatPage() {
       if (response.action === "create_task") {
         const blocks = buildTimelineBlocks(response.payload);
         if (blocks.length === 0) return null;
+
+        if (response.needsConfirmation) {
+          setPendingTaskConfirmation({ blocks: [blocks[0]] });
+          return null;
+        }
 
         await syncTimelineBlocks([blocks[0]]);
         setActionCard({
@@ -343,13 +388,20 @@ export function AuraChatPage() {
       }
 
       if (response.action === "handoff_to_journal") {
+        const summary =
+          pickString(response.payload, ["journalSummary", "summary"]) ??
+          "Resumo salvo no diário a partir desta conversa.";
+        const themes = extractStringList(response.payload, ["journalThemes", "themes"]).slice(0, 2);
+
         setActionCard({
-          eyebrow: "Melhor próximo passo",
-          title: "Seguir no diário",
-          items: ["Esse pedido pede uma conversa mais reflexiva antes de virar ação."],
-          ctaLabel: "Abrir diário",
-          ctaPath: "/journal",
+          eyebrow: "Resumo salvo no diário",
+          title: "Conversa registrada",
+          items: [
+            summary,
+            ...themes.map((theme) => `Tema: ${theme}`),
+          ],
         });
+        showSuccess("Resumo salvo no diário.");
         return null;
       }
 
@@ -378,6 +430,7 @@ export function AuraChatPage() {
     setInput("");
     setIsTyping(true);
     setActionCard(null);
+    setPendingTaskConfirmation(null);
 
     try {
       const { data: { session: auth } } = await supabase.auth.getSession();
@@ -475,6 +528,42 @@ export function AuraChatPage() {
     recognition.start();
     recognitionRef.current = recognition;
     setIsRecording(true);
+  }
+
+  async function confirmPendingTask() {
+    if (!pendingTaskConfirmation || isApplyingPendingAction) return;
+
+    setIsApplyingPendingAction(true);
+    try {
+      await syncTimelineBlocks(pendingTaskConfirmation.blocks);
+      setActionCard({
+        eyebrow: "Compromisso confirmado",
+        title: "1 compromisso salvo",
+        items: pendingTaskConfirmation.blocks.map(formatTimelineBlock),
+        ctaLabel: "Abrir planner",
+        ctaPath: "/planner",
+      });
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Pronto. Deixei esse compromisso salvo no seu planner." },
+      ]);
+      setPendingTaskConfirmation(null);
+      showSuccess("Compromisso confirmado.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Não foi possível confirmar o compromisso.");
+    } finally {
+      setIsApplyingPendingAction(false);
+    }
+  }
+
+  function cancelPendingTask() {
+    if (!pendingTaskConfirmation || isApplyingPendingAction) return;
+
+    setPendingTaskConfirmation(null);
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: "Tudo bem, não salvei esse compromisso. Se quiser, eu ajusto horário ou detalhes." },
+    ]);
   }
 
   return (
@@ -691,6 +780,79 @@ export function AuraChatPage() {
                 {actionCard.ctaLabel}
               </AuraButtonV2>
             )}
+          </div>
+        )}
+
+        {pendingTaskConfirmation && (
+          <div
+            style={{
+              margin: "6px 0 10px 33px",
+              background: "rgba(255,255,255,.72)",
+              border: "1px solid rgba(255,255,255,.84)",
+              borderRadius: 18,
+              padding: "12px 14px",
+              boxShadow: "0 12px 24px rgba(243,176,140,.08)",
+              backdropFilter: "blur(18px)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                color: "var(--nectarine)",
+                margin: "0 0 8px",
+              }}
+            >
+              Confirmar compromisso
+            </p>
+            <p
+              style={{
+                margin: "0 0 8px",
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--text-1)",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+              }}
+            >
+              Revise antes de salvar
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+              {pendingTaskConfirmation.blocks.map((block) => (
+                <p
+                  key={`${block.title}-${block.date}-${block.startTime}`}
+                  style={{
+                    margin: 0,
+                    fontSize: 12.5,
+                    color: "var(--text-2)",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                >
+                  {formatTimelineBlock(block)}
+                </p>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <AuraButtonV2
+                onClick={cancelPendingTask}
+                disabled={isApplyingPendingAction}
+                variant="glass"
+                size="sm"
+                style={{ flex: 1 }}
+              >
+                Cancelar
+              </AuraButtonV2>
+              <AuraButtonV2
+                onClick={confirmPendingTask}
+                disabled={isApplyingPendingAction}
+                variant="primary"
+                size="sm"
+                style={{ flex: 1 }}
+              >
+                {isApplyingPendingAction ? "Salvando..." : "Confirmar"}
+              </AuraButtonV2>
+            </div>
           </div>
         )}
 

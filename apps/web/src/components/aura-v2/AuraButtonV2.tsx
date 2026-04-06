@@ -1,5 +1,6 @@
 import React from "react";
 import clsx from "clsx";
+import { AuraIcon } from "../AuraIcon";
 
 /**
  * AuraButtonV2 — Design System v5.0 (Spring Meadow Edition)
@@ -11,6 +12,7 @@ type AuraButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: "sm" | "md" | "lg";
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  useAuraIcon?: boolean;
 };
 
 export function AuraButtonV2({
@@ -18,12 +20,16 @@ export function AuraButtonV2({
   size = "md",
   leftIcon,
   rightIcon,
+  useAuraIcon,
   className,
   children,
   ...props
 }: AuraButtonProps) {
   const baseClasses = "btn-aura";
   
+  const iconSize = size === "sm" ? 12 : size === "md" ? 14 : 16;
+  const finalLeftIcon = useAuraIcon ? <AuraIcon size={iconSize} /> : leftIcon;
+
   const variantClasses = {
     primary: "btn-aura-primary",
     glass: "btn-aura-glass",
@@ -47,7 +53,7 @@ export function AuraButtonV2({
       )}
       {...props}
     >
-      {leftIcon && <span className="btn-aura__icon" aria-hidden="true">{leftIcon}</span>}
+      {finalLeftIcon && <span className="btn-aura__icon" aria-hidden="true">{finalLeftIcon}</span>}
       <span className="btn-aura__label">{children}</span>
       {rightIcon && <span className="btn-aura__icon" aria-hidden="true">{rightIcon}</span>}
     </button>

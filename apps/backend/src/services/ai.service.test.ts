@@ -5,6 +5,7 @@ import { AIService } from './ai.service';
 async function run() {
   const deltas: string[] = [];
   let capturedMessages: Array<{ role: string; content: string }> = [];
+  let capturedSummaryMessages: Array<{ role: string; content: string }> = [];
 
   const fakeClient = {
     chat: {
@@ -40,6 +41,7 @@ async function run() {
           energyScore: 2,
           stateLabel: 'Dia sensível',
         },
+        moodCycleContext: 'Humor em queda suave, energia 2/5.',
       },
       history: [
         { role: 'user', content: 'Estou preocupada com minha energia.' },
@@ -55,11 +57,55 @@ async function run() {
   assert.equal(result, 'Olá, vamos organizar isso juntas.');
   assert.deepEqual(deltas, ['Olá, ', 'vamos organizar isso juntas.']);
   assert.equal(capturedMessages[0]?.role, 'system');
-  assert.match(capturedMessages[0]?.content || '', /Você é Aura/i);
-  assert.match(capturedMessages[0]?.content || '', /DIARIO AO VIVO/i);
+  assert.match(capturedMessages[0]?.content || '', /DIÁRIO \(PRESENÇA REFLEXIVA\)/i);
   assert.match(capturedMessages[0]?.content || '', /Não presuma diagnósticos/i);
+  assert.match(capturedMessages[0]?.content || '', /PERSONALIDADE E ALMA/i);
+  assert.match(capturedMessages[0]?.content || '', /CICLO DE HUMOR ATUAL/i);
+  assert.match(capturedMessages[0]?.content || '', /Humor em queda suave/i);
+  assert.match(capturedMessages[0]?.content || '', /No máximo uma pergunta por resposta/i);
+  assert.match(capturedMessages[0]?.content || '', /colete em micro-passos/i);
   assert.equal(capturedMessages[1]?.role, 'user');
-  assert.match(capturedMessages[1]?.content || '', /CONTEXTO DA PESSOA/i);
+  assert.match(capturedMessages[1]?.content || '', /Estou preocupada com minha energia/i);
+
+  const fakeSummaryClient = {
+    chat: {
+      completions: {
+        create: async ({ messages }: any) => {
+          capturedSummaryMessages = messages;
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    summary: 'Hoje ela encostou em um cansaço antigo e conseguiu nomear esse peso com mais delicadeza.',
+                    emotions: ['cansaço', 'alívio'],
+                    themes: ['trabalho'],
+                    suggestions: ['Talvez amanhã caiba começar um pouco mais devagar.'],
+                  }),
+                },
+              },
+            ],
+          };
+        },
+      },
+    },
+  };
+
+  const summary = await AIService.summarizeJournalSession(
+    [
+      { role: 'user', content: 'Hoje eu senti um peso estranho no corpo.' },
+      { role: 'assistant', content: 'Parece um dia de carga mais espessa.' },
+    ],
+    fakeSummaryClient as any,
+  );
+
+  assert.equal(summary.emotions[0], 'cansaço');
+  assert.equal(summary.themes[0], 'trabalho');
+  assert.equal(capturedSummaryMessages[0]?.role, 'system');
+  assert.match(capturedSummaryMessages[0]?.content || '', /RETRATO DO DIA/i);
+  assert.match(capturedSummaryMessages[1]?.content || '', /contemplativa e humana/i);
+  assert.match(capturedSummaryMessages[1]?.content || '', /Não faça perguntas no fechamento/i);
+  assert.match(capturedSummaryMessages[1]?.content || '', /Não escreva como relatório/i);
 }
 
 run()

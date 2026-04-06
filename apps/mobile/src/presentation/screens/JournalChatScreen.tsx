@@ -96,15 +96,12 @@ export default function JournalChatScreen() {
           contentContainerStyle={{ paddingHorizontal: appSpacing.lg, paddingTop: appSpacing.md, paddingBottom: 40 }}
         >
           {messages.length === 0 && context && (
-            <Card style={{ marginBottom: appSpacing.md, backgroundColor: appColors.surface }} mode="outlined">
+            <Card style={{ marginBottom: appSpacing.md, backgroundColor: appColors.surface, borderStyle: 'dashed' }} mode="outlined">
               <Card.Content>
-                <Text variant="labelLarge" style={{ fontWeight: '700', color: appColors.primary, marginBottom: 4 }}>
-                  BOAS-VINDAS
+                <Text variant="labelSmall" style={{ letterSpacing: 2, color: appColors.primary, marginBottom: 12, opacity: 0.7 }}>
+                  AURA • PRESENÇA
                 </Text>
-                <Text variant="bodyMedium" style={{ color: appColors.textSecondary, lineHeight: 22 }}>
-                  {context.checkinToday?.stateLabel
-                    ? `Estou vendo que hoje parece um ${context.checkinToday.stateLabel.toLowerCase()}. `
-                    : ''}
+                <Text variant="bodyLarge" style={{ color: appColors.textPrimary, lineHeight: 26, fontStyle: 'italic' }}>
                   {context.promptSummary}
                 </Text>
               </Card.Content>

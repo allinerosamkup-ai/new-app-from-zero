@@ -47,9 +47,9 @@ Analise os dados de check-in e retorne uma leitura humanizada, específica e út
 
 DADOS:
 - Momento: ${data.checkinSlot || 'não informado'}
-- Humor: ${data.moodScore}/5 | Energia: ${data.energyScore}/5 | Clareza: ${data.clarityScore}/5
-- Irritabilidade: ${data.irritabilityScore}/5 | Físico: ${data.physicalScore ?? 'não informado'}/5
-- Social: ${data.socialScore ?? 'não informado'}/5 | Sono: ${data.sleepScore ?? 'não informado'}/5
+- Humor ${humanizeScore(data.moodScore, 'mood')}, energia ${humanizeScore(data.energyScore, 'energy')} e clareza ${humanizeScore(data.clarityScore, 'generic')}
+- Irritabilidade ${humanizeScore(data.irritabilityScore, 'generic')}, estado físico ${humanizeScore(data.physicalScore, 'generic')}
+- Social ${humanizeScore(data.socialScore, 'generic')} e sono ${humanizeScore(data.sleepScore, 'sleep')}
 - Nota: ${data.note || 'Nenhuma'}
 
 DIRETRIZES:

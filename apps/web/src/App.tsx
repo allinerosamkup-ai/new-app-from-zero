@@ -66,7 +66,7 @@ const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/planner": [loadHomePage, loadJournalPage, loadGoalsPage],
   "/journal": [loadHomePage, loadPlannerPage, loadAuraChatPage],
   "/goals": [loadPlannerPage, loadHomePage],
-  "/insights": [loadHomePage, loadDailySummaryPage, loadHarmonyPage],
+  "/insights": [loadHomePage, loadDailySummaryPage],
 };
 
 function preloadNextRoutes(pathname: string) {
@@ -93,7 +93,6 @@ const DEV_SCREENS = [
   { path: "checkin-result", label: "Result" },
   { path: "planner", label: "Planner" },
   { path: "journal", label: "Diário" },
-  { path: "harmony", label: "Harmonia" },
   { path: "goals", label: "Metas" },
   { path: "insights", label: "Insights" },
   { path: "daily-summary", label: "Resumo" },

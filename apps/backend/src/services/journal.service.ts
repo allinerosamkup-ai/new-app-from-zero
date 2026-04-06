@@ -38,6 +38,7 @@ export type RoutineContext = {
   checkinToday?: CheckinSnapshot | null;
   topThemes: string[];
   topPlannerCategories: string[];
+  recentSummaries: string[];
 };
 
 function startOfUtcDay(date: Date): Date {
@@ -67,35 +68,40 @@ function buildPromptSummary(input: {
   checkinToday?: CheckinSnapshot | null;
   topThemes: string[];
   topPlannerCategories: string[];
+  recentSummaries: string[];
 }): string {
   const parts: string[] = [];
 
   if (input.routineSummary) {
-    parts.push(`Rotina percebida: ${input.routineSummary}`);
+    parts.push(`${input.routineSummary}`);
   }
 
   if (input.preferences?.wakeTime || input.preferences?.sleepTime) {
     parts.push(
-      `Horários declarados: acorda ${input.preferences?.wakeTime ?? 'sem dado'} e dorme ${input.preferences?.sleepTime ?? 'sem dado'}.`,
+      `Sua jornada costuma começar às ${input.preferences?.wakeTime ?? '...'} e silenciar por volta de ${input.preferences?.sleepTime ?? '...'}.`,
     );
   }
 
   if (input.checkinToday?.stateLabel) {
     parts.push(
-      `Estado atual: ${input.checkinToday.stateLabel} (humor ${humanizeScore(input.checkinToday.moodScore, 'mood')}, energia ${humanizeScore(input.checkinToday.energyScore, 'energy')}).`,
+      `Hoje você habita um estado ${input.checkinToday.stateLabel.toLowerCase()}, com um humor ${humanizeScore(input.checkinToday.moodScore, 'mood')} e uma energia ${humanizeScore(input.checkinToday.energyScore, 'energy')}.`,
     );
   }
 
   if (input.topThemes.length > 0) {
-    parts.push(`Temas recentes do diário: ${input.topThemes.join(', ')}.`);
+    parts.push(`Recentemente, seus pensamentos têm orbitado em torno de ${input.topThemes.join(', ')}.`);
+  }
+
+  if (input.recentSummaries.length > 0) {
+    parts.push(`Nos últimos registros do diário, apareceram passagens como: ${input.recentSummaries.join(' | ')}.`);
   }
 
   if (input.topPlannerCategories.length > 0) {
-    parts.push(`Categorias frequentes no planner: ${input.topPlannerCategories.join(', ')}.`);
+    parts.push(`No seu planner, o foco tem sido em ${input.topPlannerCategories.join(', ')}.`);
   }
 
   if (parts.length === 0) {
-    return 'Sem rotina consolidada ainda. Use apenas a mensagem atual e o histórico recente.';
+    return 'Ainda estamos começando a nos conhecer. Sinta-se à vontade para compartilhar o que vier à mente.';
   }
 
   return parts.join(' ');
@@ -191,6 +197,10 @@ export class JournalService {
     const topThemes = countTopValues(
       recentSessions.flatMap((session: { themes?: string[] | null }) => session.themes ?? []),
     );
+    const recentSummaries = recentSessions
+      .map((session: { summary?: string | null }) => session.summary?.trim() ?? '')
+      .filter(Boolean)
+      .slice(0, 3);
 
     const topPlannerCategories = countTopValues(
       recentBlocks.map((block: { category?: string | null }) => block.category ?? ''),
@@ -202,6 +212,7 @@ export class JournalService {
       checkinToday: (checkinToday as CheckinSnapshot | null) ?? null,
       topThemes,
       topPlannerCategories,
+      recentSummaries,
     };
 
     return {

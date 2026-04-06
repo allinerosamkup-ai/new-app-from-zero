@@ -32,6 +32,7 @@ export const AuraCommandResponseSchema = z.object({
   intent: AuraCommandIntentSchema,
   action: AuraCommandActionSchema,
   payload: AuraCommandPayloadSchema.default({}),
+  needsConfirmation: z.boolean().default(false),
   needsClarification: z.boolean().default(false),
   clarifyingQuestion: z.string().trim().min(1).nullable().default(null),
 });

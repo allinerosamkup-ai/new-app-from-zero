@@ -12,8 +12,18 @@ async function run() {
   const sessionId = '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11';
 
   const prisma = {
+    $queryRaw: async () => [],
+    $executeRaw: async () => ({}),
     profile: {
       findUnique: async () => ({ fullName: 'Teste Aura' }),
+    },
+    memoryEmbedding: {
+      findFirst: async () => null,
+    },
+    memoryItem: {
+      findFirst: async () => null,
+      create: async () => ({}),
+      update: async () => ({}),
     },
     onboardingResponse: {
       findUnique: async () => ({ aiProfileSummary: 'Perfil resumido.' }),

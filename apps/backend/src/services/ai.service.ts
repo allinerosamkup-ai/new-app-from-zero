@@ -128,6 +128,7 @@ export class AIService {
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',
+              'No máximo uma pergunta por resposta. Se não for essencial perguntar, apenas acompanhe e reflita.',
               input.closingMode
                 ? 'A pessoa está saindo. Apenas valide e deixe a porta aberta para amanhã. Sem tarefas.'
                 : 'Não sugira NADA. Apenas reflita o que foi dito ou pergunte sobre como o corpo está reagindo a isso.',
@@ -195,7 +196,10 @@ export class AIService {
     return OnboardingAiOutputSchema.parse(JSON.parse(content));
   }
 
-  static async summarizeJournalSession(messages: { role: string; content: string }[]): Promise<JournalSummary> {
+  static async summarizeJournalSession(
+    messages: { role: string; content: string }[],
+    client: Pick<OpenAI, 'chat'> = openai,
+  ): Promise<JournalSummary> {
     const recentMessages = messages.slice(-this.CONTEXT_LIMIT);
 
     const chatContent = recentMessages
@@ -209,14 +213,16 @@ export class AIService {
       ${chatContent}
 
       DIRETRIZES:
-      1. RESUMO: 2-5 frases sintetizando o conteúdo principal de forma acolhedora.
+      1. RESUMO: 2-5 frases sintetizando o conteúdo principal de forma acolhedora, contemplativa e humana.
       2. EMOÇÕES: Lista de 2-5 emoções predominantes (em português, minúsculas).
       3. TEMAS: Lista de 1-3 temas recorrentes (ex: trabalho, relacionamentos, saúde).
-      4. SUGESTÕES: Opcional, 1-2 sugestões suaves baseadas no conteúdo.
+      4. SUGESTÕES: Opcional, no máximo 1 sugestão suave, apenas se ela surgir de modo orgânico no que foi dito.
 
       IMPORTANTE:
-      - Mantenha um tom acolhedor e não instrucional.
-      - Não dê ordens, apenas ofereça perspectivas gentis.
+      - Mantenha um tom acolhedor, contemplativo e não instrucional.
+      - Não faça perguntas no fechamento.
+      - Não escreva como relatório, checklist, avaliação clínica ou diagnóstico.
+      - Não dê ordens. Se houver sugestão, ela deve soar como permissão leve, não como tarefa.
       - Retorne APENAS um JSON puro no formato esperado.
 
       FORMATO JSON:
@@ -228,7 +234,7 @@ export class AIService {
       }
     `;
 
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: this.MODEL,
       messages: [
         {

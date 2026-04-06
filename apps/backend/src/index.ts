@@ -17,7 +17,13 @@ import { OnboardingProcessSchema } from './contracts/onboarding.contract';
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
-import { buildAuraSystemPrompt, getFirstName, humanizeScore, type AuraPromptDomain } from './lib/aura-prompt';
+import {
+  buildAuraSystemPrompt,
+  getFirstName,
+  humanizeScore,
+  sanitizePromptContent,
+  type AuraPromptDomain,
+} from './lib/aura-prompt';
 import {
   AuraCommandMessageStreamSchema,
   AuraCommandStartSchema,
@@ -111,16 +117,16 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
   const fallbackMoodCycleContext = latestCheckin
     ? [
         `Último estado registrado: ${latestCheckin.stateLabel ?? 'sem rótulo definido'}.`,
-        `Humor ${latestCheckin.moodScore}/5 e energia ${latestCheckin.energyScore}/5.`,
-        latestCheckin.sleepScore != null ? `Sono ${latestCheckin.sleepScore}/5.` : null,
-        latestCheckin.stateSummary ? `Leitura atual: ${latestCheckin.stateSummary}` : null,
+        `Humor ${humanizeScore(latestCheckin.moodScore, 'mood')} e energia ${humanizeScore(latestCheckin.energyScore, 'energy')}.`,
+        latestCheckin.sleepScore != null ? `Sono ${humanizeScore(latestCheckin.sleepScore, 'sleep')}.` : null,
+        latestCheckin.stateSummary ? `Leitura atual: ${sanitizePromptContent(latestCheckin.stateSummary)}` : null,
       ].filter(Boolean).join(' ')
     : null;
 
   return {
     userName: explicitUserName ?? derivedUserName ?? 'você',
     moodCycleContext: explicitMoodCycle ?? fallbackMoodCycleContext,
-    userProfileSummary: onboarding?.aiProfileSummary ?? null,
+    userProfileSummary: sanitizePromptContent(onboarding?.aiProfileSummary ?? null),
   };
 }
 
@@ -186,6 +192,10 @@ function normalizeFreeText(text: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
+}
+
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
 function isJournalClosingMessage(message: string): boolean {
@@ -263,6 +273,69 @@ async function finalizeJournalSession(args: {
   };
 }
 
+async function persistAuraJournalSummary(args: {
+  prisma: PrismaClient;
+  aiService: Pick<typeof AIService, 'summarizeJournalSession'>;
+  userId: string;
+  history: Array<{ role: string; content: string }>;
+  latestUserMessage: string;
+  assistantMessage: string;
+}) {
+  const localDate = startOfUtcDay(new Date());
+  const transcript = [
+    ...args.history
+      .filter((message) => message.role === 'user' || message.role === 'assistant')
+      .slice(-10)
+      .map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    { role: 'user', content: args.latestUserMessage },
+    { role: 'assistant', content: args.assistantMessage },
+  ].filter((message) => message.content.trim().length > 0);
+
+  const session = await args.prisma.journalSession.create({
+    data: {
+      userId: args.userId,
+      localDate,
+      status: 'active',
+    },
+  });
+
+  for (const [index, message] of transcript.entries()) {
+    await args.prisma.journalMessage.create({
+      data: {
+        sessionId: session.id,
+        userId: args.userId,
+        role: message.role,
+        content: message.content,
+        orderIndex: index,
+      },
+    });
+  }
+
+  const summary = await args.aiService.summarizeJournalSession(transcript);
+  const finalized = await args.prisma.journalSession.update({
+    where: { id: session.id },
+    data: {
+      status: 'completed',
+      summary: summary.summary,
+      emotions: summary.emotions,
+      themes: summary.themes,
+      suggestions: summary.suggestions || [],
+      finalizedAt: new Date(),
+    },
+  });
+
+  return {
+    sessionId: finalized.id,
+    summary: summary.summary,
+    emotions: summary.emotions,
+    themes: summary.themes,
+    suggestions: summary.suggestions || [],
+  };
+}
+
 function getSuggestPromptDomain(type: string): AuraPromptDomain {
   if (type === 'checkin-response') {
     return 'checkin';
@@ -274,6 +347,10 @@ function getSuggestPromptDomain(type: string): AuraPromptDomain {
 
   if (type === 'journal-tasks') {
     return 'journal-finalize';
+  }
+
+  if (type === 'task-split') {
+    return 'goal-execution';
   }
 
   if (type === 'goal-subtasks' || type === 'goal-route' || type === 'gtd-clarify' || type === 'ai-goals') {
@@ -312,6 +389,10 @@ function getRagIntent(type: string, context: any): string {
       return `micro-ações anteriores e como a pessoa prefere executar tarefas`;
     case 'journal-tasks':
       return `temas emocionais recorrentes e o que a pessoa valoriza no diário`;
+    case 'task-content':
+      return `como transformar o compromisso ${context.title || 'atual'} em apoio leve e executável`;
+    case 'task-split':
+      return `micro-passos práticos para ${context.title || 'o compromisso atual'} na área ${context.category || 'pessoal'}`;
     default:
       return context.moodCycleContext || context.moodLabel || 'estado emocional e rotina do momento';
   }
@@ -679,7 +760,11 @@ export function createApp(dependencies: AppDependencies = {}) {
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
-          content: message.content,
+          content: message.content
+            .replace(/\(\d([-\s]| a )\d\)/g, '') // Remove (0-5), (0 a 5), (0 5)
+            .replace(/nota \d\/\d/gi, '')
+            .replace(/\d\/\d/g, '') // Remove X/5
+            .replace(/\*\*/g, ''), // Tira negritos excessivos do historico também
         })),
         message: data.message,
         closingMode: isClosingMessage,
@@ -815,9 +900,33 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
       });
 
+      const responsePayload = { ...commandResponse.payload };
+
+      if (commandResponse.action === 'handoff_to_journal') {
+        const journalEntry = await persistAuraJournalSummary({
+          prisma,
+          aiService,
+          userId: data.userId,
+          history: data.history,
+          latestUserMessage: data.message,
+          assistantMessage: commandResponse.assistantMessage,
+        });
+
+        Object.assign(responsePayload, {
+          journalSessionId: journalEntry.sessionId,
+          journalSummary: journalEntry.summary,
+          journalEmotions: journalEntry.emotions,
+          journalThemes: journalEntry.themes,
+          journalSuggestions: journalEntry.suggestions,
+        });
+      }
+
       writeSseEvent(res, 'assistant.completed', {
         sessionId: data.sessionId,
-        response: commandResponse,
+        response: {
+          ...commandResponse,
+          payload: responsePayload,
+        },
       });
 
       return res.end();
@@ -1279,6 +1388,8 @@ export function createApp(dependencies: AppDependencies = {}) {
       const userId = (req as AuthRequest).userId;
       const plainTextTypes = new Set(['task-notes', 'task-title']);
       const jsonObjectTypes = new Set([
+        'task-content',
+        'task-split',
         'weekly-insight',
         'stability-analysis',
         'home-messages',
@@ -1300,6 +1411,36 @@ export function createApp(dependencies: AppDependencies = {}) {
         prompt = `Você é uma assistente pessoal carinhosa e organizada. Escreva observações práticas e motivadoras (2-3 frases) para a tarefa "${context.title}" (categoria: ${context.category}). Tom acolhedor, como uma amiga organizada ajudando. Responda diretamente.`;
       } else if (type === 'task-checklist') {
         prompt = `Você é uma assistente pessoal organizada. Crie 3-5 itens de checklist práticos para a tarefa "${context.title}" (categoria: ${context.category}). Passos curtos para não sobrecarregar. Retorne SOMENTE um array JSON de strings: ["Item 1", "Item 2"]. Sem explicação.`;
+      } else if (type === 'task-content') {
+        prompt = `${userName} está organizando o bloco "${context.title}" na área ${context.category}. Decida qual apoio combina melhor com esse compromisso agora.
+
+REGRAS:
+- Se o compromisso já estiver claro e pedir só contexto, use "note".
+- Se o compromisso estiver amplo, tiver várias partes ou pedir execução passo a passo, use "checklist".
+- Se fizer sentido ter os dois, use "mixed".
+- A nota deve ser curta, concreta e útil.
+- O checklist deve ter 2-5 micro-passos reais, simples e sem abstração.
+- Respeite energia ${context.energyLevel || 'media'}.
+- Se houver contexto atual, aproveite sem repetir em eco:
+Nota atual: ${context.currentNote || 'vazia'}
+Checklist atual: ${(context.currentChecklist || []).join(' | ') || 'vazio'}
+
+JSON APENAS:
+{"mode":"note|checklist|mixed","note":"texto opcional","items":["passo 1","passo 2"]}`;
+      } else if (type === 'task-split') {
+        prompt = `${userName} quer quebrar o compromisso "${context.title}" em passos pequenos da área ${context.category}.
+
+REGRAS:
+- Gere 3-6 micro-passos concretos e executáveis.
+- Cada passo deve caber em poucos minutos.
+- Use verbos físicos e específicos.
+- Evite abstrações como "planejar", "organizar melhor", "pensar sobre".
+- Respeite energia ${context.energyLevel || 'media'}: se estiver alta, pode haver mais impulso; se estiver leve ou média, mantenha passos gentis.
+- Se já existir checklist, não duplique:
+${(context.currentChecklist || []).join(' | ') || 'nenhum item ainda'}
+
+JSON APENAS:
+{"items":["passo 1","passo 2","passo 3"]}`;
       } else if (type === 'task-title') {
         prompt = `Sugira um título claro, motivador e específico para uma tarefa de ${context.category} às ${context.time}. Retorne SOMENTE o título, sem aspas nem explicação.`;
       } else if (type === 'day-tasks') {
@@ -1310,10 +1451,12 @@ export function createApp(dependencies: AppDependencies = {}) {
         const dtGoals = (context.goals as string[] | undefined) || [];
         const dtGoalsCtx = dtGoals.length ? `\nMetas ativas de ${userName}: ${dtGoals.map((g, i) => `${i+1}. "${g}"`).join(', ')}` : '';
         const dtHour = context.hour ?? new Date().getHours();
-        const dtPeriodo = dtHour < 12 ? 'manhã' : dtHour < 18 ? 'tarde' : 'noite';
+        const dtPeriodo = context.partOfDay || (dtHour < 12 ? 'manhã' : dtHour < 18 ? 'tarde' : 'noite');
+        const dtWeekday = context.weekday ? ` | Dia: ${context.weekday}` : '';
+        const dtLocalDate = context.localDate ? ` (${context.localDate})` : '';
         prompt = `Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ${userName}.
 
-ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}
+ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}${dtWeekday}${dtLocalDate}
 ${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${ragContext}
 
 REGRAS INVIOLÁVEIS:
@@ -1323,6 +1466,7 @@ REGRAS INVIOLÁVEIS:
 4. Fase elevada/focada → 1 tarefa de trabalho real de impacto + 1 autocuidado + 1 pessoal
 5. Títulos ESPECÍFICOS: não "Crie quadro de visão", não "Planeje sua semana", não "Organize documentos"
 6. Cada tarefa = ação que ${userName} pode fazer hoje com o que já tem em casa
+7. Se for noite, priorize fechamento, autocuidado e preparação suave do próximo dia em vez de tarefas pesadas.
 
 PROIBIDO ABSOLUTAMENTE: Quadro de visão, mapa de visão, planejar semana, organizar arquivos, criar lista genérica, qualquer coisa sem contexto real da pessoa.
 
@@ -1420,12 +1564,15 @@ Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta
         const moodKey = context.mood || 'equilibrada';
         const taskCount = context.taskCount ?? 0;
         const hour = context.hour ?? new Date().getHours();
-        const periodo = hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';
+        const periodo = context.partOfDay || (hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite');
+        const weekday = context.weekday || 'hoje';
+        const localDate = context.localDate ? ` (${context.localDate})` : '';
         prompt = `${userName} está abrindo a home agora.
 
 SINAIS DO MOMENTO:
 - Estado percebido: "${moodLabel}" (${moodKey})
 - Período do dia: ${periodo}
+- Dia: ${weekday}${localDate}
 - Tarefas ativas hoje: ${taskCount}
 ${ragContext}
 
@@ -1477,6 +1624,10 @@ Sem texto fora do JSON.`;
         const nota = context.nota ? `Nota de ${userName}: "${context.nota}"` : '';
         const crStreak = typeof context.streak === 'number' ? context.streak : 0;
         const crHistory = (context.checkinHistory || []) as Array<{date:string;humor:number;energia:number}>;
+        const crHour = context.hour ?? new Date().getHours();
+        const crPartOfDay = context.partOfDay || (crHour < 12 ? 'manhã' : crHour < 18 ? 'tarde' : 'noite');
+        const crWeekday = context.weekday ? `Dia: ${context.weekday}.` : '';
+        const crLocalDate = context.localDate ? `Data local: ${context.localDate}.` : '';
         const crHistoryLines = crHistory.slice(0, 5).map((h: any) =>
           `- ${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}`
         ).join('\n');
@@ -1488,6 +1639,7 @@ Sem texto fora do JSON.`;
           : '';
         const streakCtx = crStreak >= 3 ? `\nSequência atual: ${crStreak} dias consecutivos de check-in — ${userName} está mantendo o ritmo.` : '';
         prompt = `${userName} acabou de fazer um check-in. Estado agora: "${moodLabel}" (${context.mood}).
+Período atual: ${crPartOfDay}. ${crWeekday} ${crLocalDate}
 ${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
 ${nota}${ragContext}
@@ -1695,9 +1847,8 @@ ${existingSummary || 'Nenhum perfil anterior.'}
 
 DADOS ACUMULADOS (${recentPatterns.checkinCount} check-ins):
 - Fase atual do ciclo de humor: ${recentPatterns.phase}
-- Humor médio 7d: ${recentPatterns.avgMood7d.toFixed(1)}/5
-- Energia média 7d: ${recentPatterns.avgEnergy7d.toFixed(1)}/5
-- Estabilidade: ${recentPatterns.stabilityScore}/100
+- Humor médio 7d: ${humanizeScore(recentPatterns.avgMood7d, 'mood')}
+- Energia média 7d: ${humanizeScore(recentPatterns.avgEnergy7d, 'energy')}
 - Alertas: ${recentPatterns.warningFlags.join(', ') || 'nenhum'}
 ${rp.bestDay ? `- Melhor dia da semana historicamente: ${rp.bestDay}` : ''}
 ${rp.worstDay ? `- Dia mais difícil historicamente: ${rp.worstDay}` : ''}

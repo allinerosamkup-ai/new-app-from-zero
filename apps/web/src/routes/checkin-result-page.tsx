@@ -8,6 +8,8 @@ import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
 import type { MoodOption } from "../features/aura/types";
+import { AuraIcon } from "../components/AuraIcon";
+import { getClientDayContext } from "../utils/day-context";
 import "../styles/aura.css";
 
 type ResultVariant = {
@@ -91,11 +93,12 @@ const CAT_COLOR: Record<string, string> = {
 
 export function CheckinResultPage() {
   const navigate = useNavigate();
-  const { state, addTask } = useAuraStore();
+  const { state, addTask, prepareJournalFromMood } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
   const v = variants[state.mood] ?? variants.equilibrada;
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
+  const dayContext = useMemo(() => getClientDayContext(), []);
 
   // Aura auto-response ao check-in
   const [auraMsg, setAuraMsg] = useState<AuraMsg | null>(null);
@@ -124,6 +127,10 @@ export function CheckinResultPage() {
         moodCycleContext: cycleReport.aiContext,
         checkinHistory: recentHistory,
         streak,
+        hour: dayContext.hour,
+        partOfDay: dayContext.partOfDay,
+        weekday: dayContext.weekday,
+        localDate: dayContext.localDate,
       },
     }).then((res: any) => {
       try {
@@ -156,7 +163,10 @@ export function CheckinResultPage() {
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
           goals: goalTitles,
-          hour: new Date().getHours(),
+          hour: dayContext.hour,
+          partOfDay: dayContext.partOfDay,
+          weekday: dayContext.weekday,
+          localDate: dayContext.localDate,
         },
       });
       const parsed = parseAiSuggestion<Array<{ title: string; category: string; time: string }>>(res.suggestion);
@@ -179,7 +189,10 @@ export function CheckinResultPage() {
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
           goals: goalTitles,
-          hour: new Date().getHours(),
+          hour: dayContext.hour,
+          partOfDay: dayContext.partOfDay,
+          weekday: dayContext.weekday,
+          localDate: dayContext.localDate,
         },
       });
       const parsed = parseAiSuggestion<Array<{ title: string; category: string; time: string }>>(res.suggestion);
@@ -244,7 +257,9 @@ export function CheckinResultPage() {
               Aura diz
             </p>
             {!auraMsgLoading && auraMsg && (
-              <span style={{ fontSize: 9, background: isMenuthe ? "rgba(180,185,169,.15)" : "var(--nectarine-a3)", color: v.accent, borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
+              <span style={{ fontSize: 9, background: isMenuthe ? "rgba(180,185,169,.15)" : "var(--nectarine-a3)", color: v.accent, borderRadius: 999, padding: "2px 6px", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
+                <AuraIcon size={8} /> IA
+              </span>
             )}
             {auraMsgLoading && (
               <span style={{ fontSize: 9, color: "var(--text-3)", fontStyle: "italic" }}>gerando...</span>
@@ -290,6 +305,7 @@ export function CheckinResultPage() {
         {/* ─── BLOCO IA ─── */}
         {phase === "idle" && (
           <AuraButtonV2
+            useAuraIcon
             className={`btn btn-full ${isMenuthe ? "btn-menthe" : "btn-primary"}`}
             onClick={fetchDayTasks}
             style={{ marginBottom: 10 }}
@@ -416,6 +432,32 @@ export function CheckinResultPage() {
             )}
           </div>
         )}
+
+        <div
+          style={{
+            background: "rgba(255,253,250,.9)",
+            borderRadius: 14,
+            border: `1.5px solid ${v.accent}28`,
+            padding: 14,
+            marginBottom: 12,
+          }}
+        >
+          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>
+            Depois do check-in
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.55 }}>
+            Se quiser descarregar melhor o que apareceu agora, leve esse estado para o diário e deixe a Aura guardar o resumo da sessão.
+          </p>
+          <AuraButtonV2
+            className="btn btn-ghost btn-full"
+            onClick={() => {
+              prepareJournalFromMood();
+              navigate("/journal");
+            }}
+          >
+            Abrir meu diário
+          </AuraButtonV2>
+        </div>
 
         {/* Botões de navegação */}
         <div className="result-nav-stack" style={{ marginTop: phase === "idle" ? 0 : 4 }}>

@@ -41,7 +41,7 @@ export const AuraV2Showcase: React.FC = () => {
         <PhoneFrame label="Com check-in">
           <div className="home-header">
             <p style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(255,255,255,.7)', marginBottom: '2px' }}>Bom dia,</p>
-            <h1>Maria ✨</h1>
+            <h1>Maria 1</h1>
           </div>
 
           {/* Status Card */}

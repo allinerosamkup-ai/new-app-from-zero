@@ -44,15 +44,15 @@ async function run() {
       note: 'Acordei mais arrastada hoje.',
       userName: 'Ana',
       profileSummary: 'Fica melhor quando reduz a carga no começo do dia.',
-      moodCycleContext: 'Humor em queda leve, energia 2/5.',
+      moodCycleContext: 'Humor em queda leve, energia baixa.',
     },
     fakeClient as any,
   );
 
   assert.equal(result.stateLabel, 'Dia sensível');
   assert.equal(capturedMessages[0]?.role, 'system');
-  assert.match(capturedMessages[0]?.content || '', /CHECK-IN/i);
-  assert.match(capturedMessages[0]?.content || '', /próximas horas/i);
+  assert.match(capturedMessages[0]?.content || '', /COORDENADA BIO-PSÍQUICA/i);
+  assert.match(capturedMessages[0]?.content || '', /ritmo hoje/i);
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Analise os dados de check-in/i);
 }

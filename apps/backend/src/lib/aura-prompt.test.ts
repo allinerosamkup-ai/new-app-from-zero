@@ -12,7 +12,7 @@ async function run() {
 
   assert.match(onboardingPrompt, /Você é Aura/i);
   assert.match(onboardingPrompt, /Não presuma diagnósticos/i);
-  assert.match(onboardingPrompt, /ONBOARDING/i);
+  assert.match(onboardingPrompt, /BOAS-VINDAS/i);
   assert.match(onboardingPrompt, /Humor em queda suave/i);
   assert.match(onboardingPrompt, /Prefere passos curtos/i);
   assert.match(onboardingPrompt, /Não invente fatos/i);
@@ -28,8 +28,8 @@ async function run() {
     domain: 'checkin',
   });
 
-  assert.match(checkinPrompt, /CHECK-IN/i);
-  assert.match(checkinPrompt, /próximas horas/i);
+  assert.match(checkinPrompt, /COORDENADA BIO-PSÍQUICA/i);
+  assert.match(checkinPrompt, /ritmo hoje/i);
   assert.doesNotMatch(checkinPrompt, /Usuárias típicas têm TDAH/i);
 
   const journalLivePrompt = buildAuraSystemPrompt({
@@ -37,9 +37,12 @@ async function run() {
     domain: 'journal-live' as any,
   });
 
-  assert.match(journalLivePrompt, /DIÁRIO AO VIVO/i);
-  assert.match(journalLivePrompt, /não encerre a conversa/i);
-  assert.match(journalLivePrompt, /não sugira tarefas/i);
+  assert.match(journalLivePrompt, /DIÁRIO \(PRESENÇA REFLEXIVA\)/i);
+  assert.match(journalLivePrompt, /acompanhe o fluxo/i);
+  assert.match(journalLivePrompt, /PROIBIDO sugerir metas/i);
+  assert.match(journalLivePrompt, /no máximo uma pergunta por mensagem/i);
+  assert.match(journalLivePrompt, /colete em micro-passos/i);
+  assert.match(journalLivePrompt, /nunca faça múltiplas perguntas/i);
   assert.doesNotMatch(journalLivePrompt, /gere 0 a 3 tarefas/i);
 
   const journalFinalizePrompt = buildAuraSystemPrompt({
@@ -47,19 +50,20 @@ async function run() {
     domain: 'journal-finalize' as any,
   });
 
-  assert.match(journalFinalizePrompt, /FINALIZAÇÃO DO DIÁRIO/i);
-  assert.match(journalFinalizePrompt, /resuma a sessão/i);
-  assert.match(journalFinalizePrompt, /gere 0 a 3 tarefas/i);
-  assert.doesNotMatch(journalFinalizePrompt, /não encerre a conversa/i);
+  assert.match(journalFinalizePrompt, /SÍNTESE DA SESSÃO/i);
+  assert.match(journalFinalizePrompt, /espelho calmo/i);
+  assert.match(journalFinalizePrompt, /Não faça perguntas no fechamento/i);
+  assert.match(journalFinalizePrompt, /guarde apenas o sentimento/i);
+  assert.doesNotMatch(journalFinalizePrompt, /acompanhe o fluxo/i);
 
   const auraCommandPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
     domain: 'aura-command' as any,
   });
 
-  assert.match(auraCommandPrompt, /COPILOTO OPERACIONAL/i);
-  assert.match(auraCommandPrompt, /interprete pedidos diretos/i);
-  assert.match(auraCommandPrompt, /encaminhe para planner, checklist, metas ou agenda/i);
+  assert.match(auraCommandPrompt, /HUB OPERACIONAL/i);
+  assert.match(auraCommandPrompt, /executiva de elite/i);
+  assert.match(auraCommandPrompt, /reservei 15 min/i);
   assert.doesNotMatch(auraCommandPrompt, /diário reflexivo/i);
 
   const homePrompt = buildAuraSystemPrompt({
@@ -67,27 +71,27 @@ async function run() {
     domain: 'home' as any,
   });
 
-  assert.match(homePrompt, /HOME/i);
-  assert.match(homePrompt, /presenca breve/i);
-  assert.match(homePrompt, /acao proativa/i);
+  assert.match(homePrompt, /TOUCHPOINT RÁPIDO/i);
+  assert.match(homePrompt, /sussurro/i);
+  assert.match(homePrompt, /micro-passo físico/i);
 
   const goalExecutionPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
     domain: 'goal-execution' as any,
   });
 
-  assert.match(goalExecutionPrompt, /EXECUÇÃO DE METAS/i);
-  assert.match(goalExecutionPrompt, /proximos passos fisicos/i);
-  assert.match(goalExecutionPrompt, /destino mais executavel/i);
+  assert.match(goalExecutionPrompt, /ENGENHARIA DE METAS/i);
+  assert.match(goalExecutionPrompt, /passo "atômico"/i);
+  assert.match(goalExecutionPrompt, /ridiculamente fácil/i);
 
   const longitudinalPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
     domain: 'longitudinal-insight' as any,
   });
 
-  assert.match(longitudinalPrompt, /INTELIGENCIA LONGITUDINAL/i);
-  assert.match(longitudinalPrompt, /padroes, transicoes e seguimentos/i);
-  assert.match(longitudinalPrompt, /acompanhamento/i);
+  assert.match(longitudinalPrompt, /MEMÓRIA E PADRÕES/i);
+  assert.match(longitudinalPrompt, /cruze dados/i);
+  assert.match(longitudinalPrompt, /semana passada/i);
 }
 
 run()

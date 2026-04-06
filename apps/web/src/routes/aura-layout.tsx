@@ -6,6 +6,7 @@ import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
+import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 import "../styles/aura-v2.css";
 
@@ -35,20 +36,7 @@ const NAV_ITEMS = [
   {
     label: "Aura",
     route: "/aura",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-      </svg>
-    ),
-  },
-  {
-    label: "Diário",
-    route: "/journal",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
+    icon: <AuraIcon size={20} />,
   },
   {
     label: "Metas",

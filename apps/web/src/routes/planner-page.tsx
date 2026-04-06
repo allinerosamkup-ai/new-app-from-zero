@@ -9,30 +9,81 @@ import { useToast } from "../components/Toast";
 import { computeMoodCycle } from '../utils/mood-cycle-engine';
 import {
   getTaskMeta, setTaskMeta,
-  DEFAULT_META, DEFAULT_RECURRING,
+  DEFAULT_RECURRING,
   type ChecklistItem, type RecurringConfig, type NoteMode,
 } from "../utils/task-metadata";
 import "../styles/aura.css";
 import "../styles/aura-v2.css";
 
 // ─── helpers ───────────────────────────────────────────────
-function deriveCategory(title: string) {
+type PlannerCategoryValue = "trabalho" | "autocuidado" | "social" | "pessoal";
+
+function deriveCategoryFromTitle(title: string): PlannerCategoryValue {
   const t = title.toLowerCase();
   if (t.includes("meditação") || t.includes("meditar") || t.includes("yoga") || t.includes("autocuidado"))
-    return { cat: "AUTOCUIDADO", cor: "var(--menthe)" };
+    return "autocuidado";
   if (t.includes("reunião") || t.includes("análise") || t.includes("trabalho") || t.includes("projeto"))
-    return { cat: "TRABALHO", cor: "var(--lagune)" };
+    return "trabalho";
   if (t.includes("almoço") || t.includes("social") || t.includes("amigo"))
-    return { cat: "SOCIAL", cor: "var(--social-color)" };
-  return { cat: "PESSOAL", cor: "var(--nectarine)" };
+    return "social";
+  return "pessoal";
 }
 
 const CATEGORY_OPTIONS = [
-  { label: "Trabalho", cor: "var(--lagune)" },
-  { label: "Autocuidado", cor: "var(--menthe)" },
-  { label: "Social", cor: "var(--social-color)" },
-  { label: "Pessoal", cor: "var(--nectarine)" },
+  { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "var(--lagune)", bg: "rgba(176,180,196,.14)", textColor: "var(--lagune-11)" },
+  { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--menthe)", bg: "rgba(180,185,169,.14)", textColor: "var(--menthe-11)" },
+  { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-color)", bg: "rgba(217,206,197,.18)", textColor: "var(--social-text)" },
+  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--nectarine)", bg: "rgba(243,176,140,.14)", textColor: "var(--nectarine-11)" },
 ];
+
+function normalizePlannerCategory(category?: string | null, title = ""): PlannerCategoryValue {
+  const value = (category ?? "").trim().toLowerCase();
+
+  if (value === "trabalho") return "trabalho";
+  if (value === "autocuidado" || value === "saude" || value === "saúde") return "autocuidado";
+  if (value === "social") return "social";
+  if (value === "pessoal" || value === "geral" || value === "rotina" || value === "outro") return "pessoal";
+
+  return deriveCategoryFromTitle(title);
+}
+
+function getCategoryOption(category?: string | null, title = "") {
+  const value = normalizePlannerCategory(category, title);
+  return CATEGORY_OPTIONS.find((option) => option.value === value) ?? CATEGORY_OPTIONS[3];
+}
+
+function addMinutesToTime(time: string, minutesToAdd: number): string {
+  const [hours, minutes] = time.split(":").map(Number);
+  const totalMinutes = hours * 60 + minutes + minutesToAdd;
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const nextHours = Math.floor(normalized / 60).toString().padStart(2, "0");
+  const nextMinutes = (normalized % 60).toString().padStart(2, "0");
+  return `${nextHours}:${nextMinutes}`;
+}
+
+function buildChecklistItems(items: string[]): ChecklistItem[] {
+  return items
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .map((text, index) => ({
+      id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      done: false,
+    }));
+}
+
+function mergeChecklistItems(existing: ChecklistItem[], incoming: string[]): ChecklistItem[] {
+  const seen = new Set(existing.map((item) => item.text.trim().toLowerCase()));
+  const nextItems = incoming
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0 && !seen.has(item.toLowerCase()));
+
+  return [...existing, ...buildChecklistItems(nextItems)];
+}
+
+function resolveStoredNoteMode(note: string, checklist: ChecklistItem[]): NoteMode {
+  return note.trim().length === 0 && checklist.length > 0 ? "checklist" : "text";
+}
 
 const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const DIAS = ["Seg.", "Ter.", "Qua.", "Qui.", "Sex.", "Sáb.", "Dom."];
@@ -44,7 +95,7 @@ function formatDateLabel(date: Date) {
 
 function CalendarIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--nectarine)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--text-1)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
       <rect x="2" y="3" width="12" height="11" rx="2" /><line x1="2" y1="7" x2="14" y2="7" />
       <line x1="5.5" y1="1.5" x2="5.5" y2="4.5" /><line x1="10.5" y1="1.5" x2="10.5" y2="4.5" />
     </svg>
@@ -107,41 +158,90 @@ function NoteSection({
 }: {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
-  context: { title: string; category: string };
+  context: { title: string; category: string; energyLevel: FormState["energyLevel"] };
 }) {
-  const [aiLoading, setAiLoading] = useState<null | "notes" | "checklist" | "item">(null);
+  const [aiLoading, setAiLoading] = useState<null | "content" | "split">(null);
   const recognitionRef = useRef<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const { showError } = useToast();
 
-  async function suggestNotes() {
-    setAiLoading("notes");
+  async function letAuraOrganize() {
+    setAiLoading("content");
     try {
-      const res = await api.post('/ai/suggest', { type: 'task-notes', context });
-      if (res.suggestion) setForm(f => ({ ...f, note: res.suggestion }));
+      const res = await api.post('/ai/suggest', {
+        type: 'task-content',
+        context: {
+          ...context,
+          currentNote: form.note,
+          currentChecklist: form.checklist.map((item) => item.text),
+        },
+      });
+
+      if (!res.suggestion) return;
+
+      const parsed = parseAiSuggestion<{ mode?: "note" | "checklist" | "mixed"; note?: string; items?: string[] }>(res.suggestion);
+      const suggestedNote = typeof parsed.note === "string" ? parsed.note.trim() : "";
+      const suggestedItems = Array.isArray(parsed.items) ? parsed.items : [];
+
+      setForm((current) => {
+        const nextNote = suggestedNote || current.note;
+        const nextChecklist = mergeChecklistItems(current.checklist, suggestedItems);
+        return {
+          ...current,
+          note: nextNote,
+          checklist: nextChecklist,
+          noteMode: parsed.mode === "checklist" && nextNote.length === 0 ? "checklist" : resolveStoredNoteMode(nextNote, nextChecklist),
+        };
+      });
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel gerar notas.");
-    } finally { setAiLoading(null); }
+      showError(error instanceof Error ? error.message : "Nao foi possivel organizar o conteudo.");
+    } finally {
+      setAiLoading(null);
+    }
   }
 
-  async function suggestChecklist() {
-    setAiLoading("checklist");
+  async function splitIntoSteps() {
+    setAiLoading("split");
     try {
-      const res = await api.post('/ai/suggest', { type: 'task-checklist', context });
-      if (res.suggestion) {
-        const parsed = parseAiSuggestion<string[]>(res.suggestion);
-        const items: ChecklistItem[] = parsed.map(text => ({ id: Date.now().toString() + Math.random(), text, done: false }));
-        setForm(f => ({ ...f, checklist: [...f.checklist, ...items] }));
-      }
+      const res = await api.post('/ai/suggest', {
+        type: 'task-split',
+        context: {
+          ...context,
+          currentChecklist: form.checklist.map((item) => item.text),
+        },
+      });
+
+      if (!res.suggestion) return;
+
+      const parsed = parseAiSuggestion<{ items?: string[] }>(res.suggestion);
+      const items = Array.isArray(parsed.items) ? parsed.items : [];
+      setForm((current) => {
+        const nextChecklist = mergeChecklistItems(current.checklist, items);
+        return {
+          ...current,
+          checklist: nextChecklist,
+          noteMode: resolveStoredNoteMode(current.note, nextChecklist),
+        };
+      });
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel gerar checklist.");
-    } finally { setAiLoading(null); }
+      showError(error instanceof Error ? error.message : "Nao foi possivel quebrar em etapas.");
+    } finally {
+      setAiLoading(null);
+    }
   }
 
   function addChecklistItem() {
     const text = form.checklistInput.trim();
     if (!text) return;
-    setForm(f => ({ ...f, checklist: [...f.checklist, { id: Date.now().toString(), text, done: false }], checklistInput: "" }));
+    setForm((current) => {
+      const nextChecklist = [...current.checklist, { id: Date.now().toString(), text, done: false }];
+      return {
+        ...current,
+        checklist: nextChecklist,
+        checklistInput: "",
+        noteMode: resolveStoredNoteMode(current.note, nextChecklist),
+      };
+    });
   }
 
   const checklistRecRef = useRef<any>(null);
@@ -184,7 +284,10 @@ function NoteSection({
     rec.interimResults = false;
     rec.onresult = (e: any) => {
       const transcript = e.results[0][0].transcript;
-      setForm(f => ({ ...f, note: f.note ? f.note + " " + transcript : transcript }));
+      setForm((current) => {
+        const nextNote = current.note ? `${current.note} ${transcript}` : transcript;
+        return { ...current, note: nextNote, noteMode: resolveStoredNoteMode(nextNote, current.checklist) };
+      });
     };
     rec.onend = () => setIsRecording(false);
     rec.onerror = () => setIsRecording(false);
@@ -195,95 +298,137 @@ function NoteSection({
 
   return (
     <div style={{ marginBottom: "12px" }}>
-      {/* Section header + mode tabs */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={LABEL_STYLE}>Notas</span>
-        <div style={{ display: "flex", gap: "4px" }}>
-          {(["text", "checklist"] as NoteMode[]).map(mode => (
-            <AuraButtonV2 key={mode} onClick={() => setForm(f => ({ ...f, noteMode: mode }))}
-              style={{ padding: "4px 10px", borderRadius: "6px", border: "1.5px solid", borderColor: form.noteMode === mode ? "var(--nectarine)" : "var(--warm-border)", background: form.noteMode === mode ? "var(--nectarine-a3)" : "transparent", color: form.noteMode === mode ? "var(--nectarine)" : "var(--text-3)", fontSize: "11px", fontWeight: 700, cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              {mode === "text" ? "Texto" : "Checklist"}
-            </AuraButtonV2>
-          ))}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px", marginBottom: "8px" }}>
+        <div>
+          <span style={LABEL_STYLE}>Notas e checklist</span>
+          <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--text-3)", lineHeight: 1.45 }}>
+            A Aura pode transformar esse bloco em nota, checklist ou ambos.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <AuraButtonV2
+            variant="outline"
+            size="sm"
+            onClick={letAuraOrganize}
+            disabled={aiLoading !== null}
+            style={{ minWidth: "108px" }}
+          >
+            {aiLoading === "content" ? "Lendo..." : "Aura decide"}
+          </AuraButtonV2>
+          <AuraButtonV2
+            variant="outline"
+            size="sm"
+            onClick={splitIntoSteps}
+            disabled={aiLoading !== null}
+            style={{ minWidth: "108px" }}
+          >
+            {aiLoading === "split" ? "Quebrando..." : "Quebrar em passos"}
+          </AuraButtonV2>
         </div>
       </div>
 
-      {/* TEXT MODE */}
-      {form.noteMode === "text" && (
-        <div style={{ position: "relative" }}>
-          <textarea
-            value={form.note}
-            onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
-            placeholder="Observações, contexto, links importantes..."
-            rows={3}
+      <div style={{ position: "relative", marginBottom: "10px" }}>
+        <textarea
+          value={form.note}
+          onChange={(e) => setForm((current) => ({ ...current, note: e.target.value, noteMode: resolveStoredNoteMode(e.target.value, current.checklist) }))}
+          placeholder="Observações, contexto ou detalhes importantes..."
+          rows={3}
+          style={{
+            width: "100%", borderRadius: "8px",
+            border: "1.5px solid var(--warm-border-2)",
+            padding: "10px 52px 10px 14px",
+            fontSize: "13px", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "var(--text-1)",
+            background: "var(--warm-bg)", outline: "none", resize: "none", boxSizing: "border-box"
+          }}
+        />
+        <div style={{ position: "absolute", top: "8px", right: "8px", display: "flex", gap: "6px" }}>
+          <AuraButtonV2
+            onClick={toggleVoiceNote}
+            title={isRecording ? "Parar microfone" : "Ditado por voz"}
             style={{
-              width: "100%", borderRadius: "8px",
-              border: "1.5px solid var(--warm-border-2)",
-              padding: "10px 90px 10px 14px",
-              fontSize: "13px", fontFamily: "'Plus Jakarta Sans', sans-serif", color: "var(--text-1)",
-              background: "var(--warm-bg)", outline: "none", resize: "none", boxSizing: "border-box"
+              width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--warm-border-2)",
+              background: isRecording ? "var(--menthe)" : "rgba(255,255,255,.9)",
+              display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
             }}
-          />
-          <div style={{ position: "absolute", top: "8px", right: "8px", display: "flex", gap: "6px" }}>
-            <AuraButtonV2
-              onClick={toggleVoiceNote}
-              title={isRecording ? "Parar microfone" : "Ditado por voz"}
-              style={{
-                width: 30, height: 30, borderRadius: "50%", border: "1px solid var(--warm-border-2)",
-                background: isRecording ? "var(--menthe)" : "rgba(255,255,255,.9)",
-                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0,
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={isRecording ? "#fff" : "var(--text-2)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-              </svg>
-            </AuraButtonV2>
-            <AiBtn onClick={suggestNotes} loading={aiLoading === "notes"} />
-          </div>
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={isRecording ? "#fff" : "var(--text-2)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </AuraButtonV2>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+        <span style={LABEL_STYLE}>Passos do bloco</span>
+        {form.checklist.length > 0 && (
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)" }}>
+            {form.checklist.filter((item) => item.done).length}/{form.checklist.length}
+          </span>
+        )}
+      </div>
+
+      {form.checklist.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
+          {form.checklist.map((item) => (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <AuraButtonV2
+                onClick={() => setForm((current) => {
+                  const nextChecklist = current.checklist.map((entry) =>
+                    entry.id === item.id ? { ...entry, done: !entry.done } : entry
+                  );
+                  return { ...current, checklist: nextChecklist, noteMode: resolveStoredNoteMode(current.note, nextChecklist) };
+                })}
+                style={{ width: "20px", height: "20px", borderRadius: "4px", border: `2px solid ${item.done ? "var(--menthe)" : "var(--warm-border-2)"}`, background: item.done ? "var(--menthe)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+              >
+                {item.done && <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              </AuraButtonV2>
+              <span style={{ flex: 1, fontSize: "13px", color: item.done ? "var(--text-3)" : "var(--text-1)", textDecoration: item.done ? "line-through" : "none" }}>
+                {item.text}
+              </span>
+              <AuraButtonV2
+                onClick={() => setForm((current) => {
+                  const nextChecklist = current.checklist.filter((entry) => entry.id !== item.id);
+                  return { ...current, checklist: nextChecklist, noteMode: resolveStoredNoteMode(current.note, nextChecklist) };
+                })}
+                style={{ border: "none", background: "none", color: "var(--text-3)", cursor: "pointer", fontSize: "16px", padding: "0 2px", lineHeight: 1 }}
+              >
+                ×
+              </AuraButtonV2>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* CHECKLIST MODE */}
-      {form.noteMode === "checklist" && (
-        <div>
-          {form.checklist.map(item => (
-            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-              <AuraButtonV2 onClick={() => setForm(f => ({ ...f, checklist: f.checklist.map(i => i.id === item.id ? { ...i, done: !i.done } : i) }))}
-                style={{ width: "20px", height: "20px", borderRadius: "4px", border: `2px solid ${item.done ? "var(--menthe)" : "var(--warm-border-2)"}`, background: item.done ? "var(--menthe)" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {item.done && <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-              </AuraButtonV2>
-              <span style={{ flex: 1, fontSize: "13px", color: item.done ? "var(--text-3)" : "var(--text-1)", textDecoration: item.done ? "line-through" : "none" }}>{item.text}</span>
-              <AuraButtonV2 onClick={() => setForm(f => ({ ...f, checklist: f.checklist.filter(i => i.id !== item.id) }))}
-                style={{ border: "none", background: "none", color: "var(--text-3)", cursor: "pointer", fontSize: "16px", padding: "0 2px", lineHeight: 1 }}>×</AuraButtonV2>
-            </div>
-          ))}
-          <div style={{ display: "flex", gap: "6px" }}>
-            <div style={{ position: "relative", flex: 1 }}>
-              <input value={form.checklistInput} onChange={e => setForm(f => ({ ...f, checklistInput: e.target.value }))}
-                onKeyDown={e => e.key === "Enter" && addChecklistItem()}
-                placeholder="Novo item..." style={{ ...INPUT_STYLE, height: "38px", width: "100%", paddingRight: "42px" }} />
-              <button
-                type="button"
-                onClick={toggleVoiceChecklistInput}
-                title={checklistRecording ? "Parar microfone" : "Ditado por voz"}
-                style={{
-                  position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
-                  width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--warm-border-2)",
-                  background: checklistRecording ? "var(--menthe)" : "rgba(255,255,255,.9)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer",
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={checklistRecording ? "#fff" : "var(--text-2)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
-              </button>
-            </div>
-            <AiBtn onClick={suggestChecklist} loading={aiLoading === "checklist"} />
-            <AuraButtonV2 onClick={addChecklistItem} style={{ height: "38px", width: "38px", borderRadius: "8px", border: "none", background: "var(--nectarine)", color: "#fff", fontWeight: 700, fontSize: "18px", cursor: "pointer" }}>+</AuraButtonV2>
-          </div>
+      <div style={{ display: "flex", gap: "6px" }}>
+        <div style={{ position: "relative", flex: 1 }}>
+          <input
+            value={form.checklistInput}
+            onChange={(e) => setForm((current) => ({ ...current, checklistInput: e.target.value }))}
+            onKeyDown={(e) => e.key === "Enter" && addChecklistItem()}
+            placeholder="Adicionar um passo manualmente..."
+            style={{ ...INPUT_STYLE, height: "38px", width: "100%", paddingRight: "42px" }}
+          />
+          <button
+            type="button"
+            onClick={toggleVoiceChecklistInput}
+            title={checklistRecording ? "Parar microfone" : "Ditado por voz"}
+            style={{
+              position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+              width: 28, height: 28, borderRadius: "50%", border: "1px solid var(--warm-border-2)",
+              background: checklistRecording ? "var(--menthe)" : "rgba(255,255,255,.9)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={checklistRecording ? "#fff" : "var(--text-2)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          </button>
         </div>
-      )}
+        <AuraButtonV2 onClick={addChecklistItem} style={{ height: "38px", width: "42px", borderRadius: "8px", border: "none", background: "var(--nectarine)", color: "#fff", fontWeight: 700, fontSize: "18px", cursor: "pointer" }}>
+          +
+        </AuraButtonV2>
+      </div>
     </div>
   );
 }
@@ -474,17 +619,21 @@ export function PlannerPage() {
     const openTaskId = (location.state as any)?.openTaskId;
     if (openTaskId) {
       const task = state.tasks.find(t => t.id === openTaskId);
-      if (task) openEditSheet(task.id, task.title, task.time);
+      if (task) openEditSheet(task.id);
       navigate("/planner", { replace: true, state: {} });
     }
   }, [location.state, state.tasks]);
 
-  function openEditSheet(id: string | number, title: string, time: string) {
+  function openEditSheet(id: string | number) {
+    const task = state.tasks.find((entry) => entry.id === id);
+    if (!task) return;
     const meta = getTaskMeta(id);
-    const catOpt = CATEGORY_OPTIONS.find(o => deriveCategory(title).cat === o.label.toUpperCase()) ?? CATEGORY_OPTIONS[3];
+    const categoryOption = getCategoryOption(task.category, task.title);
     setEditForm({
-      title, time, category: catOpt.label,
-      noteMode: meta.noteMode ?? "text",
+      title: task.title,
+      time: task.time,
+      category: categoryOption.label,
+      noteMode: resolveStoredNoteMode(meta.note, meta.checklist),
       note: meta.note,
       checklist: [...meta.checklist],
       checklistInput: "",
@@ -498,7 +647,7 @@ export function PlannerPage() {
     if (!editingTaskId) return;
     await updateTask(editingTaskId, { title: editForm.title.trim() || editForm.title, time: editForm.time, category: editForm.category });
     setTaskMeta(editingTaskId, { 
-      noteMode: editForm.noteMode, 
+      noteMode: resolveStoredNoteMode(editForm.note, editForm.checklist), 
       note: editForm.note, 
       checklist: editForm.checklist, 
       recurring: editForm.recurring,
@@ -517,17 +666,16 @@ export function PlannerPage() {
     const title = newForm.title.trim();
     if (!title) return;
     try {
-      await addTask(title, newForm.time, newForm.category);
-      setTimeout(() => {
-        const task = state.tasks.find(t => t.title === title);
-        if (task) setTaskMeta(task.id, { 
-          noteMode: newForm.noteMode, 
+      const createdTask = await addTask(title, newForm.time, newForm.category);
+      if (createdTask) {
+        setTaskMeta(createdTask.id, { 
+          noteMode: resolveStoredNoteMode(newForm.note, newForm.checklist), 
           note: newForm.note, 
           checklist: newForm.checklist, 
           recurring: newForm.recurring,
           energyLevel: newForm.energyLevel,
         });
-      }, 600);
+      }
       setNewForm({ ...EMPTY_FORM });
       setShowNewForm(false);
       showSuccess("Bloco adicionado ao planner.");
@@ -554,9 +702,15 @@ export function PlannerPage() {
     isDraggingRef.current = false;
   }
 
-  const blocos = (state.tasks || []).map(task => {
-    const { cat, cor } = deriveCategory(task.title);
-    return { id: task.id, hora: task.time, titulo: task.title, done: task.done, cat, cor };
+  const blocos = (state.tasks || []).map((task) => {
+    const area = getCategoryOption(task.category, task.title);
+    return {
+      id: task.id,
+      hora: task.time,
+      titulo: task.title,
+      done: task.done,
+      area,
+    };
   });
 
   function renderMonthModal() {
@@ -691,7 +845,7 @@ export function PlannerPage() {
         </div>
 
         {/* Notes + Checklist (unified) */}
-        <NoteSection form={form} setForm={setForm} context={{ title: form.title, category: form.category }} />
+        <NoteSection form={form} setForm={setForm} context={{ title: form.title, category: form.category, energyLevel: form.energyLevel }} />
 
         {/* Divider */}
         <div style={{ height: "1px", background: "var(--warm-border)", margin: "4px 0 12px" }} />
@@ -724,7 +878,24 @@ export function PlannerPage() {
           <AuraButtonV2 variant="outline" size="sm" onClick={() => setOffsetDias(d => d - 1)} style={{ width: "32px", height: "32px", padding: 0 }}>‹</AuraButtonV2>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>{formatDateLabel(dataAtual)}</span>
-            <AuraButtonV2 onClick={() => setShowMonth(m => !m)} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center" }}><CalendarIcon /></AuraButtonV2>
+            <AuraButtonV2
+              onClick={() => setShowMonth(m => !m)}
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "10px",
+                border: "1.5px solid var(--warm-border-2)",
+                cursor: "pointer",
+                padding: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "rgba(255,255,255,.88)",
+                boxShadow: "0 4px 14px rgba(0,0,0,.08)",
+              }}
+            >
+              <CalendarIcon />
+            </AuraButtonV2>
           </div>
           <AuraButtonV2 variant="outline" size="sm" onClick={() => setOffsetDias(d => d + 1)} style={{ width: "32px", height: "32px", padding: 0 }}>›</AuraButtonV2>
         </div>
@@ -740,8 +911,8 @@ export function PlannerPage() {
           return (
             <AuraButtonV2 key={i} onClick={() => setOffsetDias(Math.round((d.getTime() - dataBase.getTime()) / 86400000))}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "6px 0", borderRadius: 10, border: "none", cursor: "pointer", background: isToday ? "var(--nectarine)" : "transparent", color: isToday ? "#fff" : "var(--text-2)" }}>
-              <span style={{ fontSize: 10, fontWeight: 600 }}>{["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"][i]}</span>
               <span style={{ fontSize: 14, fontWeight: isToday ? 800 : 500, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{d.getDate()}</span>
+              <span style={{ fontSize: 10, fontWeight: 600 }}>{["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"][i]}</span>
             </AuraButtonV2>
           );
         })}
@@ -945,7 +1116,7 @@ export function PlannerPage() {
               <div className="timeline-line" />
               <div className="timeline-block-card"
                 style={{ 
-                  borderLeftColor: bloco.cor, 
+                  borderLeft: `4px solid ${bloco.area.cor}`,
                   cursor: dragIdx !== null ? "grabbing" : "grab", 
                   opacity: dragIdx === idx ? 0.6 : 1, 
                   boxShadow: dragIdx === idx ? "0 8px 24px rgba(0,0,0,.15)" : undefined, 
@@ -957,10 +1128,22 @@ export function PlannerPage() {
                 onPointerDown={e => { e.preventDefault(); isDraggingRef.current = false; setDragIdx(idx); }}
                 onPointerMove={() => { isDraggingRef.current = true; }}
                 onPointerUp={handlePointerUp}
-                onClick={() => { if (!isDraggingRef.current) openEditSheet(bloco.id, bloco.titulo, bloco.hora); }}>
+                onClick={() => { if (!isDraggingRef.current) openEditSheet(bloco.id); }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6 }}>
                   <p className="block-title" style={{ textDecoration: bloco.done ? "line-through" : "none", color: bloco.done ? "var(--text-3)" : "var(--text-1)", flex: 1, margin: 0 }}>{bloco.titulo}</p>
-                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <div style={{
+                      fontSize: "10px",
+                      fontWeight: 800,
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      background: bloco.area.bg,
+                      color: bloco.area.textColor,
+                      border: `1px solid ${bloco.area.cor}40`,
+                      textTransform: "uppercase",
+                    }}>
+                      {bloco.area.label}
+                    </div>
                     <div style={{ 
                       fontSize: "10px", 
                       fontWeight: 800, 
@@ -994,9 +1177,6 @@ export function PlannerPage() {
                   {checkCount > 0 && <span style={{ fontSize: "11px", color: doneCount === checkCount ? "var(--menthe)" : "var(--text-3)", fontWeight: 600 }}>☑ {doneCount}/{checkCount}</span>}
                   {meta.recurring?.enabled && <span style={{ fontSize: "10px" }}>🔄</span>}
                   {meta.note && <span style={{ fontSize: "10px" }}>📝</span>}
-                </div>
-                <div className="block-chip" style={{ background: `${bloco.cor}1A`, color: bloco.cor === "var(--menthe)" ? "var(--menthe-11)" : bloco.cor === "var(--lagune)" ? "var(--lagune-11)" : bloco.cor === "var(--social-color)" ? "var(--social-text)" : "var(--nectarine-11)", border: `1px solid ${bloco.cor}40` }}>
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: bloco.cor }} />{bloco.cat}
                 </div>
               </div>
             </div>

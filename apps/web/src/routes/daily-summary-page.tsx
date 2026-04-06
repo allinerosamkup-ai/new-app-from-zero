@@ -7,6 +7,7 @@ import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
 import { labelMood } from "../features/aura/data";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 
 type JTask = { title: string; category: string; time: string; discarded: boolean };
@@ -92,7 +93,6 @@ export function DailySummaryPage() {
           padding: "20px",
         }}
       >
-        {/* Ícone central */}
         <div
           style={{
             width: 64,
@@ -105,18 +105,7 @@ export function DailySummaryPage() {
             justifyContent: "center",
           }}
         >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--menthe)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+          <AuraIcon size={32} style={{ color: "var(--menthe)" }} />
         </div>
 
         {/* Títulos */}
@@ -226,16 +215,15 @@ export function DailySummaryPage() {
           </p>
         </div>
 
-        {/* ── IA: transformar em tarefas ── */}
         {state.journal && phase === "idle" && (
           <div style={{ display: "flex", justifyContent: "center" }}>
             <AuraButtonV2
               variant="primary"
               size="md"
               onClick={fetchJournalTasks}
-              leftIcon={<span>✨</span>}
+              useAuraIcon
             >
-              Gerar
+              Gerar tarefas
             </AuraButtonV2>
           </div>
         )}
@@ -245,8 +233,8 @@ export function DailySummaryPage() {
             width: "100%", padding: "14px 16px", borderRadius: 12, textAlign: "center",
             background: "rgba(255,253,249,.9)", border: "1.5px solid rgba(197,165,147,.2)",
           }}>
-            <p style={{ fontSize: 13, color: "var(--text-2)", fontStyle: "italic" }}>
-              🤔 Lendo a sessão e montando tarefas...
+            <p style={{ fontSize: 13, color: "var(--text-2)", fontStyle: "italic", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              <AuraIcon size={14} className="animate-pulse" /> Lendo a sessão e montando tarefas...
             </p>
           </div>
         )}
@@ -258,8 +246,8 @@ export function DailySummaryPage() {
           }}>
             <div style={{ padding: "12px 14px 10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine)" }}>
-                  ✨ TAREFAS DO DIÁRIO
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine)", display: "flex", alignItems: "center", gap: 4 }}>
+                  <AuraIcon size={10} /> TAREFAS DO DIÁRIO
                 </p>
                 {phase === "done" && (
                   <span style={{ fontSize: 11, color: "var(--menthe)", fontWeight: 700 }}>✓ Salvo no Planner</span>

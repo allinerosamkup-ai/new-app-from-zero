@@ -113,7 +113,7 @@ export class InsightService {
     const moodCycleContext = latestCheckin
       ? [
           latestCheckin.stateLabel ? `Ultimo estado: ${latestCheckin.stateLabel}.` : null,
-          `Humor ${latestCheckin.moodScore}/5 e energia ${latestCheckin.energyScore}/5.`,
+          `Humor ${humanizeScore(latestCheckin.moodScore, 'mood')} e energia ${humanizeScore(latestCheckin.energyScore, 'energy')}.`,
           latestCheckin.stateSummary ? `Leitura atual: ${latestCheckin.stateSummary}` : null,
         ].filter(Boolean).join(' ')
       : null;
@@ -121,10 +121,10 @@ export class InsightService {
 
     // 4. Chamada OpenAI para Análise de Padrões
     const prompt = `
-      Analise os dados semanais para identificar padrões de humor e energia.
+      Analise os dados semanais para identificar padrões de humor e energia de ${userName}.
       
       DADOS DA SEMANA:
-      - Médias: Humor ${summary.avgMood}/5, Energia ${summary.avgEnergy}/5.
+      - Médias: Humor ${humanizeScore(summary.avgMood, 'mood')}, Energia ${humanizeScore(summary.avgEnergy, 'energy')}.
       - Check-ins: ${summary.checkinCount} realizados.
       - Diário: ${summary.journalSessions} sessões concluídas. Temas recorrentes: ${journalSessions.flatMap(s => s.themes).join(', ')}.
       - Planner: ${summary.tasksCompleted}/${summary.tasksTotal} tarefas concluídas.

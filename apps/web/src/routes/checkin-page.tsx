@@ -1,10 +1,10 @@
-// Checkin Page v3 — botões nativos (sem AuraButtonV2 em controles internos) + sintomas ciclo
+// Checkin Page v4 — emoções alinhadas, cards expansíveis e sem nota livre
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { MoodOption } from "../features/aura/types";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
-import { useRef } from "react";
+import { getClientDayContext } from "../utils/day-context";
 import "../styles/aura.css";
 import "../styles/aura-v2.css";
 
@@ -33,11 +33,13 @@ function OptionalSlider({ label, emoji, value, onChange, color }: {
 const emotionToMood: Record<string, MoodOption> = {
   radiant:   "focada",
   calm:      "equilibrada",
+  happy:     "equilibrada",
   anxious:   "tensa",
   tired:     "cansada",
   focused:   "focada",
   sad:       "sensivel",
   angry:     "sobrecarregada",
+  stressed:  "tensa",
   sensitive: "sensivel",
   exhausted: "cansada",
   agitated:  "sobrecarregada",
@@ -46,11 +48,13 @@ const emotionToMood: Record<string, MoodOption> = {
 const emotions = [
   { id: "radiant",   emoji: "✨", label: "Radiante" },
   { id: "calm",      emoji: "😌", label: "Calma" },
+  { id: "happy",     emoji: "🙂", label: "Feliz" },
   { id: "anxious",   emoji: "😰", label: "Ansiosa" },
   { id: "tired",     emoji: "😴", label: "Cansada" },
   { id: "focused",   emoji: "🔥", label: "Focada" },
   { id: "sad",       emoji: "😢", label: "Triste" },
   { id: "angry",     emoji: "😤", label: "Irritada" },
+  { id: "stressed",  emoji: "😵", label: "Estressada" },
   { id: "sensitive", emoji: "🌙", label: "Sensível" },
   { id: "exhausted", emoji: "😩", label: "Exausta" },
   { id: "agitated",  emoji: "🫨", label: "Agitada" },
@@ -64,6 +68,62 @@ const symptomLevels_opts = [
   { label: "Intensa", v: 3 as 1 | 2 | 3 },
 ];
 
+type DetailCardKey = "sono" | "fisico" | "social" | "ciclo";
+
+function DetailCard({
+  emoji,
+  title,
+  summary,
+  active,
+  onClick,
+}: {
+  emoji: string;
+  title: string;
+  summary: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: "100%",
+        minHeight: "74px",
+        borderRadius: "14px",
+        border: `1.5px solid ${active ? "var(--nectarine)" : "var(--warm-border-2)"}`,
+        background: active ? "var(--nectarine-a3)" : "rgba(255,255,255,.72)",
+        padding: "12px",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        textAlign: "left",
+        cursor: "pointer",
+        boxShadow: active ? "0 12px 24px rgba(243,176,140,.14)" : "0 10px 20px rgba(0,0,0,.05)",
+        backdropFilter: "blur(16px)",
+      }}
+    >
+      <div style={{
+        width: "38px",
+        height: "38px",
+        borderRadius: "12px",
+        background: active ? "rgba(255,255,255,.75)" : "rgba(243,176,140,.16)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "18px",
+        flexShrink: 0,
+      }}>
+        {emoji}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: "12px", fontWeight: 700, color: "var(--text-1)" }}>{title}</p>
+        <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--text-3)", lineHeight: 1.4 }}>{summary}</p>
+      </div>
+    </button>
+  );
+}
+
 export function CheckinPage() {
   const { setMood, addCheckin } = useAuraStore();
   const navigate = useNavigate();
@@ -71,13 +131,15 @@ export function CheckinPage() {
   const [humor, setHumor] = useState(4);
   const [energia, setEnergia] = useState(3);
   const [emotionSelected, setEmotionSelected] = useState<string | null>("radiant");
-  const [nota, setNota] = useState("");
-  const [showDetails, setShowDetails] = useState(false);
   const [sono, setSono] = useState(3);
   const [fisico, setFisico] = useState(3);
   const [social, setSocial] = useState(3);
-  const [isRecording, setIsRecording] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const [activeDetail, setActiveDetail] = useState<DetailCardKey | null>(null);
+  const [detailEnabled, setDetailEnabled] = useState<{ sono: boolean; fisico: boolean; social: boolean }>({
+    sono: false,
+    fisico: false,
+    social: false,
+  });
 
   // Ciclo menstrual
   const [showCiclo, setShowCiclo] = useState(false);
@@ -89,23 +151,24 @@ export function CheckinPage() {
   const humorFillPct = ((humor - 1) / 4) * 100;
   const energiaFillPct = ((energia - 1) / 4) * 100;
 
-  const dataHoje = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
-  }, []);
+  const dayContext = useMemo(() => getClientDayContext(), []);
 
-  // Estilo compartilhado dos botões de accordion
-  const accordionBtnStyle: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 0,
-    width: "100%",
-    textAlign: "left",
-  };
+  function toggleDetailCard(card: DetailCardKey) {
+    if (card === "ciclo") {
+      const nextActive = activeDetail === "ciclo" ? null : "ciclo";
+      setActiveDetail(nextActive);
+      setShowCiclo(nextActive === "ciclo");
+      return;
+    }
+
+    setDetailEnabled((current) => {
+      const key = card as "sono" | "fisico" | "social";
+      const shouldDisable = activeDetail === card && current[key];
+      return { ...current, [key]: shouldDisable ? false : true };
+    });
+    setActiveDetail((current) => (current === card ? null : card));
+    setShowCiclo(false);
+  }
 
   return (
     <div style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)" }}>
@@ -115,7 +178,7 @@ export function CheckinPage() {
         <div className="aura-page-header" style={{ marginBottom: "calc(var(--a) * 1.4)" }}>
           <p className="aura-page-kicker">Check-in</p>
           <h2 className="aura-page-title">Como você está hoje?</h2>
-          <p className="aura-page-subtitle">Registro de hoje, {dataHoje}</p>
+          <p className="aura-page-subtitle">{dayContext.dateWithWeekdayLabel} · {dayContext.partOfDay}</p>
         </div>
 
         {/* Slider Humor */}
@@ -153,7 +216,7 @@ export function CheckinPage() {
           <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: "10px" }}>
             Como está se sentindo?
           </p>
-          <div className="emotion-grid">
+          <div className="emotion-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
             {emotions.map((em) => (
               <button
                 type="button"
@@ -169,108 +232,60 @@ export function CheckinPage() {
           </div>
         </div>
 
-        {/* Nota livre */}
+        {/* Escuta complementar */}
         <div style={{ marginBottom: "calc(var(--a) * 1.4)" }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: "8px" }}>
-            Nota livre (opcional)
+          <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: "10px" }}>
+            Escaneie outras áreas
           </p>
-          <div style={{ position: "relative" }}>
-            <textarea
-              value={nota}
-              onChange={(e) => setNota(e.target.value)}
-              placeholder="Como foi o seu dia até agora?"
-              style={{
-                width: "100%", height: "80px", borderRadius: "6.5px",
-                border: "1.5px solid var(--warm-border-2)", padding: "13px",
-                fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "13px", color: "var(--text-1)",
-                background: "rgba(255,255,255,.68)", outline: "none", resize: "none", lineHeight: 1.6,
-                paddingRight: "48px",
-                backdropFilter: "blur(16px)",
-                boxShadow: "0 12px 24px rgba(243,176,140,.08)",
-              }}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+            <DetailCard
+              emoji="🌙"
+              title="Sono"
+              summary={detailEnabled.sono ? `${sono}/5 registrado` : "Toque para registrar"}
+              active={activeDetail === "sono"}
+              onClick={() => toggleDetailCard("sono")}
             />
-            <button
-              type="button"
-              onClick={() => {
-                const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-                if (!SR) return;
-                if (isRecording && recognitionRef.current) {
-                  recognitionRef.current.stop();
-                  setIsRecording(false);
-                  return;
-                }
-                const rec = new SR();
-                rec.lang = "pt-BR";
-                rec.continuous = false;
-                rec.interimResults = false;
-                rec.onresult = (e: any) => {
-                  const transcript = e.results[0][0].transcript;
-                  setNota(prev => (prev ? prev + " " + transcript : transcript));
-                };
-                rec.onend = () => setIsRecording(false);
-                rec.onerror = () => setIsRecording(false);
-                rec.start();
-                recognitionRef.current = rec;
-                setIsRecording(true);
-              }}
-              title={isRecording ? "Parar microfone" : "Ditado por voz"}
-              style={{
-                position: "absolute",
-                right: 12,
-                bottom: 12,
-                width: 32,
-                height: 32,
-                borderRadius: "50%",
-                border: "1px solid var(--warm-border-2)",
-                background: isRecording ? "var(--menthe)" : "rgba(255,255,255,.9)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                boxShadow: "0 2px 6px rgba(0,0,0,.08)",
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isRecording ? "#fff" : "var(--text-2)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-              </svg>
-            </button>
+            <DetailCard
+              emoji="💪"
+              title="Corpo"
+              summary={detailEnabled.fisico ? `${fisico}/5 registrado` : "Toque para registrar"}
+              active={activeDetail === "fisico"}
+              onClick={() => toggleDetailCard("fisico")}
+            />
+            <DetailCard
+              emoji="👥"
+              title="Social"
+              summary={detailEnabled.social ? `${social}/5 registrado` : "Toque para registrar"}
+              active={activeDetail === "social"}
+              onClick={() => toggleDetailCard("social")}
+            />
+            <DetailCard
+              emoji="🌸"
+              title="Ciclo menstrual"
+              summary={showCiclo ? "Painel aberto" : "Toque se quiser registrar"}
+              active={activeDetail === "ciclo"}
+              onClick={() => toggleDetailCard("ciclo")}
+            />
           </div>
-        </div>
 
-        {/* Detalhes opcionais */}
-        <div style={{ marginBottom: "calc(var(--a) * 1.4)" }}>
-          <button type="button" onClick={() => setShowDetails(v => !v)} style={accordionBtnStyle}>
-            <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", flex: 1 }}>
-              Detalhes (opcional)
-            </span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ transform: showDetails ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms" }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-          {showDetails && (
-            <div style={{ marginTop: "10px" }}>
-              <OptionalSlider label="Como foi seu sono?" emoji="🌙" value={sono} onChange={setSono} color="var(--lagune)" />
-              <OptionalSlider label="Como está seu corpo?" emoji="💪" value={fisico} onChange={setFisico} color="var(--menthe)" />
-              <OptionalSlider label="Como foi sua vida social?" emoji="👥" value={social} onChange={setSocial} color="var(--social-color)" />
+          {activeDetail === "sono" && (
+            <div style={{ marginTop: "12px" }}>
+              <OptionalSlider label="Como foi seu sono?" emoji="🌙" value={sono} onChange={(value) => { setSono(value); setDetailEnabled((current) => ({ ...current, sono: true })); }} color="var(--lagune)" />
             </div>
           )}
-        </div>
-
-        {/* Ciclo Menstrual (Opcional) */}
-        <div style={{ marginBottom: "calc(var(--a) * 1.4)" }}>
-          <button type="button" onClick={() => setShowCiclo(v => !v)} style={accordionBtnStyle}>
-            <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", flex: 1 }}>
-              🌸 Ciclo Menstrual (opcional)
-            </span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ transform: showCiclo ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 200ms" }}>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-
+          {activeDetail === "fisico" && (
+            <div style={{ marginTop: "12px" }}>
+              <OptionalSlider label="Como está seu corpo?" emoji="💪" value={fisico} onChange={(value) => { setFisico(value); setDetailEnabled((current) => ({ ...current, fisico: true })); }} color="var(--menthe)" />
+            </div>
+          )}
+          {activeDetail === "social" && (
+            <div style={{ marginTop: "12px" }}>
+              <OptionalSlider label="Como foi sua atividade social?" emoji="👥" value={social} onChange={(value) => { setSocial(value); setDetailEnabled((current) => ({ ...current, social: true })); }} color="var(--social-color)" />
+            </div>
+          )}
           {showCiclo && (
-            <div style={{ marginTop: "12px", background: "var(--nectarine-a1)", borderRadius: "10px", border: "1px solid rgba(215,137,127,.2)", padding: "14px" }}>
+            <div style={{ marginTop: "12px" }}>
+              <div style={{ background: "var(--nectarine-a1)", borderRadius: "10px", border: "1px solid rgba(215,137,127,.2)", padding: "14px" }}>
 
               {/* Está menstruada hoje? */}
               <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Está menstruada hoje?</p>
@@ -383,6 +398,7 @@ export function CheckinPage() {
                   </div>
                 </>
               )}
+              </div>
             </div>
           )}
         </div>
@@ -400,9 +416,9 @@ export function CheckinPage() {
                   humor,
                   energia,
                   emotion: emotionSelected ?? "calm",
-                  sono: showDetails ? sono : undefined,
-                  fisico: showDetails ? fisico : undefined,
-                  social: showDetails ? social : undefined,
+                  sono: detailEnabled.sono ? sono : undefined,
+                  fisico: detailEnabled.fisico ? fisico : undefined,
+                  social: detailEnabled.social ? social : undefined,
                   isFlowing: isFlowing ?? undefined,
                   flowDay: flowDay ?? undefined,
                   flowIntensity: flowIntensity ?? undefined,

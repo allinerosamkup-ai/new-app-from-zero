@@ -120,6 +120,8 @@ async function run() {
   assert.equal(result.routineSummary, 'Costuma trabalhar melhor no fim da manhã.');
   assert.equal(result.topThemes[0], 'trabalho');
   assert.equal(result.topPlannerCategories[0], 'trabalho');
+  assert.equal(result.recentSummaries[0], 'Falou sobre pressão no trabalho.');
+  assert.match(result.promptSummary, /falou sobre pressão no trabalho/i);
   assert.match(result.promptSummary, /fim da manhã/i);
 }
 

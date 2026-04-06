@@ -11,6 +11,7 @@ import {
   Plus, Mic, Trash2, Sparkles, ChevronDown, ChevronUp,
   Link, X, Zap, BrainCircuit, Inbox,
 } from "lucide-react";
+import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 import "../styles/aura-v2.css";
 
@@ -133,10 +134,7 @@ function GoalCard({
           width: 36, height: 36, borderRadius: 11, background: color.bg,
           display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
         }}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-            stroke={color.accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-          </svg>
+          <AuraIcon size={17} style={{ color: color.accent }} />
         </div>
 
         {/* Title + progress bar */}
@@ -194,7 +192,7 @@ function GoalCard({
               display: "flex", alignItems: "center", gap: 6, padding: "8px 0",
               color: "var(--nectarine)", fontSize: "calc(var(--a) * 0.83)",
             }}>
-              <BrainCircuit size={14} /> Aura está gerando próximas ações...
+              <AuraIcon size={14} /> Aura está gerando próximas ações...
             </div>
           )}
 
@@ -334,7 +332,7 @@ function GoalCard({
                 opacity: loadingBreakdown ? 0.5 : 1, fontWeight: 600,
               }}
             >
-              <Sparkles size={13} />
+              <AuraIcon size={13} />
               {loadingBreakdown ? "Gerando..." : "Aura quebrar"}
             </button>
           </div>}
@@ -656,7 +654,7 @@ export function GoalsPage() {
             size="sm"
             onClick={handleCapture}
             disabled={!captureInput.trim() || captureLoading}
-            leftIcon={captureLoading ? <BrainCircuit size={13} /> : <Zap size={13} />}
+            leftIcon={captureLoading ? <AuraIcon size={13} /> : <AuraIcon size={13} />}
             style={{ borderRadius: 12, whiteSpace: "nowrap", flexShrink: 0 }}
           >
             {captureLoading ? "..." : "Enviar"}
@@ -878,7 +876,7 @@ export function GoalsPage() {
                     <div style={{ fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)" }}>{item.text}</div>
                     {item.clarifying && (
                       <div style={{ fontSize: "calc(var(--a) * 0.8)", color: "var(--menthe)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <BrainCircuit size={12} /> Aura clarificando...
+                        <AuraIcon size={12} /> Aura clarificando...
                       </div>
                     )}
                   </div>
@@ -894,7 +892,7 @@ export function GoalsPage() {
                   size="sm"
                   onClick={() => clarifyItem(item.id)}
                   disabled={item.clarifying}
-                  leftIcon={<Sparkles size={12} />}
+                  leftIcon={<AuraIcon size={12} />}
                   style={{ width: "100%", borderRadius: 10, justifyContent: "center" }}
                 >
                   {item.clarifying ? "Clarificando..." : "Clarificar com Aura"}

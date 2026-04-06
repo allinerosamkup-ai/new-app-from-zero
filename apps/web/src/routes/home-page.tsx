@@ -8,17 +8,18 @@ import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { computeMoodCycle, computeStreak, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { getClientDayContext } from "../utils/day-context";
 import { 
   MessageSquareText, 
   LayoutDashboard, 
   Activity, 
   Target, 
-  Hexagon, 
   Timer,
   TrendingUp,
   MessageCircle,
   Plus
 } from "lucide-react";
+import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 
 const STATE_CONFIG = {
@@ -46,7 +47,7 @@ const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string; cat
   social:       { cor: "var(--social-color)", bg: "rgba(217,206,197,.10)", emoji: "🤝", category: "social" },
   descanso:     { cor: "var(--menthe)",   bg: "rgba(180,185,169,.08)",   emoji: "😴", category: "autocuidado" },
   refeicao:     { cor: "var(--nectarine)", bg: "rgba(197,165,147,.08)", emoji: "🍽️", category: "rotina" },
-  flexivel:     { cor: "var(--lagune)",   bg: "rgba(176,180,196,.08)",    emoji: "✨", category: "pessoal" },
+  flexivel:     { cor: "var(--lagune)",   bg: "rgba(176,180,196,.08)",    emoji: <AuraIcon size={13} />, category: "pessoal" },
 };
 
 function timeToMinutes(t: string) {
@@ -209,6 +210,7 @@ export function HomePage() {
   const [homeAiLoading, setHomeAiLoading] = useState(true);
   const homeMsgRan = useRef(false);
   const autoAiTasksRan = useRef(false);
+  const dayContext = useMemo(() => getClientDayContext(), []);
 
   useEffect(() => {
     if (homeMsgRan.current) return;
@@ -221,7 +223,10 @@ export function HomePage() {
             mood: state.mood,
             moodLabel: mood.label,
             taskCount: state.tasks.length,
-            hour: new Date().getHours(),
+            hour: dayContext.hour,
+            partOfDay: dayContext.partOfDay,
+            weekday: dayContext.weekday,
+            localDate: dayContext.localDate,
             moodCycleContext: cycleReport.aiContext,
           },
         });
@@ -275,6 +280,10 @@ export function HomePage() {
           mood: state.mood, 
           moodLabel: mood.label,
           moodCycleContext: cycleReport.aiContext,
+          hour: dayContext.hour,
+          partOfDay: dayContext.partOfDay,
+          weekday: dayContext.weekday,
+          localDate: dayContext.localDate,
         } 
       });
       const parsed = parseAiSuggestion<AiTask[]>(res.suggestion);
@@ -788,7 +797,7 @@ export function HomePage() {
               <Activity size={18} color="var(--atomic-tangerine)" />
             </div>
             <span className="shortcut-label">Padrões</span>
-            <span className="shortcut-sub">Ciclagem</span>
+            <span className="shortcut-sub">Harmonia</span>
           </button>
           <button className="shortcut-card" onClick={() => navigate("/goals")}>
             <div className="icon-badge" style={{ background: "rgba(var(--sweet-mint-rgb), 0.15)" }}>
@@ -796,13 +805,6 @@ export function HomePage() {
             </div>
             <span className="shortcut-label">Objetivos</span>
             <span className="shortcut-sub">Suas metas</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/harmony")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--horizon-rgb), 0.1)" }}>
-              <Hexagon size={18} color="var(--horizon)" />
-            </div>
-            <span className="shortcut-label">Harmonia</span>
-            <span className="shortcut-sub">Radar</span>
           </button>
           <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
             <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.1)" }}>
@@ -1109,7 +1111,7 @@ export function HomePage() {
               <span style={{ fontSize: "11px", color: "var(--menthe)", fontWeight: 600 }}>✓ No Planner</span>
             )}
             {agendaPhase === "idle" && (
-              <AuraButtonV2 variant="primary" size="sm" onClick={fetchAgenda}>
+              <AuraButtonV2 variant="primary" size="sm" onClick={fetchAgenda} useAuraIcon>
                 Montar com IA
               </AuraButtonV2>
             )}
@@ -1300,9 +1302,7 @@ export function HomePage() {
         <div style={{ marginTop: "calc(var(--a) * 1.2)" }}>
           <div className="home-section-row">
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
+              <AuraIcon size={13} style={{ color: "var(--nectarine)" }} />
               <span className="section-title" style={{ fontSize: "14px" }}>Sugestoes da IA</span>
             </div>
             {aiTasks.length > 0 && (

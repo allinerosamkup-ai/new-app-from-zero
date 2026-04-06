@@ -6,7 +6,7 @@ async function run() {
   const capturedMessages: Array<{ role: string; content: string }> = [];
   const queuedResponses = [
     {
-      assistantMessage: 'Vou colocar isso no planner amanhã às 14:00.',
+      assistantMessage: 'Entendi o compromisso. Revise e confirme antes de eu salvar no planner.',
       intent: 'planner_task',
       action: 'create_task',
       payload: {
@@ -15,6 +15,7 @@ async function run() {
         time: '14:00',
         category: 'saude',
       },
+      needsConfirmation: true,
       needsClarification: false,
       clarifyingQuestion: null,
     },
@@ -26,14 +27,16 @@ async function run() {
         title: 'Preparar apresentação',
         items: ['Abrir o slide atual', 'Listar os 3 tópicos principais'],
       },
+      needsConfirmation: false,
       needsClarification: false,
       clarifyingQuestion: null,
     },
     {
-      assistantMessage: 'Entendi. Isso parece mais um momento para processar o que você está sentindo.',
+      assistantMessage: 'Isso tem mais cara de diário. Vou registrar um resumo do que conversamos.',
       intent: 'reflective_handoff',
       action: 'handoff_to_journal',
       payload: {},
+      needsConfirmation: false,
       needsClarification: false,
       clarifyingQuestion: null,
     },
@@ -42,6 +45,7 @@ async function run() {
       intent: 'clarify',
       action: 'ask_clarification',
       payload: {},
+      needsConfirmation: false,
       needsClarification: true,
       clarifyingQuestion: 'Você quer transformar isso em tarefa, checklist ou meta?',
     },
@@ -74,6 +78,7 @@ async function run() {
 
   assert.equal(plannerResult.intent, 'planner_task');
   assert.equal(plannerResult.action, 'create_task');
+  assert.equal(plannerResult.needsConfirmation, true);
   assert.equal(plannerResult.needsClarification, false);
 
   const checklistResult = await AuraCommandService.interpretCommand({
@@ -83,6 +88,7 @@ async function run() {
 
   assert.equal(checklistResult.intent, 'checklist');
   assert.equal(checklistResult.action, 'create_checklist');
+  assert.equal(checklistResult.needsConfirmation, false);
 
   const reflectiveResult = await AuraCommandService.interpretCommand({
     message: 'Preciso desabafar porque hoje estou péssima',
@@ -91,6 +97,7 @@ async function run() {
 
   assert.equal(reflectiveResult.intent, 'reflective_handoff');
   assert.equal(reflectiveResult.action, 'handoff_to_journal');
+  assert.equal(reflectiveResult.needsConfirmation, false);
 
   const clarifyResult = await AuraCommandService.interpretCommand({
     message: 'Preciso resolver minha vida',
@@ -99,17 +106,19 @@ async function run() {
 
   assert.equal(clarifyResult.intent, 'clarify');
   assert.equal(clarifyResult.action, 'ask_clarification');
+  assert.equal(clarifyResult.needsConfirmation, false);
   assert.equal(clarifyResult.needsClarification, true);
   assert.match(clarifyResult.clarifyingQuestion || '', /tarefa, checklist ou meta/i);
 
   const systemPrompt = capturedMessages[0]?.content || '';
   const userPrompt = capturedMessages[1]?.content || '';
 
-  assert.match(systemPrompt, /COPILOTO OPERACIONAL/i);
+  assert.match(systemPrompt, /copiloto de vida/i);
   assert.match(userPrompt, /planner_task/i);
   assert.match(userPrompt, /checklist/i);
   assert.match(userPrompt, /reflective_handoff/i);
   assert.match(userPrompt, /ask_clarification/i);
+  assert.match(userPrompt, /needsConfirmation/i);
 }
 
 run()
