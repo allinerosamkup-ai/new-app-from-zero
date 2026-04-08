@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { Habit } from "../features/aura/types";
 import { HABIT_SUGGESTIONS, type HabitSuggestion } from "../features/aura/habit-presets";
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive } from "lucide-react";
 import { api } from "../lib/api";
@@ -69,25 +69,25 @@ type AchievementDef = {
 const ACHIEVEMENTS: AchievementDef[] = [
   {
     id: "first_habit",
-    icon: "🌱", title: "Primeiro passo", color: "var(--menthe)",
+    icon: "🌱", title: "Primeiro passo", color: "var(--accent-sage)",
     desc: "Criou seu primeiro hábito",
     check: (h) => h.length >= 1,
   },
   {
     id: "habit_trio",
-    icon: "🎯", title: "Trifeta", color: "var(--lagune)",
+    icon: "🎯", title: "Trifeta", color: "var(--accent-sky)",
     desc: "Tem 3 ou mais hábitos ativos",
     check: (h) => h.length >= 3,
   },
   {
     id: "streak_7",
-    icon: "🔥", title: "Semana de fogo", color: "var(--nectarine)",
+    icon: "🔥", title: "Semana de fogo", color: "var(--accent-peach)",
     desc: "7 dias seguidos em algum hábito",
     check: (h) => h.some((x: any) => x.bestStreak >= 7),
   },
   {
     id: "streak_14",
-    icon: "🦁", title: "Maratona", color: "var(--nectarine)",
+    icon: "🦁", title: "Maratona", color: "var(--accent-peach)",
     desc: "14 dias seguidos em algum hábito",
     check: (h) => h.some((x: any) => x.bestStreak >= 14),
   },
@@ -99,25 +99,25 @@ const ACHIEVEMENTS: AchievementDef[] = [
   },
   {
     id: "completions_50",
-    icon: "💪", title: "50 completudes", color: "var(--menthe)",
+    icon: "💪", title: "50 completudes", color: "var(--accent-sage)",
     desc: "50 conclusões acumuladas entre todos os hábitos",
     check: (h) => h.reduce((s: number, x: any) => s + x.totalCompletions, 0) >= 50,
   },
   {
     id: "completions_100",
-    icon: "💯", title: "Centenário", color: "var(--nectarine)",
+    icon: "💯", title: "Centenário", color: "var(--accent-peach)",
     desc: "100 conclusões acumuladas",
     check: (h) => h.reduce((s: number, x: any) => s + x.totalCompletions, 0) >= 100,
   },
   {
     id: "checkin_7",
-    icon: "📅", title: "Uma semana registrada", color: "var(--lagune)",
+    icon: "📅", title: "Uma semana registrada", color: "var(--accent-sky)",
     desc: "7 check-ins registrados",
     check: (_h, history) => history.length >= 7,
   },
   {
     id: "checkin_30",
-    icon: "🗓️", title: "Mês de registros", color: "var(--lagune)",
+    icon: "🗓️", title: "Mês de registros", color: "var(--accent-sky)",
     desc: "30 check-ins registrados",
     check: (_h, history) => history.length >= 30,
   },
@@ -131,12 +131,12 @@ const ACHIEVEMENTS: AchievementDef[] = [
 
 // ─── Category config ─────────────────────────────────────────────────────────
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  health:       { label: "Saúde",         color: "var(--menthe)",    bg: "rgba(150,199,179,0.14)" },
-  productivity: { label: "Produtividade", color: "var(--lagune)",    bg: "rgba(99,152,169,0.14)"  },
-  mindfulness:  { label: "Mindfulness",   color: "var(--nectarine)", bg: "rgba(215,137,127,0.14)" },
+  health:       { label: "Saúde",         color: "var(--accent-sage)",    bg: "rgba(150,199,179,0.14)" },
+  productivity: { label: "Produtividade", color: "var(--accent-sky)",    bg: "rgba(99,152,169,0.14)"  },
+  mindfulness:  { label: "Mindfulness",   color: "var(--accent-peach)", bg: "rgba(215,137,127,0.14)" },
   social:       { label: "Social",        color: "#B5A4C8",          bg: "rgba(181,164,200,0.14)" },
-  learning:     { label: "Aprendizado",   color: "var(--lagune)",    bg: "rgba(99,152,169,0.14)"  },
-  leisure:      { label: "Lazer",         color: "var(--nectarine)", bg: "rgba(215,137,127,0.14)" },
+  learning:     { label: "Aprendizado",   color: "var(--accent-sky)",    bg: "rgba(99,152,169,0.14)"  },
+  leisure:      { label: "Lazer",         color: "var(--accent-peach)", bg: "rgba(215,137,127,0.14)" },
   geral:        { label: "Geral",         color: "var(--text-3)",    bg: "rgba(150,150,150,0.10)" },
 };
 
@@ -175,7 +175,7 @@ function StreakDots({ streakCount, completedToday }: { streakCount: number; comp
               height: isToday ? 10 : 7,
               borderRadius: "50%",
               background: isFilled
-                ? "var(--nectarine)"
+                ? "var(--accent-peach)"
                 : isToday
                   ? "rgba(215,137,127,0.25)"
                   : "var(--warm-border)",
@@ -255,7 +255,7 @@ function HabitCard({
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
           <StreakDots streakCount={habit.streakCount} completedToday={completedToday} />
-          <span style={{ fontSize: 11, color: "var(--nectarine)", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
+          <span style={{ fontSize: 11, color: "var(--accent-peach)", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
             <Flame size={11} /> {habit.streakCount}
           </span>
         </div>
@@ -269,8 +269,8 @@ function HabitCard({
           width: 42,
           height: 42,
           borderRadius: "50%",
-          border: `2px solid ${completedToday ? "var(--menthe)" : "var(--warm-border)"}`,
-          background: completedToday ? "var(--menthe)" : "transparent",
+          border: `2px solid ${completedToday ? "var(--accent-sage)" : "var(--warm-border)"}`,
+          background: completedToday ? "var(--accent-sage)" : "transparent",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
@@ -452,7 +452,7 @@ function AllHabitCard({ habit, onArchive }: { habit: Habit; onArchive: () => voi
                 width: 22,
                 height: 22,
                 borderRadius: "50%",
-                background: "var(--menthe)",
+                background: "var(--accent-sage)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -496,7 +496,7 @@ function AllHabitCard({ habit, onArchive }: { habit: Habit; onArchive: () => voi
               borderRadius: 10,
               border: "1.5px solid rgba(215,137,127,0.25)",
               background: "rgba(215,137,127,0.06)",
-              color: archiving ? "var(--text-3)" : "var(--nectarine)",
+              color: archiving ? "var(--text-3)" : "var(--accent-peach)",
               fontSize: 12,
               fontWeight: 700,
               cursor: archiving ? "default" : "pointer",
@@ -601,7 +601,7 @@ function AddHabitModal({
                 onClick={() => applysuggestion(s)}
                 style={{
                   flexShrink: 0,
-                  background: title === s.title ? "var(--nectarine)" : "var(--warm-border)",
+                  background: title === s.title ? "var(--accent-peach)" : "var(--warm-border)",
                   color: title === s.title ? "#fff" : "var(--text-2)",
                   border: "none",
                   borderRadius: 20,
@@ -689,7 +689,7 @@ function AddHabitModal({
                   key={e}
                   onClick={() => { setIcon(e); setShowEmojiPicker(false); }}
                   style={{
-                    background: icon === e ? "var(--nectarine)" : "transparent",
+                    background: icon === e ? "var(--accent-peach)" : "transparent",
                     border: "none",
                     borderRadius: 8,
                     fontSize: 20,
@@ -745,9 +745,9 @@ function AddHabitModal({
                   style={{
                     padding: "6px 12px",
                     borderRadius: 20,
-                    border: `1.5px solid ${timeOfDay === key ? "var(--lagune)" : "var(--warm-border)"}`,
+                    border: `1.5px solid ${timeOfDay === key ? "var(--accent-sky)" : "var(--warm-border)"}`,
                     background: timeOfDay === key ? "rgba(99,152,169,0.12)" : "transparent",
-                    color: timeOfDay === key ? "var(--lagune)" : "var(--text-3)",
+                    color: timeOfDay === key ? "var(--accent-sky)" : "var(--text-3)",
                     fontSize: 12,
                     fontWeight: 700,
                     cursor: "pointer",
@@ -876,7 +876,7 @@ export function HabitsPage() {
               width: 36,
               height: 36,
               borderRadius: "50%",
-              background: "var(--nectarine)",
+              background: "var(--accent-peach)",
               border: "none",
               cursor: "pointer",
               display: "flex",
@@ -903,7 +903,7 @@ export function HabitsPage() {
           >
             <div style={{ fontSize: 22 }}>✅</div>
             <div>
-              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "var(--menthe)" }}>
+              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "var(--accent-sage)" }}>
                 {completedToday}/{todayHabits.length}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0, fontWeight: 600, textTransform: "uppercase" }}>
@@ -922,9 +922,9 @@ export function HabitsPage() {
               gap: 12,
             }}
           >
-            <Flame size={22} color="var(--nectarine)" />
+            <Flame size={22} color="var(--accent-peach)" />
             <div>
-              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "var(--nectarine)" }}>
+              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "var(--accent-peach)" }}>
                 {bestStreak}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0, fontWeight: 600, textTransform: "uppercase" }}>
@@ -953,7 +953,7 @@ export function HabitsPage() {
                 flex: 1,
                 padding: "10px 0",
                 border: "none",
-                background: tab === t ? "var(--nectarine)" : "transparent",
+                background: tab === t ? "var(--accent-peach)" : "transparent",
                 color: tab === t ? "#fff" : "var(--text-3)",
                 fontSize: 13,
                 fontWeight: 700,
@@ -1013,7 +1013,7 @@ export function HabitsPage() {
                 {/* Done */}
                 {doneToday.length > 0 && (
                   <div>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--menthe)", textTransform: "uppercase", margin: "0 0 10px" }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-sage)", textTransform: "uppercase", margin: "0 0 10px" }}>
                       Concluídos hoje ({doneToday.length})
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1042,7 +1042,7 @@ export function HabitsPage() {
                     }}
                   >
                     <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
-                    <p style={{ fontWeight: 800, color: "var(--menthe)", margin: "0 0 4px", fontSize: 15 }}>
+                    <p style={{ fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 4px", fontSize: 15 }}>
                       Todos os hábitos do dia!
                     </p>
                     <p style={{ color: "var(--text-3)", fontSize: 12, margin: 0 }}>
@@ -1129,7 +1129,7 @@ export function HabitsPage() {
                     <div style={{
                       width: `${(unlockedCount / ACHIEVEMENTS.length) * 100}%`,
                       height: "100%", borderRadius: 999,
-                      background: "linear-gradient(90deg, var(--nectarine), var(--menthe))",
+                      background: "linear-gradient(90deg, var(--accent-peach), var(--accent-sage))",
                       transition: "width 0.6s ease",
                     }} />
                   </div>
@@ -1205,3 +1205,4 @@ export function HabitsPage() {
     </div>
   );
 }
+

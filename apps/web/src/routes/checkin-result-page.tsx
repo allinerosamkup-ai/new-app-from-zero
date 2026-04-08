@@ -1,4 +1,4 @@
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // CheckinResult Page v4 — Aura auto-responde ao check-in + fluxo "ajustar meu dia"
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -30,7 +30,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     tip: "Aproveite o pico para suas tarefas mais importantes antes das 14h.",
     chipLabel: "Focada",
     bg: "linear-gradient(180deg, #F5E9E7 0%, #FAF2F0 50%, #FAF6F2 100%)",
-    accent: "var(--nectarine)",
+    accent: "var(--accent-peach)",
   },
   equilibrada: {
     emoji: "😌",
@@ -39,7 +39,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     tip: "Comece com tarefas leves e vá aumentando o ritmo gradualmente.",
     chipLabel: "Estável",
     bg: "linear-gradient(180deg, #E6F2EC 0%, #EDF6F2 50%, #FAF6F2 100%)",
-    accent: "var(--menthe)",
+    accent: "var(--accent-sage)",
   },
   tensa: {
     emoji: "😰",
@@ -48,7 +48,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     tip: "Faça pausas curtas e evite decisões importantes agora.",
     chipLabel: "Tensa",
     bg: "linear-gradient(180deg, #F3E8E5 0%, #FAF0EE 50%, #FAF6F2 100%)",
-    accent: "var(--nectarine)",
+    accent: "var(--accent-peach)",
   },
   cansada: {
     emoji: "😴",
@@ -57,7 +57,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     tip: "Se possível, inclua 20 min de descanso no seu planner hoje.",
     chipLabel: "Cansada",
     bg: "linear-gradient(180deg, #E6F2EC 0%, #EDF6F2 50%, #FAF6F2 100%)",
-    accent: "var(--menthe)",
+    accent: "var(--accent-sage)",
   },
   sensivel: {
     emoji: "🌸",
@@ -66,7 +66,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     tip: "Priorize autocuidado e evite decisões importantes agora.",
     chipLabel: "Delicado",
     bg: "linear-gradient(180deg, #F3E8E5 0%, #FAF0EE 50%, #FAF6F2 100%)",
-    accent: "var(--nectarine)",
+    accent: "var(--accent-peach)",
   },
   sobrecarregada: {
     emoji: "😤",
@@ -75,7 +75,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     tip: "Cancele o que puder e reserve espaço para recuperação.",
     chipLabel: "Intenso",
     bg: "linear-gradient(180deg, #F0E4E2 0%, #F7EEEC 50%, #FAF6F2 100%)",
-    accent: "var(--nectarine)",
+    accent: "var(--accent-peach)",
   },
 };
 
@@ -84,10 +84,10 @@ type AiTask = { title: string; category: string; time: string; discarded: boolea
 type AiPhase = "idle" | "loading" | "preview" | "done";
 
 const CAT_COLOR: Record<string, string> = {
-  trabalho: "var(--lagune)",
-  saude: "var(--menthe)",
-  autocuidado: "var(--menthe)",
-  rotina: "var(--nectarine)",
+  trabalho: "var(--accent-sky)",
+  saude: "var(--accent-sage)",
+  autocuidado: "var(--accent-sage)",
+  rotina: "var(--accent-peach)",
   social: "var(--social-color)",
 };
 
@@ -260,7 +260,7 @@ export function CheckinResultPage() {
   }
 
   const acceptedCount = tasks.filter((t) => !t.discarded).length;
-  const isMenuthe = v.accent === "var(--menthe)";
+  const isMenuthe = v.accent === "var(--accent-sage)";
 
   return (
     <div className="result-shell" style={{ background: v.bg }}>
@@ -290,7 +290,7 @@ export function CheckinResultPage() {
               Aura diz
             </p>
             {!auraMsgLoading && auraMsg && (
-              <span style={{ fontSize: 9, background: isMenuthe ? "rgba(180,185,169,.15)" : "var(--nectarine-a3)", color: v.accent, borderRadius: 999, padding: "2px 6px", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
+              <span style={{ fontSize: 9, background: isMenuthe ? "rgba(180,185,169,.15)" : "var(--accent-peach-a3)", color: v.accent, borderRadius: 999, padding: "2px 6px", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
                 <AuraIcon size={8} /> IA
               </span>
             )}
@@ -309,7 +309,7 @@ export function CheckinResultPage() {
               <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.65, fontStyle: "italic", marginBottom: 10 }}>
                 {auraMsg.message}
               </p>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--nectarine-a3)", border: `1px solid ${v.accent}30` }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)", border: `1px solid ${v.accent}30` }}>
                 <span style={{ fontSize: 16, flexShrink: 0 }}>{auraMsg.suggestionEmoji}</span>
                 <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{auraMsg.suggestion}</p>
               </div>
@@ -339,7 +339,7 @@ export function CheckinResultPage() {
         {phase === "idle" && (
           <AuraButtonV2
             useAuraIcon
-            className={`btn btn-full ${isMenuthe ? "btn-menthe" : "btn-primary"}`}
+            className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
             onClick={fetchDayTasks}
             style={{ marginBottom: 10 }}
           >
@@ -374,13 +374,13 @@ export function CheckinResultPage() {
                 </p>
               )}
               {phase === "done" && (
-                <span style={{ fontSize: 11, color: "var(--menthe)", fontWeight: 700 }}>✓ Salvo no Planner</span>
+                <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 700 }}>✓ Salvo no Planner</span>
               )}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: phase === "preview" ? 14 : 0 }}>
               {tasks.map((task, idx) => {
-                const cor = CAT_COLOR[task.category] ?? "var(--nectarine)";
+                const cor = CAT_COLOR[task.category] ?? "var(--accent-peach)";
                 return (
                   <div key={idx} className="result-task-card" style={{
                     padding: "10px 12px", borderRadius: 10,
@@ -454,7 +454,7 @@ export function CheckinResultPage() {
                   Cancelar
                 </AuraButtonV2>
                 <AuraButtonV2
-                  className={`btn ${isMenuthe ? "btn-menthe" : "btn-primary"}`}
+                  className={`btn ${isMenuthe ? "btn-sage" : "btn-primary"}`}
                   style={{ flex: 2 }}
                   onClick={confirmTasks}
                   disabled={acceptedCount === 0 || savingTasks}
@@ -505,7 +505,7 @@ export function CheckinResultPage() {
             </AuraButtonV2>
           )}
           <AuraButtonV2
-            className={`btn btn-full ${isMenuthe ? "btn-menthe" : "btn-primary"}`}
+            className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
             onClick={() => navigate("/home")}
           >
             Ir para o inicio
@@ -516,3 +516,4 @@ export function CheckinResultPage() {
     </div>
   );
 }
+

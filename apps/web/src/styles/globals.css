@@ -16,8 +16,8 @@
   --warm-surface:     #FFFFFF;
 
   /* ──── Legacy Remapping (Safety Net) ──── */
-  --nectarine:        var(--atomic-tangerine);
-  --nectarine-soft:   rgba(247, 158, 112, 0.15);
+  --accent-peach:        var(--atomic-tangerine);
+  --accent-peach-soft:   rgba(247, 158, 112, 0.15);
   --rose-soft:        #F9D0CD;
   --sage-soft:        #DCE9DF;
   --lavender-soft:    #E7DEF6;
@@ -314,7 +314,7 @@ button {
 
 .aura-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--nectarine-soft);
+  box-shadow: 0 0 0 3px var(--accent-peach-soft);
 }
 
 .aura-button--primary {
@@ -370,7 +370,7 @@ button {
 
 .aura-insight {
   padding: 16px;
-  border-left: 4px solid var(--nectarine);
+  border-left: 4px solid var(--accent-peach);
   background: rgba(255, 247, 240, 0.85);
   border-radius: 14px;
 }
@@ -385,7 +385,7 @@ button {
 .aura-step {
   width: 100%;
   border: 1px solid var(--warm-border);
-  border-left: 4px solid var(--nectarine);
+  border-left: 4px solid var(--accent-peach);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.7);
   padding: 14px 16px;
@@ -491,3 +491,4 @@ button {
     grid-template-columns: 1fr;
   }
 }
+

@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
    Aura Design System — Mood Energy
-   Extraído de mockup-aura-v2.html
+   Extraído de editorial reference archive
    Fonte: https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap
    ═══════════════════════════════════════════════════════════ */
 
@@ -47,33 +47,33 @@
 
   --a: 13px;
 
-  /* ──── Nectarine Palette (Accent primário — rosa-terracota) ──── */
-  --nectarine:     #F4BEA8;
-  --nectarine-10:  #E8A98F;
-  --nectarine-11:  #A86855;
-  --nectarine-a1:  rgba(244,190,168,.08);
-  --nectarine-a3:  rgba(244,190,168,.16);
-  --nectarine-a5:  rgba(244,190,168,.28);
+  /* ──── Peach Accent Palette (Accent primário — rosa-terracota) ──── */
+  --accent-peach:     #F4BEA8;
+  --accent-peach-strong:  #E8A98F;
+  --accent-peach-ink:  #A86855;
+  --accent-peach-a1:  rgba(244,190,168,.08);
+  --accent-peach-a3:  rgba(244,190,168,.16);
+  --accent-peach-a5:  rgba(244,190,168,.28);
 
-  /* ──── Menthe (verde — Humor/Saúde/Autocuidado) ──── */
-  --menthe:        #BFDCCB;
-  --menthe-11:     #50705B;
+  /* ──── Sage Accent (verde — Humor/Saúde/Autocuidado) ──── */
+  --accent-sage:        #BFDCCB;
+  --accent-sage-ink:     #50705B;
 
-  /* ──── Lagune (azul — Energia/Trabalho/Foco) ──── */
-  --lagune:        #BEE6F3;
-  --lagune-11:     #4E7E93;
+  /* ──── Sky Accent (azul — Energia/Trabalho/Foco) ──── */
+  --accent-sky:        #BEE6F3;
+  --accent-sky-ink:     #4E7E93;
 
   /* ──── Social (bege neutro) ──── */
   --social-color:  #E5DBF7;
   --social-text:   #74628B;
 
   /* ──── Categorias semânticas ──── */
-  --cat-trabalho:    var(--lagune);
-  --cat-saude:       var(--menthe);
-  --cat-autocuidado: var(--menthe);
+  --cat-trabalho:    var(--accent-sky);
+  --cat-saude:       var(--accent-sage);
+  --cat-autocuidado: var(--accent-sage);
   --cat-social:      var(--social-color);
-  --cat-rotina:      var(--nectarine);
-  --cat-pessoal:     var(--nectarine);
+  --cat-rotina:      var(--accent-peach);
+  --cat-pessoal:     var(--accent-peach);
 
   /* ──── Raios de borda padronizados ──── */
   --radius-xs:  6.5px;
@@ -98,7 +98,7 @@ body {
   letter-spacing: .16em; text-transform: uppercase;
   color: #9A8A87; text-align: center;
 }
-.page-title span { color: var(--nectarine); }
+.page-title span { color: var(--accent-peach); }
 
 /* ─── Phone frames (mockup layout) ─── */
 .phones-row {
@@ -173,7 +173,7 @@ body {
   font-weight: 700;
   letter-spacing: .14em;
   text-transform: uppercase;
-  color: var(--nectarine);
+  color: var(--accent-peach);
   margin: 0 0 4px;
 }
 
@@ -206,7 +206,7 @@ body {
 
 .aura-muted-link {
   font-size: 12px;
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   font-family: 'Plus Jakarta Sans', sans-serif;
   text-decoration: none;
 }
@@ -347,7 +347,7 @@ body {
 /* Primary — Coastal Mist Gradient (Premium & Airy) */
 .btn-primary {
   background: linear-gradient(135deg, #F4BEA8 0%, #F7CFC4 100%);
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   border: 1px solid rgba(244,190,168,.55);
   box-shadow: 0 10px 20px rgba(244,190,168,.22), 0 1px 3px rgba(17,24,39,.05);
   font-weight: 700;
@@ -363,10 +363,10 @@ body {
   box-shadow: 0 1px 4px rgba(161,165,174,.2);
 }
 
-/* Secondary — outline pill nectarine */
+/* Secondary — outline pill peach accent */
 .btn-secondary {
   background: rgba(244,190,168,.12);
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   border-color: rgba(244,190,168,.32);
 }
 .btn-secondary:hover:not(:disabled) { background: rgba(244,190,168,.18); border-color: rgba(244,190,168,.5); }
@@ -385,24 +385,24 @@ body {
 }
 .btn-ghost:active:not(:disabled) { background: rgba(198,200,212,.18); }
 
-/* Menthe (saúde / autocuidado) */
-.btn-menthe {
+/* Sage Accent (saúde / autocuidado) */
+.btn-sage {
   background: var(--sweet-mint);
   color: #fff;
   border-color: transparent;
   box-shadow: 0 2px 10px rgba(174,205,136,.3);
 }
-.btn-menthe:hover:not(:disabled) { filter: brightness(0.95); transform: translateY(-1px); }
-.btn-menthe:active:not(:disabled) { filter: brightness(0.88); transform: translateY(0); box-shadow: none; }
+.btn-sage:hover:not(:disabled) { filter: brightness(0.95); transform: translateY(-1px); }
+.btn-sage:active:not(:disabled) { filter: brightness(0.88); transform: translateY(0); box-shadow: none; }
 
-/* Lagune (energia / foco) */
-.btn-lagune {
+/* Sky Accent (energia / foco) */
+.btn-sky {
   background: var(--horizon);
   color: #fff;
   border-color: transparent;
   box-shadow: 0 2px 10px rgba(137,168,178,.3);
 }
-.btn-lagune:hover:not(:disabled) { filter: brightness(0.95); transform: translateY(-1px); }
+.btn-sky:hover:not(:disabled) { filter: brightness(0.95); transform: translateY(-1px); }
 
 /* ── Pill modifier — border-radius 999px (Web Button Collection ref) ── */
 .btn-pill { border-radius: 999px !important; }
@@ -425,18 +425,18 @@ body {
   transform: translateY(0);
   box-shadow: none;
 }
-.btn-menthe-gradient {
-  background: linear-gradient(135deg, var(--menthe) 0%, #b8b9aa 100%);
+.btn-sage-gradient {
+  background: linear-gradient(135deg, var(--accent-sage) 0%, #b8b9aa 100%);
   color: #fff;
   border-color: transparent;
   box-shadow: 0 2px 10px rgba(203,204,190,.38);
 }
-.btn-menthe-gradient:hover:not(:disabled) { filter: brightness(0.95); transform: translateY(-1px); }
+.btn-sage-gradient:hover:not(:disabled) { filter: brightness(0.95); transform: translateY(-1px); }
 
 /* ── Soft / Neumorphic (Neumorphic UI Kit ref, recolorido) ── */
 .btn-soft {
   background: var(--warm-bg);
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   border-color: transparent;
   box-shadow:
     3px 3px 8px rgba(161,165,174,.18),
@@ -490,20 +490,20 @@ body {
   content: '';
   position: absolute; right: 0; top: 0; bottom: 0;
   width: 5px;
-  background: var(--nectarine);
+  background: var(--accent-peach);
 }
-.btn-info-row.accent-menthe::after  { background: var(--menthe); }
-.btn-info-row.accent-lagune::after  { background: var(--lagune); }
-.btn-info-row.accent-peche::after   { background: var(--peche); }
+.btn-info-row.accent-sage::after  { background: var(--accent-sage); }
+.btn-info-row.accent-sky::after  { background: var(--accent-sky); }
+.btn-info-row.accent-butter::after   { background: var(--accent-butter); }
 .btn-info-row:hover { transform: translateY(-1px); box-shadow: var(--shadow-3d-hover), var(--shadow-inset-soft); }
 .btn-info-row:active { transform: translateY(0); box-shadow: var(--shadow-3d-active); }
 .btn-info-row .info-num {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 18px; font-weight: 800;
-  color: var(--nectarine); line-height: 1; min-width: 28px;
+  color: var(--accent-peach); line-height: 1; min-width: 28px;
 }
-.btn-info-row.accent-menthe .info-num { color: var(--menthe); }
-.btn-info-row.accent-lagune .info-num { color: var(--lagune); }
+.btn-info-row.accent-sage .info-num { color: var(--accent-sage); }
+.btn-info-row.accent-sky .info-num { color: var(--accent-sky); }
 .btn-info-row .info-divider {
   width: 1px; height: 28px;
   background: var(--warm-border-2); flex-shrink: 0;
@@ -517,7 +517,7 @@ body {
 .aura-btn-primary {
   width: 100%; min-height: calc(var(--a) * 4);
   background: linear-gradient(135deg, #F4BEA8 0%, #F7CFC4 100%);
-  color: var(--nectarine-11); border: 1px solid rgba(244,190,168,.55);
+  color: var(--accent-peach-ink); border: 1px solid rgba(244,190,168,.55);
   border-radius: calc(var(--a) * 0.5); font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 14px; font-weight: 700; letter-spacing: .01em; cursor: pointer;
   box-shadow: 0 10px 20px rgba(244,190,168,.22), 0 1px 3px rgba(17,24,39,.05);
@@ -620,7 +620,7 @@ body {
 }
 .aura-tab.active {
   background: linear-gradient(135deg, #F4BEA8 0%, #F7CFC4 100%);
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   box-shadow: 0 8px 16px rgba(244,190,168,.22);
 }
 
@@ -669,14 +669,14 @@ body {
 .auth-hero-eyebrow {
   font-size: 10px; font-weight: 800;
   letter-spacing: .18em; text-transform: uppercase;
-  color: var(--lagune-11);
+  color: var(--accent-sky-ink);
   margin-bottom: 10px;
   display: flex; align-items: center; gap: 5px;
 }
 .auth-hero-eyebrow::before {
   content: ''; display: inline-block;
   width: 5px; height: 5px; border-radius: 50%;
-  background: var(--lagune);
+  background: var(--accent-sky);
 }
 .auth-hero h1 {
   font-family: 'Plus Jakarta Sans', sans-serif;
@@ -709,7 +709,7 @@ body {
 }
 .home-header-eyebrow {
   font-size: 12px; font-weight: 500;
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   margin-bottom: 2px;
   position: relative;
 }
@@ -764,11 +764,11 @@ body {
   width: 100%;
   margin-top: 12px;
   height: 38px;
-  background: var(--nectarine-a3);
-  border: 1.5px solid var(--nectarine-a5);
+  background: var(--accent-peach-a3);
+  border: 1.5px solid var(--accent-peach-a5);
   border-radius: 999px;
   font-size: 12px; font-weight: 600;
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   display: flex; align-items: center; justify-content: center; gap: 6px;
   cursor: pointer;
   transition: transform 200ms, background 200ms;
@@ -914,7 +914,7 @@ body {
 
 .home-cycle-warning-text {
   font-size: 11px;
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   margin: 0;
 }
 
@@ -1153,12 +1153,12 @@ body {
 .checkin-slider-label .title { font-size: 13px; font-weight: 600; color: var(--text-1); }
 .checkin-slider-label .val {
   font-size: 15px; font-weight: 800;
-  color: var(--nectarine);
+  color: var(--accent-peach);
   font-family: 'Plus Jakarta Sans', sans-serif;
 }
 .slider-track {
   width: 100%; height: 6px;
-  background: var(--nectarine-a3);
+  background: var(--accent-peach-a3);
   border-radius: 999px;
   position: relative;
 }
@@ -1169,7 +1169,7 @@ body {
 .slider-thumb {
   width: 20px; height: 20px;
   background: #fff;
-  border: 2px solid var(--nectarine-10);
+  border: 2px solid var(--accent-peach-strong);
   border-radius: 50%;
   position: absolute; top: 50%; transform: translate(-50%, -50%);
   box-shadow: 0 2px 8px rgba(161,165,174,.25);
@@ -1194,8 +1194,8 @@ body {
 }
 .emotion-chip.active {
   border-color: rgba(255,255,255,0.4);
-  background: var(--nectarine-a3);
-  color: var(--nectarine-11);
+  background: var(--accent-peach-a3);
+  color: var(--accent-peach-ink);
   box-shadow: var(--shadow-3d-active);
 }
 .emotion-chip .emoji { font-size: 16px; display: block; margin-bottom: 2px; }
@@ -1280,7 +1280,7 @@ body {
   background: rgba(255,255,255,.98);
   border: 1px solid rgba(17,24,39,.05);
   border-left-width: 4px;
-  border-left-color: var(--nectarine-11);
+  border-left-color: var(--accent-peach-ink);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow-3d);
@@ -1391,7 +1391,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   content: ''; width: 10px; height: 10px; border-radius: 3px;
 }
 .compare-tag.before::before { background: #c0b0aa; }
-.compare-tag.after::before  { background: var(--nectarine); }
+.compare-tag.after::before  { background: var(--accent-peach); }
 
 /* ═══════════════════════════════════════════════════════════
    SCREEN: HARMONY PAGE
@@ -1402,7 +1402,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .harmony-title {
   font-size: 20px;
   font-weight: 700;
-  color: var(--nectarine);
+  color: var(--accent-peach);
   margin-bottom: 2px;
 }
 .harmony-subtitle {
@@ -1452,7 +1452,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .harmony-overall-pct {
   font-size: 40px;
   font-weight: 800;
-  color: var(--nectarine);
+  color: var(--accent-peach);
   line-height: 1;
 }
 .harmony-overall-label {
@@ -1511,7 +1511,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   font-size: 34px;
   line-height: 1;
   font-weight: 800;
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
 }
 
 .harmony-label {
@@ -1555,7 +1555,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   text-align: center;
   font-size: 12px;
   font-weight: 600;
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
   cursor: pointer;
 }
 
@@ -1601,7 +1601,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .harmony-dim-value {
   font-size: 13px;
   font-weight: 800;
-  color: var(--nectarine-11);
+  color: var(--accent-peach-ink);
 }
 
 .harmony-progress-track {
@@ -1700,12 +1700,12 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 }
 
 .insights-bar-humor {
-  background: var(--menthe);
+  background: var(--accent-sage);
   border-radius: 4px 4px 0 0;
 }
 
 .insights-bar-energia {
-  background: var(--nectarine);
+  background: var(--accent-peach);
   border-radius: 0 0 3px 3px;
 }
 
@@ -1751,12 +1751,12 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 }
 
 .insights-legend-dot--humor {
-  background: var(--menthe);
+  background: var(--accent-sage);
   opacity: .6;
 }
 
 .insights-legend-dot--energia {
-  background: var(--nectarine);
+  background: var(--accent-peach);
   opacity: .5;
 }
 
@@ -1833,7 +1833,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   height: 18px;
   border-radius: 999px;
   border: 2px solid rgba(243,176,140,.22);
-  border-top-color: var(--nectarine);
+  border-top-color: var(--accent-peach);
   animation: aura-spin 1s linear infinite;
 }
 
@@ -1959,7 +1959,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   height: 18px;
   border-radius: 999px;
   border: 2px solid rgba(243,176,140,.22);
-  border-top-color: var(--nectarine);
+  border-top-color: var(--accent-peach);
   animation: aura-spin 1s linear infinite;
 }
 
@@ -2092,3 +2092,4 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255,255,255,.78);
 }
+

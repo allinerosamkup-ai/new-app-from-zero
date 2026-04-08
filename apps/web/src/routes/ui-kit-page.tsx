@@ -1,7 +1,7 @@
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 export function UIKitPage() {
   return (
-    <div className="aura-v2-container" style={{ padding: "80px 20px 100px", minHeight: "100vh" }}>
+    <div className="editorial-container" style={{ padding: "80px 20px 100px", minHeight: "100vh" }}>
       <h1 style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-1)", marginBottom: "32px", textAlign: "center" }}>
         New UI Kit Showcase
       </h1>
@@ -62,7 +62,7 @@ export function UIKitPage() {
                   <span className="ui-info-desc">{item.desc}</span>
                </div>
                <div className="ui-info-action">
-                 <AuraButtonV2 style={{ border: "1px solid var(--warm-border-2)", background: "transparent", width: 28, height: 28, borderRadius: "50%", color: "var(--nectarine)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                 <AuraButtonV2 style={{ border: "1px solid var(--warm-border-2)", background: "transparent", width: 28, height: 28, borderRadius: "50%", color: "var(--accent-peach)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                    +
                  </AuraButtonV2>
                </div>
@@ -74,3 +74,4 @@ export function UIKitPage() {
     </div>
   );
 }
+

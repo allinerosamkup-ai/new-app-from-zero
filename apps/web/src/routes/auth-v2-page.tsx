@@ -1,4 +1,4 @@
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import React, { useState } from 'react';
 import { Mail, Lock, Eye, User, LogIn, UserPlus } from 'lucide-react';
 

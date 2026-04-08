@@ -3,11 +3,11 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { MoodOption } from "../features/aura/types";
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { getClientDayContext } from "../utils/day-context";
 import { ChevronLeft, Check } from "lucide-react";
 import "../styles/aura.css";
-import "../styles/aura-v2.css";
+import "../styles/editorial.css";
 
 // ─── Slider auxiliar ──────────────────────────────────────────────────────────
 function ScrubSlider({
@@ -179,8 +179,8 @@ function DetailCard({ emoji, title, summary, active, onClick }: {
         width: "100%",
         minHeight: "74px",
         borderRadius: "14px",
-        border: `1.5px solid ${active ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-        background: active ? "var(--nectarine-a3)" : "rgba(255,255,255,.72)",
+        border: `1.5px solid ${active ? "var(--accent-peach)" : "var(--warm-border-2)"}`,
+        background: active ? "var(--accent-peach-a3)" : "rgba(255,255,255,.72)",
         padding: "12px",
         display: "flex",
         alignItems: "center",
@@ -352,9 +352,9 @@ export function CheckinPage() {
                   height: 22,
                   borderRadius: 11,
                   background: isDone
-                    ? "var(--menthe)"
+                    ? "var(--accent-sage)"
                     : isActive
-                      ? "var(--nectarine)"
+                      ? "var(--accent-peach)"
                       : "var(--warm-border)",
                   display: "flex",
                   alignItems: "center",
@@ -372,7 +372,7 @@ export function CheckinPage() {
                     flex: 1,
                     height: 2,
                     marginLeft: 6,
-                    background: isDone ? "var(--menthe)" : "var(--warm-border)",
+                    background: isDone ? "var(--accent-sage)" : "var(--warm-border)",
                     borderRadius: 1,
                     transition: "background 0.3s ease",
                   }} />
@@ -417,8 +417,8 @@ export function CheckinPage() {
           {/* STEP 1: Humor + Energia */}
           {wizardStep === 1 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <ScrubSlider label="Humor" emoji="😊" value={humor} onChange={setHumor} color="var(--nectarine)" />
-              <ScrubSlider label="Energia" emoji="⚡" value={energia} onChange={setEnergia} color="var(--lagune)" />
+              <ScrubSlider label="Humor" emoji="😊" value={humor} onChange={setHumor} color="var(--accent-peach)" />
+              <ScrubSlider label="Energia" emoji="⚡" value={energia} onChange={setEnergia} color="var(--accent-sky)" />
 
               {/* Visual summary */}
               <div style={{
@@ -428,8 +428,8 @@ export function CheckinPage() {
                 gap: 10,
               }}>
                 {[
-                  { label: "Humor", value: humor, color: "var(--nectarine)", emoji: getMoodEmoji(humor) },
-                  { label: "Energia", value: energia, color: "var(--lagune)", emoji: getEnergyEmoji(energia) },
+                  { label: "Humor", value: humor, color: "var(--accent-peach)", emoji: getMoodEmoji(humor) },
+                  { label: "Energia", value: energia, color: "var(--accent-sky)", emoji: getEnergyEmoji(energia) },
                 ].map((item) => (
                   <div key={item.label} style={{
                     padding: "14px 16px",
@@ -469,15 +469,15 @@ export function CheckinPage() {
                   marginTop: 16,
                   padding: "12px 16px",
                   borderRadius: 14,
-                  background: "var(--nectarine-a3)",
-                  border: "1.5px solid var(--nectarine)",
+                  background: "var(--accent-peach-a3)",
+                  border: "1.5px solid var(--accent-peach)",
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
                 }}>
                   <span style={{ fontSize: 22 }}>{emotions.find(e => e.id === emotionSelected)?.emoji}</span>
                   <div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--nectarine-11)" }}>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--accent-peach-ink)" }}>
                       {emotions.find(e => e.id === emotionSelected)?.label}
                     </p>
                     <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>selecionada</p>
@@ -508,9 +508,9 @@ export function CheckinPage() {
                         gap: "5px",
                         padding: "8px 13px",
                         borderRadius: "20px",
-                        border: `1.5px solid ${isSelected ? "var(--menthe)" : "var(--warm-border-2)"}`,
+                        border: `1.5px solid ${isSelected ? "var(--accent-sage)" : "var(--warm-border-2)"}`,
                         background: isSelected ? "rgba(150,199,179,0.14)" : "transparent",
-                        color: isSelected ? "var(--menthe)" : "var(--text-3)",
+                        color: isSelected ? "var(--accent-sage)" : "var(--text-3)",
                         fontSize: "13px",
                         fontWeight: 600,
                         cursor: "pointer",
@@ -525,7 +525,7 @@ export function CheckinPage() {
                 })}
               </div>
               {selectedFactors.length > 0 && (
-                <p style={{ marginTop: 14, fontSize: 12, color: "var(--menthe)", fontWeight: 700 }}>
+                <p style={{ marginTop: 14, fontSize: 12, color: "var(--accent-sage)", fontWeight: 700 }}>
                   {selectedFactors.length} fator{selectedFactors.length > 1 ? "es" : ""} selecionado{selectedFactors.length > 1 ? "s" : ""}
                 </p>
               )}
@@ -564,14 +564,14 @@ export function CheckinPage() {
                   <div style={{ marginTop: "12px" }}>
                     <OptionalSlider label="Como foi seu sono?" emoji="🌙" value={sono}
                       onChange={(v) => { setSono(v); setDetailEnabled((c) => ({ ...c, sono: true })); }}
-                      color="var(--lagune)" />
+                      color="var(--accent-sky)" />
                   </div>
                 )}
                 {activeDetail === "fisico" && (
                   <div style={{ marginTop: "12px" }}>
                     <OptionalSlider label="Como está seu corpo?" emoji="💪" value={fisico}
                       onChange={(v) => { setFisico(v); setDetailEnabled((c) => ({ ...c, fisico: true })); }}
-                      color="var(--menthe)" />
+                      color="var(--accent-sage)" />
                   </div>
                 )}
                 {activeDetail === "social" && (
@@ -583,17 +583,17 @@ export function CheckinPage() {
                 )}
                 {showCiclo && (
                   <div style={{ marginTop: "12px" }}>
-                    <div style={{ background: "var(--nectarine-a1)", borderRadius: "10px", border: "1px solid rgba(215,137,127,.2)", padding: "14px" }}>
-                      <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Está menstruada hoje?</p>
+                    <div style={{ background: "var(--accent-peach-a1)", borderRadius: "10px", border: "1px solid rgba(215,137,127,.2)", padding: "14px" }}>
+                      <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Está menstruada hoje?</p>
                       <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
                         {[{ label: "Sim", value: true }, { label: "Não", value: false }].map(opt => (
                           <button type="button" key={String(opt.value)}
                             onClick={() => { setIsFlowing(opt.value); if (!opt.value) { setFlowDay(null); setFlowIntensity(null); setSymptomLvls({}); } }}
                             style={{
                               flex: 1, height: "36px", borderRadius: "999px",
-                              border: `1.5px solid ${isFlowing === opt.value ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                              background: isFlowing === opt.value ? "var(--nectarine-a3)" : "transparent",
-                              color: isFlowing === opt.value ? "var(--nectarine-11)" : "var(--text-3)",
+                              border: `1.5px solid ${isFlowing === opt.value ? "var(--accent-peach)" : "var(--warm-border-2)"}`,
+                              background: isFlowing === opt.value ? "var(--accent-peach-a3)" : "transparent",
+                              color: isFlowing === opt.value ? "var(--accent-peach-ink)" : "var(--text-3)",
                               fontWeight: 700, fontSize: "13px", cursor: "pointer",
                             }}
                           >
@@ -603,21 +603,21 @@ export function CheckinPage() {
                       </div>
                       {isFlowing && (
                         <>
-                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Qual dia do fluxo?</p>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Qual dia do fluxo?</p>
                           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
                             {[1,2,3,4,5,6,7].map(d => (
                               <button type="button" key={d} onClick={() => setFlowDay(d)}
                                 style={{
                                   width: "38px", height: "38px", borderRadius: "50%",
-                                  border: `1.5px solid ${flowDay === d ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                                  background: flowDay === d ? "var(--nectarine)" : "transparent",
+                                  border: `1.5px solid ${flowDay === d ? "var(--accent-peach)" : "var(--warm-border-2)"}`,
+                                  background: flowDay === d ? "var(--accent-peach)" : "transparent",
                                   color: flowDay === d ? "#fff" : "var(--text-3)",
                                   fontWeight: 700, fontSize: "12px", cursor: "pointer",
                                 }}
                               >{d}º</button>
                             ))}
                           </div>
-                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Intensidade do fluxo</p>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Intensidade do fluxo</p>
                           <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
                             {([
                               { label: "🩸 Leve", value: "leve" },
@@ -627,39 +627,39 @@ export function CheckinPage() {
                               <button type="button" key={fi.value} onClick={() => setFlowIntensity(fi.value)}
                                 style={{
                                   flex: 1, padding: "8px 4px", borderRadius: "9px",
-                                  border: `1.5px solid ${flowIntensity === fi.value ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                                  background: flowIntensity === fi.value ? "var(--nectarine-a3)" : "transparent",
-                                  color: flowIntensity === fi.value ? "var(--nectarine-11)" : "var(--text-3)",
+                                  border: `1.5px solid ${flowIntensity === fi.value ? "var(--accent-peach)" : "var(--warm-border-2)"}`,
+                                  background: flowIntensity === fi.value ? "var(--accent-peach-a3)" : "transparent",
+                                  color: flowIntensity === fi.value ? "var(--accent-peach-ink)" : "var(--text-3)",
                                   fontWeight: 600, fontSize: "11px", cursor: "pointer",
                                 }}
                               >{fi.label}</button>
                             ))}
                           </div>
-                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Cólica</p>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Cólica</p>
                           <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
                             {symptomLevels_opts.map(s => (
                               <button type="button" key={s.v}
                                 onClick={() => setSymptomLvls(prev => ({ ...prev, colica: prev.colica === s.v ? undefined : s.v }))}
                                 style={{
                                   flex: 1, padding: "7px 4px", borderRadius: "9px",
-                                  border: `1.5px solid ${symptomLvls.colica === s.v ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                                  background: symptomLvls.colica === s.v ? "var(--nectarine-a3)" : "transparent",
-                                  color: symptomLvls.colica === s.v ? "var(--nectarine-11)" : "var(--text-3)",
+                                  border: `1.5px solid ${symptomLvls.colica === s.v ? "var(--accent-peach)" : "var(--warm-border-2)"}`,
+                                  background: symptomLvls.colica === s.v ? "var(--accent-peach-a3)" : "transparent",
+                                  color: symptomLvls.colica === s.v ? "var(--accent-peach-ink)" : "var(--text-3)",
                                   fontWeight: 600, fontSize: "11px", cursor: "pointer",
                                 }}
                               >{s.label}</button>
                             ))}
                           </div>
-                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Dor de cabeça</p>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Dor de cabeça</p>
                           <div style={{ display: "flex", gap: "8px" }}>
                             {symptomLevels_opts.map(s => (
                               <button type="button" key={s.v}
                                 onClick={() => setSymptomLvls(prev => ({ ...prev, dorCabeca: prev.dorCabeca === s.v ? undefined : s.v }))}
                                 style={{
                                   flex: 1, padding: "7px 4px", borderRadius: "9px",
-                                  border: `1.5px solid ${symptomLvls.dorCabeca === s.v ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                                  background: symptomLvls.dorCabeca === s.v ? "var(--nectarine-a3)" : "transparent",
-                                  color: symptomLvls.dorCabeca === s.v ? "var(--nectarine-11)" : "var(--text-3)",
+                                  border: `1.5px solid ${symptomLvls.dorCabeca === s.v ? "var(--accent-peach)" : "var(--warm-border-2)"}`,
+                                  background: symptomLvls.dorCabeca === s.v ? "var(--accent-peach-a3)" : "transparent",
+                                  color: symptomLvls.dorCabeca === s.v ? "var(--accent-peach-ink)" : "var(--text-3)",
                                   fontWeight: 600, fontSize: "11px", cursor: "pointer",
                                 }}
                               >{s.label}</button>
@@ -701,7 +701,7 @@ export function CheckinPage() {
                   }}
                 />
                 {note.trim() && (
-                  <p style={{ fontSize: 11, color: "var(--menthe)", fontWeight: 600, marginTop: 4 }}>
+                  <p style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 600, marginTop: 4 }}>
                     ✓ Nota registrada
                   </p>
                 )}
@@ -765,3 +765,4 @@ export function CheckinPage() {
     </div>
   );
 }
+

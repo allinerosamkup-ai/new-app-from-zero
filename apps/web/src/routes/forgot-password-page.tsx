@@ -59,8 +59,8 @@ export function ForgotPasswordPage() {
       {/* Icon */}
       <div style={{
         width: 64, height: 64, borderRadius: 20,
-        background: "var(--nectarine-a3)",
-        border: "1px solid var(--nectarine-a5)",
+        background: "var(--accent-peach-a3)",
+        border: "1px solid var(--accent-peach-a5)",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: 28, marginBottom: 20,
       }}>
@@ -140,7 +140,7 @@ export function ForgotPasswordPage() {
             style={{
               background: "none", border: "none", cursor: timer > 0 ? "default" : "pointer",
               fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 600,
-              color: timer > 0 ? "var(--text-3)" : "var(--nectarine-11)",
+              color: timer > 0 ? "var(--text-3)" : "var(--accent-peach-ink)",
             }}
           >
             {timer > 0 ? `Reenviar em ${timer}s` : "Reenviar link"}
@@ -156,8 +156,9 @@ export function ForgotPasswordPage() {
           marginTop: 24, textAlign: "center",
         }}
       >
-        Lembrei a senha — <span style={{ color: "var(--nectarine-11)", fontWeight: 600 }}>Entrar</span>
+        Lembrei a senha — <span style={{ color: "var(--accent-peach-ink)", fontWeight: 600 }}>Entrar</span>
       </button>
     </div>
   );
 }
+

@@ -11,22 +11,22 @@ const insights = [
     emoji: "🌙",
     title: "Seu pico de energia é às manhãs",
     desc: "Entre 8h–11h você mostra desempenho 40% acima da média semanal.",
-    color: "var(--nectarine-a3)",
-    border: "var(--nectarine)",
+    color: "var(--accent-peach-a3)",
+    border: "var(--accent-peach)",
   },
   {
     emoji: "📉",
     title: "Quarta-feiras tendem a ser mais pesadas",
     desc: "Humor médio de 55 nos últimos 4 ciclos. Considere tarefas leves.",
     color: "rgba(176,180,196,.1)",
-    border: "var(--lagune)",
+    border: "var(--accent-sky)",
   },
   {
     emoji: "✨",
     title: "Fins de semana recarregam bem",
     desc: "Sábado e domingo consistentemente acima de 75 nos últimos 3 ciclos.",
     color: "rgba(180,185,169,.1)",
-    border: "var(--menthe)",
+    border: "var(--accent-sage)",
   },
 ];
 
@@ -71,9 +71,9 @@ export function ProfilePage() {
           }}
         >
           {[
-            { label: "Média humor", value: "74", unit: "/100", color: "var(--menthe)" },
-            { label: "Média energia", value: "69", unit: "/100", color: "var(--lagune)" },
-            { label: "Check-ins", value: "12", unit: " dias", color: "var(--nectarine)" },
+            { label: "Média humor", value: "74", unit: "/100", color: "var(--accent-sage)" },
+            { label: "Média energia", value: "69", unit: "/100", color: "var(--accent-sky)" },
+            { label: "Check-ins", value: "12", unit: " dias", color: "var(--accent-peach)" },
           ].map((stat) => (
             <div key={stat.label} className="aura-card" style={{ padding: "12px 10px", textAlign: "center" }}>
               <p
@@ -101,8 +101,8 @@ export function ProfilePage() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
             <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-1)" }}>Semana atual</span>
             <div style={{ display: "flex", gap: "10px" }}>
-              <span style={{ fontSize: "10px", color: "var(--menthe)", fontWeight: 700 }}>● Humor</span>
-              <span style={{ fontSize: "10px", color: "var(--lagune)", fontWeight: 700 }}>● Energia</span>
+              <span style={{ fontSize: "10px", color: "var(--accent-sage)", fontWeight: 700 }}>● Humor</span>
+              <span style={{ fontSize: "10px", color: "var(--accent-sky)", fontWeight: 700 }}>● Energia</span>
             </div>
           </div>
 
@@ -114,7 +114,7 @@ export function ProfilePage() {
                     style={{
                       width: "10px",
                       height: `${(moodValues[i] / maxMood) * 60}px`,
-                      background: "var(--menthe)",
+                      background: "var(--accent-sage)",
                       borderRadius: "3px 3px 0 0",
                       opacity: i === 6 ? 1 : 0.7,
                     }}
@@ -123,7 +123,7 @@ export function ProfilePage() {
                     style={{
                       width: "10px",
                       height: `${(energyValues[i] / maxEnergy) * 60}px`,
-                      background: "var(--lagune)",
+                      background: "var(--accent-sky)",
                       borderRadius: "3px 3px 0 0",
                       opacity: i === 6 ? 1 : 0.7,
                     }}
@@ -168,3 +168,4 @@ export function ProfilePage() {
     </div>
   );
 }
+

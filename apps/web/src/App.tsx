@@ -8,7 +8,7 @@ const loadJournalPage = () => import("./routes/journal-page");
 const loadGoalsPage = () => import("./routes/goals-page");
 const loadPreferencesPage = () => import("./routes/preferences-page");
 const loadOnboardingPage = () => import("./routes/onboarding-page");
-const loadAuraV2Showcase = () => import("./routes/aura-v2-showcase");
+const loadEditorialShowcase = () => import("./routes/editorial-showcase");
 const loadAuthV2Page = () => import("./routes/auth-v2-page");
 const loadCheckinPage = () => import("./routes/checkin-page");
 const loadPlannerPage = () => import("./routes/planner-page");
@@ -36,7 +36,7 @@ const JournalPage = lazy(() => loadJournalPage().then((module) => ({ default: mo
 const GoalsPage = lazy(() => loadGoalsPage().then((module) => ({ default: module.GoalsPage })));
 const PreferencesPage = lazy(() => loadPreferencesPage().then((module) => ({ default: module.PreferencesPage })));
 const OnboardingPage = lazy(() => loadOnboardingPage().then((module) => ({ default: module.OnboardingPage })));
-const AuraV2Showcase = lazy(() => loadAuraV2Showcase().then((module) => ({ default: module.AuraV2Showcase })));
+const EditorialShowcase = lazy(() => loadEditorialShowcase().then((module) => ({ default: module.EditorialShowcase })));
 const AuthV2Page = lazy(() => loadAuthV2Page().then((module) => ({ default: module.AuthV2Page })));
 const CheckinPage = lazy(() => loadCheckinPage().then((module) => ({ default: module.CheckinPage })));
 const PlannerPage = lazy(() => loadPlannerPage().then((module) => ({ default: module.PlannerPage })));
@@ -151,7 +151,7 @@ export default function App() {
         <Route path="/onboarding/sleep" element={<OnboardingSleepPage />} />
         <Route path="/onboarding/preferences" element={<OnboardingPreferencesPage />} />
         <Route path="/onboarding/done" element={<OnboardingDonePage />} />
-        <Route path="/aura-v2" element={<AuraV2Showcase />} />
+        <Route path="/editorial-showcase" element={<EditorialShowcase />} />
         <Route path="/auth-v2" element={<AuthV2Page />} />
 
         {/* Rotas de preview sem auth — só desenvolvimento */}

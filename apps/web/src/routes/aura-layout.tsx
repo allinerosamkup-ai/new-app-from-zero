@@ -8,7 +8,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
-import "../styles/aura-v2.css";
+import "../styles/editorial.css";
 
 const NAV_ITEMS = [
   {
@@ -62,20 +62,20 @@ const NAV_ITEMS = [
 ];
 
 const SEVERITY_CONFIG = {
-  info:     { color: "var(--menthe)",    bg: "rgba(150,199,179,.12)", border: "rgba(150,199,179,.3)", emoji: "✨" },
-  warning:  { color: "var(--nectarine)", bg: "rgba(215,137,127,.10)", border: "rgba(215,137,127,.3)", emoji: "📉" },
+  info:     { color: "var(--accent-sage)",    bg: "rgba(150,199,179,.12)", border: "rgba(150,199,179,.3)", emoji: "✨" },
+  warning:  { color: "var(--accent-peach)", bg: "rgba(215,137,127,.10)", border: "rgba(215,137,127,.3)", emoji: "📉" },
   critical: { color: "#A17D6C",          bg: "rgba(161,125,108,.10)", border: "rgba(161,125,108,.3)", emoji: "🌙" },
 };
 
 const PHASE_ALERT_CONFIG: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
-  elevated: { color: "var(--lagune)", bg: "rgba(176,180,196,.14)", border: "rgba(176,180,196,.34)", emoji: "🚀" },
-  flowing: { color: "var(--menthe)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "✨" },
-  stable: { color: "var(--menthe)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "💚" },
-  falling: { color: "var(--nectarine)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "📉" },
-  low: { color: "var(--nectarine-10)", bg: "rgba(215,137,127,.14)", border: "rgba(215,137,127,.36)", emoji: "🌙" },
-  depleted: { color: "var(--nectarine-11)", bg: "rgba(161,125,108,.12)", border: "rgba(161,125,108,.34)", emoji: "😴" },
-  recovering: { color: "var(--menthe)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "🌱" },
-  mixed: { color: "var(--nectarine)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "⚡" },
+  elevated: { color: "var(--accent-sky)", bg: "rgba(176,180,196,.14)", border: "rgba(176,180,196,.34)", emoji: "🚀" },
+  flowing: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "✨" },
+  stable: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "💚" },
+  falling: { color: "var(--accent-peach)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "📉" },
+  low: { color: "var(--accent-peach-strong)", bg: "rgba(215,137,127,.14)", border: "rgba(215,137,127,.36)", emoji: "🌙" },
+  depleted: { color: "var(--accent-peach-ink)", bg: "rgba(161,125,108,.12)", border: "rgba(161,125,108,.34)", emoji: "😴" },
+  recovering: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "🌱" },
+  mixed: { color: "var(--accent-peach)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "⚡" },
 };
 
 export function AuraLayout() {
@@ -182,7 +182,7 @@ export function AuraLayout() {
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
               <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 10, fontWeight: 800, color: "var(--nectarine)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 3px" }}>
+                <p style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-peach)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 3px" }}>
                   Aura pergunta
                 </p>
                 <p style={{ fontSize: 12, color: "var(--text-1)", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
@@ -196,7 +196,7 @@ export function AuraLayout() {
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={() => resolveFollowUp("done")}
-                style={{ flex: 1, height: 34, borderRadius: 9, border: "none", background: "var(--nectarine)", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                style={{ flex: 1, height: 34, borderRadius: 9, border: "none", background: "var(--accent-peach)", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
               >
                 Sim, fiz! 🎉
               </button>
@@ -255,3 +255,4 @@ export function AuraLayout() {
     </div>
   );
 }
+

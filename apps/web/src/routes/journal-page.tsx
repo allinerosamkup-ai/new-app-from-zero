@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -324,7 +324,7 @@ export function JournalPage() {
                 gap: 10,
               }}
             >
-              <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--nectarine)", margin: 0 }}>
+              <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", margin: 0 }}>
                 Sessão recém-salva
               </p>
               <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text-1)", margin: 0 }}>
@@ -417,9 +417,9 @@ export function JournalPage() {
                             flexShrink: 0,
                             padding: "5px 11px",
                             borderRadius: 999,
-                            border: `1.5px solid ${filterEmotion === em ? "var(--nectarine)" : "var(--warm-border)"}`,
+                            border: `1.5px solid ${filterEmotion === em ? "var(--accent-peach)" : "var(--warm-border)"}`,
                             background: filterEmotion === em ? "rgba(215,137,127,0.12)" : "#fff",
-                            color: filterEmotion === em ? "var(--nectarine)" : "var(--text-3)",
+                            color: filterEmotion === em ? "var(--accent-peach)" : "var(--text-3)",
                             fontSize: 11,
                             fontWeight: 700,
                             cursor: "pointer",
@@ -628,7 +628,7 @@ export function JournalPage() {
                   width: "6px",
                   height: "6px",
                   borderRadius: "50%",
-                  background: isTyping ? "var(--menthe)" : "var(--lagune)",
+                  background: isTyping ? "var(--accent-sage)" : "var(--accent-sky)",
                   animation: isTyping ? "pulse 1.2s infinite" : "none",
                 }}
               />
@@ -738,7 +738,7 @@ export function JournalPage() {
                   height: "36px",
                   borderRadius: "50%",
                   border: "none",
-                  background: isRecording ? "var(--menthe)" : "var(--warm-bg)",
+                  background: isRecording ? "var(--accent-sage)" : "var(--warm-bg)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -801,3 +801,4 @@ export function JournalPage() {
     </div>
   );
 }
+

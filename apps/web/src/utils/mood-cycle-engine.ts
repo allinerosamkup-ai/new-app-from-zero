@@ -82,7 +82,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "🚀",
     description: "Humor e energia acima do seu basal habitual. Ótimo para projetos que exigem criatividade e iniciativa.",
     tip: "Aproveite a energia, mas mantenha o ritmo sustentável. Evite decisões impulsivas.",
-    color: "var(--lagune)",
+    color: "var(--accent-sky)",
     energyForecast: "high",
   },
   flowing: {
@@ -90,7 +90,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "✨",
     description: "Você está no seu melhor ritmo. Clareza mental, motivação e energia alinhadas.",
     tip: "Pico de produtividade. Priorize suas tarefas mais importantes agora.",
-    color: "var(--menthe)",
+    color: "var(--accent-sage)",
     energyForecast: "high",
   },
   stable: {
@@ -98,7 +98,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "💚",
     description: "Estado basal equilibrado — eutimia. Ritmo constante e previsível.",
     tip: "Bom momento para construir hábitos e avançar consistentemente.",
-    color: "var(--menthe)",
+    color: "var(--accent-sage)",
     energyForecast: "moderate",
   },
   falling: {
@@ -106,7 +106,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "📉",
     description: "Tendência de queda detectada. Seu humor está abaixo do padrão recente.",
     tip: "Reduza o ritmo. Priorize sono, alimentação e autocuidado agora.",
-    color: "var(--nectarine)",
+    color: "var(--accent-peach)",
     energyForecast: "moderate",
   },
   low: {
@@ -114,7 +114,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "🌙",
     description: "Você está numa fase de menor energia e humor. É um padrão natural do ciclo.",
     tip: "Este é o momento de restaurar — não de produzir. Gentileza consigo mesma é a prioridade.",
-    color: "var(--nectarine-10)",
+    color: "var(--accent-peach-strong)",
     energyForecast: "low",
   },
   depleted: {
@@ -122,7 +122,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "😴",
     description: "Energia e humor muito baixos. Seu sistema precisa de recuperação ativa.",
     tip: "Cancele o que puder. Descanso não é fraqueza — é necessidade biológica agora.",
-    color: "var(--nectarine-11)",
+    color: "var(--accent-peach-ink)",
     energyForecast: "rest",
   },
   recovering: {
@@ -130,7 +130,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "🌱",
     description: "Você está saindo de uma fase baixa. Energia retornando gradualmente.",
     tip: "Retome devagar. Comemore cada pequeno avanço — você está no caminho certo.",
-    color: "var(--menthe)",
+    color: "var(--accent-sage)",
     energyForecast: "low",
   },
   mixed: {
@@ -138,7 +138,7 @@ const PHASE_CONFIG: Record<MoodPhase, {
     emoji: "⚡",
     description: "Alta variabilidade detectada. Altos e baixos frequentes sem padrão claro.",
     tip: "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam o ciclo.",
-    color: "var(--nectarine)",
+    color: "var(--accent-peach)",
     energyForecast: "moderate",
   },
   insufficient_data: {
@@ -496,3 +496,4 @@ export function computeStreak(history: CheckinEntry[]): number {
   }
   return streak;
 }
+

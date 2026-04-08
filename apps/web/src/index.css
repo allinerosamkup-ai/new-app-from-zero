@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --nectarine: #F4BEA8;
-  --peche:     #F7E7A6;
-  --menthe:    #BFDCCB;
-  --lagune:    #BEE6F3;
+  --accent-peach: #F4BEA8;
+  --accent-butter: #F7E7A6;
+  --accent-sage:    #BFDCCB;
+  --accent-sky:    #BEE6F3;
 
   --bg-base: #FFFFFF;
   --bg-surface: rgba(255, 255, 255, 0.92);
@@ -56,7 +56,7 @@
   --font-heading: 'Poppins', sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  /* ── Aura Nectarine accent ── */
+  /* ── Accent peach ── */
   --accent-9:        #F4BEA8;
   --accent-10:       #E8A98F;
   --accent-11:       #A86855;
@@ -212,3 +212,4 @@ hr, .divider {
     transform: none !important;
   }
 }
+

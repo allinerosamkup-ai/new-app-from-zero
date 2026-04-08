@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import "../styles/aura.css";
 
 type Phase = "foco" | "curta" | "longa";
@@ -150,7 +150,7 @@ export function PomodoroPage() {
               cx="110"
               cy="110"
               r={RADIUS}
-              stroke="var(--nectarine)"
+              stroke="var(--accent-peach)"
               strokeWidth="9"
               fill="none"
               strokeLinecap="round"
@@ -265,7 +265,7 @@ export function PomodoroPage() {
                   height: "12px",
                   borderRadius: "50%",
                   background: i < cycles
-                    ? "var(--nectarine)"
+                    ? "var(--accent-peach)"
                     : "rgba(197,165,147,.15)",
                   display: "inline-block",
                   flexShrink: 0,
@@ -302,3 +302,4 @@ export function PomodoroPage() {
     </div>
   );
 }
+

@@ -4,7 +4,7 @@ import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useNavigate } from "react-router-dom";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import {
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
-import "../styles/aura-v2.css";
+import "../styles/editorial.css";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -58,9 +58,9 @@ function awardXP(amount: number, isTask = false) {
 
 // ── Cores por índice de meta ───────────────────────────────────
 const GOAL_COLORS = [
-  { accent: "var(--lagune)",    bg: "rgba(99,152,169,.12)"  },
-  { accent: "var(--menthe)",    bg: "rgba(150,199,179,.12)" },
-  { accent: "var(--nectarine)", bg: "rgba(215,137,127,.12)" },
+  { accent: "var(--accent-sky)",    bg: "rgba(99,152,169,.12)"  },
+  { accent: "var(--accent-sage)",    bg: "rgba(150,199,179,.12)" },
+  { accent: "var(--accent-peach)", bg: "rgba(215,137,127,.12)" },
 ];
 
 // ── Checkbox quadrado (GTD) ────────────────────────────────────
@@ -70,8 +70,8 @@ function TaskBox({ done, onClick, isNext = false }: { done: boolean; onClick: ()
       onClick={e => { e.stopPropagation(); onClick(); }}
       style={{
         width: 18, height: 18, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-        background: done ? "var(--menthe)" : isNext ? "rgba(215,137,127,0.15)" : "transparent",
-        border: done ? "none" : isNext ? "1.5px solid var(--nectarine)" : "1.5px solid var(--text-3)",
+        background: done ? "var(--accent-sage)" : isNext ? "rgba(215,137,127,0.15)" : "transparent",
+        border: done ? "none" : isNext ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--text-3)",
         display: "flex", alignItems: "center", justifyContent: "center",
         transition: "all 0.15s",
       }}
@@ -141,7 +141,7 @@ function GoalCard({
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{
             fontSize: 14, fontWeight: 700, margin: "0 0 6px",
-            color: done ? "var(--menthe)" : "var(--text-1)",
+            color: done ? "var(--accent-sage)" : "var(--text-1)",
             textDecoration: done ? "line-through" : "none",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
@@ -190,7 +190,7 @@ function GoalCard({
           {loadingBreakdown && (
             <div style={{
               display: "flex", alignItems: "center", gap: 6, padding: "8px 0",
-              color: "var(--nectarine)", fontSize: "calc(var(--a) * 0.83)",
+              color: "var(--accent-peach)", fontSize: "calc(var(--a) * 0.83)",
             }}>
               <AuraIcon size={14} /> Aura está gerando próximas ações...
             </div>
@@ -203,7 +203,7 @@ function GoalCard({
               background: "rgba(0,0,0,0.03)",
               textAlign: "center", color: "var(--text-3)", fontSize: "calc(var(--a) * 0.85)",
             }}>
-              Sem próximas ações. Use <strong style={{ color: "var(--nectarine)" }}>Aura quebrar</strong> para gerar.
+              Sem próximas ações. Use <strong style={{ color: "var(--accent-peach)" }}>Aura quebrar</strong> para gerar.
             </div>
           )}
 
@@ -220,7 +220,7 @@ function GoalCard({
                     border: "1px solid rgba(215,137,127,0.30)",
                     borderRadius: 999, padding: "2px 8px",
                     fontSize: "9px", fontWeight: 700, letterSpacing: ".06em",
-                    color: "var(--nectarine)", textTransform: "uppercase",
+                    color: "var(--accent-peach)", textTransform: "uppercase",
                     marginBottom: 4,
                   }}>
                     ▶ Fazer agora
@@ -268,7 +268,7 @@ function GoalCard({
                 placeholder="Próxima ação concreta..."
                 style={{
                   flex: 1, background: "rgba(255,255,255,0.8)",
-                  border: "1.5px solid var(--nectarine)", borderRadius: 10,
+                  border: "1.5px solid var(--accent-peach)", borderRadius: 10,
                   padding: "7px 10px", color: "var(--text-1)",
                   fontSize: "calc(var(--a) * 0.88)", outline: "none",
                 }}
@@ -290,13 +290,13 @@ function GoalCard({
             }}>
               <span style={{ fontSize: "1.1rem" }}>🎉</span>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--menthe)", margin: "0 0 2px" }}>Meta concluída!</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", margin: "0 0 2px" }}>Meta concluída!</p>
                 <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0 }}>Que tal registrar essa conquista no diário?</p>
               </div>
               <button
                 onClick={onJournalReflect}
                 style={{
-                  background: "var(--menthe)", color: "#fff",
+                  background: "var(--accent-sage)", color: "#fff",
                   border: "none", borderRadius: 10, padding: "6px 12px",
                   fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0,
                 }}
@@ -327,7 +327,7 @@ function GoalCard({
                 flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                 padding: "8px", background: "rgba(215,137,127,0.08)",
                 backdropFilter: "blur(8px)", border: "1px solid rgba(215,137,127,0.45)",
-                borderRadius: 10, color: "var(--nectarine)",
+                borderRadius: 10, color: "var(--accent-peach)",
                 fontSize: "calc(var(--a) * 0.82)", cursor: loadingBreakdown ? "default" : "pointer",
                 opacity: loadingBreakdown ? 0.5 : 1, fontWeight: 600,
               }}
@@ -584,7 +584,7 @@ export function GoalsPage() {
             flexShrink: 0,
           }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-              stroke="var(--nectarine)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              stroke="var(--accent-peach)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
             </svg>
           </div>
@@ -600,7 +600,7 @@ export function GoalsPage() {
           }}>
             <span style={{ fontSize: "1rem", flexShrink: 0 }}>⚠️</span>
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--nectarine)", margin: "0 0 2px" }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-peach)", margin: "0 0 2px" }}>
                 Fase {cycleReport.phaseLabel} detectada
               </p>
               <p style={{ fontSize: 11.5, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
@@ -648,7 +648,7 @@ export function GoalsPage() {
           <button
             onClick={toggleVoice}
             style={{
-              background: isRecording ? "var(--nectarine)" : "rgba(0,0,0,0.05)",
+              background: isRecording ? "var(--accent-peach)" : "rgba(0,0,0,0.05)",
               border: isRecording ? "none" : "1px solid rgba(0,0,0,0.10)",
               cursor: "pointer", color: isRecording ? "#fff" : "var(--text-3)",
               width: 36, height: 36, borderRadius: "50%",
@@ -681,7 +681,7 @@ export function GoalsPage() {
           }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-            stroke="var(--nectarine)" strokeWidth="2" strokeLinecap="round">
+            stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
             <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
           </svg>
           <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
@@ -689,7 +689,7 @@ export function GoalsPage() {
           </span>
           {goals.length > 0 && (
             <span style={{
-              background: "var(--nectarine)", color: "#fff",
+              background: "var(--accent-peach)", color: "#fff",
               borderRadius: 99, padding: "1px 8px",
               fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
             }}>
@@ -742,12 +742,12 @@ export function GoalsPage() {
                 padding: "6px 0 10px", marginBottom: 12, cursor: "pointer",
               }}
             >
-              <Zap size={15} style={{ color: "var(--lagune)" }} />
+              <Zap size={15} style={{ color: "var(--accent-sky)" }} />
               <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
                 Próximas Ações
               </span>
               <span style={{
-                background: "var(--lagune)", color: "#fff",
+                background: "var(--accent-sky)", color: "#fff",
                 borderRadius: 99, padding: "1px 8px",
                 fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
               }}>
@@ -789,10 +789,10 @@ export function GoalsPage() {
                       <button
                         onClick={() => setLinkingItem(linkingItem === item.id ? null : item.id)}
                         style={{
-                          background: linkingItem === item.id ? "var(--lagune)" : "rgba(99,152,169,0.10)",
+                          background: linkingItem === item.id ? "var(--accent-sky)" : "rgba(99,152,169,0.10)",
                           border: "1px solid rgba(99,152,169,0.30)",
                           borderRadius: 8, cursor: "pointer",
-                          color: linkingItem === item.id ? "#fff" : "var(--lagune)",
+                          color: linkingItem === item.id ? "#fff" : "var(--accent-sky)",
                           padding: "3px 7px", fontSize: "calc(var(--a) * 0.78)",
                           display: "flex", alignItems: "center", gap: 3, fontWeight: 600,
                         }}
@@ -856,12 +856,12 @@ export function GoalsPage() {
                 padding: "6px 0 10px", marginBottom: 12, cursor: "pointer",
               }}
             >
-              <Inbox size={15} style={{ color: "var(--menthe)" }} />
+              <Inbox size={15} style={{ color: "var(--accent-sage)" }} />
               <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
                 Inbox — Clarificando
               </span>
               <span style={{
-                background: "var(--menthe)", color: "#fff",
+                background: "var(--accent-sage)", color: "#fff",
                 borderRadius: 99, padding: "1px 8px",
                 fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
               }}>
@@ -885,7 +885,7 @@ export function GoalsPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)" }}>{item.text}</div>
                     {item.clarifying && (
-                      <div style={{ fontSize: "calc(var(--a) * 0.8)", color: "var(--menthe)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ fontSize: "calc(var(--a) * 0.8)", color: "var(--accent-sage)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
                         <AuraIcon size={12} /> Aura clarificando...
                       </div>
                     )}
@@ -939,3 +939,4 @@ export function GoalsPage() {
     </div>
   );
 }
+

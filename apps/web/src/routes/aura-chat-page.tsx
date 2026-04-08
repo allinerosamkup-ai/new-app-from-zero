@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -468,7 +468,7 @@ export function AuraChatPage() {
                 fontWeight: 700,
                 letterSpacing: ".14em",
                 textTransform: "uppercase",
-                color: "var(--nectarine)",
+                color: "var(--accent-peach)",
                 margin: "0 0 4px",
               }}
             >
@@ -503,7 +503,7 @@ export function AuraChatPage() {
             style={{
               flexShrink: 0,
               whiteSpace: "nowrap",
-              color: "var(--nectarine-11)",
+              color: "var(--accent-peach-ink)",
             }}
           >
             {action.label}
@@ -611,7 +611,7 @@ export function AuraChatPage() {
                 fontWeight: 700,
                 letterSpacing: ".1em",
                 textTransform: "uppercase",
-                color: "var(--nectarine)",
+                color: "var(--accent-peach)",
                 margin: "0 0 8px",
               }}
             >
@@ -676,7 +676,7 @@ export function AuraChatPage() {
                 fontWeight: 700,
                 letterSpacing: ".1em",
                 textTransform: "uppercase",
-                color: "var(--nectarine)",
+                color: "var(--accent-peach)",
                 margin: "0 0 8px",
               }}
             >
@@ -839,7 +839,7 @@ export function AuraChatPage() {
               height="14"
               viewBox="0 0 24 24"
               fill="none"
-              stroke={(!input.trim() || isTyping || !sessionId) ? "var(--nectarine)" : "#fff"}
+              stroke={(!input.trim() || isTyping || !sessionId) ? "var(--accent-peach)" : "#fff"}
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -853,3 +853,4 @@ export function AuraChatPage() {
     </div>
   );
 }
+

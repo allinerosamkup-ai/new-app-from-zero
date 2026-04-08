@@ -12,12 +12,12 @@ export const AuraInputV2: React.FC<AuraInputV2Props> = ({
   ...props 
 }) => {
   return (
-    <div className="aura-v2-input-wrap">
-      <label className="aura-v2-input-label">{label}</label>
-      <div className="aura-v2-input" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+    <div className="editorial-input-wrap">
+      <label className="editorial-input-label">{label}</label>
+      <div className="editorial-input" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {icon}
         <input 
-          className={`aura-v2-input-element ${className}`} 
+          className={`editorial-input-element ${className}`} 
           style={{ 
             background: 'transparent', 
             border: 'none', 

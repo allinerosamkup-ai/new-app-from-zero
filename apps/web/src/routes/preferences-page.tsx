@@ -1,4 +1,4 @@
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
@@ -47,7 +47,7 @@ export function PreferencesPage() {
               width: "48px",
               height: "48px",
               borderRadius: "50%",
-              background: "var(--nectarine)",
+              background: "var(--accent-peach)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -103,8 +103,8 @@ export function PreferencesPage() {
           <p className="config-section-title">Notificações</p>
           <div className="config-row">
             <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "var(--nectarine-a3)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <div className="icon-bg" style={{ background: "var(--accent-peach-a3)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
                 </svg>
               </div>
@@ -118,7 +118,7 @@ export function PreferencesPage() {
           <div className="config-row">
             <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--lagune)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
                 </svg>
               </div>
@@ -137,7 +137,7 @@ export function PreferencesPage() {
           <div className="config-row">
             <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(180,185,169,.12)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--menthe)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
                 </svg>
               </div>
@@ -156,7 +156,7 @@ export function PreferencesPage() {
           <div className="config-row" style={{ cursor: "pointer" }}>
             <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(197,165,147,.1)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
                 </svg>
               </div>
@@ -172,7 +172,7 @@ export function PreferencesPage() {
         <AuraButtonV2
           onClick={() => navigate("/onboarding")}
           className="btn btn-ghost btn-full"
-          style={{ marginTop: 20, color: "var(--nectarine)" }}
+          style={{ marginTop: 20, color: "var(--accent-peach)" }}
         >
           🔄 Refazer onboarding
         </AuraButtonV2>
@@ -180,3 +180,4 @@ export function PreferencesPage() {
     </div>
   );
 }
+

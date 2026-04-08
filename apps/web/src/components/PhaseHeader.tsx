@@ -36,10 +36,10 @@ function HrvBadge({ hrv }: { hrv: number }) {
 
 export function PhaseHeader({ phase, dayOfPhase, totalDays, energia, hrv, userName }: PhaseHeaderProps) {
   const PHASE_GRADIENT: Record<CyclePhase, string> = {
-    menstrual:  "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
-    folicular:  "linear-gradient(135deg, #7EBD9E 0%, var(--menthe) 100%)",
-    ovulatoria: "linear-gradient(135deg, var(--lagune) 0%, #7BB2BA 100%)",
-    lutea:      "linear-gradient(135deg, #9B7AB8 0%, var(--lagune) 100%)",
+    menstrual:  "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)",
+    folicular:  "linear-gradient(135deg, #7EBD9E 0%, var(--accent-sage) 100%)",
+    ovulatoria: "linear-gradient(135deg, var(--accent-sky) 0%, #7BB2BA 100%)",
+    lutea:      "linear-gradient(135deg, #9B7AB8 0%, var(--accent-sky) 100%)",
   };
 
   const energiaPct = Math.round((energia / 10) * 100);
@@ -97,3 +97,4 @@ export function PhaseHeader({ phase, dayOfPhase, totalDays, energia, hrv, userNa
     </div>
   );
 }
+

@@ -31,13 +31,13 @@ export function OnboardingEnergyPage() {
           {Array.from({ length: TOTAL }, (_, i) => (
             <div key={i} style={{
               flex: 1, height: 4, borderRadius: 999,
-              background: i < STEP ? "var(--nectarine)" : i === STEP - 1 ? "var(--nectarine)" : "rgba(215,137,127,.2)",
+              background: i < STEP ? "var(--accent-peach)" : i === STEP - 1 ? "var(--accent-peach)" : "rgba(215,137,127,.2)",
               transition: "background .3s",
             }} />
           ))}
         </div>
 
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--nectarine)", marginBottom: 4 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", marginBottom: 4 }}>
           PASSO {STEP} DE {TOTAL}
         </p>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.25, marginBottom: 6 }}>
@@ -50,7 +50,7 @@ export function OnboardingEnergyPage() {
 
       <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px" }}>
         {/* Drena MAIS */}
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--nectarine-10)", marginBottom: 10 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-strong)", marginBottom: 10 }}>
           ❗ Drena MAIS
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
@@ -62,9 +62,9 @@ export function OnboardingEnergyPage() {
                 onClick={() => toggle(drainsMore, setDrainsMore, item)}
                 style={{
                   height: 32, padding: "0 14px", borderRadius: 999,
-                  border: `1.5px solid ${active ? "var(--nectarine)" : "var(--nectarine-a3)"}`,
-                  background: active ? "var(--nectarine-a3)" : "rgba(255,255,255,.7)",
-                  color: active ? "var(--nectarine-11)" : "var(--text-2)",
+                  border: `1.5px solid ${active ? "var(--accent-peach)" : "var(--accent-peach-a3)"}`,
+                  background: active ? "var(--accent-peach-a3)" : "rgba(255,255,255,.7)",
+                  color: active ? "var(--accent-peach-ink)" : "var(--text-2)",
                   fontSize: 12.5, fontWeight: active ? 700 : 500,
                   cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
                   transition: "all 150ms",
@@ -77,7 +77,7 @@ export function OnboardingEnergyPage() {
         </div>
 
         {/* Drena MENOS */}
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--menthe-11)", marginBottom: 10 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage-ink)", marginBottom: 10 }}>
           💚 Drena MENOS
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 28 }}>
@@ -89,9 +89,9 @@ export function OnboardingEnergyPage() {
                 onClick={() => toggle(drainsLess, setDrainsLess, item)}
                 style={{
                   height: 32, padding: "0 14px", borderRadius: 999,
-                  border: `1.5px solid ${active ? "var(--menthe)" : "rgba(150,199,179,.3)"}`,
+                  border: `1.5px solid ${active ? "var(--accent-sage)" : "rgba(150,199,179,.3)"}`,
                   background: active ? "rgba(150,199,179,.13)" : "rgba(255,255,255,.7)",
-                  color: active ? "var(--menthe-11)" : "var(--text-2)",
+                  color: active ? "var(--accent-sage-ink)" : "var(--text-2)",
                   fontSize: 12.5, fontWeight: active ? 700 : 500,
                   cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
                   transition: "all 150ms",
@@ -104,19 +104,19 @@ export function OnboardingEnergyPage() {
         </div>
 
         {/* Slider foco */}
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--lagune)", marginBottom: 10 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sky)", marginBottom: 10 }}>
           ⚡ Foco disponível num dia bom
         </p>
         <div style={{ marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text-3)" }}>Pouco</span>
-            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--lagune)" }}>{foco}/10</span>
+            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--accent-sky)" }}>{foco}/10</span>
             <span style={{ fontSize: 12, color: "var(--text-3)" }}>Total</span>
           </div>
           <div style={{ position: "relative" }}>
             <div style={{ width: "100%", height: 8, background: "rgba(99,152,169,.15)", borderRadius: 999, position: "relative", overflow: "visible" }}>
-              <div style={{ width: `${focoPct}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, var(--menthe), var(--lagune))" }} />
-              <div style={{ width: 20, height: 20, background: "#fff", border: "2px solid var(--lagune)", borderRadius: "50%", position: "absolute", top: "50%", left: `${focoPct}%`, transform: "translate(-50%, -50%)", boxShadow: "0 2px 8px rgba(99,152,169,.3)", pointerEvents: "none" }} />
+              <div style={{ width: `${focoPct}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, var(--accent-sage), var(--accent-sky))" }} />
+              <div style={{ width: 20, height: 20, background: "#fff", border: "2px solid var(--accent-sky)", borderRadius: "50%", position: "absolute", top: "50%", left: `${focoPct}%`, transform: "translate(-50%, -50%)", boxShadow: "0 2px 8px rgba(99,152,169,.3)", pointerEvents: "none" }} />
             </div>
             <input type="range" min={1} max={10} step={1} value={foco} onChange={e => setFoco(Number(e.target.value))}
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", margin: 0 }} />
@@ -128,7 +128,7 @@ export function OnboardingEnergyPage() {
           onClick={() => navigate("/onboarding/cycle")}
           style={{
             width: "100%", height: 46,
-            background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
+            background: "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
             cursor: "pointer", boxShadow: "0 12px 24px rgba(243,176,140,.24)",
@@ -150,3 +150,4 @@ export function OnboardingEnergyPage() {
     </div>
   );
 }
+

@@ -49,7 +49,7 @@ packages/
 - Fundo base: branco/off-white, com uso de cor apenas como acento.
 - Visual dominante: cards claros, sombras suaves, bordas discretas, layout respirado.
 - Acentos ativos: salmão rosado pastel, verde sálvia claro, azul suave, lilás leve, pêssego aberto.
-- Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups Aura v2.
+- Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups legados.
 
 ## ✅ Atualizações Recentes (2026-04-03)
 - **Planner v4**: Badge de energia por tarefa (alta/média/leve) + aviso da Aura se energia baixa.

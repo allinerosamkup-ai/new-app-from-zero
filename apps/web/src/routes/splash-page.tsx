@@ -1,7 +1,7 @@
 // Splash / Welcome — tela de entrada antes do auth
 import { useNavigate } from "react-router-dom";
 import "../styles/aura.css";
-import "../styles/aura-v2.css";
+import "../styles/editorial.css";
 
 export function SplashPage() {
   const navigate = useNavigate();

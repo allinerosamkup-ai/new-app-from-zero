@@ -1,4 +1,4 @@
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useState, type KeyboardEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";

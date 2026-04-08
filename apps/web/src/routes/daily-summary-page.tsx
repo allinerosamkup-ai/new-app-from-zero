@@ -6,16 +6,16 @@ import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
 import { labelMood } from "../features/aura/data";
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 
 type JTask = { title: string; category: string; time: string; discarded: boolean };
 
 const CAT_COLOR: Record<string, string> = {
-  trabalho: "var(--lagune)",
-  saude: "var(--menthe)",
-  rotina: "var(--nectarine)",
+  trabalho: "var(--accent-sky)",
+  saude: "var(--accent-sage)",
+  rotina: "var(--accent-peach)",
   social: "var(--social-color)",
 };
 
@@ -105,7 +105,7 @@ export function DailySummaryPage() {
             justifyContent: "center",
           }}
         >
-          <AuraIcon size={32} style={{ color: "var(--menthe)" }} />
+          <AuraIcon size={32} style={{ color: "var(--accent-sage)" }} />
         </div>
 
         {/* Títulos */}
@@ -199,7 +199,7 @@ export function DailySummaryPage() {
             padding: "15px 16px",
             background:
               "linear-gradient(135deg, rgba(197,165,147,.06), rgba(180,185,169,.04))",
-            borderLeft: "3px solid var(--nectarine)",
+            borderLeft: "3px solid var(--accent-peach)",
             borderRadius: 13,
           }}
         >
@@ -246,16 +246,16 @@ export function DailySummaryPage() {
           }}>
             <div style={{ padding: "12px 14px 10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine)", display: "flex", alignItems: "center", gap: 4 }}>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)", display: "flex", alignItems: "center", gap: 4 }}>
                   <AuraIcon size={10} /> TAREFAS DO DIÁRIO
                 </p>
                 {phase === "done" && (
-                  <span style={{ fontSize: 11, color: "var(--menthe)", fontWeight: 700 }}>✓ Salvo no Planner</span>
+                  <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 700 }}>✓ Salvo no Planner</span>
                 )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {tasks.map((task, idx) => {
-                  const cor = CAT_COLOR[task.category] ?? "var(--nectarine)";
+                  const cor = CAT_COLOR[task.category] ?? "var(--accent-peach)";
                   return (
                     <div key={idx} style={{
                       display: "flex", alignItems: "center", gap: 8,
@@ -335,3 +335,4 @@ export function DailySummaryPage() {
     </div>
   );
 }
+

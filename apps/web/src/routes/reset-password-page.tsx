@@ -104,7 +104,7 @@ export function ResetPasswordPage() {
           background: "rgba(229,219,247,.28)", borderRadius: 16,
           border: "1px solid rgba(229,219,247,.6)", marginBottom: 16,
         }}>
-          <p style={{ fontSize: 12, color: "var(--nectarine-11)", margin: 0, textAlign: "center" }}>
+          <p style={{ fontSize: 12, color: "var(--accent-peach-ink)", margin: 0, textAlign: "center" }}>
             Aguardando verificação do link de redefinição...
           </p>
         </div>
@@ -218,3 +218,4 @@ export function ResetPasswordPage() {
     </div>
   );
 }
+

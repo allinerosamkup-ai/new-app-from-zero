@@ -1,7 +1,7 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -24,13 +24,13 @@ import {
 } from "../utils/task-metadata";
 import { getLocalNoonDate } from "../utils/day-context";
 import "../styles/aura.css";
-import "../styles/aura-v2.css";
+import "../styles/editorial.css";
 
 const CATEGORY_OPTIONS = [
-  { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "var(--lagune)", bg: "rgba(176,180,196,.14)", textColor: "var(--lagune-11)" },
-  { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--menthe)", bg: "rgba(180,185,169,.14)", textColor: "var(--menthe-11)" },
+  { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "var(--accent-sky)", bg: "rgba(176,180,196,.14)", textColor: "var(--accent-sky-ink)" },
+  { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", textColor: "var(--accent-sage-ink)" },
   { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-color)", bg: "rgba(217,206,197,.18)", textColor: "var(--social-text)" },
-  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--nectarine)", bg: "rgba(243,176,140,.14)", textColor: "var(--nectarine-11)" },
+  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--accent-peach)", bg: "rgba(243,176,140,.14)", textColor: "var(--accent-peach-ink)" },
 ];
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -293,7 +293,7 @@ const NoteSection = React.memo(function NoteSection({
             width: 28,
             height: 28,
             border: "none",
-            background: isRecording ? "var(--menthe)" : "var(--warm-border)",
+            background: isRecording ? "var(--accent-sage)" : "var(--warm-border)",
           }}
         >
           🎙️
@@ -556,7 +556,7 @@ export function PlannerPage() {
       <div className="glass-card" style={PLANNER_SUMMARY_CARD_STYLE}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ ...LABEL_STYLE, color: "var(--nectarine-11)", marginBottom: 6 }}>Agenda</div>
+            <div style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", marginBottom: 6 }}>Agenda</div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.2 }}>Timeline do dia</h2>
             <p style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: "var(--text-3)" }}>{plannerSummary}</p>
           </div>
@@ -573,9 +573,9 @@ export function PlannerPage() {
               fontWeight: 700,
               letterSpacing: ".08em",
               textTransform: "uppercase",
-              color: "var(--nectarine-11)",
-              background: "var(--nectarine-a3)",
-              border: "1px solid var(--nectarine-a5)",
+              color: "var(--accent-peach-ink)",
+              background: "var(--accent-peach-a3)",
+              border: "1px solid var(--accent-peach-a5)",
             }}
           >
             {plannerBadgeLabel}
@@ -649,9 +649,9 @@ export function PlannerPage() {
                 <div
                   className="block-chip"
                   style={{
-                    background: "var(--nectarine-a3)",
-                    color: "var(--nectarine-11)",
-                    border: "1px solid var(--nectarine-a5)",
+                    background: "var(--accent-peach-a3)",
+                    color: "var(--accent-peach-ink)",
+                    border: "1px solid var(--accent-peach-a5)",
                   }}
                 >
                   <span style={{ fontSize: 11, lineHeight: 1 }}>+</span>
@@ -712,3 +712,4 @@ export function PlannerPage() {
     </div>
   );
 }
+

@@ -6,7 +6,7 @@ import type { FollowUpPending } from "../features/aura/types";
 import { HABIT_SUGGESTIONS, type HabitSuggestion } from "../features/aura/habit-presets";
 import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { aggregateCheckinsByDay, computeMoodCycle, computeStreak, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
 import { getClientDayContext, getLocalDateKey } from "../utils/day-context";
@@ -33,9 +33,9 @@ import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 
 const STATE_CONFIG = {
-  stable:  { emoji: "💚", label: "Estável",   color: "var(--menthe)",    bg: "rgba(180,185,169,.10)" },
-  rising:  { emoji: "📈", label: "Subindo",   color: "var(--lagune)",    bg: "rgba(176,180,196,.10)"  },
-  falling: { emoji: "📉", label: "Caindo",    color: "var(--nectarine)", bg: "rgba(197,165,147,.10)" },
+  stable:  { emoji: "💚", label: "Estável",   color: "var(--accent-sage)",    bg: "rgba(180,185,169,.10)" },
+  rising:  { emoji: "📈", label: "Subindo",   color: "var(--accent-sky)",    bg: "rgba(176,180,196,.10)"  },
+  falling: { emoji: "📉", label: "Caindo",    color: "var(--accent-peach)", bg: "rgba(197,165,147,.10)" },
   alert:   { emoji: "⚠️", label: "Atenção",   color: "#A17D6C",          bg: "rgba(161,125,108,.08)"  },
 } as const;
 
@@ -57,24 +57,24 @@ type ChartPoint = {
 };
 
 const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string | React.ReactNode; category: string }> = {
-  trabalho:     { cor: "var(--lagune)",    bg: "rgba(176,180,196,.10)",    emoji: "💼", category: "trabalho" },
-  autocuidado:  { cor: "var(--menthe)",   bg: "rgba(180,185,169,.10)",   emoji: "🌿", category: "autocuidado" },
-  casa:         { cor: "var(--nectarine)", bg: "rgba(197,165,147,.10)",  emoji: "🏠", category: "rotina" },
+  trabalho:     { cor: "var(--accent-sky)",    bg: "rgba(176,180,196,.10)",    emoji: "💼", category: "trabalho" },
+  autocuidado:  { cor: "var(--accent-sage)",   bg: "rgba(180,185,169,.10)",   emoji: "🌿", category: "autocuidado" },
+  casa:         { cor: "var(--accent-peach)", bg: "rgba(197,165,147,.10)",  emoji: "🏠", category: "rotina" },
   social:       { cor: "var(--social-color)", bg: "rgba(217,206,197,.10)", emoji: "🤝", category: "social" },
-  descanso:     { cor: "var(--menthe)",   bg: "rgba(180,185,169,.08)",   emoji: "😴", category: "autocuidado" },
-  refeicao:     { cor: "var(--nectarine)", bg: "rgba(197,165,147,.08)", emoji: "🍽️", category: "rotina" },
-  flexivel:     { cor: "var(--lagune)",   bg: "rgba(176,180,196,.08)",    emoji: <AuraIcon size={13} />, category: "pessoal" },
+  descanso:     { cor: "var(--accent-sage)",   bg: "rgba(180,185,169,.08)",   emoji: "😴", category: "autocuidado" },
+  refeicao:     { cor: "var(--accent-peach)", bg: "rgba(197,165,147,.08)", emoji: "🍽️", category: "rotina" },
+  flexivel:     { cor: "var(--accent-sky)",   bg: "rgba(176,180,196,.08)",    emoji: <AuraIcon size={13} />, category: "pessoal" },
 };
 
 const IMPORTANT_ALERT_CONFIG: Record<ImportantAlert["tone"], { accent: string; bg: string; border: string; emoji: string }> = {
   info: {
-    accent: "var(--lagune)",
+    accent: "var(--accent-sky)",
     bg: "rgba(176,180,196,.08)",
     border: "rgba(176,180,196,.22)",
     emoji: "ℹ️",
   },
   warning: {
-    accent: "var(--nectarine)",
+    accent: "var(--accent-peach)",
     bg: "rgba(197,165,147,.08)",
     border: "rgba(197,165,147,.26)",
     emoji: "⚠️",
@@ -214,12 +214,12 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
 };
 
 const HABIT_THEME_META: Record<HabitSuggestion["theme"], { label: string; accent: string; bg: string }> = {
-  starter: { label: "Cotidiano leve", accent: "var(--nectarine)", bg: "rgba(244,190,168,.18)" },
+  starter: { label: "Cotidiano leve", accent: "var(--accent-peach)", bg: "rgba(244,190,168,.18)" },
   autocuidado: { label: "Autocuidado", accent: "var(--sweet-mint)", bg: "rgba(192,220,203,.22)" },
   casa: { label: "Casa em ordem", accent: "var(--horizon)", bg: "rgba(189,207,236,.22)" },
   social: { label: "Vínculos", accent: "var(--horizon)", bg: "rgba(218,206,235,.24)" },
   criativo: { label: "Criativo", accent: "var(--atomic-tangerine)", bg: "rgba(248,215,193,.24)" },
-  natureza: { label: "Natureza", accent: "var(--menthe)", bg: "rgba(200,220,210,.24)" },
+  natureza: { label: "Natureza", accent: "var(--accent-sage)", bg: "rgba(200,220,210,.24)" },
 };
 
 function groupHabitSuggestions() {
@@ -1009,7 +1009,7 @@ export function HomePage() {
             boxShadow: "0 8px 14px rgba(17,24,39,.04)",
           }}>
             <span style={{ fontSize: 13 }}>{mood.emoji}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--nectarine-11)" }}>{mood.chipLabel}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)" }}>{mood.chipLabel}</span>
           </div>
         </div>
 
@@ -1043,7 +1043,7 @@ export function HomePage() {
                       disabled={option.disabled}
                       style={{
                         border: "none",
-                        background: active ? "var(--nectarine)" : "transparent",
+                        background: active ? "var(--accent-peach)" : "transparent",
                         color: active ? "#fff" : "var(--text-2)",
                         opacity: option.disabled ? 0.45 : 1,
                         borderRadius: 999,
@@ -1232,7 +1232,7 @@ export function HomePage() {
                   {streak >= 2 && (
                     <span style={{
                       fontSize: "10px", fontWeight: 800, padding: "2px 8px",
-                      borderRadius: "999px", background: "var(--nectarine)",
+                      borderRadius: "999px", background: "var(--accent-peach)",
                       color: "#fff", letterSpacing: ".04em", flexShrink: 0,
                     }}>
                       🔥 {streak} dias
@@ -1258,9 +1258,9 @@ export function HomePage() {
             {cycleReport.phase !== "insufficient_data" && (
               <div className="home-cycle-metrics">
                 {[
-                  { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--menthe)" },
-                  { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--lagune)" },
-                  ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--nectarine)" }] : []),
+                  { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
+                  { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
+                  ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
                 ].map(m => (
                   <div key={m.label} className="home-cycle-metric">
                     <p className="home-cycle-metric-label">{m.label}</p>
@@ -1330,14 +1330,14 @@ export function HomePage() {
                     <span style={{
                       fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999,
                       background: allDone ? "rgba(150,199,179,0.18)" : "rgba(215,137,127,0.12)",
-                      color: allDone ? "var(--menthe)" : "var(--nectarine)",
+                      color: allDone ? "var(--accent-sage)" : "var(--accent-peach)",
                     }}>
                       {completedHabits.length}/{dailyHabits.length}
                     </span>
                   )}
                 </div>
                 <button
-                  style={{ fontSize: 11, color: "var(--nectarine)", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
+                  style={{ fontSize: 11, color: "var(--accent-peach)", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
                   onClick={() => setShowHabitIdeasModal(true)}
                 >
                   Abrir ideias →
@@ -1349,7 +1349,7 @@ export function HomePage() {
                 <div style={{ marginBottom: 10, height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
                   <div style={{
                     width: `${pct}%`, height: "100%", borderRadius: 999,
-                    background: allDone ? "var(--menthe)" : "linear-gradient(90deg, var(--lagune), var(--menthe))",
+                    background: allDone ? "var(--accent-sage)" : "linear-gradient(90deg, var(--accent-sky), var(--accent-sage))",
                     transition: "width 0.5s ease",
                   }} />
                 </div>
@@ -1371,7 +1371,7 @@ export function HomePage() {
                             gap: 10,
                             background: isCompleted ? "rgba(150,199,179,0.06)" : "rgba(255,253,249,0.97)",
                             borderColor: isCompleted ? "rgba(150,199,179,0.25)" : "var(--warm-border)",
-                            borderLeft: `3px solid ${isCompleted ? "var(--menthe)" : "var(--warm-border)"}`,
+                            borderLeft: `3px solid ${isCompleted ? "var(--accent-sage)" : "var(--warm-border)"}`,
                             transition: "all 0.2s ease",
                             opacity: isCompleted ? 0.75 : 1,
                           }}
@@ -1387,7 +1387,7 @@ export function HomePage() {
                               {habit.title}
                             </p>
                             {habit.streakCount > 0 && (
-                              <p style={{ fontSize: 10, color: "var(--nectarine)", margin: "2px 0 0", fontWeight: 700 }}>
+                              <p style={{ fontSize: 10, color: "var(--accent-peach)", margin: "2px 0 0", fontWeight: 700 }}>
                                 🔥 {habit.streakCount} dias
                               </p>
                             )}
@@ -1397,8 +1397,8 @@ export function HomePage() {
                             style={{
                               flexShrink: 0,
                               width: 32, height: 32, borderRadius: "50%",
-                              border: `2px solid ${isCompleted ? "var(--menthe)" : "rgba(0,0,0,.15)"}`,
-                              background: isCompleted ? "var(--menthe)" : "transparent",
+                              border: `2px solid ${isCompleted ? "var(--accent-sage)" : "rgba(0,0,0,.15)"}`,
+                              background: isCompleted ? "var(--accent-sage)" : "transparent",
                               cursor: "pointer",
                               display: "flex", alignItems: "center", justifyContent: "center",
                               transition: "all 0.2s ease",
@@ -1422,7 +1422,7 @@ export function HomePage() {
                       style={{
                         width: "100%", marginTop: 8, padding: "8px 0",
                         background: "rgba(215,137,127,0.06)", border: "1.5px dashed rgba(215,137,127,0.3)",
-                        borderRadius: 12, color: "var(--nectarine)", fontSize: 12, fontWeight: 700,
+                        borderRadius: 12, color: "var(--accent-peach)", fontSize: 12, fontWeight: 700,
                         cursor: "pointer",
                       }}
                     >
@@ -1438,7 +1438,7 @@ export function HomePage() {
                       display: "flex", alignItems: "center", gap: 8,
                     }}>
                       <span style={{ fontSize: 18 }}>🎉</span>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--menthe)", margin: 0 }}>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", margin: 0 }}>
                         Todos os hábitos do dia concluídos!
                       </p>
                     </div>
@@ -1453,7 +1453,7 @@ export function HomePage() {
                   <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 4px" }}>
                     Nenhum hábito para hoje.
                   </p>
-                  <p style={{ fontSize: 12, color: "var(--nectarine)", fontWeight: 700, margin: 0 }}>
+                  <p style={{ fontSize: 12, color: "var(--accent-peach)", fontWeight: 700, margin: 0 }}>
                     Abrir sugestões →
                   </p>
                 </div>
@@ -1507,10 +1507,10 @@ export function HomePage() {
           const nudge = state.proactiveNudge!;
           const colorMap = {
             checkin_missing: "#F3B08C",
-            goal_stagnant:   "var(--lagune)",
-            inbox_overdue:   "var(--menthe)",
-            weekly_review:   "var(--menthe)",
-            phase_warning:   "var(--nectarine)",
+            goal_stagnant:   "var(--accent-sky)",
+            inbox_overdue:   "var(--accent-sage)",
+            weekly_review:   "var(--accent-sage)",
+            phase_warning:   "var(--accent-peach)",
           };
           const color = colorMap[nudge.type] ?? "#F3B08C";
           return (
@@ -1718,42 +1718,42 @@ export function HomePage() {
         <div className="aura-card" style={{ marginBottom: "calc(var(--a))", padding: "14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
             <span style={{ fontSize: 15 }}>♡</span>
-            <p style={{ fontSize: 13, fontWeight: 800, color: "var(--nectarine-11)", margin: 0 }}>Como está seu dia?</p>
+            <p style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-peach-ink)", margin: 0 }}>Como está seu dia?</p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, color: "var(--text-2)" }}>Tarefas de hoje</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--lagune)", background: "rgba(176,180,196,.1)", padding: "2px 10px", borderRadius: 999 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sky)", background: "rgba(176,180,196,.1)", padding: "2px 10px", borderRadius: 999 }}>
                 {totalTasks} planejada{totalTasks !== 1 ? "s" : ""}
               </span>
             </div>
             <div style={{ height: 1, background: "var(--warm-border)" }} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, color: "var(--text-2)" }}>Concluídas</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--menthe)", background: "rgba(180,185,169,.12)", padding: "2px 10px", borderRadius: 999 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", background: "rgba(180,185,169,.12)", padding: "2px 10px", borderRadius: 999 }}>
                 {doneTasks} ✓
               </span>
             </div>
             <div style={{ height: 1, background: "var(--warm-border)" }} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: 12, color: "var(--text-2)" }}>Em andamento</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--nectarine)", background: "var(--nectarine-a3)", padding: "2px 10px", borderRadius: 999 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-peach)", background: "var(--accent-peach-a3)", padding: "2px 10px", borderRadius: 999 }}>
                 {pendingTasks}
               </span>
             </div>
           </div>
-          <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(197,165,147,.06)", borderRadius: 10, border: "1px solid var(--nectarine-a5)" }}>
+          <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(197,165,147,.06)", borderRadius: 10, border: "1px solid var(--accent-peach-a5)" }}>
             {homeAiLoading ? (
               <>
-                <div style={{ height: 10, width: "40%", background: "var(--nectarine-a3)", borderRadius: 6, marginBottom: 8 }} />
+                <div style={{ height: 10, width: "40%", background: "var(--accent-peach-a3)", borderRadius: 6, marginBottom: 8 }} />
                 <div style={{ height: 9, width: "90%", background: "rgba(0,0,0,.05)", borderRadius: 5, marginBottom: 5 }} />
                 <div style={{ height: 9, width: "70%", background: "rgba(0,0,0,.05)", borderRadius: 5 }} />
               </>
             ) : motivacionalFinal ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--nectarine-11)", margin: 0 }}>Aura diz</p>
-                  <span style={{ fontSize: 9, background: "var(--nectarine-a3)", color: "var(--nectarine-11)", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)", margin: 0 }}>Aura diz</p>
+                  <span style={{ fontSize: 9, background: "var(--accent-peach-a3)", color: "var(--accent-peach-ink)", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
                 </div>
                 <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.6, fontStyle: "italic" }}>{motivacionalFinal}</p>
               </>
@@ -1860,14 +1860,14 @@ export function HomePage() {
           {/* Header */}
           <div className="home-section-row">
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
                 <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
               </svg>
               <span className="section-title" style={{ fontSize: "14px" }}>Agenda do dia</span>
             </div>
             {agendaPhase === "approved" && (
-              <span style={{ fontSize: "11px", color: "var(--menthe)", fontWeight: 600 }}>✓ No Planner</span>
+              <span style={{ fontSize: "11px", color: "var(--accent-sage)", fontWeight: 600 }}>✓ No Planner</span>
             )}
             {agendaPhase === "preview" && (
               <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>
@@ -1998,7 +1998,7 @@ export function HomePage() {
             style={{
               fontSize: "12px",
               fontWeight: 600,
-              color: "var(--nectarine)",
+              color: "var(--accent-peach)",
               display: "flex",
               alignItems: "center",
               gap: "3px",
@@ -2041,7 +2041,7 @@ export function HomePage() {
               >
                 {nextTask.time}
               </span>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--nectarine)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12" />
                 <polyline points="12 5 19 12 12 19" />
               </svg>
@@ -2068,7 +2068,7 @@ export function HomePage() {
                   width: "6px",
                   height: "6px",
                   borderRadius: "50%",
-                  background: "var(--lagune)",
+                  background: "var(--accent-sky)",
                   display: "inline-block",
                 }}
               />
@@ -2097,3 +2097,4 @@ export function HomePage() {
     </div>
   );
 }
+

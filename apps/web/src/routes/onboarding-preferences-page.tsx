@@ -38,12 +38,12 @@ export function OnboardingPreferencesPage() {
           {Array.from({ length: TOTAL }, (_, i) => (
             <div key={i} style={{
               flex: 1, height: 4, borderRadius: 999,
-              background: i < STEP ? "var(--nectarine)" : "rgba(215,137,127,.2)",
+              background: i < STEP ? "var(--accent-peach)" : "rgba(215,137,127,.2)",
             }} />
           ))}
         </div>
 
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--nectarine)", marginBottom: 4 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", marginBottom: 4 }}>
           PASSO {STEP} DE {TOTAL}
         </p>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.25, marginBottom: 6 }}>
@@ -52,7 +52,7 @@ export function OnboardingPreferencesPage() {
         <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55, marginBottom: 6 }}>
           Selecione até 3 preferências. Vamos usar para organizar sua agenda de forma inteligente.
         </p>
-        <p style={{ fontSize: 11, color: "var(--nectarine-11)", fontWeight: 600, marginBottom: 24 }}>
+        <p style={{ fontSize: 11, color: "var(--accent-peach-ink)", fontWeight: 600, marginBottom: 24 }}>
           {selected.size}/3 selecionadas
         </p>
       </div>
@@ -70,8 +70,8 @@ export function OnboardingPreferencesPage() {
                 style={{
                   display: "flex", alignItems: "center", gap: 14,
                   padding: "14px 16px", borderRadius: 14, cursor: disabled ? "default" : "pointer",
-                  border: `1.5px solid ${active ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                  background: active ? "var(--nectarine-a3)" : "rgba(255,255,255,.62)",
+                  border: `1.5px solid ${active ? "var(--accent-peach)" : "var(--warm-border-2)"}`,
+                  background: active ? "var(--accent-peach-a3)" : "rgba(255,255,255,.62)",
                   opacity: disabled ? 0.45 : 1,
                   transition: "all 150ms", textAlign: "left",
                   backdropFilter: "blur(16px)",
@@ -80,11 +80,11 @@ export function OnboardingPreferencesPage() {
               >
                 <span style={{ fontSize: 24, flexShrink: 0 }}>{c.emoji}</span>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--nectarine-11)" : "var(--text-1)", margin: "0 0 2px" }}>{c.label}</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--accent-peach-ink)" : "var(--text-1)", margin: "0 0 2px" }}>{c.label}</p>
                   <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>{c.sub}</p>
                 </div>
                 {active && (
-                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--nectarine)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--accent-peach)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                       <path d="M2 5.2L4.2 7.4L8 3" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -101,7 +101,7 @@ export function OnboardingPreferencesPage() {
           disabled={selected.size === 0}
           style={{
             width: "100%", height: 46,
-            background: selected.size > 0 ? "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)" : "rgba(215,137,127,.3)",
+            background: selected.size > 0 ? "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)" : "rgba(215,137,127,.3)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
             cursor: selected.size === 0 ? "not-allowed" : "pointer",
@@ -121,3 +121,4 @@ export function OnboardingPreferencesPage() {
     </div>
   );
 }
+

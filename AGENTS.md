@@ -83,9 +83,9 @@ Cada Codex instance trabalha em seu próprio worktree isolado.
 - Evitar blocos inteiros em cor saturada quando uma superfície clara resolver melhor.
 
 ### Regras visuais obrigatórias
-- Não usar o mockup antigo Aura v2 como referência de implementação.
+- Não usar o mockup antigo do sistema anterior como referência de implementação.
 - Não reintroduzir headers escuros, gradientes pesados ou superfícies “glass” densas do sistema anterior.
-- Não concentrar identidade visual em `nectarine` puro ou em massa cromática contínua.
+- Não concentrar identidade visual em um único tom saturado ou em massa cromática contínua.
 - Toda tela nova ou refatorada deve conversar com o shell clean atual antes de qualquer detalhe local.
 
 ### Estado atual consolidado

@@ -5,7 +5,7 @@ import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
 
 function ConfettiPiece({ delay, x }: { delay: number; x: number }) {
-  const colors = ["var(--nectarine)", "var(--menthe)", "var(--lagune)", "var(--nectarine-10)", "var(--menthe-11)"];
+  const colors = ["var(--accent-peach)", "var(--accent-sage)", "var(--accent-sky)", "var(--accent-peach-strong)", "var(--accent-sage-ink)"];
   const color = colors[Math.floor(Math.random() * colors.length)];
   return (
     <div style={{
@@ -132,3 +132,4 @@ export function OnboardingDonePage() {
     </>
   );
 }
+

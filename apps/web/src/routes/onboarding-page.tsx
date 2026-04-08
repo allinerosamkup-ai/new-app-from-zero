@@ -1,4 +1,4 @@
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Onboarding Page v2 — chat AI mockup
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -76,7 +76,7 @@ export function OnboardingPage() {
               style={{
                 height: "100%",
                 width: `${(step / 6) * 100}%`,
-                background: "var(--nectarine)",
+                background: "var(--accent-peach)",
                 borderRadius: 999,
                 transition: "width .35s ease",
               }}
@@ -266,3 +266,4 @@ export function OnboardingPage() {
     </div>
   );
 }
+

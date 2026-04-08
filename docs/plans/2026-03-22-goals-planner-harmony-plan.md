@@ -4,7 +4,7 @@
 **Status:** Em execução
 
 ## Context
-Registro histórico: o app tinha 13 telas visuais sob o sistema Aura v2, hoje já substituído pela linguagem editorial clean atual. Blocos 1-4 do plano anterior já foram executados parcialmente: store expandido com `checkinHistory` + `addCheckin`, check-in flow funcional, Insights/Harmony/DailySummary/Pomodoro conectados ao store, back buttons adicionados. **Porém**, o usuário identificou 7 problemas críticos que precisam ser resolvidos agora:
+Registro histórico: o app tinha um sistema visual anterior, hoje já substituído pela linguagem editorial clean atual. Blocos 1-4 do plano anterior já foram executados parcialmente: store expandido com `checkinHistory` + `addCheckin`, check-in flow funcional, Insights/Harmony/DailySummary/Pomodoro conectados ao store, back buttons adicionados. **Porém**, o usuário identificou 7 problemas críticos que precisam ser resolvidos agora:
 
 1. **GoalsPage mostra TASKS em vez de METAS** — usa `state.tasks` e `toggleTask` quando deveria mostrar `state.goals` com subtarefas
 2. **FAB "+ Novo bloco" no Planner não faz nada** — falta onClick handler

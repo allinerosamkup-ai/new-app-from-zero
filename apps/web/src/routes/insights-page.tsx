@@ -1,4 +1,4 @@
-import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
+import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Insights Page v3 — padrões da semana + card IA interativo
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +7,7 @@ import { api } from "../lib/api";
 import { useToast } from "../components/Toast";
 import { computeMoodCycle, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
 import "../styles/aura.css";
-import "../styles/aura-v2.css";
+import "../styles/editorial.css";
 
 type AiInsight = { insight: string; action: string; category: string; actionTitle: string };
 type InsightPhase = "idle" | "loading" | "done";
@@ -32,9 +32,9 @@ const CAT_COLOR: Record<string, string> = {
 };
 
 const STAT_ACCENT: Record<string, string> = {
-  Humor: "var(--menthe)",
-  Energia: "var(--lagune)",
-  "Check-ins": "var(--nectarine)",
+  Humor: "var(--accent-sage)",
+  Energia: "var(--accent-sky)",
+  "Check-ins": "var(--accent-peach)",
 };
 
 const toPoint = (angle: number, r: number, cx = 120, cy = 120) => ({
@@ -160,7 +160,7 @@ export function InsightsPage() {
   const harmonyDimensions = [
     { emoji: "😊", label: "Humor", cor: "var(--sweet-mint)", valor: avgHarmonyMood ?? 0, noData: avgHarmonyMood === null },
     { emoji: "⚡", label: "Energia", cor: "var(--atomic-tangerine)", valor: avgHarmonyEnergy ?? 0, noData: avgHarmonyEnergy === null },
-    { emoji: "🎯", label: "Metas", cor: "var(--lagune)", valor: avgGoalPct ?? 0, noData: avgGoalPct === null },
+    { emoji: "🎯", label: "Metas", cor: "var(--accent-sky)", valor: avgGoalPct ?? 0, noData: avgGoalPct === null },
     { emoji: "👥", label: "Social", cor: "var(--horizon)", valor: avgHarmonySocial ?? 0, noData: avgHarmonySocial === null },
     { emoji: "💪", label: "Força", cor: "var(--terracotta)", valor: avgHarmonyFisico ?? 0, noData: avgHarmonyFisico === null },
     { emoji: "🌙", label: "Sono", cor: "var(--aquamarine)", valor: avgHarmonySono ?? 0, noData: avgHarmonySono === null },
@@ -244,8 +244,8 @@ export function InsightsPage() {
                   style={{
                     padding: "5px 14px", borderRadius: "999px", fontSize: "12px", fontWeight: 700,
                     fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer",
-                    border: active ? "1.5px solid var(--nectarine)" : "1.5px solid var(--warm-border-2)",
-                    background: active ? "var(--nectarine)" : "rgba(255,255,255,.62)",
+                    border: active ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
+                    background: active ? "var(--accent-peach)" : "rgba(255,255,255,.62)",
                     color: active ? "#fff" : "var(--text-2)",
                     backdropFilter: "blur(14px)",
                     transition: "all 150ms",
@@ -522,9 +522,9 @@ export function InsightsPage() {
               {/* Métricas 7d */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 {[
-                  { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--menthe)" },
-                  { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--lagune)" },
-                  ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--nectarine)" }] : []),
+                  { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
+                  { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
+                  ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
                 ].map(m => (
                   <div key={m.label} style={{ flex: 1, padding: "8px 10px", borderRadius: 10, background: `${m.color}15`, border: `1px solid ${m.color}30`, textAlign: "center" }}>
                     <p style={{ fontSize: 10, color: "var(--text-3)", margin: "0 0 2px" }}>{m.label}</p>
@@ -557,7 +557,7 @@ export function InsightsPage() {
                     return (
                       <span key={flag} style={{
                         fontSize: 10, padding: "3px 8px", borderRadius: 999,
-                        background: "rgba(215,137,127,.12)", color: "var(--nectarine)",
+                        background: "rgba(215,137,127,.12)", color: "var(--accent-peach)",
                         border: "1px solid rgba(215,137,127,.25)", fontWeight: 600,
                       }}>
                         ⚠ {FLAG_LABELS[flag] ?? flag}
@@ -627,7 +627,7 @@ export function InsightsPage() {
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)" }}>Hoje</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: completedToday.length === totalToday ? "var(--menthe)" : "var(--text-2)" }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: completedToday.length === totalToday ? "var(--accent-sage)" : "var(--text-2)" }}>
                       {completedToday.length}/{totalToday}
                     </span>
                   </div>
@@ -636,8 +636,8 @@ export function InsightsPage() {
                       width: `${(completedToday.length / totalToday) * 100}%`,
                       height: "100%", borderRadius: 999,
                       background: completedToday.length === totalToday
-                        ? "var(--menthe)"
-                        : "linear-gradient(90deg, var(--lagune), var(--menthe))",
+                        ? "var(--accent-sage)"
+                        : "linear-gradient(90deg, var(--accent-sky), var(--accent-sage))",
                       transition: "width 0.5s ease",
                     }} />
                   </div>
@@ -655,7 +655,7 @@ export function InsightsPage() {
                       <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <span style={{ fontSize: 18, width: 28, textAlign: "center" }}>{h.icon || "✨"}</span>
                         <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--text-1)" }}>{h.title}</span>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: "var(--nectarine)", display: "flex", alignItems: "center", gap: 3 }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "var(--accent-peach)", display: "flex", alignItems: "center", gap: 3 }}>
                           🔥 {h.streakCount}d
                         </span>
                       </div>
@@ -673,7 +673,7 @@ export function InsightsPage() {
                 }}>
                   <span style={{ fontSize: 18 }}>🏆</span>
                   <div>
-                    <p style={{ fontSize: 10, color: "var(--nectarine)", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>
+                    <p style={{ fontSize: 10, color: "var(--accent-peach)", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>
                       Melhor sequência de sempre
                     </p>
                     <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
@@ -686,7 +686,7 @@ export function InsightsPage() {
               {/* Factors correlation (only if enough data) */}
               {topFactors.length > 0 && (
                 <div>
-                  <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--menthe)", margin: "12px 0 8px" }}>
+                  <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage)", margin: "12px 0 8px" }}>
                     ✨ Fatores nos seus dias de bom humor
                   </p>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -697,7 +697,7 @@ export function InsightsPage() {
                           display: "flex", alignItems: "center", gap: 5,
                           padding: "5px 10px", borderRadius: 20,
                           background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)",
-                          fontSize: 12, fontWeight: 600, color: "var(--menthe)",
+                          fontSize: 12, fontWeight: 600, color: "var(--accent-sage)",
                         }}>
                           <span>{meta.icon}</span>
                           <span>{meta.label}</span>
@@ -769,7 +769,7 @@ export function InsightsPage() {
             padding: "14px 16px",
             marginBottom: "calc(var(--a))",
           }}>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--menthe)", margin: "0 0 12px" }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sage)", margin: "0 0 12px" }}>
               🌟 Conquistas desta semana
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -782,7 +782,7 @@ export function InsightsPage() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     marginTop: 1,
                   }}>
-                    <span style={{ fontSize: 11, color: "var(--menthe)", fontWeight: 800 }}>✓</span>
+                    <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 800 }}>✓</span>
                   </div>
                   <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0, lineHeight: 1.5, flex: 1 }}>
                     {h}
@@ -802,7 +802,7 @@ export function InsightsPage() {
             padding: "18px 20px",
             marginBottom: "calc(var(--a))",
           }}>
-            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine)", margin: "0 0 10px" }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)", margin: "0 0 10px" }}>
               💭 Pergunta da semana
             </p>
             <p style={{ fontSize: 17, fontWeight: 700, color: "var(--text-1)", margin: "0 0 14px", lineHeight: 1.45 }}>
@@ -812,7 +812,7 @@ export function InsightsPage() {
               onClick={() => window.location.href = "/journal"}
               style={{
                 background: "none", border: "none", padding: 0, cursor: "pointer",
-                fontSize: 12, fontWeight: 700, color: "var(--nectarine)",
+                fontSize: 12, fontWeight: 700, color: "var(--accent-peach)",
                 display: "flex", alignItems: "center", gap: 4,
               }}
             >
@@ -839,21 +839,21 @@ export function InsightsPage() {
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               {patterns.bestDay && (
                 <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)", textAlign: "center" }}>
-                  <p style={{ fontSize: 9, fontWeight: 700, color: "var(--menthe)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Melhor dia</p>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--menthe)", margin: "0 0 1px" }}>{patterns.bestDay.day}</p>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-sage)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Melhor dia</p>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 1px" }}>{patterns.bestDay.day}</p>
                   <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.bestDay.mood.toFixed(1)}/10</p>
                 </div>
               )}
               {patterns.worstDay && patterns.worstDay.day !== patterns.bestDay?.day && (
                 <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(215,137,127,0.08)", border: "1px solid rgba(215,137,127,0.25)", textAlign: "center" }}>
-                  <p style={{ fontSize: 9, fontWeight: 700, color: "var(--nectarine)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Dia difícil</p>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--nectarine)", margin: "0 0 1px" }}>{patterns.worstDay.day}</p>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-peach)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Dia difícil</p>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-peach)", margin: "0 0 1px" }}>{patterns.worstDay.day}</p>
                   <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.worstDay.mood.toFixed(1)}/10</p>
                 </div>
               )}
               <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(99,152,169,0.10)", border: "1px solid rgba(99,152,169,0.25)", textAlign: "center" }}>
-                <p style={{ fontSize: 9, fontWeight: 700, color: "var(--lagune)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Sequência</p>
-                <p style={{ fontSize: 18, fontWeight: 800, color: "var(--lagune)", margin: "0 0 1px" }}>{patterns.streak}</p>
+                <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-sky)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Sequência</p>
+                <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-sky)", margin: "0 0 1px" }}>{patterns.streak}</p>
                 <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>dias seguidos</p>
               </div>
             </div>
@@ -862,13 +862,13 @@ export function InsightsPage() {
             <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>Distribuição de humor ({patterns.total} registros)</p>
             <div style={{ display: "flex", gap: 4, height: 8, borderRadius: 999, overflow: "hidden", marginBottom: 6 }}>
               {patterns.highDays > 0 && (
-                <div style={{ flex: patterns.highDays, background: "var(--menthe)", borderRadius: "999px 0 0 999px" }} />
+                <div style={{ flex: patterns.highDays, background: "var(--accent-sage)", borderRadius: "999px 0 0 999px" }} />
               )}
               {patterns.stableDays > 0 && (
-                <div style={{ flex: patterns.stableDays, background: "var(--lagune)" }} />
+                <div style={{ flex: patterns.stableDays, background: "var(--accent-sky)" }} />
               )}
               {patterns.lowDays > 0 && (
-                <div style={{ flex: patterns.lowDays, background: "var(--nectarine)", borderRadius: "0 999px 999px 0" }} />
+                <div style={{ flex: patterns.lowDays, background: "var(--accent-peach)", borderRadius: "0 999px 999px 0" }} />
               )}
             </div>
             <div style={{ display: "flex", gap: 10, fontSize: 10, color: "var(--text-3)" }}>
@@ -884,8 +884,8 @@ export function InsightsPage() {
                 background: "rgba(99,152,169,0.08)", border: "1px solid rgba(99,152,169,0.20)",
               }}>
                 <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-                  💡 Nos seus dados, <strong style={{ color: "var(--menthe)" }}>{patterns.bestDay.day}</strong> é seu melhor dia.
-                  Nas <strong style={{ color: "var(--nectarine)" }}>{patterns.worstDay.day}s</strong>, proteja sua energia —
+                  💡 Nos seus dados, <strong style={{ color: "var(--accent-sage)" }}>{patterns.bestDay.day}</strong> é seu melhor dia.
+                  Nas <strong style={{ color: "var(--accent-peach)" }}>{patterns.worstDay.day}s</strong>, proteja sua energia —
                   evite compromissos exigentes ou agendamentos difíceis nesse dia.
                 </p>
               </div>
@@ -897,3 +897,4 @@ export function InsightsPage() {
     </div>
   );
 }
+

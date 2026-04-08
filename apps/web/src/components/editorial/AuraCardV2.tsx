@@ -10,7 +10,7 @@ export const AuraCardV2: React.FC<AuraCardV2Props> = ({
   ...props 
 }) => {
   return (
-    <div className={`aura-v2-card ${className}`} {...props}>
+    <div className={`editorial-card ${className}`} {...props}>
       {children}
     </div>
   );
