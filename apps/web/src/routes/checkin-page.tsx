@@ -1,34 +1,132 @@
-// Checkin Page v4 — emoções alinhadas, cards expansíveis e sem nota livre
-import { useState, useMemo } from "react";
+// Checkin Page v5 — wizard multi-step (4 telas)
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { MoodOption } from "../features/aura/types";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
 import { getClientDayContext } from "../utils/day-context";
+import { ChevronLeft, Check } from "lucide-react";
 import "../styles/aura.css";
 import "../styles/aura-v2.css";
 
-function OptionalSlider({ label, emoji, value, onChange, color }: {
-  label: string; emoji: string; value: number; onChange: (v: number) => void; color: string;
+// ─── Slider auxiliar ──────────────────────────────────────────────────────────
+function ScrubSlider({
+  label,
+  emoji,
+  value,
+  onChange,
+  color,
+}: {
+  label: string;
+  emoji: string;
+  value: number;
+  onChange: (v: number) => void;
+  color: string;
 }) {
-  const pct = ((value - 1) / 4) * 100;
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const pct = ((value - 1) / 9) * 100;
+
+  function valueFromClientX(clientX: number) {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect) return value;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return Math.round(1 + ratio * 9);
+  }
+
+  function handlePointer(clientX: number) {
+    onChange(valueFromClientX(clientX));
+  }
+
+  function buildLabels() {
+    return Array.from({ length: 10 }, (_, index) => index + 1);
+  }
+
   return (
     <div className="checkin-slider-wrap">
       <div className="checkin-slider-label">
         <span className="title">{emoji} {label}</span>
         <span className="val" style={{ color }}>{value}</span>
       </div>
-      <div style={{ position: "relative" }}>
-        <div style={{ width: "100%", height: "8px", background: `${color}22`, borderRadius: "999px", position: "relative", overflow: "visible" }}>
+      <div
+        style={{ position: "relative", touchAction: "none" }}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          handlePointer(event.clientX);
+        }}
+        onPointerMove={(event) => {
+          if (event.buttons !== 1) return;
+          handlePointer(event.clientX);
+        }}
+      >
+        <div ref={trackRef} style={{ width: "100%", height: "10px", background: `${color}22`, borderRadius: "999px", position: "relative", overflow: "visible" }}>
           <div style={{ width: `${pct}%`, height: "100%", borderRadius: "999px", background: color }} />
-          <div style={{ width: "20px", height: "20px", background: "#fff", border: `2px solid ${color}`, borderRadius: "50%", position: "absolute", top: "50%", left: `${pct}%`, transform: "translate(-50%, -50%)", boxShadow: `0 2px 8px ${color}44`, pointerEvents: "none" }} />
+          <div style={{ width: "24px", height: "24px", background: "#fff", border: `2px solid ${color}`, borderRadius: "50%", position: "absolute", top: "50%", left: `${pct}%`, transform: "translate(-50%, -50%)", boxShadow: `0 6px 16px ${color}44`, pointerEvents: "none" }} />
         </div>
-        <input type="range" min={1} max={5} step={1} value={value} onChange={e => onChange(Number(e.target.value))}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", margin: 0 }} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 0, marginTop: 10, padding: "0 2px" }}>
+          {buildLabels().map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => onChange(item)}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                fontSize: 10,
+                fontWeight: value === item ? 800 : 600,
+                color: value === item ? color : "var(--text-3)",
+                cursor: "pointer",
+              }}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
+
+function OptionalSlider(props: {
+  label: string; emoji: string; value: number; onChange: (v: number) => void; color: string;
+}) {
+  return <ScrubSlider {...props} />;
+}
+
+function getMoodEmoji(value: number) {
+  if (value <= 2) return "😞";
+  if (value <= 4) return "😕";
+  if (value <= 6) return "😌";
+  if (value <= 8) return "🙂";
+  return "✨";
+}
+
+function getEnergyEmoji(value: number) {
+  if (value <= 2) return "🪫";
+  if (value <= 4) return "😴";
+  if (value <= 6) return "⚡";
+  if (value <= 8) return "💪";
+  return "🔥";
+}
+
+// ─── Dados ───────────────────────────────────────────────────────────────────
+const FACTORS = [
+  { id: "good_sleep",      label: "Sono bom",            icon: "😴", category: "saúde"     },
+  { id: "exercise",        label: "Exercício",            icon: "🏋️", category: "saúde"     },
+  { id: "healthy_meal",    label: "Alimentação",          icon: "🥗", category: "saúde"     },
+  { id: "fresh_air",       label: "Ar fresco",            icon: "🌿", category: "saúde"     },
+  { id: "good_talk",       label: "Boa conversa",         icon: "💬", category: "social"    },
+  { id: "kind_words",      label: "Palavras gentis",      icon: "❤️", category: "social"    },
+  { id: "support",         label: "Apoio recebido",       icon: "🤝", category: "social"    },
+  { id: "small_win",       label: "Pequena vitória",      icon: "⭐", category: "trabalho"  },
+  { id: "finished_task",   label: "Tarefa concluída",     icon: "✅", category: "trabalho"  },
+  { id: "feeling_valued",  label: "Me senti valorizada",  icon: "🏆", category: "trabalho"  },
+  { id: "music",           label: "Música",               icon: "🎵", category: "lazer"     },
+  { id: "time_outside",    label: "Tempo ao ar livre",    icon: "🌳", category: "lazer"     },
+  { id: "hobby",           label: "Hobby",                icon: "🎨", category: "lazer"     },
+  { id: "self_trust",      label: "Confiança em mim",     icon: "💪", category: "pessoal"   },
+  { id: "rest",            label: "Descanso",             icon: "🛋️", category: "pessoal"   },
+];
 
 const emotionToMood: Record<string, MoodOption> = {
   radiant:   "focada",
@@ -46,42 +144,32 @@ const emotionToMood: Record<string, MoodOption> = {
 };
 
 const emotions = [
-  { id: "radiant",   emoji: "✨", label: "Radiante" },
-  { id: "calm",      emoji: "😌", label: "Calma" },
-  { id: "happy",     emoji: "🙂", label: "Feliz" },
-  { id: "anxious",   emoji: "😰", label: "Ansiosa" },
-  { id: "tired",     emoji: "😴", label: "Cansada" },
-  { id: "focused",   emoji: "🔥", label: "Focada" },
-  { id: "sad",       emoji: "😢", label: "Triste" },
-  { id: "angry",     emoji: "😤", label: "Irritada" },
+  { id: "radiant",   emoji: "✨", label: "Radiante"   },
+  { id: "calm",      emoji: "😌", label: "Calma"      },
+  { id: "happy",     emoji: "🙂", label: "Feliz"      },
+  { id: "anxious",   emoji: "😰", label: "Ansiosa"    },
+  { id: "tired",     emoji: "😴", label: "Cansada"    },
+  { id: "focused",   emoji: "🔥", label: "Focada"     },
+  { id: "sad",       emoji: "😢", label: "Triste"     },
+  { id: "angry",     emoji: "😤", label: "Irritada"   },
   { id: "stressed",  emoji: "😵", label: "Estressada" },
-  { id: "sensitive", emoji: "🌙", label: "Sensível" },
-  { id: "exhausted", emoji: "😩", label: "Exausta" },
-  { id: "agitated",  emoji: "🫨", label: "Agitada" },
+  { id: "sensitive", emoji: "🌙", label: "Sensível"   },
+  { id: "exhausted", emoji: "😩", label: "Exausta"    },
+  { id: "agitated",  emoji: "🫨", label: "Agitada"    },
 ];
 
 type FlowIntensity = "leve" | "moderado" | "intenso";
 
 const symptomLevels_opts = [
-  { label: "Leve", v: 1 as 1 | 2 | 3 },
+  { label: "Leve",     v: 1 as 1 | 2 | 3 },
   { label: "Moderada", v: 2 as 1 | 2 | 3 },
-  { label: "Intensa", v: 3 as 1 | 2 | 3 },
+  { label: "Intensa",  v: 3 as 1 | 2 | 3 },
 ];
 
 type DetailCardKey = "sono" | "fisico" | "social" | "ciclo";
 
-function DetailCard({
-  emoji,
-  title,
-  summary,
-  active,
-  onClick,
-}: {
-  emoji: string;
-  title: string;
-  summary: string;
-  active: boolean;
-  onClick: () => void;
+function DetailCard({ emoji, title, summary, active, onClick }: {
+  emoji: string; title: string; summary: string; active: boolean; onClick: () => void;
 }) {
   return (
     <button
@@ -104,15 +192,10 @@ function DetailCard({
       }}
     >
       <div style={{
-        width: "38px",
-        height: "38px",
-        borderRadius: "12px",
+        width: "38px", height: "38px", borderRadius: "12px",
         background: active ? "rgba(255,255,255,.75)" : "rgba(243,176,140,.16)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "18px",
-        flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: "18px", flexShrink: 0,
       }}>
         {emoji}
       </div>
@@ -124,34 +207,51 @@ function DetailCard({
   );
 }
 
+// ─── Wizard step configs ──────────────────────────────────────────────────────
+const STEPS = [
+  { label: "Humor & Energia", hint: "Como seu corpo se sente agora?" },
+  { label: "Emoção",          hint: "Que emoção domina o momento?" },
+  { label: "Influências",     hint: "O que contribuiu pro seu estado?" },
+  { label: "Detalhes",        hint: "Opcional — mas muito útil pra Aura." },
+];
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 export function CheckinPage() {
   const { setMood, addCheckin } = useAuraStore();
   const navigate = useNavigate();
 
-  const [humor, setHumor] = useState(4);
-  const [energia, setEnergia] = useState(3);
+  // ── wizard state
+  const [wizardStep, setWizardStep] = useState(1);
+  const [slideDir, setSlideDir] = useState<1 | -1>(1);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // ── step 1: humor + energia
+  const [humor, setHumor] = useState(7);
+  const [energia, setEnergia] = useState(6);
+
+  // ── step 2: emoção
   const [emotionSelected, setEmotionSelected] = useState<string | null>("radiant");
-  const [sono, setSono] = useState(3);
-  const [fisico, setFisico] = useState(3);
-  const [social, setSocial] = useState(3);
+
+  // ── step 3: fatores
+  const [selectedFactors, setSelectedFactors] = useState<string[]>([]);
+
+  // ── step 4: detalhes + nota
+  const [sono, setSono] = useState(6);
+  const [fisico, setFisico] = useState(6);
+  const [social, setSocial] = useState(6);
   const [activeDetail, setActiveDetail] = useState<DetailCardKey | null>(null);
   const [detailEnabled, setDetailEnabled] = useState<{ sono: boolean; fisico: boolean; social: boolean }>({
-    sono: false,
-    fisico: false,
-    social: false,
+    sono: false, fisico: false, social: false,
   });
-
-  // Ciclo menstrual
   const [showCiclo, setShowCiclo] = useState(false);
   const [isFlowing, setIsFlowing] = useState<boolean | null>(null);
   const [flowDay, setFlowDay] = useState<number | null>(null);
   const [flowIntensity, setFlowIntensity] = useState<FlowIntensity | null>(null);
   const [symptomLvls, setSymptomLvls] = useState<{ colica?: 1|2|3; dorCabeca?: 1|2|3 }>({});
-
-  const humorFillPct = ((humor - 1) / 4) * 100;
-  const energiaFillPct = ((energia - 1) / 4) * 100;
+  const [note, setNote] = useState("");
 
   const dayContext = useMemo(() => getClientDayContext(), []);
+  const touchStartX = useRef<number | null>(null);
 
   function toggleDetailCard(card: DetailCardKey) {
     if (card === "ciclo") {
@@ -160,278 +260,505 @@ export function CheckinPage() {
       setShowCiclo(nextActive === "ciclo");
       return;
     }
-
-    setDetailEnabled((current) => {
+    setDetailEnabled((cur) => {
       const key = card as "sono" | "fisico" | "social";
-      const shouldDisable = activeDetail === card && current[key];
-      return { ...current, [key]: shouldDisable ? false : true };
+      const shouldDisable = activeDetail === card && cur[key];
+      return { ...cur, [key]: shouldDisable ? false : true };
     });
-    setActiveDetail((current) => (current === card ? null : card));
+    setActiveDetail((cur) => (cur === card ? null : card));
     setShowCiclo(false);
   }
 
+  function goNext() {
+    setSlideDir(1);
+    setWizardStep((s) => s + 1);
+  }
+
+  function goBack() {
+    setSlideDir(-1);
+    setWizardStep((s) => s - 1);
+  }
+
+  async function handleFinish() {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const mood = emotionToMood[emotionSelected ?? "calm"] ?? "equilibrada";
+      setMood(mood);
+      await addCheckin({
+        humor,
+        energia,
+        emotion: emotionSelected ?? "calm",
+        sono: detailEnabled.sono ? sono : undefined,
+        fisico: detailEnabled.fisico ? fisico : undefined,
+        social: detailEnabled.social ? social : undefined,
+        factors: selectedFactors.length > 0 ? selectedFactors : undefined,
+        note: note.trim() || undefined,
+        isFlowing: isFlowing ?? undefined,
+        flowDay: flowDay ?? undefined,
+        flowIntensity: flowIntensity ?? undefined,
+        symptomLevels: Object.keys(symptomLvls).length > 0 ? symptomLvls : undefined,
+      });
+      navigate("/checkin-result");
+    } catch (err) {
+      console.error("Erro ao registrar check-in:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const animClass = slideDir === 1 ? "checkin-step-enter-fwd" : "checkin-step-enter-bwd";
+
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)" }}>
+    <div style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", paddingBottom: 32 }}>
+      <style>{`
+        @keyframes checkin-fwd {
+          from { opacity: 0; transform: translateX(28px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes checkin-bwd {
+          from { opacity: 0; transform: translateX(-28px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        .checkin-step-enter-fwd { animation: checkin-fwd 0.28s cubic-bezier(0.22,1,0.36,1) forwards; }
+        .checkin-step-enter-bwd { animation: checkin-bwd 0.28s cubic-bezier(0.22,1,0.36,1) forwards; }
+      `}</style>
+
       <div className="screen-content">
 
-        {/* Header */}
-        <div className="aura-page-header" style={{ marginBottom: "calc(var(--a) * 1.4)" }}>
-          <p className="aura-page-kicker">Check-in</p>
-          <h2 className="aura-page-title">Como você está hoje?</h2>
-          <p className="aura-page-subtitle">{dayContext.dateWithWeekdayLabel} · {dayContext.partOfDay}</p>
-        </div>
-
-        {/* Slider Humor */}
-        <div className="checkin-slider-wrap">
-          <div className="checkin-slider-label">
-            <span className="title">😊 Humor</span>
-            <span className="val" style={{ color: "var(--nectarine)" }}>{humor}</span>
-          </div>
-          <div className="aura-slider-container">
-            <div className="aura-slider-track">
-              <div className="aura-slider-fill" style={{ width: `${humorFillPct}%`, background: "linear-gradient(90deg, var(--menthe), var(--nectarine))" }} />
-            </div>
-            <div className="aura-slider-thumb" style={{ left: `${humorFillPct}%` }} />
-            <input type="range" min={1} max={5} step={1} value={humor} className="aura-range-input" onChange={(e) => setHumor(Number(e.target.value))} />
-          </div>
-        </div>
-
-        {/* Slider Energia */}
-        <div className="checkin-slider-wrap">
-          <div className="checkin-slider-label">
-            <span className="title">⚡ Energia</span>
-            <span className="val" style={{ color: "var(--lagune)" }}>{energia}</span>
-          </div>
-          <div className="aura-slider-container">
-            <div className="aura-slider-track">
-              <div className="aura-slider-fill" style={{ width: `${energiaFillPct}%`, background: "linear-gradient(90deg, var(--lagune), var(--menthe))" }} />
-            </div>
-            <div className="aura-slider-thumb" style={{ left: `${energiaFillPct}%` }} />
-            <input type="range" min={1} max={5} step={1} value={energia} className="aura-range-input" onChange={(e) => setEnergia(Number(e.target.value))} />
-          </div>
-        </div>
-
-        {/* Seção emoções */}
-        <div style={{ marginBottom: "calc(var(--a) * 1.2)" }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: "10px" }}>
-            Como está se sentindo?
+        {/* ── Back button + date ─────────────────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, marginTop: 8 }}>
+          <button
+            onClick={() => wizardStep > 1 ? goBack() : navigate(-1)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-1)", padding: 4, display: "flex", alignItems: "center" }}
+          >
+            <ChevronLeft size={22} />
+          </button>
+          <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0, fontWeight: 600 }}>
+            {dayContext.dateWithWeekdayLabel}
           </p>
-          <div className="emotion-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-            {emotions.map((em) => (
-              <button
-                type="button"
-                key={em.id}
-                className={`emotion-chip${emotionSelected === em.id ? " active" : ""}`}
-                onClick={() => setEmotionSelected(em.id === emotionSelected ? null : em.id)}
-                style={{ border: "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                <span className="emoji">{em.emoji}</span>
-                {em.label}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* Escuta complementar */}
-        <div style={{ marginBottom: "calc(var(--a) * 1.4)" }}>
-          <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: "10px" }}>
-            Escaneie outras áreas
+        {/* ── Progress dots ──────────────────────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+          {STEPS.map((_, i) => {
+            const n = i + 1;
+            const isDone = n < wizardStep;
+            const isActive = n === wizardStep;
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", flex: i < STEPS.length - 1 ? 1 : "unset" }}>
+                <div style={{
+                  width: isActive ? 28 : 22,
+                  height: 22,
+                  borderRadius: 11,
+                  background: isDone
+                    ? "var(--menthe)"
+                    : isActive
+                      ? "var(--nectarine)"
+                      : "var(--warm-border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "all 0.25s ease",
+                  flexShrink: 0,
+                }}>
+                  {isDone
+                    ? <Check size={11} color="#fff" strokeWidth={3} />
+                    : <span style={{ fontSize: 11, fontWeight: 800, color: isActive ? "#fff" : "var(--text-3)" }}>{n}</span>
+                  }
+                </div>
+                {i < STEPS.length - 1 && (
+                  <div style={{
+                    flex: 1,
+                    height: 2,
+                    marginLeft: 6,
+                    background: isDone ? "var(--menthe)" : "var(--warm-border)",
+                    borderRadius: 1,
+                    transition: "background 0.3s ease",
+                  }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* ── Step heading ───────────────────────────────────────────── */}
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 4px" }}>
+            Passo {wizardStep} de {STEPS.length}
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
-            <DetailCard
-              emoji="🌙"
-              title="Sono"
-              summary={detailEnabled.sono ? `${sono}/5 registrado` : "Toque para registrar"}
-              active={activeDetail === "sono"}
-              onClick={() => toggleDetailCard("sono")}
-            />
-            <DetailCard
-              emoji="💪"
-              title="Corpo"
-              summary={detailEnabled.fisico ? `${fisico}/5 registrado` : "Toque para registrar"}
-              active={activeDetail === "fisico"}
-              onClick={() => toggleDetailCard("fisico")}
-            />
-            <DetailCard
-              emoji="👥"
-              title="Social"
-              summary={detailEnabled.social ? `${social}/5 registrado` : "Toque para registrar"}
-              active={activeDetail === "social"}
-              onClick={() => toggleDetailCard("social")}
-            />
-            <DetailCard
-              emoji="🌸"
-              title="Ciclo menstrual"
-              summary={showCiclo ? "Painel aberto" : "Toque se quiser registrar"}
-              active={activeDetail === "ciclo"}
-              onClick={() => toggleDetailCard("ciclo")}
-            />
-          </div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
+            {STEPS[wizardStep - 1].label}
+          </h2>
+          <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>
+            {STEPS[wizardStep - 1].hint}
+          </p>
+        </div>
 
-          {activeDetail === "sono" && (
-            <div style={{ marginTop: "12px" }}>
-              <OptionalSlider label="Como foi seu sono?" emoji="🌙" value={sono} onChange={(value) => { setSono(value); setDetailEnabled((current) => ({ ...current, sono: true })); }} color="var(--lagune)" />
-            </div>
-          )}
-          {activeDetail === "fisico" && (
-            <div style={{ marginTop: "12px" }}>
-              <OptionalSlider label="Como está seu corpo?" emoji="💪" value={fisico} onChange={(value) => { setFisico(value); setDetailEnabled((current) => ({ ...current, fisico: true })); }} color="var(--menthe)" />
-            </div>
-          )}
-          {activeDetail === "social" && (
-            <div style={{ marginTop: "12px" }}>
-              <OptionalSlider label="Como foi sua atividade social?" emoji="👥" value={social} onChange={(value) => { setSocial(value); setDetailEnabled((current) => ({ ...current, social: true })); }} color="var(--social-color)" />
-            </div>
-          )}
-          {showCiclo && (
-            <div style={{ marginTop: "12px" }}>
-              <div style={{ background: "var(--nectarine-a1)", borderRadius: "10px", border: "1px solid rgba(215,137,127,.2)", padding: "14px" }}>
+        {/* ── Step content (animated) ────────────────────────────────── */}
+        <div
+          key={wizardStep}
+          className={animClass}
+          onTouchStart={(event) => {
+            touchStartX.current = event.changedTouches[0]?.clientX ?? null;
+          }}
+          onTouchEnd={(event) => {
+            const startX = touchStartX.current;
+            const endX = event.changedTouches[0]?.clientX ?? null;
+            touchStartX.current = null;
+            if (startX == null || endX == null) return;
+            const delta = endX - startX;
+            if (Math.abs(delta) < 56) return;
+            if (delta < 0 && wizardStep < STEPS.length) goNext();
+            if (delta > 0 && wizardStep > 1) goBack();
+          }}
+        >
 
-              {/* Está menstruada hoje? */}
-              <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Está menstruada hoje?</p>
-              <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-                {[{ label: "Sim", value: true }, { label: "Não", value: false }].map(opt => (
+          {/* STEP 1: Humor + Energia */}
+          {wizardStep === 1 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <ScrubSlider label="Humor" emoji="😊" value={humor} onChange={setHumor} color="var(--nectarine)" />
+              <ScrubSlider label="Energia" emoji="⚡" value={energia} onChange={setEnergia} color="var(--lagune)" />
+
+              {/* Visual summary */}
+              <div style={{
+                marginTop: 8,
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+              }}>
+                {[
+                  { label: "Humor", value: humor, color: "var(--nectarine)", emoji: getMoodEmoji(humor) },
+                  { label: "Energia", value: energia, color: "var(--lagune)", emoji: getEnergyEmoji(energia) },
+                ].map((item) => (
+                  <div key={item.label} style={{
+                    padding: "14px 16px",
+                    borderRadius: 16,
+                    background: `${item.color}12`,
+                    border: `1.5px solid ${item.color}30`,
+                    textAlign: "center",
+                  }}>
+                    <div style={{ fontSize: 28, lineHeight: 1, marginBottom: 4 }}>{item.emoji}</div>
+                    <p style={{ fontSize: 22, fontWeight: 800, color: item.color, margin: "0 0 2px" }}>{item.value}/10</p>
+                    <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0, fontWeight: 700, textTransform: "uppercase" }}>{item.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Emoção */}
+          {wizardStep === 2 && (
+            <div>
+              <div className="emotion-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+                {emotions.map((em) => (
                   <button
                     type="button"
-                    key={String(opt.value)}
-                    onClick={() => {
-                      setIsFlowing(opt.value);
-                      if (!opt.value) { setFlowDay(null); setFlowIntensity(null); setSymptomLvls({}); }
-                    }}
-                    style={{
-                      flex: 1, height: "36px", borderRadius: "999px",
-                      border: `1.5px solid ${isFlowing === opt.value ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                      background: isFlowing === opt.value ? "var(--nectarine-a3)" : "transparent",
-                      color: isFlowing === opt.value ? "var(--nectarine-11)" : "var(--text-3)",
-                      fontWeight: 700, fontSize: "13px", cursor: "pointer",
-                    }}
+                    key={em.id}
+                    className={`emotion-chip${emotionSelected === em.id ? " active" : ""}`}
+                    onClick={() => setEmotionSelected(em.id === emotionSelected ? null : em.id)}
+                    style={{ border: "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
-                    {opt.label}
+                    <span className="emoji">{em.emoji}</span>
+                    {em.label}
                   </button>
                 ))}
               </div>
-
-              {isFlowing && (
-                <>
-                  {/* Dia do fluxo */}
-                  <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Qual dia do fluxo?</p>
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
-                    {[1, 2, 3, 4, 5, 6, 7].map(d => (
-                      <button
-                        type="button"
-                        key={d}
-                        onClick={() => setFlowDay(d)}
-                        style={{
-                          width: "38px", height: "38px", borderRadius: "50%",
-                          border: `1.5px solid ${flowDay === d ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                          background: flowDay === d ? "var(--nectarine)" : "transparent",
-                          color: flowDay === d ? "#fff" : "var(--text-3)",
-                          fontWeight: 700, fontSize: "12px", cursor: "pointer",
-                        }}
-                      >
-                        {d}º
-                      </button>
-                    ))}
+              {emotionSelected && (
+                <div style={{
+                  marginTop: 16,
+                  padding: "12px 16px",
+                  borderRadius: 14,
+                  background: "var(--nectarine-a3)",
+                  border: "1.5px solid var(--nectarine)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}>
+                  <span style={{ fontSize: 22 }}>{emotions.find(e => e.id === emotionSelected)?.emoji}</span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--nectarine-11)" }}>
+                      {emotions.find(e => e.id === emotionSelected)?.label}
+                    </p>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>selecionada</p>
                   </div>
-
-                  {/* Intensidade do fluxo */}
-                  <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Intensidade do fluxo</p>
-                  <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-                    {([{ label: "🩸 Leve", value: "leve" }, { label: "🩸🩸 Moderado", value: "moderado" }, { label: "🩸🩸🩸 Intenso", value: "intenso" }] as { label: string; value: FlowIntensity }[]).map(fi => (
-                      <button
-                        type="button"
-                        key={fi.value}
-                        onClick={() => setFlowIntensity(fi.value)}
-                        style={{
-                          flex: 1, padding: "8px 4px", borderRadius: "9px",
-                          border: `1.5px solid ${flowIntensity === fi.value ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                          background: flowIntensity === fi.value ? "var(--nectarine-a3)" : "transparent",
-                          color: flowIntensity === fi.value ? "var(--nectarine-11)" : "var(--text-3)",
-                          fontWeight: 600, fontSize: "11px", cursor: "pointer",
-                        }}
-                      >
-                        {fi.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Cólica */}
-                  <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Cólica</p>
-                  <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
-                    {symptomLevels_opts.map(s => (
-                      <button
-                        type="button"
-                        key={s.v}
-                        onClick={() => setSymptomLvls(prev => ({ ...prev, colica: prev.colica === s.v ? undefined : s.v }))}
-                        style={{
-                          flex: 1, padding: "7px 4px", borderRadius: "9px",
-                          border: `1.5px solid ${symptomLvls.colica === s.v ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                          background: symptomLvls.colica === s.v ? "var(--nectarine-a3)" : "transparent",
-                          color: symptomLvls.colica === s.v ? "var(--nectarine-11)" : "var(--text-3)",
-                          fontWeight: 600, fontSize: "11px", cursor: "pointer",
-                        }}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Dor de cabeça */}
-                  <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Dor de cabeça</p>
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    {symptomLevels_opts.map(s => (
-                      <button
-                        type="button"
-                        key={s.v}
-                        onClick={() => setSymptomLvls(prev => ({ ...prev, dorCabeca: prev.dorCabeca === s.v ? undefined : s.v }))}
-                        style={{
-                          flex: 1, padding: "7px 4px", borderRadius: "9px",
-                          border: `1.5px solid ${symptomLvls.dorCabeca === s.v ? "var(--nectarine)" : "var(--warm-border-2)"}`,
-                          background: symptomLvls.dorCabeca === s.v ? "var(--nectarine-a3)" : "transparent",
-                          color: symptomLvls.dorCabeca === s.v ? "var(--nectarine-11)" : "var(--text-3)",
-                          fontWeight: 600, fontSize: "11px", cursor: "pointer",
-                        }}
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
+                </div>
               )}
+            </div>
+          )}
+
+          {/* STEP 3: Fatores */}
+          {wizardStep === 3 && (
+            <div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {FACTORS.map((f) => {
+                  const isSelected = selectedFactors.includes(f.id);
+                  return (
+                    <button
+                      type="button"
+                      key={f.id}
+                      onClick={() =>
+                        setSelectedFactors((prev) =>
+                          isSelected ? prev.filter((x) => x !== f.id) : [...prev, f.id]
+                        )
+                      }
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "8px 13px",
+                        borderRadius: "20px",
+                        border: `1.5px solid ${isSelected ? "var(--menthe)" : "var(--warm-border-2)"}`,
+                        background: isSelected ? "rgba(150,199,179,0.14)" : "transparent",
+                        color: isSelected ? "var(--menthe)" : "var(--text-3)",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      }}
+                    >
+                      <span style={{ fontSize: "15px", lineHeight: 1 }}>{f.icon}</span>
+                      {f.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedFactors.length > 0 && (
+                <p style={{ marginTop: 14, fontSize: 12, color: "var(--menthe)", fontWeight: 700 }}>
+                  {selectedFactors.length} fator{selectedFactors.length > 1 ? "es" : ""} selecionado{selectedFactors.length > 1 ? "s" : ""}
+                </p>
+              )}
+              {selectedFactors.length === 0 && (
+                <p style={{ marginTop: 14, fontSize: 12, color: "var(--text-3)" }}>
+                  Nada selecionado — tudo bem, pode pular.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* STEP 4: Detalhes + Nota */}
+          {wizardStep === 4 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Detail cards */}
+              <div>
+                <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 10px" }}>
+                  Escaneie outras áreas
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
+                  <DetailCard emoji="🌙" title="Sono"
+                    summary={detailEnabled.sono ? `${sono}/10 registrado` : "Toque para registrar"}
+                    active={activeDetail === "sono"} onClick={() => toggleDetailCard("sono")} />
+                  <DetailCard emoji="💪" title="Corpo"
+                    summary={detailEnabled.fisico ? `${fisico}/10 registrado` : "Toque para registrar"}
+                    active={activeDetail === "fisico"} onClick={() => toggleDetailCard("fisico")} />
+                  <DetailCard emoji="👥" title="Social"
+                    summary={detailEnabled.social ? `${social}/10 registrado` : "Toque para registrar"}
+                    active={activeDetail === "social"} onClick={() => toggleDetailCard("social")} />
+                  <DetailCard emoji="🌸" title="Ciclo menstrual"
+                    summary={showCiclo ? "Painel aberto" : "Toque se quiser registrar"}
+                    active={activeDetail === "ciclo"} onClick={() => toggleDetailCard("ciclo")} />
+                </div>
+
+                {activeDetail === "sono" && (
+                  <div style={{ marginTop: "12px" }}>
+                    <OptionalSlider label="Como foi seu sono?" emoji="🌙" value={sono}
+                      onChange={(v) => { setSono(v); setDetailEnabled((c) => ({ ...c, sono: true })); }}
+                      color="var(--lagune)" />
+                  </div>
+                )}
+                {activeDetail === "fisico" && (
+                  <div style={{ marginTop: "12px" }}>
+                    <OptionalSlider label="Como está seu corpo?" emoji="💪" value={fisico}
+                      onChange={(v) => { setFisico(v); setDetailEnabled((c) => ({ ...c, fisico: true })); }}
+                      color="var(--menthe)" />
+                  </div>
+                )}
+                {activeDetail === "social" && (
+                  <div style={{ marginTop: "12px" }}>
+                    <OptionalSlider label="Como foi sua atividade social?" emoji="👥" value={social}
+                      onChange={(v) => { setSocial(v); setDetailEnabled((c) => ({ ...c, social: true })); }}
+                      color="var(--social-color)" />
+                  </div>
+                )}
+                {showCiclo && (
+                  <div style={{ marginTop: "12px" }}>
+                    <div style={{ background: "var(--nectarine-a1)", borderRadius: "10px", border: "1px solid rgba(215,137,127,.2)", padding: "14px" }}>
+                      <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Está menstruada hoje?</p>
+                      <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+                        {[{ label: "Sim", value: true }, { label: "Não", value: false }].map(opt => (
+                          <button type="button" key={String(opt.value)}
+                            onClick={() => { setIsFlowing(opt.value); if (!opt.value) { setFlowDay(null); setFlowIntensity(null); setSymptomLvls({}); } }}
+                            style={{
+                              flex: 1, height: "36px", borderRadius: "999px",
+                              border: `1.5px solid ${isFlowing === opt.value ? "var(--nectarine)" : "var(--warm-border-2)"}`,
+                              background: isFlowing === opt.value ? "var(--nectarine-a3)" : "transparent",
+                              color: isFlowing === opt.value ? "var(--nectarine-11)" : "var(--text-3)",
+                              fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                            }}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      {isFlowing && (
+                        <>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Qual dia do fluxo?</p>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
+                            {[1,2,3,4,5,6,7].map(d => (
+                              <button type="button" key={d} onClick={() => setFlowDay(d)}
+                                style={{
+                                  width: "38px", height: "38px", borderRadius: "50%",
+                                  border: `1.5px solid ${flowDay === d ? "var(--nectarine)" : "var(--warm-border-2)"}`,
+                                  background: flowDay === d ? "var(--nectarine)" : "transparent",
+                                  color: flowDay === d ? "#fff" : "var(--text-3)",
+                                  fontWeight: 700, fontSize: "12px", cursor: "pointer",
+                                }}
+                              >{d}º</button>
+                            ))}
+                          </div>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Intensidade do fluxo</p>
+                          <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
+                            {([
+                              { label: "🩸 Leve", value: "leve" },
+                              { label: "🩸🩸 Moderado", value: "moderado" },
+                              { label: "🩸🩸🩸 Intenso", value: "intenso" },
+                            ] as { label: string; value: FlowIntensity }[]).map(fi => (
+                              <button type="button" key={fi.value} onClick={() => setFlowIntensity(fi.value)}
+                                style={{
+                                  flex: 1, padding: "8px 4px", borderRadius: "9px",
+                                  border: `1.5px solid ${flowIntensity === fi.value ? "var(--nectarine)" : "var(--warm-border-2)"}`,
+                                  background: flowIntensity === fi.value ? "var(--nectarine-a3)" : "transparent",
+                                  color: flowIntensity === fi.value ? "var(--nectarine-11)" : "var(--text-3)",
+                                  fontWeight: 600, fontSize: "11px", cursor: "pointer",
+                                }}
+                              >{fi.label}</button>
+                            ))}
+                          </div>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Cólica</p>
+                          <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                            {symptomLevels_opts.map(s => (
+                              <button type="button" key={s.v}
+                                onClick={() => setSymptomLvls(prev => ({ ...prev, colica: prev.colica === s.v ? undefined : s.v }))}
+                                style={{
+                                  flex: 1, padding: "7px 4px", borderRadius: "9px",
+                                  border: `1.5px solid ${symptomLvls.colica === s.v ? "var(--nectarine)" : "var(--warm-border-2)"}`,
+                                  background: symptomLvls.colica === s.v ? "var(--nectarine-a3)" : "transparent",
+                                  color: symptomLvls.colica === s.v ? "var(--nectarine-11)" : "var(--text-3)",
+                                  fontWeight: 600, fontSize: "11px", cursor: "pointer",
+                                }}
+                              >{s.label}</button>
+                            ))}
+                          </div>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--nectarine-11)", marginBottom: "8px" }}>Dor de cabeça</p>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            {symptomLevels_opts.map(s => (
+                              <button type="button" key={s.v}
+                                onClick={() => setSymptomLvls(prev => ({ ...prev, dorCabeca: prev.dorCabeca === s.v ? undefined : s.v }))}
+                                style={{
+                                  flex: 1, padding: "7px 4px", borderRadius: "9px",
+                                  border: `1.5px solid ${symptomLvls.dorCabeca === s.v ? "var(--nectarine)" : "var(--warm-border-2)"}`,
+                                  background: symptomLvls.dorCabeca === s.v ? "var(--nectarine-a3)" : "transparent",
+                                  color: symptomLvls.dorCabeca === s.v ? "var(--nectarine-11)" : "var(--text-3)",
+                                  fontWeight: 600, fontSize: "11px", cursor: "pointer",
+                                }}
+                              >{s.label}</button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Nota livre */}
+              <div>
+                <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>
+                  Nota livre <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(opcional)</span>
+                </p>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Algo que queira registrar antes de finalizar... um pensamento, uma situação, um sentimento."
+                  rows={3}
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    border: note.trim()
+                      ? "1.5px solid rgba(150,199,179,0.45)"
+                      : "1.5px solid var(--warm-border-2)",
+                    background: "transparent",
+                    fontSize: 13,
+                    color: "var(--text-1)",
+                    resize: "none",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    lineHeight: 1.5,
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    transition: "border-color 0.2s ease",
+                  }}
+                />
+                {note.trim() && (
+                  <p style={{ fontSize: 11, color: "var(--menthe)", fontWeight: 600, marginTop: 4 }}>
+                    ✓ Nota registrada
+                  </p>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Botão submit */}
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
-          <AuraButtonV2
-            variant="primary"
-            size="md"
-            onClick={async () => {
-              try {
-                const mood = emotionToMood[emotionSelected ?? "calm"] ?? "equilibrada";
-                setMood(mood);
-                await addCheckin({
-                  humor,
-                  energia,
-                  emotion: emotionSelected ?? "calm",
-                  sono: detailEnabled.sono ? sono : undefined,
-                  fisico: detailEnabled.fisico ? fisico : undefined,
-                  social: detailEnabled.social ? social : undefined,
-                  isFlowing: isFlowing ?? undefined,
-                  flowDay: flowDay ?? undefined,
-                  flowIntensity: flowIntensity ?? undefined,
-                  symptomLevels: Object.keys(symptomLvls).length > 0 ? symptomLvls : undefined,
-                });
-                navigate("/checkin-result");
-              } catch (err) {
-                console.error("Erro ao registrar check-in:", err);
-              }
-            }}
-          >
-            Finalizar
-          </AuraButtonV2>
+        {/* ── Navigation buttons ─────────────────────────────────────── */}
+        <div style={{ display: "flex", gap: 10, marginTop: 32 }}>
+          {wizardStep > 1 && (
+            <button
+              type="button"
+              onClick={goBack}
+              style={{
+                flex: "none",
+                height: 50,
+                padding: "0 20px",
+                borderRadius: 14,
+                border: "1.5px solid var(--warm-border)",
+                background: "transparent",
+                color: "var(--text-2)",
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              Voltar
+            </button>
+          )}
+          {wizardStep < STEPS.length ? (
+            <AuraButtonV2
+              variant="primary"
+              onClick={goNext}
+              style={{ flex: 1, height: 50, fontSize: 15, fontWeight: 800, borderRadius: 14 }}
+            >
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                Próximo
+              </span>
+            </AuraButtonV2>
+          ) : (
+            <AuraButtonV2
+              variant="primary"
+              onClick={handleFinish}
+              disabled={isSaving}
+              style={{ flex: 1, height: 50, fontSize: 15, fontWeight: 800, borderRadius: 14 }}
+            >
+              {isSaving ? "Salvando..." : (
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  Finalizar <Check size={16} />
+                </span>
+              )}
+            </AuraButtonV2>
+          )}
         </div>
 
       </div>

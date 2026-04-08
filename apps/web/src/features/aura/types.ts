@@ -49,6 +49,8 @@ export type CheckinEntry = {
     colica?: 1 | 2 | 3;
     dorCabeca?: 1 | 2 | 3;
   };
+  factors?: string[];
+  note?: string;
 };
 
 export type AutonomousInsight = {
@@ -110,4 +112,26 @@ export type AuraState = {
   proactiveNudge: ProactiveNudge | null;
   cycleStart?: string;
   cycleLength?: number;
+  habits: Habit[];
+};
+
+export type Habit = {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  icon?: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  targetDays: number[];
+  streakCount: number;
+  bestStreak: number;
+  totalCompletions: number;
+  completions?: HabitCompletion[];
+};
+
+export type HabitCompletion = {
+  id: string;
+  habitId: string;
+  date: string;
+  completedAt?: string;
 };

@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Card, Text, Button, ActivityIndicator } from 'react-native-paper';
 import { useCheckinStore } from '../providers/checkin_store';
 import { usePlannerStore } from '../providers/planner_store';
+import { useHabitStore } from '../providers/habit_store';
 import { useAuthStore } from '../providers/auth_store';
 import { appColors, appGlass, appRadius, appSpacing } from '../theme/appTheme';
 import {
@@ -19,13 +20,15 @@ export default function HomeScreen() {
   const { userId } = useAuthStore();
   const { todayCheckin, recentCheckins, loadRecentCheckins } = useCheckinStore();
   const { blocks, fetchBlocks, isLoading: plannerLoading } = usePlannerStore();
+  const { habits, fetchHabits, toggleHabit, isLoading: habitsLoading } = useHabitStore();
 
   useEffect(() => {
     if (!userId) return;
     const dateStr = new Date().toISOString().split('T')[0];
     fetchBlocks(userId, dateStr);
+    fetchHabits(userId, dateStr);
     void loadRecentCheckins(userId, 7);
-  }, [userId, fetchBlocks, loadRecentCheckins]);
+  }, [userId, fetchBlocks, fetchHabits, loadRecentCheckins]);
 
   const stateColors: Record<string, { bg: string, border: string, text: string, icon: string }> = {
     leve: { bg: '#F0FDF4', border: '#BBF7D0', text: '#166534', icon: '#166534' },
@@ -343,6 +346,84 @@ export default function HomeScreen() {
               </Text>
             </Card.Content>
           </Card>
+        </View>
+
+        {/* Hábitos de Hoje */}
+        <View style={{ marginBottom: appSpacing.xl }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: appSpacing.md,
+            }}
+          >
+            <Text variant="titleMedium" style={{ color: appColors.textPrimary, fontWeight: '700' }}>
+              Hábitos de hoje
+            </Text>
+            <Button compact mode="text" onPress={() => navigation.navigate('Habits')}>
+              Gerenciar
+            </Button>
+          </View>
+
+          {habitsLoading ? (
+            <ActivityIndicator animating color={appColors.primary} />
+          ) : habits.length > 0 ? (
+            <View style={{ gap: appSpacing.sm }}>
+              {habits.map((habit) => {
+                const dateStr = new Date().toISOString().split('T')[0];
+                const isCompleted = habit.completions?.some(c => c.date.startsWith(dateStr));
+                
+                return (
+                  <TouchableOpacity
+                    key={habit.id}
+                    onPress={() => toggleHabit(userId!, habit.id, dateStr)}
+                    activeOpacity={0.7}
+                  >
+                    <Card
+                      style={{
+                        backgroundColor: isCompleted ? 'rgba(150,199,179,0.1)' : appColors.surface,
+                        borderColor: isCompleted ? '#BBF7D0' : appGlass.cardBorder,
+                      }}
+                      mode="outlined"
+                    >
+                      <Card.Content style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: appSpacing.md }}>
+                        <Text style={{ fontSize: 20, marginRight: appSpacing.md }}>
+                          {habit.icon || '✨'}
+                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <Text variant="bodyMedium" style={{ fontWeight: '600', color: isCompleted ? appColors.textSecondary : appColors.textPrimary }}>
+                            {habit.title}
+                          </Text>
+                          <Text variant="labelSmall" style={{ color: appColors.textSecondary }}>
+                            🔥 {habit.streakCount} dias de sequência
+                          </Text>
+                        </View>
+                        <View 
+                          style={{ 
+                            width: 24, height: 24, borderRadius: 12, 
+                            borderWidth: 2, borderColor: isCompleted ? '#166534' : appColors.textSecondary,
+                            backgroundColor: isCompleted ? '#166534' : 'transparent',
+                            alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >
+                          {isCompleted && <Text style={{ color: 'white', fontSize: 14, fontWeight: 'bold' }}>✓</Text>}
+                        </View>
+                      </Card.Content>
+                    </Card>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <Card style={{ backgroundColor: appColors.surfaceAlt }} mode="contained">
+              <Card.Content style={{ alignItems: 'center', paddingVertical: appSpacing.md }}>
+                <Text variant="bodySmall" style={{ color: appColors.textSecondary }}>
+                  Nenhum hábito configurado para hoje.
+                </Text>
+              </Card.Content>
+            </Card>
+          )}
         </View>
 
         {/* Preview do Planner (Agenda de Hoje) */}

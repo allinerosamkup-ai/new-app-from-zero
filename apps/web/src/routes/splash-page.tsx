@@ -9,7 +9,7 @@ export function SplashPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(160deg, #FFF7F1 0%, #FFF0E5 48%, #F7F3ED 100%)",
+      background: "linear-gradient(180deg, #FFFFFF 0%, #FAFBFB 100%)",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -23,10 +23,10 @@ export function SplashPage() {
         <div style={{
           width: 80, height: 80,
           borderRadius: 28,
-          background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 60%, var(--menthe) 100%)",
+          background: "linear-gradient(135deg, #5A7A64 0%, #BFDCCB 100%)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 38,
-          boxShadow: "0 8px 32px rgba(243,176,140,.28), 0 2px 8px rgba(243,176,140,.16)",
+          boxShadow: "0 18px 32px rgba(17,24,39,.08), 0 2px 8px rgba(17,24,39,.04)",
           marginBottom: 28,
         }}>
           🌸
@@ -59,12 +59,12 @@ export function SplashPage() {
           {["🌙", "🌱", "🚀", "🌊"].map((e, i) => (
             <div key={i} style={{
               width: 40, height: 40, borderRadius: "50%",
-              background: "rgba(255,255,255,.62)",
+              background: "rgba(255,255,255,.96)",
               backdropFilter: "blur(16px)",
-              border: "1px solid rgba(255,255,255,.82)",
+              border: "1px solid rgba(17,24,39,.05)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 18,
-              boxShadow: "0 10px 24px rgba(243,176,140,.10)",
+              boxShadow: "0 10px 24px rgba(17,24,39,.06)",
             }}>
               {e}
             </div>
@@ -78,11 +78,11 @@ export function SplashPage() {
           onClick={() => navigate("/login?tab=criar")}
           style={{
             width: "100%", height: 50,
-            background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
+            background: "linear-gradient(135deg, #5A7A64 0%, #4E6B57 100%)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
             cursor: "pointer",
-            boxShadow: "0 12px 28px rgba(243,176,140,.28)",
+            boxShadow: "0 14px 26px rgba(90,122,100,.18)",
             transition: "all 150ms ease",
           }}
         >
@@ -92,9 +92,9 @@ export function SplashPage() {
           onClick={() => navigate("/login")}
           style={{
             width: "100%", height: 50,
-            background: "rgba(255,255,255,.62)",
+            background: "rgba(255,255,255,.96)",
             backdropFilter: "blur(16px)",
-            color: "var(--nectarine-11)", border: "1.5px solid var(--nectarine-a5)",
+            color: "var(--text-1)", border: "1px solid var(--warm-border)",
             borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
             cursor: "pointer",

@@ -83,6 +83,9 @@ type AuraStoreContextValue = {
   updateTask: (id: string | number, updates: { title?: string; time?: string; category?: string }) => Promise<void>;
   removeTask: (id: string | number) => Promise<void>;
   reorderTasks: (fromIdx: number, toIdx: number) => void;
+  toggleHabit: (habitId: string) => Promise<void>;
+  archiveHabit: (habitId: string) => Promise<void>;
+  addHabit: (habit: { title: string; category: string; frequency: string; icon?: string; timeOfDay?: string; description?: string; durationMinutes?: number }) => Promise<void>;
   setAutonomousInsight: (insight: AutonomousInsight | null) => void;
   setPhaseTransitionAlert: (alert: PhaseTransitionAlert | null) => void;
   dismissPhaseTransitionAlert: () => void;
@@ -109,12 +112,19 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const today = getLocalDateKey();
-      const [checkins, timeline, objectives, preferences] = await Promise.all([
-        api.get('/checkins?days=7'),
-        api.get(`/timeline/${today}`),
-        api.get('/objectives'),
-        api.get('/preferences')
+      const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw] = await Promise.all([
+        api.get('/checkins?days=7').catch(e => { console.error(e); return []; }),
+        api.get(`/timeline/${today}`).catch(e => { console.error(e); return []; }),
+        api.get('/objectives').catch(e => { console.error(e); return []; }),
+        api.get('/preferences').catch(e => { console.error(e); return {}; }),
+        api.get('/habits').catch(e => { console.error(e); return []; })
       ]);
+
+      const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : [];
+      const timeline = Array.isArray(timelineRaw) ? timelineRaw : [];
+      const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : [];
+      const preferences = preferencesRaw || {};
+      const habits = Array.isArray(habitsRaw) ? habitsRaw : [];
 
       setState(current => ({
         ...current,
@@ -129,6 +139,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           fisico: c.physicalScore ?? undefined,
           social: c.socialScore ?? undefined,
           sono: c.sleepScore ?? undefined,
+          factors: Array.isArray(c.factors) && c.factors.length > 0 ? c.factors : undefined,
         })),
         tasks: timeline.map((t: any) => ({
           id: t.id,
@@ -144,11 +155,24 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           title: o.title,
           progress: o.description || 'Em andamento',
           completedPct: o.progress,
-          subtasks: o.subgoals.map((s: any) => ({
+          subtasks: Array.isArray(o.subgoals) ? o.subgoals.map((s: any) => ({
             id: s.id,
             title: s.title,
             done: s.done
-          }))
+          })) : []
+        })),
+        habits: habits.map((h: any) => ({
+          id: h.id,
+          title: h.title,
+          description: h.description,
+          category: h.category,
+          icon: h.icon,
+          frequency: h.frequency,
+          targetDays: h.targetDays,
+          streakCount: h.streakCount,
+          bestStreak: h.bestStreak,
+          totalCompletions: h.totalCompletions,
+          completions: Array.isArray(h.completions) ? h.completions : [],
         })),
         theme: preferences.aiTone === 'warm' ? 'Tema suave' : 'Tema claro',
         quietMode: !preferences.notificationsOn
@@ -251,12 +275,13 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             checkinSlot,
             moodScore: entry.humor,
             energyScore: entry.energia,
-            clarityScore: 3,
-            irritabilityScore: 3,
+            clarityScore: 5,
+            irritabilityScore: 5,
             physicalScore: entry.fisico,
             socialScore: entry.social,
             sleepScore: entry.sono,
-            note: state.journal,
+            note: entry.note ?? state.journal,
+            factors: entry.factors,
             isFlowing: entry.isFlowing,
             flowDay: entry.flowDay,
             flowIntensity: entry.flowIntensity,
@@ -376,6 +401,19 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           tasks.splice(toIdx, 0, moved);
           return { ...current, tasks };
         });
+      },
+      toggleHabit: async (habitId) => {
+        const today = getLocalDateKey();
+        await api.post(`/habits/${habitId}/toggle`, { date: today });
+        await refreshData();
+      },
+      archiveHabit: async (habitId) => {
+        await api.patch(`/habits/${habitId}`, { archived: true });
+        await refreshData();
+      },
+      addHabit: async (habit) => {
+        await api.post('/habits', habit);
+        await refreshData();
       },
       setAutonomousInsight: (insight) =>
         setState((current) => ({ ...current, autonomousInsight: insight })),

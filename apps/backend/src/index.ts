@@ -32,6 +32,7 @@ import {
   AuraCommandStartSchema,
 } from './contracts/aura-command.contract';
 import { z } from 'zod';
+import { startOfDay, subDays, format } from 'date-fns';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env'), override: true });
 
@@ -550,6 +551,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         socialScore: data.socialScore || 3,
         sleepScore: data.sleepScore,
         note: data.note,
+        factors: data.factors ?? [],
         ...(menstrualPhase !== undefined && { menstrualPhase }),
         ...(cycleDay !== undefined && { cycleDay }),
         ...(physicalSymptoms.length > 0 && { physicalSymptoms }),
@@ -572,6 +574,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         socialScore: data.socialScore || 3,
         sleepScore: data.sleepScore,
         note: data.note,
+        factors: data.factors ?? [],
         menstrualPhase: menstrualPhase ?? null,
         cycleDay: cycleDay ?? null,
         physicalSymptoms,
@@ -642,21 +645,36 @@ export function createApp(dependencies: AppDependencies = {}) {
    * GET /api/journal/sessions
    * Lista sessões de diário do usuário, mais recentes primeiro.
    */
-  app.get('/api/journal/sessions', async (req: Request, res: Response) => {
+  app.get('/api/journal/sessions', requireAuth, async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
-    const { limit } = req.query;
+    const { limit, q, emotion, theme } = req.query;
 
     try {
-      const limitNum = Math.min(Number(limit ?? 20), 50);
+      const limitNum = Math.min(Number(limit ?? 30), 100);
 
       const sessions = await prisma.journalSession.findMany({
-        where: { userId },
-        orderBy: { startedAt: 'desc' },
+        where: {
+          userId,
+          status: 'completed',
+          ...(emotion ? { emotions: { has: String(emotion) } } : {}),
+          ...(theme   ? { themes:   { has: String(theme) } }   : {}),
+        },
+        orderBy: { localDate: 'desc' },
         take: limitNum,
       });
 
+      // Client-side text filter on summary (Prisma doesn't do free-text without pg_trgm)
+      const qStr = q ? String(q).toLowerCase() : null;
+      const filtered = qStr
+        ? sessions.filter(s =>
+            (s.summary ?? '').toLowerCase().includes(qStr) ||
+            s.themes.some(t => t.toLowerCase().includes(qStr)) ||
+            s.emotions.some(e => e.toLowerCase().includes(qStr))
+          )
+        : sessions;
+
       return res.json(
-        sessions.map((s) => ({
+        filtered.map((s) => ({
           id: s.id,
           localDate: s.localDate.toISOString().split('T')[0],
           status: s.status,
@@ -1795,6 +1813,17 @@ REGRAS:
 - 1-2 frases apenas. Sem cobrança, sem culpa, sem discurso motivacional vazio.
 
 JSON APENAS: {"message":"..."}`;
+      } else if (type === 'habit-recommendation') {
+        const hour = new Date().getHours();
+        const timeOfDay = hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';
+        const suggestions = await AIService.generateHabitSuggestions({
+          userName,
+          profileSummary: userProfileSummary,
+          moodCycleContext,
+          currentMoodLabel: String(context.moodLabel || ''),
+          timeOfDay,
+        });
+        return res.json({ suggestion: suggestions });
       } else {
         return res.status(400).json({ error: 'Unknown suggestion type' });
       }
@@ -2053,6 +2082,125 @@ JSON APENAS: {"profileSummary":"..."}`,
     } catch (error: any) {
       console.error('[timeline/delete] Error:', error);
       return res.status(500).json({ error: 'Failed to delete timeline block' });
+    }
+  });
+
+  // ── Endpoints de Hábitos ──────────────────────────────────────────────────
+
+  /**
+   * GET /api/habits
+   * Lista os hábitos do usuário para uma data específica.
+   */
+  app.get('/api/habits', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { date } = req.query;
+    try {
+      const { HabitService } = await import('./services/habit.service');
+      const habits = date
+        ? await HabitService.getHabitsForDate(userId, new Date(String(date)))
+        : await HabitService.listHabits(userId, new Date());
+      return res.json(habits);
+    } catch (error) {
+      console.error('[habits/list]', error);
+      return res.status(500).json({ error: 'Failed to fetch habits' });
+    }
+  });
+
+  /**
+   * POST /api/habits
+   * Cria um novo hábito.
+   */
+  app.post('/api/habits', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const HabitCreateSchema = z.object({
+      title: z.string().min(1),
+      description: z.string().optional(),
+      category: z.string().optional(),
+      icon: z.string().optional(),
+      frequency: z.enum(['daily', 'weekly', 'monthly']),
+      targetDays: z.array(z.number()).optional(),
+      timeOfDay: z.string().optional(),
+      durationMinutes: z.number().optional(),
+      reminderEnabled: z.boolean().optional(),
+      reminderTime: z.string().optional(),
+    });
+    try {
+      const data = HabitCreateSchema.parse(req.body);
+      const { HabitService } = await import('./services/habit.service');
+      const habit = await HabitService.createHabit({ ...data, userId });
+      return res.status(201).json(habit);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[habits/create]', error);
+      return res.status(500).json({ error: 'Failed to create habit' });
+    }
+  });
+
+  /**
+   * POST /api/habits/:id/toggle
+   * Registra ou inverte a conclusão de um hábito.
+   */
+  app.post('/api/habits/:id/toggle', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const { date, notes } = req.body;
+    try {
+      const targetDate = date ? new Date(String(date)) : new Date();
+      const { HabitService } = await import('./services/habit.service');
+      const habit = await HabitService.toggleCompletion(id, targetDate, userId, notes);
+      return res.json(habit);
+    } catch (error: any) {
+      console.error('[habits/toggle]', error);
+      return res.status(500).json({ error: error.message || 'Failed to toggle habit' });
+    }
+  });
+
+  /**
+   * GET /api/habits/:id/history
+   * Retorna as datas de conclusão de um hábito nos últimos N dias (padrão 28).
+   */
+  app.get('/api/habits/:id/history', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const weeks = parseInt((req.query.weeks as string) || '4', 10);
+    const days = weeks * 7;
+    try {
+      const habit = await prisma.habit.findUnique({ where: { id } });
+      if (!habit || habit.userId !== userId) {
+        return res.status(404).json({ error: 'Habit not found' });
+      }
+      const since = startOfDay(subDays(new Date(), days - 1));
+      const completions = await prisma.habitCompletion.findMany({
+        where: { habitId: id, date: { gte: since } },
+        select: { date: true },
+        orderBy: { date: 'asc' },
+      });
+      const dates = completions.map((c: { date: Date }) => format(c.date, 'yyyy-MM-dd'));
+      return res.json({ dates, days });
+    } catch (error) {
+      console.error('[habits/history]', error);
+      return res.status(500).json({ error: 'Failed to fetch habit history' });
+    }
+  });
+
+  /**
+   * PATCH /api/habits/:id
+   * Atualiza ou arquiva um hábito.
+   */
+  app.patch('/api/habits/:id', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    try {
+      const habit = await prisma.habit.updateMany({
+        where: { id, userId },
+        data: req.body,
+      });
+      if (habit.count === 0) return res.status(404).json({ error: 'Habit not found' });
+      const updated = await prisma.habit.findUnique({ where: { id } });
+      return res.json(updated);
+    } catch (error) {
+      console.error('[habits/update]', error);
+      return res.status(500).json({ error: 'Failed to update habit' });
     }
   });
 

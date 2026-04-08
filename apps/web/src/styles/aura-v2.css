@@ -4,47 +4,47 @@
   /* ─── Aura Design System v6.0 — Lux Glass (Coral Baby Pastel) ─── */
 
   /* Raw Palette */
-  --terracotta:    #F3B08C;
+  --terracotta:    #F4BEA8;
   --coral:         #ffb4a2;
-  --olive:         #a5a58d;
-  --gold:          #d4a373;
-  --peach:         #FFD6D1;
-  --golden-yellow: #ffecb3;
-  --apricot:       #FFD6D1;
-  --beige:         #f5ebe0;
+  --olive:         #899980;
+  --gold:          #F7E7A6;
+  --peach:         #F5C9C1;
+  --golden-yellow: #F7E7A6;
+  --apricot:       #F5C9C1;
+  --beige:         #F8F9F8;
 
   /* Functional Tokens */
-  --primary:            #F3B08C;
-  --primary-container:  #ffcdb2;
-  --primary-grad-1:     #F3B08C;
-  --primary-grad-2:     #FFD6D1;
-  --primary-dim:        #e5989b;
+  --primary:            #5A7A64;
+  --primary-container:  #BFDCCB;
+  --primary-grad-1:     #5A7A64;
+  --primary-grad-2:     #BFDCCB;
+  --primary-dim:        #88A18E;
 
-  --secondary:          #a5a58d;
-  --tertiary:           #b7b7a4;
+  --secondary:          #F4BEA8;
+  --tertiary:           #E5DBF7;
 
-  --background:         #fffaf0;
-  --surface:            #fffaf0;
-  --surface-variant:    #f0e5d8;
-  --warm-bg:            #faf6f2;
+  --background:         #ffffff;
+  --surface:            #ffffff;
+  --surface-variant:    #f4f6f6;
+  --warm-bg:            #ffffff;
 
-  --on-surface:         #4a443f;
-  --on-surface-variant: #8d7b68;
+  --on-surface:         #181A1F;
+  --on-surface-variant: #5F6673;
 
-  --outline:            #b7b7a4;
-  --outline-variant:    #d4a373;
+  --outline:            #d3d9df;
+  --outline-variant:    #eef1f3;
 
   /* Typography */
   --font-main: 'Plus Jakarta Sans', sans-serif;
 
   /* Glass System */
   --glass-blur:   20px;
-  --glass-bg:     rgba(255, 255, 255, 0.45);
-  --glass-border: 0.5px solid rgba(255, 255, 255, 0.50);
-  --glass-shadow: 0 20px 40px rgba(243, 176, 140, 0.08);
+  --glass-bg:     rgba(255, 255, 255, 0.78);
+  --glass-border: 0.5px solid rgba(17, 24, 39, 0.05);
+  --glass-shadow: 0 20px 40px rgba(17, 24, 39, 0.06);
 
   /* Satin */
-  --satin-gradient: linear-gradient(135deg, #F3B08C 0%, #FFD6D1 100%);
+  --satin-gradient: linear-gradient(135deg, #BFDCCB 0%, #E5DBF7 100%);
 
   /* Radii */
   --radius-pill: 9999px;
@@ -55,12 +55,7 @@
 /* ─── Base ─── */
 body {
   font-family: var(--font-main);
-  background-color: #fffaf0;
-  background-image:
-    radial-gradient(at 0% 0%,   #FFD6D1 0px, transparent 55%),
-    radial-gradient(at 100% 0%, #ffecb3 0px, transparent 55%),
-    radial-gradient(at 100% 100%, #FFD6D1 0px, transparent 55%);
-  background-attachment: fixed;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFB 100%);
   color: var(--on-surface);
   min-height: 100vh;
   overflow-x: hidden;
@@ -72,18 +67,18 @@ body {
 .glass-card {
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  box-shadow: 0 18px 40px rgba(243, 176, 140, 0.08), 0 1px 0 rgba(255,255,255,0.78) inset;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(17, 24, 39, 0.05);
+  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.06), 0 1px 0 rgba(255,255,255,0.88) inset;
 }
 
 /* backwards compat */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  box-shadow: 0 18px 40px rgba(243, 176, 140, 0.08), 0 1px 0 rgba(255,255,255,0.78) inset;
+  border: 1px solid rgba(17, 24, 39, 0.05);
+  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.06), 0 1px 0 rgba(255,255,255,0.88) inset;
   border-radius: 1.25rem;
 }
 
@@ -207,29 +202,29 @@ body {
 }
 /* Variants */
 .aura-v2-btn-primary {
-  background: rgba(243, 176, 140, 0.62);
+  background: linear-gradient(135deg, #F4BEA8 0%, #F7CFC4 100%);
   backdrop-filter: blur(18px) saturate(118%);
   -webkit-backdrop-filter: blur(18px) saturate(118%);
   border: 1px solid rgba(255, 255, 255, 0.78);
-  color: #fff;
-  box-shadow: 0 12px 28px rgba(243, 176, 140, 0.18), 0 1px 0 rgba(255,255,255,.24) inset;
+  color: #A86855;
+  box-shadow: 0 12px 28px rgba(244, 190, 168, 0.20), 0 1px 0 rgba(255,255,255,.24) inset;
 }
-.aura-v2-btn-primary:hover  { background: rgba(227, 154, 115, 0.72); }
+.aura-v2-btn-primary:hover  { background: linear-gradient(135deg, #F1B59C 0%, #F5C8BC 100%); }
 .aura-v2-btn-primary:active { transform: scale(0.96); }
 
 .aura-v2-btn-outline {
   background: transparent;
   color: var(--on-surface-variant);
-  border: 1.5px solid rgba(180, 170, 160, 0.40);
+  border: 1.5px solid rgba(17, 24, 39, 0.08);
 }
-.aura-v2-btn-outline:hover  { border-color: var(--terracotta); color: var(--terracotta); }
+.aura-v2-btn-outline:hover  { border-color: rgba(90, 122, 100, 0.24); color: var(--on-surface); }
 .aura-v2-btn-outline:active { transform: scale(0.96); }
 
 .aura-v2-btn-glass {
-  background: rgba(255, 255, 255, 0.40);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.50);
+  border: 1px solid rgba(17, 24, 39, 0.05);
   color: var(--on-surface);
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
@@ -238,36 +233,36 @@ body {
 
 /* Primary — Nectarine Solid */
 .btn-aura-primary {
-  background: #F3B08C !important;
+  background: linear-gradient(135deg, #F4BEA8 0%, #F7CFC4 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.30) !important;
-  color: #fff !important;
-  box-shadow: 0 6px 20px rgba(243, 176, 140, 0.35) !important;
+  color: #A86855 !important;
+  box-shadow: 0 6px 20px rgba(244, 190, 168, 0.24) !important;
 }
-.btn-aura-primary:hover  { background: #EDA070 !important; transform: scale(1.02); }
+.btn-aura-primary:hover  { background: linear-gradient(135deg, #F1B59C 0%, #F5C8BC 100%) !important; transform: scale(1.02); }
 .btn-aura-primary:active { transform: scale(0.95); }
 .btn-aura-primary:disabled { background: rgba(243, 176, 140, 0.45) !important; transform: none !important; }
 
 /* Deep Glass */
 .btn-aura-glass {
-  background: rgba(255, 255, 255, 0.52) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
   backdrop-filter: blur(18px) saturate(120%) !important;
   -webkit-backdrop-filter: blur(18px) saturate(120%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.75) !important;
-  color: var(--terracotta) !important;
-  box-shadow: 0 10px 28px rgba(243, 176, 140, 0.10), 0 1px 0 rgba(255,255,255,.82) inset !important;
+  border: 1px solid rgba(17, 24, 39, 0.05) !important;
+  color: var(--on-surface) !important;
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.06), 0 1px 0 rgba(255,255,255,.82) inset !important;
 }
 .btn-aura-glass:hover { background: rgba(255, 255, 255, 0.50) !important; }
 
 /* Ghost Glow */
 .btn-aura-outline {
-  background: rgba(255, 255, 255, 0.36) !important;
+  background: rgba(255, 255, 255, 0.94) !important;
   backdrop-filter: blur(14px) !important;
   -webkit-backdrop-filter: blur(14px) !important;
-  border: 1px solid rgba(243, 176, 140, 0.32) !important;
-  color: var(--terracotta) !important;
-  box-shadow: 0 8px 18px rgba(243, 176, 140, 0.06), inset 0 1px 0 rgba(255,255,255,.7) !important;
+  border: 1px solid rgba(17, 24, 39, 0.08) !important;
+  color: var(--on-surface) !important;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.06), inset 0 1px 0 rgba(255,255,255,.7) !important;
 }
-.btn-aura-outline:hover { border-color: var(--gold) !important; }
+.btn-aura-outline:hover { border-color: rgba(90, 122, 100, 0.24) !important; }
 
 .btn-aura-ghost {
   background: transparent !important;
@@ -280,12 +275,12 @@ body {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: rgba(243, 176, 140, 0.66);
+  background: linear-gradient(135deg, #F4BEA8 0%, #F7CFC4 100%);
   backdrop-filter: blur(18px) saturate(118%);
   -webkit-backdrop-filter: blur(18px) saturate(118%);
   border: 1px solid rgba(255,255,255,.78);
-  color: #fff;
-  box-shadow: 0 12px 28px rgba(243, 176, 140, 0.2), 0 1px 0 rgba(255,255,255,.24) inset;
+  color: #A86855;
+  box-shadow: 0 12px 28px rgba(244, 190, 168, 0.2), 0 1px 0 rgba(255,255,255,.24) inset;
   display: flex;
   align-items: center;
   justify-content: center;

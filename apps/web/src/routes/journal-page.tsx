@@ -59,6 +59,8 @@ export function JournalPage() {
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [latestSummary, setLatestSummary] = useState<JournalSummary | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterEmotion, setFilterEmotion] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -76,7 +78,7 @@ export function JournalPage() {
   async function loadSessions() {
     setIsSessionsLoading(true);
     try {
-      const result = await api.get("/journal/sessions?limit=12");
+      const result = await api.get("/journal/sessions?limit=50");
       setSessions(Array.isArray(result) ? result : []);
     } catch (error) {
       showError(error instanceof Error ? error.message : "Não foi possível carregar seus resumos do diário.");
@@ -373,6 +375,67 @@ export function JournalPage() {
               </AuraButtonV2>
             </div>
 
+            {/* ── Search + emotion filter ── */}
+            {sessions.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ position: "relative" }}>
+                  <span style={{
+                    position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+                    fontSize: 14, pointerEvents: "none", color: "var(--text-3)",
+                  }}>🔍</span>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Buscar por tema, emoção ou conteúdo..."
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px 10px 34px",
+                      borderRadius: 12,
+                      border: searchQuery ? "1.5px solid rgba(99,152,169,0.45)" : "1.5px solid var(--warm-border)",
+                      background: "#fff",
+                      fontSize: 13,
+                      color: "var(--text-1)",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      transition: "border-color 0.2s",
+                    }}
+                  />
+                </div>
+                {/* Unique emotions as filter chips */}
+                {(() => {
+                  const allEmotions = [...new Set(sessions.flatMap(s => s.emotions))].slice(0, 8);
+                  if (allEmotions.length === 0) return null;
+                  return (
+                    <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                      {allEmotions.map(em => (
+                        <button
+                          key={em}
+                          onClick={() => setFilterEmotion(filterEmotion === em ? null : em)}
+                          style={{
+                            flexShrink: 0,
+                            padding: "5px 11px",
+                            borderRadius: 999,
+                            border: `1.5px solid ${filterEmotion === em ? "var(--nectarine)" : "var(--warm-border)"}`,
+                            background: filterEmotion === em ? "rgba(215,137,127,0.12)" : "#fff",
+                            color: filterEmotion === em ? "var(--nectarine)" : "var(--text-3)",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                            fontFamily: "'Plus Jakarta Sans', sans-serif",
+                          }}
+                        >
+                          {em}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             {isSessionsLoading ? (
               <div
                 style={{
@@ -403,7 +466,23 @@ export function JournalPage() {
                 Seu histórico vai aparecer aqui assim que a primeira sessão for concluída.
               </div>
             ) : (
-              sessions.map((session) => {
+              (() => {
+                const q = searchQuery.toLowerCase().trim();
+                const filteredSessions = sessions.filter(s => {
+                  if (filterEmotion && !s.emotions.includes(filterEmotion)) return false;
+                  if (!q) return true;
+                  return (
+                    (s.summary ?? '').toLowerCase().includes(q) ||
+                    s.emotions.some(e => e.toLowerCase().includes(q)) ||
+                    s.themes.some(t => t.toLowerCase().includes(q))
+                  );
+                });
+                if (filteredSessions.length === 0) return (
+                  <div style={{ padding: "16px", textAlign: "center", color: "var(--text-3)", fontSize: 13 }}>
+                    Nenhuma sessão encontrada para "{searchQuery || filterEmotion}".
+                  </div>
+                );
+                return filteredSessions.map((session) => {
                 const expanded = expandedSessionId === session.id;
                 const isActive = session.status === "active";
 
@@ -505,7 +584,8 @@ export function JournalPage() {
                     )}
                   </div>
                 );
-              })
+              });
+              })()
             )}
           </div>
         </div>

@@ -54,16 +54,16 @@ export function ResetPasswordPage() {
     return (
       <div style={{
         minHeight: "100vh",
-        background: "linear-gradient(160deg, #FFF7F1 0%, #FFF0E5 50%, #F7F3ED 100%)",
+        background: "linear-gradient(180deg, #FFFFFF 0%, #FAFBFB 100%)",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center", padding: "40px 28px", textAlign: "center",
       }}>
         <div style={{
           width: 80, height: 80, borderRadius: 28,
-          background: "linear-gradient(135deg, var(--nectarine), var(--menthe))",
+          background: "linear-gradient(135deg, #5A7A64, #BFDCCB)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 36, marginBottom: 20,
-          boxShadow: "0 8px 32px rgba(243,176,140,.25)",
+          boxShadow: "0 18px 32px rgba(17,24,39,.08)",
         }}>✅</div>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", marginBottom: 10 }}>
           Senha redefinida!
@@ -78,17 +78,17 @@ export function ResetPasswordPage() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(160deg, #FFF7F1 0%, #FFF0E5 100%)",
+      background: "linear-gradient(180deg, #FFFFFF 0%, #FAFBFB 100%)",
       display: "flex", flexDirection: "column", alignItems: "center",
       justifyContent: "center", padding: "40px 24px",
     }}>
       {/* Icon */}
       <div style={{
         width: 72, height: 72, borderRadius: 24,
-        background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
+        background: "linear-gradient(135deg, #5A7A64 0%, #4E6B57 100%)",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: 32, marginBottom: 20,
-        boxShadow: "0 8px 28px rgba(243,176,140,.28)",
+        boxShadow: "0 18px 32px rgba(17,24,39,.08)",
       }}>🔐</div>
 
       <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", marginBottom: 6, textAlign: "center" }}>
@@ -101,8 +101,8 @@ export function ResetPasswordPage() {
       {!sessionReady && (
         <div style={{
           width: "100%", maxWidth: 360, padding: "12px 16px",
-          background: "rgba(215,137,127,.1)", borderRadius: 12,
-          border: "1px solid rgba(215,137,127,.25)", marginBottom: 16,
+          background: "rgba(229,219,247,.28)", borderRadius: 16,
+          border: "1px solid rgba(229,219,247,.6)", marginBottom: 16,
         }}>
           <p style={{ fontSize: 12, color: "var(--nectarine-11)", margin: 0, textAlign: "center" }}>
             Aguardando verificação do link de redefinição...
@@ -125,13 +125,13 @@ export function ResetPasswordPage() {
               required
               style={{
                 width: "100%", height: 50, borderRadius: 16,
-                border: "1.5px solid var(--warm-border-2)",
+                border: "1px solid var(--warm-border)",
                 padding: "0 44px 0 16px",
                 fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--text-1)",
-                background: "rgba(255,255,255,.72)", outline: "none",
+                background: "rgba(255,255,255,.98)", outline: "none",
                 boxSizing: "border-box",
                 backdropFilter: "blur(18px)",
-                boxShadow: "0 12px 28px rgba(243,176,140,.08)",
+                boxShadow: "0 10px 22px rgba(17,24,39,.05)",
               }}
             />
             <button
@@ -158,13 +158,13 @@ export function ResetPasswordPage() {
               required
               style={{
                 width: "100%", height: 50, borderRadius: 16,
-                border: `1.5px solid ${confirm && confirm !== password ? "#c0392b" : "var(--warm-border-2)"}`,
+                border: `1px solid ${confirm && confirm !== password ? "#c0392b" : "var(--warm-border)"}`,
                 padding: "0 44px 0 16px",
                 fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, color: "var(--text-1)",
-                background: "rgba(255,255,255,.72)", outline: "none",
+                background: "rgba(255,255,255,.98)", outline: "none",
                 boxSizing: "border-box",
                 backdropFilter: "blur(18px)",
-                boxShadow: "0 12px 28px rgba(243,176,140,.08)",
+                boxShadow: "0 10px 22px rgba(17,24,39,.05)",
               }}
             />
             <button
@@ -196,12 +196,12 @@ export function ResetPasswordPage() {
           style={{
             width: "100%", height: 50,
             background: loading || !sessionReady
-              ? "rgba(215,137,127,.3)"
-              : "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
+              ? "rgba(90,122,100,.24)"
+              : "linear-gradient(135deg, #5A7A64 0%, #4E6B57 100%)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
             cursor: loading || !sessionReady ? "not-allowed" : "pointer",
-            boxShadow: loading || !sessionReady ? "none" : "0 12px 26px rgba(243,176,140,.28)",
+            boxShadow: loading || !sessionReady ? "none" : "0 14px 26px rgba(90,122,100,.18)",
             transition: "all 200ms",
           }}
         >

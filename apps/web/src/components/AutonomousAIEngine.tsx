@@ -379,8 +379,8 @@ async function runProfileUpdate(
     const worstDay = dayPatterns[dayPatterns.length - 1];
 
     // Phase distribution
-    const lowDays  = history.filter(h => h.humor <= 2).length;
-    const highDays = history.filter(h => h.humor >= 4).length;
+    const lowDays  = history.filter(h => h.humor <= 4).length;
+    const highDays = history.filter(h => h.humor >= 8).length;
 
     // Goals summary
     const completedGoals = goals.filter(g => g.completedPct >= 100).length;
@@ -395,8 +395,8 @@ async function runProfileUpdate(
         warningFlags: cycleReport.warningFlags,
         stabilityScore: cycleReport.stabilityScore,
         checkinCount: history.length,
-        bestDay: bestDay ? `${bestDay.day} (média ${bestDay.avg.toFixed(1)}/5)` : null,
-        worstDay: worstDay ? `${worstDay.day} (média ${worstDay.avg.toFixed(1)}/5)` : null,
+        bestDay: bestDay ? `${bestDay.day} (média ${bestDay.avg.toFixed(1)}/10)` : null,
+        worstDay: worstDay ? `${worstDay.day} (média ${worstDay.avg.toFixed(1)}/10)` : null,
         moodDistribution: `${highDays} dias altos, ${history.length - highDays - lowDays} estáveis, ${lowDays} baixos`,
         goalsStatus: `${completedGoals} concluídas, ${activeGoals} em andamento de ${goals.length} total`,
       },

@@ -25,6 +25,7 @@ export interface WeeklyInsightData {
 
 interface InsightState {
   weeklyData: WeeklyInsightData | null;
+  rawData: any | null;
   isLoading: boolean;
   error: string | null;
 
@@ -38,6 +39,7 @@ interface InsightState {
  */
 export const useInsightStore = create<InsightState>((set) => ({
   weeklyData: null,
+  rawData: null,
   isLoading: false,
   error: null,
 
@@ -47,7 +49,11 @@ export const useInsightStore = create<InsightState>((set) => ({
       const response = await api.get('/api/insights/weekly', {
         params: { userId, weekStart }
       });
-      set({ weeklyData: response.data.insights, isLoading: false });
+      set({ 
+        weeklyData: response.data.insights, 
+        rawData: response.data.rawData,
+        isLoading: false 
+      });
     } catch (err: any) {
       set({ 
         isLoading: false, 

@@ -7,6 +7,7 @@ import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import {
+  buildPlannerAgendaSlots,
   buildTimelineBlockInput,
   mapIntensityToEnergyLevel,
   normalizePlannerCategory,
@@ -53,6 +54,23 @@ const LABEL_STYLE: React.CSSProperties = {
   color: "var(--text-3)",
   textTransform: "uppercase",
   letterSpacing: ".08em",
+};
+
+const PLANNER_SUMMARY_CARD_STYLE: React.CSSProperties = {
+  borderRadius: 20,
+  padding: "16px",
+  marginBottom: "14px",
+  background: "linear-gradient(135deg, rgba(243,176,140,.12), rgba(255,255,255,.58))",
+  border: "1px solid rgba(255,255,255,.78)",
+  boxShadow: "0 16px 38px rgba(243,176,140,.09), 0 1px 0 rgba(255,255,255,.82) inset",
+};
+
+const EMPTY_TIMELINE_CARD_STYLE: React.CSSProperties = {
+  width: "100%",
+  textAlign: "left",
+  background: "rgba(255,251,247,.78)",
+  border: "1.5px dashed rgba(243,176,140,.22)",
+  borderLeft: "4px solid rgba(243,176,140,.42)",
 };
 
 type FormState = {
@@ -382,6 +400,19 @@ export function PlannerPage() {
     return date;
   }, [offsetDias, todayAnchor]);
   const selectedDateKey = useMemo(() => formatDateKey(dataAtual), [dataAtual]);
+  const emptyAgendaSlots = useMemo(() => buildPlannerAgendaSlots([]), []);
+  const agendaSlots = useMemo(() => buildPlannerAgendaSlots(plannerTasks), [plannerTasks]);
+  const visibleAgendaSlots = plannerLoading ? emptyAgendaSlots : agendaSlots;
+  const plannerSummary = plannerLoading
+    ? "Montando a visualização da sua agenda."
+    : plannerTasks.length === 0
+      ? "Seu dia ainda está livre, mas a timeline continua visível para você organizar sem cair numa tela vazia."
+      : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""} organizado${plannerTasks.length > 1 ? "s" : ""} na sua agenda de hoje.`;
+  const plannerBadgeLabel = plannerLoading
+    ? "Carregando"
+    : plannerTasks.length === 0
+      ? "Agenda livre"
+      : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""}`;
 
   useEffect(() => {
     let ignore = false;
@@ -418,6 +449,11 @@ export function PlannerPage() {
   function closeNewForm() {
     setShowNewForm(false);
     setNewForm({ ...EMPTY_FORM });
+  }
+
+  function openNewFormAt(time: string) {
+    setNewForm({ ...EMPTY_FORM, time });
+    setShowNewForm(true);
   }
 
   function closeEditForm() {
@@ -517,35 +553,132 @@ export function PlannerPage() {
         <AuraButtonV2 onClick={() => setOffsetDias((current) => current + 1)}>Próximo ›</AuraButtonV2>
       </div>
 
-      {plannerLoading ? (
-        <p>Carregando...</p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {plannerTasks.map((task) => {
-            const categoryOption = CATEGORY_OPTIONS.find((option) => option.value === normalizePlannerCategory(task.category, task.title)) ?? CATEGORY_OPTIONS[3];
+      <div className="glass-card" style={PLANNER_SUMMARY_CARD_STYLE}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...LABEL_STYLE, color: "var(--nectarine-11)", marginBottom: 6 }}>Agenda</div>
+            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.2 }}>Timeline do dia</h2>
+            <p style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: "var(--text-3)" }}>{plannerSummary}</p>
+          </div>
+          <span
+            style={{
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: 28,
+              padding: "0 10px",
+              borderRadius: 999,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              color: "var(--nectarine-11)",
+              background: "var(--nectarine-a3)",
+              border: "1px solid var(--nectarine-a5)",
+            }}
+          >
+            {plannerBadgeLabel}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", paddingBottom: 88 }}>
+        {visibleAgendaSlots.map((slot) => {
+          if (slot.kind === "task") {
+            const categoryOption = CATEGORY_OPTIONS.find((option) => option.value === slot.category) ?? CATEGORY_OPTIONS[3];
+
             return (
-              <div
-                key={task.id}
-                onClick={() => openEditForm(task)}
-                style={{
-                  padding: "12px",
-                  background: "#fff",
-                  borderRadius: 8,
-                  borderLeft: `4px solid ${categoryOption.cor}`,
-                }}
-              >
-                <span style={{ fontWeight: 600 }}>{task.time}</span> - {task.title}
+              <div key={slot.key} className="timeline-slot">
+                <span className="timeline-time">{slot.time}</span>
+                <div className="timeline-line" />
+                <button
+                  type="button"
+                  className="timeline-block-card interactive-card"
+                  onClick={() => openEditForm(slot.task)}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    borderLeftColor: categoryOption.cor,
+                    opacity: slot.task.done ? 0.74 : 1,
+                  }}
+                >
+                  <div
+                    className="block-title"
+                    style={{
+                      textDecoration: slot.task.done ? "line-through" : "none",
+                    }}
+                  >
+                    {slot.task.title}
+                  </div>
+                  <div className="block-meta">
+                    {slot.time} — {slot.endTime} · {slot.durationLabel}
+                  </div>
+                  <div
+                    className="block-chip"
+                    style={{
+                      background: categoryOption.bg,
+                      color: categoryOption.textColor,
+                      border: `1px solid ${categoryOption.cor}33`,
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: categoryOption.cor }} />
+                    {categoryOption.shortLabel}
+                  </div>
+                </button>
               </div>
             );
-          })}
-        </div>
-      )}
+          }
+
+          return (
+            <div key={slot.key} className="timeline-slot">
+              <span className="timeline-time">{slot.time}</span>
+              <div className="timeline-line" />
+              <button
+                type="button"
+                className="timeline-block-card interactive-card"
+                onClick={() => openNewFormAt(slot.time)}
+                style={EMPTY_TIMELINE_CARD_STYLE}
+              >
+                <div className="block-title" style={{ color: "var(--text-2)" }}>
+                  {slot.title}
+                </div>
+                <div className="block-meta" style={{ marginTop: 4, lineHeight: 1.6 }}>
+                  {slot.description}
+                </div>
+                <div
+                  className="block-chip"
+                  style={{
+                    background: "var(--nectarine-a3)",
+                    color: "var(--nectarine-11)",
+                    border: "1px solid var(--nectarine-a5)",
+                  }}
+                >
+                  <span style={{ fontSize: 11, lineHeight: 1 }}>+</span>
+                  Criar bloco
+                </div>
+              </button>
+            </div>
+          );
+        })}
+      </div>
 
       <AuraButtonV2
-        onClick={() => setShowNewForm(true)}
-        style={{ position: "fixed", bottom: 20, right: 20, width: 50, height: 50, borderRadius: "50%" }}
+        variant="outline"
+        onClick={() => openNewFormAt("09:00")}
+        style={{
+          position: "fixed",
+          bottom: 20,
+          left: "50%",
+          transform: "translateX(-50%)",
+          borderRadius: 999,
+          padding: "0 18px",
+          background: "rgba(255,253,249,.92)",
+          boxShadow: "0 10px 28px rgba(243,176,140,.14)",
+          zIndex: 20,
+        }}
       >
-        +
+        + Novo bloco
       </AuraButtonV2>
 
       {showNewForm ? (

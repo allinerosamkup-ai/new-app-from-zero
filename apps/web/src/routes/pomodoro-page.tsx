@@ -193,7 +193,7 @@ export function PomodoroPage() {
         }}>
           {/* Reset */}
           <AuraButtonV2
-            variant="secondary"
+            variant="outline"
             onClick={() => { setTimeLeft(totalTime); setRunning(false); }}
             style={{ width: "40px", height: "40px", padding: 0, borderRadius: "50%", fontSize: "18px" }}
             title="Reiniciar"
@@ -213,7 +213,7 @@ export function PomodoroPage() {
 
           {/* Skip */}
           <AuraButtonV2
-            variant="secondary"
+            variant="outline"
             onClick={() => { setTimeLeft(0); setRunning(false); }}
             style={{ width: "40px", height: "40px", padding: 0, borderRadius: "50%", fontSize: "18px" }}
             title="Pular"
@@ -291,7 +291,7 @@ export function PomodoroPage() {
         {/* Finalizar */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
           <AuraButtonV2
-            variant="secondary"
+            variant="outline"
             onClick={() => navigate("/daily-summary")}
           >
             ✓ Sessão concluída

@@ -254,4 +254,55 @@ export class AIService {
     const parsed = JSON.parse(content);
     return JournalSummarySchema.parse(parsed);
   }
+
+  /**
+   * Gera sugestões de hábitos baseadas no estado atual do usuário.
+   */
+  static async generateHabitSuggestions(input: {
+    userName: string;
+    profileSummary?: string | null;
+    moodCycleContext?: string | null;
+    currentMoodLabel?: string;
+    timeOfDay: string;
+  }): Promise<Array<{ title: string; category: string; reason: string; icon: string }>> {
+    const prompt = `
+      Com base no estado atual de ${input.userName}, sugira 3 hábitos ou micro-ações para este momento do dia (${input.timeOfDay}).
+      
+      CONTEXTO:
+      - Estado percebido: ${input.currentMoodLabel || 'não informado'}
+      - Ciclo/Histórico: ${input.moodCycleContext || 'iniciando agora'}
+      
+      REGRAS:
+      1. Use micro-passos (5-15 min).
+      2. Foque em regulação emocional ou proteção de energia conforme a fase.
+      3. Categorias: saúde, produtividade, mindfulness, social, lazer.
+      4. Retorne APENAS um array JSON.
+
+      FORMATO:
+      [{"title": "string", "category": "string", "reason": "1 frase curta", "icon": "emoji"}]
+    `;
+
+    const response = await openai.chat.completions.create({
+      model: this.MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: input.userName,
+            profileSummary: input.profileSummary,
+            moodCycleContext: input.moodCycleContext,
+            domain: 'planning',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
+      response_format: { type: 'json_object' },
+    } as any);
+
+    const content = response.choices[0].message.content;
+    if (!content) return [];
+
+    const parsed = JSON.parse(content);
+    return Array.isArray(parsed) ? parsed : (parsed.suggestions || parsed.habits || []);
+  }
 }

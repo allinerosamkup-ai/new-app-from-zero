@@ -93,6 +93,7 @@ export const initialAuraState: AuraState = {
   lastProfileUpdate: null,
   proactiveNudge: null,
   checkinHistory: [],
+  habits: [],
 };
 
 export function labelMood(mood: MoodOption) {

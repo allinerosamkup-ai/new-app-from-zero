@@ -105,12 +105,12 @@ export function ForgotPasswordPage() {
             disabled={loading || !email.trim()}
             style={{
               width: "100%", height: 46,
-              background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
+              background: "linear-gradient(135deg, #5A7A64 0%, #4E6B57 100%)",
               color: "#fff", border: "none", borderRadius: 16,
               fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
               cursor: loading || !email.trim() ? "not-allowed" : "pointer",
               opacity: loading || !email.trim() ? 0.6 : 1,
-              boxShadow: "0 12px 24px rgba(243,176,140,.24)",
+              boxShadow: "0 14px 24px rgba(90,122,100,.18)",
               transition: "all 150ms",
             }}
           >
@@ -120,11 +120,11 @@ export function ForgotPasswordPage() {
       ) : (
         /* Sucesso */
         <div style={{
-          background: "rgba(255,255,255,.62)",
-          border: "1px solid rgba(255,255,255,.82)",
-          borderRadius: 18, padding: 24, textAlign: "center",
+          background: "rgba(255,255,255,.98)",
+          border: "1px solid rgba(17,24,39,.05)",
+          borderRadius: 24, padding: 24, textAlign: "center",
           backdropFilter: "blur(18px)",
-          boxShadow: "0 14px 32px rgba(243,176,140,.08)",
+          boxShadow: "0 18px 32px rgba(17,24,39,.06)",
         }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
           <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--text-1)", marginBottom: 8 }}>

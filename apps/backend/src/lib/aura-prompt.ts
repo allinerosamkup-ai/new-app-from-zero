@@ -128,7 +128,7 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
 
 export function humanizeScore(score: number | null | undefined, type: 'mood' | 'energy' | 'sleep' | 'generic' = 'generic'): string {
   if (score == null) return 'não informado';
-  const val = Math.round(score);
+  const clamped = Math.max(1, Math.min(10, Math.round(score)));
   const labels: Record<string, string[]> = {
     mood: ['melancólico', 'frágil', 'neutro', 'sereno', 'vibrante', 'pleno'],
     energy: ['esgotado', 'baixo', 'estável', 'equilibrado', 'vigoroso', 'radiante'],
@@ -136,7 +136,8 @@ export function humanizeScore(score: number | null | undefined, type: 'mood' | '
     generic: ['crítico', 'baixo', 'médio', 'bom', 'alto', 'máximo']
   };
   const pool = labels[type] || labels.generic;
-  return pool[val] || pool[pool.length - 1];
+  const bucket = Math.min(pool.length - 1, Math.round(((clamped - 1) / 9) * (pool.length - 1)));
+  return pool[bucket] || pool[pool.length - 1];
 }
 
 export function getFirstName(fullName?: string | null): string | null {
@@ -190,6 +191,12 @@ PRINCIPIOS DO PRODUTO:
 - Respostas boas unem acolhimento, especificidade e utilidade pratica.
 - Evite repetir as mesmas ideias com palavras diferentes quando a resposta puder ser mais direta.
 - Prefira sinais concretos do contexto a frases genericas ou conclusoes apressadas.
+
+FUNDAMENTOS TEÓRICOS (AURA BRAIN):
+- HÁBITOS (Duhigg): Identifique o Loop (Gatilho -> Rotina -> Recompensa). Use Nudge Theory (Thaler) para empurrões gentis.
+- JOURNALING (Pennebaker): Promova a "Escrita Expressiva". Foco em processamento emocional e "como se sente" vs "o que fez".
+- TCC PRÁTICA: Identifique distorções cognitivas e sugira reestruturação leve através de perguntas curiosas.
+- NEUROCIÊNCIA: Valorize micro-vitórias para o sistema de dopamina e plasticidade neural (repetição consistente).
 
 SEGURANCA E EFICIENCIA:
 - Não presuma diagnósticos, traumas ou condições clínicas não informadas.

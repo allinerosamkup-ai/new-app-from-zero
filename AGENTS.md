@@ -67,48 +67,34 @@ Cada Codex instance trabalha em seu próprio worktree isolado.
 - Tipos de sugestão: `home-messages`, `checkin-response`, `day-tasks`, `planner-insight`
 - **Regra inviolável**: Nenhuma tela exibe texto pré-pronto como fallback de IA. Padrão: skeleton → dado IA → empty state neutro
 
-## Status do Design System — Aura v2 (atualizado 2026-03-18)
+## Status do Design System — Aura Editorial Clean (atualizado 2026-04-07)
 
-### ✅ Concluído
-- CSS foundation (`index.css`): tokens nectarine, classes `.btn-aura`, `.interactive-card`, `.glass-card`, `.aura-slider`
-- Mockup de referência completo: `apps/web/public/mockup-aura-v2.html` (13 telas + 6 variantes de estado)
-- Mockup aprovado com paleta 100% nectarine (sem orange/peche em estados de humor/energia)
-- **Implementação Aura v2 em TODAS as 13 telas** (2026-03-18):
-  1. `CheckinResultScreen.tsx` — gradientes opacos, 4 variantes (radiant/stable/sensitive/overloaded)
-  2. `HomeScreen.tsx` — header nectarine + radial gradient, state card nectarine-a3, bug EN/PT corrigido
-  3. `CheckinScreen.tsx` — sliders visuais com thumb, emotion grid 4-col, botão Aura 52px
-  4. `PlannerScreen.tsx` — category chips com dot colorido, borders 4px semânticas, FAB nectarine
-  5. `InsightsScreen.tsx` — bar chart menthe/nectarine, stats Poppins 17px, pattern cards
-  6. `JournalScreen.tsx` — bubbles assimétricas, avatar nectarine-a3, input com send nectarine
-  7. `AuthScreen.tsx` — hero card nectarine, tab switcher Aura, inputs 52px com ícones Lucide
-  8. `ConfigScreen.tsx` — config rows agrupadas, toggles nectarine, profile card 52px
-  9. `ObjectivesScreen.tsx` — progress bars lagune, subtask checkmarks menthe, cards com border-left
-  10. `PomodoroScreen.tsx` — timer circle nectarine, phase tabs, session dots
-  11. `OnboardingScreen.tsx` — chat bubbles nectarine/menthe, progress bar
-  12. `HarmonyCircleScreen.tsx` — radar chart nectarine, dimension bars
-  13. `DailySummaryScreen.tsx` — emotion chips nectarine palette, synthesis card
+### ✅ Fonte de verdade atual
+- Fundo base branco/off-white em todas as superfícies principais.
+- Cor entra como acento, não como massa: botões, chips, gráficos, estados, indicadores e detalhes.
+- Cards claros, sombras suaves, bordas discretas e respiro editorial.
+- Navegação, headers e shells com presença visual menor que o conteúdo.
+- Fluxos interativos devem priorizar gesto natural: swipe, scrub horizontal, scroll por toque.
 
-### Variantes do CheckinResult implementadas
-| Estado | Cor dominante | BG topo | Emoji |
-|--------|--------------|---------|-------|
-| `radiant` | Nectarine | `#F5E9E7` | ✨ |
-| `stable` | Menthe | `#E6F2EC` | 😌 |
-| `sensitive` | Nectarine suave | `#F3E8E5` | 🌸 |
-| `overloaded` | Warm rose | `#F0E4E2` | 😤 |
+### Paleta ativa
+- Neutros: branco quente, creme muito claro, cinzas suaves.
+- Acentos: salmão rosado pastel, verde sálvia claro, azul céu suave, lilás leve e pêssego aberto.
+- Evitar qualquer cor escura dominante no app.
+- Evitar blocos inteiros em cor saturada quando uma superfície clara resolver melhor.
 
-### ✅ Atualizações 2026-04-01
-- IA persona Aura implementada (`buildAuraSystemPrompt`) — injetada em todos os calls OpenAI
-- HomeScreen: skeleton de carregamento + empty state neutro (sem texto fixo de fallback)
-- CheckinResult: "Aura diz:" com resposta dinâmica da IA (`checkin-response`)
-- CheckinPage v3: botões nativos corrigidos + sintomas do ciclo (cólica + dor de cabeça)
-- `CheckinEntry` expandido: `isFlowing`, `flowDay`, `flowIntensity`, `symptomLevels`
+### Regras visuais obrigatórias
+- Não usar o mockup antigo Aura v2 como referência de implementação.
+- Não reintroduzir headers escuros, gradientes pesados ou superfícies “glass” densas do sistema anterior.
+- Não concentrar identidade visual em `nectarine` puro ou em massa cromática contínua.
+- Toda tela nova ou refatorada deve conversar com o shell clean atual antes de qualquer detalhe local.
 
-### 🔜 Próxima sessão
-- Persistir campos ciclo menstrual no backend (schema `daily_checkins`)
-- Testar `checkin-response` end-to-end (IA retorna mensagem real no resultado)
-- Testar responsividade do phone-frame em todas as telas
-- Ajustar micro-interações (hover/active states)
+### Estado atual consolidado
+- Redesign global clean aplicado nas páginas principais do app.
+- Home com hero claro, popup premium de hábitos e cards mais leves.
+- Planner com estética contínua de agenda, inclusive quando vazio.
+- Check-in com sliders táteis, escala `1–10` e swipe entre etapas.
+- Hábitos sincronizados entre modal da Home e página completa.
 
-### Referência visual
-Para cada tela: consultar `mockup-aura-v2.html` antes de ajustar o `.tsx`.
-Regra: **gradientes de fundo usam cores OPACAS** (não rgba sobre #111).
+### Próxima sessão
+- Polimento fino nas telas densas restantes para eliminar resíduos visuais do sistema antigo.
+- Revisar docs e artefatos históricos sempre que algum deles puder voltar a influenciar a UI atual.

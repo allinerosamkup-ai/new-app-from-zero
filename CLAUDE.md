@@ -45,10 +45,11 @@ packages/
 - `moodCycleContext`: String de 1 linha (`cycleReport.aiContext`) injetada para dar consciência de fase à IA.
 - Metodologia: Terapia de Exposição + TCC gentil + Psicologia somática + Autocompaixão.
 
-## Status do Design System — Aura v2
-- Paleta: `--nectarine` (#D7897F), `--menthe` (#96C7B3), `--lagune` (#6398A9).
-- Regra: Humor → `--menthe`; Energia → `--lagune`; Estado/Destaque → `--nectarine`.
-- **NUNCA** usar `--peche` (#F9B95C) para humor ou energia.
+## Status do Design System — Aura Editorial Clean
+- Fundo base: branco/off-white, com uso de cor apenas como acento.
+- Visual dominante: cards claros, sombras suaves, bordas discretas, layout respirado.
+- Acentos ativos: salmão rosado pastel, verde sálvia claro, azul suave, lilás leve, pêssego aberto.
+- Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups Aura v2.
 
 ## ✅ Atualizações Recentes (2026-04-03)
 - **Planner v4**: Badge de energia por tarefa (alta/média/leve) + aviso da Aura se energia baixa.

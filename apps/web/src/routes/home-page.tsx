@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { FollowUpPending } from "../features/aura/types";
+import { HABIT_SUGGESTIONS, type HabitSuggestion } from "../features/aura/habit-presets";
 import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/aura-v2/AuraButtonV2";
@@ -25,6 +26,8 @@ import {
   Target, 
   Timer,
   TrendingUp,
+  Plus,
+  Sparkles,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
@@ -53,7 +56,7 @@ type ChartPoint = {
   isHighlight?: boolean;
 };
 
-const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string; category: string }> = {
+const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string | React.ReactNode; category: string }> = {
   trabalho:     { cor: "var(--lagune)",    bg: "rgba(176,180,196,.10)",    emoji: "💼", category: "trabalho" },
   autocuidado:  { cor: "var(--menthe)",   bg: "rgba(180,185,169,.10)",   emoji: "🌿", category: "autocuidado" },
   casa:         { cor: "var(--nectarine)", bg: "rgba(197,165,147,.10)",  emoji: "🏠", category: "rotina" },
@@ -116,7 +119,7 @@ function valueToChartY(value: number) {
   const Y_TOP = 12;
   const Y_BOTTOM = 63;
   const Y_RANGE = Y_BOTTOM - Y_TOP;
-  return Y_BOTTOM - ((value - 1) / 4) * Y_RANGE;
+  return Y_BOTTOM - ((value - 1) / 9) * Y_RANGE;
 }
 
 function getCheckinMoment(entry: { recordedAt?: string; checkinSlot?: string }) {
@@ -210,23 +213,298 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
   },
 };
 
+const HABIT_THEME_META: Record<HabitSuggestion["theme"], { label: string; accent: string; bg: string }> = {
+  starter: { label: "Cotidiano leve", accent: "var(--nectarine)", bg: "rgba(244,190,168,.18)" },
+  autocuidado: { label: "Autocuidado", accent: "var(--sweet-mint)", bg: "rgba(192,220,203,.22)" },
+  casa: { label: "Casa em ordem", accent: "var(--horizon)", bg: "rgba(189,207,236,.22)" },
+  social: { label: "Vínculos", accent: "var(--horizon)", bg: "rgba(218,206,235,.24)" },
+  criativo: { label: "Criativo", accent: "var(--atomic-tangerine)", bg: "rgba(248,215,193,.24)" },
+  natureza: { label: "Natureza", accent: "var(--menthe)", bg: "rgba(200,220,210,.24)" },
+};
+
+function groupHabitSuggestions() {
+  const groups = new Map<HabitSuggestion["theme"], HabitSuggestion[]>();
+
+  HABIT_SUGGESTIONS.forEach((suggestion) => {
+    const current = groups.get(suggestion.theme) ?? [];
+    current.push(suggestion);
+    groups.set(suggestion.theme, current);
+  });
+
+  return Array.from(groups.entries()).map(([theme, suggestions]) => ({
+    theme,
+    meta: HABIT_THEME_META[theme],
+    suggestions,
+  }));
+}
+
+function HabitIdeasModal({
+  onClose,
+  onManualAdd,
+  onQuickAdd,
+  onViewAll,
+}: {
+  onClose: () => void;
+  onManualAdd: (payload: { title: string; icon: string }) => Promise<boolean>;
+  onQuickAdd: (suggestion: HabitSuggestion) => Promise<boolean>;
+  onViewAll: () => void;
+}) {
+  const groupedSuggestions = groupHabitSuggestions();
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualIcon, setManualIcon] = useState("✨");
+  const [savingManual, setSavingManual] = useState(false);
+  const [savingSuggestion, setSavingSuggestion] = useState<string | null>(null);
+  const [addedSuggestions, setAddedSuggestions] = useState<Set<string>>(new Set());
+
+  async function handleManualSave() {
+    if (!manualTitle.trim()) return;
+    setSavingManual(true);
+    const ok = await onManualAdd({ title: manualTitle.trim(), icon: manualIcon });
+    if (ok) {
+      setManualTitle("");
+      onClose();
+    }
+    setSavingManual(false);
+  }
+
+  async function handleQuickSave(suggestion: HabitSuggestion) {
+    if (savingSuggestion === suggestion.title || addedSuggestions.has(suggestion.title)) return;
+    setSavingSuggestion(suggestion.title);
+    const ok = await onQuickAdd(suggestion);
+    if (ok) {
+      setAddedSuggestions((current) => new Set(current).add(suggestion.title));
+    }
+    setSavingSuggestion(null);
+  }
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 1400,
+        background: "rgba(252,248,245,.78)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        padding: "16px 12px 0",
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 520,
+          maxHeight: "88vh",
+          overflowY: "auto",
+          background: "rgba(255,255,255,.96)",
+          border: "1px solid rgba(17,24,39,.06)",
+          borderRadius: "30px 30px 0 0",
+          boxShadow: "0 -8px 40px rgba(17,24,39,.10)",
+          padding: "18px 18px 28px",
+        }}
+      >
+        <div style={{ width: 46, height: 5, borderRadius: 999, background: "rgba(17,24,39,.10)", margin: "0 auto 18px" }} />
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
+          <div>
+            <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)" }}>
+              Hábitos com mais charme
+            </p>
+            <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>Escolha um ritual para hoje</h3>
+            <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.55, color: "var(--text-2)" }}>
+              Adicione algo simples, gostoso ou inesperado. O foco aqui é facilitar a entrada e deixar a rotina mais viva.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "1px solid rgba(17,24,39,.08)",
+              background: "rgba(255,255,255,.85)",
+              color: "var(--text-2)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "56px 1fr auto",
+            gap: 10,
+            padding: 14,
+            borderRadius: 22,
+            background: "linear-gradient(135deg, rgba(244,190,168,.16), rgba(229,219,247,.18))",
+            border: "1px solid rgba(17,24,39,.05)",
+            marginBottom: 18,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setManualIcon((current) => (current === "✨" ? "🌿" : current === "🌿" ? "🧡" : "✨"))}
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 18,
+              border: "1px solid rgba(17,24,39,.06)",
+              background: "rgba(255,255,255,.88)",
+              fontSize: 28,
+              cursor: "pointer",
+            }}
+          >
+            {manualIcon}
+          </button>
+          <div>
+            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--text-3)" }}>
+              Entrada livre
+            </p>
+            <input
+              type="text"
+              value={manualTitle}
+              onChange={(event) => setManualTitle(event.target.value)}
+              placeholder="Ex: dobrar as roupas, regar as plantas, 5 min de silêncio"
+              style={{
+                width: "100%",
+                height: 44,
+                borderRadius: 14,
+                border: "1px solid rgba(17,24,39,.08)",
+                background: "rgba(255,255,255,.92)",
+                padding: "0 14px",
+                fontSize: 14,
+                color: "var(--text-1)",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <AuraButtonV2 variant="primary" size="sm" onClick={handleManualSave} disabled={savingManual || !manualTitle.trim()} style={{ alignSelf: "end", height: 44 }}>
+            {savingManual ? "Salvando..." : "Criar"}
+          </AuraButtonV2>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {groupedSuggestions.map(({ theme, meta, suggestions }) => (
+            <div key={theme}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 28,
+                      height: 28,
+                      borderRadius: 999,
+                      background: meta.bg,
+                      color: meta.accent,
+                      fontSize: 14,
+                      fontWeight: 800,
+                    }}
+                  >
+                    <Sparkles size={14} />
+                  </span>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--text-1)" }}>{meta.label}</p>
+                    <p style={{ margin: "1px 0 0", fontSize: 11, color: "var(--text-3)" }}>{suggestions.length} ideias para puxar a rotina</p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+                {suggestions.map((suggestion) => {
+                  const isAdded = addedSuggestions.has(suggestion.title);
+                  const isSaving = savingSuggestion === suggestion.title;
+                  return (
+                    <button
+                      key={suggestion.title}
+                      type="button"
+                      onClick={() => handleQuickSave(suggestion)}
+                      disabled={isAdded || isSaving}
+                      style={{
+                        minWidth: 180,
+                        maxWidth: 180,
+                        padding: 14,
+                        borderRadius: 22,
+                        border: `1px solid ${isAdded ? `${meta.accent}26` : "rgba(17,24,39,.06)"}`,
+                        background: isAdded ? "rgba(255,255,255,.98)" : meta.bg,
+                        boxShadow: "0 10px 22px rgba(17,24,39,.06)",
+                        cursor: isAdded ? "default" : "pointer",
+                        textAlign: "left",
+                        flexShrink: 0,
+                        opacity: isSaving ? 0.7 : 1,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14 }}>
+                        <span style={{ fontSize: 24 }}>{suggestion.icon}</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            letterSpacing: ".08em",
+                            textTransform: "uppercase",
+                            color: meta.accent,
+                          }}
+                        >
+                          {suggestion.durationMinutes > 0 ? `${suggestion.durationMinutes} min` : "flex"}
+                        </span>
+                      </div>
+                      <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.3 }}>
+                        {suggestion.title}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--text-2)" }}>
+                        {isAdded ? "Já entrou na sua lista de hábitos." : "Toque para adicionar em um clique."}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={onViewAll}
+          style={{
+            width: "100%",
+            marginTop: 18,
+            height: 46,
+            borderRadius: 16,
+            border: "1px solid rgba(17,24,39,.08)",
+            background: "rgba(255,255,255,.9)",
+            color: "var(--text-1)",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Ver página completa de hábitos
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function HomePage() {
-  const { state, addTask, refreshData, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
+  const { state, addTask, addHabit, refreshData, setPendingFollowUp, setProactiveNudge, hydrated, toggleHabit } = useAuraStore();
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());
   const [checkinChartMode, setCheckinChartMode] = useState<"week" | "day">("week");
+  const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
 
-  // Agenda por blocos
-  const [agendaPhase, setAgendaPhase] = useState<"idle" | "loading" | "preview" | "approved">("idle");
-  const [agendaBlocks, setAgendaBlocks] = useState<AgendaBlock[]>([]);
-  const [selectedAgendaTaskKeys, setSelectedAgendaTaskKeys] = useState<Set<string>>(new Set());
-  const [savedAgendaTaskKeys, setSavedAgendaTaskKeys] = useState<Set<string>>(new Set());
-  const [agendaSaving, setAgendaSaving] = useState(false);
-  const agendaRequestCountRef = useRef(0);
+  // Relógio e Contexto de Tempo (necessários para IDs e filtros)
   const [clockTime, setClockTime] = useState(() => new Date());
-
-  const mood = moodMap[state.mood] ?? moodMap.equilibrada;
   const dayContext = useMemo(
     () => getClientDayContext(clockTime),
     [
@@ -247,6 +525,18 @@ export function HomePage() {
       clockTime.getMinutes(),
     ],
   );
+
+  // Agenda por blocos
+  const [agendaPhase, setAgendaPhase] = useState<"idle" | "loading" | "preview" | "approved">("idle");
+  const [agendaBlocks, setAgendaBlocks] = useState<AgendaBlock[]>([]);
+  const [selectedAgendaTaskKeys, setSelectedAgendaTaskKeys] = useState<Set<string>>(new Set());
+  const [savedAgendaTaskKeys, setSavedAgendaTaskKeys] = useState<Set<string>>(new Set());
+  const [agendaSaving, setAgendaSaving] = useState(false);
+  const agendaRequestCountRef = useRef(0);
+
+  const mood = moodMap[state.mood] ?? moodMap.equilibrada;
+  const habits = state.habits || [];
+  const todayStr = dayContext.localDate;
   const aggregatedCheckinHistory = useMemo(
     () => aggregateCheckinsByDay(state.checkinHistory || []),
     [state.checkinHistory]
@@ -547,6 +837,42 @@ export function HomePage() {
       return next;
     });
   }
+
+  async function handleQuickHabitAdd(suggestion: HabitSuggestion) {
+    try {
+      await addHabit({
+        title: suggestion.title,
+        category: suggestion.category,
+        frequency: "daily",
+        icon: suggestion.icon,
+        timeOfDay: suggestion.timeOfDay,
+        durationMinutes: suggestion.durationMinutes,
+      });
+      showSuccess(`"${suggestion.title}" entrou nos seus hábitos.`);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel adicionar o habito.");
+      return false;
+    }
+  }
+
+  async function handleManualHabitAdd({ title, icon }: { title: string; icon: string }) {
+    try {
+      await addHabit({
+        title,
+        category: "geral",
+        frequency: "daily",
+        icon,
+        timeOfDay: "anytime",
+      });
+      showSuccess(`"${title}" foi criado com sucesso.`);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel criar o habito.");
+      return false;
+    }
+  }
+
   const nextTask = state.tasks.find((t) => !t.done) ?? state.tasks[0];
   const selectedAgendaCount = selectedAgendaTaskKeys.size;
   const importantAlerts = useMemo(() => {
@@ -644,25 +970,26 @@ export function HomePage() {
                 {getGreetingEmoji(clockTime.getHours())} {getGreeting(clockTime.getHours())},
               </p>
               <h1 style={{ marginBottom: 4 }}>{displayName}</h1>
-              <p style={{ fontSize: "11px", color: "rgba(255,255,255,.75)", margin: 0 }}>
+              <p style={{ fontSize: "11px", color: "var(--text-2)", margin: 0 }}>
                 {getFormattedDate(clockTime)}
               </p>
             </div>
             {/* Relógio */}
             <div style={{
-              background: "rgba(255,255,255,.18)",
-              borderRadius: "12px",
+              background: "rgba(255,255,255,.76)",
+              borderRadius: "16px",
               padding: "10px 14px",
               textAlign: "center",
               backdropFilter: "blur(8px)",
-              border: "1px solid rgba(255,255,255,.25)",
+              border: "1px solid rgba(17,24,39,.05)",
+              boxShadow: "0 10px 18px rgba(17,24,39,.05)",
               minWidth: 90,
             }}>
               <p style={{
                 fontFamily: "'Plus Jakarta Sans', sans-serif",
                 fontSize: "22px",
                 fontWeight: 800,
-                color: "#fff",
+                color: "var(--text-1)",
                 margin: 0,
                 lineHeight: 1,
                 letterSpacing: "1px",
@@ -676,12 +1003,13 @@ export function HomePage() {
           <div style={{
             marginTop: "12px",
             display: "inline-flex", alignItems: "center", gap: 6,
-            background: "rgba(255,255,255,.2)",
-            border: "1px solid rgba(255,255,255,.3)",
+            background: "rgba(255,255,255,.72)",
+            border: "1px solid rgba(17,24,39,.05)",
             borderRadius: 999, padding: "5px 14px",
+            boxShadow: "0 8px 14px rgba(17,24,39,.04)",
           }}>
             <span style={{ fontSize: 13 }}>{mood.emoji}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{mood.chipLabel}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--nectarine-11)" }}>{mood.chipLabel}</span>
           </div>
         </div>
 
@@ -979,6 +1307,160 @@ export function HomePage() {
             )}
           </div>
         </div>
+
+        {/* ── Hábitos de Hoje ── */}
+        {(() => {
+          const dailyHabits = habits.filter((h: any) => h.frequency === "daily");
+          const completedHabits = dailyHabits.filter((h: any) => (h.completions?.length ?? 0) > 0);
+          const pendingHabits  = dailyHabits.filter((h: any) => (h.completions?.length ?? 0) === 0);
+          const allSorted      = [...pendingHabits, ...completedHabits];
+          const shown          = allSorted.slice(0, 3);
+          const hiddenCount    = allSorted.length - shown.length;
+          const allDone        = dailyHabits.length > 0 && completedHabits.length === dailyHabits.length;
+          const pct            = dailyHabits.length > 0 ? (completedHabits.length / dailyHabits.length) * 100 : 0;
+
+          return (
+            <div style={{ marginBottom: "calc(var(--a) * 1.2)", marginTop: 12 }}>
+              {/* Header */}
+              <div className="home-section-row" style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>🔥</span>
+                  <span className="section-title" style={{ fontSize: 14 }}>Hábitos de hoje</span>
+                  {dailyHabits.length > 0 && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999,
+                      background: allDone ? "rgba(150,199,179,0.18)" : "rgba(215,137,127,0.12)",
+                      color: allDone ? "var(--menthe)" : "var(--nectarine)",
+                    }}>
+                      {completedHabits.length}/{dailyHabits.length}
+                    </span>
+                  )}
+                </div>
+                <button
+                  style={{ fontSize: 11, color: "var(--nectarine)", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
+                  onClick={() => setShowHabitIdeasModal(true)}
+                >
+                  Abrir ideias →
+                </button>
+              </div>
+
+              {/* Progress bar */}
+              {dailyHabits.length > 0 && (
+                <div style={{ marginBottom: 10, height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                  <div style={{
+                    width: `${pct}%`, height: "100%", borderRadius: 999,
+                    background: allDone ? "var(--menthe)" : "linear-gradient(90deg, var(--lagune), var(--menthe))",
+                    transition: "width 0.5s ease",
+                  }} />
+                </div>
+              )}
+
+              {dailyHabits.length > 0 ? (
+                <>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {shown.map((habit: any) => {
+                      const isCompleted = (habit.completions?.length ?? 0) > 0;
+                      return (
+                        <div
+                          key={habit.id}
+                          className="aura-card"
+                          style={{
+                            padding: "10px 12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            background: isCompleted ? "rgba(150,199,179,0.06)" : "rgba(255,253,249,0.97)",
+                            borderColor: isCompleted ? "rgba(150,199,179,0.25)" : "var(--warm-border)",
+                            borderLeft: `3px solid ${isCompleted ? "var(--menthe)" : "var(--warm-border)"}`,
+                            transition: "all 0.2s ease",
+                            opacity: isCompleted ? 0.75 : 1,
+                          }}
+                        >
+                          <span style={{ fontSize: 20, flexShrink: 0 }}>{habit.icon || "✨"}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{
+                              fontSize: 13, fontWeight: 700, margin: 0,
+                              color: isCompleted ? "var(--text-3)" : "var(--text-1)",
+                              textDecoration: isCompleted ? "line-through" : "none",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }}>
+                              {habit.title}
+                            </p>
+                            {habit.streakCount > 0 && (
+                              <p style={{ fontSize: 10, color: "var(--nectarine)", margin: "2px 0 0", fontWeight: 700 }}>
+                                🔥 {habit.streakCount} dias
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleHabit(habit.id); }}
+                            style={{
+                              flexShrink: 0,
+                              width: 32, height: 32, borderRadius: "50%",
+                              border: `2px solid ${isCompleted ? "var(--menthe)" : "rgba(0,0,0,.15)"}`,
+                              background: isCompleted ? "var(--menthe)" : "transparent",
+                              cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              transition: "all 0.2s ease",
+                            }}
+                          >
+                            {isCompleted && (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Ver mais */}
+                  {hiddenCount > 0 && (
+                    <button
+                      onClick={() => setShowHabitIdeasModal(true)}
+                      style={{
+                        width: "100%", marginTop: 8, padding: "8px 0",
+                        background: "rgba(215,137,127,0.06)", border: "1.5px dashed rgba(215,137,127,0.3)",
+                        borderRadius: 12, color: "var(--nectarine)", fontSize: 12, fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      + {hiddenCount} hábito{hiddenCount > 1 ? "s" : ""} a mais
+                    </button>
+                  )}
+
+                  {/* All done celebration */}
+                  {allDone && (
+                    <div style={{
+                      marginTop: 8, padding: "10px 14px", borderRadius: 12,
+                      background: "rgba(150,199,179,0.10)", border: "1px solid rgba(150,199,179,0.25)",
+                      display: "flex", alignItems: "center", gap: 8,
+                    }}>
+                      <span style={{ fontSize: 18 }}>🎉</span>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--menthe)", margin: 0 }}>
+                        Todos os hábitos do dia concluídos!
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div
+                  className="aura-card"
+                  onClick={() => setShowHabitIdeasModal(true)}
+                  style={{ padding: 16, textAlign: "center", borderStyle: "dashed", cursor: "pointer" }}
+                >
+                  <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 4px" }}>
+                    Nenhum hábito para hoje.
+                  </p>
+                  <p style={{ fontSize: 12, color: "var(--nectarine)", fontWeight: 700, margin: 0 }}>
+                    Abrir sugestões →
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Acesso Rápido ── */}
         <p className="aura-section-kicker">Acesso rapido</p>
@@ -1601,6 +2083,17 @@ export function HomePage() {
           </div>
         )}
       </div>
+      {showHabitIdeasModal && (
+        <HabitIdeasModal
+          onClose={() => setShowHabitIdeasModal(false)}
+          onManualAdd={handleManualHabitAdd}
+          onQuickAdd={handleQuickHabitAdd}
+          onViewAll={() => {
+            setShowHabitIdeasModal(false);
+            navigate("/habits");
+          }}
+        />
+      )}
     </div>
   );
 }

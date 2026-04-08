@@ -3,42 +3,41 @@
 @tailwind utilities;
 
 :root {
-  /* ── Paleta Nectarine × Pêche × Menthe × Lagune ── */
-  --nectarine: #D7897F;
-  --peche:     #F9B95C;
-  --menthe:    #96C7B3;
-  --lagune:    #6398A9;
+  --nectarine: #F4BEA8;
+  --peche:     #F7E7A6;
+  --menthe:    #BFDCCB;
+  --lagune:    #BEE6F3;
 
-  --bg-base: #FFFCF8;
-  --bg-surface: rgba(255, 253, 250, 0.78);
-  --bg-surface-solid: #FFFDF9;
-  --bg-glass: rgba(255, 253, 250, 0.52);
-  --bg-glass-strong: rgba(255, 253, 250, 0.88);
-  --bg-dark: #D7897F;
-  --bg-dark-hover: #C46B60;
+  --bg-base: #FFFFFF;
+  --bg-surface: rgba(255, 255, 255, 0.92);
+  --bg-surface-solid: #FFFFFF;
+  --bg-glass: rgba(255, 255, 255, 0.76);
+  --bg-glass-strong: rgba(255, 255, 255, 0.96);
+  --bg-dark: #5A7A64;
+  --bg-dark-hover: #486451;
 
-  --text-primary: #4A3B38;
-  --text-secondary: #7D6B68;
-  --text-muted: #B0A0A0;
+  --text-primary: #181A1F;
+  --text-secondary: #5F6673;
+  --text-muted: #98A0AE;
   --text-on-dark: #FFFFFF;
-  --text-on-dark-muted: #D8ECF3;
+  --text-on-dark-muted: #DDE7E1;
 
-  --accent-green:  #96C7B3;
-  --accent-blue:   #6398A9;
-  --accent-teal:   #96C7B3;
-  --accent-orange: #F9B95C;
-  --accent-purple: #D7897F;
-  --accent-rose:   #D7897F;
+  --accent-green:  #BFDCCB;
+  --accent-blue:   #BEE6F3;
+  --accent-teal:   #BFDCCB;
+  --accent-orange: #F4BEA8;
+  --accent-purple: #E5DBF7;
+  --accent-rose:   #F5C9C1;
 
-  --cat-trabalho: #6398A9;
-  --cat-saude:    #96C7B3;
-  --cat-lazer:    #F9B95C;
-  --cat-rotina:   #D7897F;
+  --cat-trabalho: #BEE6F3;
+  --cat-saude:    #BFDCCB;
+  --cat-lazer:    #F7E7A6;
+  --cat-rotina:   #F4BEA8;
 
-  --state-leve:     #96C7B3;
-  --state-moderado: #F9B95C;
-  --state-sensivel: #D7897F;
-  --state-critico:  #E07070;
+  --state-leve:     #BFDCCB;
+  --state-moderado: #F7E7A6;
+  --state-sensivel: #F4BEA8;
+  --state-critico:  #F3A7A7;
 
   --radius-sm: 12px;
   --radius-md: 16px;
@@ -49,31 +48,31 @@
   --blur-glass: 20px;
   --blur-glass-strong: 30px;
 
-  --shadow-sm: 0 1px 3px rgba(99, 152, 169, 0.07);
-  --shadow-md: 0 4px 12px rgba(99, 152, 169, 0.11);
-  --shadow-lg: 0 8px 30px rgba(99, 152, 169, 0.16);
-  --shadow-glow: 0 0 30px rgba(150, 199, 179, 0.22);
+  --shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.05);
+  --shadow-md: 0 8px 20px rgba(17, 24, 39, 0.06);
+  --shadow-lg: 0 18px 40px rgba(17, 24, 39, 0.08);
+  --shadow-glow: 0 0 30px rgba(191, 220, 203, 0.28);
 
   --font-heading: 'Poppins', sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* ── Aura Nectarine accent ── */
-  --accent-9:        #D7897F;
-  --accent-10:       #C46B60;
-  --accent-11:       #A8544A;
-  --accent-surface:  rgba(215, 137, 127, .09);
+  --accent-9:        #F4BEA8;
+  --accent-10:       #E8A98F;
+  --accent-11:       #A86855;
+  --accent-surface:  rgba(244, 190, 168, .10);
 
   /* ── Bordas tonais ── */
-  --border-subtle:      rgba(215, 137, 127, .10);
-  --border-interactive: rgba(215, 137, 127, .22);
-  --border-card:        rgba(255, 255, 255, .65);
+  --border-subtle:      rgba(17, 24, 39, .06);
+  --border-interactive: rgba(90, 122, 100, .18);
+  --border-card:        rgba(17, 24, 39, .05);
 
   /* ── Categorias Planner ── */
-  --cat-trabalho:    #6398A9;
-  --cat-pessoal:     #B8A0C8;
-  --cat-autocuidado: #96C7B3;
-  --cat-social:      #F9B95C;
-  --cat-outro:       #B0A0A0;
+  --cat-trabalho:    #BEE6F3;
+  --cat-pessoal:     #E5DBF7;
+  --cat-autocuidado: #BFDCCB;
+  --cat-social:      #F7E7A6;
+  --cat-outro:       #CDD2DA;
 }
 
 * {
@@ -86,7 +85,8 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #F2EBE2;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFB 100%);
+  color: var(--text-primary);
 }
 
 h1, h2, h3 {
@@ -112,8 +112,7 @@ h1, h2, h3 {
   backdrop-filter: blur(var(--blur-glass));
   -webkit-backdrop-filter: blur(var(--blur-glass));
   border: 1px solid var(--border-card);
-  box-shadow: 0 2px 8px rgba(215, 137, 127, .07),
-              0 1px 2px rgba(215, 137, 127, .04);
+  box-shadow: var(--shadow-md);
 }
 
 @keyframes fadeInUp {

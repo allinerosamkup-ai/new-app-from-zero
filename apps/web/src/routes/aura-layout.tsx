@@ -124,11 +124,6 @@ export function AuraLayout() {
       {/* Daemon IA proativa — invisível, roda após hydration */}
       <AutonomousAIEngine />
 
-      {/* Mood Spheres — Warm Terracotta Atmosphere */}
-      <div className="mood-sphere w-[500px] h-[500px] -top-48 -left-24" style={{ background: '#ffdab9' }}></div>
-      <div className="mood-sphere w-[400px] h-[400px] top-1/2 -right-24" style={{ background: '#ffecb3' }}></div>
-      <div className="mood-sphere w-[300px] h-[300px] bottom-10 left-1/4" style={{ background: '#ffd1b3' }}></div>
-
       {/* ── #2: Phase Transition Alert — banner fixo topo ── */}
       {state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed && (() => {
         const alert = state.phaseTransitionAlert!;
@@ -136,10 +131,11 @@ export function AuraLayout() {
         return (
           <div style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 500,
-            background: cfg.bg, borderBottom: `1.5px solid ${cfg.border}`,
+            background: "rgba(255,255,255,.94)", borderBottom: `1px solid ${cfg.border}`,
             backdropFilter: "blur(16px)",
             padding: "10px 16px 12px",
             maxWidth: 448, margin: "0 auto",
+            boxShadow: "0 10px 24px rgba(17,24,39,.05)",
           }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
               <span style={{ fontSize: 18, flexShrink: 0, lineHeight: 1 }}>{cfg.emoji}</span>
@@ -179,8 +175,8 @@ export function AuraLayout() {
           <div style={{
             position: "fixed", bottom: "calc(80px + env(safe-area-inset-bottom))", left: 12, right: 12, zIndex: 450,
             maxWidth: 424, margin: "0 auto",
-            background: "rgba(255,253,249,.96)", borderRadius: 14, border: "1.5px solid rgba(215,137,127,.3)",
-            boxShadow: "0 4px 24px rgba(0,0,0,.10)", backdropFilter: "blur(16px)",
+            background: "rgba(255,255,255,.96)", borderRadius: 22, border: "1px solid rgba(17,24,39,.06)",
+            boxShadow: "0 18px 30px rgba(17,24,39,.08)", backdropFilter: "blur(16px)",
             padding: "12px 14px",
           }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
@@ -235,7 +231,7 @@ export function AuraLayout() {
       </div>
 
       {/* Bottom Nav — Floating Pill v6 */}
-      <div className="bottom-nav fixed bottom-0 left-6 right-6 mb-8 flex justify-around items-center px-4 py-3 z-50" style={{ maxWidth: '448px', margin: '0 auto 2rem', left: 0, right: 0 }}>
+      <div className="bottom-nav fixed bottom-0 left-6 right-6 mb-8 flex justify-around items-center px-4 py-3 z-50" style={{ maxWidth: '448px', margin: '0 auto 2rem', left: 0, right: 0, borderRadius: 28 }}>
         {NAV_ITEMS.map((item, idx) => {
           const isActive = location.pathname === item.route;
           if (idx === 2) { // Centro (Aura)
@@ -248,7 +244,7 @@ export function AuraLayout() {
           }
           return (
             <div key={item.route}
-                 className={`flex flex-col items-center justify-center cursor-pointer transition-all duration-300 active:scale-90 hover:scale-110 p-2 ${isActive ? 'nav-item-active' : 'nav-item'}`}
+                 className={`flex flex-col items-center justify-center cursor-pointer transition-all duration-300 active:scale-90 hover:scale-110 p-2 nav-item${isActive ? ' active' : ''}`}
                  onClick={() => navigate(item.route)}>
               <span className="mb-0.5">{item.icon}</span>
               <span className="text-[9px] font-bold tracking-wider uppercase">{item.label === 'Início' ? 'Home' : item.label}</span>

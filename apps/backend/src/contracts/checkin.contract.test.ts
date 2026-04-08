@@ -32,7 +32,7 @@ const validCheckin = {
 {
   const result = CheckinCreateSchema.safeParse({
     ...validCheckin,
-    energyScore: 6,
+    energyScore: 11,
   });
 
   assert.equal(result.success, false);
@@ -41,7 +41,7 @@ const validCheckin = {
 {
   const result = CheckinCreateSchema.safeParse({
     ...validCheckin,
-    physicalScore: 6,
+    physicalScore: 11,
   });
 
   assert.equal(result.success, false);
@@ -50,7 +50,7 @@ const validCheckin = {
 {
   const result = CheckinCreateSchema.safeParse({
     ...validCheckin,
-    socialScore: 6,
+    socialScore: 11,
   });
 
   assert.equal(result.success, false);

@@ -18,6 +18,7 @@ const loadDailySummaryPage = () => import("./routes/daily-summary-page");
 const loadHarmonyPage = () => import("./routes/harmony-page");
 const loadUIKitPage = () => import("./routes/ui-kit-page");
 const loadCheckinResultPage = () => import("./routes/checkin-result-page");
+const loadHabitsPage = () => import("./routes/habits-page");
 const loadAuraChatPage = () => import("./routes/aura-chat-page");
 const loadSplashPage = () => import("./routes/splash-page");
 const loadForgotPasswordPage = () => import("./routes/forgot-password-page");
@@ -45,6 +46,7 @@ const DailySummaryPage = lazy(() => loadDailySummaryPage().then((module) => ({ d
 const HarmonyPage = lazy(() => loadHarmonyPage().then((module) => ({ default: module.HarmonyPage })));
 const UIKitPage = lazy(() => loadUIKitPage().then((module) => ({ default: module.UIKitPage })));
 const CheckinResultPage = lazy(() => loadCheckinResultPage().then((module) => ({ default: module.CheckinResultPage })));
+const HabitsPage = lazy(() => loadHabitsPage().then((module) => ({ default: module.HabitsPage })));
 const AuraChatPage = lazy(() => loadAuraChatPage().then((module) => ({ default: module.AuraChatPage })));
 const SplashPage = lazy(() => loadSplashPage().then((module) => ({ default: module.SplashPage })));
 const ForgotPasswordPage = lazy(() => loadForgotPasswordPage().then((module) => ({ default: module.ForgotPasswordPage })));
@@ -157,6 +159,7 @@ export default function App() {
           <Route path="home" element={<HomePage />} />
           <Route path="checkin" element={<CheckinPage />} />
           <Route path="checkin-result" element={<CheckinResultPage />} />
+          <Route path="habits" element={<HabitsPage />} />
           <Route path="planner" element={<PlannerPage />} />
           <Route path="journal" element={<JournalPage />} />
           <Route path="harmony" element={<HarmonyPage />} />
@@ -173,6 +176,7 @@ export default function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/goals" element={<GoalsPage />} />
+          <Route path="/habits" element={<HabitsPage />} />
           <Route path="/profile" element={<Navigate to="/insights" replace />} />
           <Route path="/preferences" element={<PreferencesPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />

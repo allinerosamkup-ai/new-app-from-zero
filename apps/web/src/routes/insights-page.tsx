@@ -19,6 +19,8 @@ type WeeklyInsightsResponse = {
       text: string;
       priority: "high" | "medium" | "low";
     }>;
+    weeklyQuestion?: string;
+    highlights?: string[];
   };
 };
 
@@ -61,6 +63,8 @@ export function InsightsPage() {
 
   const [insightPhase, setInsightPhase] = useState<InsightPhase>("idle");
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
+  const [weeklyQuestion, setWeeklyQuestion] = useState<string | null>(null);
+  const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
   const goals = state.goals || [];
@@ -125,8 +129,8 @@ export function InsightsPage() {
       else break;
     }
 
-    const lowDays    = history.filter(h => h.humor <= 2).length;
-    const highDays   = history.filter(h => h.humor >= 4).length;
+    const lowDays    = history.filter(h => h.humor <= 4).length;
+    const highDays   = history.filter(h => h.humor >= 8).length;
     const stableDays = history.length - lowDays - highDays;
     const total      = history.length;
 
@@ -142,15 +146,15 @@ export function InsightsPage() {
     return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
   }
 
-  const avgHarmonyMood = history.length > 0 ? avg(history.map((entry) => entry.humor)) / 5 : null;
-  const avgHarmonyEnergy = history.length > 0 ? avg(history.map((entry) => entry.energia)) / 5 : null;
+  const avgHarmonyMood = history.length > 0 ? avg(history.map((entry) => entry.humor)) / 10 : null;
+  const avgHarmonyEnergy = history.length > 0 ? avg(history.map((entry) => entry.energia)) / 10 : null;
   const avgGoalPct = goals.length > 0 ? goals.reduce((sum, goal) => sum + goal.completedPct, 0) / goals.length / 100 : null;
   const socialVals = history.filter((entry) => entry.social != null).map((entry) => entry.social!);
   const fisicoVals = history.filter((entry) => entry.fisico != null).map((entry) => entry.fisico!);
   const sonoVals = history.filter((entry) => entry.sono != null).map((entry) => entry.sono!);
-  const avgHarmonySocial = socialVals.length > 0 ? avg(socialVals) / 5 : null;
-  const avgHarmonyFisico = fisicoVals.length > 0 ? avg(fisicoVals) / 5 : null;
-  const avgHarmonySono = sonoVals.length > 0 ? avg(sonoVals) / 5 : null;
+  const avgHarmonySocial = socialVals.length > 0 ? avg(socialVals) / 10 : null;
+  const avgHarmonyFisico = fisicoVals.length > 0 ? avg(fisicoVals) / 10 : null;
+  const avgHarmonySono = sonoVals.length > 0 ? avg(sonoVals) / 10 : null;
   const harmonyValues = [avgHarmonyMood, avgHarmonyEnergy, avgGoalPct, avgHarmonySocial, avgHarmonyFisico, avgHarmonySono].filter((value): value is number => value !== null);
   const overallHarmonyPct = harmonyValues.length > 0 ? Math.round((harmonyValues.reduce((sum, value) => sum + value, 0) / harmonyValues.length) * 100) : 0;
   const harmonyDimensions = [
@@ -199,6 +203,8 @@ export function InsightsPage() {
         actionTitle: topRecommendation?.text?.slice(0, 40) ?? "Revisar minha semana",
       };
       setAiInsight(parsed);
+      setWeeklyQuestion(res.insights.weeklyQuestion ?? null);
+      setHighlights(res.insights.highlights ?? []);
       setInsightPhase("done");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel analisar os padroes.");
@@ -523,7 +529,7 @@ export function InsightsPage() {
                   <div key={m.label} style={{ flex: 1, padding: "8px 10px", borderRadius: 10, background: `${m.color}15`, border: `1px solid ${m.color}30`, textAlign: "center" }}>
                     <p style={{ fontSize: 10, color: "var(--text-3)", margin: "0 0 2px" }}>{m.label}</p>
                     <p style={{ fontSize: 15, fontWeight: 800, color: m.color, margin: 0 }}>
-                      {m.val.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 400 }}>/5</span>
+                      {m.val.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 400 }}>/10</span>
                     </p>
                   </div>
                 ))}
@@ -563,6 +569,148 @@ export function InsightsPage() {
             </div>
           </div>
         )}
+
+        {/* ── Seção: Hábitos e Momentum ──────────────────────── */}
+        {(() => {
+          const habits = state.habits || [];
+          if (habits.length === 0) return null;
+
+          const activeStreaks = habits.filter(h => h.streakCount > 0).sort((a, b) => b.streakCount - a.streakCount);
+          const completedToday = habits.filter(h => (h.completions?.length ?? 0) > 0);
+          const totalToday = habits.filter(h => h.frequency === 'daily').length;
+          const bestHabit = habits.reduce((best, h) => h.bestStreak > (best?.bestStreak ?? 0) ? h : best, habits[0]);
+
+          // Fatores que aparecem nos dias de bom humor (humor >= 4)
+          const goodMoodCheckins = history.filter(h => h.humor >= 8 && (h as any).factors?.length > 0);
+          const factorFrequency: Record<string, number> = {};
+          goodMoodCheckins.forEach(h => {
+            ((h as any).factors as string[]).forEach((f: string) => {
+              factorFrequency[f] = (factorFrequency[f] ?? 0) + 1;
+            });
+          });
+          const topFactors = Object.entries(factorFrequency)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+
+          const FACTOR_LABELS: Record<string, { label: string; icon: string }> = {
+            good_sleep: { label: "Sono bom", icon: "😴" },
+            exercise: { label: "Exercício", icon: "🏋️" },
+            healthy_meal: { label: "Alimentação", icon: "🥗" },
+            fresh_air: { label: "Ar fresco", icon: "🌿" },
+            good_talk: { label: "Boa conversa", icon: "💬" },
+            kind_words: { label: "Palavras gentis", icon: "❤️" },
+            support: { label: "Apoio", icon: "🤝" },
+            small_win: { label: "Pequena vitória", icon: "⭐" },
+            finished_task: { label: "Tarefa concluída", icon: "✅" },
+            feeling_valued: { label: "Me senti valorizada", icon: "🏆" },
+            music: { label: "Música", icon: "🎵" },
+            time_outside: { label: "Ao ar livre", icon: "🌳" },
+            hobby: { label: "Hobby", icon: "🎨" },
+            self_trust: { label: "Confiança em mim", icon: "💪" },
+            rest: { label: "Descanso", icon: "🛋️" },
+          };
+
+          return (
+            <div style={{
+              borderRadius: 18, border: "1.5px solid var(--warm-border)",
+              background: "rgba(255,255,255,0.62)",
+              backdropFilter: "blur(16px)",
+              padding: "14px",
+              marginBottom: "calc(var(--a))",
+            }}>
+              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
+                🔥 Hábitos — Momentum
+              </p>
+
+              {/* Today's progress */}
+              {totalToday > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)" }}>Hoje</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: completedToday.length === totalToday ? "var(--menthe)" : "var(--text-2)" }}>
+                      {completedToday.length}/{totalToday}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                    <div style={{
+                      width: `${(completedToday.length / totalToday) * 100}%`,
+                      height: "100%", borderRadius: 999,
+                      background: completedToday.length === totalToday
+                        ? "var(--menthe)"
+                        : "linear-gradient(90deg, var(--lagune), var(--menthe))",
+                      transition: "width 0.5s ease",
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Active streaks */}
+              {activeStreaks.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--text-3)", margin: "0 0 8px", textTransform: "uppercase", letterSpacing: ".1em" }}>
+                    Em sequência agora
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {activeStreaks.slice(0, 3).map(h => (
+                      <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 18, width: 28, textAlign: "center" }}>{h.icon || "✨"}</span>
+                        <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: "var(--text-1)" }}>{h.title}</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "var(--nectarine)", display: "flex", alignItems: "center", gap: 3 }}>
+                          🔥 {h.streakCount}d
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Best habit */}
+              {bestHabit && bestHabit.bestStreak > 0 && (
+                <div style={{
+                  padding: "8px 10px", borderRadius: 10,
+                  background: "rgba(215,137,127,0.08)", border: "1px solid rgba(215,137,127,0.20)",
+                  display: "flex", alignItems: "center", gap: 10, marginBottom: topFactors.length > 0 ? 12 : 0,
+                }}>
+                  <span style={{ fontSize: 18 }}>🏆</span>
+                  <div>
+                    <p style={{ fontSize: 10, color: "var(--nectarine)", fontWeight: 700, margin: "0 0 1px", textTransform: "uppercase" }}>
+                      Melhor sequência de sempre
+                    </p>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                      {bestHabit.title} — {bestHabit.bestStreak} dias
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Factors correlation (only if enough data) */}
+              {topFactors.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--menthe)", margin: "12px 0 8px" }}>
+                    ✨ Fatores nos seus dias de bom humor
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {topFactors.map(([factorId, count]) => {
+                      const meta = FACTOR_LABELS[factorId] ?? { label: factorId, icon: "•" };
+                      return (
+                        <div key={factorId} style={{
+                          display: "flex", alignItems: "center", gap: 5,
+                          padding: "5px 10px", borderRadius: 20,
+                          background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)",
+                          fontSize: 12, fontWeight: 600, color: "var(--menthe)",
+                        }}>
+                          <span>{meta.icon}</span>
+                          <span>{meta.label}</span>
+                          <span style={{ fontSize: 10, opacity: 0.7 }}>×{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── AI Insight Card ── */}
         {insightPhase === "idle" && (
@@ -612,6 +760,67 @@ export function InsightsPage() {
           );
         })()}
 
+        {/* ── Highlights da semana ───────────────────────────── */}
+        {insightPhase === "done" && highlights.length > 0 && (
+          <div style={{
+            borderRadius: 18,
+            border: "1.5px solid rgba(150,199,179,0.28)",
+            background: "rgba(150,199,179,0.07)",
+            padding: "14px 16px",
+            marginBottom: "calc(var(--a))",
+          }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--menthe)", margin: "0 0 12px" }}>
+              🌟 Conquistas desta semana
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {highlights.map((h, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{
+                    width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                    background: "rgba(150,199,179,0.20)",
+                    border: "1.5px solid rgba(150,199,179,0.40)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    marginTop: 1,
+                  }}>
+                    <span style={{ fontSize: 11, color: "var(--menthe)", fontWeight: 800 }}>✓</span>
+                  </div>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0, lineHeight: 1.5, flex: 1 }}>
+                    {h}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Pergunta da semana ─────────────────────────────── */}
+        {insightPhase === "done" && weeklyQuestion && (
+          <div style={{
+            borderRadius: 18,
+            background: "linear-gradient(135deg, rgba(215,137,127,0.10) 0%, rgba(150,199,179,0.08) 100%)",
+            border: "1.5px solid rgba(215,137,127,0.20)",
+            padding: "18px 20px",
+            marginBottom: "calc(var(--a))",
+          }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine)", margin: "0 0 10px" }}>
+              💭 Pergunta da semana
+            </p>
+            <p style={{ fontSize: 17, fontWeight: 700, color: "var(--text-1)", margin: "0 0 14px", lineHeight: 1.45 }}>
+              {weeklyQuestion}
+            </p>
+            <button
+              onClick={() => window.location.href = "/journal"}
+              style={{
+                background: "none", border: "none", padding: 0, cursor: "pointer",
+                fontSize: 12, fontWeight: 700, color: "var(--nectarine)",
+                display: "flex", alignItems: "center", gap: 4,
+              }}
+            >
+              Refletir no diário →
+            </button>
+          </div>
+        )}
+
         {/* ── Padrões Preditivos ──────────────────────────────── */}
         {patterns && (
           <div style={{
@@ -632,14 +841,14 @@ export function InsightsPage() {
                 <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)", textAlign: "center" }}>
                   <p style={{ fontSize: 9, fontWeight: 700, color: "var(--menthe)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Melhor dia</p>
                   <p style={{ fontSize: 18, fontWeight: 800, color: "var(--menthe)", margin: "0 0 1px" }}>{patterns.bestDay.day}</p>
-                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.bestDay.mood.toFixed(1)}/5</p>
+                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.bestDay.mood.toFixed(1)}/10</p>
                 </div>
               )}
               {patterns.worstDay && patterns.worstDay.day !== patterns.bestDay?.day && (
                 <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(215,137,127,0.08)", border: "1px solid rgba(215,137,127,0.25)", textAlign: "center" }}>
                   <p style={{ fontSize: 9, fontWeight: 700, color: "var(--nectarine)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Dia difícil</p>
                   <p style={{ fontSize: 18, fontWeight: 800, color: "var(--nectarine)", margin: "0 0 1px" }}>{patterns.worstDay.day}</p>
-                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.worstDay.mood.toFixed(1)}/5</p>
+                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.worstDay.mood.toFixed(1)}/10</p>
                 </div>
               )}
               <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(99,152,169,0.10)", border: "1px solid rgba(99,152,169,0.25)", textAlign: "center" }}>

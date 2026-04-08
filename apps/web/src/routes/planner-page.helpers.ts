@@ -1,5 +1,6 @@
 export type TimelineBlockStatus = "planned" | "completed" | "postponed";
 export type TimelineBlockIntensity = "L" | "M" | "P";
+export type PlannerCategory = "trabalho" | "autocuidado" | "social" | "pessoal";
 
 export type FormStateLike = {
   title: string;
@@ -8,9 +9,68 @@ export type FormStateLike = {
   energyLevel: "alta" | "media" | "leve";
 };
 
-export function addMinutesToTime(time: string, minutesToAdd: number): string {
+export type PlannerTaskLike = {
+  id: string;
+  title: string;
+  time: string;
+  endTime: string;
+  done: boolean;
+  category?: string | null;
+};
+
+export type PlannerAgendaSlot =
+  | {
+      kind: "task";
+      key: string;
+      time: string;
+      endTime: string;
+      durationLabel: string;
+      category: PlannerCategory;
+      task: PlannerTaskLike;
+    }
+  | {
+      kind: "empty";
+      key: string;
+      time: string;
+      title: string;
+      description: string;
+    };
+
+const EMPTY_AGENDA_TEMPLATE: Array<Pick<Extract<PlannerAgendaSlot, { kind: "empty" }>, "time" | "title" | "description">> = [
+  {
+    time: "08:00",
+    title: "Manhã livre",
+    description: "Um começo sem pressa para encaixar um primeiro bloco com calma.",
+  },
+  {
+    time: "10:30",
+    title: "Janela de foco",
+    description: "Espaço aberto para trabalho profundo, estudo ou uma reunião curta.",
+  },
+  {
+    time: "13:00",
+    title: "Pausa do meio-dia",
+    description: "Mantém a cara de agenda e deixa um respiro visível no centro do dia.",
+  },
+  {
+    time: "15:30",
+    title: "Bloco flexível",
+    description: "Use para ajustar imprevistos, deslocamentos ou uma tarefa leve.",
+  },
+  {
+    time: "18:00",
+    title: "Fechamento do dia",
+    description: "Reserve um encerramento gentil para não deixar a agenda sumir ao anoitecer.",
+  },
+];
+
+function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
-  const totalMinutes = hours * 60 + minutes + minutesToAdd;
+  return hours * 60 + minutes;
+}
+
+export function addMinutesToTime(time: string, minutesToAdd: number): string {
+  const totalMinutes = timeToMinutes(time) + minutesToAdd;
   const normalized = ((totalMinutes % 1440) + 1440) % 1440;
   const nextHours = Math.floor(normalized / 60).toString().padStart(2, "0");
   const nextMinutes = (normalized % 60).toString().padStart(2, "0");
@@ -95,4 +155,43 @@ export function buildTimelineBlockInput(
     intensity: mapEnergyLevelToIntensity(form.energyLevel, options?.fallbackIntensity),
     status: options?.fallbackStatus ?? "planned",
   };
+}
+
+export function formatTimelineDurationLabel(startTime: string, endTime: string): string {
+  const delta = timeToMinutes(endTime) - timeToMinutes(startTime);
+  const safeMinutes = delta > 0 ? delta : 30;
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h${minutes.toString().padStart(2, "0")}`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h`;
+  }
+
+  return `${minutes} min`;
+}
+
+export function buildPlannerAgendaSlots(tasks: PlannerTaskLike[]): PlannerAgendaSlot[] {
+  if (tasks.length === 0) {
+    return EMPTY_AGENDA_TEMPLATE.map((slot) => ({
+      kind: "empty",
+      key: `empty-${slot.time}`,
+      ...slot,
+    }));
+  }
+
+  return [...tasks]
+    .sort((left, right) => timeToMinutes(left.time) - timeToMinutes(right.time))
+    .map((task) => ({
+      kind: "task",
+      key: task.id,
+      time: task.time,
+      endTime: task.endTime,
+      durationLabel: formatTimelineDurationLabel(task.time, task.endTime),
+      category: normalizePlannerCategory(task.category, task.title),
+      task,
+    }));
 }

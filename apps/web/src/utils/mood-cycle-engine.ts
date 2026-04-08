@@ -305,31 +305,31 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   if (sorted.length >= 10) {
     const before = sorted.slice(-14, -7);
     const beforeAvg = mean(before.map(e => e.humor));
-    if (beforeAvg < 2.5) previousPhase = "low";
-    else if (beforeAvg < 2.0) previousPhase = "depleted";
+    if (beforeAvg < 4.0) previousPhase = "depleted";
+    else if (beforeAvg < 5.0) previousPhase = "low";
   }
 
-  if (recent3avg >= 4.2 && volatility14d < 1.0) {
+  if (recent3avg >= 8.4 && volatility14d < 2.0) {
     phase = "elevated";
-  } else if (recent3avg < 1.8 || recent5avg < 2.0) {
+  } else if (recent3avg < 3.6 || recent5avg < 4.0) {
     phase = "depleted";
-  } else if (recent5avg < 2.5) {
+  } else if (recent5avg < 5.0) {
     phase = "low";
   } else if (
     (previousPhase === "low" || previousPhase === "depleted") &&
-    trend7d > 0.3 &&
-    avgMood7d >= 2.5
+    trend7d > 0.6 &&
+    avgMood7d >= 5.0
   ) {
     phase = "recovering";
-  } else if (volatility14d > 1.2 && humors14.length >= 7) {
+  } else if (volatility14d > 2.4 && humors14.length >= 7) {
     phase = "mixed";
-  } else if (trend7d < -0.4 && avgMood7d > 2.5) {
+  } else if (trend7d < -0.8 && avgMood7d > 5.0) {
     phase = "falling";
-  } else if (ewmaRecent >= 3.6) {
+  } else if (ewmaRecent >= 7.2) {
     phase = "flowing";
-  } else if (avgMood7d >= 2.8 && volatility14d <= 0.9) {
+  } else if (avgMood7d >= 5.6 && volatility14d <= 1.8) {
     phase = "stable";
-  } else if (trend7d < -0.2) {
+  } else if (trend7d < -0.4) {
     phase = "falling";
   } else {
     phase = "stable";
@@ -338,13 +338,13 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // ── Dias na fase atual ──────────────────────────────────
   let daysInPhase = 1;
   const phaseThresholds: Record<MoodPhase, (h: number) => boolean> = {
-    elevated:          h => h >= 4.0,
-    flowing:           h => h >= 3.5,
-    stable:            h => h >= 2.8 && h < 3.6,
+    elevated:          h => h >= 8.0,
+    flowing:           h => h >= 7.0,
+    stable:            h => h >= 5.6 && h < 7.2,
     falling:           h => true, // baseado em tendência, não em valor absoluto
-    low:               h => h < 2.5,
-    depleted:          h => h < 2.0,
-    recovering:        h => h >= 2.5,
+    low:               h => h < 5.0,
+    depleted:          h => h < 4.0,
+    recovering:        h => h >= 5.0,
     mixed:             h => true,
     insufficient_data: h => true,
   };
@@ -360,11 +360,11 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
 
   // ── Score de estabilidade (0-100) ──────────────────────
   let stabilityScore = 100;
-  stabilityScore -= Math.min(30, volatility14d * 18);       // variabilidade
-  stabilityScore -= Math.min(20, Math.abs(trend7d) * 10);  // mudança brusca
-  const lowDays = humors14.filter(h => h <= 2.5).length;
+  stabilityScore -= Math.min(30, volatility14d * 9);       // variabilidade
+  stabilityScore -= Math.min(20, Math.abs(trend7d) * 5);  // mudança brusca
+  const lowDays = humors14.filter(h => h <= 5.0).length;
   stabilityScore -= Math.min(25, lowDays * 4);              // dias baixos
-  const highDays = humors14.filter(h => h >= 4.5).length;
+  const highDays = humors14.filter(h => h >= 9.0).length;
   stabilityScore -= Math.min(10, highDays * 3);             // dias muito altos
   if (sorted.length < 7) stabilityScore -= 15;              // poucos dados
   stabilityScore = Math.max(0, Math.min(100, Math.round(stabilityScore)));
@@ -372,7 +372,7 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // ── Warning flags ──────────────────────────────────────
   const warningFlags: WarningFlag[] = [];
 
-  if (volatility14d > 1.2) warningFlags.push("high_volatility");
+  if (volatility14d > 2.4) warningFlags.push("high_volatility");
   if (lowDays >= 5) warningFlags.push("sustained_low");
   if (highDays >= 5) warningFlags.push("sustained_elevated");
 
@@ -380,7 +380,7 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   if (sorted.length >= 4) {
     const last2avg = mean(sorted.slice(-2).map(e => e.humor));
     const prev2avg = mean(sorted.slice(-4, -2).map(e => e.humor));
-    if (prev2avg - last2avg > 1.5) warningFlags.push("rapid_drop");
+    if (prev2avg - last2avg > 3.0) warningFlags.push("rapid_drop");
   }
 
   // Correlação sono-humor
@@ -411,7 +411,7 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
     const valleys: number[] = []; // índices dos vales
 
     for (let i = 1; i < allHumors.length - 1; i++) {
-      if (allHumors[i] < allHumors[i - 1] && allHumors[i] < allHumors[i + 1] && allHumors[i] <= 2.8) {
+      if (allHumors[i] < allHumors[i - 1] && allHumors[i] < allHumors[i + 1] && allHumors[i] <= 5.6) {
         valleys.push(i);
       }
     }
@@ -431,10 +431,10 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   const cfg = PHASE_CONFIG[phase];
   const aiContext = [
     `FASE DO CICLO DE HUMOR: ${cfg.label} (${phase}) — ${daysInPhase} dia(s) nesta fase.`,
-    `Média de humor 7 dias: ${avgMood7d.toFixed(1)}/5 | Energia: ${avgEnergy7d.toFixed(1)}/5.`,
+    `Média de humor 7 dias: ${avgMood7d.toFixed(1)}/10 | Energia: ${avgEnergy7d.toFixed(1)}/10.`,
     `Tendência: ${trend7d > 0.2 ? "subindo" : trend7d < -0.2 ? "caindo" : "estável"} (Δ${trend7d > 0 ? "+" : ""}${trend7d.toFixed(2)}).`,
     `Estabilidade: ${stabilityScore}/100 | Volatilidade: ${volatility14d.toFixed(2)}.`,
-    avgSleep7d ? `Sono médio: ${avgSleep7d.toFixed(1)}/5.` : "",
+    avgSleep7d ? `Sono médio: ${avgSleep7d.toFixed(1)}/10.` : "",
     warningFlags.length > 0 ? `Alertas: ${warningFlags.join(", ")}.` : "",
     `Previsão de energia hoje: ${ENERGY_LABELS[cfg.energyForecast]}.`,
   ].filter(Boolean).join(" ");

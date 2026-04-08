@@ -21,6 +21,7 @@ model Profile {
   journalSessions  JournalSession[]
   journalMessages  JournalMessage[]
   timelineBlocks   TimelineBlock[]
+  habits           Habit[]
   weeklyInsights   WeeklyInsight[]
   objectives       Objective[]
   memoryEmbeddings MemoryEmbedding[]
@@ -134,6 +135,7 @@ model DailyCheckin {
   symptomColica     Int?     @map("symptom_colica")
   symptomDorCabeca  Int?     @map("symptom_dor_cabeca")
   
+  factors           String[] @default([])
   note              String?  @db.Text
   stateLabel        String?  @map("state_label")
   stateLabelType    String?  @map("state_label_type")
@@ -230,6 +232,50 @@ model Objective {
   @@map("objectives")
 }
 
+model Habit {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  title            String
+  description      String?  @db.Text
+  category         String   @default("geral") // health | productivity | mindfulness | social | learning | leisure
+  icon             String?  // emoji
+  frequency        String   @default("daily") // daily | weekly | monthly
+  targetDays       Int[]    @default([]) @map("target_days") // 0-6 (dom-sab) para weekly
+  timeOfDay        String?  @map("time_of_day") // morning | afternoon | evening | anytime
+  durationMinutes  Int?     @map("duration_minutes")
+  reminderEnabled  Boolean  @default(false) @map("reminder_enabled")
+  reminderTime     String?  @map("reminder_time") // HH:mm
+  streakCount      Int      @default(0) @map("streak_count")
+  bestStreak       Int      @default(0) @map("best_streak")
+  totalCompletions Int      @default(0) @map("total_completions")
+  archived         Boolean  @default(false)
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        Profile           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completions HabitCompletion[]
+
+  @@index([userId, archived])
+  @@map("habits")
+}
+
+model HabitCompletion {
+  id          String    @id @default(uuid()) @db.Uuid
+  habitId     String    @map("habit_id") @db.Uuid
+  date        DateTime  @db.Date
+  completedAt DateTime? @default(now()) @map("completed_at") @db.Timestamptz(6)
+  notes       String?   @db.Text
+  moodBefore  Int?      @map("mood_before")
+  moodAfter   Int?      @map("mood_after")
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([habitId, date])
+  @@map("habit_completions")
+}
+
 model WeeklyInsight {
   id          String   @id @default(uuid()) @db.Uuid
   userId      String   @map("user_id") @db.Uuid
@@ -237,6 +283,8 @@ model WeeklyInsight {
   avgMood     Float?   @map("avg_mood")
   avgEnergy   Float?   @map("avg_energy")
   checkinCount Int     @map("checkin_count")
+  bestDay     String?  @map("best_day")
+  worstDay    String?  @map("worst_day")
   insights    Json?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

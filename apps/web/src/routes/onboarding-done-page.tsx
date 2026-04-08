@@ -48,7 +48,7 @@ export function OnboardingDonePage() {
 
       <div style={{
         minHeight: "100vh",
-        background: "linear-gradient(160deg, rgba(243,176,140,.12) 0%, var(--warm-bg) 100%)",
+        background: "linear-gradient(180deg, #FFFFFF 0%, #FAFBFB 100%)",
         display: "flex", flexDirection: "column", alignItems: "center",
         justifyContent: "center", padding: "40px 28px", textAlign: "center",
         position: "relative", overflow: "hidden",
@@ -61,10 +61,10 @@ export function OnboardingDonePage() {
         {/* Ícone animado */}
         <div style={{
           width: 100, height: 100, borderRadius: 36,
-          background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 50%, var(--menthe) 100%)",
+          background: "linear-gradient(135deg, #5A7A64 0%, #BFDCCB 100%)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 46, marginBottom: 24,
-          boxShadow: "0 10px 40px rgba(243,176,140,.3), 0 4px 12px rgba(243,176,140,.2)",
+          boxShadow: "0 20px 38px rgba(17,24,39,.08), 0 4px 12px rgba(17,24,39,.05)",
           animation: "fade-up 0.6s ease both",
         }}>
           🌸
@@ -87,11 +87,11 @@ export function OnboardingDonePage() {
 
         {/* Resumo do perfil */}
         <div style={{
-          width: "100%", background: "rgba(255,255,255,.64)", backdropFilter: "blur(20px)",
-          border: "1px solid rgba(255,255,255,.84)", borderRadius: 20,
+          width: "100%", background: "rgba(255,255,255,.98)", backdropFilter: "blur(16px)",
+          border: "1px solid rgba(17,24,39,.05)", borderRadius: 26,
           padding: 20, marginBottom: 32,
           animation: "fade-up 0.6s ease 0.5s both",
-          boxShadow: "0 14px 32px rgba(243,176,140,.08)",
+          boxShadow: "0 18px 32px rgba(17,24,39,.06)",
         }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: 14 }}>
             SEU PERFIL
@@ -119,10 +119,10 @@ export function OnboardingDonePage() {
           onClick={() => navigate("/home")}
           style={{
             width: "100%", height: 50,
-            background: "linear-gradient(135deg, var(--nectarine) 0%, var(--nectarine-10) 100%)",
+            background: "linear-gradient(135deg, #5A7A64 0%, #4E6B57 100%)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", boxShadow: "0 12px 26px rgba(243,176,140,.28)",
+            cursor: "pointer", boxShadow: "0 14px 26px rgba(90,122,100,.18)",
             animation: "fade-up 0.6s ease 0.65s both",
           }}
         >
