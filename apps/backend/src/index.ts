@@ -18,6 +18,11 @@ import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
 import {
+  buildUnifiedSuggestContext,
+  getSuggestFallback,
+  resolveSuggestGenerationConfig,
+} from './services/aiOrchestrator';
+import {
   buildAuraSystemPrompt,
   getFirstName,
   humanizeScore,
@@ -81,6 +86,9 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
         moodScore: true,
         energyScore: true,
         sleepScore: true,
+        factors: true,
+        note: true,
+        aiState: true,
         stateLabel: true,
         stateLabelType: true,
         stateSummary: true,
@@ -110,11 +118,29 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     ? aiPayload.longTermMemory.trim()
     : null;
 
+  const aiStatePayload = latestCheckin?.aiState as Record<string, unknown> | null | undefined;
+  const latestCheckinSignals = latestCheckin
+    ? {
+        emotions: Array.isArray(aiStatePayload?.emotions)
+          ? aiStatePayload.emotions.map((item) => String(item))
+          : [],
+        factors: Array.isArray(latestCheckin.factors)
+          ? latestCheckin.factors.map((item) => String(item))
+          : [],
+        note: typeof latestCheckin.note === 'string' ? latestCheckin.note : undefined,
+        moodScore: latestCheckin.moodScore ?? undefined,
+        energyScore: latestCheckin.energyScore ?? undefined,
+        sleepScore: latestCheckin.sleepScore ?? undefined,
+        stateLabel: latestCheckin.stateLabel ?? undefined,
+      }
+    : null;
+
   return {
     userName: explicitUserName ?? derivedUserName ?? 'você',
     moodCycleContext: sharedMoodCycleContext || null,
     userProfileSummary: sanitizePromptContent(onboarding?.aiProfileSummary ?? null),
     longTermMemory,
+    latestCheckinSignals,
   };
 }
 
@@ -174,37 +200,96 @@ REGRAS:
   return rawTasks.map((task) => SuggestedTaskSchema.parse(task)).slice(0, 3);
 }
 
-function normalizeFreeText(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-}
-
 function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-function isJournalClosingMessage(message: string): boolean {
-  const normalized = normalizeFreeText(message);
-  const markers = [
-    'por hoje e isso',
-    'ja terminei',
-    'ja acabei',
-    'acho que ja terminei',
-    'vou parar por aqui',
-    'vou ficando por aqui',
-    'encerrar sessao',
-    'finalizar sessao',
-    'tchau',
-    'ate mais',
-    'ate logo',
-    'isso e tudo por hoje',
-    'era isso por hoje',
-  ];
+function parseLocalDateInput(localDate: string): Date {
+  const direct = localDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (direct) {
+    const year = Number(direct[1]);
+    const month = Number(direct[2]);
+    const day = Number(direct[3]);
+    // Meio-dia UTC evita deslocamento de dia por fuso ao persistir em coluna DATE.
+    return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  }
 
-  return markers.some((marker) => normalized.includes(marker));
+  const parsed = new Date(localDate);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid localDate: ${localDate}`);
+  }
+
+  return new Date(Date.UTC(
+    parsed.getUTCFullYear(),
+    parsed.getUTCMonth(),
+    parsed.getUTCDate(),
+    12, 0, 0, 0,
+  ));
+}
+
+function normalizeSuggestionKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function uniqueByKey(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const key = normalizeSuggestionKey(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
+}
+
+function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record<string, unknown>): unknown {
+  if (type === 'home-messages' && suggestion && typeof suggestion === 'object') {
+    const payload = suggestion as Record<string, unknown>;
+    const autocuidado = Array.isArray(payload.autocuidado)
+      ? uniqueByKey(
+          payload.autocuidado
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter(Boolean),
+        ).slice(0, 3)
+      : [];
+
+    return {
+      ...payload,
+      autocuidado,
+    };
+  }
+
+  if (type === 'day-tasks' && Array.isArray(suggestion)) {
+    const avoidRaw = Array.isArray(context.avoidTaskTitles)
+      ? context.avoidTaskTitles.filter((item): item is string => typeof item === 'string')
+      : [];
+    const blocked = new Set(avoidRaw.map((item) => normalizeSuggestionKey(item)));
+    const seen = new Set<string>();
+
+    const filtered = suggestion
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .filter((item) => typeof item.title === 'string' && typeof item.category === 'string')
+      .filter((item) => {
+        const title = String(item.title).trim();
+        const key = normalizeSuggestionKey(title);
+        if (!key || blocked.has(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 3);
+
+    return filtered;
+  }
+
+  return suggestion;
 }
 
 async function extractAndSaveLongTermMemory(
@@ -581,9 +666,15 @@ export function createApp(dependencies: AppDependencies = {}) {
 
     try {
       const daysNum = Math.min(Math.max(Number(days ?? 7), 1), 90);
-      const fromDate = new Date();
-      fromDate.setDate(fromDate.getDate() - daysNum);
-      fromDate.setHours(0, 0, 0, 0);
+      // Usa corte em UTC para evitar exclusão acidental de check-ins do dia
+      // por deslocamento de fuso ao comparar com coluna DATE.
+      const now = new Date();
+      const fromDate = new Date(Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() - daysNum,
+        0, 0, 0, 0,
+      ));
 
       const checkins = await prisma.dailyCheckin.findMany({
         where: {
@@ -595,8 +686,20 @@ export function createApp(dependencies: AppDependencies = {}) {
           { recordedAt: 'desc' },
         ],
       });
+      // emotions já é coluna própria; fallback para ai_state para checkins antigos
+      const payload = checkins.map((item) => {
+        const emotions = item.emotions.length > 0
+          ? item.emotions
+          : (() => {
+              const aiState = (item.aiState as Record<string, unknown> | null) ?? null;
+              return Array.isArray(aiState?.emotions)
+                ? (aiState.emotions as unknown[]).map((e) => String(e))
+                : [];
+            })();
+        return { ...item, emotions };
+      });
 
-      return res.json(checkins);
+      return res.json(payload);
     } catch (error: any) {
       console.error('[checkins/list] Error:', error);
       return res.status(500).json({ error: 'Failed to fetch check-ins' });
@@ -610,7 +713,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.post('/api/checkins', async (req: Request, res: Response) => {
   try {
     const data = CheckinCreateSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
-    const date = new Date(data.localDate);
+    const date = parseLocalDateInput(data.localDate);
     const recordedAt = new Date();
     const checkinSlot = data.checkinSlot ?? deriveCheckinSlot(recordedAt);
 
@@ -645,6 +748,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         sleepScore: data.sleepScore,
         note: data.note,
         factors: data.factors ?? [],
+        emotions: data.emotions ?? [],
         ...(menstrualPhase !== undefined && { menstrualPhase }),
         ...(cycleDay !== undefined && { cycleDay }),
         ...(physicalSymptoms.length > 0 && { physicalSymptoms }),
@@ -668,6 +772,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         sleepScore: data.sleepScore,
         note: data.note,
         factors: data.factors ?? [],
+        emotions: data.emotions ?? [],
         menstrualPhase: menstrualPhase ?? null,
         cycleDay: cycleDay ?? null,
         physicalSymptoms,
@@ -694,6 +799,8 @@ export function createApp(dependencies: AppDependencies = {}) {
       userName: checkinRuntimeContext.userName,
       profileSummary: checkinRuntimeContext.userProfileSummary,
       moodCycleContext: checkinRuntimeContext.moodCycleContext,
+      emotions: (data as any).emotions,
+      factors: data.factors,
     });
 
     // 3. Atualizar com Resultado da IA
@@ -703,7 +810,11 @@ export function createApp(dependencies: AppDependencies = {}) {
         stateLabel: aiState.stateLabel,
         stateLabelType: aiState.stateLabelType,
         stateSummary: aiState.analysis, // Mapeado para o novo campo analysis da IA
-        aiState: aiState as any
+        aiState: {
+          ...(aiState as any),
+          emotions: data.emotions ?? [],
+          factors: data.factors ?? [],
+        } as any,
       }
     });
 
@@ -833,7 +944,6 @@ export function createApp(dependencies: AppDependencies = {}) {
       const routineCtx = await journalService.buildRoutineContext(prisma, data.userId);
       const runtimeContext = await resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext });
       const context = { ...routineCtx, moodCycleContext: runtimeContext.moodCycleContext };
-      const isClosingMessage = isJournalClosingMessage(data.message);
       const userOrderIndex = journalService.nextOrderIndex(existingMessages);
 
       await prisma.journalMessage.create({
@@ -890,7 +1000,7 @@ export function createApp(dependencies: AppDependencies = {}) {
             .replace(/\*\*/g, ''), // Tira negritos excessivos do historico também
         })),
         message: data.message,
-        closingMode: isClosingMessage,
+        closingMode: false,
         onDelta: (chunk) => {
           writeSseEvent(res, 'assistant.delta', { chunk });
         },
@@ -916,40 +1026,6 @@ export function createApp(dependencies: AppDependencies = {}) {
           createdAt: assistantMessage.createdAt?.toISOString?.() ?? new Date().toISOString(),
         },
       });
-
-      if (isClosingMessage) {
-        const finalization = await finalizeJournalSession({
-          prisma,
-          aiService,
-          journalSuggestedTasksGenerator,
-          memoryService,
-          userId: data.userId,
-          sessionId: data.sessionId,
-          messages: [
-            ...existingMessages.map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
-            { role: 'user', content: data.message },
-            { role: 'assistant', content: assistantContent },
-          ],
-          userName: runtimeContext.userName,
-          profileSummary: runtimeContext.userProfileSummary,
-          moodCycleContext: runtimeContext.moodCycleContext,
-        });
-
-        writeSseEvent(res, 'session.finalized', {
-          sessionId: finalization.updatedSession.id,
-          sessionStatus: 'completed',
-          summary: {
-            text: finalization.summary.summary,
-            emotions: finalization.summary.emotions,
-            themes: finalization.summary.themes,
-            suggestions: finalization.summary.suggestions,
-          },
-          suggestedTasks: finalization.suggestedTasks,
-        });
-      }
 
       return res.end();
     } catch (error: any) {
@@ -1510,12 +1586,23 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const userId = (req as AuthRequest).userId;
       const plainTextTypes = new Set(['task-notes', 'task-title', 'monthly-report']);
-      const { userName, moodCycleContext, userProfileSummary, longTermMemory } = await resolveAiRuntimeContext(prisma, userId, context);
+      const { userName, moodCycleContext, userProfileSummary, longTermMemory, latestCheckinSignals } =
+        await resolveAiRuntimeContext(prisma, userId, context);
 
       // Shared Brain: todas as superfícies de IA buscam memória vetorial com intenção específica
       const ragQuery = getRagIntent(type, context);
       const ragMemories = await memoryService.retrieve(userId, ragQuery, 3).catch(() => []);
       const ragContext = memoryService.formatForPrompt(ragMemories);
+      context = buildUnifiedSuggestContext({
+        type,
+        context,
+        userName,
+        moodCycleContext,
+        userProfileSummary,
+        longTermMemory,
+        ragContext,
+        latestCheckinSignals,
+      });
 
       let prompt = '';
       if (type === 'task-notes') {
@@ -1561,26 +1648,76 @@ JSON APENAS:
         ).join('\n');
         const dtGoals = (context.goals as string[] | undefined) || [];
         const dtGoalsCtx = dtGoals.length ? `\nMetas ativas de ${userName}: ${dtGoals.map((g, i) => `${i+1}. "${g}"`).join(', ')}` : '';
+        const dtPendingTasks = (context.pendingTasks as string[] | undefined) || [];
+        const dtPendingCtx = dtPendingTasks.length ? `\nCompromissos pendentes HOJE: ${dtPendingTasks.join(' | ')}` : '';
+        const dtAvoidTaskTitles = (context.avoidTaskTitles as string[] | undefined) || [];
+        const dtAvoidCtx = dtAvoidTaskTitles.length
+          ? `\nNÃO REPETIR títulos já usados/ativos: ${dtAvoidTaskTitles.join(' | ')}`
+          : '';
         const dtHour = context.hour ?? new Date().getHours();
         const dtPeriodo = context.partOfDay || (dtHour < 12 ? 'manhã' : dtHour < 18 ? 'tarde' : 'noite');
         const dtWeekday = context.weekday ? ` | Dia: ${context.weekday}` : '';
         const dtLocalDate = context.localDate ? ` (${context.localDate})` : '';
+
+        // Fatores e emoções do check-in de hoje
+        const FACTOR_LABELS: Record<string, string> = {
+          good_sleep: 'Sono bom', exercise: 'Exercício', healthy_meal: 'Alimentação saudável',
+          fresh_air: 'Ar fresco', good_talk: 'Boa conversa', kind_words: 'Palavras gentis',
+          support: 'Apoio recebido', small_win: 'Pequena vitória', finished_task: 'Tarefa concluída',
+          feeling_valued: 'Me senti valorizada', music: 'Música', time_outside: 'Tempo ao ar livre',
+          hobby: 'Hobby', self_trust: 'Confiança em mim', rest: 'Descanso',
+          stuck: 'Travada/o', relationship_conflict: 'Briga no relacionamento',
+          overwhelmed: 'Sobrecarga mental', loneliness: 'Solidão', bad_sleep: 'Sono ruim',
+          work_pressure: 'Pressão no trabalho', financial_stress: 'Estresse financeiro', bad_news: 'Má notícia',
+        };
+        const NEGATIVE_IDS = new Set(['stuck','relationship_conflict','overwhelmed','loneliness','bad_sleep','work_pressure','financial_stress','bad_news']);
+        const EMOTION_LABELS: Record<string, string> = {
+          radiant: 'Radiante', calm: 'Calma', happy: 'Feliz', anxious: 'Ansiosa',
+          tired: 'Cansada', focused: 'Focada', sad: 'Triste', angry: 'Irritada',
+          stressed: 'Estressada', sensitive: 'Sensível', exhausted: 'Exausta', agitated: 'Agitada',
+        };
+
+        const allFactors = (context.factors as string[] | undefined) || [];
+        const negFactors = allFactors.filter(id => NEGATIVE_IDS.has(id));
+        const posFactors = allFactors.filter(id => !NEGATIVE_IDS.has(id));
+        const emotions = (context.emotions as string[] | undefined) || [];
+
+        const emotionCtx = emotions.length > 0
+          ? `\nEMOÇÕES RELATADAS: ${emotions.map(id => EMOTION_LABELS[id] ?? id).join(', ')}`
+          : '';
+        const negCtx = negFactors.length > 0
+          ? `\nFATORES QUE PESARAM HOJE: ${negFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}`
+          : '';
+        const posCtx = posFactors.length > 0
+          ? `\nFATORES QUE AJUDARAM HOJE: ${posFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}`
+          : '';
+
+        const negRule = negFactors.length > 0
+          ? `\n8. FATORES NEGATIVOS presentes (${negFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}): pelo menos 1 tarefa deve endereçar diretamente um desses fatores com ação específica de alívio (ex: "Briga no relacionamento" → "Escrever como você se sente sobre a situação, 10 min"; "Sobrecarga mental" → "Listar no papel as 3 coisas que mais pesam agora, 5 min"; "Sono ruim" → "Deitar sem tela por 20 min às [hora]").`
+          : '';
+        const posRule = posFactors.length > 0
+          ? `\n${negFactors.length > 0 ? '9' : '8'}. FATORES POSITIVOS presentes (${posFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}): potencialize ao menos um desses elementos em uma tarefa.`
+          : '';
+
         prompt = `Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ${userName}.
 
-ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}${dtWeekday}${dtLocalDate}
-${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}
+ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}${dtWeekday}${dtLocalDate}${emotionCtx}${negCtx}${posCtx}
+${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${dtPendingCtx}${dtAvoidCtx}
 ${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : ''}${ragContext}
 
 REGRAS INVIOLÁVEIS:
+0. FONTE DA VERDADE DE HOJE = listas acima de "Metas ativas" e "Compromissos pendentes HOJE". Se a memória sugerir algo fora dessas listas, IGNORE.
 1. Use o histórico e as metas acima — as tarefas devem ser relevantes ao que ${userName} realmente faz, não inventadas
 2. Se há metas, pelo menos 1 tarefa deve avançar uma meta específica (cite a meta no título)
+2.1 Se NÃO há metas ativas, não cite nenhuma meta específica.
+2.2 Se NÃO há compromissos pendentes HOJE, não cite compromisso específico inexistente.
 3. Fase baixa/cansada → tarefas de 5-15min máximo, zero pressão, focadas em autocuidado/repouso
 4. Fase elevada/focada → 1 tarefa de trabalho real de impacto + 1 autocuidado + 1 pessoal
-5. Títulos ESPECÍFICOS: não "Crie quadro de visão", não "Planeje sua semana", não "Organize documentos"
-6. Cada tarefa = ação que ${userName} pode fazer hoje com o que já tem em casa
-7. Se for noite, priorize fechamento, autocuidado e preparação suave do próximo dia em vez de tarefas pesadas.
+5. Cada tarefa = ação que ${userName} pode fazer hoje com o que já tem em casa
+6. Se for noite, priorize fechamento, autocuidado e preparação suave do próximo dia
+7. ESPECIFICIDADE OBRIGATÓRIA: cada título deve ter VERBO ATIVO + DETALHE CONCRETO + DURAÇÃO estimada${negRule}${posRule}
 
-PROIBIDO ABSOLUTAMENTE: Quadro de visão, mapa de visão, planejar semana, organizar arquivos, criar lista genérica, qualquer coisa sem contexto real da pessoa.
+PROIBIDO ABSOLUTAMENTE: "Descanse", "Beba água", quadro de visão, mapa de visão, planejar semana, organizar arquivos, qualquer genérico sem contexto real da pessoa.
 
 Retorne SOMENTE array JSON: [{"title":"título específico e real","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
       } else if (type === 'journal-tasks') {
@@ -1696,6 +1833,29 @@ Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta
         const periodo = context.partOfDay || (hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite');
         const weekday = context.weekday || 'hoje';
         const localDate = context.localDate ? ` (${context.localDate})` : '';
+        const EMOTION_LABELS: Record<string, string> = {
+          radiant: 'Radiante', calm: 'Calma', happy: 'Feliz', anxious: 'Ansiosa',
+          tired: 'Cansada', focused: 'Focada', sad: 'Triste', angry: 'Irritada',
+          stressed: 'Estressada', sensitive: 'Sensível', exhausted: 'Exausta', agitated: 'Agitada',
+        };
+        const FACTOR_LABELS: Record<string, string> = {
+          good_sleep: 'Sono bom', exercise: 'Exercício', healthy_meal: 'Alimentação saudável',
+          fresh_air: 'Ar fresco', good_talk: 'Boa conversa', kind_words: 'Palavras gentis',
+          support: 'Apoio recebido', small_win: 'Pequena vitória', finished_task: 'Tarefa concluída',
+          feeling_valued: 'Me senti valorizada', music: 'Música', time_outside: 'Tempo ao ar livre',
+          hobby: 'Hobby', self_trust: 'Confiança em mim', rest: 'Descanso',
+          stuck: 'Travada/o', relationship_conflict: 'Briga no relacionamento',
+          overwhelmed: 'Sobrecarga mental', loneliness: 'Solidão', bad_sleep: 'Sono ruim',
+          work_pressure: 'Pressão no trabalho', financial_stress: 'Estresse financeiro', bad_news: 'Má notícia',
+        };
+        const emotions = (context.emotions as string[] | undefined) || [];
+        const factors = (context.factors as string[] | undefined) || [];
+        const emotionsCtx = emotions.length > 0
+          ? `- Emoções do check-in atual: ${emotions.map((id) => EMOTION_LABELS[id] ?? id).join(', ')}`
+          : '';
+        const factorsCtx = factors.length > 0
+          ? `- Fatores do check-in atual: ${factors.map((id) => FACTOR_LABELS[id] ?? id).join(', ')}`
+          : '';
         prompt = `${userName} está abrindo a home agora.
 
 SINAIS DO MOMENTO:
@@ -1705,6 +1865,8 @@ SINAIS DO MOMENTO:
 - Tarefas ativas hoje: ${taskCount}
 ${pendingTaskTitles.length ? `- Pendências abertas: ${pendingTaskTitles.join(' | ')}` : ''}
 ${goals.length ? `- Metas ativas: ${goals.join(' | ')}` : ''}
+${emotionsCtx}
+${factorsCtx}
 ${previousMotivacional ? `- Última mensagem recente para NÃO reciclar: ${previousMotivacional}` : ''}
 ${previousAutocuidado.length ? `- Micro-ações recentes para NÃO repetir: ${previousAutocuidado.join(' | ')}` : ''}
 ${context.moodCycleContext ? `- Contexto vivo recente: ${context.moodCycleContext}` : ''}
@@ -1781,6 +1943,7 @@ Sem texto fora do JSON.`;
         const nota = context.nota ? `Nota de ${userName}: "${context.nota}"` : '';
         const crStreak = typeof context.streak === 'number' ? context.streak : 0;
         const crHistory = (context.checkinHistory || []) as Array<{date:string;humor:number;energia:number}>;
+        const crPreviousSuggestion = typeof context.previousSuggestion === 'string' ? context.previousSuggestion.trim() : '';
         const crHour = context.hour ?? new Date().getHours();
         const crPartOfDay = context.partOfDay || (crHour < 12 ? 'manhã' : crHour < 18 ? 'tarde' : 'noite');
         const crWeekday = context.weekday ? `Dia: ${context.weekday}.` : '';
@@ -1800,6 +1963,7 @@ Período atual: ${crPartOfDay}. ${crWeekday} ${crLocalDate}
 ${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
 ${context.moodCycleContext ? `\nContexto vivo recente:\n${context.moodCycleContext}` : ''}
+${crPreviousSuggestion ? `\nSugestão anterior para NÃO repetir: ${crPreviousSuggestion}` : ''}
 ${nota}${ragContext}
 
 Responda como Aura, com leitura específica e útil para este momento.
@@ -1945,7 +2109,7 @@ INSTRUÇÕES:
 
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const maxTokens = type === 'agenda-blocks' ? 700 : type === 'home-messages' ? 400 : type === 'gtd-clarify' ? 280 : type === 'goal-route' ? 150 : type === 'phase-transition' ? 200 : type === 'follow-up' ? 150 : type === 'monthly-report' ? 600 : 300;
+      const generationConfig = resolveSuggestGenerationConfig(type, plainTextTypes.has(type));
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         messages: [
@@ -1961,22 +2125,22 @@ INSTRUÇÕES:
           },
           { role: 'user' as const, content: prompt },
         ],
-        max_completion_tokens: maxTokens,
-        temperature:
-          type === 'home-messages'
-            ? 0.85
-            : type === 'agenda-blocks'
-              ? 0.9
-              : plainTextTypes.has(type)
-                ? 0.7
-                : 0.4,
-        ...(usesJsonObjectResponse(type) ? { response_format: { type: 'json_object' as const } } : {}),
+        max_completion_tokens: generationConfig.maxTokens,
+        temperature: generationConfig.temperature,
+        ...(generationConfig.useJsonResponse && usesJsonObjectResponse(type)
+          ? { response_format: { type: 'json_object' as const } }
+          : {}),
       });
       const rawSuggestion = completion.choices[0]?.message?.content?.trim() || '';
-      const suggestion = plainTextTypes.has(type) ? rawSuggestion : normalizeAiSuggestion(type, rawSuggestion);
+      const normalizedSuggestion = plainTextTypes.has(type) ? rawSuggestion : normalizeAiSuggestion(type, rawSuggestion);
+      const suggestion = sanitizeAiSuggestion(type, normalizedSuggestion, context);
       return res.json({ suggestion });
     } catch (error: any) {
       console.error('[ai/suggest] Error:', error);
+      const fallback = getSuggestFallback(type);
+      if (fallback) {
+        return res.json({ suggestion: fallback });
+      }
       return res.status(500).json({
         error: error instanceof Error ? error.message : 'AI suggestion failed',
       });
@@ -2217,8 +2381,9 @@ JSON APENAS: {"profileSummary":"..."}`,
         : await HabitService.listHabits(userId, new Date());
       return res.json(habits);
     } catch (error) {
-      console.error('[habits/list]', error);
-      return res.status(500).json({ error: 'Failed to fetch habits' });
+      console.error('[habits/list] Falling back to empty list:', error);
+      // Contingência: evitar quebrar o app quando houver mismatch de schema no banco.
+      return res.json([]);
     }
   });
 

@@ -1494,10 +1494,16 @@ export function HomePage() {
                       const isGood = val >= 7, isWarn = val < 4.5;
                       const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
                       const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                      // Labels acima do ponto quando está na metade inferior do gráfico (evita colidir com datas)
+                      const midY = PY + h / 2;
+                      const labelsAbove = y > midY;
+                      const emojiY = labelsAbove ? y - 18 : y + 6;
+                      const scoreY = labelsAbove ? y - 5 : y + 20;
                       return (
                         <g key={i}>
-                          <text x={x} y={y + 6} textAnchor="middle" fontSize={15} style={{ userSelect: "none" }}>{emoji}</text>
-                          <text x={x} y={y + 20} textAnchor="middle" fontSize={8.5} fill={scoreColor}
+                          <circle cx={x} cy={y} r={3} fill={scoreColor} opacity={0.8} />
+                          <text x={x} y={emojiY} textAnchor="middle" fontSize={13} style={{ userSelect: "none" }}>{emoji}</text>
+                          <text x={x} y={scoreY} textAnchor="middle" fontSize={8.5} fill={scoreColor}
                             fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{val.toFixed(1)}</text>
                           <text x={x} y={H - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
                             fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{d.getDate()}</text>

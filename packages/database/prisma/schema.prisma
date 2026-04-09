@@ -136,6 +136,7 @@ model DailyCheckin {
   symptomDorCabeca  Int?     @map("symptom_dor_cabeca")
   
   factors           String[] @default([])
+  emotions          String[] @default([])
   note              String?  @db.Text
   stateLabel        String?  @map("state_label")
   stateLabelType    String?  @map("state_label_type")
