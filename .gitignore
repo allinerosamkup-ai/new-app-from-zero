@@ -1,14 +1,56 @@
-# Dependências
+```
+# Dependencies
 node_modules/
 
-# Variáveis de ambiente (NUNCA commitar)
-.env
-.env.local
-.env.production
-
-# Build
+# Build artifacts
 dist/
 build/
+target/
 
-# Expo
-.expo/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py.class
+*.py.obj
+.Python
+env/
+venv/
+.venv/
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+*.env.*
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+```

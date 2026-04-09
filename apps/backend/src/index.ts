@@ -13,6 +13,7 @@ import { JournalMessageStreamSchema, JournalStartSchema } from './contracts/jour
 import { OnboardingProcessSchema } from './contracts/onboarding.contract';
 import { JournalService } from './services/journal.service';
 import { z } from 'zod';
+import { processUserActionWithAI } from './services/aiOrchestrator';
 
 dotenv.config();
 
@@ -103,7 +104,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       },
     });
 
-    // 2. Chamar IA para Avaliar Estado
+    // 2. Chamar IA para Avaliar Estado (CheckinService tradicional)
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -115,18 +116,34 @@ export function createApp(dependencies: AppDependencies = {}) {
       note: data.note
     });
 
-    // 3. Atualizar com Resultado da IA
+    // 3. Chamar AI Orchestrator para enriquecimento adicional e padronização
+    const enrichedData = await processUserActionWithAI({
+      userId: data.userId,
+      actionType: 'CHECKIN',
+      rawData: { ...data, id: checkin.id },
+    });
+
+    // 4. Atualizar com Resultado Combinado (IA Tradicional + Orchestrator)
     const updatedCheckin = await prisma.dailyCheckin.update({
       where: { id: checkin.id },
       data: {
         stateLabel: aiState.stateLabel,
         stateLabelType: aiState.stateLabelType,
-        stateSummary: aiState.analysis, // Mapeado para o novo campo analysis da IA
-        aiState: aiState as any
+        stateSummary: aiState.analysis,
+        aiState: {
+          ...aiState,
+          ...enrichedData, // Merge dos dados enriquecidos
+          stabilityScore: enrichedData.stabilityScore,
+          phase: enrichedData.phase,
+          suggestedActions: enrichedData.suggestedActions,
+        }
       }
     });
 
-    return res.json(updatedCheckin);
+    return res.json({
+      ...updatedCheckin,
+      aiEnriched: enrichedData // Retorna dados enriquecidos separadamente para o frontend
+    });
 
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -255,8 +272,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   /**
    * GET /api/insights/weekly
-  ...
-
+   * Gera insights semanais com IA baseada em todo o histórico do usuário.
    */
   app.get('/api/insights/weekly', async (req: Request, res: Response) => {
   const { userId, weekStart } = req.query;
@@ -266,8 +282,26 @@ export function createApp(dependencies: AppDependencies = {}) {
   }
 
   try {
+    // 1. Gerar insights tradicionais via InsightService
     const result = await InsightService.getWeeklyInsights(String(userId), String(weekStart));
-    return res.json(result);
+    
+    // 2. Enriquecer com AI Orchestrator para análise contextual adicional
+    const enrichedData = await processUserActionWithAI({
+      userId: String(userId),
+      actionType: 'CHECKIN', // Usando CHECKIN como contexto base para análise de padrão
+      rawData: { 
+        weekStart,
+        summary: result.insights.summary,
+        patterns: result.insights.patterns,
+        checkinCount: result.insights.summary.checkinCount
+      },
+      currentStats: result.insights.summary
+    });
+
+    return res.json({
+      ...result,
+      aiEnriched: enrichedData // Análise adicional da IA sobre os padrões semanais
+    });
   } catch (error: any) {
     console.error('[insights/weekly] Error:', error);
     return res.status(500).json({ error: 'Failed to generate weekly insights' });
@@ -276,8 +310,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   /**
    * POST /api/journal/finalize
-  ...
-
+   * Finaliza sessão de diário e processa com IA para gerar insights persistidos.
    */
   app.post('/api/journal/finalize', async (req: Request, res: Response) => {
   const { sessionId } = req.body;
@@ -296,8 +329,26 @@ export function createApp(dependencies: AppDependencies = {}) {
       return res.status(404).json({ error: 'No messages found for this session' });
     }
 
+    // 1. Resumo tradicional via AIService
     const summary = await AIService.summarizeJournalSession(messages);
 
+    // 2. Buscar dados da sessão para contexto da IA Orchestrator
+    const session = await prisma.journalSession.findUnique({
+      where: { id: sessionId }
+    });
+
+    // 3. Processar via AI Orchestrator para enriquecimento adicional
+    const enrichedData = await processUserActionWithAI({
+      userId: session?.userId || 'unknown',
+      actionType: 'JOURNAL',
+      rawData: { 
+        sessionId, 
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+        summary 
+      },
+    });
+
+    // 4. Atualizar sessão com dados combinados
     const updatedSession = await prisma.journalSession.update({
       where: { id: sessionId },
       data: {
@@ -305,8 +356,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         summary: summary.summary,
         emotions: summary.emotions,
         themes: summary.themes,
-        suggestions: summary.suggestions || [],
+        suggestions: [...(summary.suggestions || []), ...(enrichedData.suggestedActions || [])],
         finalizedAt: new Date(),
+        aiInsight: enrichedData.insight,
+        stabilityScore: enrichedData.stabilityScore,
       },
     });
 
@@ -316,8 +369,9 @@ export function createApp(dependencies: AppDependencies = {}) {
         text: summary.summary,
         emotions: summary.emotions,
         themes: summary.themes,
-        suggestions: summary.suggestions,
+        suggestions: updatedSession.suggestions,
       },
+      aiEnriched: enrichedData,
       sessionStatus: 'completed',
     });
   } catch (error: any) {
@@ -331,7 +385,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   /**
    * POST /api/timeline
-   * Sincroniza blocos do planner em lote com detecção preventiva de conflitos.
+   * Sincroniza blocos do planner em lote com detecção preventiva de conflitos e IA para sugestões.
    */
   app.post('/api/timeline', async (req: Request, res: Response) => {
   try {
@@ -384,9 +438,26 @@ export function createApp(dependencies: AppDependencies = {}) {
       })
     );
 
+    // Chamar IA Orchestrator para análise das tarefas criadas/atualizadas
+    const enrichedData = await processUserActionWithAI({
+      userId,
+      actionType: 'TASK_CREATE',
+      rawData: { 
+        date, 
+        blocks: savedBlocks.map(b => ({ 
+          id: b.id, 
+          title: b.title, 
+          category: b.category, 
+          intensity: b.intensity,
+          status: b.status 
+        })) 
+      },
+    });
+
     return res.json({
       savedBlocks,
       conflicts, // Retornamos conflitos de forma passiva se forceSave for true
+      aiEnriched: enrichedData // Sugestões e insights da IA sobre as tarefas
     });
 
   } catch (error: any) {
@@ -441,6 +512,40 @@ export function createApp(dependencies: AppDependencies = {}) {
     } catch (error: any) {
       console.error('[timeline/get] Error:', error);
       return res.status(500).json({ error: 'Failed to fetch timeline blocks' });
+    }
+  });
+
+  /**
+   * GET /api/checkins/recent
+   * Retorna os últimos check-ins do usuário para popular gráficos e cards.
+   */
+  app.get('/api/checkins/recent', async (req: Request, res: Response) => {
+    const { userId, days = '7' } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    try {
+      const daysNum = parseInt(days as string, 10);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - daysNum);
+
+      const checkins = await prisma.dailyCheckin.findMany({
+        where: {
+          userId: String(userId),
+          localDate: { gte: startDate }
+        },
+        orderBy: [
+          { localDate: 'desc' },
+          { checkinSlot: 'desc' }
+        ]
+      });
+
+      return res.json({ checkins });
+    } catch (error: any) {
+      console.error('[checkins/recent] Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch recent checkins' });
     }
   });
 

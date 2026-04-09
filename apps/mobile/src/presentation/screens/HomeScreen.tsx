@@ -12,13 +12,15 @@ import { LucideSparkles, LucideMessageCircle, LucideCalendar, LucidePlusCircle }
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const { userId } = useAuthStore();
-  const { todayCheckin, isLoading: checkinLoading } = useCheckinStore();
+  const { todayCheckin, isLoading: checkinLoading, loadRecentCheckins, recentCheckins } = useCheckinStore();
   const { blocks, fetchBlocks, isLoading: plannerLoading } = usePlannerStore();
 
   useEffect(() => {
     if (!userId) return;
     const dateStr = new Date().toISOString().split('T')[0];
     fetchBlocks(userId, dateStr);
+    // Carrega check-ins recentes para alimentar gráficos e cards
+    loadRecentCheckins(userId, 7);
   }, [userId]);
 
   const stateColors: Record<string, string> = {
@@ -112,6 +114,72 @@ export default function HomeScreen() {
             ))
           ) : (
             <Text className="text-gray-400 italic text-center py-4">Sua agenda está livre por enquanto.</Text>
+          )}
+        </View>
+
+        {/* Card "Humor e Energia" - Gráfico Semanal */}
+        <View className="mb-10">
+          <View className="flex-row justify-between items-center mb-4">
+            <Text className="text-lg font-bold text-gray-800">Humor e energia</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Insights' as any)}>
+              <Text className="text-blue-600 font-bold">Ver semana</Text>
+            </TouchableOpacity>
+          </View>
+
+          {checkinLoading ? (
+            <ActivityIndicator color="#3b82f6" />
+          ) : recentCheckins.length > 0 ? (
+            <View className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+              {/* Gráfico de barras simples com dados reais */}
+              <View className="flex-row justify-between items-end h-32 mb-3">
+                {recentCheckins.slice(0, 7).reverse().map((checkin: any, index: number) => {
+                  const moodHeight = (checkin.moodScore / 5) * 100;
+                  const energyHeight = (checkin.energyScore / 5) * 100;
+                  const dayLabel = new Date(checkin.localDate).toLocaleDateString('pt-BR', { weekday: 'short' });
+                  
+                  return (
+                    <View key={checkin.id || index} className="items-center flex-1">
+                      <View className="flex-row items-end justify-center h-24">
+                        <View 
+                          className="w-3 bg-blue-400 rounded-t mr-1" 
+                          style={{ height: `${moodHeight}%` }} 
+                        />
+                        <View 
+                          className="w-3 bg-yellow-400 rounded-t" 
+                          style={{ height: `${energyHeight}%` }} 
+                        />
+                      </View>
+                      <Text className="text-gray-400 text-[9px] font-bold mt-1 capitalize">
+                        {dayLabel.replace('.', '')}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              
+              {/* Legenda */}
+              <View className="flex-row justify-center items-center space-x-4">
+                <View className="flex-row items-center">
+                  <View className="w-3 h-3 bg-blue-400 rounded mr-1" />
+                  <Text className="text-gray-500 text-xs">Humor</Text>
+                </View>
+                <View className="flex-row items-center">
+                  <View className="w-3 h-3 bg-yellow-400 rounded mr-1" />
+                  <Text className="text-gray-500 text-xs">Energia</Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View className="bg-gray-50 p-6 rounded-2xl border border-gray-100 items-center">
+              <Text className="text-gray-400 text-center mb-3">Faça check-ins para ver sua evolução semanal</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Checkin')}
+                className="bg-blue-600 px-4 py-2 rounded-full flex-row items-center"
+              >
+                <LucidePlusCircle size={16} color="white" />
+                <Text className="text-white font-bold text-sm ml-2">Fazer check-in</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </ScrollView>

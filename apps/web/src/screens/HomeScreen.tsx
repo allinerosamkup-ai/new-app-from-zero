@@ -2,15 +2,65 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, MessageCircle, Calendar, PlusCircle, Brain, ArrowRight, Zap, LineChart } from 'lucide-react';
 import { useNavigation } from '../navigation';
 
+interface CheckinData {
+  state: 'leve' | 'moderado' | 'sensível' | 'crítico';
+  date: string;
+}
+
+const CHECKIN_STORAGE_KEY = 'ciclagem_checkin_today';
+
+function getStoredCheckin(): CheckinData | null {
+  try {
+    const stored = localStorage.getItem(CHECKIN_STORAGE_KEY);
+    if (!stored) return null;
+    
+    const data: CheckinData = JSON.parse(stored);
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Verifica se o check-in é de hoje
+    if (data.date === today) {
+      return data;
+    }
+    
+    // Check-in expirado (não é de hoje)
+    localStorage.removeItem(CHECKIN_STORAGE_KEY);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCheckin(data: CheckinData): void {
+  try {
+    localStorage.setItem(CHECKIN_STORAGE_KEY, JSON.stringify(data));
+  } catch (err) {
+    console.error('[saveCheckin] Failed to persist checkin:', err);
+  }
+}
+
 export default function HomeScreen() {
   const { navigate } = useNavigation();
   const [hasCheckin, setHasCheckin] = useState(false);
-  const [checkinState, setCheckinState] = useState('moderado');
-
+  const [checkinState, setCheckinState] = useState<'leve' | 'moderado' | 'sensível' | 'crítico'>('moderado');
+  
   useEffect(() => {
+    // Carrega check-in persistido ao montar o componente
+    const stored = getStoredCheckin();
+    if (stored) {
+      setHasCheckin(true);
+      setCheckinState(stored.state);
+    }
+    
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (detail?.state) setCheckinState(detail.state);
+      if (detail?.state) {
+        const newData: CheckinData = {
+          state: detail.state,
+          date: new Date().toISOString().split('T')[0],
+        };
+        setCheckinState(detail.state);
+        saveCheckin(newData);
+      }
       setHasCheckin(true);
     };
     window.addEventListener('checkin-done', handler);
