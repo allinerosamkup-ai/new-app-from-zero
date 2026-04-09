@@ -85,7 +85,7 @@ type AuraStoreContextValue = {
   reorderTasks: (fromIdx: number, toIdx: number) => void;
   toggleHabit: (habitId: string) => Promise<void>;
   archiveHabit: (habitId: string) => Promise<void>;
-  addHabit: (habit: { title: string; category: string; frequency: string; icon?: string; timeOfDay?: string; description?: string; durationMinutes?: number }) => Promise<void>;
+  addHabit: (habit: { title: string; category: string; frequency: string; icon?: string; timeOfDay?: string; description?: string; durationMinutes?: number; reminderEnabled?: boolean; reminderTime?: string }) => Promise<void>;
   setAutonomousInsight: (insight: AutonomousInsight | null) => void;
   setPhaseTransitionAlert: (alert: PhaseTransitionAlert | null) => void;
   dismissPhaseTransitionAlert: () => void;
@@ -173,6 +173,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           bestStreak: h.bestStreak,
           totalCompletions: h.totalCompletions,
           completions: Array.isArray(h.completions) ? h.completions : [],
+          reminderEnabled: h.reminderEnabled ?? false,
+          reminderTime: h.reminderTime ?? null,
         })),
         theme: preferences.aiTone === 'warm' ? 'Tema suave' : 'Tema claro',
         quietMode: !preferences.notificationsOn

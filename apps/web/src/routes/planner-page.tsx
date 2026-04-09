@@ -23,6 +23,7 @@ import {
   type RecurringConfig,
 } from "../utils/task-metadata";
 import { getLocalNoonDate } from "../utils/day-context";
+import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -373,8 +374,15 @@ function PlannerSheetBody({
 }
 
 export function PlannerPage() {
-  const { refreshData } = useAuraStore();
+  const { refreshData, state } = useAuraStore();
   const { showError, showSuccess } = useToast();
+
+  // ── Modo Proteção de Fase Baixa (7.2) ──────────────────────
+  const cycleReport = useMemo(() => {
+    const aggregated = aggregateCheckinsByDay(state.checkinHistory || []);
+    return computeMoodCycle(aggregated);
+  }, [state.checkinHistory]);
+  const isLowPhase = cycleReport.phase === "low" || cycleReport.phase === "depleted";
   const [offsetDias, setOffsetDias] = useState(0);
   const [plannerTasks, setPlannerTasks] = useState<PlannerTask[]>([]);
   const [plannerLoading, setPlannerLoading] = useState(false);
@@ -552,6 +560,38 @@ export function PlannerPage() {
         <span style={{ fontWeight: 700 }}>{formatDateLabel(dataAtual)}</span>
         <AuraButtonV2 onClick={() => setOffsetDias((current) => current + 1)}>Próximo ›</AuraButtonV2>
       </div>
+
+      {/* ── Banner: Modo Proteção de Fase Baixa ── */}
+      {isLowPhase && (
+        <div style={{
+          borderRadius: 14, padding: "12px 14px", marginBottom: 14,
+          background: cycleReport.phase === "depleted"
+            ? "rgba(161,125,108,.12)"
+            : "rgba(197,165,147,.10)",
+          border: cycleReport.phase === "depleted"
+            ? "1.5px solid rgba(161,125,108,.30)"
+            : "1.5px solid rgba(197,165,147,.28)",
+        }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>
+              {cycleReport.phase === "depleted" ? "😴" : "🌙"}
+            </span>
+            <div style={{ flex: 1 }}>
+              <p style={{
+                fontSize: 12, fontWeight: 800, margin: "0 0 3px",
+                color: cycleReport.phase === "depleted" ? "#A17D6C" : "var(--accent-peach)",
+              }}>
+                Modo Proteção Ativo — {cycleReport.phaseLabel}
+              </p>
+              <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
+                {cycleReport.phase === "depleted"
+                  ? "Você está em esgotamento. Considere adiar tarefas não urgentes e priorizar descanso."
+                  : "Fase baixa detectada. Evite sobrecarregar a agenda — tarefas leves e autocuidado em primeiro lugar."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="glass-card" style={PLANNER_SUMMARY_CARD_STYLE}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>

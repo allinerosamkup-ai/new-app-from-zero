@@ -437,33 +437,26 @@ export function JournalPage() {
             )}
 
             {isSessionsLoading ? (
-              <div
-                style={{
-                  background: "#fff",
-                  borderRadius: "20px",
-                  border: "1.5px solid var(--warm-border)",
-                  padding: "18px",
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: "var(--text-3)",
-                }}
-              >
-                Carregando sessões...
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{ background: "#fff", borderRadius: 20, border: "1.5px solid var(--warm-border)", padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <div className="skeleton" style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0 }} />
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div className="skeleton" style={{ height: 13, width: "60%", borderRadius: 6 }} />
+                        <div className="skeleton" style={{ height: 11, width: "35%", borderRadius: 6 }} />
+                      </div>
+                    </div>
+                    <div className="skeleton" style={{ height: 11, width: "90%", borderRadius: 6 }} />
+                    <div className="skeleton" style={{ height: 11, width: "70%", borderRadius: 6 }} />
+                  </div>
+                ))}
               </div>
             ) : sessions.length === 0 ? (
-              <div
-                style={{
-                  background: "#fff",
-                  borderRadius: "20px",
-                  border: "1.5px solid var(--warm-border)",
-                  padding: "18px",
-                  textAlign: "center",
-                  fontSize: 13,
-                  color: "var(--text-2)",
-                  lineHeight: 1.6,
-                }}
-              >
-                Seu histórico vai aparecer aqui assim que a primeira sessão for concluída.
+              <div className="empty-state" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid var(--warm-border)" }}>
+                <div className="empty-state-icon">📔</div>
+                <div className="empty-state-title">Nenhuma sessão ainda</div>
+                <div className="empty-state-sub">Seu histórico aparece aqui após a primeira sessão de diário concluída.</div>
               </div>
             ) : (
               (() => {

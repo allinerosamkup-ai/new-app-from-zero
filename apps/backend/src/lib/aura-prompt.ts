@@ -17,6 +17,7 @@ type AuraPromptOptions = {
   userName?: string | null;
   profileSummary?: string | null;
   moodCycleContext?: string | null;
+  longTermMemory?: string | null;
   domain?: AuraPromptDomain;
   extraInstructions?: string[];
 };
@@ -170,6 +171,9 @@ export function buildAuraSystemPrompt(options: AuraPromptOptions): string {
   const cycle = options.moodCycleContext?.trim()
     ? `\nCICLO DE HUMOR ATUAL DE ${safeUserName.toUpperCase()}:\n${options.moodCycleContext.trim()}`
     : '';
+  const memory = options.longTermMemory?.trim()
+    ? `\nMEMÓRIA ACUMULADA DE ${safeUserName.toUpperCase()}:\n${options.longTermMemory.trim()}`
+    : '';
   const extra = options.extraInstructions?.filter(Boolean) ?? [];
   const domainGuide = DOMAIN_GUIDANCE[domain];
   const generalGuide = DOMAIN_GUIDANCE.general;
@@ -218,7 +222,7 @@ METODOLOGIA:
 
 ${domain === 'general' ? 'PERSONALIDADE E ALMA' : `${generalGuide.title} & ${domainGuide.title}`}:
 ${baseInstructions.map((instruction) => `- ${instruction}`).join('\n')}
-${extra.length > 0 ? `\n${extra.map((instruction) => `- ${instruction}`).join('\n')}` : ''}${cycle}${profile}
+${extra.length > 0 ? `\n${extra.map((instruction) => `- ${instruction}`).join('\n')}` : ''}${memory}${cycle}${profile}
 
 TOM: proximo, claro, humano e respeitoso. Use o nome quando isso soar natural.
 REGRA INVOLAVEL: o ciclo orienta o plano; a pessoa nao e o problema.`;

@@ -7,6 +7,7 @@ import { MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native
 import RootStackNavigator from './src/presentation/navigation/RootStackNavigator';
 import { useAuthStore } from './src/presentation/providers/auth_store';
 import { appColors } from './src/presentation/theme/appTheme';
+import { useNotifications } from './src/hooks/useNotifications';
 
 const { LightTheme } = adaptNavigationTheme({
   reactNavigationLight: NavigationDefaultTheme,
@@ -31,6 +32,7 @@ const theme = {
  */
 export default function App() {
   const { initialize } = useAuthStore();
+  useNotifications();
 
   useEffect(() => {
     void initialize();

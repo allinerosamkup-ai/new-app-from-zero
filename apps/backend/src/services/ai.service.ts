@@ -36,6 +36,7 @@ export type JournalStreamHistoryMessage = {
 export type JournalPromptContext = {
   userName?: string;
   userProfileSummary?: string | null;
+  longTermMemory?: string | null;
   routineSummary?: string;
   promptSummary: string;
   topThemes: string[];
@@ -125,6 +126,7 @@ export class AIService {
             userName: input.context.userName,
             profileSummary: input.context.userProfileSummary || input.context.promptSummary,
             moodCycleContext: input.context.moodCycleContext,
+            longTermMemory: input.context.longTermMemory,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',

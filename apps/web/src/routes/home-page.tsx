@@ -1,5 +1,6 @@
 // Home Page v4 — babá digital IA + mensagens personalizadas + agenda por blocos
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { FollowUpPending } from "../features/aura/types";
@@ -8,7 +9,7 @@ import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
-import { aggregateCheckinsByDay, computeMoodCycle, computeStreak, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, computeStreak, forecastMood7d, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
 import { getClientDayContext, getLocalDateKey } from "../utils/day-context";
 import {
   type AgendaBlock,
@@ -20,16 +21,16 @@ import {
   extractHomeRepeatContext,
 } from "./home-page.helpers";
 import { 
-  MessageSquareText, 
-  LayoutDashboard, 
-  Activity, 
-  Target, 
+  MessageSquareText,
+  LayoutDashboard,
+  Activity,
+  Target,
   Timer,
   TrendingUp,
-  Plus,
   Sparkles,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
+import { OnboardingTour } from "../components/OnboardingTour";
 import "../styles/aura.css";
 
 const STATE_CONFIG = {
@@ -496,11 +497,14 @@ function HabitIdeasModal({
 }
 
 export function HomePage() {
-  const { state, addTask, addHabit, refreshData, setPendingFollowUp, setProactiveNudge, hydrated, toggleHabit } = useAuraStore();
+  const { state, addTask, addHabit, refreshData, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
+  const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
+  const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());
   const [checkinChartMode, setCheckinChartMode] = useState<"week" | "day">("week");
+  const [forecastTab, setForecastTab] = useState<"forecast" | "monthly">("forecast");
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
 
   // Relógio e Contexto de Tempo (necessários para IDs e filtros)
@@ -536,7 +540,6 @@ export function HomePage() {
 
   const mood = moodMap[state.mood] ?? moodMap.equilibrada;
   const habits = state.habits || [];
-  const todayStr = dayContext.localDate;
   const aggregatedCheckinHistory = useMemo(
     () => aggregateCheckinsByDay(state.checkinHistory || []),
     [state.checkinHistory]
@@ -549,6 +552,19 @@ export function HomePage() {
   );
   const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
+  const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
+  const monthlyHistory = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const cutoffIso = cutoff.toISOString().split("T")[0];
+    return [...aggregatedCheckinHistory]
+      .filter(h => h.date >= cutoffIso)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [aggregatedCheckinHistory]);
+  const consistencyScore = useMemo(
+    () => computeConsistencyScore(aggregatedCheckinHistory, state.habits ?? [], 0),
+    [aggregatedCheckinHistory, state.habits],
+  );
   const goalTitles = useMemo(
     () => (state.goals || []).filter((goal) => goal.completedPct < 100).map((goal) => goal.title),
     [state.goals],
@@ -959,7 +975,18 @@ export function HomePage() {
     : "você";
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)" }}>
+    <>
+    <OnboardingTour />
+    <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)" }}>
+      {/* Pull-to-refresh indicator */}
+      {(pullDistance > 0 || isRefreshing) && (
+        <div className={`pull-indicator${isReady ? " ready" : ""}`} style={{ height: isRefreshing ? 44 : pullDistance, overflow: "hidden" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.54" />
+          </svg>
+          {isRefreshing ? "Atualizando..." : isReady ? "Solte para atualizar" : "Puxe para atualizar"}
+        </div>
+      )}
       <div className="screen-content">
 
         {/* Header com relógio */}
@@ -1033,7 +1060,7 @@ export function HomePage() {
               <div style={{ display: "flex", padding: 3, borderRadius: 999, background: "rgba(255,255,255,.82)", border: "1px solid var(--warm-border)" }}>
                 {[
                   { id: "week", label: "Semana", disabled: false },
-                  { id: "day", label: "Hoje", disabled: todayCheckinData.length === 0 },
+                  { id: "day", label: "Hoje", disabled: false },
                 ].map((option) => {
                   const active = checkinChartMode === option.id;
                   return (
@@ -1089,10 +1116,15 @@ export function HomePage() {
 
           {!hasActiveChartData ? (
             <div style={{
-              height: 72, display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--text-3)", fontSize: "0.82rem", fontStyle: "italic",
+              height: 72, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+              color: "var(--text-3)", fontSize: "0.82rem",
             }}>
-              Faça seu primeiro check-in para ver o gráfico
+              <span style={{ fontSize: 20 }}>{checkinChartMode === "day" ? "🌅" : "📊"}</span>
+              <span style={{ fontStyle: "italic" }}>
+                {checkinChartMode === "day"
+                  ? "Nenhum check-in hoje ainda — faça o de hoje!"
+                  : "Faça seu primeiro check-in para ver o gráfico"}
+              </span>
             </div>
           ) : (
             <>
@@ -1273,6 +1305,36 @@ export function HomePage() {
               </div>
             )}
 
+            {/* ── 7.4 Score de consistência ── */}
+            {cycleReport.phase !== "insufficient_data" && (
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "8px 10px", borderRadius: 10,
+                background: "rgba(255,255,255,.5)", border: "1px solid rgba(0,0,0,.06)",
+                marginBottom: 8,
+              }}>
+                <div>
+                  <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 1px" }}>
+                    Consistência semanal
+                  </p>
+                  <div style={{ height: 4, width: 80, borderRadius: 999, background: "rgba(0,0,0,.08)", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: 999, transition: "width .6s ease",
+                      width: `${consistencyScore}%`,
+                      background: consistencyScore >= 70 ? "var(--accent-sage)" : consistencyScore >= 40 ? "var(--accent-sky)" : "var(--accent-peach)",
+                    }} />
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 18, fontWeight: 800,
+                  color: consistencyScore >= 70 ? "var(--accent-sage)" : consistencyScore >= 40 ? "var(--accent-sky)" : "var(--accent-peach)",
+                }}>
+                  {consistencyScore}<span style={{ fontSize: 10, fontWeight: 400 }}>/100</span>
+                </span>
+              </div>
+            )}
+
+
             {/* Dica da fase */}
             <div className="home-cycle-tip" style={{ background: `${phaseColor}10`, border: `1px solid ${phaseColor}20` }}>
               <p className="home-cycle-tip-text">
@@ -1308,156 +1370,230 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* ── Hábitos de Hoje ── */}
-        {(() => {
-          const dailyHabits = habits.filter((h: any) => h.frequency === "daily");
-          const completedHabits = dailyHabits.filter((h: any) => (h.completions?.length ?? 0) > 0);
-          const pendingHabits  = dailyHabits.filter((h: any) => (h.completions?.length ?? 0) === 0);
-          const allSorted      = [...pendingHabits, ...completedHabits];
-          const shown          = allSorted.slice(0, 3);
-          const hiddenCount    = allSorted.length - shown.length;
-          const allDone        = dailyHabits.length > 0 && completedHabits.length === dailyHabits.length;
-          const pct            = dailyHabits.length > 0 ? (completedHabits.length / dailyHabits.length) * 100 : 0;
+        {/* ── Previsão de Humor — próximos 7 dias ── */}
+        {moodForecast.length === 7 && (() => {
+          const DAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+          const today = new Date();
+
+          // ── Escala automática: amplifica diferenças sutis ──
+          const W = 300, H = 130, PX = 22, PY = 14;
+          // Área do gráfico: reserva 36px no fundo p/ dia do mês + nome do dia + score
+          const BOTTOM_RESERVE = 36;
+          const h = H - PY - BOTTOM_RESERVE;
+          const rawMin = Math.min(...moodForecast);
+          const rawMax = Math.max(...moodForecast);
+          const padding = Math.max(0.6, (rawMax - rawMin) * 0.3); // mínimo 0.6 de margem
+          const scaleMin = Math.max(1,  rawMin - padding);
+          const scaleMax = Math.min(10, rawMax + padding);
+          const range = scaleMax - scaleMin || 1;
+          const toX = (i: number) => PX + (i / 6) * (W - PX * 2);
+          const toY = (v: number) => PY + h - ((v - scaleMin) / range) * h;
+
+          const areaPath = moodForecast.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ')
+            + ` L${toX(6).toFixed(1)} ${(PY + h).toFixed(1)} L${toX(0).toFixed(1)} ${(PY + h).toFixed(1)} Z`;
+          // Curva suave (bezier cúbico)
+          const linePath = moodForecast.reduce((acc, v, i) => {
+            const x = toX(i), y = toY(v);
+            if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
+            const px = toX(i - 1), py = toY(moodForecast[i - 1]);
+            const cp = (x - px) * 0.45;
+            return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
+          }, '');
 
           return (
-            <div style={{ marginBottom: "calc(var(--a) * 1.2)", marginTop: 12 }}>
-              {/* Header */}
-              <div className="home-section-row" style={{ marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 14 }}>🔥</span>
-                  <span className="section-title" style={{ fontSize: 14 }}>Hábitos de hoje</span>
-                  {dailyHabits.length > 0 && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999,
-                      background: allDone ? "rgba(150,199,179,0.18)" : "rgba(215,137,127,0.12)",
-                      color: allDone ? "var(--accent-sage)" : "var(--accent-peach)",
-                    }}>
-                      {completedHabits.length}/{dailyHabits.length}
-                    </span>
-                  )}
+            <div style={{
+              borderRadius: 18, border: "1.5px solid var(--warm-border)",
+              background: "rgba(255,255,255,.70)", backdropFilter: "blur(16px)",
+              padding: "16px", marginBottom: "calc(var(--a) * 1.2)",
+            }}>
+              {/* Cabeçalho + Abas */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                <div>
+                  <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 3px" }}>
+                    {forecastTab === "forecast" ? "Como seu humor pode evoluir" : "Seu humor este mês"}
+                  </p>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>
+                    {forecastTab === "forecast" ? "Previsão — próximos 7 dias" : "Histórico — últimos 30 dias"}
+                  </p>
                 </div>
-                <button
-                  style={{ fontSize: 11, color: "var(--accent-peach)", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}
-                  onClick={() => setShowHabitIdeasModal(true)}
-                >
-                  Abrir ideias →
-                </button>
+                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                  {(["forecast", "monthly"] as const).map(tab => (
+                    <button key={tab} onClick={() => setForecastTab(tab)} style={{
+                      padding: "4px 10px", borderRadius: 999, fontSize: 10, fontWeight: 700,
+                      fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer",
+                      border: forecastTab === tab ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
+                      background: forecastTab === tab ? "var(--accent-peach)" : "rgba(255,255,255,.62)",
+                      color: forecastTab === tab ? "#fff" : "var(--text-3)",
+                      transition: "all 150ms",
+                    }}>
+                      {tab === "forecast" ? "7 dias" : "Mensal"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Progress bar */}
-              {dailyHabits.length > 0 && (
-                <div style={{ marginBottom: 10, height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
-                  <div style={{
-                    width: `${pct}%`, height: "100%", borderRadius: 999,
-                    background: allDone ? "var(--accent-sage)" : "linear-gradient(90deg, var(--accent-sky), var(--accent-sage))",
-                    transition: "width 0.5s ease",
-                  }} />
-                </div>
-              )}
-
-              {dailyHabits.length > 0 ? (
+              {/* ── ABA: PREVISÃO 7 DIAS ── */}
+              {forecastTab === "forecast" && (
                 <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {shown.map((habit: any) => {
-                      const isCompleted = (habit.completions?.length ?? 0) > 0;
+                  <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible", display: "block" }}>
+                    {[0.2, 0.5, 0.8].map(pct => {
+                      const v = scaleMin + pct * range;
+                      return <line key={pct} x1={PX} x2={W - PX} y1={toY(v)} y2={toY(v)}
+                        stroke="rgba(0,0,0,.055)" strokeWidth={0.7} strokeDasharray="3,3" />;
+                    })}
+                    <path d={areaPath} fill="rgba(99,152,169,.08)" />
+                    <path d={linePath} fill="none" stroke="rgba(99,152,169,.45)" strokeWidth={2} strokeDasharray="6,3" strokeLinecap="round" strokeLinejoin="round" />
+                    {moodForecast.map((val, i) => {
+                      const x = toX(i), y = toY(val);
+                      const d = new Date(today); d.setDate(today.getDate() + i + 1);
+                      const dayName = DAY_NAMES[d.getDay()];
+                      const isGood = val >= 7, isWarn = val < 4.5;
+                      const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
+                      const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
                       return (
-                        <div
-                          key={habit.id}
-                          className="aura-card"
-                          style={{
-                            padding: "10px 12px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            background: isCompleted ? "rgba(150,199,179,0.06)" : "rgba(255,253,249,0.97)",
-                            borderColor: isCompleted ? "rgba(150,199,179,0.25)" : "var(--warm-border)",
-                            borderLeft: `3px solid ${isCompleted ? "var(--accent-sage)" : "var(--warm-border)"}`,
-                            transition: "all 0.2s ease",
-                            opacity: isCompleted ? 0.75 : 1,
-                          }}
-                        >
-                          <span style={{ fontSize: 20, flexShrink: 0 }}>{habit.icon || "✨"}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{
-                              fontSize: 13, fontWeight: 700, margin: 0,
-                              color: isCompleted ? "var(--text-3)" : "var(--text-1)",
-                              textDecoration: isCompleted ? "line-through" : "none",
-                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            }}>
-                              {habit.title}
-                            </p>
-                            {habit.streakCount > 0 && (
-                              <p style={{ fontSize: 10, color: "var(--accent-peach)", margin: "2px 0 0", fontWeight: 700 }}>
-                                🔥 {habit.streakCount} dias
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleHabit(habit.id); }}
-                            style={{
-                              flexShrink: 0,
-                              width: 32, height: 32, borderRadius: "50%",
-                              border: `2px solid ${isCompleted ? "var(--accent-sage)" : "rgba(0,0,0,.15)"}`,
-                              background: isCompleted ? "var(--accent-sage)" : "transparent",
-                              cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              transition: "all 0.2s ease",
-                            }}
-                          >
-                            {isCompleted && (
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
+                        <g key={i}>
+                          <text x={x} y={y + 6} textAnchor="middle" fontSize={15} style={{ userSelect: "none" }}>{emoji}</text>
+                          <text x={x} y={y + 20} textAnchor="middle" fontSize={8.5} fill={scoreColor}
+                            fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{val.toFixed(1)}</text>
+                          <text x={x} y={H - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
+                            fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{d.getDate()}</text>
+                          <text x={x} y={H - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
+                            fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{dayName}</text>
+                        </g>
                       );
                     })}
+                  </svg>
+                  <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                    {[
+                      { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
+                      { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
+                      { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
+                    ].map(l => (
+                      <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
+                        {l.emoji} {l.label}
+                      </span>
+                    ))}
                   </div>
-
-                  {/* Ver mais */}
-                  {hiddenCount > 0 && (
-                    <button
-                      onClick={() => setShowHabitIdeasModal(true)}
-                      style={{
-                        width: "100%", marginTop: 8, padding: "8px 0",
-                        background: "rgba(215,137,127,0.06)", border: "1.5px dashed rgba(215,137,127,0.3)",
-                        borderRadius: 12, color: "var(--accent-peach)", fontSize: 12, fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      + {hiddenCount} hábito{hiddenCount > 1 ? "s" : ""} a mais
-                    </button>
-                  )}
-
-                  {/* All done celebration */}
-                  {allDone && (
-                    <div style={{
-                      marginTop: 8, padding: "10px 14px", borderRadius: 12,
-                      background: "rgba(150,199,179,0.10)", border: "1px solid rgba(150,199,179,0.25)",
-                      display: "flex", alignItems: "center", gap: 8,
-                    }}>
-                      <span style={{ fontSize: 18 }}>🎉</span>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", margin: 0 }}>
-                        Todos os hábitos do dia concluídos!
-                      </p>
-                    </div>
-                  )}
+                  <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
+                    Baseado no seu padrão de humor. Quanto mais check-ins, mais preciso.
+                  </p>
                 </>
-              ) : (
-                <div
-                  className="aura-card"
-                  onClick={() => setShowHabitIdeasModal(true)}
-                  style={{ padding: 16, textAlign: "center", borderStyle: "dashed", cursor: "pointer" }}
-                >
-                  <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 4px" }}>
-                    Nenhum hábito para hoje.
-                  </p>
-                  <p style={{ fontSize: 12, color: "var(--accent-peach)", fontWeight: 700, margin: 0 }}>
-                    Abrir sugestões →
-                  </p>
-                </div>
               )}
+
+              {/* ── ABA: MENSAL ── */}
+              {forecastTab === "monthly" && (() => {
+                if (monthlyHistory.length === 0) {
+                  return (
+                    <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: 20 }}>📊</span>
+                      <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}>Sem dados nos últimos 30 dias ainda.</span>
+                    </div>
+                  );
+                }
+
+                const MW = 300, MH = 130, MPX = 22, MPY = 14, MBOT = 28;
+                const mh = MH - MPY - MBOT;
+                const n = monthlyHistory.length;
+                const mxToX = (i: number) => MPX + (n > 1 ? (i / (n - 1)) : 0.5) * (MW - MPX * 2);
+                const mVals = monthlyHistory.map(e => e.humor);
+                const mRawMin = Math.min(...mVals), mRawMax = Math.max(...mVals);
+                const mPad = Math.max(0.6, (mRawMax - mRawMin) * 0.25);
+                const mMin = Math.max(1, mRawMin - mPad), mMax = Math.min(10, mRawMax + mPad);
+                const mRange = mMax - mMin || 1;
+                const mToY = (v: number) => MPY + mh - ((v - mMin) / mRange) * mh;
+
+                // Curva bezier
+                const mLine = monthlyHistory.reduce((acc, e, i) => {
+                  const x = mxToX(i), y = mToY(e.humor);
+                  if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
+                  const px = mxToX(i - 1), py = mToY(monthlyHistory[i - 1].humor);
+                  const cp = (x - px) * 0.45;
+                  return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
+                }, '');
+                const mArea = mLine
+                  + ` L${mxToX(n - 1).toFixed(1)} ${(MPY + mh).toFixed(1)} L${mxToX(0).toFixed(1)} ${(MPY + mh).toFixed(1)} Z`;
+
+                // Pontos-chave: máximo, mínimo, hoje (último)
+                const maxIdx = mVals.indexOf(mRawMax);
+                const minIdx = mVals.indexOf(mRawMin);
+                const lastIdx = n - 1;
+                const keyIdxs = new Set([maxIdx, minIdx, lastIdx]);
+
+                // Ticks de data: a cada ~7 pontos
+                const tickStep = Math.max(1, Math.floor(n / 5));
+                const tickIdxs = Array.from({ length: n }, (_, i) => i).filter(i => i % tickStep === 0 || i === lastIdx);
+
+                return (
+                  <>
+                    <svg width="100%" viewBox={`0 0 ${MW} ${MH}`} style={{ overflow: "visible", display: "block" }}>
+                      {[0.2, 0.5, 0.8].map(pct => {
+                        const v = mMin + pct * mRange;
+                        return <line key={pct} x1={MPX} x2={MW - MPX} y1={mToY(v)} y2={mToY(v)}
+                          stroke="rgba(0,0,0,.055)" strokeWidth={0.7} strokeDasharray="3,3" />;
+                      })}
+                      <path d={mArea} fill="rgba(150,199,179,.09)" />
+                      <path d={mLine} fill="none" stroke="var(--accent-sage)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+
+                      {/* Todos os pontos — pequeno círculo */}
+                      {monthlyHistory.map((e, i) => {
+                        const x = mxToX(i), y = mToY(e.humor);
+                        const isKey = keyIdxs.has(i);
+                        const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
+                        const dotColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                        return (
+                          <circle key={i} cx={x} cy={y} r={isKey ? 0 : 2.5}
+                            fill={dotColor} stroke="white" strokeWidth={isKey ? 0 : 1} opacity={0.8} />
+                        );
+                      })}
+
+                      {/* Pontos-chave: emoji + score */}
+                      {monthlyHistory.map((e, i) => {
+                        if (!keyIdxs.has(i)) return null;
+                        const x = mxToX(i), y = mToY(e.humor);
+                        const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
+                        const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
+                        const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                        return (
+                          <g key={`key-${i}`}>
+                            <text x={x} y={y + 6} textAnchor="middle" fontSize={15} style={{ userSelect: "none" }}>{emoji}</text>
+                            <text x={x} y={y + 20} textAnchor="middle" fontSize={8.5} fill={scoreColor}
+                              fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{e.humor.toFixed(1)}</text>
+                          </g>
+                        );
+                      })}
+
+                      {/* Ticks de data na base */}
+                      {tickIdxs.map(i => {
+                        const x = mxToX(i);
+                        const dt = new Date(monthlyHistory[i].date + "T12:00:00");
+                        return (
+                          <g key={`tick-${i}`}>
+                            <text x={x} y={MH - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
+                              fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{dt.getDate()}</text>
+                            <text x={x} y={MH - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
+                              fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{DAY_NAMES[dt.getDay()]}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+
+                    <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                      {[
+                        { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
+                        { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
+                        { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
+                      ].map(l => (
+                        <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
+                          {l.emoji} {l.label}
+                        </span>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
+                      {n} check-in{n !== 1 ? "s" : ""} registrado{n !== 1 ? "s" : ""} nos últimos 30 dias.
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           );
         })()}
@@ -1499,6 +1635,13 @@ export function HomePage() {
             </div>
             <span className="shortcut-label">Pomodoro</span>
             <span className="shortcut-sub">Foco</span>
+          </button>
+          <button className="shortcut-card" onClick={() => setShowHabitIdeasModal(true)}>
+            <div className="icon-badge" style={{ background: "rgba(150,199,179,.18)" }}>
+              <Sparkles size={18} color="var(--accent-sage)" />
+            </div>
+            <span className="shortcut-label">Hábitos</span>
+            <span className="shortcut-sub">Rituais</span>
           </button>
         </div>
 
@@ -2095,6 +2238,7 @@ export function HomePage() {
         />
       )}
     </div>
+    </>
   );
 }
 

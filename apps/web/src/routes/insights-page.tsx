@@ -1,5 +1,5 @@
+// Insights Page v4 — Analytics profundo + Line chart + Correlações + Export + Relatório mensal
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-// Insights Page v3 — padrões da semana + card IA interativo
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
@@ -56,6 +56,69 @@ function polygonPoints(r: number): string {
     .join(" ");
 }
 
+// ── Pearson correlation ────────────────────────────────────────────
+function pearson(xs: number[], ys: number[]): number {
+  const n = Math.min(xs.length, ys.length);
+  if (n < 3) return 0;
+  const mx = xs.slice(0, n).reduce((a, b) => a + b) / n;
+  const my = ys.slice(0, n).reduce((a, b) => a + b) / n;
+  const num = xs.slice(0, n).reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0);
+  const dx = Math.sqrt(xs.slice(0, n).reduce((s, x) => s + (x - mx) ** 2, 0));
+  const dy = Math.sqrt(ys.slice(0, n).reduce((s, _, i) => s + (ys[i] - my) ** 2, 0));
+  return dx === 0 || dy === 0 ? 0 : Math.max(-1, Math.min(1, num / (dx * dy)));
+}
+
+// ── SVG Line Chart ─────────────────────────────────────────────────
+function MoodLineChart({ data }: { data: Array<{ date: string; humor: number; energia: number }> }) {
+  if (data.length < 3) {
+    return (
+      <div style={{ padding: "24px", textAlign: "center", color: "var(--text-3)", fontSize: 12 }}>
+        Precisa de pelo menos 3 registros para exibir o gráfico.
+      </div>
+    );
+  }
+  const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
+  const W = 320, H = 110, PX = 28, PY = 12;
+  const w = W - PX * 2, h = H - PY * 2;
+  const toX = (i: number) => PX + (i / (sorted.length - 1)) * w;
+  const toY = (v: number) => PY + h - (v / 10) * h;
+  const humorPath = sorted.map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)} ${toY(d.humor).toFixed(1)}`).join(' ');
+  const energyPath = sorted.map((d, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)} ${toY(d.energia).toFixed(1)}`).join(' ');
+  // X-axis: up to 6 evenly spaced labels
+  const step = Math.max(1, Math.floor(sorted.length / 5));
+  const xIdxs = Array.from({ length: sorted.length }, (_, i) => i).filter(i => i % step === 0 || i === sorted.length - 1);
+  const uniqueXIdxs = [...new Set(xIdxs)];
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', display: 'block' }}>
+      {[0, 0.25, 0.5, 0.75, 1].map(pct => (
+        <line key={pct} x1={PX} x2={W - PX} y1={PY + h * (1 - pct)} y2={PY + h * (1 - pct)}
+          stroke="rgba(0,0,0,.05)" strokeWidth={1} />
+      ))}
+      {/* Area fill under humor */}
+      <path
+        d={`${humorPath} L${toX(sorted.length - 1).toFixed(1)} ${(PY + h).toFixed(1)} L${toX(0).toFixed(1)} ${(PY + h).toFixed(1)} Z`}
+        fill="rgba(150,199,179,0.10)"
+      />
+      <path d={energyPath} fill="none" stroke="rgba(99,152,169,0.6)" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4,2" />
+      <path d={humorPath} fill="none" stroke="var(--accent-sage)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      {sorted.map((d, i) => <circle key={i} cx={toX(i)} cy={toY(d.humor)} r={i === sorted.length - 1 ? 4 : 2} fill="var(--accent-sage)" />)}
+      {uniqueXIdxs.map(i => {
+        const dt = new Date(sorted[i].date + 'T12:00:00');
+        return (
+          <text key={i} x={toX(i)} y={H - 1} textAnchor="middle" fontSize={7.5} fill="var(--text-3)" fontFamily="Plus Jakarta Sans, sans-serif">
+            {dt.getDate()}/{dt.getMonth() + 1}
+          </text>
+        );
+      })}
+      {[0, 5, 10].map(v => (
+        <text key={v} x={PX - 3} y={toY(v) + 3} textAnchor="end" fontSize={7.5} fill="var(--text-3)" fontFamily="Plus Jakarta Sans, sans-serif">
+          {v}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
 export function InsightsPage() {
   const { state, addTask } = useAuraStore();
   const navigate = useNavigate();
@@ -67,6 +130,8 @@ export function InsightsPage() {
   const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
+  const [monthlyReport, setMonthlyReport] = useState<string | null>(null);
+  const [monthlyReportPhase, setMonthlyReportPhase] = useState<'idle' | 'loading' | 'done'>('idle');
   const goals = state.goals || [];
 
   // Derive data from checkinHistory (fallback to empty if missing)
@@ -166,6 +231,39 @@ export function InsightsPage() {
     { emoji: "🌙", label: "Sono", cor: "var(--aquamarine)", valor: avgHarmonySono ?? 0, noData: avgHarmonySono === null },
   ];
 
+  // ── Comparativo semana a semana (7.3) ────────────────────────
+  const weeklyCompare = useMemo(() => {
+    const today = new Date();
+    const startOfThisWeek = new Date(today);
+    startOfThisWeek.setDate(today.getDate() - today.getDay()); // domingo
+    const startOfLastWeek = new Date(startOfThisWeek);
+    startOfLastWeek.setDate(startOfThisWeek.getDate() - 7);
+
+    const thisWeekIso = startOfThisWeek.toISOString().split("T")[0];
+    const lastWeekIso = startOfLastWeek.toISOString().split("T")[0];
+
+    const thisWeek = allHistory.filter(h => h.date >= thisWeekIso);
+    const lastWeek = allHistory.filter(h => h.date >= lastWeekIso && h.date < thisWeekIso);
+
+    if (thisWeek.length === 0 && lastWeek.length === 0) return null;
+
+    const avgOf = (arr: typeof allHistory, key: "humor" | "energia") =>
+      arr.length > 0 ? arr.reduce((s, h) => s + h[key], 0) / arr.length : null;
+
+    const tw = {
+      humor: avgOf(thisWeek, "humor"),
+      energia: avgOf(thisWeek, "energia"),
+      checkins: thisWeek.length,
+    };
+    const lw = {
+      humor: avgOf(lastWeek, "humor"),
+      energia: avgOf(lastWeek, "energia"),
+      checkins: lastWeek.length,
+    };
+
+    return { thisWeek: tw, lastWeek: lw };
+  }, [allHistory]);
+
   const avgHumorNum = history.length > 0
     ? history.reduce((s, h) => s + h.humor, 0) / history.length
     : 0;
@@ -224,6 +322,54 @@ export function InsightsPage() {
       });
   }
 
+  function exportCSV() {
+    if (allHistory.length === 0) { showError("Nenhum dado para exportar."); return; }
+    const header = 'data,humor,energia,sono,social,fisico,fatores';
+    const rows = allHistory.map(h => [
+      h.date, h.humor, h.energia,
+      h.sono ?? '', h.social ?? '', h.fisico ?? '',
+      ((h as any).factors ?? []).join('|'),
+    ].join(','));
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `airia-dados-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showSuccess("CSV exportado!");
+  }
+
+  async function fetchMonthlyReport() {
+    setMonthlyReportPhase('loading');
+    try {
+      const avgHumor7d = history.length > 0 ? (history.reduce((s, h) => s + h.humor, 0) / history.length).toFixed(1) : '—';
+      const avgEnergy7d = history.length > 0 ? (history.reduce((s, h) => s + h.energia, 0) / history.length).toFixed(1) : '—';
+      const res = await api.post('/ai/suggest', {
+        type: 'monthly-report',
+        context: {
+          period,
+          totalCheckins: history.length,
+          avgHumor: avgHumor7d,
+          avgEnergy: avgEnergy7d,
+          phase: cycleReport.phase,
+          phaseLabel: cycleReport.phaseLabel,
+          stabilityScore: cycleReport.stabilityScore,
+          warningFlags: cycleReport.warningFlags,
+          moodCycleContext: cycleReport.aiContext,
+        },
+      }) as { suggestion: string };
+      setMonthlyReport(res.suggestion);
+      setMonthlyReportPhase('done');
+    } catch {
+      showError("Não foi possível gerar o relatório.");
+      setMonthlyReportPhase('idle');
+    }
+  }
+
   return (
     <div className="insights-page">
       <div className="screen-content">
@@ -232,8 +378,8 @@ export function InsightsPage() {
         <div className="aura-page-header insights-header">
           <p className="aura-page-kicker">Sua Ciclagem</p>
           <h1 className="aura-page-title insights-title">Padrões e Harmonia</h1>
-          {/* Seletor de período */}
-          <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
+          {/* Seletor de período + Export */}
+          <div style={{ display: "flex", gap: "6px", marginTop: "10px", alignItems: "center", flexWrap: "wrap" }}>
             {(['7d', '30d', '90d'] as const).map(p => {
               const label = p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias';
               const active = period === p;
@@ -253,16 +399,38 @@ export function InsightsPage() {
                 >{label}</button>
               );
             })}
+            <button
+              onClick={exportCSV}
+              style={{
+                marginLeft: "auto", padding: "5px 12px", borderRadius: "999px", fontSize: "11px",
+                fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer",
+                border: "1.5px solid var(--warm-border-2)", background: "rgba(255,255,255,.62)",
+                color: "var(--text-3)", backdropFilter: "blur(14px)", transition: "all 150ms",
+                display: "flex", alignItems: "center", gap: 4,
+              }}
+            >
+              ↓ CSV
+            </button>
           </div>
         </div>
 
-        {/* ── Bar chart card ── */}
+        {/* ── Chart card ── */}
         <div className="aura-card aura-card--chart insights-chart-card">
           <div className="insights-chart-heading">
             <span className="insights-chart-bullet" />
             <p className="insights-chart-label">Humor &amp; Energia</p>
           </div>
 
+          {period !== '7d' ? (
+            <>
+              <MoodLineChart data={history.map(h => ({ date: h.date, humor: h.humor, energia: h.energia }))} />
+              <div className="insights-legend" style={{ marginTop: 8 }}>
+                <div className="insights-legend-item"><span className="insights-legend-dot insights-legend-dot--humor" /><span className="insights-legend-text">Humor</span></div>
+                <div className="insights-legend-item"><span className="insights-legend-dot insights-legend-dot--energia" /><span className="insights-legend-text">Energia</span></div>
+              </div>
+            </>
+          ) : (
+          <>
           <div className="insights-barchart">
             {DAYS.map((day, i) => {
               const active = todayIndex === i;
@@ -287,7 +455,6 @@ export function InsightsPage() {
             })}
           </div>
 
-          {/* Legend */}
           <div className="insights-legend">
             <div className="insights-legend-item">
               <span className="insights-legend-dot insights-legend-dot--humor" />
@@ -298,6 +465,8 @@ export function InsightsPage() {
               <span className="insights-legend-text">Energia</span>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         {/* ── Stats row — 3 cards ── */}
@@ -317,6 +486,44 @@ export function InsightsPage() {
             </div>
           ))}
         </div>
+
+        {/* ── Comparativo Semana a Semana (7.3) ── */}
+        {weeklyCompare && (weeklyCompare.thisWeek.checkins > 0 || weeklyCompare.lastWeek.checkins > 0) && (
+          <div style={{
+            borderRadius: 18, border: "1.5px solid var(--warm-border)",
+            background: "rgba(255,255,255,.62)", backdropFilter: "blur(16px)",
+            padding: "14px", marginBottom: "calc(var(--a))",
+          }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
+              📅 Esta semana vs semana passada
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {([
+                { label: "Humor", twVal: weeklyCompare.thisWeek.humor, lwVal: weeklyCompare.lastWeek.humor, fmt: (v: number | null) => v ? v.toFixed(1) : "—", unit: "/10" },
+                { label: "Energia", twVal: weeklyCompare.thisWeek.energia, lwVal: weeklyCompare.lastWeek.energia, fmt: (v: number | null) => v ? v.toFixed(1) : "—", unit: "/10" },
+                { label: "Check-ins", twVal: weeklyCompare.thisWeek.checkins, lwVal: weeklyCompare.lastWeek.checkins, fmt: (v: number | null) => String(v ?? 0), unit: "" },
+              ] as const).map(row => {
+                const diff = (row.twVal ?? 0) - (row.lwVal ?? 0);
+                const arrow = Math.abs(diff) < 0.1 ? "→" : diff > 0 ? "↑" : "↓";
+                const arrowColor = Math.abs(diff) < 0.1 ? "var(--text-3)" : diff > 0 ? "var(--accent-sage)" : "var(--accent-peach)";
+                return (
+                  <div key={row.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", minWidth: 70 }}>{row.label}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+                        {row.fmt(row.lwVal as any)}{row.unit}
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: arrowColor }}>{arrow}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-1)" }}>
+                        {row.fmt(row.twVal as any)}{row.unit}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="aura-page-header" style={{ marginBottom: 12 }}>
           <p className="aura-page-kicker">Leitura integrada</p>
@@ -458,6 +665,71 @@ export function InsightsPage() {
             </div>
           ))}
         </div>
+
+        {/* ── Correlações ─────────────────────────────────────── */}
+        {history.length >= 5 && (() => {
+          const humorVals  = history.map(h => h.humor);
+          const energyVals = history.map(h => h.energia);
+          const sleepArr   = history.filter(h => h.sono != null).map(h => ({ humor: h.humor, sono: h.sono! }));
+          const corSleepMood = sleepArr.length >= 3 ? pearson(sleepArr.map(x => x.sono), sleepArr.map(x => x.humor)) : null;
+          const corEnergyMood = pearson(energyVals, humorVals);
+          const habits = state.habits || [];
+          const habitsByDate = history.map(h => {
+            const dateStr = h.date;
+            const done = habits.filter(hab => hab.completions?.some(c => c.date?.startsWith(dateStr))).length;
+            const total = habits.filter(hab => hab.frequency === 'daily').length;
+            return { pct: total > 0 ? done / total : 0, humor: h.humor };
+          });
+          const corHabitsMood = habitsByDate.length >= 3
+            ? pearson(habitsByDate.map(x => x.pct), habitsByDate.map(x => x.humor))
+            : null;
+
+          const corItems = [
+            { label: "Sono → Humor", cor: corSleepMood, icon: "🌙", desc: "bom sono eleva o humor?" },
+            { label: "Energia ↔ Humor", cor: corEnergyMood, icon: "⚡", desc: "energia e humor caminham juntos?" },
+            ...(corHabitsMood !== null ? [{ label: "Hábitos → Humor", cor: corHabitsMood, icon: "🔁", desc: "completar hábitos melhora o estado?" }] : []),
+          ].filter(x => x.cor !== null) as Array<{ label: string; cor: number; icon: string; desc: string }>;
+
+          if (corItems.length === 0) return null;
+
+          const label = (r: number) => {
+            const abs = Math.abs(r);
+            const dir = r >= 0 ? "positiva" : "negativa";
+            if (abs >= 0.6) return `forte ${dir}`;
+            if (abs >= 0.3) return `moderada ${dir}`;
+            return `fraca ${dir}`;
+          };
+
+          return (
+            <div style={{ borderRadius: 18, border: "1.5px solid var(--warm-border)", background: "rgba(255,255,255,.62)", backdropFilter: "blur(16px)", padding: "14px", marginBottom: "calc(var(--a))" }}>
+              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 14px" }}>
+                🔗 Correlações do período
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {corItems.map(item => {
+                  const abs = Math.abs(item.cor);
+                  const barColor = item.cor >= 0 ? "var(--accent-sage)" : "var(--accent-peach)";
+                  return (
+                    <div key={item.label}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", display: "flex", alignItems: "center", gap: 6 }}>
+                          {item.icon} {item.label}
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: barColor }}>
+                          {label(item.cor)} ({item.cor >= 0 ? "+" : ""}{(item.cor * 100).toFixed(0)}%)
+                        </span>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                        <div style={{ width: `${abs * 100}%`, height: "100%", borderRadius: 999, background: barColor, transition: "width 0.5s ease" }} />
+                      </div>
+                      <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>{item.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── #4: Ciclo de Humor — card com phase + cycleEstimate ── */}
         {cycleReport.phase !== "insufficient_data" && (
@@ -892,6 +1164,59 @@ export function InsightsPage() {
             )}
           </div>
         )}
+
+        {/* ── Relatório Mensal IA ─────────────────────────────── */}
+        <div style={{
+          borderRadius: 18, border: "1.5px solid var(--warm-border)",
+          background: "rgba(255,255,255,.62)", backdropFilter: "blur(16px)",
+          padding: "14px", marginBottom: "calc(var(--a))",
+        }}>
+          <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
+            📋 Relatório da Aura
+          </p>
+
+          {monthlyReportPhase === 'idle' && (
+            <AuraButtonV2
+              variant="outline"
+              onClick={fetchMonthlyReport}
+              style={{ width: "100%", fontSize: 13, fontWeight: 700, height: 44 }}
+            >
+              Gerar relatório do período
+            </AuraButtonV2>
+          )}
+
+          {monthlyReportPhase === 'loading' && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0" }}>
+              <div style={{
+                width: 18, height: 18, borderRadius: "50%",
+                border: "2px solid var(--accent-sage)", borderTopColor: "transparent",
+                animation: "spin 0.8s linear infinite",
+              }} />
+              <p style={{ fontSize: 13, color: "var(--text-2)", margin: 0 }}>
+                A Aura está analisando o período...
+              </p>
+            </div>
+          )}
+
+          {monthlyReportPhase === 'done' && monthlyReport && (
+            <div>
+              <p style={{ fontSize: 13, color: "var(--text-1)", lineHeight: 1.7, margin: "0 0 12px", whiteSpace: "pre-wrap" }}>
+                {monthlyReport}
+              </p>
+              <button
+                onClick={() => { setMonthlyReport(null); setMonthlyReportPhase('idle'); }}
+                style={{
+                  background: "none", border: "none", padding: 0, cursor: "pointer",
+                  fontSize: 11, color: "var(--text-3)", fontWeight: 600,
+                }}
+              >
+                Gerar novamente
+              </button>
+            </div>
+          )}
+        </div>
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       </div>
     </div>

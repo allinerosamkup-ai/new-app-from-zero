@@ -341,12 +341,12 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
     elevated:          h => h >= 8.0,
     flowing:           h => h >= 7.0,
     stable:            h => h >= 5.6 && h < 7.2,
-    falling:           h => true, // baseado em tendência, não em valor absoluto
+    falling:           _h => true, // baseado em tendência, não em valor absoluto
     low:               h => h < 5.0,
     depleted:          h => h < 4.0,
     recovering:        h => h >= 5.0,
-    mixed:             h => true,
-    insufficient_data: h => true,
+    mixed:             _h => true,
+    insufficient_data: _h => true,
   };
   const phaseCheck = phaseThresholds[phase];
   for (let i = sorted.length - 2; i >= 0; i--) {
@@ -478,6 +478,74 @@ export function getStabilityLabel(score: number): string {
   if (score >= 40) return "Moderado";
   if (score >= 20) return "Instável";
   return "Muito instável";
+}
+
+// ── Previsão EWMA — próximos 7 dias ───────────────────────────
+// Usa Double Exponential Smoothing (Holt's method) para projetar
+// o humor dos próximos 7 dias com decaimento de tendência.
+export function forecastMood7d(history: CheckinEntry[]): number[] {
+  const sorted = aggregateCheckinsByDay(history);
+  if (sorted.length < 5) return [];
+
+  const humors = sorted.map(e => e.humor);
+  const alpha = 0.3, beta = 0.1;
+  let level = humors[0];
+  let trend = humors.length > 1 ? humors[1] - humors[0] : 0;
+
+  for (let i = 1; i < humors.length; i++) {
+    const prevLevel = level;
+    level  = alpha * humors[i] + (1 - alpha) * (level + trend);
+    trend  = beta  * (level - prevLevel) + (1 - beta) * trend;
+  }
+
+  const forecast: number[] = [];
+  let l = level, t = trend;
+  for (let i = 1; i <= 7; i++) {
+    l += t;
+    t *= 0.82; // decaimento da tendência
+    forecast.push(Math.max(1, Math.min(10, l)));
+  }
+  return forecast;
+}
+
+// ── Score de consistência semanal (0-100) ──────────────────────
+// check-ins (40) + hábitos diários completados (40) + journal (20)
+export function computeConsistencyScore(
+  history: CheckinEntry[],
+  habits: Array<{ frequency: string; completions?: Array<{ date?: string | null }> }>,
+  journalSessions: number,
+): number {
+  const today = new Date();
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    return d.toISOString().split("T")[0];
+  });
+
+  // 40 pts: check-ins esta semana (max 7, cada = ~5.7 pts)
+  const checkinDates = new Set(history.map(h => h.date));
+  const checkinsThisWeek = weekDates.filter(d => checkinDates.has(d)).length;
+  const checkinScore = Math.round((checkinsThisWeek / 7) * 40);
+
+  // 40 pts: hábitos diários completados esta semana
+  const dailyHabits = habits.filter(h => h.frequency === "daily");
+  if (dailyHabits.length > 0) {
+    let totalSlots = 0, completedSlots = 0;
+    for (const d of weekDates) {
+      totalSlots += dailyHabits.length;
+      completedSlots += dailyHabits.filter(h =>
+        h.completions?.some(c => c.date?.startsWith(d))
+      ).length;
+    }
+    var habitScore = totalSlots > 0 ? Math.round((completedSlots / totalSlots) * 40) : 20;
+  } else {
+    var habitScore = 20; // sem hábitos = neutro
+  }
+
+  // 20 pts: journals esta semana (1+ = 10, 3+ = 20)
+  const journalScore = journalSessions >= 3 ? 20 : journalSessions >= 1 ? 10 : 0;
+
+  return Math.min(100, checkinScore + habitScore + journalScore);
 }
 
 // ── Streak — dias consecutivos com check-in ─────────────────

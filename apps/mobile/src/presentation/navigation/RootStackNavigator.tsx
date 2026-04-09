@@ -18,6 +18,7 @@ import PlansScreen from '../screens/PlansScreen';
 import PaymentSuccessScreen from '../screens/PaymentSuccessScreen';
 import GoogleCalendarScreen from '../screens/GoogleCalendarScreen';
 import JournalChatScreen from '../screens/JournalChatScreen';
+import HabitsScreen from '../screens/HabitsScreen';
 import { useAuthStore } from '../providers/auth_store';
 import { appColors } from '../theme/appTheme';
 
@@ -143,6 +144,11 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="GoogleCalendar"
         component={GoogleCalendarScreen}
+        options={{ animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Habits"
+        component={HabitsScreen}
         options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>

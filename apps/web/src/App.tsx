@@ -140,6 +140,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<RouteLoader />}>
+      <div key={location.pathname} className="page-transition">
       <Routes>
         <Route path="/" element={<Navigate to="/splash" replace />} />
         <Route path="/splash" element={<SplashPage />} />
@@ -190,6 +191,7 @@ export default function App() {
           <Route path="/aura" element={<AuraChatPage />} />
         </Route>
       </Routes>
+      </div>
     </Suspense>
   );
 }

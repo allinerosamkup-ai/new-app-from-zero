@@ -68,7 +68,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     }).catch(() => null),
     prisma.onboardingResponse.findUnique({
       where: { userId },
-      select: { aiProfileSummary: true },
+      select: { aiProfileSummary: true, aiProfilePayload: true },
     }).catch(() => null),
     prisma.dailyCheckin.findFirst({
       where: { userId },
@@ -105,10 +105,16 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     routinePromptSummary,
   ].filter(Boolean).join(' ').trim();
 
+  const aiPayload = onboarding?.aiProfilePayload as Record<string, unknown> | null | undefined;
+  const longTermMemory = typeof aiPayload?.longTermMemory === 'string' && aiPayload.longTermMemory.trim()
+    ? aiPayload.longTermMemory.trim()
+    : null;
+
   return {
     userName: explicitUserName ?? derivedUserName ?? 'você',
     moodCycleContext: sharedMoodCycleContext || null,
     userProfileSummary: sanitizePromptContent(onboarding?.aiProfileSummary ?? null),
+    longTermMemory,
   };
 }
 
@@ -201,6 +207,88 @@ function isJournalClosingMessage(message: string): boolean {
   return markers.some((marker) => normalized.includes(marker));
 }
 
+async function extractAndSaveLongTermMemory(
+  prisma: PrismaClient,
+  userId: string,
+  messages: Array<{ role: string; content: string }>,
+  summary: { summary: string; emotions: string[]; themes: string[] },
+): Promise<void> {
+  const OpenAI = (await import('openai')).default;
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const chatContent = messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant')
+    .slice(-20)
+    .map((m) => `${m.role === 'user' ? 'Usuário' : 'Aura'}: ${m.content}`)
+    .join('\n');
+
+  const response = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'Você é um sistema de memória de IA. Extraia fatos permanentes e recorrentes de uma conversa de diário. Retorne apenas JSON.',
+      },
+      {
+        role: 'user',
+        content: `Analise e extraia APENAS informações que serão relevantes em futuras conversas (objetivos, pessoas importantes, padrões, insights pessoais). Ignore eventos únicos, detalhes do dia e conteúdo transitório.
+
+CONVERSA:
+${chatContent}
+
+RESUMO: ${summary.summary}
+TEMAS: ${summary.themes.join(', ')}
+
+JSON APENAS: {"goals":["string"],"people":["string"],"patterns":["string"],"insights":["string"]}`,
+      },
+    ],
+    response_format: { type: 'json_object' },
+    max_completion_tokens: 400,
+    temperature: 0.2,
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) return;
+
+  const extracted = JSON.parse(content) as {
+    goals?: string[];
+    people?: string[];
+    patterns?: string[];
+    insights?: string[];
+  };
+
+  const existing = await prisma.onboardingResponse.findUnique({
+    where: { userId },
+    select: { aiProfilePayload: true },
+  });
+
+  const existingPayload = (existing?.aiProfilePayload as Record<string, unknown>) ?? {};
+  const existingRaw = (existingPayload.longTermMemoryRaw as Record<string, string[]>) ?? {};
+
+  const mergeUnique = (prev: string[] = [], next: string[] = []) =>
+    [...prev, ...next.filter((n) => !prev.includes(n))].slice(-20);
+
+  const merged = {
+    goals: mergeUnique(existingRaw.goals, extracted.goals),
+    people: mergeUnique(existingRaw.people, extracted.people),
+    patterns: mergeUnique(existingRaw.patterns, extracted.patterns),
+    insights: mergeUnique(existingRaw.insights, extracted.insights),
+  };
+
+  const formatted = [
+    merged.goals.length ? `Objetivos: ${merged.goals.join('; ')}` : null,
+    merged.people.length ? `Pessoas importantes: ${merged.people.join('; ')}` : null,
+    merged.patterns.length ? `Padrões: ${merged.patterns.join('; ')}` : null,
+    merged.insights.length ? `Insights: ${merged.insights.join('; ')}` : null,
+  ].filter(Boolean).join('\n');
+
+  await prisma.onboardingResponse.upsert({
+    where: { userId },
+    update: { aiProfilePayload: { ...existingPayload, longTermMemory: formatted, longTermMemoryRaw: merged } },
+    create: { userId, aiProfilePayload: { longTermMemory: formatted, longTermMemoryRaw: merged } },
+  });
+}
+
 async function finalizeJournalSession(args: {
   prisma: PrismaClient;
   aiService: Pick<typeof AIService, 'summarizeJournalSession'>;
@@ -212,6 +300,7 @@ async function finalizeJournalSession(args: {
   userName: string;
   profileSummary?: string | null;
   moodCycleContext?: string | null;
+  longTermMemory?: string | null;
 }) {
   const summary = await args.aiService.summarizeJournalSession(args.messages);
 
@@ -222,6 +311,7 @@ async function finalizeJournalSession(args: {
         userName: args.userName,
         profileSummary: args.profileSummary,
         moodCycleContext: args.moodCycleContext,
+        longTermMemory: args.longTermMemory,
         domain: 'journal-finalize',
       }),
       userName: args.userName,
@@ -261,6 +351,9 @@ async function finalizeJournalSession(args: {
         emotions: summary.emotions || [],
       },
     }).catch(() => {});
+
+    // Fire-and-forget: extrai e acumula memória de longo prazo no perfil do usuário
+    void extractAndSaveLongTermMemory(args.prisma, args.userId, args.messages, summary).catch(() => {});
   }
 
   return {
@@ -785,6 +878,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           ...context,
           userName: runtimeContext.userName,
           userProfileSummary: runtimeContext.userProfileSummary,
+          longTermMemory: runtimeContext.longTermMemory,
           ragContext: journalRagContext,
         },
         history: existingMessages.map((message) => ({
@@ -1049,6 +1143,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       userName: runtimeContext.userName,
       profileSummary: runtimeContext.userProfileSummary,
       moodCycleContext: runtimeContext.moodCycleContext,
+      longTermMemory: runtimeContext.longTermMemory,
     });
 
     return res.json({
@@ -1414,8 +1509,8 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
     try {
       const userId = (req as AuthRequest).userId;
-      const plainTextTypes = new Set(['task-notes', 'task-title']);
-      const { userName, moodCycleContext, userProfileSummary } = await resolveAiRuntimeContext(prisma, userId, context);
+      const plainTextTypes = new Set(['task-notes', 'task-title', 'monthly-report']);
+      const { userName, moodCycleContext, userProfileSummary, longTermMemory } = await resolveAiRuntimeContext(prisma, userId, context);
 
       // Shared Brain: todas as superfícies de IA buscam memória vetorial com intenção específica
       const ragQuery = getRagIntent(type, context);
@@ -1813,6 +1908,26 @@ REGRAS:
 - 1-2 frases apenas. Sem cobrança, sem culpa, sem discurso motivacional vazio.
 
 JSON APENAS: {"message":"..."}`;
+      } else if (type === 'monthly-report') {
+        const period = context.period ?? '30d';
+        const periodLabel = period === '7d' ? 'últimos 7 dias' : period === '30d' ? 'últimos 30 dias' : 'últimos 90 dias';
+        prompt = `Você é a Aura, assistente de bem-estar de ${userName}. Gere um relatório pessoal de saúde mental dos ${periodLabel}.
+
+DADOS DO PERÍODO:
+- Check-ins registrados: ${context.totalCheckins ?? '—'}
+- Humor médio: ${context.avgHumor ?? '—'}/10
+- Energia média: ${context.avgEnergy ?? '—'}/10
+- Fase atual: ${context.phaseLabel ?? context.phase ?? '—'}
+- Score de estabilidade: ${context.stabilityScore ?? '—'}/100
+- Alertas: ${(context.warningFlags as string[] | undefined)?.join(', ') || 'nenhum'}
+- Contexto do ciclo: ${context.moodCycleContext ?? ''}
+
+INSTRUÇÕES:
+- Tom: acolhedor, honesto, como uma amiga que acompanha de verdade.
+- Máximo 4 parágrafos curtos.
+- Estrutura: 1) O que o período mostrou, 2) Padrões ou tendências, 3) Uma conquista ou ponto de atenção, 4) Uma sugestão concreta para o próximo período.
+- Sem jargões clínicos. Sem excesso de emojis (max 3 no total).
+- Responda em português, direto ao ponto.`;
       } else if (type === 'habit-recommendation') {
         const hour = new Date().getHours();
         const timeOfDay = hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';
@@ -1830,7 +1945,7 @@ JSON APENAS: {"message":"..."}`;
 
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const maxTokens = type === 'agenda-blocks' ? 700 : type === 'home-messages' ? 400 : type === 'gtd-clarify' ? 280 : type === 'goal-route' ? 150 : type === 'phase-transition' ? 200 : type === 'follow-up' ? 150 : 300;
+      const maxTokens = type === 'agenda-blocks' ? 700 : type === 'home-messages' ? 400 : type === 'gtd-clarify' ? 280 : type === 'goal-route' ? 150 : type === 'phase-transition' ? 200 : type === 'follow-up' ? 150 : type === 'monthly-report' ? 600 : 300;
       const completion = await openai.chat.completions.create({
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         messages: [
@@ -1840,6 +1955,7 @@ JSON APENAS: {"message":"..."}`;
               userName,
               profileSummary: userProfileSummary,
               moodCycleContext,
+              longTermMemory,
               domain: getSuggestPromptDomain(type),
             }),
           },

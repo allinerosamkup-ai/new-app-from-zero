@@ -127,6 +127,8 @@ export type Habit = {
   bestStreak: number;
   totalCompletions: number;
   completions?: HabitCompletion[];
+  reminderEnabled: boolean;
+  reminderTime?: string | null;
 };
 
 export type HabitCompletion = {

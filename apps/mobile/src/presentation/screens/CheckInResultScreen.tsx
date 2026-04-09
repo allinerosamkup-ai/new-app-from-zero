@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, ScrollView, SafeAreaView } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { 
   Text, 
   Card, 
@@ -69,6 +70,11 @@ const STATE_CONFIG: Record<StateType, {
 export default function CheckInResultScreen() {
   const navigation = useNavigation<any>();
   const { todayCheckin } = useCheckinStore();
+
+  // Vibração de conclusão ao abrir o resultado
+  useEffect(() => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
 
   const stateType = (todayCheckin?.stateLabelType ?? 'leve') as StateType;
   const config = STATE_CONFIG[stateType] ?? STATE_CONFIG.leve;

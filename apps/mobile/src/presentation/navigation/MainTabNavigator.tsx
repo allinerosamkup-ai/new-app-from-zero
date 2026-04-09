@@ -10,6 +10,7 @@ import HomeScreen from '../screens/HomeScreen';
 import PlannerScreen from '../screens/PlannerScreen';
 import WeeklyInsightsScreen from '../screens/WeeklyInsightsScreen';
 import JournalHubScreen from '../screens/JournalHubScreen';
+import HabitsScreen from '../screens/HabitsScreen';
 import ConfigScreen from '../screens/ConfigScreen';
 
 const Tab = createBottomTabNavigator();
@@ -99,6 +100,14 @@ export default function MainTabNavigator() {
         options={{
           tabBarLabel: 'Análise',
           tabBarIcon: ({ color, size }) => <Text style={{ color, fontSize: size }}>≈</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="Hábitos"
+        component={HabitsScreen}
+        options={{
+          tabBarLabel: 'Hábitos',
+          tabBarIcon: ({ color, size }) => <Text style={{ color, fontSize: size }}>✦</Text>,
         }}
       />
       <Tab.Screen

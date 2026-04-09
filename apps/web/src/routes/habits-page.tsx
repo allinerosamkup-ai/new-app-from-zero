@@ -7,6 +7,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive } from "lucide-react";
 import { api } from "../lib/api";
+import { useHabitReminders } from "../hooks/useHabitReminders";
 
 // ─── Confetti burst (CSS-only, no dependency) ────────────────────────────────
 const CONFETTI_COLORS = ["#D7897F","#96C7B3","#6398A9","#B5A4C8","#F9C784","#fff"];
@@ -529,6 +530,8 @@ function AddHabitModal({
     icon: string;
     timeOfDay: string;
     description: string;
+    reminderEnabled: boolean;
+    reminderTime?: string;
   }) => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
@@ -539,6 +542,8 @@ function AddHabitModal({
   const [description, setDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderTime, setReminderTime] = useState("08:00");
 
   function applysuggestion(s: HabitSuggestion) {
     setTitle(s.title);
@@ -550,7 +555,16 @@ function AddHabitModal({
   async function handleSave() {
     if (!title.trim()) return;
     setIsSaving(true);
-    await onAdd({ title, category, frequency, icon, timeOfDay, description });
+    await onAdd({
+      title,
+      category,
+      frequency,
+      icon,
+      timeOfDay,
+      description,
+      reminderEnabled,
+      reminderTime: reminderEnabled ? reminderTime : undefined,
+    });
     setIsSaving(false);
   }
 
@@ -616,6 +630,17 @@ function AddHabitModal({
                 }}
               >
                 {s.icon} {s.title}
+                {s.socialProof != null && (
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    opacity: 0.65,
+                    marginLeft: 2,
+                    color: title === s.title ? "rgba(255,255,255,0.9)" : "var(--menthe)",
+                  }}>
+                    {s.socialProof}%
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -761,6 +786,70 @@ function AddHabitModal({
             </div>
           </div>
 
+          {/* Reminder */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Lembrete</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Notificação no horário escolhido</div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!reminderEnabled) {
+                    const { requestNotificationPermission } = await import('../hooks/useHabitReminders');
+                    await requestNotificationPermission();
+                  }
+                  setReminderEnabled(!reminderEnabled);
+                }}
+                style={{
+                  width: 44,
+                  height: 26,
+                  borderRadius: 13,
+                  border: "none",
+                  background: reminderEnabled ? "var(--menthe)" : "var(--warm-border)",
+                  cursor: "pointer",
+                  position: "relative",
+                  transition: "background 0.2s",
+                  flexShrink: 0,
+                }}
+                aria-label="Ativar lembrete"
+              >
+                <span style={{
+                  position: "absolute",
+                  top: 3,
+                  left: reminderEnabled ? 21 : 3,
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+                  transition: "left 0.2s",
+                }} />
+              </button>
+            </div>
+            {reminderEnabled && (
+              <input
+                type="time"
+                value={reminderTime}
+                onChange={(e) => setReminderTime(e.target.value)}
+                style={{
+                  marginTop: 12,
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  border: "1.5px solid var(--menthe)",
+                  background: "rgba(150,199,179,0.08)",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: "var(--text-1)",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  cursor: "pointer",
+                }}
+              />
+            )}
+          </div>
+
           {/* Motivation note */}
           <div>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
@@ -807,6 +896,8 @@ export function HabitsPage() {
   const { showSuccess, showError } = useToast();
   const [tab, setTab] = useState<"today" | "all" | "badges">("today");
   const [showAddModal, setShowAddModal] = useState(false);
+
+  useHabitReminders(state.habits ?? []);
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [showConfetti, setShowConfetti] = useState(false);
 
@@ -846,6 +937,8 @@ export function HabitsPage() {
     icon: string;
     timeOfDay: string;
     description: string;
+    reminderEnabled: boolean;
+    reminderTime?: string;
   }) {
     try {
       await addHabit(data);
@@ -970,22 +1063,11 @@ export function HabitsPage() {
         {tab === "today" && (
           <div>
             {todayHabits.length === 0 ? (
-              <div
-                style={{
-                  padding: "40px 20px",
-                  textAlign: "center",
-                  border: "2px dashed var(--warm-border)",
-                  borderRadius: 16,
-                }}
-              >
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🌱</div>
-                <p style={{ color: "var(--text-2)", fontSize: 14, fontWeight: 600, margin: "0 0 4px" }}>
-                  Nenhum hábito ainda
-                </p>
-                <p style={{ color: "var(--text-3)", fontSize: 12, margin: "0 0 20px" }}>
-                  Crie seu primeiro hábito diário
-                </p>
-                <AuraButtonV2 variant="primary" size="sm" onClick={() => setShowAddModal(true)} leftIcon={<Plus size={14} />}>
+              <div className="empty-state" style={{ border: "2px dashed var(--warm-border)", borderRadius: 20 }}>
+                <div className="empty-state-icon">🌱</div>
+                <div className="empty-state-title">Nenhum hábito ainda</div>
+                <div className="empty-state-sub">Pequenos hábitos diários constroem grandes mudanças. Crie o primeiro agora.</div>
+                <AuraButtonV2 variant="primary" size="sm" onClick={() => setShowAddModal(true)} leftIcon={<Plus size={14} />} style={{ marginTop: 4 }}>
                   Criar hábito
                 </AuraButtonV2>
               </div>
@@ -1059,15 +1141,13 @@ export function HabitsPage() {
         {tab === "all" && (
           <div>
             {habits.length === 0 ? (
-              <div
-                style={{
-                  padding: "40px 20px",
-                  textAlign: "center",
-                  border: "2px dashed var(--warm-border)",
-                  borderRadius: 16,
-                }}
-              >
-                <p style={{ color: "var(--text-3)", fontSize: 14 }}>Nenhum hábito ainda.</p>
+              <div className="empty-state" style={{ border: "2px dashed var(--warm-border)", borderRadius: 20 }}>
+                <div className="empty-state-icon">📋</div>
+                <div className="empty-state-title">Sem hábitos cadastrados</div>
+                <div className="empty-state-sub">Adicione hábitos e acompanhe seu progresso ao longo do tempo.</div>
+                <AuraButtonV2 variant="primary" size="sm" onClick={() => setShowAddModal(true)} leftIcon={<Plus size={14} />} style={{ marginTop: 4 }}>
+                  Criar hábito
+                </AuraButtonV2>
               </div>
             ) : (
               (() => {

@@ -2093,3 +2093,71 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   border-top: 1px solid rgba(255,255,255,.78);
 }
 
+
+/* ─── Page Transition ─────────────────────────────────────── */
+.page-transition {
+  animation: page-enter 0.22s ease-out both;
+  display: contents;
+}
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Skeleton Loader ─────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--warm-border) 25%, rgba(17,24,39,.04) 50%, var(--warm-border) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 10px;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── Pull to refresh ─────────────────────────────────────── */
+.pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  transition: opacity 0.2s;
+}
+.pull-indicator svg {
+  transition: transform 0.3s;
+}
+.pull-indicator.ready svg {
+  transform: rotate(180deg);
+}
+
+/* ─── Empty State ─────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  gap: 12px;
+}
+.empty-state-icon {
+  font-size: 48px;
+  line-height: 1;
+  opacity: 0.7;
+}
+.empty-state-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.empty-state-sub {
+  font-size: 13px;
+  color: var(--text-3);
+  line-height: 1.6;
+  max-width: 240px;
+}
