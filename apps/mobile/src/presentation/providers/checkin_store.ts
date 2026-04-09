@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { AIService, CheckinResponse } from '../../services/ai_service';
+import api from '../../services/api_service';
 
 /**
  * Entidade de dados para o formulário de Check-in (Clean Architecture)
@@ -64,15 +65,45 @@ export const useCheckinStore = create<CheckinState>((set, get) => ({
   },
 
   /**
-   * Carrega os check-ins recentes (Placeholder para implementação futura da API)
+   * Carrega os check-ins recentes da API
    */
   loadRecentCheckins: async (userId: string, days = 7) => {
     set({ isLoading: true });
     try {
-      // TODO: Implementar endpoint GET /api/checkins/recent no backend
-      set({ isLoading: false });
+      const response = await api.get('/api/checkins/recent', {
+        params: { userId, days }
+      });
+      const checkins = response.data.checkins || [];
+      
+      // Identificar o check-in de hoje (último slot do dia atual)
+      const today = new Date().toISOString().split('T')[0];
+      const todayCheckin = checkins
+        .filter((c: any) => c.localDate.startsWith(today))
+        .sort((a: any, b: any) => {
+          const slotOrder = { morning: 1, midday: 2, evening: 3 };
+          return (slotOrder[a.checkinSlot as keyof typeof slotOrder] || 0) - 
+                 (slotOrder[b.checkinSlot as keyof typeof slotOrder] || 0);
+        })
+        .pop() || null;
+
+      set({ 
+        isLoading: false,
+        recentCheckins: checkins,
+        todayCheckin: todayCheckin ? {
+          ...todayCheckin,
+          aiState: todayCheckin.aiState || {
+            analysis: todayCheckin.stateSummary || '',
+            recommendations: [],
+            suggestedIntensity: 'M',
+            rationale: ''
+          }
+        } : null
+      });
     } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+      set({ 
+        isLoading: false, 
+        error: err.response?.data?.error || 'Falha ao carregar check-ins' 
+      });
     }
   },
 
