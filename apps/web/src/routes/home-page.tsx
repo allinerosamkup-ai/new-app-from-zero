@@ -528,6 +528,9 @@ export function HomePage() {
   const { state, addTask, addHabit, refreshData, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
+
+  // Refresh on mount to pick up any check-ins done since the app loaded
+  useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());

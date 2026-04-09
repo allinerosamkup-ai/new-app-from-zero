@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { computeMoodCycle, computeStreak } from '../utils/mood-cycle-engine';
 import { api } from "../lib/api";
-import { parseAiSuggestion } from "../lib/ai";
+import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
 import type { MoodOption } from "../features/aura/types";
 import { AuraIcon } from "../components/AuraIcon";
@@ -93,7 +93,7 @@ const CAT_COLOR: Record<string, string> = {
 
 export function CheckinResultPage() {
   const navigate = useNavigate();
-  const { state, addTask, prepareJournalFromMood } = useAuraStore();
+  const { state, addTask, prepareJournalFromMood, refreshData, hydrated } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
   const v = variants[state.mood] ?? variants.equilibrada;
@@ -115,6 +115,25 @@ export function CheckinResultPage() {
     () => (state.goals || []).filter(g => g.completedPct < 100).map(g => g.title),
     [state.goals]
   );
+  const pendingTaskTitles = useMemo(
+    () => (state.tasks || []).filter((task) => !task.done).slice(0, 8).map((task) => task.title),
+    [state.tasks],
+  );
+  // Fatores e emoções do check-in mais recente — alimentam a IA com contexto real
+  const todayFactors = useMemo(() => (state.checkinHistory || [])[0]?.factors ?? [], [state.checkinHistory]);
+  const todayEmotions = useMemo(() => (state.checkinHistory || [])[0]?.emotions ?? [], [state.checkinHistory]);
+  const previousCheckinSuggestion = useMemo(
+    () => localStorage.getItem("aura_last_checkin_suggestion") ?? "",
+    [],
+  );
+  const blockedTaskTitles = useMemo(() => {
+    const existingPlanner = (state.tasks || []).map((task) => task.title.trim()).filter(Boolean);
+    const lastAiTasks = (localStorage.getItem("aura_last_day_tasks") ?? "")
+      .split("|")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return Array.from(new Set([...existingPlanner, ...lastAiTasks]));
+  }, [state.tasks]);
 
   useEffect(() => {
     if (auraMsgRan.current) return;
@@ -132,11 +151,17 @@ export function CheckinResultPage() {
         partOfDay: dayContext.partOfDay,
         weekday: dayContext.weekday,
         localDate: dayContext.localDate,
+        previousSuggestion: previousCheckinSuggestion,
       },
     }).then((res: any) => {
       try {
         const parsed = parseAiSuggestion<AuraMsg>(res.suggestion);
-        if (parsed?.message) setAuraMsg(parsed);
+        if (parsed?.message) {
+          setAuraMsg(parsed);
+          if (parsed.suggestion?.trim()) {
+            localStorage.setItem("aura_last_checkin_suggestion", parsed.suggestion.trim());
+          }
+        }
       } catch { /* mantém null */ }
     }).catch((error) => {
       console.warn("Aura check-in auto-response failed:", error);
@@ -147,12 +172,47 @@ export function CheckinResultPage() {
   const [tasks, setTasks] = useState<AiTask[]>([]);
   const [regenIdx, setRegenIdx] = useState<number | null>(null);
   const [savingTasks, setSavingTasks] = useState(false);
+  const [syncingContext, setSyncingContext] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+    setSyncingContext(true);
+    refreshData()
+      .catch(() => null)
+      .finally(() => {
+        if (mounted) setSyncingContext(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!hydrated || syncingContext) return;
     if (autoTasksRan.current || auraMsgLoading || phase !== "idle") return;
     autoTasksRan.current = true;
     void fetchDayTasks();
-  }, [auraMsgLoading, phase]);
+  }, [auraMsgLoading, phase, hydrated, syncingContext]);
+
+  function normalizeTaskSuggestions(payload: unknown): AiTask[] {
+    if (!Array.isArray(payload)) return [];
+    const seen = new Set<string>();
+    const normalized: AiTask[] = [];
+    for (const raw of payload) {
+      if (!raw || typeof raw !== "object") continue;
+      const item = raw as { title?: unknown; category?: unknown; time?: unknown };
+      const title = typeof item.title === "string" ? item.title.trim() : "";
+      if (!title) continue;
+      const key = title.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const category = typeof item.category === "string" ? item.category.trim().toLowerCase() : "rotina";
+      const time = typeof item.time === "string" && /^\d{2}:\d{2}$/.test(item.time) ? item.time : "09:00";
+      normalized.push({ title, category, time, discarded: false });
+      if (normalized.length >= 3) break;
+    }
+    return normalized;
+  }
 
   async function fetchDayTasks() {
     setPhase("loading");
@@ -165,15 +225,24 @@ export function CheckinResultPage() {
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
           goals: goalTitles,
+          pendingTasks: pendingTaskTitles,
           nota: state.journal,
           hour: dayContext.hour,
           partOfDay: dayContext.partOfDay,
           weekday: dayContext.weekday,
           localDate: dayContext.localDate,
+          factors: todayFactors,
+          emotions: todayEmotions,
+          avoidTaskTitles: blockedTaskTitles,
         },
       });
-      const parsed = parseAiSuggestion<Array<{ title: string; category: string; time: string }>>(res.suggestion);
-      setTasks(parsed.slice(0, 3).map((t) => ({ ...t, discarded: false })));
+      const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
+      const normalized = normalizeTaskSuggestions(parsed);
+      if (normalized.length === 0) {
+        throw new Error("A IA não retornou tarefas válidas agora.");
+      }
+      setTasks(normalized);
+      localStorage.setItem("aura_last_day_tasks", normalized.map((task) => task.title).join("|"));
       setPhase("preview");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel gerar ajustes para o dia.");
@@ -192,17 +261,22 @@ export function CheckinResultPage() {
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
           goals: goalTitles,
+          pendingTasks: pendingTaskTitles,
           nota: state.journal,
           hour: dayContext.hour,
           partOfDay: dayContext.partOfDay,
           weekday: dayContext.weekday,
           localDate: dayContext.localDate,
+          factors: todayFactors,
+          emotions: todayEmotions,
+          avoidTaskTitles: blockedTaskTitles,
         },
       });
-      const parsed = parseAiSuggestion<Array<{ title: string; category: string; time: string }>>(res.suggestion);
-      if (parsed[0]) {
+      const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
+      const normalized = normalizeTaskSuggestions(parsed);
+      if (normalized[0]) {
         setTasks((prev) =>
-          prev.map((t, i) => (i === idx ? { ...parsed[0], discarded: false } : t))
+          prev.map((t, i) => (i === idx ? normalized[0] : t))
         );
       }
     } catch (error) {
@@ -261,6 +335,15 @@ export function CheckinResultPage() {
 
   const acceptedCount = tasks.filter((t) => !t.discarded).length;
   const isMenuthe = v.accent === "var(--accent-sage)";
+
+  async function finalizeAndGo(path: "/planner" | "/home" | "/journal") {
+    try {
+      await refreshData();
+    } catch {
+      // mantém navegação mesmo com erro de sync
+    }
+    navigate(path, { replace: true });
+  }
 
   return (
     <div className="result-shell" style={{ background: v.bg }}>
@@ -336,7 +419,7 @@ export function CheckinResultPage() {
         </div>
 
         {/* ─── BLOCO IA ─── */}
-        {phase === "idle" && (
+        {phase === "idle" && !syncingContext && (
           <AuraButtonV2
             useAuraIcon
             className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
@@ -345,6 +428,18 @@ export function CheckinResultPage() {
           >
             Ajustar meu dia
           </AuraButtonV2>
+        )}
+
+        {syncingContext && (
+          <div className="aura-panel-soft" style={{
+            background: "rgba(255,253,250,.9)", borderRadius: 12, padding: 16,
+            marginBottom: 10, textAlign: "center", border: "1.5px solid var(--warm-border)",
+          }}>
+            <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
+            <p style={{ fontSize: 12, color: "var(--text-2)", fontStyle: "italic" }}>
+              Sincronizando metas e compromissos atuais...
+            </p>
+          </div>
         )}
 
         {phase === "loading" && (
@@ -487,7 +582,7 @@ export function CheckinResultPage() {
             className="btn btn-ghost btn-full"
             onClick={() => {
               prepareJournalFromMood();
-              navigate("/journal");
+              void finalizeAndGo("/journal");
             }}
           >
             Abrir meu diário
@@ -499,14 +594,14 @@ export function CheckinResultPage() {
           {phase !== "idle" && (
             <AuraButtonV2
               className="btn btn-ghost btn-full"
-              onClick={() => navigate("/planner")}
+              onClick={() => { void finalizeAndGo("/planner"); }}
             >
               Ver meu Planner
             </AuraButtonV2>
           )}
           <AuraButtonV2
             className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
-            onClick={() => navigate("/home")}
+            onClick={() => { void finalizeAndGo("/home"); }}
           >
             Ir para o inicio
           </AuraButtonV2>

@@ -1,6 +1,6 @@
 // Insights Page v4 — Analytics profundo + Line chart + Correlações + Export + Relatório mensal
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -125,7 +125,10 @@ function MoodLineChart({ data }: { data: Array<{ date: string; humor: number; en
 }
 
 export function InsightsPage() {
-  const { state, addTask } = useAuraStore();
+  const { state, addTask, refreshData } = useAuraStore();
+
+  // Refresh on mount to ensure fresh data
+  useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
 

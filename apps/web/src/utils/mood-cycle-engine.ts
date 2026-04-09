@@ -18,6 +18,7 @@
  */
 
 import type { CheckinEntry } from "../features/aura/types";
+import { getLocalDateKey, normalizeDateKey } from "./day-context";
 
 // ── Tipos ──────────────────────────────────────────────────
 
@@ -212,8 +213,16 @@ export function aggregateCheckinsByDay(history: CheckinEntry[]): CheckinEntry[] 
   const grouped = new Map<string, CheckinEntry[]>();
 
   for (const entry of history) {
-    if (!grouped.has(entry.date)) grouped.set(entry.date, []);
-    grouped.get(entry.date)!.push(entry);
+    const dateKey = normalizeDateKey(entry.date);
+    if (!dateKey) continue;
+    if (!Number.isFinite(Number(entry.humor)) || !Number.isFinite(Number(entry.energia))) continue;
+    if (!grouped.has(dateKey)) grouped.set(dateKey, []);
+    grouped.get(dateKey)!.push({
+      ...entry,
+      date: dateKey,
+      humor: Number(entry.humor),
+      energia: Number(entry.energia),
+    });
   }
 
   return Array.from(grouped.entries())
@@ -239,7 +248,7 @@ export function aggregateCheckinsByDay(history: CheckinEntry[]): CheckinEntry[] 
         symptomLevels: latest?.symptomLevels,
       } satisfies CheckinEntry;
     })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 // ── Motor principal ────────────────────────────────────────
@@ -519,7 +528,7 @@ export function computeConsistencyScore(
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    return d.toISOString().split("T")[0];
+    return getLocalDateKey(d);
   });
 
   // 40 pts: check-ins esta semana (max 7, cada = ~5.7 pts)
@@ -558,10 +567,9 @@ export function computeStreak(history: CheckinEntry[]): number {
   for (let i = 0; i < 365; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const iso = d.toISOString().split("T")[0];
+    const iso = getLocalDateKey(d);
     if (dateSet.has(iso)) streak++;
     else break;
   }
   return streak;
 }
-
