@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -10,7 +11,7 @@ import { initialAuraState, labelMood } from "./data";
 import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodOption, PhaseTransitionAlert, ProactiveNudge } from "./types";
 import { api } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
-import { getLocalDateKey } from "../../utils/day-context";
+import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -37,6 +38,12 @@ function addMinutesToTime(time: string, minutesToAdd: number): string {
   const nextHours = Math.floor(normalized / 60).toString().padStart(2, '0');
   const nextMinutes = (normalized % 60).toString().padStart(2, '0');
   return `${nextHours}:${nextMinutes}`;
+}
+
+function toScore(value: unknown, fallback = 5): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(1, Math.min(10, Math.round(n)));
 }
 
 function diffMinutes(startTime: string, endTime?: string | null): number {
@@ -102,8 +109,14 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuraState>(initialAuraState);
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const refreshInFlightRef = useRef<Promise<void> | null>(null);
 
   const refreshData = async () => {
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
+    }
+
+    const run = (async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       setHydrated(true);
@@ -113,35 +126,45 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
     try {
       const today = getLocalDateKey();
       const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw] = await Promise.all([
-        api.get('/checkins?days=7').catch(e => { console.error(e); return []; }),
-        api.get(`/timeline/${today}`).catch(e => { console.error(e); return []; }),
-        api.get('/objectives').catch(e => { console.error(e); return []; }),
-        api.get('/preferences').catch(e => { console.error(e); return {}; }),
-        api.get('/habits').catch(e => { console.error(e); return []; })
+        api.get('/checkins?days=45').catch(e => { console.error(e); return null; }),
+        api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; }),
+        api.get('/objectives').catch(e => { console.error(e); return null; }),
+        api.get('/preferences').catch(e => { console.error(e); return null; }),
+        api.get('/habits').catch(e => { console.error(e); return null; })
       ]);
 
-      const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : [];
-      const timeline = Array.isArray(timelineRaw) ? timelineRaw : [];
-      const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : [];
-      const preferences = preferencesRaw || {};
-      const habits = Array.isArray(habitsRaw) ? habitsRaw : [];
+      const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : null;
+      const mappedCheckins = checkins
+        ? checkins.map((c: any) => ({
+          date: normalizeDateKey(c.localDate ?? c.recordedAt ?? c.date),
+          recordedAt: c.recordedAt,
+          checkinSlot: c.checkinSlot,
+          humor: toScore(c.moodScore),
+          energia: toScore(c.energyScore),
+          emotion: c.stateLabelType || 'calm',
+          emotions: Array.isArray(c.emotions)
+            ? c.emotions
+            : (Array.isArray(c.aiState?.emotions) ? c.aiState.emotions : undefined),
+          fisico: c.physicalScore != null ? toScore(c.physicalScore) : undefined,
+          social: c.socialScore != null ? toScore(c.socialScore) : undefined,
+          sono: c.sleepScore != null ? toScore(c.sleepScore) : undefined,
+          factors: Array.isArray(c.factors) && c.factors.length > 0 ? c.factors : undefined,
+          note: typeof c.note === 'string' ? c.note : undefined,
+          })).filter((entry) => Boolean(entry.date))
+        : null;
+      const timeline = Array.isArray(timelineRaw) ? timelineRaw : null;
+      const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : null;
+      const preferences = (preferencesRaw && typeof preferencesRaw === 'object') ? preferencesRaw : null;
+      const habits = Array.isArray(habitsRaw) ? habitsRaw : null;
 
       setState(current => ({
         ...current,
-        name: preferences.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
-        checkinHistory: checkins.map((c: any) => ({
-          date: c.localDate.split('T')[0],
-          recordedAt: c.recordedAt,
-          checkinSlot: c.checkinSlot,
-          humor: c.moodScore,
-          energia: c.energyScore,
-          emotion: c.stateLabelType || 'calm',
-          fisico: c.physicalScore ?? undefined,
-          social: c.socialScore ?? undefined,
-          sono: c.sleepScore ?? undefined,
-          factors: Array.isArray(c.factors) && c.factors.length > 0 ? c.factors : undefined,
-        })),
-        tasks: timeline.map((t: any) => ({
+        name: (preferences as any)?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
+        checkinHistory: mappedCheckins && mappedCheckins.length > 0
+          ? mappedCheckins
+          : current.checkinHistory,
+        tasks: timeline
+          ? timeline.map((t: any) => ({
           id: t.id,
           title: t.title,
           time: t.startTime,
@@ -149,8 +172,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           done: t.status === 'completed',
           category: t.category,
           intensity: t.intensity,
-        })),
-        goals: objectives.map((o: any) => ({
+          }))
+          : current.tasks,
+        goals: objectives
+          ? objectives.map((o: any) => ({
           id: o.id,
           title: o.title,
           progress: o.description || 'Em andamento',
@@ -160,8 +185,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             title: s.title,
             done: s.done
           })) : []
-        })),
-        habits: habits.map((h: any) => ({
+          }))
+          : current.goals,
+        habits: habits
+          ? habits.map((h: any) => ({
           id: h.id,
           title: h.title,
           description: h.description,
@@ -175,15 +202,26 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           completions: Array.isArray(h.completions) ? h.completions : [],
           reminderEnabled: h.reminderEnabled ?? false,
           reminderTime: h.reminderTime ?? null,
-        })),
-        theme: preferences.aiTone === 'warm' ? 'Tema suave' : 'Tema claro',
-        quietMode: !preferences.notificationsOn
+          }))
+          : current.habits,
+        theme: (preferences as any)?.aiTone === 'warm' ? 'Tema suave' : current.theme,
+        quietMode: typeof (preferences as any)?.notificationsOn === 'boolean'
+          ? !(preferences as any).notificationsOn
+          : current.quietMode
       }));
     } catch (err) {
       console.error("Failed to sync with backend:", err);
     } finally {
       setLoading(false);
       setHydrated(true);
+    }
+    })();
+
+    refreshInFlightRef.current = run;
+    try {
+      await run;
+    } finally {
+      refreshInFlightRef.current = null;
     }
   };
 
@@ -284,6 +322,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             sleepScore: entry.sono,
             note: entry.note ?? state.journal,
             factors: entry.factors,
+            emotions: entry.emotions,
             isFlowing: entry.isFlowing,
             flowDay: entry.flowDay,
             flowIntensity: entry.flowIntensity,

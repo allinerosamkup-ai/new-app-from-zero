@@ -6,6 +6,7 @@ import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { useToast } from "../components/Toast";
 import { computeMoodCycle, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -46,6 +47,10 @@ const harmonyAngles = Array.from(
   { length: 6 },
   (_, i) => -Math.PI / 2 + (2 * Math.PI * i) / 6
 );
+
+function toLocalNoon(dateKey: string): Date {
+  return new Date(`${normalizeDateKey(dateKey)}T12:00:00`);
+}
 
 function polygonPoints(r: number): string {
   return harmonyAngles
@@ -140,7 +145,7 @@ export function InsightsPage() {
   const history = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - periodDays);
-    const cutoffIso = cutoff.toISOString().split('T')[0];
+    const cutoffIso = getLocalDateKey(cutoff);
     return allHistory.filter(h => h.date >= cutoffIso);
   }, [allHistory, periodDays]);
   // #4 — CycleEstimate via MoodCycleEngine
@@ -151,12 +156,12 @@ export function InsightsPage() {
   // Map history to chart data (last 7 entries, pad with zeros)
   const chartData = DAYS.map((_, dayIndex) => {
     const entry = history.find(h => {
-      const d = new Date(h.date);
+      const d = toLocalNoon(h.date);
       return d.getDay() === dayIndex;
     });
     return {
-      humor: entry ? (entry.humor / 5) * 100 : 0,
-      energia: entry ? (entry.energia / 5) * 100 : 0,
+      humor: entry ? (entry.humor / 10) * 100 : 0,
+      energia: entry ? (entry.energia / 10) * 100 : 0,
       hasData: !!entry,
     };
   });
@@ -190,7 +195,7 @@ export function InsightsPage() {
     for (let i = 0; i < 60; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      if (history.find(h => h.date === d.toISOString().split("T")[0])) streak++;
+      if (history.find(h => h.date === getLocalDateKey(d))) streak++;
       else break;
     }
 
@@ -239,8 +244,8 @@ export function InsightsPage() {
     const startOfLastWeek = new Date(startOfThisWeek);
     startOfLastWeek.setDate(startOfThisWeek.getDate() - 7);
 
-    const thisWeekIso = startOfThisWeek.toISOString().split("T")[0];
-    const lastWeekIso = startOfLastWeek.toISOString().split("T")[0];
+    const thisWeekIso = getLocalDateKey(startOfThisWeek);
+    const lastWeekIso = getLocalDateKey(startOfLastWeek);
 
     const thisWeek = allHistory.filter(h => h.date >= thisWeekIso);
     const lastWeek = allHistory.filter(h => h.date >= lastWeekIso && h.date < thisWeekIso);
@@ -547,7 +552,7 @@ export function InsightsPage() {
               <polygon
                 points={polygonPoints(45)}
                 fill="rgba(0,0,0,.02)"
-                stroke="rgba(var(--text-3-rgb), 0.15)"
+                stroke="rgba(152,160,174,0.15)"
                 strokeWidth={1}
                 strokeDasharray="4,2"
               />
@@ -1222,4 +1227,3 @@ export function InsightsPage() {
     </div>
   );
 }
-

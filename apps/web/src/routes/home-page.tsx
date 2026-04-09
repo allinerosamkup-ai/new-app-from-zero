@@ -10,7 +10,7 @@ import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, computeStreak, forecastMood7d, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
-import { getClientDayContext, getLocalDateKey } from "../utils/day-context";
+import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import {
   type AgendaBlock,
   type HomeAiMsg,
@@ -56,6 +56,32 @@ type ChartPoint = {
   label: string;
   isHighlight?: boolean;
 };
+
+function normalizeHomeAiMessage(payload: unknown): HomeAiMsg | null {
+  if (!payload || typeof payload !== "object") return null;
+  const source = payload as Partial<HomeAiMsg> & { proactive?: unknown };
+  const motivacional = typeof source.motivacional === "string" ? source.motivacional.trim() : "";
+  const autocuidado = Array.isArray(source.autocuidado)
+    ? source.autocuidado.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean).slice(0, 3)
+    : [];
+
+  if (!motivacional && autocuidado.length === 0) return null;
+
+  const proactiveRaw = source.proactive && typeof source.proactive === "object"
+    ? source.proactive as { emoji?: unknown; title?: unknown; desc?: unknown; actionPath?: unknown }
+    : null;
+
+  return {
+    motivacional: motivacional || "Hoje vale escolher uma única ação concreta e começar por ela.",
+    autocuidado: autocuidado.length > 0 ? autocuidado : ["🌿 Respire por 1 minuto e alongue os ombros."],
+    proactive: {
+      emoji: typeof proactiveRaw?.emoji === "string" ? proactiveRaw.emoji : "🎯",
+      title: typeof proactiveRaw?.title === "string" ? proactiveRaw.title : "Ação rápida",
+      desc: typeof proactiveRaw?.desc === "string" ? proactiveRaw.desc : "Escolha um próximo passo simples para agora.",
+      actionPath: typeof proactiveRaw?.actionPath === "string" ? proactiveRaw.actionPath : null,
+    },
+  };
+}
 
 const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string | React.ReactNode; category: string }> = {
   trabalho:     { cor: "var(--accent-sky)",    bg: "rgba(176,180,196,.10)",    emoji: "💼", category: "trabalho" },
@@ -116,11 +142,13 @@ function buildAgendaSelection(blocks: AgendaBlock[]) {
   return selected;
 }
 
-function valueToChartY(value: number) {
+function valueToChartY(value: number | undefined) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
   const Y_TOP = 12;
   const Y_BOTTOM = 63;
   const Y_RANGE = Y_BOTTOM - Y_TOP;
-  return Y_BOTTOM - ((value - 1) / 9) * Y_RANGE;
+  return Y_BOTTOM - ((numeric - 1) / 9) * Y_RANGE;
 }
 
 function getCheckinMoment(entry: { recordedAt?: string; checkinSlot?: string }) {
@@ -556,7 +584,7 @@ export function HomePage() {
   const monthlyHistory = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
-    const cutoffIso = cutoff.toISOString().split("T")[0];
+    const cutoffIso = getLocalDateKey(cutoff);
     return [...aggregatedCheckinHistory]
       .filter(h => h.date >= cutoffIso)
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -599,7 +627,7 @@ export function HomePage() {
 
   const todayCheckinData = useMemo<ChartPoint[]>(() => {
     const todayEntries = [...(state.checkinHistory || [])]
-      .filter((entry) => entry.date === dayContext.localDate)
+      .filter((entry) => normalizeDateKey(entry.date) === dayContext.localDate)
       .sort((a, b) => getCheckinMoment(a) - getCheckinMoment(b));
 
     if (todayEntries.length === 0) return [];
@@ -633,7 +661,9 @@ export function HomePage() {
   }
 
   const activeChartData = checkinChartMode === "week" ? weeklyCheckinData : todayCheckinData;
-  const hasActiveChartData = activeChartData.some((point) => point.humorY !== null);
+  const hasActiveChartData = activeChartData.some(
+    (point) => point.humorY !== null || point.energiaY !== null,
+  );
 
   useEffect(() => {
     const t = setInterval(() => setClockTime(new Date()), 1000);
@@ -647,10 +677,18 @@ export function HomePage() {
   const latestCheckinKey = useMemo(() => {
     const history = state.checkinHistory || [];
     if (history.length === 0) return null;
-
-    return [...history]
-      .sort((a, b) => getCheckinMoment(b) - getCheckinMoment(a))
-      .map((entry) => entry.recordedAt || `${entry.date}:${entry.checkinSlot || "agora"}`)[0] || null;
+    const latest = history.reduce<{
+      stamp: number;
+      key: string;
+    } | null>((acc, entry) => {
+      const baseStamp = getCheckinMoment(entry);
+      const stamp = Number.isFinite(baseStamp) ? baseStamp : 0;
+      const key = entry.recordedAt || `${normalizeDateKey(entry.date)}:${entry.checkinSlot || "agora"}`;
+      if (!acc || stamp > acc.stamp) return { stamp, key };
+      if (stamp === acc.stamp && key > acc.key) return { stamp, key };
+      return acc;
+    }, null);
+    return latest?.key ?? null;
   }, [state.checkinHistory]);
   const homeAiRequestKey = useMemo(
     () =>
@@ -682,7 +720,9 @@ export function HomePage() {
 
     let cancelled = false;
     const previousHomeContext = extractHomeRepeatContext(previousHomeAiMsgRef.current);
-    setHomeAiLoading(true);
+    if (!homeAiMsg) {
+      setHomeAiLoading(true);
+    }
 
     const timer = setTimeout(async () => {
       try {
@@ -704,11 +744,12 @@ export function HomePage() {
             refreshBucket,
           },
         });
-        const parsed = tryParseAiSuggestion<HomeAiMsg>(res.suggestion);
-        if (!cancelled && parsed?.motivacional && Array.isArray(parsed?.autocuidado)) {
-          previousHomeAiMsgRef.current = parsed;
+        const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
+        const normalizedMessage = normalizeHomeAiMessage(parsed);
+        if (!cancelled && normalizedMessage) {
+          previousHomeAiMsgRef.current = normalizedMessage;
           lastHomeAiRequestKeyRef.current = homeAiRequestKey;
-          setHomeAiMsg(parsed);
+          setHomeAiMsg(normalizedMessage);
         }
       } catch {
         /* IA indisponível — sem fallback estático */
@@ -1297,7 +1338,7 @@ export function HomePage() {
                   <div key={m.label} className="home-cycle-metric">
                     <p className="home-cycle-metric-label">{m.label}</p>
                     <div className="home-cycle-metric-track">
-                      <div className="home-cycle-metric-fill" style={{ background: m.color, width: `${(m.val / 5) * 100}%` }} />
+                      <div className="home-cycle-metric-fill" style={{ background: m.color, width: `${Math.min(100, (m.val / 10) * 100)}%` }} />
                     </div>
                     <p className="home-cycle-metric-value" style={{ color: m.color }}>{m.val.toFixed(1)}</p>
                   </div>
