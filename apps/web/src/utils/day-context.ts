@@ -20,6 +20,19 @@ export function getLocalDateKey(referenceDate = new Date()): string {
   ].join("-");
 }
 
+export function normalizeDateKey(value: unknown): string {
+  if (value instanceof Date) return getLocalDateKey(value);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    const directMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (directMatch) return directMatch[1];
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) return getLocalDateKey(parsed);
+  }
+  return "";
+}
+
 export function getLocalNoonDate(referenceDate = new Date()): Date {
   const date = new Date(referenceDate);
   date.setHours(12, 0, 0, 0);

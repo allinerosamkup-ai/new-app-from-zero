@@ -111,21 +111,31 @@ function getEnergyEmoji(value: number) {
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
 const FACTORS = [
-  { id: "good_sleep",      label: "Sono bom",            icon: "😴", category: "saúde"     },
-  { id: "exercise",        label: "Exercício",            icon: "🏋️", category: "saúde"     },
-  { id: "healthy_meal",    label: "Alimentação",          icon: "🥗", category: "saúde"     },
-  { id: "fresh_air",       label: "Ar fresco",            icon: "🌿", category: "saúde"     },
-  { id: "good_talk",       label: "Boa conversa",         icon: "💬", category: "social"    },
-  { id: "kind_words",      label: "Palavras gentis",      icon: "❤️", category: "social"    },
-  { id: "support",         label: "Apoio recebido",       icon: "🤝", category: "social"    },
-  { id: "small_win",       label: "Pequena vitória",      icon: "⭐", category: "trabalho"  },
-  { id: "finished_task",   label: "Tarefa concluída",     icon: "✅", category: "trabalho"  },
-  { id: "feeling_valued",  label: "Me senti valorizada",  icon: "🏆", category: "trabalho"  },
-  { id: "music",           label: "Música",               icon: "🎵", category: "lazer"     },
-  { id: "time_outside",    label: "Tempo ao ar livre",    icon: "🌳", category: "lazer"     },
-  { id: "hobby",           label: "Hobby",                icon: "🎨", category: "lazer"     },
-  { id: "self_trust",      label: "Confiança em mim",     icon: "💪", category: "pessoal"   },
-  { id: "rest",            label: "Descanso",             icon: "🛋️", category: "pessoal"   },
+  // Positivos
+  { id: "good_sleep",           label: "Sono bom",                icon: "😴", category: "saúde"     },
+  { id: "exercise",             label: "Exercício",               icon: "🏋️", category: "saúde"     },
+  { id: "healthy_meal",         label: "Alimentação",             icon: "🥗", category: "saúde"     },
+  { id: "fresh_air",            label: "Ar fresco",               icon: "🌿", category: "saúde"     },
+  { id: "good_talk",            label: "Boa conversa",            icon: "💬", category: "social"    },
+  { id: "kind_words",           label: "Palavras gentis",         icon: "❤️", category: "social"    },
+  { id: "support",              label: "Apoio recebido",          icon: "🤝", category: "social"    },
+  { id: "small_win",            label: "Pequena vitória",         icon: "⭐", category: "trabalho"  },
+  { id: "finished_task",        label: "Tarefa concluída",        icon: "✅", category: "trabalho"  },
+  { id: "feeling_valued",       label: "Me senti valorizada",     icon: "🏆", category: "trabalho"  },
+  { id: "music",                label: "Música",                  icon: "🎵", category: "lazer"     },
+  { id: "time_outside",         label: "Tempo ao ar livre",       icon: "🌳", category: "lazer"     },
+  { id: "hobby",                label: "Hobby",                   icon: "🎨", category: "lazer"     },
+  { id: "self_trust",           label: "Confiança em mim",        icon: "💪", category: "pessoal"   },
+  { id: "rest",                 label: "Descanso",                icon: "🛋️", category: "pessoal"   },
+  // Negativos
+  { id: "stuck",                label: "Travada/o",               icon: "🪨", category: "negativo"  },
+  { id: "relationship_conflict",label: "Briga no relacionamento", icon: "💔", category: "negativo"  },
+  { id: "overwhelmed",          label: "Sobrecarga mental",       icon: "🌊", category: "negativo"  },
+  { id: "loneliness",           label: "Solidão",                 icon: "🫥", category: "negativo"  },
+  { id: "bad_sleep",            label: "Sono ruim",               icon: "😵", category: "negativo"  },
+  { id: "work_pressure",        label: "Pressão no trabalho",     icon: "⚙️", category: "negativo"  },
+  { id: "financial_stress",     label: "Estresse financeiro",     icon: "💸", category: "negativo"  },
+  { id: "bad_news",             label: "Má notícia",              icon: "📰", category: "negativo"  },
 ];
 
 const emotionToMood: Record<string, MoodOption> = {
@@ -229,8 +239,8 @@ export function CheckinPage() {
   const [humor, setHumor] = useState(7);
   const [energia, setEnergia] = useState(6);
 
-  // ── step 2: emoção
-  const [emotionSelected, setEmotionSelected] = useState<string | null>("radiant");
+  // ── step 2: emoção (até 3)
+  const [emotionsSelected, setEmotionsSelected] = useState<string[]>(["radiant"]);
 
   // ── step 3: fatores
   const [selectedFactors, setSelectedFactors] = useState<string[]>([]);
@@ -283,12 +293,14 @@ export function CheckinPage() {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      const mood = emotionToMood[emotionSelected ?? "calm"] ?? "equilibrada";
+      const primaryEmotion = emotionsSelected[0] ?? "calm";
+      const mood = emotionToMood[primaryEmotion] ?? "equilibrada";
       setMood(mood);
       await addCheckin({
         humor,
         energia,
-        emotion: emotionSelected ?? "calm",
+        emotion: primaryEmotion,
+        emotions: emotionsSelected,
         sono: detailEnabled.sono ? sono : undefined,
         fisico: detailEnabled.fisico ? fisico : undefined,
         social: detailEnabled.social ? social : undefined,
@@ -447,95 +459,176 @@ export function CheckinPage() {
             </div>
           )}
 
-          {/* STEP 2: Emoção */}
+          {/* STEP 2: Emoção — até 3 */}
           {wizardStep === 2 && (
             <div>
-              <div className="emotion-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-                {emotions.map((em) => (
-                  <button
-                    type="button"
-                    key={em.id}
-                    className={`emotion-chip${emotionSelected === em.id ? " active" : ""}`}
-                    onClick={() => setEmotionSelected(em.id === emotionSelected ? null : em.id)}
-                    style={{ border: "none", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                  >
-                    <span className="emoji">{em.emoji}</span>
-                    {em.label}
-                  </button>
-                ))}
-              </div>
-              {emotionSelected && (
-                <div style={{
-                  marginTop: 16,
-                  padding: "12px 16px",
-                  borderRadius: 14,
-                  background: "var(--accent-peach-a3)",
-                  border: "1.5px solid var(--accent-peach)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
+              {/* Contador */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>
+                  Selecione até 3 emoções
+                </p>
+                <span style={{
+                  fontSize: 11, fontWeight: 800,
+                  color: emotionsSelected.length === 3 ? "var(--accent-peach)" : "var(--text-3)",
+                  background: "var(--warm-border)",
+                  padding: "2px 8px", borderRadius: 99,
                 }}>
-                  <span style={{ fontSize: 22 }}>{emotions.find(e => e.id === emotionSelected)?.emoji}</span>
-                  <div>
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--accent-peach-ink)" }}>
-                      {emotions.find(e => e.id === emotionSelected)?.label}
-                    </p>
-                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>selecionada</p>
-                  </div>
+                  {emotionsSelected.length}/3
+                </span>
+              </div>
+
+              <div className="emotion-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+                {emotions.map((em) => {
+                  const isSelected = emotionsSelected.includes(em.id);
+                  const isDisabled = !isSelected && emotionsSelected.length >= 3;
+                  return (
+                    <button
+                      type="button"
+                      key={em.id}
+                      className={`emotion-chip${isSelected ? " active" : ""}`}
+                      onClick={() => {
+                        if (isSelected) {
+                          setEmotionsSelected(prev => prev.length > 1 ? prev.filter(id => id !== em.id) : prev);
+                        } else if (!isDisabled) {
+                          setEmotionsSelected(prev => [...prev, em.id]);
+                        }
+                      }}
+                      style={{
+                        border: "none",
+                        cursor: isDisabled ? "not-allowed" : "pointer",
+                        opacity: isDisabled ? 0.35 : 1,
+                        fontFamily: "'Plus Jakarta Sans', sans-serif",
+                        position: "relative",
+                      }}
+                    >
+                      {isSelected && (
+                        <span style={{
+                          position: "absolute", top: 3, right: 3,
+                          width: 14, height: 14, borderRadius: "50%",
+                          background: "var(--accent-peach)", color: "#fff",
+                          fontSize: 9, fontWeight: 800, lineHeight: "14px", textAlign: "center",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {emotionsSelected.indexOf(em.id) + 1}
+                        </span>
+                      )}
+                      <span className="emoji">{em.emoji}</span>
+                      {em.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Pills das selecionadas */}
+              {emotionsSelected.length > 0 && (
+                <div style={{ marginTop: 14, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {emotionsSelected.map(id => {
+                    const em = emotions.find(e => e.id === id);
+                    if (!em) return null;
+                    return (
+                      <div key={id} style={{
+                        padding: "6px 12px", borderRadius: 99,
+                        background: "var(--accent-peach-a3)",
+                        border: "1.5px solid var(--accent-peach)",
+                        fontSize: 12, fontWeight: 700, color: "var(--accent-peach-ink)",
+                        display: "flex", alignItems: "center", gap: 6,
+                      }}>
+                        {em.emoji} {em.label}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
 
-          {/* STEP 3: Fatores */}
-          {wizardStep === 3 && (
-            <div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                {FACTORS.map((f) => {
-                  const isSelected = selectedFactors.includes(f.id);
-                  return (
-                    <button
-                      type="button"
-                      key={f.id}
-                      onClick={() =>
-                        setSelectedFactors((prev) =>
-                          isSelected ? prev.filter((x) => x !== f.id) : [...prev, f.id]
-                        )
-                      }
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        padding: "8px 13px",
-                        borderRadius: "20px",
-                        border: `1.5px solid ${isSelected ? "var(--accent-sage)" : "var(--warm-border-2)"}`,
-                        background: isSelected ? "rgba(150,199,179,0.14)" : "transparent",
-                        color: isSelected ? "var(--accent-sage)" : "var(--text-3)",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                        fontFamily: "'Plus Jakarta Sans', sans-serif",
-                      }}
-                    >
-                      <span style={{ fontSize: "15px", lineHeight: 1 }}>{f.icon}</span>
-                      {f.label}
-                    </button>
-                  );
-                })}
+          {/* STEP 3: Fatores — positivos e negativos */}
+          {wizardStep === 3 && (() => {
+            const positiveFactors = FACTORS.filter(f => f.category !== "negativo");
+            const negativeFactors = FACTORS.filter(f => f.category === "negativo");
+            const negSelected = selectedFactors.filter(id => negativeFactors.some(f => f.id === id));
+
+            const FactorChip = ({ f }: { f: typeof FACTORS[0] }) => {
+              const isSelected = selectedFactors.includes(f.id);
+              const isNeg = f.category === "negativo";
+              return (
+                <button
+                  type="button"
+                  key={f.id}
+                  onClick={() =>
+                    setSelectedFactors((prev) =>
+                      isSelected ? prev.filter((x) => x !== f.id) : [...prev, f.id]
+                    )
+                  }
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "8px 13px",
+                    borderRadius: "20px",
+                    border: `1.5px solid ${
+                      isSelected
+                        ? (isNeg ? "#E07070" : "var(--accent-sage)")
+                        : "var(--warm-border-2)"
+                    }`,
+                    background: isSelected
+                      ? (isNeg ? "rgba(224,112,112,0.12)" : "rgba(150,199,179,0.14)")
+                      : "transparent",
+                    color: isSelected
+                      ? (isNeg ? "#C44444" : "var(--accent-sage)")
+                      : "var(--text-3)",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                >
+                  <span style={{ fontSize: "15px", lineHeight: 1 }}>{f.icon}</span>
+                  {f.label}
+                </button>
+              );
+            };
+
+            return (
+              <div>
+                {/* Seção positiva */}
+                <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sage)", margin: "0 0 10px" }}>
+                  O que ajudou hoje? ✨
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: 20 }}>
+                  {positiveFactors.map(f => <FactorChip key={f.id} f={f} />)}
+                </div>
+
+                {/* Divisor */}
+                <div style={{ height: 1, background: "var(--warm-border)", marginBottom: 16 }} />
+
+                {/* Seção negativa */}
+                <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "#C44444", margin: "0 0 10px" }}>
+                  O que pesou hoje? 🌧️
+                </p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: 8 }}>
+                  {negativeFactors.map(f => <FactorChip key={f.id} f={f} />)}
+                </div>
+
+                {/* Contador */}
+                {selectedFactors.length > 0 ? (
+                  <p style={{ marginTop: 10, fontSize: 12, color: "var(--text-3)", fontWeight: 700 }}>
+                    {selectedFactors.length} fator{selectedFactors.length > 1 ? "es" : ""} selecionado{selectedFactors.length > 1 ? "s" : ""}
+                    {negSelected.length > 0 && (
+                      <span style={{ color: "#C44444", marginLeft: 6 }}>
+                        · {negSelected.length} pesado{negSelected.length > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </p>
+                ) : (
+                  <p style={{ marginTop: 10, fontSize: 12, color: "var(--text-3)" }}>
+                    Nada selecionado — tudo bem, pode pular.
+                  </p>
+                )}
               </div>
-              {selectedFactors.length > 0 && (
-                <p style={{ marginTop: 14, fontSize: 12, color: "var(--accent-sage)", fontWeight: 700 }}>
-                  {selectedFactors.length} fator{selectedFactors.length > 1 ? "es" : ""} selecionado{selectedFactors.length > 1 ? "s" : ""}
-                </p>
-              )}
-              {selectedFactors.length === 0 && (
-                <p style={{ marginTop: 14, fontSize: 12, color: "var(--text-3)" }}>
-                  Nada selecionado — tudo bem, pode pular.
-                </p>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* STEP 4: Detalhes + Nota */}
           {wizardStep === 4 && (

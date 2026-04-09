@@ -32,8 +32,64 @@ type JournalSummary = {
   suggestions?: string[];
 };
 
+type SuggestedTask = {
+  title: string;
+  category: "trabalho" | "saude" | "rotina" | "social";
+  time?: string;
+};
+
+type JournalFinalizationResult = {
+  summary: JournalSummary | null;
+  suggestedTasks: SuggestedTask[];
+  temporalLabel: string;
+};
+
 const INITIAL_ASSISTANT_MESSAGE =
   "Este espaço é seu. Pode começar de onde estiver: pensamento solto, emoção embolada ou algo que você só quer deixar sair.";
+
+const DAY_KEYWORDS: Array<{ regex: RegExp; label: string }> = [
+  { regex: /\b(hoje|agora|nesta noite|essa noite)\b/i, label: "Hoje" },
+  { regex: /\b(amanha|amanhã)\b/i, label: "Amanhã" },
+  { regex: /\bsegunda(-feira)?\b/i, label: "Segunda" },
+  { regex: /\bterca(-feira)?|terça(-feira)?\b/i, label: "Terça" },
+  { regex: /\bquarta(-feira)?\b/i, label: "Quarta" },
+  { regex: /\bquinta(-feira)?\b/i, label: "Quinta" },
+  { regex: /\bsexta(-feira)?\b/i, label: "Sexta" },
+  { regex: /\bsabado|sábado\b/i, label: "Sábado" },
+  { regex: /\bdomingo\b/i, label: "Domingo" },
+];
+
+function resolveTemporalLabelFromConversation(messages: Message[]): string {
+  const recentUserText = messages
+    .filter((message) => message.role === "user")
+    .slice(-6)
+    .map((message) => message.content)
+    .join(" ");
+
+  for (const marker of DAY_KEYWORDS) {
+    if (marker.regex.test(recentUserText)) return marker.label;
+  }
+
+  const hour = new Date().getHours();
+  if (hour >= 20 || hour < 5) return "Amanhã";
+  return "Hoje";
+}
+
+function buildCommitmentSuggestions(summary: JournalSummary | null, temporalLabel: string): string[] {
+  if (!summary?.suggestions?.length) return [];
+  return summary.suggestions.slice(0, 3).map((suggestion) => `${temporalLabel}: ${suggestion}`);
+}
+
+function buildGoalSuggestions(summary: JournalSummary | null, phaseLabel: string): string[] {
+  if (!summary) return [];
+  const fromThemes = (summary.themes || []).slice(0, 2).map((theme) => `Consolidar progresso no tema "${theme}"`);
+  const emotionalGoal = summary.emotions?.[0]
+    ? `Reduzir intensidade de "${summary.emotions[0]}" com uma rotina de regulação emocional`
+    : null;
+  const phaseGoal = `Ajustar metas ao estado atual (${phaseLabel}) para manter consistência sem sobrecarga`;
+
+  return [phaseGoal, ...fromThemes, emotionalGoal].filter((item): item is string => Boolean(item)).slice(0, 3);
+}
 
 function formatSessionDate(localDate: string, startedAt: string): string {
   const date = localDate ? new Date(`${localDate}T12:00:00`) : new Date(startedAt);
@@ -49,7 +105,7 @@ export function JournalPage() {
   const { showError, showSuccess } = useToast();
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
 
-  const [view, setView] = useState<"overview" | "chat">("overview");
+  const [view, setView] = useState<"overview" | "chat">("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -62,8 +118,11 @@ export function JournalPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterEmotion, setFilterEmotion] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showFinalizationModal, setShowFinalizationModal] = useState(false);
+  const [finalizationResult, setFinalizationResult] = useState<JournalFinalizationResult | null>(null);
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const hasAutoOpenedRef = useRef(false);
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -74,6 +133,12 @@ export function JournalPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
+
+  useEffect(() => {
+    if (hasAutoOpenedRef.current) return;
+    hasAutoOpenedRef.current = true;
+    void openJournal();
+  }, []);
 
   async function loadSessions() {
     setIsSessionsLoading(true);
@@ -153,9 +218,6 @@ export function JournalPage() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistantMessage = "";
-      let completedSummary: JournalSummary | null = null;
-      let autoFinalized = false;
-
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
       while (true) {
@@ -181,24 +243,11 @@ export function JournalPage() {
                 next[next.length - 1] = data.message;
                 return next;
               });
-            } else if (data.sessionStatus === "completed") {
-              autoFinalized = true;
-              completedSummary = data.summary ?? null;
             }
           } catch {
             continue;
           }
         }
-      }
-
-      if (autoFinalized) {
-        setLatestSummary(completedSummary);
-        setSessionId(null);
-        setMessages([]);
-        setExpandedSessionId(null);
-        setView("overview");
-        await loadSessions();
-        showSuccess("Sessão finalizada e resumo salvo.");
       }
     } catch (error) {
       showError(error instanceof Error ? error.message : "Não foi possível enviar a mensagem agora.");
@@ -221,10 +270,18 @@ export function JournalPage() {
     try {
       const result = await api.post("/journal/finalize", { sessionId }) as {
         summary?: JournalSummary;
+        suggestedTasks?: SuggestedTask[];
         sessionStatus?: string;
       };
 
+      const temporalLabel = resolveTemporalLabelFromConversation(messages);
       setLatestSummary(result.summary ?? null);
+      setFinalizationResult({
+        summary: result.summary ?? null,
+        suggestedTasks: Array.isArray(result.suggestedTasks) ? result.suggestedTasks : [],
+        temporalLabel,
+      });
+      setShowFinalizationModal(true);
       setSessionId(null);
       setMessages([]);
       setExpandedSessionId(null);
@@ -265,6 +322,133 @@ export function JournalPage() {
 
   const activePersistedSession = sessions.find((session) => session.status === "active");
   const mainButtonLabel = sessionId || activePersistedSession ? "Continuar meu diário" : "Abrir meu diário";
+
+  const commitmentSuggestions = buildCommitmentSuggestions(finalizationResult?.summary ?? null, finalizationResult?.temporalLabel ?? "Hoje");
+  const goalSuggestions = buildGoalSuggestions(finalizationResult?.summary ?? null, cycleReport.phaseLabel);
+
+  const finalizationModal = showFinalizationModal && finalizationResult ? (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(17, 24, 39, 0.36)",
+        backdropFilter: "blur(2px)",
+        zIndex: 1200,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          maxHeight: "82vh",
+          overflowY: "auto",
+          background: "#fff",
+          borderRadius: 20,
+          border: "1.5px solid var(--warm-border)",
+          boxShadow: "0 24px 64px rgba(17,24,39,.18)",
+          padding: 18,
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)" }}>
+            Sessão finalizada
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowFinalizationModal(false)}
+            style={{ border: "1px solid var(--warm-border)", background: "#fff", borderRadius: 8, width: 28, height: 28, cursor: "pointer" }}
+            aria-label="Fechar resumo"
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ background: "rgba(255, 251, 246, .9)", borderRadius: 14, border: "1px solid rgba(197,165,147,.24)", padding: "12px 13px" }}>
+          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "var(--text-3)" }}>
+            Resumo do dia
+          </p>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--text-1)" }}>
+            {finalizationResult.summary?.text ?? "Resumo indisponível para esta sessão."}
+          </p>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>Base de contexto:</span>
+          <span style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "rgba(150,199,179,.16)", color: "var(--text-1)", fontWeight: 700 }}>
+            Check-in: {cycleReport.phaseLabel}
+          </span>
+          <span style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "rgba(99,152,169,.14)", color: "var(--text-1)", fontWeight: 700 }}>
+            Janela: {finalizationResult.temporalLabel}
+          </span>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>
+            Compromissos sugeridos
+          </p>
+          {commitmentSuggestions.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>Sem compromisso sugerido para este fechamento.</p>
+          ) : (
+            commitmentSuggestions.map((item) => (
+              <div key={item} style={{ borderRadius: 12, border: "1px solid rgba(197,165,147,.24)", background: "#fff", padding: "10px 12px", fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>
+                {item}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>
+            Tarefas sugeridas
+          </p>
+          {finalizationResult.suggestedTasks.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>Nenhuma tarefa foi sugerida neste fechamento.</p>
+          ) : (
+            finalizationResult.suggestedTasks.map((task, index) => (
+              <div key={`${task.title}-${index}`} style={{ borderRadius: 12, border: "1px solid rgba(150,199,179,.28)", background: "rgba(150,199,179,.09)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--text-1)", fontWeight: 700 }}>{task.title}</p>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
+                    {finalizationResult.temporalLabel}
+                  </span>
+                  <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
+                    {task.category}
+                  </span>
+                  {task.time ? (
+                    <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
+                      {task.time}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>
+            Metas sugeridas
+          </p>
+          {goalSuggestions.map((goal) => (
+            <div key={goal} style={{ borderRadius: 12, border: "1px solid rgba(99,152,169,.24)", background: "rgba(99,152,169,.08)", padding: "10px 12px", fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>
+              {goal}
+            </div>
+          ))}
+        </div>
+
+        <AuraButtonV2 className="ui-btn-gradient" onClick={() => setShowFinalizationModal(false)}>
+          Continuar
+        </AuraButtonV2>
+      </div>
+    </div>
+  ) : null;
 
   if (view === "overview") {
     return (
@@ -582,6 +766,7 @@ export function JournalPage() {
             )}
           </div>
         </div>
+        {finalizationModal}
       </div>
     );
   }
@@ -708,23 +893,26 @@ export function JournalPage() {
               gap: "10px",
             }}
           >
-            <input
+            <textarea
               className="journal-input"
-              type="text"
               placeholder="O que você está pensando?"
               value={input}
               onChange={(event) => setInput(event.target.value)}
               disabled={isTyping || isFinalizing}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void sendMessage();
-                }
+              rows={4}
+              style={{
+                fontSize: "14px",
+                color: "var(--text-1)",
+                fontWeight: 500,
+                minHeight: "96px",
+                resize: "none",
+                lineHeight: 1.45,
               }}
-              style={{ fontSize: "14px", color: "var(--text-1)", fontWeight: 500 }}
             />
             <div style={{ display: "flex", gap: "6px" }}>
-              <AuraButtonV2
-                onClick={toggleVoice}
+              <button
+                type="button"
+                onClick={() => toggleVoice()}
                 title={isRecording ? "Parar" : "Falar"}
                 style={{
                   width: "36px",
@@ -737,15 +925,16 @@ export function JournalPage() {
                   justifyContent: "center",
                   cursor: "pointer",
                   transition: "all 200ms",
+                  color: isRecording ? "#fff" : "var(--text-2)",
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isRecording ? "#fff" : "var(--text-2)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                   <line x1="12" y1="19" x2="12" y2="23" />
                   <line x1="8" y1="23" x2="16" y2="23" />
                 </svg>
-              </AuraButtonV2>
+              </button>
               <div
                 className="journal-send"
                 onClick={() => void sendMessage()}
@@ -791,7 +980,7 @@ export function JournalPage() {
           </AuraButtonV2>
         </div>
       </div>
+      {finalizationModal}
     </div>
   );
 }
-

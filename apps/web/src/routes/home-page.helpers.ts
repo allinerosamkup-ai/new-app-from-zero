@@ -91,23 +91,48 @@ export function extractHomeRepeatContext(message: HomeAiMsg | null): {
 }
 
 export function dedupeAgendaBlocks(blocks: AgendaBlock[]): AgendaBlock[] {
+  const ALLOWED_TYPES = new Set<AgendaBlock["tipo"]>([
+    "trabalho",
+    "autocuidado",
+    "casa",
+    "social",
+    "descanso",
+    "refeicao",
+    "flexivel",
+  ]);
   const seenTasks = new Set<string>();
 
-  return blocks.map((block) => {
-    const uniqueTasks = uniqueStrings(block.tarefas_sugeridas).filter((task) => {
-      const key = comparableKey(task);
-      if (seenTasks.has(key)) return false;
-      seenTasks.add(key);
-      return true;
-    });
+  return blocks
+    .filter((block) => block && typeof block === "object")
+    .map((block) => {
+      const safeType = ALLOWED_TYPES.has(block.tipo) ? block.tipo : "flexivel";
+      const safeLabel = normalizeWhitespace(typeof block.label === "string" ? block.label : "");
+      const safeReason = normalizeWhitespace(typeof block.razao_ia === "string" ? block.razao_ia : "");
+      const safeStart = typeof block.horario_inicio === "string" ? block.horario_inicio : "09:00";
+      const safeEnd = typeof block.horario_fim === "string" ? block.horario_fim : "10:00";
+      const taskList = Array.isArray(block.tarefas_sugeridas)
+        ? block.tarefas_sugeridas.filter((task): task is string => typeof task === "string")
+        : [];
 
-    return {
-      ...block,
-      label: normalizeWhitespace(block.label),
-      razao_ia: normalizeWhitespace(block.razao_ia),
-      tarefas_sugeridas: uniqueTasks,
-    };
-  });
+      const uniqueTasks = uniqueStrings(taskList).filter((task) => {
+        const key = comparableKey(task);
+        if (seenTasks.has(key)) return false;
+        seenTasks.add(key);
+        return true;
+      });
+
+      return {
+        ...block,
+        tipo: safeType,
+        horario_inicio: safeStart,
+        horario_fim: safeEnd,
+        label: safeLabel || "Bloco flexível",
+        razao_ia: safeReason || "Ajustado para manter seu ritmo hoje.",
+        tarefas_sugeridas: uniqueTasks,
+      };
+    })
+    .filter((block) => block.tarefas_sugeridas.length > 0 || block.tipo === "descanso" || block.tipo === "refeicao")
+    .slice(0, 10);
 }
 
 export function extractAgendaRepeatContext(blocks: AgendaBlock[]): {

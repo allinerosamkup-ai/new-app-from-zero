@@ -25,6 +25,7 @@ export const CheckinCreateSchema = z.object({
     dorCabeca: SymptomLevelSchema.optional(),
   }).optional(),
   factors: z.array(z.string()).optional(),
+  emotions: z.array(z.string()).max(3).optional(),
 });
 
 export type CheckinCreateInput = z.infer<typeof CheckinCreateSchema>;

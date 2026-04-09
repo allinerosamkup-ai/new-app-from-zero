@@ -1,19 +1,34 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
 import "../styles/aura.css";
 
 type Tab = "entrar" | "criar";
+const REMEMBER_ME_KEY = "aura.rememberMe";
+const REMEMBERED_EMAIL_KEY = "aura.rememberedEmail";
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { state, setName, setEmail } = useAuraStore();
   const [tab, setTab] = useState<Tab>("entrar");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const saved = window.localStorage.getItem(REMEMBER_ME_KEY);
+    return saved ? saved === "true" : true;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!rememberMe || state.email) return;
+    const rememberedEmail = window.localStorage.getItem(REMEMBERED_EMAIL_KEY);
+    if (rememberedEmail) setEmail(rememberedEmail);
+  }, [rememberMe, setEmail, state.email]);
 
   const handleEnterSubmit = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== "Enter" || loading) return;
@@ -38,6 +53,13 @@ export function LoginPage() {
           options: { data: { full_name: state.name } },
         });
         if (err) throw err;
+      }
+      if (rememberMe) {
+        window.localStorage.setItem(REMEMBER_ME_KEY, "true");
+        window.localStorage.setItem(REMEMBERED_EMAIL_KEY, state.email);
+      } else {
+        window.localStorage.setItem(REMEMBER_ME_KEY, "false");
+        window.localStorage.removeItem(REMEMBERED_EMAIL_KEY);
       }
       navigate("/home");
     } catch (err: any) {
@@ -139,7 +161,7 @@ export function LoginPage() {
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleEnterSubmit}
@@ -147,13 +169,30 @@ export function LoginPage() {
                     className="aura-inline-input"
                   />
                 </div>
-                {/* Ícone eye */}
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  style={{ border: "none", background: "transparent", padding: 0, display: "flex", cursor: "pointer" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                    {showPassword && <line x1="3" y1="21" x2="21" y2="3" />}
+                  </svg>
+                </button>
               </div>
             </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, cursor: "pointer", color: "var(--text-2)", fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ accentColor: "var(--accent-peach)" }}
+              />
+              Lembrar de mim
+            </label>
 
             <div style={{ textAlign: "right", marginBottom: 16 }}>
               <Link to="/forgot-password" className="aura-muted-link">
@@ -238,7 +277,7 @@ export function LoginPage() {
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handleEnterSubmit}
@@ -246,10 +285,18 @@ export function LoginPage() {
                     className="aura-inline-input"
                   />
                 </div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  style={{ border: "none", background: "transparent", padding: 0, display: "flex", cursor: "pointer" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                    {showPassword && <line x1="3" y1="21" x2="21" y2="3" />}
+                  </svg>
+                </button>
               </div>
             </div>
 

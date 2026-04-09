@@ -7,6 +7,21 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const startY = useRef<number | null>(null);
   const containerRef = useRef<HTMLElement | null>(null);
+  const pullDistanceRef = useRef(0);
+  const isRefreshingRef = useRef(false);
+  const onRefreshRef = useRef(onRefresh);
+
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  useEffect(() => {
+    pullDistanceRef.current = pullDistance;
+  }, [pullDistance]);
+
+  useEffect(() => {
+    isRefreshingRef.current = isRefreshing;
+  }, [isRefreshing]);
 
   useEffect(() => {
     const el = containerRef.current ?? document.documentElement;
@@ -18,7 +33,7 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (startY.current === null || isRefreshing) return;
+      if (startY.current === null || isRefreshingRef.current) return;
       const delta = e.touches[0].clientY - startY.current;
       if (delta > 0 && el.scrollTop === 0) {
         e.preventDefault();
@@ -27,11 +42,11 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
     };
 
     const onTouchEnd = async () => {
-      if (pullDistance >= THRESHOLD && !isRefreshing) {
+      if (pullDistanceRef.current >= THRESHOLD && !isRefreshingRef.current) {
         setIsRefreshing(true);
         setPullDistance(0);
         try {
-          await onRefresh();
+          await onRefreshRef.current();
         } finally {
           setIsRefreshing(false);
         }
@@ -50,7 +65,7 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
       el.removeEventListener('touchmove', onTouchMove);
       el.removeEventListener('touchend', onTouchEnd);
     };
-  }, [onRefresh, pullDistance, isRefreshing]);
+  }, []);
 
   const isReady = pullDistance >= THRESHOLD;
 

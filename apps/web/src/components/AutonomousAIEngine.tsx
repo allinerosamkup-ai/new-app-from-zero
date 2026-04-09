@@ -52,6 +52,7 @@ export function AutonomousAIEngine() {
 
   const lastHistoryKeyRef = useRef<string | null>(null);
   const lastPhaseRef = useRef<string | null>(null);
+  const initializedRef = useRef(false);
   const stabilityInFlightRef = useRef(false);
   const transitionInFlightRef = useRef(false);
   const profileInFlightRef = useRef(false);
@@ -75,33 +76,44 @@ export function AutonomousAIEngine() {
     // #2 — Detecta transição de fase
     const storedPhase = localStorage.getItem("aura_last_phase");
     const storedPhaseDate = localStorage.getItem("aura_last_phase_date");
-    const prevPhase = lastPhaseRef.current ?? storedPhase;
-    const prevPhaseDate = storedPhaseDate;
-    const hasNewDailySnapshot = Boolean(latestHistoryDate && latestHistoryDate !== prevPhaseDate);
 
-    if (
-      prevPhase &&
-      hasNewDailySnapshot &&
-      prevPhase !== currentPhase &&
-      currentPhase !== "insufficient_data" &&
-      !transitionInFlightRef.current &&
-      (!state.phaseTransitionAlert || state.phaseTransitionAlert.dismissed)
-    ) {
-      transitionInFlightRef.current = true;
-      void runPhaseTransitionAlert(
-        prevPhase,
-        currentPhase,
-        cycleReport.phaseLabel,
-        cycleReport.aiContext,
-        setPhaseTransitionAlert
-      ).finally(() => {
-        transitionInFlightRef.current = false;
-      });
-    }
-    lastPhaseRef.current = currentPhase;
-    localStorage.setItem("aura_last_phase", currentPhase);
-    if (latestHistoryDate) {
-      localStorage.setItem("aura_last_phase_date", latestHistoryDate);
+    if (!initializedRef.current) {
+      // Primeiro mount: apenas registra a fase atual, nunca dispara alerta
+      initializedRef.current = true;
+      lastPhaseRef.current = currentPhase;
+      localStorage.setItem("aura_last_phase", currentPhase);
+      if (latestHistoryDate) {
+        localStorage.setItem("aura_last_phase_date", latestHistoryDate);
+      }
+    } else {
+      const prevPhase = lastPhaseRef.current ?? storedPhase;
+      const prevPhaseDate = storedPhaseDate;
+      const hasNewDailySnapshot = Boolean(latestHistoryDate && latestHistoryDate !== prevPhaseDate);
+
+      if (
+        prevPhase &&
+        hasNewDailySnapshot &&
+        prevPhase !== currentPhase &&
+        currentPhase !== "insufficient_data" &&
+        !transitionInFlightRef.current &&
+        (!state.phaseTransitionAlert || state.phaseTransitionAlert.dismissed)
+      ) {
+        transitionInFlightRef.current = true;
+        void runPhaseTransitionAlert(
+          prevPhase,
+          currentPhase,
+          PHASE_LABELS[currentPhase] ?? currentPhase,
+          cycleReport.aiContext,
+          setPhaseTransitionAlert
+        ).finally(() => {
+          transitionInFlightRef.current = false;
+        });
+      }
+      lastPhaseRef.current = currentPhase;
+      localStorage.setItem("aura_last_phase", currentPhase);
+      if (latestHistoryDate) {
+        localStorage.setItem("aura_last_phase_date", latestHistoryDate);
+      }
     }
 
     // #1 — Stability analysis com moodCycleContext completo
@@ -179,19 +191,26 @@ export function AutonomousAIEngine() {
     const goals = state.goals || [];
     const now = Date.now();
 
-    // Already have a nudge less than 6h old → skip
-    if (state.proactiveNudge) {
-      const age = now - new Date(state.proactiveNudge.generatedAt).getTime();
-      if (age < 6 * 3600_000) return;
-    }
-
     // Priority 1: no check-in for 48h
-    const lastCheckin = history[0]?.date;
-    const daysSince = lastCheckin
-      ? (now - new Date(lastCheckin + "T12:00:00").getTime()) / 86_400_000
+    const latestCheckinMs = history.reduce<number>((latest, entry) => {
+      const recorded = entry.recordedAt ? new Date(entry.recordedAt).getTime() : Number.NaN;
+      const fallback = new Date(`${entry.date}T12:00:00`).getTime();
+      const timestamp = Number.isNaN(recorded) ? fallback : recorded;
+      return Math.max(latest, timestamp);
+    }, Number.NEGATIVE_INFINITY);
+    const daysSince = Number.isFinite(latestCheckinMs)
+      ? (now - latestCheckinMs) / 86_400_000
       : Infinity;
+
+    const shouldThrottleSameNudge = (type: ProactiveNudge["type"]) => {
+      if (!state.proactiveNudge || state.proactiveNudge.type !== type) return false;
+      const age = now - new Date(state.proactiveNudge.generatedAt).getTime();
+      return age < 6 * 3600_000;
+    };
+
     if (daysSince >= 2) {
       const days = Math.floor(daysSince);
+      if (shouldThrottleSameNudge("checkin_missing")) return;
       setProactiveNudge({
         type: "checkin_missing",
         title: days >= 3 ? "Aura com saudade 💛" : "Check-in em falta",
@@ -215,6 +234,7 @@ export function AutonomousAIEngine() {
         ? (now - new Date(oldest.capturedAt).getTime()) / 86_400_000
         : 0;
       if (unclarified.length >= 3 && oldestAge >= 1) {
+        if (shouldThrottleSameNudge("inbox_overdue")) return;
         setProactiveNudge({
           type: "inbox_overdue",
           title: `${unclarified.length} itens esperando clarificação`,
@@ -230,6 +250,7 @@ export function AutonomousAIEngine() {
     // Priority 3: goal stagnant (goal com subtarefas mas 0% progresso há muito tempo)
     const stagnantGoal = goals.find(g => g.completedPct === 0 && g.subtasks.length > 0);
     if (stagnantGoal) {
+      if (shouldThrottleSameNudge("goal_stagnant")) return;
       setProactiveNudge({
         type: "goal_stagnant",
         title: "Meta esperando por você",
@@ -251,6 +272,7 @@ export function AutonomousAIEngine() {
         ? (now - new Date(lastReview).getTime()) / 86_400_000
         : Infinity;
       if (daysSinceReview >= 5) {
+        if (shouldThrottleSameNudge("weekly_review")) return;
         setProactiveNudge({
           type: "weekly_review",
           title: "Revisão semanal 📋",
