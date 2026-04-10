@@ -113,22 +113,26 @@ export function buildUnifiedSuggestContext(args: {
 }
 
 export function resolveSuggestGenerationConfig(type: string, plainText: boolean): GenerationConfig {
+  // gpt-5.2 and other reasoning models consume internal "thinking" tokens that count toward
+  // max_completion_tokens. Using low limits (300-400) causes all tokens to be spent on
+  // reasoning, leaving zero for the actual output (finish_reason=length, content="").
+  // Minimum safe value for reasoning models: 4000+
   const maxTokens =
     type === 'agenda-blocks'
-      ? 700
+      ? 6000
       : type === 'home-messages'
-        ? 400
+        ? 4000
         : type === 'gtd-clarify'
-          ? 280
+          ? 4000
           : type === 'goal-route'
-            ? 150
+            ? 4000
             : type === 'phase-transition'
-              ? 200
+              ? 4000
               : type === 'follow-up'
-                ? 150
+                ? 4000
                 : type === 'monthly-report'
-                  ? 600
-                  : 300;
+                  ? 6000
+                  : 4000;
 
   const temperature =
     type === 'home-messages'

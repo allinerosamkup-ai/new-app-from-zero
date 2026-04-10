@@ -186,6 +186,7 @@ export class InsightService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
+      max_completion_tokens: 6000,
     });
 
     const aiResult = WeeklyInsightSchema.parse(JSON.parse(response.choices[0].message.content || '{}'));

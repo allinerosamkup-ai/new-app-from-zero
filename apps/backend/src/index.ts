@@ -187,7 +187,7 @@ REGRAS:
     ],
     temperature: 0.4,
     response_format: { type: 'json_object' },
-    max_completion_tokens: 300,
+    max_completion_tokens: 4000,
   });
 
   const content = completion.choices[0]?.message?.content?.trim() || '';
@@ -328,7 +328,7 @@ JSON APENAS: {"goals":["string"],"people":["string"],"patterns":["string"],"insi
       },
     ],
     response_format: { type: 'json_object' },
-    max_completion_tokens: 400,
+    max_completion_tokens: 4000,
     temperature: 0.2,
   });
 
@@ -2131,7 +2131,11 @@ INSTRUÇÕES:
           ? { response_format: { type: 'json_object' as const } }
           : {}),
       });
-      const rawSuggestion = completion.choices[0]?.message?.content?.trim() || '';
+      const choice = completion.choices[0];
+      if (!choice?.message?.content) {
+        console.warn(`[ai/suggest] type=${type} model=${process.env.OPENAI_MODEL} finish_reason=${choice?.finish_reason} refusal=${choice?.message?.refusal} content=${JSON.stringify(choice?.message?.content)}`);
+      }
+      const rawSuggestion = choice?.message?.content?.trim() || '';
       const normalizedSuggestion = plainTextTypes.has(type) ? rawSuggestion : normalizeAiSuggestion(type, rawSuggestion);
       const suggestion = sanitizeAiSuggestion(type, normalizedSuggestion, context);
       return res.json({ suggestion });
@@ -2230,7 +2234,7 @@ JSON APENAS: {"profileSummary":"..."}`,
         ],
         model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         response_format: { type: 'json_object' },
-        max_completion_tokens: 300,
+        max_completion_tokens: 4000,
         temperature: 0.4,
       } as any);
 
