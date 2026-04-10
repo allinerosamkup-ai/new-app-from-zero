@@ -5,6 +5,7 @@ export type PlannerCategory = "trabalho" | "autocuidado" | "social" | "pessoal";
 export type FormStateLike = {
   title: string;
   time: string;
+  endTime?: string;
   category: string;
   energyLevel: "alta" | "media" | "leve";
 };
@@ -16,6 +17,8 @@ export type PlannerTaskLike = {
   endTime: string;
   done: boolean;
   category?: string | null;
+  source?: string;
+  link?: string;
 };
 
 export type PlannerAgendaSlot =
@@ -150,7 +153,7 @@ export function buildTimelineBlockInput(
     ...(options?.id ? { id: options.id } : {}),
     title: form.title.trim(),
     startTime: form.time,
-    endTime: addMinutesToTime(form.time, options?.durationMinutes ?? 30),
+    endTime: form.endTime || addMinutesToTime(form.time, options?.durationMinutes ?? 30),
     category: normalizePlannerCategory(form.category, form.title),
     intensity: mapEnergyLevelToIntensity(form.energyLevel, options?.fallbackIntensity),
     status: options?.fallbackStatus ?? "planned",
@@ -175,17 +178,21 @@ export function formatTimelineDurationLabel(startTime: string, endTime: string):
 }
 
 export function buildPlannerAgendaSlots(tasks: PlannerTaskLike[]): PlannerAgendaSlot[] {
-  if (tasks.length === 0) {
-    return EMPTY_AGENDA_TEMPLATE.map((slot) => ({
+  const slots: PlannerAgendaSlot[] = [];
+
+  for (let i = 6; i <= 23; i++) {
+    const time = `${i.toString().padStart(2, "0")}:00`;
+    slots.push({
       kind: "empty",
-      key: `empty-${slot.time}`,
-      ...slot,
-    }));
+      key: `hour-${time}`,
+      time,
+      title: "",
+      description: "",
+    });
   }
 
-  return [...tasks]
-    .sort((left, right) => timeToMinutes(left.time) - timeToMinutes(right.time))
-    .map((task) => ({
+  tasks.forEach((task) => {
+    slots.push({
       kind: "task",
       key: task.id,
       time: task.time,
@@ -193,5 +200,19 @@ export function buildPlannerAgendaSlots(tasks: PlannerTaskLike[]): PlannerAgenda
       durationLabel: formatTimelineDurationLabel(task.time, task.endTime),
       category: normalizePlannerCategory(task.category, task.title),
       task,
-    }));
+    });
+  });
+
+  slots.sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+
+  const deduped: PlannerAgendaSlot[] = [];
+  slots.forEach((slot) => {
+    if (slot.kind === "empty" && !slot.title) {
+      const hasTaskAtSameTime = tasks.some((t) => t.time === slot.time);
+      if (hasTaskAtSameTime) return;
+    }
+    deduped.push(slot);
+  });
+
+  return deduped;
 }

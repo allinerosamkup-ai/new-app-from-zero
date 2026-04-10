@@ -1,11 +1,12 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { buildAuraSystemPrompt, humanizeScore } from '../lib/aura-prompt';
+import { getOpenRouterMaxCompletionTokens, getOpenRouterModel } from '../lib/openrouter';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing' });
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing', baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
   }
   return _openai;
 }
@@ -26,7 +27,7 @@ export const CheckinStateSchema = z.object({
 export type CheckinState = z.infer<typeof CheckinStateSchema>;
 
 export class CheckinService {
-  private static readonly MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  private static readonly MODEL = getOpenRouterModel();
 
   static async evaluateDayState(data: {
     checkinSlot?: string;
@@ -119,7 +120,7 @@ JSON APENAS:
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: 4000,
+      max_completion_tokens: getOpenRouterMaxCompletionTokens(1200),
     });
 
     const content = response.choices[0].message.content;

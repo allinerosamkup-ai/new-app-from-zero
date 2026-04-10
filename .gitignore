@@ -16,3 +16,11 @@ vite.config.previewbridge.js
 
 # D.U.M.M.Y. OS memory
 .dummy/
+tmp/
+scratch/
+**/*.cjs
+**/*.js
+# Mas permitir arquivos JS normais do projeto
+!apps/web/src/**/*.js
+!apps/backend/src/**/*.js
+!packages/**/*.js

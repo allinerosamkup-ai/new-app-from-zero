@@ -28,6 +28,11 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
+  // Ignora auth para o callback do Google, que é uma navegação do browser sem headers customizados
+  if (req.path === '/gcal/callback' || req.originalUrl.includes('/api/gcal/callback')) {
+    return next();
+  }
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Token de autenticação ausente.' });

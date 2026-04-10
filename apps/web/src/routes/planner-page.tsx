@@ -1,5 +1,6 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Calendar, CalendarRange } from "lucide-react";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
@@ -32,7 +33,29 @@ const CATEGORY_OPTIONS = [
   { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", textColor: "var(--accent-sage-ink)" },
   { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-color)", bg: "rgba(217,206,197,.18)", textColor: "var(--social-text)" },
   { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--accent-peach)", bg: "rgba(243,176,140,.14)", textColor: "var(--accent-peach-ink)" },
+  { value: "casa" as const, label: "Casa", shortLabel: "CASA", cor: "#E5A08A", bg: "rgba(229,160,138,.14)", textColor: "#8C4A36" }
 ];
+
+function getCategoryStyles(val: string) {
+  const norm = (val || "").trim().toLowerCase();
+  const option = CATEGORY_OPTIONS.find(o => o.value === norm);
+  if (option) return option;
+  
+  let sum = 0;
+  for(let i=0; i<norm.length; i++) sum += norm.charCodeAt(i);
+  const colorSet = [
+    { cor: "#D9A0C3", bg: "rgba(217, 160, 195, 0.14)", textColor: "#7C4A6A" },
+    { cor: "#F0C85A", bg: "rgba(240, 200, 90, 0.14)", textColor: "#8B6B15" },
+    { cor: "#8CB3A8", bg: "rgba(140, 179, 168, 0.14)", textColor: "#446B60" },
+    { cor: "#A5AADA", bg: "rgba(165, 170, 218, 0.14)", textColor: "#484E8F" },
+  ];
+  return {
+    value: norm,
+    label: val.toUpperCase(),
+    shortLabel: val.toUpperCase(),
+    ...colorSet[sum % colorSet.length]
+  };
+}
 
 const INPUT_STYLE: React.CSSProperties = {
   flex: 1,
@@ -77,6 +100,7 @@ const EMPTY_TIMELINE_CARD_STYLE: React.CSSProperties = {
 type FormState = {
   title: string;
   time: string;
+  endTime: string;
   category: string;
   noteMode: NoteMode;
   note: string;
@@ -100,6 +124,7 @@ type PlannerTask = {
 const EMPTY_FORM: FormState = {
   title: "",
   time: "09:00",
+  endTime: "10:00",
   category: "pessoal",
   noteMode: "text",
   note: "",
@@ -183,6 +208,7 @@ function buildFormStateFromTask(task: PlannerTask): FormState {
     ...EMPTY_FORM,
     title: task.title,
     time: task.time,
+    endTime: task.endTime,
     category: normalizePlannerCategory(task.category, task.title),
     note,
     checklist,
@@ -234,6 +260,35 @@ const NoteSection = React.memo(function NoteSection({
     }
   }
 
+  async function splitIntoSubtasks() {
+    setAiLoading("split");
+    try {
+      const res = await api.post("/ai/suggest", {
+        type: "task-content",
+        context: { 
+          ...context, 
+          currentNote: `[SYSTEM: Ignore notes, strictly split the main task "${context.title}" into highly actionable, step-by-step subtasks. Return as items array in JSON]`, 
+          currentChecklist: [] 
+        },
+      });
+
+      if (!res.suggestion) return;
+
+      const parsed = parseAiSuggestion<{ items?: string[] }>(res.suggestion);
+      setForm((current) => {
+        const nextChecklist = mergeChecklistItems(current.checklist, parsed.items || []);
+        return {
+          ...current,
+          checklist: nextChecklist,
+        };
+      });
+    } catch (error: any) {
+      showError(error.message);
+    } finally {
+      setAiLoading(null);
+    }
+  }
+
   function toggleVoiceNote() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
@@ -272,9 +327,14 @@ const NoteSection = React.memo(function NoteSection({
     <div style={{ marginBottom: "12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
         <span style={LABEL_STYLE}>Notas e checklist</span>
-        <AuraButtonV2 variant="outline" size="sm" onClick={letAuraOrganize} disabled={aiLoading !== null}>
-          {aiLoading === "content" ? "Lendo..." : "Aura decide"}
-        </AuraButtonV2>
+        <div style={{ display: "flex", gap: 6 }}>
+          <AuraButtonV2 variant="outline" size="sm" onClick={letAuraOrganize} disabled={aiLoading !== null}>
+            {aiLoading === "content" ? "Lendo..." : "Aura"}
+          </AuraButtonV2>
+          <AuraButtonV2 variant="outline" size="sm" onClick={splitIntoSubtasks} disabled={aiLoading !== null}>
+            {aiLoading === "split" ? "Splitando..." : "Split Tarefa"}
+          </AuraButtonV2>
+        </div>
       </div>
       <div style={{ position: "relative", marginBottom: "10px" }}>
         <textarea
@@ -300,9 +360,40 @@ const NoteSection = React.memo(function NoteSection({
           🎙️
         </button>
       </div>
+      {form.checklist.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+          {form.checklist.map((item, idx) => (
+            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-1)' }}>
+              <input 
+                type="checkbox" 
+                checked={item.done}
+                onChange={(e) => {
+                  const lst = [...form.checklist];
+                  lst[idx] = { ...item, done: e.target.checked };
+                  setForm(cur => ({...cur, checklist: lst}));
+                }}
+                style={{ width: 16, height: 16, accentColor: 'var(--accent-peach)' }}
+              />
+              <span style={{ textDecoration: item.done ? 'line-through' : 'none', opacity: item.done ? 0.5 : 1, transition: 'all 0.2s' }}>
+                {item.text}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 });
+
+const DIAS_RECORRENCIA = [
+  { label: "D", val: 6 },
+  { label: "S", val: 0 },
+  { label: "T", val: 1 },
+  { label: "Q", val: 2 },
+  { label: "Q", val: 3 },
+  { label: "S", val: 4 },
+  { label: "S", val: 5 },
+];
 
 function RecurringSection({
   recurring,
@@ -317,6 +408,31 @@ function RecurringSection({
         <span style={LABEL_STYLE}>Recorrente</span>
         <input type="checkbox" checked={recurring.enabled} onChange={(event) => setRecurring({ ...recurring, enabled: event.target.checked })} />
       </div>
+      {recurring.enabled && (
+        <div style={{ display: "flex", gap: "6px", marginTop: "10px", justifyContent: "space-between" }}>
+          {DIAS_RECORRENCIA.map(d => {
+            const isSelected = recurring.days.includes(d.val);
+            return (
+               <button
+                 key={d.val}
+                 type="button"
+                 onClick={() => {
+                   const cur = new Set(recurring.days);
+                   if (cur.has(d.val)) cur.delete(d.val);
+                   else cur.add(d.val);
+                   setRecurring({ ...recurring, days: Array.from(cur) });
+                 }}
+                 style={{
+                   width: 34, height: 34, borderRadius: '50%', border: 'none',
+                   background: isSelected ? 'var(--accent-sage)' : 'var(--warm-border-2)',
+                   color: isSelected ? 'var(--accent-sage-ink)' : 'var(--text-2)',
+                   fontWeight: 700, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s'
+                 }}
+               >{d.label}</button>
+            )
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -336,20 +452,131 @@ function PlannerSheetBody({
   saveLabel: string;
   extraBtn?: React.ReactNode;
 }) {
+  const [customTag, setCustomTag] = useState("");
+  const [showCustomConfig, setShowCustomConfig] = useState(false);
+
+  // Derive active options
+  const isCustomActive = form.category && !CATEGORY_OPTIONS.some(o => o.value === form.category);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "16px 0" }}>
       <input
         value={form.title}
         onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-        style={INPUT_STYLE}
-        placeholder="Título"
+        style={{ ...INPUT_STYLE, height: "54px", fontSize: "16px", fontWeight: 700 }}
+        placeholder="O que você vai fazer?"
+        autoFocus
       />
-      <input
-        type="time"
-        value={form.time}
-        onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
-        style={INPUT_STYLE}
-      />
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <span style={LABEL_STYLE}>Início</span>
+          <input
+            type="time"
+            value={form.time}
+            onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
+            style={INPUT_STYLE}
+          />
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <span style={LABEL_STYLE}>Fim</span>
+          <input
+            type="time"
+            value={form.endTime || ''}
+            onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))}
+            style={INPUT_STYLE}
+          />
+        </div>
+      </div>
+      
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <span style={LABEL_STYLE}>Tag de Evento</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {CATEGORY_OPTIONS.map(opt => {
+            const isSel = form.category === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setForm(c => ({...c, category: opt.value}))}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 99,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: `1px solid ${isSel ? opt.cor : 'transparent'}`,
+                  background: isSel ? opt.bg : 'var(--warm-border-2)',
+                  color: isSel ? opt.textColor : 'var(--text-2)',
+                  cursor: "pointer"
+                }}
+              >{opt.label}</button>
+            )
+          })}
+          
+          {isCustomActive && (
+              <button
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 99,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  border: `1px solid var(--text-2)`,
+                  background: 'transparent',
+                  color: 'var(--text-1)',
+                }}
+              >{form.category}</button>
+          )}
+
+          <button
+            onClick={() => setShowCustomConfig(!showCustomConfig)}
+            style={{
+               padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700,
+               border: '1px dashed var(--text-3)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer'
+            }}
+          >+ Nova</button>
+        </div>
+
+        {showCustomConfig && (
+          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+            <input 
+              value={customTag} 
+              onChange={e => setCustomTag(e.target.value)} 
+              placeholder="Nome da tag..."
+              style={{ ...INPUT_STYLE, height: 32, fontSize: 12 }}
+            />
+            <AuraButtonV2 size="sm" variant="outline" onClick={() => {
+              if (customTag.trim()) {
+                setForm(c => ({...c, category: customTag.trim().toLowerCase()}));
+              }
+              setShowCustomConfig(false);
+              setCustomTag("");
+            }}>Salvar</AuraButtonV2>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <span style={LABEL_STYLE}>Energia Gasta</span>
+        <div style={{ display: "flex", gap: 6 }}>
+           {(["leve", "media", "alta"] as const).map(lvl => {
+              const isSel = form.energyLevel === lvl;
+              const emoji = lvl === 'leve' ? '🔋 Leve' : lvl === 'media' ? '⚡ Média' : '🔥 Alta';
+              return (
+                 <button
+                   key={lvl}
+                   type="button"
+                   onClick={() => setForm(c => ({...c, energyLevel: lvl}))}
+                   style={{
+                     flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                     border: `1.5px solid ${isSel ? 'var(--accent-peach)' : 'var(--warm-border-2)'}`,
+                     background: isSel ? 'var(--accent-peach-a3)' : 'var(--warm-bg)',
+                     color: isSel ? 'var(--accent-peach-ink)' : 'var(--text-2)'
+                   }}
+                 >{emoji}</button>
+              )
+           })}
+        </div>
+      </div>
+
       <NoteSection
         form={form}
         setForm={setForm}
@@ -369,6 +596,185 @@ function PlannerSheetBody({
           {saveLabel}
         </AuraButtonV2>
       </div>
+    </div>
+  );
+}
+
+function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayAnchor: Date; offsetDias: number; setOffsetDias: (v: any) => void }) {
+  const selectedDate = new Date(todayAnchor);
+  selectedDate.setDate(selectedDate.getDate() + offsetDias);
+
+  const currentDayOfWeek = selectedDate.getDay(); 
+  const startOfWeek = new Date(selectedDate);
+  startOfWeek.setDate(selectedDate.getDate() - currentDayOfWeek);
+
+  const days = Array.from({length: 7}).map((_, i) => {
+     const d = new Date(startOfWeek);
+     d.setDate(d.getDate() + i);
+     return d;
+  });
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    const [y, m, day] = e.target.value.split('-').map(Number);
+    const date = new Date(y, m - 1, day);
+    const diffTime = Math.round((date.getTime() - todayAnchor.getTime()) / (1000 * 3600 * 24));
+    setOffsetDias(diffTime);
+  };
+
+  const yyyy = selectedDate.getFullYear();
+  const mm = String(selectedDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(selectedDate.getDate()).padStart(2, '0');
+  const formattedDate = `${yyyy}-${mm}-${dd}`;
+
+  return (
+    <div style={{ marginBottom: "20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <button 
+           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}
+           onClick={() => setOffsetDias((c: number) => c - 7)}
+        >
+          <ChevronLeft size={24} color="var(--text-2)" />
+        </button>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, textTransform: 'capitalize', color: 'var(--text-1)' }}>
+            {selectedDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+          </h3>
+          
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Calendar size={18} color="var(--text-2)" />
+            <input 
+              type="date"
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+              onChange={handleDateChange}
+              value={formattedDate}
+            />
+          </div>
+        </div>
+
+        <button 
+           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}
+           onClick={() => setOffsetDias((c: number) => c + 7)}
+        >
+          <ChevronRight size={24} color="var(--text-2)" />
+        </button>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        {days.map(d => {
+          const isSelected = d.toDateString() === selectedDate.toDateString();
+          const isToday = d.toDateString() === todayAnchor.toDateString();
+          const DIAS_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+          return (
+            <div 
+              key={d.toISOString()} 
+              onClick={() => {
+                const timeDiff = d.getTime() - todayAnchor.getTime();
+                setOffsetDias(Math.round(timeDiff / (1000 * 3600 * 24)));
+              }}
+              style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                padding: '8px', borderRadius: 16,
+                background: isSelected ? 'var(--accent-peach)' : 'transparent',
+                color: isSelected ? 'var(--accent-peach-ink)' : 'var(--text-1)',
+                cursor: 'pointer',
+                minWidth: 40
+              }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? 'var(--accent-peach-ink)' : 'var(--text-3)' }}>
+                {DIAS_CURTOS[d.getDay()]}
+              </span>
+              <span style={{ fontSize: 16, fontWeight: 800 }}>{d.getDate()}</span>
+              {isToday && <div style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? 'var(--accent-peach-ink)' : 'var(--accent-peach)', marginTop: 2 }} />}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onDragStart }: any) {
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef<number | null>(null);
+  
+  const isGcal = slot.task.source === 'gcal';
+
+  function handleTouchStart(e: React.TouchEvent) {
+    if (isGcal) return;
+    startX.current = e.touches[0].clientX;
+    setDragging(true);
+  }
+
+  function handleTouchMove(e: React.TouchEvent) {
+    if (isGcal || startX.current === null) return;
+    const diff = e.touches[0].clientX - startX.current;
+    if (Math.abs(diff) > 20) {
+       e.stopPropagation(); 
+    }
+    setOffset(Math.max(-120, Math.min(120, diff)));
+  }
+
+  function handleTouchEnd() {
+    if (isGcal) return;
+    setDragging(false);
+    startX.current = null;
+    if (offset < -70) {
+      onComplete(slot.task);
+    } else if (offset > 70) {
+      onDelete(slot.task);
+    }
+    setOffset(0);
+  }
+
+  return (
+    <div 
+       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 12 }}
+       draggable={!isGcal}
+       onDragStart={(e) => {
+         if (!isGcal) onDragStart(e, slot.task.id);
+         else e.preventDefault();
+       }}
+    >
+      {!isGcal && (
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: offset < 0 ? 'flex-end' : 'flex-start', padding: '0 20px', color: '#fff', zIndex: 0, borderRadius: 12, transition: 'background 0.2s', background: offset < 0 ? 'var(--accent-sage)' : 'var(--error-color, #E5A08A)' }}>
+           <span style={{ fontWeight: 800, fontSize: 13 }}>{offset < 0 ? '✓ Concluir' : '🗑️ Excluir'}</span>
+        </div>
+      )}
+      <button
+        type="button"
+        className="timeline-block-card interactive-card"
+        onClick={() => { 
+          if(isGcal) return; 
+          if(Math.abs(offset) < 10) onClick(); 
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{
+          width: "100%", textAlign: "left", 
+          borderLeft: isGcal ? 'none' : `4px solid ${categoryOption.cor}`,
+          border: isGcal ? '1px dashed var(--accent-sky)' : 'none',
+          opacity: slot.task.done ? 0.74 : 1, 
+          transform: `translateX(${offset}px)`, 
+          transition: dragging ? 'none' : 'transform 0.2s', 
+          position: 'relative', 
+          zIndex: 1, 
+          background: isGcal ? 'var(--accent-sky-a3)' : 'rgba(255,255,255,0.95)',
+          cursor: isGcal ? 'default' : 'pointer'
+        }}
+      >
+        <div className="block-title" style={{ textDecoration: slot.task.done ? "line-through" : "none" }}>{slot.task.title}</div>
+        <div className="block-meta">
+          {slot.time} — {slot.endTime} · {slot.durationLabel} · { (() => { 
+                const meta = getTaskMeta(slot.task.id); if (meta.energyLevel === 'leve') return '🔋'; if (meta.energyLevel === 'alta') return '🔥'; return '⚡';
+          })() }
+        </div>
+        <div className="block-chip" style={{ background: categoryOption.bg, color: categoryOption.textColor, border: `1px solid ${categoryOption.cor}33` }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: categoryOption.cor }} />{categoryOption.shortLabel}
+        </div>
+      </button>
     </div>
   );
 }
@@ -422,15 +828,51 @@ export function PlannerPage() {
       ? "Agenda livre"
       : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""}`;
 
+  const [gcalConnected, setGcalConnected] = useState(false);
+
   useEffect(() => {
     let ignore = false;
 
     async function loadPlannerTasks() {
       setPlannerLoading(true);
       try {
-        const timeline = await api.get(`/timeline/${selectedDateKey}`);
+        const [timeline, gcalRes] = await Promise.all([
+           api.get(`/timeline/${selectedDateKey}`),
+           api.get(`/gcal/events?date=${selectedDateKey}`).catch(() => ({ connected: false, events: [] }))
+        ]);
         if (ignore) return;
-        setPlannerTasks(Array.isArray(timeline) ? timeline.map(mapTaskFromApi) : []);
+        
+        let merged: any[] = Array.isArray(timeline) ? timeline.map(mapTaskFromApi) : [];
+        
+        if (gcalRes && gcalRes.connected) {
+          setGcalConnected(true);
+          if (Array.isArray(gcalRes.events)) {
+             const dayEvents = gcalRes.events.filter((e: any) => {
+                  const dateStr = (e.start?.dateTime || e.start?.date || '');
+                  const eventDate = dateStr ? new Date(dateStr).toLocaleDateString('sv-SE') : '';
+                 return eventDate === selectedDateKey;
+             }).map((e: any) => {
+                 const startStr = e.start?.dateTime ? e.start.dateTime.slice(11,16) : '00:00';
+                 const endStr = e.end?.dateTime ? e.end.dateTime.slice(11,16) : '23:59';
+                 return {
+                    id: `gcal-${e.id}`,
+                    title: `📅 ${e.summary}`,
+                    time: startStr,
+                    endTime: endStr,
+                    category: "social",
+                    intensity: 2,
+                    done: false,
+                    source: 'gcal'
+                 };
+             });
+             merged = [...merged, ...dayEvents];
+             merged.sort((a,b) => a.time.localeCompare(b.time));
+          }
+        } else {
+          setGcalConnected(false);
+        }
+
+        setPlannerTasks(merged);
       } catch (error) {
         if (!ignore) {
           console.error("[planner/load] Failed to load timeline", error);
@@ -450,8 +892,44 @@ export function PlannerPage() {
   }, [selectedDateKey]);
 
   async function reloadPlannerTasks() {
-    const timeline = await api.get(`/timeline/${selectedDateKey}`);
-    setPlannerTasks(Array.isArray(timeline) ? timeline.map(mapTaskFromApi) : []);
+    try {
+        const [timeline, gcalRes] = await Promise.all([
+           api.get(`/timeline/${selectedDateKey}`),
+           api.get(`/gcal/events?date=${selectedDateKey}`).catch(() => ({ connected: false, events: [] }))
+        ]);
+        let merged: any[] = Array.isArray(timeline) ? timeline.map(mapTaskFromApi) : [];
+
+        if (gcalRes && gcalRes.connected) {
+          setGcalConnected(true);
+          if (Array.isArray(gcalRes.events)) {
+             const dayEvents = gcalRes.events.filter((e: any) => {
+                  const dateStr = (e.start?.dateTime || e.start?.date || '');
+                  const eventDate = dateStr ? new Date(dateStr).toLocaleDateString('sv-SE') : '';
+                 return eventDate === selectedDateKey;
+             }).map((e: any) => {
+                 const startStr = e.start?.dateTime ? e.start.dateTime.slice(11,16) : '00:00';
+                 const endStr = e.end?.dateTime ? e.end.dateTime.slice(11,16) : '23:59';
+                 return {
+                    id: `gcal-${e.id}`,
+                    title: `📅 ${e.summary}`,
+                    time: startStr,
+                    endTime: endStr,
+                    category: "social",
+                    intensity: 2,
+                    done: false,
+                    source: 'gcal'
+                 };
+             });
+             merged = [...merged, ...dayEvents];
+             merged.sort((a,b) => a.time.localeCompare(b.time));
+          }
+        } else {
+          setGcalConnected(false);
+        }
+        setPlannerTasks(merged);
+    } catch (e) {
+        console.error(e);
+    }
   }
 
   function closeNewForm() {
@@ -460,7 +938,8 @@ export function PlannerPage() {
   }
 
   function openNewFormAt(time: string) {
-    setNewForm({ ...EMPTY_FORM, time });
+    const defaultEnd = addMinutesToTime(time, 60);
+    setNewForm({ ...EMPTY_FORM, time, endTime: defaultEnd });
     setShowNewForm(true);
   }
 
@@ -553,13 +1032,92 @@ export function PlannerPage() {
     }
   }
 
+  const [globalTouchStartX, setGlobalTouchStartX] = useState<number | null>(null);
+
+  function handleAgendaTouchStart(e: React.TouchEvent) {
+     setGlobalTouchStartX(e.touches[0].clientX);
+  }
+
+  function handleAgendaTouchEnd(e: React.TouchEvent) {
+     if (globalTouchStartX === null) return;
+     const diff = e.changedTouches[0].clientX - globalTouchStartX;
+     if (diff > 100) setOffsetDias(c => c - 1);
+     else if (diff < -100) setOffsetDias(c => c + 1);
+     setGlobalTouchStartX(null);
+  }
+
+  async function handleCompleteTaskDirect(task: PlannerTask) {
+    try {
+      await api.post("/timeline", {
+        date: selectedDateKey,
+        forceSave: true,
+        blocks: [ { id: task.id, title: task.title, startTime: task.time, endTime: task.endTime, status: task.done ? 'planned' : 'completed', category: task.category, intensity: task.intensity } ],
+      });
+      await reloadPlannerTasks();
+      await refreshData();
+      showSuccess(task.done ? "Bloco reaberto." : "Bloco concluído.");
+    } catch (error: any) {
+      showError(error.message);
+    }
+  }
+
+  async function handleDeleteTaskDirect(task: PlannerTask) {
+    try {
+      await api.delete(`/timeline/${task.id}`);
+      await reloadPlannerTasks();
+      await refreshData();
+      showSuccess("Bloco excluído.");
+    } catch (error: any) {
+      showError(error.message);
+    }
+  }
+
+  async function handleDropTaskToTime(taskId: string, newTime: string) {
+    const task = plannerTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const durMinutes = diffMinutes(task.time, task.endTime);
+    const [h, m] = newTime.split(':').map(Number);
+    const endTotal = h * 60 + m + durMinutes;
+    const endH = Math.floor(endTotal / 60);
+    const endM = endTotal % 60;
+    const newEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+
+    try {
+      await api.post("/timeline", {
+        date: selectedDateKey,
+        forceSave: true,
+        blocks: [ { id: task.id, title: task.title, startTime: newTime, endTime: newEndTime, status: task.status, category: task.category, intensity: task.intensity } ]
+      });
+      await reloadPlannerTasks();
+      await refreshData();
+      showSuccess("Horário atualizado.");
+    } catch (error: any) {
+      showError(error.message);
+    }
+  }
+
   return (
-    <div style={{ flex: 1, padding: "20px", background: "var(--warm-bg)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
-        <AuraButtonV2 onClick={() => setOffsetDias((current) => current - 1)}>‹ Anterior</AuraButtonV2>
-        <span style={{ fontWeight: 700 }}>{formatDateLabel(dataAtual)}</span>
-        <AuraButtonV2 onClick={() => setOffsetDias((current) => current + 1)}>Próximo ›</AuraButtonV2>
-      </div>
+    <div style={{ flex: 1, padding: "20px", background: "var(--warm-bg)", overflowX: 'hidden' }}>
+      <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
+
+      {!gcalConnected && (
+        <div style={{ padding: "12px 14px", background: "var(--surface-color)", borderRadius: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.03)", border: "1px solid var(--border-neutral)" }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CalendarRange size={16} color="var(--accent-peach)" />
+            <span style={{ fontSize: 13, color: "var(--text-2)", fontWeight: 500 }}>Conectar ao Google Agenda</span>
+          </div>
+          <AuraButtonV2 variant="ghost" onClick={async () => {
+             try {
+                const res = await api.get('/gcal/auth-url');
+                if (res?.url) window.location.href = res.url;
+             } catch (e) {
+                console.error(e);
+             }
+          }}>
+            Conectar
+          </AuraButtonV2>
+        </div>
+      )}
 
       {/* ── Banner: Modo Proteção de Fase Baixa ── */}
       {isLowPhase && (
@@ -623,80 +1181,75 @@ export function PlannerPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", paddingBottom: 88 }}>
+      <div 
+         style={{ display: "flex", flexDirection: "column", paddingBottom: 88, overflowX: "hidden" }}
+         onTouchStart={handleAgendaTouchStart}
+         onTouchEnd={handleAgendaTouchEnd}
+      >
         {visibleAgendaSlots.map((slot) => {
           if (slot.kind === "task") {
-            const categoryOption = CATEGORY_OPTIONS.find((option) => option.value === slot.category) ?? CATEGORY_OPTIONS[3];
+            const categoryOption = getCategoryStyles(slot.category);
 
             return (
               <div key={slot.key} className="timeline-slot">
                 <span className="timeline-time">{slot.time}</span>
                 <div className="timeline-line" />
-                <button
-                  type="button"
-                  className="timeline-block-card interactive-card"
-                  onClick={() => openEditForm(slot.task)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    borderLeftColor: categoryOption.cor,
-                    opacity: slot.task.done ? 0.74 : 1,
-                  }}
-                >
-                  <div
-                    className="block-title"
-                    style={{
-                      textDecoration: slot.task.done ? "line-through" : "none",
-                    }}
-                  >
-                    {slot.task.title}
-                  </div>
-                  <div className="block-meta">
-                    {slot.time} — {slot.endTime} · {slot.durationLabel}
-                  </div>
-                  <div
-                    className="block-chip"
-                    style={{
-                      background: categoryOption.bg,
-                      color: categoryOption.textColor,
-                      border: `1px solid ${categoryOption.cor}33`,
-                    }}
-                  >
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: categoryOption.cor }} />
-                    {categoryOption.shortLabel}
-                  </div>
-                </button>
+                <SwipeableTaskCard 
+                   slot={slot} 
+                   categoryOption={categoryOption} 
+                   onClick={() => openEditForm(slot.task)}
+                   onComplete={handleCompleteTaskDirect}
+                   onDelete={handleDeleteTaskDirect}
+                   onDragStart={(e: any, id: string) => {
+                      e.dataTransfer.setData('text/plain', id);
+                      e.dataTransfer.effectAllowed = "move";
+                   }}
+                />
               </div>
             );
           }
 
           return (
-            <div key={slot.key} className="timeline-slot">
-              <span className="timeline-time">{slot.time}</span>
-              <div className="timeline-line" />
+            <div key={slot.key} className="timeline-slot" style={{ minHeight: slot.title ? 100 : 54 }}
+                 onDragOver={e => e.preventDefault()}
+                 onDrop={e => {
+                    e.preventDefault();
+                    const tid = e.dataTransfer.getData('text/plain');
+                    if (tid) handleDropTaskToTime(tid, slot.time);
+                 }}
+            >
+              <span className="timeline-time" style={{ opacity: slot.title ? 1 : 0.45 }}>{slot.time}</span>
+              <div className="timeline-line" style={{ opacity: slot.title ? 1 : 0.2 }} />
               <button
                 type="button"
                 className="timeline-block-card interactive-card"
                 onClick={() => openNewFormAt(slot.time)}
-                style={EMPTY_TIMELINE_CARD_STYLE}
+                style={slot.title ? EMPTY_TIMELINE_CARD_STYLE : { width: '100%', background: 'transparent', border: 'none', borderLeft: '2px solid transparent', textAlign: 'left', opacity: 0.6, display: 'flex', alignItems: 'center', boxShadow: 'none' }}
               >
-                <div className="block-title" style={{ color: "var(--text-2)" }}>
-                  {slot.title}
-                </div>
-                <div className="block-meta" style={{ marginTop: 4, lineHeight: 1.6 }}>
-                  {slot.description}
-                </div>
-                <div
-                  className="block-chip"
-                  style={{
-                    background: "var(--accent-peach-a3)",
-                    color: "var(--accent-peach-ink)",
-                    border: "1px solid var(--accent-peach-a5)",
-                  }}
-                >
-                  <span style={{ fontSize: 11, lineHeight: 1 }}>+</span>
-                  Criar bloco
-                </div>
+                {slot.title ? (
+                  <>
+                    <div className="block-title" style={{ color: "var(--text-2)" }}>
+                      {slot.title}
+                    </div>
+                    <div className="block-meta" style={{ marginTop: 4, lineHeight: 1.6 }}>
+                      {slot.description}
+                    </div>
+                    <div
+                      className="block-chip"
+                      style={{
+                        background: "var(--accent-peach-a3)",
+                        color: "var(--accent-peach-ink)",
+                        border: "1px solid var(--accent-peach-a5)",
+                        marginTop: 10
+                      }}
+                    >
+                      <span style={{ fontSize: 11, lineHeight: 1 }}>+</span>
+                      Criar bloco
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 13, color: 'var(--text-3)' }}>&nbsp;&nbsp;+&nbsp;</div>
+                )}
               </button>
             </div>
           );

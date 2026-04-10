@@ -9,6 +9,7 @@ import { AIService } from './services/ai.service';
 import { PlannerService } from './services/planner.service';
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
+import { GCalService } from './services/gcal.service';
 import { CheckinCreateSchema } from './contracts/checkin.contract';
 import { deriveCheckinSlot } from './contracts/checkin-slot';
 import { PlannerSyncSchema } from './contracts/planner.contract';
@@ -31,6 +32,7 @@ import {
 } from './lib/aura-prompt';
 import { normalizeAiSuggestion, usesJsonObjectResponse } from './lib/ai-suggest-response';
 import { extractJsonValue } from './lib/extract-json';
+import { getOpenRouterMaxCompletionTokens, getOpenRouterModel } from './lib/openrouter';
 import { ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
 import {
   AuraCommandMessageStreamSchema,
@@ -159,14 +161,14 @@ async function generateJournalSuggestedTasks(args: {
   recentMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
 }): Promise<SuggestedTask[]> {
   const OpenAI = (await import('openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
   const transcript = args.recentMessages
     .slice(-8)
     .map((message) => `${message.role === 'user' ? args.userName : 'Aura'}: ${message.content}`)
     .join('\n');
 
   const completion = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    model: getOpenRouterModel(),
     messages: [
       { role: 'system' as const, content: args.systemPrompt },
       {
@@ -187,7 +189,7 @@ REGRAS:
     ],
     temperature: 0.4,
     response_format: { type: 'json_object' },
-    max_completion_tokens: 4000,
+    max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
   });
 
   const content = completion.choices[0]?.message?.content?.trim() || '';
@@ -299,7 +301,7 @@ async function extractAndSaveLongTermMemory(
   summary: { summary: string; emotions: string[]; themes: string[] },
 ): Promise<void> {
   const OpenAI = (await import('openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
 
   const chatContent = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -308,7 +310,7 @@ async function extractAndSaveLongTermMemory(
     .join('\n');
 
   const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    model: getOpenRouterModel(),
     messages: [
       {
         role: 'system',
@@ -328,7 +330,7 @@ JSON APENAS: {"goals":["string"],"people":["string"],"patterns":["string"],"insi
       },
     ],
     response_format: { type: 'json_object' },
-    max_completion_tokens: 4000,
+    max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
     temperature: 0.2,
   });
 
@@ -1297,6 +1299,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       })
     );
 
+    // Sync
+    try {
+      for (const b of savedBlocks) await GCalService.syncBlockToGcal(prisma, userId, b, date);
+    } catch (e) {}
+
     return res.json({
       savedBlocks,
       conflicts, // Retornamos conflitos de forma passiva se forceSave for true
@@ -2108,10 +2115,10 @@ INSTRUÇÕES:
       }
 
       const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
       const generationConfig = resolveSuggestGenerationConfig(type, plainTextTypes.has(type));
       const completion = await openai.chat.completions.create({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        model: getOpenRouterModel(),
         messages: [
           {
             role: 'system' as const,
@@ -2125,7 +2132,7 @@ INSTRUÇÕES:
           },
           { role: 'user' as const, content: prompt },
         ],
-        max_completion_tokens: generationConfig.maxTokens,
+        max_completion_tokens: getOpenRouterMaxCompletionTokens(generationConfig.maxTokens),
         temperature: generationConfig.temperature,
         ...(generationConfig.useJsonResponse && usesJsonObjectResponse(type)
           ? { response_format: { type: 'json_object' as const } }
@@ -2186,7 +2193,7 @@ INSTRUÇÕES:
       const existingSummary = existingOnboarding?.aiProfileSummary ?? '';
 
       const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
 
       const { recentPatterns, moodCycleContext } = body;
       const rp = recentPatterns as any;
@@ -2232,9 +2239,9 @@ Tom próximo, sem diagnósticos clínicos. Use o nome ${firstName}.
 JSON APENAS: {"profileSummary":"..."}`,
           },
         ],
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        model: getOpenRouterModel(),
         response_format: { type: 'json_object' },
-        max_completion_tokens: 4000,
+        max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
         temperature: 0.4,
       } as any);
 
@@ -2277,7 +2284,7 @@ JSON APENAS: {"profileSummary":"..."}`,
       return res.status(503).json({ error: 'Google Calendar not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env' });
     }
     const redirectUri = `${process.env.API_URL || 'http://localhost:3001'}/api/gcal/callback`;
-    const scopes = 'https://www.googleapis.com/auth/calendar.readonly';
+    const scopes = 'https://www.googleapis.com/auth/calendar';
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&access_type=offline&prompt=consent&state=${(req as AuthRequest).userId}`;
     // Keep both keys for compatibility with the current frontend and future callers.
     return res.json({ url: authUrl, authUrl });
@@ -2315,22 +2322,47 @@ JSON APENAS: {"profileSummary":"..."}`,
 
   app.get('/api/gcal/events', requireAuth, async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
+    const requestedDate = req.query.date as string;
     try {
-      const pref = await prisma.userPreference.findUnique({ where: { userId }, select: { gcalAccessToken: true } }).catch(() => null);
-      if (!pref?.gcalAccessToken) return res.json({ connected: false, events: [] });
-      const now = new Date().toISOString();
-      const end = new Date(Date.now() + 7 * 24 * 3600_000).toISOString();
-      const eventsRes = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(now)}&timeMax=${encodeURIComponent(end)}&maxResults=10&singleEvents=true&orderBy=startTime`,
-        { headers: { Authorization: `Bearer ${pref.gcalAccessToken}` } }
-      );
+      let token = await GCalService.getValidToken(prisma, userId);
+      if (!token) return res.json({ connected: false, events: [] });
+
+      const fetchEvents = async (t: string) => {
+        let timeMin = new Date(Date.now() - 24 * 3600_000).toISOString();
+        let timeMax = new Date(Date.now() + 14 * 24 * 3600_000).toISOString();
+        if (requestedDate) {
+          // Fetch a slightly wider window to allow for timezone shifts (GMT-12 to GMT+14)
+          timeMin = new Date(`${requestedDate}T00:00:00Z`);
+          timeMin.setHours(timeMin.getHours() - 14); // Buffer for ahead timezones
+          timeMax = new Date(`${requestedDate}T23:59:59Z`);
+          timeMax.setHours(timeMax.getHours() + 14); // Buffer for behind timezones
+        }
+        
+        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin instanceof Date ? timeMin.toISOString() : timeMin)}&timeMax=${encodeURIComponent(timeMax instanceof Date ? timeMax.toISOString() : timeMax)}&singleEvents=true&orderBy=startTime&maxResults=100`;
+        return fetch(url, { headers: { Authorization: `Bearer ${t}` } });
+      };
+
+      let eventsRes = await fetchEvents(token);
+
+      if (eventsRes.status === 401) {
+        const pref = await prisma.userPreference.findUnique({ where: { userId }, select: { gcalRefreshToken: true } });
+        if (pref?.gcalRefreshToken) {
+          const newToken = await GCalService.refreshAccessToken(prisma, userId, pref.gcalRefreshToken);
+          if (newToken) {
+            eventsRes = await fetchEvents(newToken);
+          }
+        }
+      }
+
       if (!eventsRes.ok) return res.json({ connected: false, events: [] });
+
       const data = await eventsRes.json() as any;
       const events = (data.items || []).map((e: any) => ({
         id: e.id,
         summary: e.summary ?? 'Evento',
         start: { dateTime: e.start?.dateTime, date: e.start?.date },
-        end: e.end ? { dateTime: e.end?.dateTime } : undefined,
+        end: e.end ? { dateTime: e.end?.dateTime, date: e.end?.date } : undefined,
+        link: e.htmlLink
       }));
       return res.json({ connected: true, events });
     } catch (err) {

@@ -204,6 +204,7 @@ model TimelineBlock {
   intensity     String
   status        String   @default("planned")
   isAiSuggested Boolean  @default(false) @map("is_ai_suggested")
+  gcalEventId   String?  @map("gcal_event_id")
   aiReasoning   String?  @map("ai_reasoning") @db.Text
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

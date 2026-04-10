@@ -2,11 +2,12 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { PrismaClient } from '@app/database';
 import { buildAuraSystemPrompt, getFirstName, humanizeScore } from '../lib/aura-prompt';
+import { getOpenRouterMaxCompletionTokens, getOpenRouterModel } from '../lib/openrouter';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing' });
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing', baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
   }
   return _openai;
 }
@@ -43,7 +44,7 @@ export const WeeklyInsightSchema = z.object({
 export type WeeklyInsightData = z.infer<typeof WeeklyInsightSchema>;
 
 export class InsightService {
-  private static readonly MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  private static readonly MODEL = getOpenRouterModel();
 
   /**
    * Gera ou recupera insights semanais.
@@ -186,7 +187,7 @@ export class InsightService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: 6000,
+      max_completion_tokens: getOpenRouterMaxCompletionTokens(2000),
     });
 
     const aiResult = WeeklyInsightSchema.parse(JSON.parse(response.choices[0].message.content || '{}'));

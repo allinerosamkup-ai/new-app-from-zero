@@ -4,6 +4,7 @@ import { AuraCommandService } from './aura-command.service';
 
 async function run() {
   const capturedMessages: Array<{ role: string; content: string }> = [];
+  const capturedModels: string[] = [];
   const queuedResponses = [
     {
       assistantMessage: 'Entendi o compromisso. Revise e confirme antes de eu salvar no planner.',
@@ -54,7 +55,8 @@ async function run() {
   const fakeClient = {
     chat: {
       completions: {
-        create: async ({ messages }: any) => {
+        create: async ({ model, messages }: any) => {
+          capturedModels.push(model);
           capturedMessages.push(...messages);
           const next = queuedResponses.shift();
           return {
@@ -121,6 +123,7 @@ async function run() {
   assert.match(userPrompt, /needsConfirmation/i);
   assert.match(userPrompt, /recorrent/i);
   assert.match(userPrompt, /nunca diga que j[aá] salvou|n[aã]o diga que j[aá] salvou/i);
+  assert.ok(capturedModels.every((model) => model === 'openrouter/free'));
 }
 
 run()

@@ -4,11 +4,13 @@ import { CheckinService } from './checkin.service';
 
 async function run() {
   let capturedMessages: Array<{ role: string; content: string }> = [];
+  let capturedModel = '';
 
   const fakeClient = {
     chat: {
       completions: {
-        create: async ({ messages }: any) => {
+        create: async ({ model, messages }: any) => {
+          capturedModel = model;
           capturedMessages = messages;
           return {
             choices: [
@@ -53,6 +55,7 @@ async function run() {
   assert.equal(capturedMessages[0]?.role, 'system');
   assert.match(capturedMessages[0]?.content || '', /COORDENADA BIO-PSÍQUICA/i);
   assert.match(capturedMessages[0]?.content || '', /ritmo hoje/i);
+  assert.equal(capturedModel, 'openrouter/free');
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Analise os dados de check-in/i);
 }

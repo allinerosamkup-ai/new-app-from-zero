@@ -6,11 +6,16 @@ async function run() {
   const deltas: string[] = [];
   let capturedMessages: Array<{ role: string; content: string }> = [];
   let capturedSummaryMessages: Array<{ role: string; content: string }> = [];
+  let capturedStreamModel = '';
+  let capturedSummaryModel = '';
+
+  delete process.env.OPENAI_MODEL;
 
   const fakeClient = {
     chat: {
       completions: {
-        create: async ({ messages }: any) => {
+        create: async ({ model, messages }: any) => {
+          capturedStreamModel = model;
           capturedMessages = messages;
           return {
             async *[Symbol.asyncIterator]() {
@@ -64,13 +69,15 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /Humor em queda suave/i);
   assert.match(capturedMessages[0]?.content || '', /No máximo uma pergunta por resposta/i);
   assert.match(capturedMessages[0]?.content || '', /colete em micro-passos/i);
+  assert.equal(capturedStreamModel, 'openrouter/free');
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Estou preocupada com minha energia/i);
 
   const fakeSummaryClient = {
     chat: {
       completions: {
-        create: async ({ messages }: any) => {
+        create: async ({ model, messages }: any) => {
+          capturedSummaryModel = model;
           capturedSummaryMessages = messages;
           return {
             choices: [
@@ -106,6 +113,7 @@ async function run() {
   assert.match(capturedSummaryMessages[1]?.content || '', /contemplativa e humana/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não faça perguntas no fechamento/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não escreva como relatório/i);
+  assert.equal(capturedSummaryModel, 'openrouter/free');
 }
 
 run()

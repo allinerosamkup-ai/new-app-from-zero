@@ -146,7 +146,7 @@ async function run() {
 
     assert.match(streamBody, /event: assistant\.delta/);
     assert.match(streamBody, /event: assistant\.completed/);
-    assert.match(streamBody, /event: session\.finalized/);
+    assert.doesNotMatch(streamBody, /event: session\.finalized/);
     assert.equal(savedMessages.length, 2);
     assert.equal(savedMessages[0].role, 'user');
     assert.equal(savedMessages[1].role, 'assistant');
