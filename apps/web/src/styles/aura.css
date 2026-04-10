@@ -1688,26 +1688,28 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   width: 100%;
   height: 100%;
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  flex-direction: row;
+  align-items: flex-end;
   gap: 2px;
 }
 
 .insights-bar {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: var(--bar-h);
+  min-height: 2px;
   opacity: var(--bar-opacity);
-  transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease;
+  transition: height 300ms ease, opacity 180ms ease;
 }
 
 .insights-bar-humor {
   background: var(--accent-sage);
-  border-radius: 4px 4px 0 0;
+  border-radius: 4px 4px 2px 2px;
 }
 
 .insights-bar-energia {
   background: var(--accent-peach);
-  border-radius: 0 0 3px 3px;
+  border-radius: 4px 4px 2px 2px;
 }
 
 .insights-bar--active {

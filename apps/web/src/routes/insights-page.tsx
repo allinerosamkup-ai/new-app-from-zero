@@ -127,8 +127,13 @@ function MoodLineChart({ data }: { data: Array<{ date: string; humor: number; en
 export function InsightsPage() {
   const { state, addTask, refreshData } = useAuraStore();
 
-  // Refresh on mount to ensure fresh data
-  useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Refresh on mount and on page focus (catches returning from check-in)
+  useEffect(() => {
+    void refreshData();
+    const onFocus = () => { void refreshData(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
 
@@ -647,9 +652,14 @@ export function InsightsPage() {
               Base (50%)
             </span>
           </div>
-          <div onClick={() => navigate("/goals")} className="harmony-goals-link">
+          <button
+            type="button"
+            onClick={() => navigate("/goals")}
+            className="harmony-goals-link"
+            style={{ background: "none", border: "none", padding: "6px 0", width: "100%", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
             Ver detalhes das metas →
-          </div>
+          </button>
         </div>
 
         <h2 className="harmony-section-title">Dimensões correlacionadas</h2>
