@@ -2328,8 +2328,8 @@ JSON APENAS: {"profileSummary":"..."}`,
       if (!token) return res.json({ connected: false, events: [] });
 
       const fetchEvents = async (t: string) => {
-        let timeMin = new Date(Date.now() - 24 * 3600_000).toISOString();
-        let timeMax = new Date(Date.now() + 14 * 24 * 3600_000).toISOString();
+        let timeMin: Date = new Date(Date.now() - 24 * 3600_000);
+        let timeMax: Date = new Date(Date.now() + 14 * 24 * 3600_000);
         if (requestedDate) {
           // Fetch a slightly wider window to allow for timezone shifts (GMT-12 to GMT+14)
           timeMin = new Date(`${requestedDate}T00:00:00Z`);
@@ -2337,8 +2337,8 @@ JSON APENAS: {"profileSummary":"..."}`,
           timeMax = new Date(`${requestedDate}T23:59:59Z`);
           timeMax.setHours(timeMax.getHours() + 14); // Buffer for behind timezones
         }
-        
-        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin instanceof Date ? timeMin.toISOString() : timeMin)}&timeMax=${encodeURIComponent(timeMax instanceof Date ? timeMax.toISOString() : timeMax)}&singleEvents=true&orderBy=startTime&maxResults=100`;
+
+        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin.toISOString())}&timeMax=${encodeURIComponent(timeMax.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=100`;
         return fetch(url, { headers: { Authorization: `Bearer ${t}` } });
       };
 
