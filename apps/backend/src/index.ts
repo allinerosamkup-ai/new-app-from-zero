@@ -32,7 +32,7 @@ import {
 } from './lib/aura-prompt';
 import { normalizeAiSuggestion, usesJsonObjectResponse } from './lib/ai-suggest-response';
 import { extractJsonValue } from './lib/extract-json';
-import { getOpenRouterMaxCompletionTokens, getOpenRouterModel } from './lib/openrouter';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel } from './lib/openai-config';
 import { ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
 import {
   AuraCommandMessageStreamSchema,
@@ -161,14 +161,14 @@ async function generateJournalSuggestedTasks(args: {
   recentMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
 }): Promise<SuggestedTask[]> {
   const OpenAI = (await import('openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const transcript = args.recentMessages
     .slice(-8)
     .map((message) => `${message.role === 'user' ? args.userName : 'Aura'}: ${message.content}`)
     .join('\n');
 
   const completion = await openai.chat.completions.create({
-    model: getOpenRouterModel(),
+    model: getOpenAiModel(),
     messages: [
       { role: 'system' as const, content: args.systemPrompt },
       {
@@ -189,7 +189,7 @@ REGRAS:
     ],
     temperature: 0.4,
     response_format: { type: 'json_object' },
-    max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
+    max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
   });
 
   const content = completion.choices[0]?.message?.content?.trim() || '';
@@ -301,7 +301,7 @@ async function extractAndSaveLongTermMemory(
   summary: { summary: string; emotions: string[]; themes: string[] },
 ): Promise<void> {
   const OpenAI = (await import('openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
   const chatContent = messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -310,7 +310,7 @@ async function extractAndSaveLongTermMemory(
     .join('\n');
 
   const response = await openai.chat.completions.create({
-    model: getOpenRouterModel(),
+    model: getOpenAiModel(),
     messages: [
       {
         role: 'system',
@@ -330,7 +330,7 @@ JSON APENAS: {"goals":["string"],"people":["string"],"patterns":["string"],"insi
       },
     ],
     response_format: { type: 'json_object' },
-    max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
+    max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
     temperature: 0.2,
   });
 
@@ -1727,9 +1727,15 @@ REGRAS INVIOLÁVEIS:
 
 PROIBIDO ABSOLUTAMENTE: "Descanse", "Beba água", quadro de visão, mapa de visão, planejar semana, organizar arquivos, qualquer genérico sem contexto real da pessoa.
 
+HORÁRIOS OBRIGATÓRIOS: use apenas entre 08:00 e 20:00. NUNCA sugira horários após 20:00, meia-noite ou madrugada.
+
 Retorne SOMENTE array JSON: [{"title":"título específico e real","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
       } else if (type === 'journal-tasks') {
-        prompt = `Você é uma assistente pessoal carinhosa. Com base nessa conversa de diário:\n\n${context.messages}\n\nSugira 2-3 tarefas práticas e gentis que a pessoa pode fazer hoje para apoiar o que foi discutido. Tom encorajador. Retorne SOMENTE um array JSON: [{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
+        const nowHour = new Date().getHours();
+        const timeWindow = nowHour >= 20
+          ? 'ATENÇÃO: já são mais de 20h. Sugira tarefas para AMANHÃ com horários entre 08:00 e 12:00.'
+          : `Sugira horários realistas entre ${Math.max(nowHour + 1, 8).toString().padStart(2, '0')}:00 e 20:00. NUNCA use horários após 20:00, meia-noite ou madrugada.`;
+        prompt = `Você é uma assistente pessoal carinhosa. Com base nessa conversa de diário:\n\n${context.messages}\n\nSugira 2-3 tarefas práticas e gentis que a pessoa pode fazer para apoiar o que foi discutido. Tom encorajador.\n\n${timeWindow}\n\nRetorne SOMENTE um array JSON: [{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
       } else if (type === 'goal-subtasks') {
         const existing = context.existingSubtasks?.length ? `\nSubtarefas já existentes: ${context.existingSubtasks.join(', ')}` : '';
         prompt = `${userName} pode estar com energia baixa ou oscilante. Gere micro-passos sem carga cognitiva e sem abstrações.
@@ -2116,10 +2122,10 @@ INSTRUÇÕES:
       }
 
       const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
       const generationConfig = resolveSuggestGenerationConfig(type, plainTextTypes.has(type));
       const completion = await openai.chat.completions.create({
-        model: getOpenRouterModel(),
+        model: getOpenAiModel(),
         messages: [
           {
             role: 'system' as const,
@@ -2133,7 +2139,7 @@ INSTRUÇÕES:
           },
           { role: 'user' as const, content: prompt },
         ],
-        max_completion_tokens: getOpenRouterMaxCompletionTokens(generationConfig.maxTokens),
+        max_completion_tokens: getOpenAiMaxCompletionTokens(generationConfig.maxTokens),
         temperature: generationConfig.temperature,
         ...(generationConfig.useJsonResponse && usesJsonObjectResponse(type)
           ? { response_format: { type: 'json_object' as const } }
@@ -2194,7 +2200,7 @@ INSTRUÇÕES:
       const existingSummary = existingOnboarding?.aiProfileSummary ?? '';
 
       const OpenAI = (await import('openai')).default;
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
       const { recentPatterns, moodCycleContext } = body;
       const rp = recentPatterns as any;
@@ -2240,9 +2246,9 @@ Tom próximo, sem diagnósticos clínicos. Use o nome ${firstName}.
 JSON APENAS: {"profileSummary":"..."}`,
           },
         ],
-        model: getOpenRouterModel(),
+        model: getOpenAiModel(),
         response_format: { type: 'json_object' },
-        max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
+        max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
         temperature: 0.4,
       } as any);
 

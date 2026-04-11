@@ -285,8 +285,6 @@ model WeeklyInsight {
   avgMood     Float?   @map("avg_mood")
   avgEnergy   Float?   @map("avg_energy")
   checkinCount Int     @map("checkin_count")
-  bestDay     String?  @map("best_day")
-  worstDay    String?  @map("worst_day")
   insights    Json?
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

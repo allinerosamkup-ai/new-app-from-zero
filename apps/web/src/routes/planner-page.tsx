@@ -135,9 +135,6 @@ const EMPTY_FORM: FormState = {
   energyLevel: "media",
 };
 
-const DIAS = ["Seg.", "Ter.", "Qua.", "Qui.", "Sex.", "Sáb.", "Dom."];
-const MESES = ["Jan.", "Fev.", "Mar.", "Abr.", "Mai.", "Jun.", "Jul.", "Ago.", "Set.", "Out.", "Nov.", "Dez."];
-
 function buildChecklistItems(items: string[]): ChecklistItem[] {
   return items
     .map((text) => text.trim())
@@ -160,10 +157,6 @@ function mergeChecklistItems(existing: ChecklistItem[], incoming: string[]): Che
 
 function resolveStoredNoteMode(note: string, checklist: ChecklistItem[]): NoteMode {
   return note.trim().length === 0 && checklist.length > 0 ? "checklist" : "text";
-}
-
-function formatDateLabel(date: Date) {
-  return `${DIAS[date.getDay() === 0 ? 6 : date.getDay() - 1]}, ${date.getDate()} de ${MESES[date.getMonth()]}`;
 }
 
 function formatDateKey(date: Date) {
@@ -781,7 +774,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 }
 
 export function PlannerPage() {
-  const { refreshData, state } = useAuraStore();
+  const { refreshData, state, toggleSubGoal } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
   // ── Modo Proteção de Fase Baixa (7.2) ──────────────────────
@@ -830,6 +823,37 @@ export function PlannerPage() {
       : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""}`;
 
   const [gcalConnected, setGcalConnected] = useState(false);
+
+  // ── Foco do dia — GTD tasks + first uncompleted goal subtask ──
+  const [gtdFocusItems, setGtdFocusItems] = useState<Array<{
+    id: string; text: string; type: "tarefa" | "meta"; goalTitle?: string; goalId?: number | string;
+  }>>(() => {
+    try {
+      const raw: any[] = JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
+      return raw
+        .filter(i => !i.archived && !i.sentToGoal && !i.done && i.clarified && i.tipo === "proxima_acao" && !i.linkedGoalId)
+        .map(i => ({ id: i.id, text: i.titulo || i.text, type: "tarefa" as const }));
+    } catch { return []; }
+  });
+
+  const goalFocusItems = useMemo(() => {
+    return state.goals
+      .map(g => {
+        const nextSub = g.subtasks.find(s => !s.done);
+        if (!nextSub) return null;
+        return { id: `goal-${g.id}-${nextSub.id}`, text: nextSub.title, type: "meta" as const, goalTitle: g.title, goalId: g.id, subId: nextSub.id };
+      })
+      .filter(Boolean) as Array<{ id: string; text: string; type: "meta"; goalTitle: string; goalId: number | string; subId: number | string }>;
+  }, [state.goals]);
+
+  function toggleGtdFocusItem(itemId: string) {
+    try {
+      const raw: any[] = JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
+      const updated = raw.map(i => i.id === itemId ? { ...i, done: true } : i);
+      localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
+    } catch {}
+    setGtdFocusItems(prev => prev.filter(i => i.id !== itemId));
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -1182,7 +1206,82 @@ export function PlannerPage() {
         </div>
       </div>
 
-      <div 
+      {/* ── Foco do dia — GTD tasks + next goal actions ── */}
+      {(gtdFocusItems.length > 0 || goalFocusItems.length > 0) && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.2" strokeLinecap="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
+              Foco do dia
+            </span>
+            <span style={{
+              background: "var(--accent-peach-a3)", color: "var(--accent-peach-ink)",
+              borderRadius: 999, padding: "0 6px", fontSize: 10, fontWeight: 700,
+              border: "1px solid var(--accent-peach-a5)",
+            }}>{gtdFocusItems.length + goalFocusItems.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {gtdFocusItems.map(item => (
+              <div key={item.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "rgba(255,255,255,0.68)", backdropFilter: "blur(12px)",
+                border: "1px solid rgba(99,152,169,0.18)",
+                borderLeft: "3px solid var(--accent-sky)",
+                borderRadius: 12, padding: "8px 12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              }}>
+                <button
+                  onClick={() => toggleGtdFocusItem(item.id)}
+                  style={{
+                    width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer",
+                    background: "transparent", border: "1.5px solid var(--accent-sky)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".07em", color: "var(--accent-sky)", textTransform: "uppercase", marginBottom: 1 }}>
+                    ⚡ Tarefa
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--text-1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.text}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {goalFocusItems.map(item => (
+              <div key={item.id} style={{
+                display: "flex", alignItems: "center", gap: 10,
+                background: "rgba(255,255,255,0.68)", backdropFilter: "blur(12px)",
+                border: "1px solid rgba(215,137,127,0.18)",
+                borderLeft: "3px solid var(--accent-peach)",
+                borderRadius: 12, padding: "8px 12px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              }}>
+                <button
+                  onClick={() => { toggleSubGoal(item.goalId, item.subId); }}
+                  style={{
+                    width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer",
+                    background: "rgba(215,137,127,0.12)", border: "1.5px solid var(--accent-peach)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".07em", color: "var(--accent-peach)", textTransform: "uppercase", marginBottom: 1 }}>
+                    🎯 {item.goalTitle}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--text-1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.text}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div
          style={{ display: "flex", flexDirection: "column", paddingBottom: 88, overflowX: "hidden" }}
          onTouchStart={handleAgendaTouchStart}
          onTouchEnd={handleAgendaTouchEnd}

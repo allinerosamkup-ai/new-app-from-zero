@@ -123,7 +123,7 @@ async function run() {
   assert.match(userPrompt, /needsConfirmation/i);
   assert.match(userPrompt, /recorrent/i);
   assert.match(userPrompt, /nunca diga que j[aá] salvou|n[aã]o diga que j[aá] salvou/i);
-  assert.ok(capturedModels.every((model) => model === 'openrouter/free'));
+  assert.ok(capturedModels.every((model) => model === 'gpt-5.4-nano'));
 }
 
 run()

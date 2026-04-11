@@ -36,7 +36,7 @@ export class MemoryService {
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
 
   // ── Gera embedding via OpenAI ────────────────────────────────

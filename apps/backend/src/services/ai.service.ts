@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { OnboardingAiOutputSchema, type OnboardingAiOutput } from '../contracts/onboarding-ai.contract';
-import { getOpenRouterMaxCompletionTokens, getOpenRouterModel } from '../lib/openrouter';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
 
 let _openai: OpenAI | null = null;
@@ -9,7 +9,7 @@ function getOpenAI(): OpenAI {
   if (!_openai) {
     const key = process.env.OPENAI_API_KEY;
     if (!key) throw new Error('OPENAI_API_KEY is not set in environment variables');
-    _openai = new OpenAI({ apiKey: key, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+    _openai = new OpenAI({ apiKey: key });
   }
   return _openai;
 }
@@ -65,7 +65,7 @@ export type OnboardingProfileInput = {
 };
 
 export class AIService {
-  private static readonly MODEL = getOpenRouterModel();
+  private static readonly MODEL = getOpenAiModel();
   private static readonly CONTEXT_LIMIT = 50;
 
 
@@ -188,7 +188,7 @@ export class AIService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
+      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
     } as any);
 
     const content = response.choices?.[0]?.message?.content;
@@ -250,7 +250,7 @@ export class AIService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
+      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
     });
 
     const content = response.choices[0].message.content;
@@ -302,7 +302,7 @@ export class AIService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenRouterMaxCompletionTokens(1500),
+      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
     } as any);
 
     const content = response.choices[0].message.content;

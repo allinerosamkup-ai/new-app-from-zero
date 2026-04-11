@@ -69,7 +69,7 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /Humor em queda suave/i);
   assert.match(capturedMessages[0]?.content || '', /No máximo uma pergunta por resposta/i);
   assert.match(capturedMessages[0]?.content || '', /colete em micro-passos/i);
-  assert.equal(capturedStreamModel, 'openrouter/free');
+  assert.equal(capturedStreamModel, 'gpt-5.4-nano');
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Estou preocupada com minha energia/i);
 
@@ -113,7 +113,7 @@ async function run() {
   assert.match(capturedSummaryMessages[1]?.content || '', /contemplativa e humana/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não faça perguntas no fechamento/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não escreva como relatório/i);
-  assert.equal(capturedSummaryModel, 'openrouter/free');
+  assert.equal(capturedSummaryModel, 'gpt-5.4-nano');
 }
 
 run()

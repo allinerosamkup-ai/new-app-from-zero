@@ -8,8 +8,8 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useNavigate } from "react-router-dom";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import {
-  Plus, Mic, Trash2, Sparkles, ChevronDown, ChevronUp,
-  Link, X, Zap, BrainCircuit, Inbox,
+  Plus, Mic, Trash2, ChevronDown, ChevronUp,
+  Link, X, Zap, Inbox,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
@@ -139,6 +139,15 @@ function GoalCard({
 
         {/* Title + progress bar */}
         <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ marginBottom: 3 }}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 3,
+              background: color.bg, border: `1px solid ${color.accent}44`,
+              borderRadius: 999, padding: "1px 7px",
+              fontSize: 9, fontWeight: 800, letterSpacing: ".07em",
+              color: color.accent, textTransform: "uppercase" as const,
+            }}>🎯 Meta</span>
+          </div>
           <p style={{
             fontSize: 14, fontWeight: 700, margin: "0 0 6px",
             color: done ? "var(--accent-sage)" : "var(--text-1)",
@@ -367,6 +376,7 @@ export function GoalsPage() {
   const [linkingItem, setLinkingItem] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const capturingRef = useRef(false);
+  const [activeTab, setActiveTab] = useState<"capturar" | "metas" | "acoes">("capturar");
 
   useEffect(() => {
     localStorage.setItem("gtd-inbox-v1", JSON.stringify(gtdItems));
@@ -489,11 +499,16 @@ export function GoalsPage() {
         setCaptureReply(`Guardei na caixa de entrada. Vou clarificar isso em seguida.`);
         setTimeout(() => clarifyItem(itemId), 100);
       }
-    } catch {
+    } catch (err) {
       const itemId = `gtd-${Date.now()}`;
       setGtdItems(prev => [{ id: itemId, text, capturedAt: new Date().toISOString() }, ...prev]);
-      setInboxOpen(true);
-      setCaptureReply(`Guardei para revisão. Você pode clarificar depois.`);
+      const msg = err instanceof Error ? err.message : "";
+      const isRateLimit = msg.includes("429") || msg.includes("rate") || msg.includes("limit");
+      setCaptureReply(isRateLimit
+        ? `A IA está sobrecarregada agora. Guardei na aba Ações para você revisar depois.`
+        : `Guardei para revisão. Você pode clarificar depois na aba Capturar.`
+      );
+      if (!isRateLimit) showError("Erro ao classificar. Item salvo para revisão.");
     } finally {
       setCaptureLoading(false);
       capturingRef.current = false;
@@ -621,7 +636,44 @@ export function GoalsPage() {
           </div>
         )}
 
+        {/* ── Tab bar ─────────────────────────────────────────── */}
+        <div style={{
+          display: "flex", gap: 4, marginBottom: 20,
+          background: "rgba(0,0,0,0.04)", borderRadius: 14, padding: 4,
+        }}>
+          {([
+            { key: "capturar" as const, label: "Capturar", count: inbox.length },
+            { key: "metas" as const, label: "Metas", count: goals.length },
+            { key: "acoes" as const, label: "Ações", count: standaloneActions.filter(i => !i.done).length },
+          ] as const).map(tab => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+                flex: 1, padding: "8px 6px", borderRadius: 10, border: "none",
+                background: isActive ? "white" : "transparent",
+                boxShadow: isActive ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
+                cursor: "pointer", fontSize: 12,
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? "var(--text-1)" : "var(--text-3)",
+                transition: "all 200ms",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+              }}>
+                {tab.label}
+                {tab.count > 0 && (
+                  <span style={{
+                    background: isActive ? "var(--accent-peach)" : "rgba(0,0,0,0.10)",
+                    color: isActive ? "white" : "var(--text-3)",
+                    borderRadius: 999, padding: "0 5px",
+                    fontSize: 10, fontWeight: 700, lineHeight: "16px",
+                  }}>{tab.count}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
         {/* ── Captura conversacional GTD ── */}
+        {activeTab === "capturar" && (
         <div style={{ marginBottom: 24 }}>
 
           {/* Bubble da Airia — pergunta ou confirmação */}
@@ -744,8 +796,10 @@ export function GoalsPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* ── METAS ──────────────────────────────────────── */}
+        {activeTab === "metas" && (<>
         <button
           onClick={() => setMetasOpen(o => !o)}
           style={{
@@ -803,9 +857,10 @@ export function GoalsPage() {
             ))
           )
         )}
+        </>)}
 
         {/* ── PRÓXIMAS AÇÕES standalone ───────────────────── */}
-        {standaloneActions.length > 0 && (
+        {activeTab === "acoes" && standaloneActions.length > 0 && (
           <>
             <div style={{ height: 8 }} />
             <button
@@ -845,6 +900,15 @@ export function GoalsPage() {
                 }}>
                   <TaskBox done={!!item.done} onClick={() => toggleStandaloneAction(item.id)} />
                   <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ marginBottom: 2 }}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 3,
+                        background: "rgba(99,152,169,0.10)", border: "1px solid rgba(99,152,169,0.25)",
+                        borderRadius: 999, padding: "1px 7px",
+                        fontSize: 9, fontWeight: 800, letterSpacing: ".07em",
+                        color: "var(--accent-sky)", textTransform: "uppercase" as const,
+                      }}>⚡ Tarefa</span>
+                    </div>
                     <div style={{
                       fontSize: "calc(var(--a) * 0.9)", fontWeight: 500,
                       color: item.done ? "var(--text-3)" : "var(--text-1)",
@@ -919,7 +983,7 @@ export function GoalsPage() {
         )}
 
         {/* ── INBOX ─────────────────────────────────────── */}
-        {inbox.length > 0 && (
+        {activeTab === "capturar" && inbox.length > 0 && (
           <>
             <div style={{ height: 8 }} />
             <button
@@ -987,7 +1051,7 @@ export function GoalsPage() {
         )}
 
         {/* ── PARKED ────────────────────────────────────── */}
-        {parked.length > 0 && (
+        {activeTab === "acoes" && parked.length > 0 && (
           <>
             <div style={{ height: 8 }} />
             <div style={{

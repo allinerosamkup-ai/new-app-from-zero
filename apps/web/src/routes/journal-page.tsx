@@ -120,6 +120,9 @@ export function JournalPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [showFinalizationModal, setShowFinalizationModal] = useState(false);
   const [finalizationResult, setFinalizationResult] = useState<JournalFinalizationResult | null>(null);
+  const [addingToPlanner, setAddingToPlanner] = useState<string | null>(null);
+  const [addedToPlanner, setAddedToPlanner] = useState<Set<string>>(new Set());
+  const [dayChoice, setDayChoice] = useState<{ key: string; task: SuggestedTask; isCommitment?: boolean; text?: string } | null>(null);
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAutoOpenedRef = useRef(false);
@@ -320,6 +323,55 @@ export function JournalPage() {
     setIsRecording(true);
   }
 
+  async function addTaskToPlanner(key: string, task: SuggestedTask, dayOffset: number) {
+    setAddingToPlanner(key);
+    try {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + dayOffset);
+      const dateKey = targetDate.toISOString().slice(0, 10);
+
+      // Normalize time to 08:00-20:00
+      let time = task.time || "09:00";
+      const [h] = time.split(":").map(Number);
+      if (h < 8 || h >= 20) time = dayOffset > 0 ? "09:00" : "20:00";
+
+      const endH = Math.min(Number(time.split(":")[0]) + 1, 20);
+      const endTime = `${String(endH).padStart(2, "0")}:${time.split(":")[1] || "00"}`;
+
+      await api.post("/timeline", {
+        date: dateKey,
+        forceSave: true,
+        blocks: [{
+          title: task.title,
+          startTime: time,
+          endTime,
+          category: task.category === "saude" ? "autocuidado" : task.category,
+          intensity: "M",
+          status: "planned",
+        }],
+      });
+
+      setAddedToPlanner(prev => new Set([...prev, key]));
+      showSuccess(dayOffset === 0 ? "Adicionado à agenda de hoje!" : "Adicionado à agenda de amanhã!");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Não foi possível adicionar ao planner.");
+    } finally {
+      setAddingToPlanner(null);
+      setDayChoice(null);
+    }
+  }
+
+  function handleAddClick(key: string, task: SuggestedTask) {
+    const nowHour = new Date().getHours();
+    const taskHour = task.time ? Number(task.time.split(":")[0]) : 9;
+    // After 20h or task time >= 20h → ask today or tomorrow
+    if (nowHour >= 20 || taskHour >= 20) {
+      setDayChoice({ key, task });
+    } else {
+      void addTaskToPlanner(key, task, 0);
+    }
+  }
+
   const activePersistedSession = sessions.find((session) => session.status === "active");
   const mainButtonLabel = sessionId || activePersistedSession ? "Continuar meu diário" : "Abrir meu diário";
 
@@ -396,11 +448,29 @@ export function JournalPage() {
           {commitmentSuggestions.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>Sem compromisso sugerido para este fechamento.</p>
           ) : (
-            commitmentSuggestions.map((item) => (
-              <div key={item} style={{ borderRadius: 12, border: "1px solid rgba(197,165,147,.24)", background: "#fff", padding: "10px 12px", fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>
-                {item}
-              </div>
-            ))
+            commitmentSuggestions.map((item, idx) => {
+              const key = `commit-${idx}`;
+              const added = addedToPlanner.has(key);
+              const fakeTask: SuggestedTask = { title: item.replace(/^(Hoje|Amanhã|[^:]+):\s*/, ""), category: "rotina" };
+              return (
+                <div key={item} style={{ borderRadius: 12, border: "1px solid rgba(197,165,147,.24)", background: "#fff", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>{item}</p>
+                  <button
+                    onClick={() => !added && handleAddClick(key, fakeTask)}
+                    disabled={added || addingToPlanner === key}
+                    style={{
+                      alignSelf: "flex-start", border: "none", borderRadius: 8, cursor: added ? "default" : "pointer",
+                      padding: "5px 12px", fontSize: 11, fontWeight: 700,
+                      background: added ? "rgba(150,199,179,.18)" : "rgba(244,168,150,.15)",
+                      color: added ? "var(--accent-sage)" : "var(--accent-peach)",
+                      transition: "all 200ms",
+                    }}
+                  >
+                    {added ? "✓ Adicionado" : addingToPlanner === key ? "Adicionando..." : "+ Planner"}
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
 
@@ -411,26 +481,79 @@ export function JournalPage() {
           {finalizationResult.suggestedTasks.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>Nenhuma tarefa foi sugerida neste fechamento.</p>
           ) : (
-            finalizationResult.suggestedTasks.map((task, index) => (
-              <div key={`${task.title}-${index}`} style={{ borderRadius: 12, border: "1px solid rgba(150,199,179,.28)", background: "rgba(150,199,179,.09)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                <p style={{ margin: 0, fontSize: 13, color: "var(--text-1)", fontWeight: 700 }}>{task.title}</p>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
-                    {finalizationResult.temporalLabel}
-                  </span>
-                  <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
-                    {task.category}
-                  </span>
-                  {task.time ? (
+            finalizationResult.suggestedTasks.map((task, index) => {
+              const key = `task-${index}`;
+              const added = addedToPlanner.has(key);
+              return (
+                <div key={`${task.title}-${index}`} style={{ borderRadius: 12, border: "1px solid rgba(150,199,179,.28)", background: "rgba(150,199,179,.09)", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: "var(--text-1)", fontWeight: 700 }}>{task.title}</p>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
-                      {task.time}
+                      {finalizationResult.temporalLabel}
                     </span>
-                  ) : null}
+                    <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
+                      {task.category}
+                    </span>
+                    {task.time ? (
+                      <span style={{ fontSize: 10.5, padding: "3px 7px", borderRadius: 999, background: "#fff", border: "1px solid rgba(99,152,169,.24)", color: "var(--text-2)", fontWeight: 700 }}>
+                        {task.time}
+                      </span>
+                    ) : null}
+                    <button
+                      onClick={() => !added && handleAddClick(key, task)}
+                      disabled={added || addingToPlanner === key}
+                      style={{
+                        marginLeft: "auto", border: "none", borderRadius: 8, cursor: added ? "default" : "pointer",
+                        padding: "5px 12px", fontSize: 11, fontWeight: 700,
+                        background: added ? "rgba(150,199,179,.18)" : "var(--accent-peach)",
+                        color: added ? "var(--accent-sage)" : "#fff",
+                        boxShadow: added ? "none" : "0 2px 8px rgba(244,168,150,.35)",
+                        transition: "all 200ms",
+                      }}
+                    >
+                      {added ? "✓ Na agenda" : addingToPlanner === key ? "..." : "+ Planner"}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
+
+        {/* Hoje ou Amanhã? dialog */}
+        {dayChoice && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(17,24,39,.5)", zIndex: 1300,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          }}>
+            <div style={{
+              background: "#fff", borderRadius: 20, padding: 20, maxWidth: 320, width: "100%",
+              boxShadow: "0 24px 64px rgba(17,24,39,.2)",
+            }}>
+              <p style={{ fontWeight: 800, fontSize: 15, margin: "0 0 6px", color: "var(--text-1)" }}>Quando adicionar?</p>
+              <p style={{ fontSize: 13, color: "var(--text-2)", margin: "0 0 16px", lineHeight: 1.5 }}>
+                "{dayChoice.task.title}"
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 0)}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "1.5px solid var(--accent-peach)", background: "rgba(244,168,150,.1)", color: "var(--accent-peach)", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+                >
+                  Hoje
+                </button>
+                <button
+                  onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 1)}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13, boxShadow: "0 4px 14px rgba(244,168,150,.4)" }}
+                >
+                  Amanhã
+                </button>
+              </div>
+              <button onClick={() => setDayChoice(null)} style={{ width: "100%", marginTop: 10, background: "none", border: "none", color: "var(--text-3)", fontSize: 12, cursor: "pointer", padding: 6 }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>

@@ -6,14 +6,14 @@ import {
   type AuraCommandResponse,
 } from '../contracts/aura-command.contract';
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
-import { getOpenRouterMaxCompletionTokens, getOpenRouterModel } from '../lib/openrouter';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
     const key = process.env.OPENAI_API_KEY;
     if (!key) throw new Error('OPENAI_API_KEY is not set in environment variables');
-    _openai = new OpenAI({ apiKey: key, baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+    _openai = new OpenAI({ apiKey: key });
   }
   return _openai;
 }
@@ -25,7 +25,7 @@ const openai = new Proxy({} as OpenAI, {
 });
 
 export class AuraCommandService {
-  private static readonly MODEL = getOpenRouterModel();
+  private static readonly MODEL = getOpenAiModel();
 
   static async interpretCommand(
     input: {
@@ -98,7 +98,7 @@ REGRAS:
         },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenRouterMaxCompletionTokens(1200),
+      max_completion_tokens: getOpenAiMaxCompletionTokens(1200),
     } as any);
 
     const content = response.choices?.[0]?.message?.content;

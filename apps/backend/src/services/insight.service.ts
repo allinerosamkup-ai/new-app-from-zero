@@ -2,12 +2,12 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { PrismaClient } from '@app/database';
 import { buildAuraSystemPrompt, getFirstName, humanizeScore } from '../lib/aura-prompt';
-import { getOpenRouterMaxCompletionTokens, getOpenRouterModel } from '../lib/openrouter';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing', baseURL: process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1' });
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'missing' });
   }
   return _openai;
 }
@@ -44,7 +44,7 @@ export const WeeklyInsightSchema = z.object({
 export type WeeklyInsightData = z.infer<typeof WeeklyInsightSchema>;
 
 export class InsightService {
-  private static readonly MODEL = getOpenRouterModel();
+  private static readonly MODEL = getOpenAiModel();
 
   /**
    * Gera ou recupera insights semanais.
@@ -58,7 +58,18 @@ export class InsightService {
     const existingInsight = await prisma.weeklyInsight.findUnique({
       where: {
         userId_weekStart: { userId, weekStart }
-      }
+      },
+      select: {
+        id: true,
+        userId: true,
+        weekStart: true,
+        avgMood: true,
+        avgEnergy: true,
+        checkinCount: true,
+        insights: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     // 2. Buscar Dados Brutos da Semana
@@ -187,7 +198,7 @@ export class InsightService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenRouterMaxCompletionTokens(2000),
+      max_completion_tokens: getOpenAiMaxCompletionTokens(2000),
     });
 
     const aiResult = WeeklyInsightSchema.parse(JSON.parse(response.choices[0].message.content || '{}'));
