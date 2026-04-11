@@ -2283,7 +2283,7 @@ JSON APENAS: {"profileSummary":"..."}`,
     if (!clientId || !clientSecret) {
       return res.status(503).json({ error: 'Google Calendar not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env' });
     }
-    const host = req.get('host');
+    const host = req.get('host') ?? 'airia.pro';
     const protocol = req.protocol === 'http' && host.includes('localhost') ? 'http' : 'https';
     const redirectUri = `${protocol}://${host}/api/gcal/callback`;
     const scopes = 'https://www.googleapis.com/auth/calendar';
@@ -2301,7 +2301,7 @@ JSON APENAS: {"profileSummary":"..."}`,
     try {
       const clientId = process.env.GOOGLE_CLIENT_ID!;
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-      const host = req.get('host');
+      const host = req.get('host') ?? 'airia.pro';
       const protocol = req.protocol === 'http' && host.includes('localhost') ? 'http' : 'https';
       const redirectUri = `${protocol}://${host}/api/gcal/callback`;
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
