@@ -8,6 +8,7 @@ import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import {
+  addMinutesToTime,
   buildPlannerAgendaSlots,
   buildTimelineBlockInput,
   mapIntensityToEnergyLevel,
@@ -1256,23 +1257,35 @@ export function PlannerPage() {
         })}
       </div>
 
-      <AuraButtonV2
-        variant="outline"
+      {/* FAB — Novo bloco */}
+      <button
         onClick={() => openNewFormAt("09:00")}
+        aria-label="Novo bloco"
         style={{
           position: "fixed",
-          bottom: 20,
-          left: "50%",
-          transform: "translateX(-50%)",
-          borderRadius: 999,
-          padding: "0 18px",
-          background: "rgba(255,253,249,.92)",
-          boxShadow: "0 10px 28px rgba(243,176,140,.14)",
-          zIndex: 20,
+          bottom: "calc(88px + env(safe-area-inset-bottom))",
+          right: 20,
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          background: "var(--accent-peach, #F4A896)",
+          border: "none",
+          boxShadow: "0 6px 20px rgba(244,168,150,.45)",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 40,
+          transition: "transform 150ms, box-shadow 150ms",
         }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
       >
-        + Novo bloco
-      </AuraButtonV2>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
 
       {showNewForm ? (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "flex-end", zIndex: 100 }}>

@@ -1,4 +1,4 @@
-import { ArrowLeft, X } from "lucide-react";
+import { X } from "lucide-react";
 // Aura Layout v2 — bottom nav + Phase Transition Alert + Follow-up Card
 import { Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -213,25 +213,29 @@ export function AuraLayout() {
 
       {/* Conteúdo das rotas filhas */}
       <div className="aura-layout-content" style={{
-        paddingTop: state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed ? "80px" : "18px"
+        paddingTop: state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed ? "80px" : "18px",
+        paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
       }}>
-        {location.pathname !== "/home" && (
-          <button
-            className="aura-back-btn"
-            onClick={() => navigate(-1)}
-            aria-label="Voltar"
-            style={{ top: "20px", left: "16px" }}
-          >
-            <ArrowLeft size={18} />
-          </button>
-        )}
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
       </div>
 
-      {/* Bottom Nav — Floating Pill v6 */}
-      <div className="bottom-nav fixed bottom-0 left-6 right-6 mb-8 flex justify-around items-center px-4 py-3 z-50" style={{ maxWidth: '448px', margin: '0 auto 2rem', left: 0, right: 0, borderRadius: 28 }}>
+      {/* Bottom Nav — Floating Pill — sempre fixo */}
+      <div className="bottom-nav" style={{
+        position: "fixed",
+        bottom: "calc(16px + env(safe-area-inset-bottom))",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "calc(100% - 32px)",
+        maxWidth: 448,
+        borderRadius: 28,
+        zIndex: 50,
+        display: "flex",
+        justifyContent: "space-around",
+        alignItems: "center",
+        padding: "10px 16px 12px",
+      }}>
         {NAV_ITEMS.map((item, idx) => {
           const isActive = location.pathname === item.route;
           if (idx === 2) { // Centro (Aura)
