@@ -2306,7 +2306,14 @@ JSON APENAS: {"profileSummary":"..."}`,
 
   app.get('/api/gcal/callback', async (req: Request, res: Response) => {
     const { code, state: userId, error } = req.query as Record<string, string>;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    
+    // Identifica o origin dinamicamente para evitar perda de sessão em subdomínios (www vs apex)
+    const host = req.get('host') || 'www.airia.pro';
+    const protocol = (req.protocol === 'https' || !host.includes('localhost')) ? 'https' : 'http';
+    const currentOrigin = `${protocol}://${host.replace('api.', '')}`; // Assume que se vier de api.airia.pro, o front está em airia.pro
+    
+    // Fallback para FRONTEND_URL se não for possível determinar
+    const frontendUrl = process.env.FRONTEND_URL || currentOrigin;
     if (error || !code || !userId) {
       return res.redirect(`${frontendUrl}/planner?gcal=error`);
     }

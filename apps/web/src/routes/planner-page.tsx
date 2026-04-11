@@ -1,6 +1,7 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar, CalendarRange } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
@@ -790,7 +791,27 @@ export function PlannerPage() {
   const [newForm, setNewForm] = useState<FormState>({ ...EMPTY_FORM });
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
+  const [searchParams, setSearchParams] = useSearchParams();
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
+
+  // Feedback do Google Calendar OAuth
+  useEffect(() => {
+    const gcalStatus = searchParams.get('gcal');
+    const reason = searchParams.get('reason');
+    if (gcalStatus === 'connected') {
+      showSuccess("Google Agenda conectado com sucesso!");
+      // Limpa os parâmetros da URL sem recarregar a página
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('gcal');
+      setSearchParams(newParams, { replace: true });
+    } else if (gcalStatus === 'error') {
+      showError(`Erro ao conectar Google Agenda: ${reason || 'Erro desconhecido'}`);
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('gcal');
+      newParams.delete('reason');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
