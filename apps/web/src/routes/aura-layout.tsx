@@ -219,6 +219,13 @@ export function AuraLayout() {
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
+
+        {/* Link de conformidade Google/Privacy */}
+        <div style={{ padding: "40px 0 20px", textAlign: "center", opacity: 0.4 }}>
+            <a href="https://airia.pro/privacy" target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "var(--text-3)", textDecoration: "none", fontWeight: 600, letterSpacing: "0.05em" }}>
+                POLÍTICA DE PRIVACIDADE
+            </a>
+        </div>
       </div>
 
       {/* Bottom Nav — Floating Pill — sempre fixo */}

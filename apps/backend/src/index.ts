@@ -15,6 +15,12 @@ import { deriveCheckinSlot } from './contracts/checkin-slot';
 import { PlannerSyncSchema } from './contracts/planner.contract';
 import { JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { OnboardingProcessSchema } from './contracts/onboarding.contract';
+import {
+  DEFAULT_EVENING_REVIEW_TIME,
+  DEFAULT_MORNING_CHECKIN_TIME,
+  PreferencesPatchSchema,
+  defaultUserPreferences,
+} from './contracts/preferences.contract';
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
@@ -645,10 +651,85 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use('/api', dependencies.authMiddleware ?? requireAuth);
 
   app.post('/api/onboarding/process', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
     try {
       const data = OnboardingProcessSchema.parse(req.body);
       const result = await aiService.generateOnboardingProfile(data);
-      return res.json(result);
+
+      await prisma.$transaction([
+        prisma.profile.upsert({
+          where: { id: userId },
+          update: {
+            fullName: data.fullName,
+            onboardingDone: true,
+          },
+          create: {
+            id: userId,
+            fullName: data.fullName,
+            onboardingDone: true,
+          },
+        }),
+        prisma.onboardingResponse.upsert({
+          where: { userId },
+          update: {
+            supportGoals: data.supportGoals,
+            age: data.age,
+            currentFeeling: data.currentFeeling,
+            sleepQualityNote: data.sleepQualityNote,
+            routineText: data.routineText,
+            routineSummary: result.routineSummaryNormalized,
+            mainEnergyPressure: data.mainEnergyPressure,
+            primaryGoal: data.primaryGoal,
+            aiProfileSummary: result.profileSummary,
+            aiRoutineSummary: result.routineSummaryNormalized,
+            aiInitialStateSummary: result.initialStateSummary,
+            aiTopThemes: result.topThemes,
+            aiInitialSuggestions: result.initialSuggestions,
+            aiProfilePayload: {
+              ...result,
+              input: data,
+            },
+          },
+          create: {
+            userId,
+            supportGoals: data.supportGoals,
+            age: data.age,
+            currentFeeling: data.currentFeeling,
+            sleepQualityNote: data.sleepQualityNote,
+            routineText: data.routineText,
+            routineSummary: result.routineSummaryNormalized,
+            mainEnergyPressure: data.mainEnergyPressure,
+            primaryGoal: data.primaryGoal,
+            aiProfileSummary: result.profileSummary,
+            aiRoutineSummary: result.routineSummaryNormalized,
+            aiInitialStateSummary: result.initialStateSummary,
+            aiTopThemes: result.topThemes,
+            aiInitialSuggestions: result.initialSuggestions,
+            aiProfilePayload: {
+              ...result,
+              input: data,
+            },
+          },
+        }),
+        prisma.userPreference.upsert({
+          where: { userId },
+          update: {
+            wakeTime: data.wakeTime,
+            sleepTime: data.sleepTime,
+            morningCheckinTime: DEFAULT_MORNING_CHECKIN_TIME,
+            eveningReviewTime: DEFAULT_EVENING_REVIEW_TIME,
+            notificationsOn: true,
+          },
+          create: {
+            userId,
+            ...defaultUserPreferences,
+            wakeTime: data.wakeTime,
+            sleepTime: data.sleepTime,
+          },
+        }),
+      ]);
+
+      return res.json({ ...result, saved: true });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -1331,13 +1412,9 @@ export function createApp(dependencies: AppDependencies = {}) {
         prisma.profile.findUnique({ where: { id: userId }, select: { fullName: true } }),
       ]);
       return res.json({
-        ...(prefs ?? {
-          timezone: 'America/Sao_Paulo',
-          wakeTime: null,
-          sleepTime: null,
-          notificationsOn: true,
-          aiTone: 'warm',
-        }),
+        ...(prefs ?? defaultUserPreferences),
+        morningCheckinTime: prefs?.morningCheckinTime ?? DEFAULT_MORNING_CHECKIN_TIME,
+        eveningReviewTime: prefs?.eveningReviewTime ?? DEFAULT_EVENING_REVIEW_TIME,
         fullName: profile?.fullName ?? null,
       });
     } catch (error: any) {
@@ -1352,19 +1429,12 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.patch('/api/preferences', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
-    const PrefsSchema = z.object({
-      timezone: z.string().optional(),
-      wakeTime: z.string().nullable().optional(),
-      sleepTime: z.string().nullable().optional(),
-      notificationsOn: z.boolean().optional(),
-      aiTone: z.string().optional(),
-    });
     try {
-      const data = PrefsSchema.parse(req.body);
+      const data = PreferencesPatchSchema.parse(req.body);
       const prefs = await prisma.userPreference.upsert({
         where: { userId },
         update: data,
-        create: { userId, ...data },
+        create: { userId, ...defaultUserPreferences, ...data },
       });
       return res.json(prefs);
     } catch (error: any) {
@@ -1373,6 +1443,35 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
       console.error('[preferences/patch] Error:', error);
       return res.status(500).json({ error: 'Failed to update preferences' });
+    }
+  });
+
+  /**
+   * PATCH /api/profile
+   * Atualiza dados básicos do perfil do usuário autenticado.
+   */
+  app.patch('/api/profile', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const ProfilePatchSchema = z.object({
+      fullName: z.string().trim().min(1).max(80),
+    });
+
+    try {
+      const data = ProfilePatchSchema.parse(req.body);
+      const profile = await prisma.profile.upsert({
+        where: { id: userId },
+        update: { fullName: data.fullName },
+        create: { id: userId, fullName: data.fullName },
+        select: { fullName: true },
+      });
+
+      return res.json(profile);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[profile/patch] Error:', error);
+      return res.status(500).json({ error: 'Failed to update profile' });
     }
   });
 
@@ -2307,15 +2406,30 @@ JSON APENAS: {"profileSummary":"..."}`,
   app.get('/api/gcal/callback', async (req: Request, res: Response) => {
     const { code, state: userId, error } = req.query as Record<string, string>;
     
-    // Identifica o origin dinamicamente para evitar perda de sessão em subdomínios (www vs apex)
+    // Identifica o origin dinamicamente para evitar perda de sessão em subdomínios
     const host = req.get('host') || 'www.airia.pro';
     const protocol = (req.protocol === 'https' || !host.includes('localhost')) ? 'https' : 'http';
-    const currentOrigin = `${protocol}://${host.replace('api.', '')}`; // Assume que se vier de api.airia.pro, o front está em airia.pro
     
-    // Fallback para FRONTEND_URL se não for possível determinar
+    // Se vier de api.airia.pro, removemos o 'api.' para chegar no front
+    // Se vier de airia.pro ou www.airia.pro, o host é o próprio front
+    let frontendHost = host;
+    if (host.startsWith('api.')) {
+      frontendHost = host.substring(4);
+    }
+    const currentOrigin = `${protocol}://${frontendHost}`;
+    
+    // Para logs de debug
+    process.env.NODE_ENV !== 'production' && console.log(`[GCal Callback] Host: ${host}, Redirecting to: ${currentOrigin}`);
+
+    // Fallback para FRONTEND_URL se estiver definido, senão usa a origem calculada
     const frontendUrl = process.env.FRONTEND_URL || currentOrigin;
-    if (error || !code || !userId) {
-      return res.redirect(`${frontendUrl}/planner?gcal=error`);
+    if (error) {
+      process.env.NODE_ENV !== 'production' && console.error('Google OAuth Error:', error);
+      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=${encodeURIComponent(error)}`);
+    }
+
+    if (!code || !userId) {
+      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=missing_code_or_state`);
     }
     try {
       const clientId = process.env.GOOGLE_CLIENT_ID!;
