@@ -357,7 +357,9 @@ export function GoalsPage() {
 
   const [captureInput, setCaptureInput] = useState("");
   const [captureLoading, setCaptureLoading] = useState(false);
+  const [captureReply, setCaptureReply] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const captureInputRef = useRef<HTMLInputElement>(null);
   const [metasOpen, setMetasOpen] = useState(true);
   const [actionsOpen, setActionsOpen] = useState(true);
   const [inboxOpen, setInboxOpen] = useState(true);
@@ -460,11 +462,13 @@ export function GoalsPage() {
         awardXP(20);
         setMetasOpen(true);
         sessionStorage.setItem("aura-auto-break-goal", parsed.titulo || text);
+        setCaptureReply(`Meta criada — já vou pensar nos próximos passos para "${parsed.titulo || text}".`);
       } else if (parsed?.tipo === "proxima_acao") {
         const goalMatch = goals.find(g => g.title === parsed.meta_sugerida);
         if (goalMatch) {
           await addSubGoals(goalMatch.id, [parsed.titulo || text]);
           awardXP(10);
+          setCaptureReply(`Adicionei como próxima ação em "${goalMatch.title}".`);
         } else {
           const item: GTDItem = {
             id: `gtd-${Date.now()}`, text,
@@ -475,21 +479,28 @@ export function GoalsPage() {
           setGtdItems(prev => [item, ...prev]);
           setActionsOpen(true);
           awardXP(5);
+          setCaptureReply(`Próxima ação registrada. Quando quiser, vincule a uma meta.`);
         }
       } else {
         const itemId = `gtd-${Date.now()}`;
         const item: GTDItem = { id: itemId, text, capturedAt: new Date().toISOString() };
         setGtdItems(prev => [item, ...prev]);
         setInboxOpen(true);
+        setCaptureReply(`Guardei na caixa de entrada. Vou clarificar isso em seguida.`);
         setTimeout(() => clarifyItem(itemId), 100);
       }
     } catch {
       const itemId = `gtd-${Date.now()}`;
       setGtdItems(prev => [{ id: itemId, text, capturedAt: new Date().toISOString() }, ...prev]);
       setInboxOpen(true);
+      setCaptureReply(`Guardei para revisão. Você pode clarificar depois.`);
     } finally {
       setCaptureLoading(false);
       capturingRef.current = false;
+      setTimeout(() => {
+        setCaptureReply(null);
+        captureInputRef.current?.focus();
+      }, 2800);
     }
   }
 
@@ -610,65 +621,128 @@ export function GoalsPage() {
           </div>
         )}
 
-        {/* ── Capture bar — glass com borda visível ────────── */}
-        <div style={{
-          backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-          background: "rgba(255,255,255,0.70)",
-          border: "1px solid rgba(255,255,255,0.85)",
-          borderRadius: 18, padding: "10px 12px", marginBottom: 20,
-          display: "flex", gap: 8, alignItems: "center",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.07)",
-        }}>
-          {/* Input com borda própria */}
-          <div style={{
-            flex: 1, display: "flex", alignItems: "center",
-            background: "rgba(255,255,255,0.80)",
-            border: "1.5px solid rgba(0,0,0,0.10)",
-            borderRadius: 12, padding: "0 10px", gap: 6,
-            boxShadow: "inset 0 1px 3px rgba(0,0,0,0.05)",
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="var(--text-3)" strokeWidth="1.5" strokeLinecap="round">
-              <line x1="11" y1="5" x2="11" y2="19"/><line x1="5" y1="11" x2="19" y2="11"/>
-            </svg>
-            <input
-              value={captureInput}
-              onChange={e => setCaptureInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !captureLoading && handleCapture()}
-              placeholder="Capture uma ideia, meta ou tarefa..."
-              style={{
-                flex: 1, background: "transparent", border: "none", outline: "none",
-                fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)",
-                padding: "9px 0",
-              }}
-            />
+        {/* ── Captura conversacional GTD ── */}
+        <div style={{ marginBottom: 24 }}>
+
+          {/* Bubble da Airia — pergunta ou confirmação */}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginBottom: 10 }}>
+            <div style={{ flexShrink: 0, opacity: captureLoading ? 0.6 : 1, transition: "opacity 300ms" }}>
+              <AuraIcon size={26} />
+            </div>
+            <div style={{
+              background: captureReply ? "rgba(150,199,179,.15)" : "rgba(244,168,150,.10)",
+              border: `1px solid ${captureReply ? "rgba(150,199,179,.3)" : "rgba(244,168,150,.22)"}`,
+              borderRadius: "14px 14px 14px 4px",
+              padding: "9px 13px",
+              fontSize: 13, color: "var(--text-1)", lineHeight: 1.55,
+              maxWidth: "82%",
+              transition: "background 300ms, border-color 300ms",
+            }}>
+              {captureLoading
+                ? <span style={{ color: "var(--text-3)", fontStyle: "italic" }}>
+                    Entendendo o que você capturou...
+                  </span>
+                : captureReply
+                  ? <span>{captureReply}</span>
+                  : <span>O que está na sua mente agora?<br />
+                      <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+                        Uma ideia, meta, tarefa ou qualquer coisa que precise sair da cabeça.
+                      </span>
+                    </span>
+              }
+            </div>
           </div>
 
-          {/* Mic */}
-          <button
-            onClick={toggleVoice}
-            style={{
-              background: isRecording ? "var(--accent-peach)" : "rgba(0,0,0,0.05)",
-              border: isRecording ? "none" : "1px solid rgba(0,0,0,0.10)",
-              cursor: "pointer", color: isRecording ? "#fff" : "var(--text-3)",
-              width: 36, height: 36, borderRadius: "50%",
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}
-          >
-            <Mic size={15} />
-          </button>
+          {/* Resposta do usuário — input ou confirmação visual */}
+          {!captureReply && !captureLoading && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", paddingLeft: 34 }}>
+              <div style={{
+                flex: 1, display: "flex", alignItems: "center", gap: 6,
+                background: "white",
+                border: "1.5px solid rgba(0,0,0,.09)",
+                borderRadius: "14px 14px 4px 14px",
+                padding: "0 12px",
+                boxShadow: "0 2px 10px rgba(0,0,0,.05)",
+              }}>
+                <input
+                  ref={captureInputRef}
+                  value={captureInput}
+                  onChange={e => setCaptureInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !captureLoading && handleCapture()}
+                  placeholder="Escreva ou dite..."
+                  style={{
+                    flex: 1, background: "transparent", border: "none", outline: "none",
+                    fontSize: 13, color: "var(--text-1)", padding: "11px 0",
+                  }}
+                />
+                <button
+                  onClick={toggleVoice}
+                  style={{
+                    background: isRecording ? "var(--accent-peach)" : "transparent",
+                    border: "none", cursor: "pointer",
+                    color: isRecording ? "#fff" : "var(--text-3)",
+                    width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "background 200ms",
+                  }}
+                >
+                  <Mic size={13} />
+                </button>
+              </div>
 
-          {/* Send */}
-          <AuraButtonV2
-            variant="primary"
-            size="sm"
-            onClick={handleCapture}
-            disabled={!captureInput.trim() || captureLoading}
-            leftIcon={captureLoading ? <AuraIcon size={13} /> : <AuraIcon size={13} />}
-            style={{ borderRadius: 12, whiteSpace: "nowrap", flexShrink: 0 }}
-          >
-            {captureLoading ? "..." : "Enviar"}
-          </AuraButtonV2>
+              {/* Botão enviar */}
+              <button
+                onClick={handleCapture}
+                disabled={!captureInput.trim()}
+                style={{
+                  width: 38, height: 38, borderRadius: "50%", flexShrink: 0, border: "none",
+                  background: captureInput.trim() ? "var(--accent-peach)" : "rgba(0,0,0,.07)",
+                  color: captureInput.trim() ? "#fff" : "var(--text-3)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  cursor: captureInput.trim() ? "pointer" : "default",
+                  transition: "background 200ms, color 200ms",
+                  boxShadow: captureInput.trim() ? "0 4px 14px rgba(244,168,150,.4)" : "none",
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"/>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Estado: processando */}
+          {captureLoading && (
+            <div style={{ paddingLeft: 34 }}>
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "white", border: "1.5px solid rgba(0,0,0,.07)",
+                borderRadius: "14px 14px 4px 14px", padding: "9px 14px",
+                fontSize: 12, color: "var(--text-3)",
+              }}>
+                <span style={{ fontStyle: "italic" }}>{captureInput || "..."}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Estado: confirmado — "continuar" */}
+          {captureReply && !captureLoading && (
+            <div style={{ paddingLeft: 34 }}>
+              <button
+                onClick={() => { setCaptureReply(null); setTimeout(() => captureInputRef.current?.focus(), 50); }}
+                style={{
+                  background: "rgba(244,168,150,.12)", border: "1px solid rgba(244,168,150,.25)",
+                  borderRadius: "14px 14px 4px 14px", padding: "9px 14px",
+                  fontSize: 12, color: "var(--accent-peach-ink)",
+                  cursor: "pointer", fontWeight: 600,
+                }}
+              >
+                + Capturar outra
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── METAS ──────────────────────────────────────── */}
