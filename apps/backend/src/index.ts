@@ -372,9 +372,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         };
 
         if (block.id) {
-          return prisma.timelineBlock.update({
+          return prisma.timelineBlock.upsert({
             where: { id: block.id },
-            data,
+            update: data,
+            create: { id: block.id, ...data },
           });
         } else {
           return prisma.timelineBlock.create({
