@@ -43,7 +43,7 @@ export class AuraCommandService {
       .map((message) => `${message.role === 'user' ? 'Usuário' : 'Aura'}: ${message.content}`)
       .join('\n');
 
-    const prompt = `Interprete o pedido operacional da pessoa e devolva uma resposta estruturada para a Aura.
+    const prompt = `Interprete o pedido operacional da pessoa e devolva uma resposta estruturada para a Airia.
 
 PEDIDO ATUAL:
 "${input.message}"
@@ -103,7 +103,7 @@ REGRAS:
 
     const content = response.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error('Falha ao interpretar o comando da Aura');
+      throw new Error('Falha ao interpretar o comando da Airia');
     }
 
     return AuraCommandResponseSchema.parse(JSON.parse(content));

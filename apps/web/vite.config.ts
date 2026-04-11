@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 
 const addComponentDataPlugin = () => {
@@ -52,7 +53,88 @@ const addComponentDataPlugin = () => {
 };
 
 export default defineConfig({
-  plugins: [react(), addComponentDataPlugin()],
+  plugins: [
+    react(),
+    addComponentDataPlugin(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
+      manifest: {
+        name: 'Airia — Ciclagem de Humor',
+        short_name: 'Airia',
+        description: 'Seu assistente pessoal de ciclagem de humor. Entenda seus padrões, preveja suas fases.',
+        theme_color: '#F4A896',
+        background_color: '#FDF9F5',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        categories: ['health', 'lifestyle', 'productivity'],
+        icons: [
+          {
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
+            src: '/icons/icon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any',
+          },
+        ],
+        screenshots: [
+          { src: '/screenshots/home-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Home — Ciclagem de Humor' },
+          { src: '/screenshots/checkin-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Check-in Diário' },
+          { src: '/screenshots/insights-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Analytics & Insights' },
+          { src: '/screenshots/planner-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Planner de Energia' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /\/api\//,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 5 },
+              networkTimeoutSeconds: 10,
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

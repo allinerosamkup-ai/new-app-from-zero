@@ -222,7 +222,7 @@ const STEPS = [
   { label: "Humor & Energia", hint: "Como seu corpo se sente agora?" },
   { label: "Emoção",          hint: "Que emoção domina o momento?" },
   { label: "Influências",     hint: "O que contribuiu pro seu estado?" },
-  { label: "Detalhes",        hint: "Opcional — mas muito útil pra Aura." },
+  { label: "Detalhes",        hint: "Opcional — mas muito útil pra Airia." },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────

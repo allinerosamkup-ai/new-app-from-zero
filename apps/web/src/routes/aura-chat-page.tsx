@@ -147,7 +147,7 @@ export function AuraChatPage() {
       })
       .catch((error) => {
         if (!isMounted) return;
-        showError(error instanceof Error ? error.message : "Não foi possível iniciar a Aura agora.");
+        showError(error instanceof Error ? error.message : "Não foi possível iniciar a Airia agora.");
       });
 
     return () => {
@@ -226,7 +226,7 @@ export function AuraChatPage() {
       }
 
       if (response.action === "create_goal") {
-        const objective = await createObjectiveFromPayload(response.payload, "Nova meta da Aura");
+        const objective = await createObjectiveFromPayload(response.payload, "Nova meta da Airia");
         setActionCard({
           eyebrow: "Meta criada",
           title: objective.title,
@@ -239,7 +239,7 @@ export function AuraChatPage() {
       }
 
       if (response.action === "create_checklist") {
-        const checklist = await createObjectiveFromPayload(response.payload, "Checklist da Aura");
+        const checklist = await createObjectiveFromPayload(response.payload, "Checklist da Airia");
         setActionCard({
           eyebrow: "Checklist criado",
           title: checklist.title,
@@ -313,7 +313,7 @@ export function AuraChatPage() {
       });
 
       if (!response.ok || !response.body) {
-        throw new Error("A Aura não conseguiu processar esse pedido agora.");
+        throw new Error("A Airia não conseguiu processar esse pedido agora.");
       }
 
       const reader = response.body.getReader();
@@ -340,13 +340,13 @@ export function AuraChatPage() {
           if (data.response) {
             completedResponse = data.response as AuraCommandResponse;
           } else if (data.error) {
-            throw new Error(typeof data.error === "string" ? data.error : "Falha no stream da Aura.");
+            throw new Error(typeof data.error === "string" ? data.error : "Falha no stream da Airia.");
           }
         }
       }
 
       if (!completedResponse) {
-        throw new Error("A Aura não conseguiu interpretar esse pedido.");
+        throw new Error("A Airia não conseguiu interpretar esse pedido.");
       }
 
       setMessages((prev) => [
@@ -359,7 +359,7 @@ export function AuraChatPage() {
         setMessages((prev) => [...prev, { role: "assistant", content: executionFollowUp }]);
       }
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Não foi possível conversar com a Aura agora.");
+      showError(error instanceof Error ? error.message : "Não foi possível conversar com a Airia agora.");
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Tive um problema para executar isso agora. Se quiser, tente me pedir de novo com um pouco mais de detalhe." },
@@ -483,7 +483,7 @@ export function AuraChatPage() {
                 margin: 0,
               }}
             >
-              Aura
+              Airia
             </p>
           </div>
           <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>

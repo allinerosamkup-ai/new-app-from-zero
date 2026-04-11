@@ -34,7 +34,7 @@ const NAV_ITEMS = [
     ),
   },
   {
-    label: "Aura",
+    label: "Airia",
     route: "/aura",
     icon: <AuraIcon size={20} />,
   },
@@ -183,7 +183,7 @@ export function AuraLayout() {
               <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-peach)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 3px" }}>
-                  Aura pergunta
+                  Airia pergunta
                 </p>
                 <p style={{ fontSize: 12, color: "var(--text-1)", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
                   "{followUp.followUpMessage}"

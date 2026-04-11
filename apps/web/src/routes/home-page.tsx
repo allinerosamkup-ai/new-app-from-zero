@@ -29,7 +29,7 @@ import {
   TrendingUp,
   Sparkles,
 } from "lucide-react";
-import { AuraIcon } from "../components/AuraIcon";
+import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { OnboardingTour } from "../components/OnboardingTour";
 import "../styles/aura.css";
 
@@ -996,7 +996,7 @@ export function HomePage() {
     if (hasCompulsionSignal) {
       alerts.push({
         key: "compulsion-signal",
-        title: "A Aura percebeu sinal de impulso ou compulsão",
+        title: "A Airia percebeu sinal de impulso ou compulsão",
         description: "O padrão recente sugere comportamento mais automático do que o normal. Vale pausar estímulos e nomear isso no diário antes de agir.",
         tone: "critical",
         actionLabel: "Registrar agora",
@@ -1021,7 +1021,11 @@ export function HomePage() {
   return (
     <>
     <OnboardingTour />
-    <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)" }}>
+    <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative" }}>
+      {/* Watermark híbrida — logo da Airia quase transparente */}
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", pointerEvents: "none", zIndex: 0 }}>
+        <AiriaLogoBg size={420} opacity={0.055} />
+      </div>
       {/* Pull-to-refresh indicator */}
       {(pullDistance > 0 || isRefreshing) && (
         <div className={`pull-indicator${isReady ? " ready" : ""}`} style={{ height: isRefreshing ? 44 : pullDistance, overflow: "hidden" }}>
@@ -1031,7 +1035,7 @@ export function HomePage() {
           {isRefreshing ? "Atualizando..." : isReady ? "Solte para atualizar" : "Puxe para atualizar"}
         </div>
       )}
-      <div className="screen-content">
+      <div className="screen-content" style={{ position: "relative", zIndex: 1 }}>
 
         {/* Header com relógio */}
         <div className="home-header" style={{ position: "relative", paddingBottom: "18px" }}>
@@ -1695,7 +1699,7 @@ export function HomePage() {
           </button>
         </div>
 
-        {/* ── Nudge proativo da Aura ──────────────────────────── */}
+        {/* ── Nudge proativo da Airia ──────────────────────────── */}
         {state.proactiveNudge && (() => {
           const nudge = state.proactiveNudge!;
           const colorMap = {
@@ -1781,7 +1785,7 @@ export function HomePage() {
                           {isUrgent && <span style={{ color: cfg.color, fontWeight: 800 }}> · Precisa de cuidado agora</span>}
                         </>
                       ) : (
-                        "Espaço reservado para a leitura autônoma da Aura"
+                        "Espaço reservado para a leitura autônoma da Airia"
                       )}
                     </p>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
@@ -1895,7 +1899,7 @@ export function HomePage() {
                 ) : (
                   <>
                     <p className="home-ai-quote">
-                      "Esse espaço continua reservado para a leitura autônoma da Aura."
+                      "Esse espaço continua reservado para a leitura autônoma da Airia."
                     </p>
                     <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5, marginBottom: 0 }}>
                       Assim que houver sinais suficientes, a análise e autonomia volta a aparecer aqui com o padrão detectado e os próximos movimentos sugeridos.
@@ -1945,7 +1949,7 @@ export function HomePage() {
             ) : motivacionalFinal ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)", margin: 0 }}>Aura diz</p>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)", margin: 0 }}>Airia diz</p>
                   <span style={{ fontSize: 9, background: "var(--accent-peach-a3)", color: "var(--accent-peach-ink)", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
                 </div>
                 <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.6, fontStyle: "italic" }}>{motivacionalFinal}</p>

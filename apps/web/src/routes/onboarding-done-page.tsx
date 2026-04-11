@@ -82,7 +82,7 @@ export function OnboardingDonePage() {
           fontSize: 14, color: "var(--text-2)", lineHeight: 1.65, marginBottom: 32, maxWidth: 280,
           animation: "fade-up 0.6s ease 0.35s both",
         }}>
-          Seu perfil foi criado com sucesso. A Aura já sabe como te ajudar melhor.
+          Seu perfil foi criado com sucesso. A Airia já sabe como te ajudar melhor.
         </p>
 
         {/* Resumo do perfil */}

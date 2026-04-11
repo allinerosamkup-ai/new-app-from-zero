@@ -52,7 +52,7 @@ export class GCalService {
 
     const event = {
       summary: block.title,
-      description: `Aura Task: ${block.category}`,
+      description: `Airia Task: ${block.category}`,
       start: { dateTime: block.startAt.toISOString() },
       end: { dateTime: block.endAt.toISOString() },
     };

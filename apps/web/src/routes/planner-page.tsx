@@ -329,7 +329,7 @@ const NoteSection = React.memo(function NoteSection({
         <span style={LABEL_STYLE}>Notas e checklist</span>
         <div style={{ display: "flex", gap: 6 }}>
           <AuraButtonV2 variant="outline" size="sm" onClick={letAuraOrganize} disabled={aiLoading !== null}>
-            {aiLoading === "content" ? "Lendo..." : "Aura"}
+            {aiLoading === "content" ? "Lendo..." : "Airia"}
           </AuraButtonV2>
           <AuraButtonV2 variant="outline" size="sm" onClick={splitIntoSubtasks} disabled={aiLoading !== null}>
             {aiLoading === "split" ? "Splitando..." : "Split Tarefa"}

@@ -1,5 +1,5 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-// CheckinResult Page v4 — Aura auto-responde ao check-in + fluxo "ajustar meu dia"
+// CheckinResult Page v4 — Airia auto-responde ao check-in + fluxo "ajustar meu dia"
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
@@ -100,7 +100,7 @@ export function CheckinResultPage() {
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
   const dayContext = useMemo(() => getClientDayContext(), []);
 
-  // Aura auto-response ao check-in
+  // Airia auto-response ao check-in
   const [auraMsg, setAuraMsg] = useState<AuraMsg | null>(null);
   const [auraMsgLoading, setAuraMsgLoading] = useState(true);
   const auraMsgRan = useRef(false);
@@ -366,11 +366,11 @@ export function CheckinResultPage() {
           <p className="result-header-copy">{v.description}</p>
         </div>
 
-        {/* Card Aura diz — resposta personalizada ao check-in */}
+        {/* Card Airia diz — resposta personalizada ao check-in */}
         <div className="aura-card" style={{ marginBottom: 16, borderLeft: `3px solid ${v.accent}`, background: "rgba(255,253,250,.9)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent, margin: 0 }}>
-              Aura diz
+              Airia diz
             </p>
             {!auraMsgLoading && auraMsg && (
               <span style={{ fontSize: 9, background: isMenuthe ? "rgba(180,185,169,.15)" : "var(--accent-peach-a3)", color: v.accent, borderRadius: 999, padding: "2px 6px", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
@@ -576,7 +576,7 @@ export function CheckinResultPage() {
             Depois do check-in
           </p>
           <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.55 }}>
-            Se quiser descarregar melhor o que apareceu agora, leve esse estado para o diário e deixe a Aura guardar o resumo da sessão.
+            Se quiser descarregar melhor o que apareceu agora, leve esse estado para o diário e deixe a Airia guardar o resumo da sessão.
           </p>
           <AuraButtonV2
             className="btn btn-ghost btn-full"

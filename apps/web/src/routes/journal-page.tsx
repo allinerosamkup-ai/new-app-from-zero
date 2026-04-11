@@ -811,7 +811,7 @@ export function JournalPage() {
                 }}
               />
               <p style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-                {isTyping ? "Aura contemplando..." : "Sessão aberta"}
+                {isTyping ? "Airia contemplando..." : "Sessão aberta"}
               </p>
             </div>
           </div>
@@ -822,7 +822,7 @@ export function JournalPage() {
             message.role === "assistant" ? (
               <div key={message.id ?? index} className="bubble" style={{ maxWidth: "88%" }}>
                 <p className="bubble-name" style={{ color: "var(--text-2)", fontWeight: 700, fontSize: "10px", marginBottom: "6px" }}>
-                  Aura
+                  Airia
                 </p>
                 <div
                   className="bubble-ai"

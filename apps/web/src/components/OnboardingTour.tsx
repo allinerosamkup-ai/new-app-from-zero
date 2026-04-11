@@ -7,7 +7,7 @@ const STEPS = [
   {
     icon: "🌡️",
     title: "Check-in diário",
-    desc: "Registre seu humor, energia e sono uma vez por dia. A Aura usa esses dados para entender seus ciclos e orientar seu dia.",
+    desc: "Registre seu humor, energia e sono uma vez por dia. A Airia usa esses dados para entender seus ciclos e orientar seu dia.",
     color: "var(--nectarine, #D7897F)",
     bg: "rgba(215,137,127,0.08)",
   },
@@ -21,7 +21,7 @@ const STEPS = [
   {
     icon: "📔",
     title: "Diário reflexivo",
-    desc: "Converse com a Aura sobre como está se sentindo. Ela escuta, reflete e guarda o que importa para te conhecer melhor.",
+    desc: "Converse com a Airia sobre como está se sentindo. Ela escuta, reflete e guarda o que importa para te conhecer melhor.",
     color: "var(--lagune, #6398A9)",
     bg: "rgba(99,152,169,0.08)",
   },

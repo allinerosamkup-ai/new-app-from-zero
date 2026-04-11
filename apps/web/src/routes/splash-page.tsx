@@ -105,7 +105,7 @@ const features: FeatureCard[] = [
   },
   {
     icon: HeartHandshake,
-    title: "Aura como camada de apoio",
+    title: "Airia como camada de apoio",
     description:
       "A leitura interna vira atitude concreta: conversar melhor, recuar a tempo, reorganizar o dia, descansar ou focar com mais intenção.",
   },
@@ -133,7 +133,7 @@ const screenshots: ScreenshotCard[] = [
     src: "/screenshots/insights-page.png",
   },
   {
-    title: "Aura como apoio prático",
+    title: "Airia como apoio prático",
     description: "Uma conversa que ajuda a organizar o dia, destravar prioridades e transformar contexto em ação.",
     src: "/screenshots/aura-page.png",
   },

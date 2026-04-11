@@ -61,7 +61,7 @@ export function OnboardingPage() {
         <div className="aura-page-header">
           <p className="aura-page-kicker">Onboarding</p>
           <h1 className="aura-page-title">Vamos conhecer sua ciclagem.</h1>
-          <p className="aura-page-subtitle">A Aura ajusta o app para energia, sono e rotina desde a primeira entrada.</p>
+          <p className="aura-page-subtitle">A Airia ajusta o app para energia, sono e rotina desde a primeira entrada.</p>
           {/* Progress bar */}
           <div
             style={{
@@ -109,7 +109,7 @@ export function OnboardingPage() {
                   gap: 8,
                 }}
               >
-                {/* Label Aura IA */}
+                {/* Label Airia IA */}
                 {idx === 0 && (
                   <span
                     style={{
@@ -121,7 +121,7 @@ export function OnboardingPage() {
                       paddingBottom: 4,
                     }}
                   >
-                    Aura IA
+                    Airia IA
                   </span>
                 )}
 

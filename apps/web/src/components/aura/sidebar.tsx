@@ -16,7 +16,7 @@ export function AuraSidebar() {
       <div className="aura-brand">
         <span className="aura-brand__dot" />
         <div>
-          <strong>Aura</strong>
+          <strong>Airia</strong>
           <p>Mood Energy</p>
         </div>
       </div>

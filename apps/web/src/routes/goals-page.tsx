@@ -192,7 +192,7 @@ function GoalCard({
               display: "flex", alignItems: "center", gap: 6, padding: "8px 0",
               color: "var(--accent-peach)", fontSize: "calc(var(--a) * 0.83)",
             }}>
-              <AuraIcon size={14} /> Aura está gerando próximas ações...
+              <AuraIcon size={14} /> Airia está gerando próximas ações...
             </div>
           )}
 
@@ -203,7 +203,7 @@ function GoalCard({
               background: "rgba(0,0,0,0.03)",
               textAlign: "center", color: "var(--text-3)", fontSize: "calc(var(--a) * 0.85)",
             }}>
-              Sem próximas ações. Use <strong style={{ color: "var(--accent-peach)" }}>Aura quebrar</strong> para gerar.
+              Sem próximas ações. Use <strong style={{ color: "var(--accent-peach)" }}>Airia quebrar</strong> para gerar.
             </div>
           )}
 
@@ -333,7 +333,7 @@ function GoalCard({
               }}
             >
               <AuraIcon size={13} />
-              {loadingBreakdown ? "Gerando..." : "Aura quebrar"}
+              {loadingBreakdown ? "Gerando..." : "Airia quebrar"}
             </button>
           </div>}
         </div>
@@ -425,7 +425,7 @@ export function GoalsPage() {
       if (items.length > 0) {
         await addSubGoals(goalId, items);
       } else {
-        showError("A Aura não conseguiu gerar subtarefas agora.");
+        showError("A Airia não conseguiu gerar subtarefas agora.");
       }
     } catch (err) {
       showError(err instanceof Error ? err.message : "Erro ao gerar próximas ações.");
@@ -707,7 +707,7 @@ export function GoalsPage() {
               textAlign: "center", padding: "20px 0 8px",
               color: "var(--text-3)", fontSize: "calc(var(--a) * 0.88)", fontStyle: "italic",
             }}>
-              Capture algo acima — a Aura classifica e gera os passos automaticamente 🎯
+              Capture algo acima — a Airia classifica e gera os passos automaticamente 🎯
             </div>
           ) : (
             goals.map((goal, idx) => (
@@ -886,7 +886,7 @@ export function GoalsPage() {
                     <div style={{ fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)" }}>{item.text}</div>
                     {item.clarifying && (
                       <div style={{ fontSize: "calc(var(--a) * 0.8)", color: "var(--accent-sage)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <AuraIcon size={12} /> Aura clarificando...
+                        <AuraIcon size={12} /> Airia clarificando...
                       </div>
                     )}
                   </div>
@@ -905,7 +905,7 @@ export function GoalsPage() {
                   leftIcon={<AuraIcon size={12} />}
                   style={{ width: "100%", borderRadius: 10, justifyContent: "center" }}
                 >
-                  {item.clarifying ? "Clarificando..." : "Clarificar com Aura"}
+                  {item.clarifying ? "Clarificando..." : "Clarificar com Airia"}
                 </AuraButtonV2>
               </div>
             ))}

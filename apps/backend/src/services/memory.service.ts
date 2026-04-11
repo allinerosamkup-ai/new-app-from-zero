@@ -2,7 +2,7 @@
  * MemoryService — RAG (Retrieval Augmented Generation)
  *
  * Vetoriza conteúdo do usuário (journal, check-in notes, metas) e
- * recupera os fragmentos mais relevantes para enriquecer o contexto da Aura.
+ * recupera os fragmentos mais relevantes para enriquecer o contexto da Airia.
  *
  * Modelo: text-embedding-3-small (OpenAI) — 1536 dimensões, barato e rápido.
  */

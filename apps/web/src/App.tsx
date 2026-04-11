@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { InstallPWA } from "./components/InstallPWA";
 
 const loadAuraLayout = () => import("./routes/aura-layout");
 const loadLoginPage = () => import("./routes/login-page");
@@ -192,6 +193,7 @@ export default function App() {
         </Route>
       </Routes>
       </div>
+      <InstallPWA />
     </Suspense>
   );
 }

@@ -1190,7 +1190,7 @@ export function InsightsPage() {
           padding: "14px", marginBottom: "calc(var(--a))",
         }}>
           <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
-            📋 Relatório da Aura
+            📋 Relatório da Airia
           </p>
 
           {monthlyReportPhase === 'idle' && (
@@ -1211,7 +1211,7 @@ export function InsightsPage() {
                 animation: "spin 0.8s linear infinite",
               }} />
               <p style={{ fontSize: 13, color: "var(--text-2)", margin: 0 }}>
-                A Aura está analisando o período...
+                A Airia está analisando o período...
               </p>
             </div>
           )}

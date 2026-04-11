@@ -1050,7 +1050,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   /**
    * POST /api/aura/command/start
-   * Inicia uma sessão operacional da Aura central.
+   * Inicia uma sessão operacional da Airia central.
    */
   app.post('/api/aura/command/start', async (req: Request, res: Response) => {
     try {
@@ -1067,13 +1067,13 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
 
       console.error('[aura/command/start] Error:', error);
-      return res.status(500).json({ error: 'Failed to start Aura command session' });
+      return res.status(500).json({ error: 'Failed to start Airia command session' });
     }
   });
 
   /**
    * POST /api/aura/command/stream
-   * Processa um comando operacional da Aura via SSE.
+   * Processa um comando operacional da Airia via SSE.
    */
   app.post('/api/aura/command/stream', async (req: Request, res: Response) => {
     try {
@@ -1140,11 +1140,11 @@ export function createApp(dependencies: AppDependencies = {}) {
         }
 
         console.error('[aura/command/stream] Error:', error);
-        return res.status(500).json({ error: 'Failed to process Aura command' });
+        return res.status(500).json({ error: 'Failed to process Airia command' });
       }
 
       writeSseEvent(res, 'error', {
-        error: error instanceof Error ? error.message : 'Failed to process Aura command',
+        error: error instanceof Error ? error.message : 'Failed to process Airia command',
       });
 
       return res.end();
@@ -1913,7 +1913,7 @@ JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..
         const history = (context.history || []).slice(0, 3).map((h: any) =>
           `${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}`
         ).join('; ');
-        prompt = `Você é a Aura, uma concierge pessoal e assistente de rotina sofisticada de ${userName}. Monte a agenda personalizada do dia de hoje.
+        prompt = `Você é a Airia, uma concierge pessoal e assistente de rotina sofisticada de ${userName}. Monte a agenda personalizada do dia de hoje.
 
 Estado atual: ${moodLabel} (${mood}), energia ${humanizeScore(energia, 'energy')}.
 Horário acordar: ${wakeTime} | Dormir: ${sleepTime}.
@@ -1973,7 +1973,7 @@ ${context.moodCycleContext ? `\nContexto vivo recente:\n${context.moodCycleConte
 ${crPreviousSuggestion ? `\nSugestão anterior para NÃO repetir: ${crPreviousSuggestion}` : ''}
 ${nota}${ragContext}
 
-Responda como Aura, com leitura específica e útil para este momento.
+Responda como Airia, com leitura específica e útil para este momento.
 
 REGRAS:
 - "message" deve ter 2-3 frases curtas. A primeira precisa ler um padrão, contraste ou nuance do momento; não repita o rótulo do estado como eco.
@@ -2045,7 +2045,7 @@ Regras de classificação:
 Sem texto fora do JSON.`;
       } else if (type === 'phase-transition') {
         const { fromPhase, toPhase, fromLabel, toLabel } = context as any;
-        prompt = `Você é a Aura, assistente pessoal autônoma de ${userName}, especializada em ciclagem de humor.
+        prompt = `Você é a Airia, assistente pessoal autônoma de ${userName}, especializada em ciclagem de humor.
 
 A fase de humor de ${userName} acabou de mudar: de "${fromLabel}" (${fromPhase}) → "${toLabel}" (${toPhase}).
 
@@ -2064,7 +2064,7 @@ REGRAS:
 JSON APENAS: {"message":"...","tip":"..."}`;
       } else if (type === 'follow-up') {
         const { suggestionTitle, suggestionCategory } = context as any;
-        prompt = `Você é a Aura, assistente pessoal autônoma de ${userName}.
+        prompt = `Você é a Airia, assistente pessoal autônoma de ${userName}.
 
 Algumas horas atrás, você sugeriu para ${userName}: "${suggestionTitle}" (categoria: ${suggestionCategory}).
 
@@ -2082,7 +2082,7 @@ JSON APENAS: {"message":"..."}`;
       } else if (type === 'monthly-report') {
         const period = context.period ?? '30d';
         const periodLabel = period === '7d' ? 'últimos 7 dias' : period === '30d' ? 'últimos 30 dias' : 'últimos 90 dias';
-        prompt = `Você é a Aura, assistente de bem-estar de ${userName}. Gere um relatório pessoal de saúde mental dos ${periodLabel}.
+        prompt = `Você é a Airia, assistente de bem-estar de ${userName}. Gere um relatório pessoal de saúde mental dos ${periodLabel}.
 
 DADOS DO PERÍODO:
 - Check-ins registrados: ${context.totalCheckins ?? '—'}
