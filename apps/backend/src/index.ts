@@ -623,6 +623,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     },
     credentials: true,
   }));
+  app.set('trust proxy', true);
   app.use(express.json());
 
   app.get('/health', (req: Request, res: Response) => {
@@ -2283,12 +2284,17 @@ JSON APENAS: {"profileSummary":"..."}`,
     if (!clientId || !clientSecret) {
       return res.status(503).json({ error: 'Google Calendar not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env' });
     }
-    const host = req.get('host') ?? 'airia.pro';
-    const protocol = req.protocol === 'http' && host.includes('localhost') ? 'http' : 'https';
+
+    // Identifica o host e protocolo real (considerando trust proxy)
+    const host = req.get('host') || 'www.airia.pro';
+    const protocol = (req.protocol === 'https' || !host.includes('localhost')) ? 'https' : 'http';
     const redirectUri = `${protocol}://${host}/api/gcal/callback`;
-    const scopes = 'https://www.googleapis.com/auth/calendar';
+    
+    // Scopes robustos para leitura e escrita
+    const scopes = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events';
+    
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}&access_type=offline&prompt=consent&state=${(req as AuthRequest).userId}`;
-    // Keep both keys for compatibility with the current frontend and future callers.
+    
     return res.json({ url: authUrl, authUrl });
   });
 
@@ -2301,8 +2307,8 @@ JSON APENAS: {"profileSummary":"..."}`,
     try {
       const clientId = process.env.GOOGLE_CLIENT_ID!;
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-      const host = req.get('host') ?? 'airia.pro';
-      const protocol = req.protocol === 'http' && host.includes('localhost') ? 'http' : 'https';
+      const host = req.get('host') || 'www.airia.pro';
+      const protocol = (req.protocol === 'https' || !host.includes('localhost')) ? 'https' : 'http';
       const redirectUri = `${protocol}://${host}/api/gcal/callback`;
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
