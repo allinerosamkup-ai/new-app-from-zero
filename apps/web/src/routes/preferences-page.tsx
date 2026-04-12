@@ -71,6 +71,11 @@ export function PreferencesPage() {
     await updateNotificationPreferences(patch);
   }
 
+  function handleGCalConnect() {
+    const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/api$/, "");
+    window.location.href = `${baseUrl}/auth/gcal`;
+  }
+
   const notificationPrefs = state.notificationPreferences;
 
   return (
@@ -350,9 +355,11 @@ export function PreferencesPage() {
         </div>
 
         {/* Aparência section */}
+
+        {/* Aparência section */}
         <div className="config-section">
           <p className="config-section-title">Aparência</p>
-          <div className="config-row">
+          <div className="config-row" onClick={toggleTheme} style={{ cursor: "pointer" }}>
             <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(180,185,169,.12)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -364,13 +371,28 @@ export function PreferencesPage() {
                 <p className="config-row-sub">{state.theme === "dark" ? "Escuro" : "Claro"}</p>
               </div>
             </div>
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>
+            <Toggle on={state.theme === "dark"} onToggle={toggleTheme} />
+          </div>
+        </div>
+
+        {/* Conta e Integrações section */}
+        <div className="config-section">
+          <p className="config-section-title">Conta e Integrações</p>
+          
+          <div className="config-row" onClick={handleGCalConnect} style={{ cursor: "pointer" }}>
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
               </div>
-              <p className="config-row-text">Sincronizar Google Agenda</p>
+              <div>
+                <p className="config-row-text">Sincronizar Google Agenda</p>
+                <p className="config-row-sub">Conecte sua agenda pessoal</p>
+              </div>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+              <polyline points="9 18 15 12 9 6" />
             </svg>
           </div>
           
@@ -396,7 +418,7 @@ export function PreferencesPage() {
               <p className="config-row-text">{isSigningOut ? "Saindo..." : "Sair da conta"}</p>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+              <polyline points="9 18 15 12 9 6" />
             </svg>
           </div>
         </div>
