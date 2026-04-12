@@ -8,13 +8,13 @@ export const HabitCreateSchema = z.object({
   category: z.string().optional(),
   icon: z.string().optional().nullable(),
   frequency: z.enum(['daily', 'weekly', 'monthly']),
-  targetDays: z.array(z.number().int().min(0).max(6)).optional().nullable(),
+  targetDays: z.array(z.number().int().min(0).max(6)).optional(),
   targetCount: z.number().int().min(1).max(24).default(1),
   timeOfDay: z.string().optional().nullable(),
   durationMinutes: z.number().int().min(0).max(1440).optional().nullable(),
-  reminderEnabled: z.boolean().optional().nullable(),
+  reminderEnabled: z.boolean().optional(),
   reminderTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional().nullable(),
-  persistentReminderEnabled: z.boolean().optional().nullable(),
+  persistentReminderEnabled: z.boolean().optional(),
   persistentReminderIntervalMinutes: ReminderIntervalSchema.optional().nullable(),
 });
 
