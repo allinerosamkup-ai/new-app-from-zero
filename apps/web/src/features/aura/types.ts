@@ -18,6 +18,8 @@ export type Task = {
   intensity?: string;
   persistentReminderEnabled?: boolean;
   persistentReminderIntervalMinutes?: number | null;
+  isAiSuggested?: boolean;
+  aiReasoning?: string | null;
 };
 
 export type SubGoal = {
@@ -112,6 +114,7 @@ export type AuraState = {
   checkinReminder: boolean;
   morningCheckinTime: string;
   eveningCheckinTime: string;
+  notificationPreferences: NotificationPreferences;
   onboardingStep: number;
   onboardingDraft: OnboardingDraft;
   checkinHistory: CheckinEntry[];
@@ -125,6 +128,17 @@ export type AuraState = {
   habits: Habit[];
 };
 
+export type NotificationPreferences = {
+  checkin: boolean;
+  journal: boolean;
+  planner: boolean;
+  habits: boolean;
+  persistent: boolean;
+  aiSuggestions: boolean;
+  journalMorningTime: string;
+  journalEveningTime: string;
+};
+
 export type Habit = {
   id: string;
   title: string;
@@ -134,6 +148,8 @@ export type Habit = {
   frequency: 'daily' | 'weekly' | 'monthly';
   targetDays: number[];
   targetCount: number;
+  timeOfDay?: string | null;
+  durationMinutes?: number | null;
   streakCount: number;
   bestStreak: number;
   totalCompletions: number;

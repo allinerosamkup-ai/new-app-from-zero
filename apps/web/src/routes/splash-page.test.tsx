@@ -15,5 +15,6 @@ describe("SplashPage", () => {
     expect(html).toContain("Como funciona");
     expect(html).toContain("Veja o app em ação");
     expect(html).toContain("Criar minha conta");
+    expect(html).toContain("Gratuito durante o preview");
   });
 });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
-import { buildTimelineBlocks } from "./aura-chat-page.helpers.ts";
+import { buildTimelineBlocks, buildTimelineSyncRequests } from "./aura-chat-page.helpers.ts";
 
 describe("aura chat page helpers", () => {
   it("builds a single timeline block with the default start time", () => {
@@ -42,5 +42,22 @@ describe("aura chat page helpers", () => {
         { date: "2026-04-10", title: "Ginástica", startTime: "07:00" },
       ],
     );
+  });
+
+  it("builds force-save sync requests for command-center planner actions", () => {
+    const requests = buildTimelineSyncRequests([
+      {
+        date: "2026-04-12",
+        title: "Ligar para o medico",
+        startTime: "09:00",
+        endTime: "09:30",
+        category: "pessoal",
+        intensity: "M",
+      },
+    ]);
+
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.forceSave, true);
+    assert.equal(requests[0]?.blocks[0]?.isAiSuggested, true);
   });
 });

@@ -3,6 +3,7 @@ import { createEmptyOnboardingDraft } from "./onboarding";
 import {
   DEFAULT_EVENING_CHECKIN_TIME,
   DEFAULT_MORNING_CHECKIN_TIME,
+  DEFAULT_NOTIFICATION_PREFERENCES,
   QUIET_MODE_END_TIME,
   QUIET_MODE_START_TIME,
 } from "./settings";
@@ -97,6 +98,7 @@ export const initialAuraState: AuraState = {
   checkinReminder: true,
   morningCheckinTime: DEFAULT_MORNING_CHECKIN_TIME,
   eveningCheckinTime: DEFAULT_EVENING_CHECKIN_TIME,
+  notificationPreferences: DEFAULT_NOTIFICATION_PREFERENCES,
   onboardingStep: 0,
   onboardingDraft: createEmptyOnboardingDraft(),
   autonomousInsight: null,

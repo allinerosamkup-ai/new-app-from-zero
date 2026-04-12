@@ -86,7 +86,10 @@ export function AuraLayout() {
   const [authChecked, setAuthChecked] = useState(false);
   const [hasSession, setHasSession] = useState(false);
 
-  useHabitReminders(state.habits ?? [], state.tasks ?? []);
+  useHabitReminders(state.habits ?? [], state.tasks ?? [], state.notificationPreferences, {
+    morning: state.morningCheckinTime,
+    evening: state.eveningCheckinTime,
+  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

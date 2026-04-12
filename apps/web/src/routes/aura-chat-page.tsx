@@ -6,7 +6,7 @@ import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
-import { buildTimelineBlocks, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
+import { buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
@@ -160,24 +160,8 @@ export function AuraChatPage() {
   }, [messages, isTyping, actionCard, pendingTaskConfirmation]);
 
   async function syncTimelineBlocks(blocks: TimelineBlock[]) {
-    const groups = blocks.reduce((acc, block) => {
-      const current = acc.get(block.date) ?? [];
-      current.push(block);
-      acc.set(block.date, current);
-      return acc;
-    }, new Map<string, TimelineBlock[]>());
-
-    for (const [date, dateBlocks] of groups.entries()) {
-      await api.post("/timeline", {
-        date,
-        blocks: dateBlocks.map((block) => ({
-          title: block.title,
-          startTime: block.startTime,
-          endTime: block.endTime,
-          category: block.category,
-          intensity: block.intensity,
-        })),
-      });
+    for (const request of buildTimelineSyncRequests(blocks)) {
+      await api.post("/timeline", request);
     }
 
     await refreshData();
@@ -766,9 +750,10 @@ export function AuraChatPage() {
               }
             }}
             placeholder="O que vamos organizar agora?"
-            rows={1}
+            rows={3}
             style={{
               flex: 1,
+              minHeight: 62,
               border: "none",
               outline: "none",
               resize: "none",
@@ -853,4 +838,3 @@ export function AuraChatPage() {
     </div>
   );
 }
-

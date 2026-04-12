@@ -5,6 +5,7 @@ import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
+import { buildJournalPlannerSlot } from "./journal-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
@@ -326,28 +327,20 @@ export function JournalPage() {
   async function addTaskToPlanner(key: string, task: SuggestedTask, dayOffset: number) {
     setAddingToPlanner(key);
     try {
-      const targetDate = new Date();
-      targetDate.setDate(targetDate.getDate() + dayOffset);
-      const dateKey = targetDate.toISOString().slice(0, 10);
-
-      // Normalize time to 08:00-20:00
-      let time = task.time || "09:00";
-      const [h] = time.split(":").map(Number);
-      if (h < 8 || h >= 20) time = dayOffset > 0 ? "09:00" : "20:00";
-
-      const endH = Math.min(Number(time.split(":")[0]) + 1, 20);
-      const endTime = `${String(endH).padStart(2, "0")}:${time.split(":")[1] || "00"}`;
+      const slot = buildJournalPlannerSlot({ time: task.time, dayOffset });
 
       await api.post("/timeline", {
-        date: dateKey,
+        date: slot.date,
         forceSave: true,
         blocks: [{
           title: task.title,
-          startTime: time,
-          endTime,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
           category: task.category === "saude" ? "autocuidado" : task.category,
           intensity: "M",
           status: "planned",
+          isAiSuggested: true,
+          aiReasoning: "Sugerido a partir do diário.",
         }],
       });
 

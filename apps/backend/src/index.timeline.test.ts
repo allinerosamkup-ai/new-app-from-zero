@@ -127,6 +127,8 @@ async function run() {
             lastResetDate: '2026-04-05',
             persistentReminderEnabled: true,
             persistentReminderIntervalMinutes: 60,
+            isAiSuggested: true,
+            aiReasoning: 'Sugerido pela Airia.',
           },
         ],
       }),
@@ -142,6 +144,8 @@ async function run() {
     assert.equal(createdBlocks[1].lastResetDate.toISOString(), '2026-04-05T00:00:00.000Z');
     assert.equal(createdBlocks[1].persistentReminderEnabled, true);
     assert.equal(createdBlocks[1].persistentReminderIntervalMinutes, 60);
+    assert.equal(createdBlocks[1].isAiSuggested, true);
+    assert.equal(createdBlocks[1].aiReasoning, 'Sugerido pela Airia.');
 
     const metadataBlockId = '44444444-4444-4444-8444-444444444444';
     const metadataUpsertResponse = await fetch(`${baseUrl}/api/timeline`, {

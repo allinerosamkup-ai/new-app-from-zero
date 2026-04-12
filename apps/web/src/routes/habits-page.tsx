@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { Habit } from "../features/aura/types";
@@ -6,7 +6,7 @@ import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitI
 import { getHabitCompletionCount, getHabitProgressLabel, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from "../features/aura/habit-helpers";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
-import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive } from "lucide-react";
+import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil } from "lucide-react";
 import { api } from "../lib/api";
 import { getLocalDateKey } from "../utils/day-context";
 
@@ -374,7 +374,7 @@ function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
 }
 
 // ─── All habits card (expandable with calendar) ───────────────────────────
-function AllHabitCard({ habit, dateKey, onArchive }: { habit: Habit; dateKey: string; onArchive: () => void }) {
+function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dateKey: string; onArchive: () => void; onEdit: () => void }) {
   const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
   const completedToday = isHabitCompleteForDate(habit, dateKey);
   const [expanded, setExpanded] = useState(false);
@@ -486,6 +486,32 @@ function AllHabitCard({ habit, dateKey, onArchive }: { habit: Habit; dateKey: st
         >
           <HabitCalendar habitId={habit.id} color={cat.color} />
           <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            style={{
+              marginTop: 14,
+              width: "100%",
+              padding: "9px 0",
+              borderRadius: 10,
+              border: "1.5px solid rgba(99,152,169,0.25)",
+              background: "rgba(99,152,169,0.08)",
+              color: "var(--accent-sky)",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            <Pencil size={13} />
+            Editar hábito
+          </button>
+          <button
             onClick={async (e) => {
               e.stopPropagation();
               if (archiving) return;
@@ -512,7 +538,7 @@ function AllHabitCard({ habit, dateKey, onArchive }: { habit: Habit; dateKey: st
             }}
           >
             <Archive size={13} />
-            {archiving ? "Arquivando..." : "Arquivar hábito"}
+            {archiving ? "Excluindo..." : "Excluir hábito"}
           </button>
         </div>
       )}
@@ -522,11 +548,12 @@ function AllHabitCard({ habit, dateKey, onArchive }: { habit: Habit; dateKey: st
 
 // ─── Main page ────────────────────────────────────────────────────────────
 export function HabitsPage() {
-  const { state, addHabit, toggleHabit, archiveHabit } = useAuraStore();
+  const { state, addHabit, updateHabit, toggleHabit, archiveHabit } = useAuraStore();
   const navigate = useNavigate();
   const { showSuccess, showError } = useToast();
   const [tab, setTab] = useState<"today" | "all" | "badges">("today");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
 
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [showConfetti, setShowConfetti] = useState(false);
@@ -539,6 +566,10 @@ export function HabitsPage() {
   const bestStreak = habits.reduce((max, h) => Math.max(max, h.streakCount), 0);
   const pendingToday = todayHabits.filter((h) => !isHabitCompleteForDate(h, todayKey));
   const doneToday = todayHabits.filter((h) => isHabitCompleteForDate(h, todayKey));
+  const editingHabitDraft = useMemo(
+    () => (editingHabit ? buildHabitEditDraft(editingHabit) : undefined),
+    [editingHabit],
+  );
 
   async function handleToggle(habitId: string) {
     if (togglingIds.has(habitId)) return;
@@ -576,6 +607,37 @@ export function HabitsPage() {
       showError("Erro ao criar hábito.");
       return false;
     }
+  }
+
+  async function handleEditHabit(data: HabitModalPayload) {
+    if (!editingHabit) return false;
+    try {
+      await updateHabit(editingHabit.id, data);
+      setEditingHabit(null);
+      showSuccess("Hábito salvo.");
+      return true;
+    } catch {
+      showError("Erro ao salvar hábito.");
+      return false;
+    }
+  }
+
+  function buildHabitEditDraft(habit: Habit) {
+    return {
+      title: habit.title,
+      category: habit.category,
+      frequency: habit.frequency,
+      targetDays: habit.targetDays ?? [],
+      targetCount: habit.targetCount ?? 1,
+      icon: habit.icon ?? "✨",
+      timeOfDay: habit.timeOfDay ?? "anytime",
+      description: habit.description ?? "",
+      durationMinutes: habit.durationMinutes ?? undefined,
+      reminderEnabled: habit.reminderEnabled,
+      reminderTime: habit.reminderTime ?? "09:00",
+      persistentReminderEnabled: habit.persistentReminderEnabled ?? false,
+      persistentReminderIntervalMinutes: habit.persistentReminderIntervalMinutes ?? 60,
+    };
   }
 
   return (
@@ -801,7 +863,13 @@ export function HabitsPage() {
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {catHabits.map((h) => (
-                          <AllHabitCard key={h.id} habit={h} dateKey={todayKey} onArchive={() => archiveHabit(h.id)} />
+                          <AllHabitCard
+                            key={h.id}
+                            habit={h}
+                            dateKey={todayKey}
+                            onArchive={() => archiveHabit(h.id)}
+                            onEdit={() => setEditingHabit(h)}
+                          />
                         ))}
                       </div>
                     </div>
@@ -911,6 +979,17 @@ export function HabitsPage() {
         <HabitIdeasModal
           onClose={() => setShowAddModal(false)}
           onSave={handleAddHabit}
+        />
+      )}
+
+      {editingHabit && (
+        <HabitIdeasModal
+          onClose={() => setEditingHabit(null)}
+          onSave={handleEditHabit}
+          initialDraft={editingHabitDraft}
+          title="Editar hábito"
+          subtitle="Ajuste frequência, metas, dias e lembretes desse hábito."
+          saveLabel="Salvar alterações"
         />
       )}
     </div>

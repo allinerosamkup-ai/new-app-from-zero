@@ -20,7 +20,9 @@ import {
   DEFAULT_EVENING_REVIEW_TIME,
   DEFAULT_MORNING_CHECKIN_TIME,
   PreferencesPatchSchema,
+  defaultNotificationPreferences,
   defaultUserPreferences,
+  normalizeNotificationPreferences,
 } from './contracts/preferences.contract';
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
@@ -80,6 +82,8 @@ function buildTimelineMetadataData(block: TimelineBlockInput) {
   if (block.persistentReminderIntervalMinutes !== undefined) {
     metadata.persistentReminderIntervalMinutes = block.persistentReminderIntervalMinutes ?? null;
   }
+  if (block.isAiSuggested !== undefined) metadata.isAiSuggested = block.isAiSuggested;
+  if (block.aiReasoning !== undefined) metadata.aiReasoning = block.aiReasoning ?? null;
 
   return metadata;
 }
@@ -775,6 +779,7 @@ export function createApp(dependencies: AppDependencies = {}) {
             morningCheckinTime: DEFAULT_MORNING_CHECKIN_TIME,
             eveningReviewTime: DEFAULT_EVENING_REVIEW_TIME,
             notificationsOn: true,
+            notificationPreferences: defaultNotificationPreferences,
           },
           create: {
             userId,
@@ -1511,6 +1516,9 @@ export function createApp(dependencies: AppDependencies = {}) {
         ...(prefs ?? defaultUserPreferences),
         morningCheckinTime: prefs?.morningCheckinTime ?? DEFAULT_MORNING_CHECKIN_TIME,
         eveningReviewTime: prefs?.eveningReviewTime ?? DEFAULT_EVENING_REVIEW_TIME,
+        notificationPreferences: normalizeNotificationPreferences(
+          prefs?.notificationPreferences ?? defaultUserPreferences.notificationPreferences,
+        ),
         fullName: profile?.fullName ?? null,
       });
     } catch (error: any) {
@@ -1527,12 +1535,20 @@ export function createApp(dependencies: AppDependencies = {}) {
     const userId = (req as AuthRequest).userId;
     try {
       const data = PreferencesPatchSchema.parse(req.body);
+      const patchData = data.notificationPreferences
+        ? { ...data, notificationPreferences: normalizeNotificationPreferences(data.notificationPreferences) }
+        : data;
       const prefs = await prisma.userPreference.upsert({
         where: { userId },
-        update: data,
-        create: { userId, ...defaultUserPreferences, ...data },
+        update: patchData,
+        create: { userId, ...defaultUserPreferences, ...patchData },
       });
-      return res.json(prefs);
+      return res.json({
+        ...prefs,
+        notificationPreferences: normalizeNotificationPreferences(
+          prefs.notificationPreferences ?? defaultUserPreferences.notificationPreferences,
+        ),
+      });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });

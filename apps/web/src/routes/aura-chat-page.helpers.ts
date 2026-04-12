@@ -12,6 +12,20 @@ export type TimelineBlock = {
   intensity: "L" | "M" | "P";
 };
 
+export type TimelineSyncRequest = {
+  date: string;
+  forceSave: boolean;
+  blocks: Array<{
+    title: string;
+    startTime: string;
+    endTime: string;
+    category: TimelineBlock["category"];
+    intensity: TimelineBlock["intensity"];
+    isAiSuggested: boolean;
+    aiReasoning: string;
+  }>;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -252,6 +266,29 @@ export function buildTimelineBlocks(payload: Record<string, unknown>, referenceD
     category: normalizeCategory(typeof payload.category === "string" ? payload.category : undefined),
     intensity: normalizeIntensity(payload.intensity),
   }];
+}
+
+export function buildTimelineSyncRequests(blocks: TimelineBlock[]): TimelineSyncRequest[] {
+  const groups = blocks.reduce((acc, block) => {
+    const current = acc.get(block.date) ?? [];
+    current.push(block);
+    acc.set(block.date, current);
+    return acc;
+  }, new Map<string, TimelineBlock[]>());
+
+  return Array.from(groups.entries()).map(([date, dateBlocks]) => ({
+    date,
+    forceSave: true,
+    blocks: dateBlocks.map((block) => ({
+      title: block.title,
+      startTime: block.startTime,
+      endTime: block.endTime,
+      category: block.category,
+      intensity: block.intensity,
+      isAiSuggested: true,
+      aiReasoning: "Criado pela Airia no comando central.",
+    })),
+  }));
 }
 
 export function formatDateLabel(date: string): string {

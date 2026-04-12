@@ -81,6 +81,7 @@ model UserPreference {
   morningCheckinTime String?  @map("morning_checkin_time")
   eveningReviewTime  String?  @map("evening_review_time")
   notificationsOn    Boolean  @default(true) @map("notifications_on")
+  notificationPreferences Json @default("{\"checkin\":true,\"journal\":true,\"planner\":true,\"habits\":true,\"persistent\":true,\"aiSuggestions\":true,\"journalMorningTime\":\"11:00\",\"journalEveningTime\":\"19:00\"}") @map("notification_preferences")
   aiTone             String   @default("warm") @map("ai_tone")
   gcalAccessToken    String?  @map("gcal_access_token") @db.Text
   gcalRefreshToken   String?  @map("gcal_refresh_token") @db.Text

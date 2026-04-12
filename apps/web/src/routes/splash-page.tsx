@@ -568,6 +568,24 @@ export function SplashPage() {
                 Entrar na Airia
               </button>
             </div>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                width: "fit-content",
+                padding: "9px 12px",
+                borderRadius: 999,
+                background: "rgba(184,217,200,.26)",
+                border: "1px solid rgba(80,112,91,.14)",
+                color: "#50705B",
+                fontSize: 12,
+                fontWeight: 800,
+              }}
+            >
+              <Sparkles size={14} color="#50705B" />
+              Gratuito durante o preview
+            </div>
 
             <div
               style={{

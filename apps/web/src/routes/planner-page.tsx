@@ -1,7 +1,7 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar, CalendarRange } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
@@ -14,7 +14,9 @@ import {
   buildTimelineBlockInput,
   mapIntensityToEnergyLevel,
   normalizePlannerCategory,
+  resolveTaskCardSwipeAction,
   resolvePlannerBlockDate,
+  shouldNavigateAgendaBySwipe,
   type TimelineBlockIntensity,
   type TimelineBlockStatus,
 } from "./planner-page.helpers";
@@ -34,9 +36,9 @@ import "../styles/editorial.css";
 const CATEGORY_OPTIONS = [
   { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "var(--accent-sky)", bg: "rgba(176,180,196,.14)", textColor: "var(--accent-sky-ink)" },
   { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", textColor: "var(--accent-sage-ink)" },
-  { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-color)", bg: "rgba(217,206,197,.18)", textColor: "var(--social-text)" },
-  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--accent-peach)", bg: "rgba(243,176,140,.14)", textColor: "var(--accent-peach-ink)" },
-  { value: "casa" as const, label: "Casa", shortLabel: "CASA", cor: "#E5A08A", bg: "rgba(229,160,138,.14)", textColor: "#8C4A36" }
+  { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-color)", bg: "rgba(229,219,247,.32)", textColor: "var(--social-text)" },
+  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--accent-peach)", bg: "rgba(244,190,168,.30)", textColor: "var(--accent-peach-ink)" },
+  { value: "casa" as const, label: "Casa", shortLabel: "CASA", cor: "var(--buttercup)", bg: "rgba(247,231,166,.38)", textColor: "#7C641A" }
 ];
 
 function getCategoryStyles(val: string) {
@@ -126,6 +128,7 @@ type PlannerTask = {
   category?: string | null;
   intensity?: string | null;
   status?: string | null;
+  source?: string;
   noteMode?: NoteMode | null;
   note?: string | null;
   checklist?: ChecklistItem[] | null;
@@ -134,6 +137,8 @@ type PlannerTask = {
   lastResetDate?: string | null;
   persistentReminderEnabled?: boolean | null;
   persistentReminderIntervalMinutes?: number | null;
+  isAiSuggested?: boolean | null;
+  aiReasoning?: string | null;
 };
 
 const EMPTY_FORM: FormState = {
@@ -215,6 +220,8 @@ function mapTaskFromApi(task: any): PlannerTask {
     lastResetDate: typeof task.lastResetDate === "string" ? task.lastResetDate : null,
     persistentReminderEnabled: Boolean(task.persistentReminderEnabled),
     persistentReminderIntervalMinutes: typeof task.persistentReminderIntervalMinutes === "number" ? task.persistentReminderIntervalMinutes : null,
+    isAiSuggested: Boolean(task.isAiSuggested),
+    aiReasoning: typeof task.aiReasoning === "string" ? task.aiReasoning : null,
   };
 }
 
@@ -545,10 +552,11 @@ function PlannerSheetBody({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "16px 0" }}>
-      <input
+      <textarea
         value={form.title}
         onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-        style={{ ...INPUT_STYLE, height: "54px", fontSize: "16px", fontWeight: 700 }}
+        rows={2}
+        style={{ ...INPUT_STYLE, minHeight: "64px", padding: "12px 14px", fontSize: "16px", fontWeight: 700, lineHeight: 1.35, resize: "none", fontFamily: "inherit" }}
         placeholder="O que você vai fazer?"
         autoFocus
       />
@@ -828,34 +836,50 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
+  const startY = useRef<number | null>(null);
+  const lastDelta = useRef({ deltaX: 0, deltaY: 0 });
   
   const isGcal = slot.task.source === 'gcal';
 
   function handleTouchStart(e: React.TouchEvent) {
     if (isGcal) return;
+    e.stopPropagation();
     startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    lastDelta.current = { deltaX: 0, deltaY: 0 };
     setDragging(true);
   }
 
   function handleTouchMove(e: React.TouchEvent) {
     if (isGcal || startX.current === null) return;
     const diff = e.touches[0].clientX - startX.current;
-    if (Math.abs(diff) > 20) {
-       e.stopPropagation(); 
+    const deltaY = startY.current === null ? 0 : e.touches[0].clientY - startY.current;
+    lastDelta.current = { deltaX: diff, deltaY };
+    const isHorizontal = Math.abs(diff) > 16 && Math.abs(diff) > Math.abs(deltaY) * 1.35;
+
+    if (!isHorizontal) {
+      setOffset(0);
+      return;
     }
+
+    e.stopPropagation();
     setOffset(Math.max(-120, Math.min(120, diff)));
   }
 
-  function handleTouchEnd() {
+  function handleTouchEnd(e: React.TouchEvent) {
     if (isGcal) return;
+    e.stopPropagation();
     setDragging(false);
     startX.current = null;
-    if (offset < -70) {
+    startY.current = null;
+    const action = resolveTaskCardSwipeAction(lastDelta.current);
+    if (action === "complete") {
       onComplete(slot.task);
-    } else if (offset > 70) {
+    } else if (action === "delete") {
       onDelete(slot.task);
     }
     setOffset(0);
+    lastDelta.current = { deltaX: 0, deltaY: 0 };
   }
 
   return (
@@ -872,27 +896,39 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
            <span style={{ fontWeight: 800, fontSize: 13 }}>{offset < 0 ? '✓ Concluir' : '🗑️ Excluir'}</span>
         </div>
       )}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className="timeline-block-card interactive-card"
         onClick={() => { 
           if(isGcal) return; 
           if(Math.abs(offset) < 10) onClick(); 
+        }}
+        onKeyDown={(event) => {
+          if (!isGcal && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onClick();
+          }
+        }}
+        draggable={!isGcal}
+        onDragStart={(e) => {
+          if (!isGcal) onDragStart(e, slot.task.id);
+          else e.preventDefault();
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left", 
-          borderLeft: isGcal ? 'none' : `4px solid ${categoryOption.cor}`,
-          border: isGcal ? '1px dashed var(--accent-sky)' : 'none',
+          border: isGcal ? '1px dashed var(--accent-sky)' : `2px solid ${categoryOption.cor}`,
           opacity: slot.task.done ? 0.74 : 1, 
           transform: `translateX(${offset}px)`, 
           transition: dragging ? 'none' : 'transform 0.2s', 
           position: 'relative', 
           zIndex: 1, 
-          background: isGcal ? 'var(--accent-sky-a3)' : 'rgba(255,255,255,0.95)',
-          cursor: isGcal ? 'default' : 'pointer'
+          background: isGcal ? 'var(--accent-sky-a3)' : 'rgba(255,255,255,0.98)',
+          cursor: isGcal ? 'default' : 'pointer',
+          touchAction: "pan-y"
         }}
       >
         <div className="block-title" style={{ textDecoration: slot.task.done ? "line-through" : "none" }}>{slot.task.title}</div>
@@ -901,10 +937,43 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                 const meta = getTaskMeta(slot.task.id); if (meta.energyLevel === 'leve') return '🔋'; if (meta.energyLevel === 'alta') return '🔥'; return '⚡';
           })() }
         </div>
-        <div className="block-chip" style={{ background: categoryOption.bg, color: categoryOption.textColor, border: `1px solid ${categoryOption.cor}33` }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: categoryOption.cor }} />{categoryOption.shortLabel}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          <div className="block-chip" style={{ background: categoryOption.bg, color: categoryOption.textColor, border: `1px solid ${categoryOption.cor}33` }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: categoryOption.cor }} />{categoryOption.shortLabel}
+          </div>
+          {slot.task.isAiSuggested && (
+            <div className="block-chip" style={{ background: "rgba(244,190,168,.14)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.35)" }}>
+              Airia
+            </div>
+          )}
+          {!isGcal && (
+            <>
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 800 }}>arraste para mudar horário</span>
+              <span style={{ flex: 1 }} />
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onComplete(slot.task);
+                }}
+                style={{ border: "1px solid rgba(150,199,179,.35)", background: "rgba(150,199,179,.12)", color: "var(--accent-sage)", borderRadius: 7, padding: "4px 7px", fontSize: 10, fontWeight: 800 }}
+              >
+                {slot.task.done ? "Reabrir" : "Feito"}
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete(slot.task);
+                }}
+                style={{ border: "1px solid rgba(215,137,127,.28)", background: "rgba(215,137,127,.08)", color: "var(--accent-peach)", borderRadius: 7, padding: "4px 7px", fontSize: 10, fontWeight: 800 }}
+              >
+                Excluir
+              </button>
+            </>
+          )}
         </div>
-      </button>
+      </div>
     </div>
   );
 }
@@ -912,6 +981,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 export function PlannerPage() {
   const { refreshData, state, toggleSubGoal } = useAuraStore();
   const { showError, showSuccess } = useToast();
+  const location = useLocation();
 
   // ── Modo Proteção de Fase Baixa (7.2) ──────────────────────
   const cycleReport = useMemo(() => {
@@ -928,6 +998,7 @@ export function PlannerPage() {
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
   const [searchParams, setSearchParams] = useSearchParams();
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
+  const openedTaskFromLocationRef = useRef<string | null>(null);
 
   // Feedback do Google Calendar OAuth
   useEffect(() => {
@@ -1071,6 +1142,18 @@ export function PlannerPage() {
       ignore = true;
     };
   }, [selectedDateKey]);
+
+  useEffect(() => {
+    const taskId = (location.state as { openTaskId?: string | number } | null)?.openTaskId;
+    if (!taskId) return;
+    const normalizedTaskId = String(taskId);
+    if (openedTaskFromLocationRef.current === normalizedTaskId) return;
+    const task = plannerTasks.find((item) => item.id === normalizedTaskId);
+    if (!task || task.source === "gcal") return;
+
+    openedTaskFromLocationRef.current = normalizedTaskId;
+    openEditForm(task);
+  }, [location.state, plannerTasks]);
 
   async function reloadPlannerTasks() {
     try {
@@ -1243,17 +1326,23 @@ export function PlannerPage() {
   }
 
   const [globalTouchStartX, setGlobalTouchStartX] = useState<number | null>(null);
+  const [globalTouchStartY, setGlobalTouchStartY] = useState<number | null>(null);
 
   function handleAgendaTouchStart(e: React.TouchEvent) {
      setGlobalTouchStartX(e.touches[0].clientX);
+     setGlobalTouchStartY(e.touches[0].clientY);
   }
 
   function handleAgendaTouchEnd(e: React.TouchEvent) {
      if (globalTouchStartX === null) return;
-     const diff = e.changedTouches[0].clientX - globalTouchStartX;
-     if (diff > 100) setOffsetDias(c => c - 1);
-     else if (diff < -100) setOffsetDias(c => c + 1);
+     const deltaX = e.changedTouches[0].clientX - globalTouchStartX;
+     const deltaY = globalTouchStartY === null ? 0 : e.changedTouches[0].clientY - globalTouchStartY;
+     if (shouldNavigateAgendaBySwipe({ deltaX, deltaY })) {
+       if (deltaX > 0) setOffsetDias(c => c - 1);
+       else setOffsetDias(c => c + 1);
+     }
      setGlobalTouchStartX(null);
+     setGlobalTouchStartY(null);
   }
 
   async function handleCompleteTaskDirect(task: PlannerTask) {
@@ -1267,8 +1356,8 @@ export function PlannerPage() {
           startTime: task.time,
           endTime: task.endTime,
           status: task.done ? 'planned' : 'completed',
-          category: task.category,
-          intensity: task.intensity,
+          category: normalizePlannerCategory(task.category, task.title),
+          intensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
           persistentReminderEnabled: task.persistentReminderEnabled ?? false,
           persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
         } ],
@@ -1311,9 +1400,9 @@ export function PlannerPage() {
           title: task.title,
           startTime: newTime,
           endTime: newEndTime,
-          status: task.status,
-          category: task.category,
-          intensity: task.intensity,
+          status: ((task.status ?? (task.done ? "completed" : "planned")) as TimelineBlockStatus),
+          category: normalizePlannerCategory(task.category, task.title),
+          intensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
           persistentReminderEnabled: task.persistentReminderEnabled ?? false,
           persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
         } ]

@@ -2,6 +2,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import type { NotificationPreferences } from "../features/aura/types";
 import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
 
@@ -22,6 +23,7 @@ export function PreferencesPage() {
     setName,
     toggleCheckinReminder,
     setCheckinReminderTimes,
+    updateNotificationPreferences,
     toggleQuietMode,
     toggleTheme,
     resetOnboardingDraft,
@@ -30,6 +32,7 @@ export function PreferencesPage() {
   } = useAuraStore();
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(true);
 
   const displayName = state.name
     ? state.name.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
@@ -59,6 +62,16 @@ export function PreferencesPage() {
     resetOnboardingDraft();
     navigate("/onboarding");
   }
+
+  async function handleNotificationPatch(patch: Partial<NotificationPreferences>) {
+    if (Object.values(patch).some((value) => value === true)) {
+      const { requestNotificationPermission } = await import("../hooks/useHabitReminders");
+      await requestNotificationPermission();
+    }
+    await updateNotificationPreferences(patch);
+  }
+
+  const notificationPrefs = state.notificationPreferences;
 
   return (
     <div className="aura-page-shell">
@@ -144,7 +157,17 @@ export function PreferencesPage() {
 
         {/* Notificações section */}
         <div className="config-section">
-          <p className="config-section-title">Notificações</p>
+          <button
+            type="button"
+            className="config-section-title config-section-toggle"
+            onClick={() => setNotificationsOpen((open) => !open)}
+            aria-expanded={notificationsOpen}
+          >
+            <span>Notificações</span>
+            <span>{notificationsOpen ? "Recolher" : "Abrir"}</span>
+          </button>
+          {notificationsOpen && (
+            <>
           <div className="config-row">
             <div className="config-row-label">
               <div className="icon-bg" style={{ background: "var(--accent-peach-a3)" }}>
@@ -192,6 +215,124 @@ export function PreferencesPage() {
           </div>
           <div className="config-row">
             <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(212,196,224,.16)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9D8DB1" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Escrever no diário</p>
+                <p className="config-row-sub">Duas chamadas por dia, às {notificationPrefs.journalMorningTime} e {notificationPrefs.journalEveningTime}</p>
+              </div>
+            </div>
+            <Toggle
+              on={notificationPrefs.journal}
+              onToggle={() => handleNotificationPatch({ journal: !notificationPrefs.journal })}
+            />
+          </div>
+          {notificationPrefs.journal && (
+            <div className="config-row">
+              <div className="config-row-label">
+                <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" /><path d="M12 6v6l4 2" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="config-row-text">Horários do diário</p>
+                  <p className="config-row-sub">Primeiro e segundo lembrete</p>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  type="time"
+                  value={notificationPrefs.journalMorningTime}
+                  onChange={(event) => handleNotificationPatch({ journalMorningTime: event.target.value })}
+                  className="aura-inline-input"
+                  style={{ width: 82, fontSize: 12, fontWeight: 700 }}
+                  aria-label="Primeiro horário do diário"
+                />
+                <input
+                  type="time"
+                  value={notificationPrefs.journalEveningTime}
+                  onChange={(event) => handleNotificationPatch({ journalEveningTime: event.target.value })}
+                  className="aura-inline-input"
+                  style={{ width: 82, fontSize: 12, fontWeight: 700 }}
+                  aria-label="Segundo horário do diário"
+                />
+              </div>
+            </div>
+          )}
+          <div className="config-row">
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(150,199,179,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Agenda e tarefas</p>
+                <p className="config-row-sub">Avisos no horário marcado</p>
+              </div>
+            </div>
+            <Toggle
+              on={notificationPrefs.planner}
+              onToggle={() => handleNotificationPatch({ planner: !notificationPrefs.planner })}
+            />
+          </div>
+          <div className="config-row">
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(244,168,150,.14)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2v20" /><path d="M5 9c4 0 7-3 7-7 0 4 3 7 7 7" /><path d="M5 15c4 0 7 3 7 7 0-4 3-7 7-7" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Hábitos</p>
+                <p className="config-row-sub">Água, plantas, remédios, rotina e metas pequenas</p>
+              </div>
+            </div>
+            <Toggle
+              on={notificationPrefs.habits}
+              onToggle={() => handleNotificationPatch({ habits: !notificationPrefs.habits })}
+            />
+          </div>
+          <div className="config-row">
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 4v6h6" /><path d="M20 20v-6h-6" /><path d="M20 9a8 8 0 0 0-13.5-3.5L4 8" /><path d="M4 15a8 8 0 0 0 13.5 3.5L20 16" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Notificação insistente</p>
+                <p className="config-row-sub">Repete até a tarefa ou hábito ser concluído</p>
+              </div>
+            </div>
+            <Toggle
+              on={notificationPrefs.persistent}
+              onToggle={() => handleNotificationPatch({ persistent: !notificationPrefs.persistent })}
+            />
+          </div>
+          <div className="config-row">
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(184,217,200,.16)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z" /><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8Z" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Sugestões da Airia</p>
+                <p className="config-row-sub">Toques de revisão, retomada e mudança de fase</p>
+              </div>
+            </div>
+            <Toggle
+              on={notificationPrefs.aiSuggestions}
+              onToggle={() => handleNotificationPatch({ aiSuggestions: !notificationPrefs.aiSuggestions })}
+            />
+          </div>
+          <div className="config-row">
+            <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
@@ -204,6 +345,8 @@ export function PreferencesPage() {
             </div>
             <Toggle on={state.quietMode ?? false} onToggle={toggleQuietMode} />
           </div>
+          </>
+          )}
         </div>
 
         {/* Aparência section */}

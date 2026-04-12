@@ -1,13 +1,13 @@
 import { z } from 'zod';
 
-const CATEGORY_ALIASES: Record<string, 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'outro'> = {
+const CATEGORY_ALIASES: Record<string, 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro'> = {
   trabalho: 'trabalho',
   work: 'trabalho',
   pessoal: 'pessoal',
   personal: 'pessoal',
   geral: 'pessoal',
   rotina: 'pessoal',
-  casa: 'pessoal',
+  casa: 'casa',
   lazer: 'pessoal',
   planning: 'pessoal',
   foco: 'trabalho',
@@ -69,7 +69,7 @@ export const TimelineBlockSchema = z.object({
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/), // HH:mm
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),   // HH:mm
   title: z.string().min(1),
-  category: z.preprocess(normalizeCategory, z.enum(['trabalho', 'pessoal', 'autocuidado', 'social', 'outro'])),
+  category: z.preprocess(normalizeCategory, z.enum(['trabalho', 'pessoal', 'autocuidado', 'social', 'casa', 'outro'])),
   intensity: z.preprocess(normalizeIntensity, z.enum(['L', 'M', 'P'])), // Leve, Média, Pesada
   status: z.enum(['planned', 'completed', 'postponed']).default('planned'),
   noteMode: z.enum(['text', 'checklist']).optional(),
@@ -80,6 +80,8 @@ export const TimelineBlockSchema = z.object({
   lastResetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   persistentReminderEnabled: z.boolean().optional(),
   persistentReminderIntervalMinutes: z.number().int().min(5).max(720).optional().nullable(),
+  isAiSuggested: z.boolean().optional(),
+  aiReasoning: z.string().optional().nullable(),
 });
 
 export type TimelineBlockInput = z.infer<typeof TimelineBlockSchema>;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
 
 import { AuraButtonV2 } from "../../components/editorial/AuraButtonV2";
@@ -61,7 +61,7 @@ function groupHabitSuggestions() {
   }));
 }
 
-function createInitialDraft(): HabitFormDraft {
+function createInitialDraft(initial?: Partial<HabitFormDraft>): HabitFormDraft {
   return {
     title: "",
     category: "geral",
@@ -75,6 +75,7 @@ function createInitialDraft(): HabitFormDraft {
     reminderTime: "09:00",
     persistentReminderEnabled: false,
     persistentReminderIntervalMinutes: 60,
+    ...initial,
   };
 }
 
@@ -88,15 +89,27 @@ export function HabitIdeasModal({
   onClose,
   onSave,
   onViewAll,
+  initialDraft,
+  title = "Escolha um ritual para hoje",
+  subtitle = "Ajuste a frequência, os dias e os lembretes antes de salvar.",
+  saveLabel = "Salvar hábito",
 }: {
   onClose: () => void;
   onSave: (payload: HabitModalPayload) => Promise<boolean>;
   onViewAll?: () => void;
+  initialDraft?: Partial<HabitFormDraft>;
+  title?: string;
+  subtitle?: string;
+  saveLabel?: string;
 }) {
   const groupedSuggestions = groupHabitSuggestions();
-  const [draft, setDraft] = useState<HabitFormDraft>(() => createInitialDraft());
+  const [draft, setDraft] = useState<HabitFormDraft>(() => createInitialDraft(initialDraft));
   const [saving, setSaving] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(createInitialDraft(initialDraft));
+  }, [initialDraft]);
 
   function updateDraft(patch: Partial<HabitFormDraft>) {
     setDraft((current) => ({ ...current, ...patch }));
@@ -169,9 +182,9 @@ export function HabitIdeasModal({
             <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)" }}>
               Hábitos com mais charme
             </p>
-            <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>Escolha um ritual para hoje</h3>
+            <h3 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>{title}</h3>
             <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.55, color: "var(--text-2)" }}>
-              Ajuste a frequência, os dias e os lembretes antes de salvar.
+              {subtitle}
             </p>
           </div>
           <button
@@ -226,22 +239,25 @@ export function HabitIdeasModal({
             <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--text-3)" }}>
               Entrada livre
             </p>
-            <input
-              type="text"
+            <textarea
               value={draft.title}
               onChange={(event) => updateDraft({ title: event.target.value })}
               placeholder="Ex: beber água, regar as plantas, 5 min de silêncio"
+              rows={2}
               style={{
                 width: "100%",
-                height: 44,
+                minHeight: 58,
                 borderRadius: 14,
                 border: "1px solid rgba(17,24,39,.08)",
                 background: "rgba(255,255,255,.92)",
-                padding: "0 14px",
+                padding: "10px 14px",
                 fontSize: 14,
                 color: "var(--text-1)",
                 outline: "none",
                 boxSizing: "border-box",
+                resize: "none",
+                lineHeight: 1.35,
+                fontFamily: "inherit",
               }}
             />
           </div>
@@ -432,9 +448,10 @@ export function HabitIdeasModal({
           value={draft.description}
           onChange={(event) => updateDraft({ description: event.target.value })}
           placeholder="Por que isso importa? Opcional."
-          rows={2}
+          rows={3}
           style={{
             width: "100%",
+            minHeight: 76,
             borderRadius: 14,
             border: "1px solid rgba(17,24,39,.08)",
             background: "rgba(255,255,255,.86)",
@@ -449,8 +466,8 @@ export function HabitIdeasModal({
         />
 
         <AuraButtonV2 variant="primary" onClick={handleSave} disabled={saving || !draft.title.trim()} style={{ width: "100%", height: 48, marginBottom: 18 }}>
-          {saving ? "Salvando..." : "Salvar hábito"}
-        </AuraButtonV2>
+              {saving ? "Salvando..." : saveLabel}
+            </AuraButtonV2>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           {groupedSuggestions.map(({ theme, meta, suggestions }) => (

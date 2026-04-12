@@ -33,6 +33,7 @@ export type HomeAgendaTaskItem = {
   title: string;
   time: string;
   category?: string;
+  isAiSuggested?: boolean;
 };
 
 export type HomeAgendaHabitItem = {
@@ -112,7 +113,7 @@ export function buildHomeAiRequestKey(input: HomeAiRequestKeyInput): string {
 }
 
 export function buildHomeAgendaPreview(input: {
-  tasks: Array<{ id: string | number; title: string; time: string; done: boolean; category?: string }>;
+  tasks: Array<{ id: string | number; title: string; time: string; done: boolean; category?: string; isAiSuggested?: boolean }>;
   habits: Array<{ id: string; title: string; icon?: string; targetCount?: number | null; completions?: Array<{ completionCount?: number | null } | unknown>; reminderEnabled?: boolean; reminderTime?: string | null }>;
 }): { tasks: HomeAgendaTaskItem[]; habit: HomeAgendaHabitItem | null } {
   const tasks = input.tasks
@@ -125,6 +126,7 @@ export function buildHomeAgendaPreview(input: {
       title: normalizeWhitespace(task.title),
       time: safeTimeValue(task.time),
       category: task.category,
+      isAiSuggested: Boolean(task.isAiSuggested),
     }));
 
   const taskTitles = new Set(tasks.map((task) => comparableKey(task.title)));
@@ -142,6 +144,10 @@ export function buildHomeAgendaPreview(input: {
     }))[0] ?? null;
 
   return { tasks, habit };
+}
+
+export function shouldRefreshHomeSuggestionAfterAction(item: { kind: "task" | "habit"; isAiSuggested?: boolean }): boolean {
+  return item.kind === "task" && Boolean(item.isAiSuggested);
 }
 
 export function resolveHomeAgendaSuggestionDate(localDate: string, hour: number): string {

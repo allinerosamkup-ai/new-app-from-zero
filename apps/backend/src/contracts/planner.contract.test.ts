@@ -67,7 +67,7 @@ const validPayload = {
   if (result.success) {
     assert.deepEqual(
       result.data.blocks.map((block) => block.category),
-      ['pessoal', 'pessoal', 'pessoal', 'autocuidado'],
+      ['casa', 'pessoal', 'pessoal', 'autocuidado'],
     );
   }
 }
@@ -94,6 +94,8 @@ const validPayload = {
         lastResetDate: '2026-04-12',
         persistentReminderEnabled: true,
         persistentReminderIntervalMinutes: 60,
+        isAiSuggested: true,
+        aiReasoning: 'Sugerido pela Airia.',
       },
     ],
   });
@@ -109,6 +111,8 @@ const validPayload = {
     assert.equal(block.lastResetDate, '2026-04-12');
     assert.equal(block.persistentReminderEnabled, true);
     assert.equal(block.persistentReminderIntervalMinutes, 60);
+    assert.equal(block.isAiSuggested, true);
+    assert.equal(block.aiReasoning, 'Sugerido pela Airia.');
   }
 }
 

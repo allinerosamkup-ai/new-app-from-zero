@@ -95,6 +95,7 @@ export function AutonomousAIEngine() {
         hasNewDailySnapshot &&
         prevPhase !== currentPhase &&
         currentPhase !== "insufficient_data" &&
+        state.notificationPreferences.aiSuggestions &&
         !transitionInFlightRef.current &&
         (!state.phaseTransitionAlert || state.phaseTransitionAlert.dismissed)
       ) {
@@ -142,6 +143,7 @@ export function AutonomousAIEngine() {
     state.tasks,
     state.autonomousInsight?.generatedAt,
     state.phaseTransitionAlert,
+    state.notificationPreferences.aiSuggestions,
     setAutonomousInsight,
     setPhaseTransitionAlert,
   ]);
@@ -190,6 +192,11 @@ export function AutonomousAIEngine() {
     const history = state.checkinHistory || [];
     const goals = state.goals || [];
     const now = Date.now();
+
+    if (!state.notificationPreferences.aiSuggestions) {
+      if (state.proactiveNudge) setProactiveNudge(null);
+      return;
+    }
 
     // Priority 1: no check-in for 48h
     const latestCheckinMs = history.reduce<number>((latest, entry) => {
@@ -287,7 +294,7 @@ export function AutonomousAIEngine() {
 
     // No nudge needed — clear any stale one
     if (state.proactiveNudge) setProactiveNudge(null);
-  }, [state.checkinHistory, state.goals, state.proactiveNudge, setProactiveNudge]);
+  }, [state.checkinHistory, state.goals, state.notificationPreferences.aiSuggestions, state.proactiveNudge, setProactiveNudge]);
 
   return null;
 }

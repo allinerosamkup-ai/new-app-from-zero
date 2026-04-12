@@ -9,6 +9,7 @@ import {
   extractAgendaRepeatContext,
   extractHomeRepeatContext,
   resolveHomeAgendaSuggestionDate,
+  shouldRefreshHomeSuggestionAfterAction,
 } from "./home-page.helpers.ts";
 
 describe("home page helpers", () => {
@@ -104,6 +105,18 @@ describe("home page helpers", () => {
     assert.equal(preview.habit?.title, "Alongamento");
   });
 
+  it("keeps AI suggestion metadata on the home agenda preview", () => {
+    const preview = buildHomeAgendaPreview({
+      tasks: [
+        { id: "ai", title: "Enviar proposta", time: "10:00", done: false, category: "trabalho", isAiSuggested: true },
+      ],
+      habits: [],
+    });
+
+    assert.equal(preview.tasks[0]?.isAiSuggested, true);
+    assert.equal(shouldRefreshHomeSuggestionAfterAction(preview.tasks[0]!), true);
+  });
+
   it("does not repeat a pending habit that is already in the next commitments", () => {
     const preview = buildHomeAgendaPreview({
       tasks: [
@@ -140,5 +153,10 @@ describe("home page helpers", () => {
   it("resolves agenda suggestions to tomorrow from 18h onward", () => {
     assert.equal(resolveHomeAgendaSuggestionDate("2026-04-12", 17), "2026-04-12");
     assert.equal(resolveHomeAgendaSuggestionDate("2026-04-12", 18), "2026-04-13");
+  });
+
+  it("does not regenerate AI suggestions after regular task or habit actions", () => {
+    assert.equal(shouldRefreshHomeSuggestionAfterAction({ kind: "task", isAiSuggested: false }), false);
+    assert.equal(shouldRefreshHomeSuggestionAfterAction({ kind: "habit" }), false);
   });
 });

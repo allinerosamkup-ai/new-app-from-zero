@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react';
-import type { Habit, Task } from '../features/aura/types';
+import type { Habit, NotificationPreferences, Task } from '../features/aura/types';
 import { getHabitCompletionCount, getHabitTargetCount, isHabitCompleteForDate } from '../features/aura/habit-helpers';
+import {
+  DEFAULT_EVENING_CHECKIN_TIME,
+  DEFAULT_MORNING_CHECKIN_TIME,
+  DEFAULT_NOTIFICATION_PREFERENCES,
+} from '../features/aura/settings';
 import { getLocalDateKey } from '../utils/day-context';
 
 function timeToMinutes(time: string | null | undefined): number | null {
@@ -14,15 +19,29 @@ function shouldFirePersistentReminder(nowMinutes: number, startMinutes: number, 
   return (nowMinutes - startMinutes) % intervalMinutes === 0;
 }
 
-export function useHabitReminders(habits: Habit[], tasks: Task[] = []) {
+export function useHabitReminders(
+  habits: Habit[],
+  tasks: Task[] = [],
+  notificationPreferences: NotificationPreferences = DEFAULT_NOTIFICATION_PREFERENCES,
+  checkinTimes: { morning?: string; evening?: string } = {},
+) {
   const firedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!('Notification' in window)) return;
 
-    const habitsWithReminders = habits.filter((h) => h.reminderEnabled && h.reminderTime);
-    const tasksWithPersistentReminders = tasks.filter((task) => task.persistentReminderEnabled && task.time);
-    if (habitsWithReminders.length === 0 && tasksWithPersistentReminders.length === 0) return;
+    const preferences = {
+      ...DEFAULT_NOTIFICATION_PREFERENCES,
+      ...notificationPreferences,
+    };
+    const habitsWithReminders = preferences.habits
+      ? habits.filter((h) => h.reminderEnabled && h.reminderTime)
+      : [];
+    const tasksWithReminders = preferences.planner
+      ? tasks.filter((task) => task.time)
+      : [];
+    const hasFixedReminders = preferences.checkin || preferences.journal;
+    if (habitsWithReminders.length === 0 && tasksWithReminders.length === 0 && !hasFixedReminders) return;
 
     const checkAndFire = () => {
       if (Notification.permission !== 'granted') return;
@@ -30,6 +49,33 @@ export function useHabitReminders(habits: Habit[], tasks: Task[] = []) {
       const todayKey = getLocalDateKey(now);
       const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      const morningCheckinTime = checkinTimes.morning ?? DEFAULT_MORNING_CHECKIN_TIME;
+      const eveningCheckinTime = checkinTimes.evening ?? DEFAULT_EVENING_CHECKIN_TIME;
+
+      if (preferences.checkin && (hhmm === morningCheckinTime || hhmm === eveningCheckinTime)) {
+        const firedKey = `checkin-${todayKey}-${hhmm}`;
+        if (!firedRef.current.has(firedKey)) {
+          firedRef.current.add(firedKey);
+          new Notification('Check-in da Airia', {
+            body: 'Registre humor e energia para manter seu padrão atualizado.',
+            icon: '/favicon.ico',
+            tag: `checkin-${todayKey}`,
+          });
+        }
+      }
+
+      if (preferences.journal && (hhmm === preferences.journalMorningTime || hhmm === preferences.journalEveningTime)) {
+        const firedKey = `journal-${todayKey}-${hhmm}`;
+        if (!firedRef.current.has(firedKey)) {
+          firedRef.current.add(firedKey);
+          new Notification('Diário da Airia', {
+            body: 'Dois minutos para registrar o que mudou por dentro.',
+            icon: '/favicon.ico',
+            tag: `journal-${todayKey}`,
+          });
+        }
+      }
 
       habitsWithReminders
         .forEach((h) => {
@@ -40,7 +86,7 @@ export function useHabitReminders(habits: Habit[], tasks: Task[] = []) {
 
           const interval = h.persistentReminderIntervalMinutes ?? 60;
           const shouldFire = h.reminderTime === hhmm
-            || Boolean(h.persistentReminderEnabled && shouldFirePersistentReminder(nowMinutes, startMinutes, interval));
+            || Boolean(preferences.persistent && h.persistentReminderEnabled && shouldFirePersistentReminder(nowMinutes, startMinutes, interval));
           const firedKey = `habit-${h.id}-${todayKey}-${hhmm}`;
           if (!shouldFire || firedRef.current.has(firedKey)) return;
           firedRef.current.add(firedKey);
@@ -54,13 +100,15 @@ export function useHabitReminders(habits: Habit[], tasks: Task[] = []) {
           });
         });
 
-      tasksWithPersistentReminders
+      tasksWithReminders
         .forEach((task) => {
           if (task.done) return;
           const startMinutes = timeToMinutes(task.time);
           if (startMinutes === null) return;
           const interval = task.persistentReminderIntervalMinutes ?? 60;
-          if (!shouldFirePersistentReminder(nowMinutes, startMinutes, interval)) return;
+          const shouldFire = task.time === hhmm
+            || Boolean(preferences.persistent && task.persistentReminderEnabled && shouldFirePersistentReminder(nowMinutes, startMinutes, interval));
+          if (!shouldFire) return;
 
           const firedKey = `task-${task.id}-${todayKey}-${hhmm}`;
           if (firedRef.current.has(firedKey)) return;
@@ -88,7 +136,7 @@ export function useHabitReminders(habits: Habit[], tasks: Task[] = []) {
       clearTimeout(timeout);
       clearInterval(interval);
     };
-  }, [habits, tasks]);
+  }, [habits, tasks, notificationPreferences, checkinTimes.morning, checkinTimes.evening]);
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {

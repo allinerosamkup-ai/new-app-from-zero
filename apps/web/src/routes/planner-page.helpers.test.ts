@@ -5,7 +5,9 @@ import {
   buildPlannerAgendaSlots,
   buildTimelineBlockInput,
   formatTimelineDurationLabel,
+  resolveTaskCardSwipeAction,
   resolvePlannerBlockDate,
+  shouldNavigateAgendaBySwipe,
   type FormStateLike,
   type PlannerTaskLike,
 } from "./planner-page.helpers.ts";
@@ -80,6 +82,23 @@ describe("planner page helpers", () => {
     assert.equal(result.intensity, "M");
   });
 
+  it("keeps home commitments separate from personal commitments", () => {
+    assert.equal(buildTimelineBlockInput({ ...baseForm, category: "casa" }).category, "casa");
+    const slots = buildPlannerAgendaSlots([
+      {
+        id: "home",
+        title: "Regar plantas",
+        time: "09:00",
+        endTime: "09:30",
+        done: false,
+        category: "casa",
+      },
+    ]);
+    const taskSlot = slots.find((slot) => slot.kind === "task");
+    assert.equal(taskSlot?.kind, "task");
+    if (taskSlot?.kind === "task") assert.equal(taskSlot.category, "casa");
+  });
+
   it("uses the form date for planner submissions when present", () => {
     assert.equal(resolvePlannerBlockDate("2026-04-20", "2026-04-11"), "2026-04-20");
     assert.equal(resolvePlannerBlockDate("", "2026-04-11"), "2026-04-11");
@@ -133,5 +152,19 @@ describe("planner page helpers", () => {
       assert.equal(taskSlots[1].durationLabel, "2h");
       assert.equal(taskSlots[1].category, "trabalho");
     }
+  });
+
+  it("keeps horizontal card actions from being confused with vertical scroll", () => {
+    assert.equal(resolveTaskCardSwipeAction({ deltaX: -92, deltaY: 12 }), "complete");
+    assert.equal(resolveTaskCardSwipeAction({ deltaX: 96, deltaY: 10 }), "delete");
+    assert.equal(resolveTaskCardSwipeAction({ deltaX: -70, deltaY: 4 }), null);
+    assert.equal(resolveTaskCardSwipeAction({ deltaX: -110, deltaY: 100 }), null);
+  });
+
+  it("only changes planner day on deliberate horizontal agenda swipes", () => {
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 130, deltaY: 20 }), true);
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: -140, deltaY: 40 }), true);
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 105, deltaY: 10 }), false);
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 150, deltaY: 120 }), false);
   });
 });

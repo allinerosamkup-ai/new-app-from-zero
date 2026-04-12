@@ -1,6 +1,6 @@
 export type TimelineBlockStatus = "planned" | "completed" | "postponed";
 export type TimelineBlockIntensity = "L" | "M" | "P";
-export type PlannerCategory = "trabalho" | "autocuidado" | "social" | "pessoal";
+export type PlannerCategory = "trabalho" | "autocuidado" | "social" | "pessoal" | "casa";
 export type TimelineBlockNoteMode = "text" | "checklist";
 
 export type TimelineChecklistItem = {
@@ -43,6 +43,8 @@ export type PlannerTaskLike = {
   link?: string;
   persistentReminderEnabled?: boolean;
   persistentReminderIntervalMinutes?: number | null;
+  isAiSuggested?: boolean;
+  aiReasoning?: string | null;
 };
 
 export type PlannerAgendaSlot =
@@ -62,6 +64,11 @@ export type PlannerAgendaSlot =
       title: string;
       description: string;
     };
+
+export type SwipeGestureInput = {
+  deltaX: number;
+  deltaY: number;
+};
 
 const EMPTY_AGENDA_TEMPLATE: Array<Pick<Extract<PlannerAgendaSlot, { kind: "empty" }>, "time" | "title" | "description">> = [
   {
@@ -128,6 +135,16 @@ function deriveCategoryFromTitle(title: string) {
   }
 
   if (
+    normalizedTitle.includes("casa") ||
+    normalizedTitle.includes("mercado") ||
+    normalizedTitle.includes("limpeza") ||
+    normalizedTitle.includes("plantas") ||
+    normalizedTitle.includes("planta")
+  ) {
+    return "casa";
+  }
+
+  if (
     normalizedTitle.includes("almoço") ||
     normalizedTitle.includes("social") ||
     normalizedTitle.includes("amigo")
@@ -146,7 +163,8 @@ export function normalizePlannerCategory(category?: string | null, title = "") {
   if (value === "self-care" || value === "selfcare" || value === "health" || value === "energia" || value === "humor") return "autocuidado";
   if (value === "social") return "social";
   if (value === "foco") return "trabalho";
-  if (value === "pessoal" || value === "geral" || value === "rotina" || value === "casa" || value === "lazer" || value === "planning" || value === "outro") return "pessoal";
+  if (value === "casa") return "casa";
+  if (value === "pessoal" || value === "geral" || value === "rotina" || value === "lazer" || value === "planning" || value === "outro") return "pessoal";
   return deriveCategoryFromTitle(title);
 }
 
@@ -273,4 +291,28 @@ export function buildPlannerAgendaSlots(tasks: PlannerTaskLike[]): PlannerAgenda
   });
 
   return deduped;
+}
+
+export function resolveTaskCardSwipeAction(
+  gesture: SwipeGestureInput,
+  threshold = 76,
+): "complete" | "delete" | null {
+  const absX = Math.abs(gesture.deltaX);
+  const absY = Math.abs(gesture.deltaY);
+
+  if (absX < threshold || absX < absY * 1.35) {
+    return null;
+  }
+
+  return gesture.deltaX < 0 ? "complete" : "delete";
+}
+
+export function shouldNavigateAgendaBySwipe(
+  gesture: SwipeGestureInput,
+  threshold = 120,
+): boolean {
+  const absX = Math.abs(gesture.deltaX);
+  const absY = Math.abs(gesture.deltaY);
+
+  return absX >= threshold && absX >= absY * 1.5;
 }

@@ -21,6 +21,7 @@ import {
   extractAgendaRepeatContext,
   extractHomeRepeatContext,
   resolveHomeAgendaSuggestionDate,
+  shouldRefreshHomeSuggestionAfterAction,
 } from "./home-page.helpers";
 import { 
   MessageSquareText,
@@ -268,8 +269,24 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
   },
 };
 
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <>
+      {String(now.getHours()).padStart(2,"0")}:{String(now.getMinutes()).padStart(2,"0")}
+      <span style={{ fontSize: "13px", opacity: 0.8 }}>:{String(now.getSeconds()).padStart(2,"0")}</span>
+    </>
+  );
+}
+
 export function HomePage() {
-  const { state, addTask, addHabit, refreshData, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
+  const { state, addTask, addHabit, refreshData, toggleTask, removeTask, toggleHabit, archiveHabit, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
 
@@ -417,7 +434,7 @@ export function HomePage() {
   );
 
   useEffect(() => {
-    const t = setInterval(() => setClockTime(new Date()), 1000);
+    const t = setInterval(() => setClockTime(new Date()), 60_000);
     return () => clearInterval(t);
   }, []);
 
@@ -589,7 +606,7 @@ export function HomePage() {
     if (agendaSaving) return;
     const SKIP_TYPES = new Set(["descanso", "refeicao"]);
     const today = getLocalDateKey();
-    const batches = new Map<string, Array<{ title: string; startTime: string; endTime: string; category: string; intensity: "L" | "M" | "P" }>>();
+    const batches = new Map<string, Array<{ title: string; startTime: string; endTime: string; category: string; intensity: "L" | "M" | "P"; isAiSuggested: boolean; aiReasoning: string }>>();
     const savedKeys = new Set<string>();
     const seenTitles = new Set<string>();
 
@@ -620,6 +637,8 @@ export function HomePage() {
           endTime: minutesToTime(itemStart + duration),
           category: cfg.category,
           intensity: block.intensity ?? "M",
+          isAiSuggested: true,
+          aiReasoning: block.razao_ia,
         });
         batches.set(targetDate, dateBlocks);
       });
@@ -684,6 +703,49 @@ export function HomePage() {
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel adicionar o habito.");
       return false;
+    }
+  }
+
+  async function refreshSuggestionQueueIfNeeded(item: { kind: "task" | "habit"; isAiSuggested?: boolean }) {
+    if (!shouldRefreshHomeSuggestionAfterAction(item)) return;
+    await fetchAgenda();
+  }
+
+  async function handleHomeTaskDone(task: (typeof homeAgendaPreview.tasks)[number]) {
+    try {
+      await toggleTask(task.id);
+      showSuccess("Compromisso concluído.");
+      await refreshSuggestionQueueIfNeeded(task);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel concluir o compromisso.");
+    }
+  }
+
+  async function handleHomeTaskDelete(task: (typeof homeAgendaPreview.tasks)[number]) {
+    try {
+      await removeTask(task.id);
+      showSuccess("Compromisso excluído.");
+      await refreshSuggestionQueueIfNeeded(task);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel excluir o compromisso.");
+    }
+  }
+
+  async function handleHomeHabitDone(habit: NonNullable<typeof homeAgendaPreview.habit>) {
+    try {
+      await toggleHabit(habit.id);
+      showSuccess("Hábito atualizado.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel atualizar o habito.");
+    }
+  }
+
+  async function handleHomeHabitDelete(habit: NonNullable<typeof homeAgendaPreview.habit>) {
+    try {
+      await archiveHabit(habit.id);
+      showSuccess("Hábito excluído da lista ativa.");
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel excluir o habito.");
     }
   }
 
@@ -774,7 +836,7 @@ export function HomePage() {
   return (
     <>
     <OnboardingTour />
-    <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative" }}>
+    <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
       {/* Watermark híbrida — logo da Airia quase transparente */}
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", pointerEvents: "none", zIndex: 0 }}>
         <AiriaLogoBg size={420} opacity={0.055} />
@@ -822,8 +884,7 @@ export function HomePage() {
                 lineHeight: 1,
                 letterSpacing: "1px",
               }}>
-                {String(clockTime.getHours()).padStart(2,"0")}:{String(clockTime.getMinutes()).padStart(2,"0")}
-                <span style={{ fontSize: "13px", opacity: 0.8 }}>:{String(clockTime.getSeconds()).padStart(2,"0")}</span>
+                <LiveClock />
               </p>
             </div>
           </div>
@@ -1497,10 +1558,17 @@ export function HomePage() {
               ) : (
                 <>
                   {homeAgendaPreview.tasks.map((task, index) => (
-                    <button
+                    <div
                       key={task.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => navigate("/planner", { state: { openTaskId: task.id } })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate("/planner", { state: { openTaskId: task.id } });
+                        }
+                      }}
                       style={{
                         width: "100%",
                         display: "flex",
@@ -1525,13 +1593,47 @@ export function HomePage() {
                         <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>
                           {task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa"}
                         </p>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleHomeTaskDone(task);
+                            }}
+                            style={{ border: "1px solid rgba(150,199,179,.35)", background: "rgba(150,199,179,.12)", color: "var(--accent-sage)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
+                          >
+                            Feito
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleHomeTaskDelete(task);
+                            }}
+                            style={{ border: "1px solid rgba(215,137,127,.28)", background: "rgba(215,137,127,.08)", color: "var(--accent-peach)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
+                          >
+                            Excluir
+                          </button>
+                          {task.isAiSuggested && (
+                            <span style={{ alignSelf: "center", fontSize: 10, color: "var(--accent-peach-ink)", fontWeight: 800 }}>
+                              Airia repõe ao sair
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   ))}
                   {homeAgendaPreview.habit && (
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => navigate("/habits")}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate("/habits");
+                        }
+                      }}
                       style={{
                         width: "100%",
                         display: "flex",
@@ -1557,8 +1659,30 @@ export function HomePage() {
                         <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>
                           Ritual pendente de hoje
                         </p>
+                        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleHomeHabitDone(homeAgendaPreview.habit!);
+                            }}
+                            style={{ border: "1px solid rgba(150,199,179,.35)", background: "rgba(150,199,179,.12)", color: "var(--accent-sage)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
+                          >
+                            Feito
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleHomeHabitDelete(homeAgendaPreview.habit!);
+                            }}
+                            style={{ border: "1px solid rgba(215,137,127,.28)", background: "rgba(215,137,127,.08)", color: "var(--accent-peach)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
+                          >
+                            Excluir
+                          </button>
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   )}
                 </>
               )}

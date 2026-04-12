@@ -8,18 +8,19 @@ import {
   type ReactNode,
 } from "react";
 import { initialAuraState, labelMood } from "./data";
-import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodOption, PhaseTransitionAlert, ProactiveNudge } from "./types";
+import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodOption, NotificationPreferences, PhaseTransitionAlert, ProactiveNudge } from "./types";
 import { createEmptyOnboardingDraft, type OnboardingDraft } from "./onboarding";
 import { normalizeReminderPreferences } from "./settings";
 import { api } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
 
-function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'outro' {
+function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
 
   if (value === 'trabalho') return 'trabalho';
   if (value === 'social') return 'social';
+  if (value === 'casa') return 'casa';
   if (value === 'autocuidado' || value === 'saude' || value === 'saúde') return 'autocuidado';
   if (value === 'geral' || value === 'rotina' || value === 'pessoal') return 'pessoal';
   return 'outro';
@@ -74,6 +75,7 @@ type AuraStoreContextValue = {
   toggleQuietMode: () => void;
   toggleCheckinReminder: () => Promise<void>;
   setCheckinReminderTimes: (times: { morning?: string; evening?: string }) => Promise<void>;
+  updateNotificationPreferences: (patch: Partial<NotificationPreferences>) => Promise<void>;
   toggleTheme: () => void;
   nextOnboardingStep: () => void;
   prevOnboardingStep: () => void;
@@ -93,12 +95,27 @@ type AuraStoreContextValue = {
     time: string,
     category?: string,
     options?: { date?: string; forceSave?: boolean }
-  ) => Promise<{ id: string | number; title: string; time: string; endTime: string; done: boolean; category?: string; intensity?: string } | null>;
+  ) => Promise<{ id: string | number; title: string; time: string; endTime: string; done: boolean; category?: string; intensity?: string; isAiSuggested?: boolean; aiReasoning?: string | null } | null>;
   updateTask: (id: string | number, updates: { title?: string; time?: string; category?: string }) => Promise<void>;
   removeTask: (id: string | number) => Promise<void>;
   reorderTasks: (fromIdx: number, toIdx: number) => void;
   toggleHabit: (habitId: string) => Promise<void>;
   archiveHabit: (habitId: string) => Promise<void>;
+  updateHabit: (habitId: string, habit: Partial<{
+    title: string;
+    category: string;
+    frequency: string;
+    targetDays: number[];
+    targetCount: number;
+    icon: string;
+    timeOfDay: string;
+    description: string;
+    durationMinutes: number;
+    reminderEnabled: boolean;
+    reminderTime: string;
+    persistentReminderEnabled: boolean;
+    persistentReminderIntervalMinutes: number;
+  }>) => Promise<void>;
   addHabit: (habit: {
     title: string;
     category: string;
@@ -196,6 +213,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           intensity: t.intensity,
           persistentReminderEnabled: t.persistentReminderEnabled ?? false,
           persistentReminderIntervalMinutes: t.persistentReminderIntervalMinutes ?? null,
+          isAiSuggested: t.isAiSuggested ?? false,
+          aiReasoning: t.aiReasoning ?? null,
           }))
           : current.tasks,
         goals: objectives
@@ -221,6 +240,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           frequency: h.frequency,
           targetDays: h.targetDays,
           targetCount: h.targetCount ?? 1,
+          timeOfDay: h.timeOfDay ?? null,
+          durationMinutes: h.durationMinutes ?? null,
           streakCount: h.streakCount,
           bestStreak: h.bestStreak,
           totalCompletions: h.totalCompletions,
@@ -241,6 +262,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           morningCheckinTime: current.morningCheckinTime,
           eveningCheckinTime: current.eveningCheckinTime,
           checkinReminder: current.checkinReminder,
+          notificationPreferences: current.notificationPreferences,
         }),
       }));
     } catch (err) {
@@ -297,6 +319,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             intensity: task.intensity ?? 'M',
             persistentReminderEnabled: task.persistentReminderEnabled ?? false,
             persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+            isAiSuggested: task.isAiSuggested ?? false,
+            aiReasoning: task.aiReasoning ?? null,
             status: newStatus
           }]
         });
@@ -312,19 +336,32 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         }),
       toggleCheckinReminder: async () => {
         const next = !state.checkinReminder;
+        const notificationPreferences = {
+          ...state.notificationPreferences,
+          checkin: next,
+        };
         setState((current) => ({
           ...current,
           checkinReminder: next,
+          notificationPreferences,
         }));
         try {
           await api.patch('/preferences', {
             notificationsOn: next,
             morningCheckinTime: state.morningCheckinTime,
             eveningReviewTime: state.eveningCheckinTime,
+            notificationPreferences,
           });
         } catch (err) {
           console.error("Failed to persist check-in reminder preference.", err);
-          setState((current) => ({ ...current, checkinReminder: !next }));
+          setState((current) => ({
+            ...current,
+            checkinReminder: !next,
+            notificationPreferences: {
+              ...current.notificationPreferences,
+              checkin: !next,
+            },
+          }));
         }
       },
       setCheckinReminderTimes: async (times) => {
@@ -341,9 +378,34 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           await api.patch('/preferences', {
             morningCheckinTime,
             eveningReviewTime: eveningCheckinTime,
+            notificationPreferences: state.notificationPreferences,
           });
         } catch (err) {
           console.error("Failed to persist check-in reminder times.", err);
+          await refreshData();
+        }
+      },
+      updateNotificationPreferences: async (patch) => {
+        const next = {
+          ...state.notificationPreferences,
+          ...patch,
+        };
+
+        setState((current) => ({
+          ...current,
+          checkinReminder: next.checkin,
+          notificationPreferences: next,
+        }));
+
+        try {
+          await api.patch('/preferences', {
+            notificationsOn: next.checkin,
+            morningCheckinTime: state.morningCheckinTime,
+            eveningReviewTime: state.eveningCheckinTime,
+            notificationPreferences: next,
+          });
+        } catch (err) {
+          console.error("Failed to persist notification preferences.", err);
           await refreshData();
         }
       },
@@ -503,7 +565,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             startTime: time,
             endTime,
             category: normalizedCategory,
-            intensity: 'M'
+            intensity: 'M',
+            isAiSuggested: options?.forceSave ?? false,
+            aiReasoning: options?.forceSave ? 'Criado por sugestão da Airia.' : undefined,
           }]
         });
         if (today === getLocalDateKey()) {
@@ -519,6 +583,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
               done: false,
               category: normalizedCategory,
               intensity: 'M',
+              isAiSuggested: options?.forceSave ?? false,
+              aiReasoning: options?.forceSave ? 'Criado por sugestão da Airia.' : undefined,
             }
           : null;
       },
@@ -536,7 +602,11 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             startTime,
             endTime,
             category: normalizeTaskCategory(updates.category ?? task.category),
-            intensity: task.intensity ?? 'M'
+            intensity: task.intensity ?? 'M',
+            persistentReminderEnabled: task.persistentReminderEnabled ?? false,
+            persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+            isAiSuggested: task.isAiSuggested ?? false,
+            aiReasoning: task.aiReasoning ?? null,
           }]
         });
         await refreshData();
@@ -561,6 +631,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       },
       archiveHabit: async (habitId) => {
         await api.patch(`/habits/${habitId}`, { archived: true });
+        await refreshData();
+      },
+      updateHabit: async (habitId, habit) => {
+        await api.patch(`/habits/${habitId}`, habit);
         await refreshData();
       },
       addHabit: async (habit) => {
