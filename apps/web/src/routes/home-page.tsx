@@ -836,7 +836,7 @@ export function HomePage() {
   return (
     <>
     <OnboardingTour />
-    <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative", WebkitOverflowScrolling: "touch", overscrollBehaviorY: "contain" }}>
+    <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative", WebkitOverflowScrolling: "touch" }}>
       {/* Watermark híbrida — logo da Airia quase transparente */}
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", pointerEvents: "none", zIndex: 0 }}>
         <AiriaLogoBg size={420} opacity={0.055} />

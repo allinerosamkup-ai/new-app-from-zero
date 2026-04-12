@@ -2,68 +2,13 @@
 > @app/backend@1.0.0 dev
 > ts-node-dev --respawn --transpile-only src/index.ts
 
-[INFO] 11:45:39 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[INFO] 12:41:44 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
 [backend]: Server is running at http://localhost:3001
-[INFO] 11:58:21 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
+[INFO] 17:00:52 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\planner.service.ts has been modified
 [backend]: Server is running at http://localhost:3001
-[INFO] 12:30:22 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\aiOrchestrator.ts has been modified
+[INFO] 17:01:00 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
 [backend]: Server is running at http://localhost:3001
-[INFO] 12:30:34 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
+[INFO] 17:28:43 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\contracts\preferences.contract.ts has been modified
 [backend]: Server is running at http://localhost:3001
-[INFO] 12:30:41 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 12:30:52 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 12:31:02 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\ai.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 12:31:07 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\checkin.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 12:31:25 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\aura-command.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 12:31:30 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\insight.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 12:31:47 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\ai.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 12:31:52 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\ai.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 15:27:24 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\ai.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 15:27:41 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\checkin.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 15:27:57 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\insight.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 15:28:13 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\aura-command.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 15:28:24 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 15:28:44 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\memory.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 16:30:27 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\ai.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 16:53:04 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\middleware\auth.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 17:06:49 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 17:14:14 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 17:15:18 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[ERROR] 17:15:18 ⨯ Unable to compile TypeScript:
-src/index.ts(2352,4): error TS1128: Declaration or statement expected.
-src/index.ts(2505,1): error TS1128: Declaration or statement expected.
-
-[INFO] 17:20:00 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[ERROR] 17:20:02 ⨯ Unable to compile TypeScript:
-src/index.ts(2352,4): error TS1128: Declaration or statement expected.
-src/index.ts(2505,1): error TS1128: Declaration or statement expected.
-
-[INFO] 17:25:30 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[ERROR] 17:25:35 ⨯ Unable to compile TypeScript:
-src/index.ts(2352,4): error TS1128: Declaration or statement expected.
-src/index.ts(2505,1): error TS1128: Declaration or statement expected.
-
-[INFO] 17:30:07 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 17:34:47 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\gcal.service.ts has been modified
-[backend]: Server is running at http://localhost:3001
-[INFO] 18:07:22 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
+[INFO] 17:30:04 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
 [backend]: Server is running at http://localhost:3001

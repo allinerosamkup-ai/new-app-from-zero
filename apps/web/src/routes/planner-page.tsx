@@ -1419,24 +1419,7 @@ export function PlannerPage() {
     <div style={{ flex: 1, padding: "20px", background: "var(--warm-bg)", overflowX: 'hidden' }}>
       <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
 
-      {!gcalConnected && (
-        <div style={{ padding: "12px 14px", background: "var(--surface-color)", borderRadius: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.03)", border: "1px solid var(--border-neutral)" }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CalendarRange size={16} color="var(--accent-peach)" />
-            <span style={{ fontSize: 13, color: "var(--text-2)", fontWeight: 500 }}>Conectar ao Google Agenda</span>
-          </div>
-          <AuraButtonV2 variant="ghost" onClick={async () => {
-             try {
-                const res = await api.get('/gcal/auth-url');
-                if (res?.url) window.location.href = res.url;
-             } catch (e) {
-                console.error(e);
-             }
-          }}>
-            Conectar
-          </AuraButtonV2>
-        </div>
-      )}
+
 
       {/* ── Banner: Modo Proteção de Fase Baixa ── */}
       {isLowPhase && (

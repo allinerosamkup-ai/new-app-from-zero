@@ -74,7 +74,10 @@
       "Bash(npx @playwright/mcp@latest --help)",
       "Bash(cat /c/Users/allin/Projetos/Apps/new-app-fron-zero/apps/web/.env*)",
       "Bash(ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@195.35.17.102 \"docker ps --format 'table {{.Names}}\\\\t{{.Status}}'\")",
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "mcp__playwright__browser_resize",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot"
     ]
   },
   "enabledMcpjsonServers": [

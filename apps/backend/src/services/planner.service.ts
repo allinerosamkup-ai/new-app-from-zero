@@ -65,7 +65,7 @@ const RecurringConfigSchema = z.object({
 });
 
 export const TimelineBlockSchema = z.object({
-  id: z.string().uuid().optional().nullable(),
+  id: z.string().optional().nullable(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/), // HH:mm
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),   // HH:mm
   title: z.string().min(1),

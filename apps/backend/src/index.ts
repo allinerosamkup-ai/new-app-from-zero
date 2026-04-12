@@ -2196,7 +2196,7 @@ Monte complementos, não uma rotina inteira:
 - Se esta for uma nova tentativa, mude pelo menos 60% dos títulos e das tarefas em relação à tentativa anterior
 - Não repita nem reescreva superficialmente itens das listas recentes acima
 - Evite absolutamente: "organizar documentos", "planejar a semana", "fazer lista", "revisar prioridades", "alinhamento geral", "colocar a vida em ordem"
-- Horários sugeridos pela IA devem ficar entre 08:00 e 20:00; o backend ainda vai validar e remanejar para horário livre.
+- REGRA MÁXIMA E ABSOLUTA: Os horários para sugestões devem RIGOROSAMENTE estar entre 08:00 e 20:00 da noite. É ESTRITAMENTE PROIBIDO e INACEITÁVEL fornecer sugestões para madrugadas (como 04:00 da manhã) sob qualquer pretexto. O planner geral é livre (pode ter blocos até de madrugada inseridos pelo usuário no calendário em outros momentos criados por ele MANUALMENTE), MAS VOCÊ SÓ TEM AUTORIZAÇÃO ENTRE O HORÁRIO COMERCIAL + NOITE, OU SEJA, 08:00 ATÉ AS 20:00!
 - intensity deve representar o esforço: L leve, M medio, P pesado
 - razao_ia: frase carinhosa de 1 linha explicando por que esse encaixe combina com o estado atual
 

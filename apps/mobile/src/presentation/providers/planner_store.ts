@@ -24,7 +24,7 @@ interface PlannerState {
   setSelectedDate: (date: string) => void;
   fetchBlocks: (userId: string, date: string) => Promise<void>;
   moveBlock: (blockId: string, newStart: string) => Promise<void>;
-  syncBlocks: (userId: string, date: string, blocks: Partial<TimelineBlock>[]) => Promise<void>;
+  syncBlocks: (userId: string, date: string, blocks: Partial<TimelineBlock>[]) => Promise<boolean>;
 }
 
 /**
@@ -47,7 +47,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       });
       set({ blocks: response.data, isLoading: false });
     } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+      set({ isLoading: false, error: err.response?.data?.error || err.message });
     }
   },
 
@@ -83,12 +83,14 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   },
 
   syncBlocks: async (userId: string, date: string, blocks: Partial<TimelineBlock>[]) => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     try {
       await api.post('/api/timeline', { userId, date, blocks });
       set({ isLoading: false });
+      return true;
     } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+      set({ isLoading: false, error: err.response?.data?.error || err.message });
+      return false;
     }
   },
 }));

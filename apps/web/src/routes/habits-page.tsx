@@ -206,7 +206,8 @@ function HabitCard({
         gap: 14,
         transition: "all 0.25s ease",
         opacity: completedToday ? 0.72 : 1,
-        borderLeft: `4px solid ${cat.color}`,
+        position: "relative",
+        overflow: "hidden",
       }}
     >
       {/* Icon */}
@@ -387,7 +388,7 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
         border: "1.5px solid var(--warm-border)",
         borderRadius: 14,
         overflow: "hidden",
-        borderLeft: `3px solid ${cat.color}`,
+        position: "relative",
         transition: "all 0.2s ease",
       }}
     >

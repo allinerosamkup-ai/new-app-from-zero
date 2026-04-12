@@ -106,7 +106,7 @@ export default function PlannerScreen() {
   const handleSaveBlock = async () => {
     if (!userId || !newTitle.trim()) return;
     setIsSaving(true);
-    await syncBlocks(userId, selectedDate, [
+    const success = await syncBlocks(userId, selectedDate, [
       {
         title: newTitle.trim(),
         startTime: newStartTime,
@@ -117,9 +117,11 @@ export default function PlannerScreen() {
         isAiSuggested: false,
       },
     ]);
-    await fetchBlocks(userId, selectedDate);
+    if (success) {
+      await fetchBlocks(userId, selectedDate);
+      setShowModal(false);
+    }
     setIsSaving(false);
-    setShowModal(false);
   };
 
   return (

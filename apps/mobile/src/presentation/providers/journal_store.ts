@@ -78,7 +78,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
     } catch (err: any) {
       set({
         isLoading: false,
-        error: err.message || 'Falha ao iniciar sessão de diário',
+        error: err.response?.data?.error || err.message || 'Falha ao iniciar sessão de diário',
       });
     }
   },
@@ -163,7 +163,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       set({
         isLoading: false,
         isStreaming: false,
-        error: err.message || 'Falha ao enviar mensagem do diário',
+        error: err.response?.data?.error || err.message || 'Falha ao enviar mensagem do diário',
       });
     }
   },
@@ -178,7 +178,7 @@ export const useJournalStore = create<JournalState>((set, get) => ({
       set({ isLoading: false });
       return result;
     } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+      set({ isLoading: false, error: err.response?.data?.error || err.message });
       return null;
     }
   },
