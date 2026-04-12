@@ -1,16 +1,18 @@
 // Onboarding: Ciclo Menstrual — date picker + sliders duração
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
 
-const STEP = 2;
-const TOTAL = 7;
+const STEP = 3;
+const TOTAL = 5;
 
 export function OnboardingCyclePage() {
   const navigate = useNavigate();
-  const [lastPeriod, setLastPeriod] = useState("");
-  const [cycleDuration, setCycleDuration] = useState(28);
-  const [lutealDuration, setLutealDuration] = useState(14);
+  const { state, updateOnboardingDraft } = useAuraStore();
+  const [lastPeriod, setLastPeriod] = useState(state.onboardingDraft.cycleStart);
+  const [cycleDuration, setCycleDuration] = useState(state.onboardingDraft.cycleLength);
+  const [lutealDuration, setLutealDuration] = useState(state.onboardingDraft.lutealLength);
 
   const cycleMin = 21, cycleMax = 35;
   const lutealMin = 10, lutealMax = 16;
@@ -19,6 +21,15 @@ export function OnboardingCyclePage() {
   const lutealPct = ((lutealDuration - lutealMin) / (lutealMax - lutealMin)) * 100;
 
   const folicular = cycleDuration - lutealDuration;
+
+  function persistAndGo(path: string) {
+    updateOnboardingDraft({
+      cycleStart: lastPeriod,
+      cycleLength: cycleDuration,
+      lutealLength: lutealDuration,
+    });
+    navigate(path);
+  }
 
   return (
     <div className="aura-page-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -144,7 +155,7 @@ export function OnboardingCyclePage() {
 
         {/* CTAs */}
         <button
-          onClick={() => navigate("/onboarding/sleep")}
+          onClick={() => persistAndGo("/onboarding/sleep")}
           style={{
             width: "100%", height: 46,
             background: "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)",
@@ -157,7 +168,7 @@ export function OnboardingCyclePage() {
           Continuar →
         </button>
         <button
-          onClick={() => navigate("/onboarding/sleep")}
+          onClick={() => persistAndGo("/onboarding/sleep")}
           style={{ width: "100%", height: 40, background: "none", border: "none", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer" }}
         >
           Pular por enquanto

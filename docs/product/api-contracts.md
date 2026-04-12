@@ -3,6 +3,8 @@
 **Last updated:** 2026-03-13
 **Status:** Working contract
 
+Planner metadata fields updated and applied to Supabase on 2026-04-12.
+
 ## Journal
 
 ### `POST /api/journal/start`
@@ -186,7 +188,20 @@ Returns the timeline blocks for a single day plus derived statistics for the cur
       "intensity": "M",
       "status": "planned",
       "isAiSuggested": false,
-      "aiReasoning": null
+      "aiReasoning": null,
+      "noteMode": "checklist",
+      "note": "Separar documentos antes de sair.",
+      "checklist": [
+        { "id": "item_1", "text": "Pegar documento", "done": false }
+      ],
+      "recurring": {
+        "enabled": false,
+        "frequency": "daily",
+        "days": [],
+        "everyNDays": 1
+      },
+      "energyLevel": "media",
+      "lastResetDate": null
     }
   ],
   "stats": {
@@ -208,6 +223,48 @@ Returns the timeline blocks for a single day plus derived statistics for the cur
 - `blocks[].endTime` maps from `timeline_blocks.end_at`
 - `blocks[].isAiSuggested` maps from `timeline_blocks.is_ai_suggested`
 - `blocks[].aiReasoning` maps from `timeline_blocks.ai_reasoning`
+- `blocks[].noteMode` maps from `timeline_blocks.note_mode`
+- `blocks[].checklist` maps from `timeline_blocks.checklist`
+- `blocks[].recurring` maps from `timeline_blocks.recurring`
+- `blocks[].energyLevel` maps from `timeline_blocks.energy_level`
+- `blocks[].lastResetDate` maps from `timeline_blocks.last_reset_date`
+
+### `POST /timeline`
+
+Saves one or more blocks for a day. Planner metadata is optional, so partial updates such as completing or dragging a block do not erase notes, checklist or recurrence.
+
+**Request**
+
+```json
+{
+  "date": "2026-03-13",
+  "forceSave": true,
+  "blocks": [
+    {
+      "id": "block_123",
+      "startTime": "09:00",
+      "endTime": "10:30",
+      "title": "Planejamento da semana",
+      "category": "trabalho",
+      "intensity": "M",
+      "status": "planned",
+      "noteMode": "checklist",
+      "note": "Separar contexto antes de comecar.",
+      "checklist": [
+        { "id": "item_1", "text": "Abrir pauta", "done": false }
+      ],
+      "recurring": {
+        "enabled": true,
+        "frequency": "weekly",
+        "days": [0, 2, 4],
+        "everyNDays": 1
+      },
+      "energyLevel": "media",
+      "lastResetDate": "2026-03-12"
+    }
+  ]
+}
+```
 
 ### Stats Rules
 

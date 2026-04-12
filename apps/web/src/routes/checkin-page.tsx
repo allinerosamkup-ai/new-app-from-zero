@@ -168,6 +168,20 @@ const emotions = [
   { id: "agitated",  emoji: "🫨", label: "Agitada"    },
 ];
 
+export const INITIAL_EMOTIONS_SELECTED: string[] = [];
+
+export function toggleEmotionSelection(current: string[], emotionId: string, maxSelections = 3): string[] {
+  if (current.includes(emotionId)) {
+    return current.filter((id) => id !== emotionId);
+  }
+
+  if (current.length >= maxSelections) {
+    return current;
+  }
+
+  return [...current, emotionId];
+}
+
 type FlowIntensity = "leve" | "moderado" | "intenso";
 
 const symptomLevels_opts = [
@@ -240,7 +254,7 @@ export function CheckinPage() {
   const [energia, setEnergia] = useState(6);
 
   // ── step 2: emoção (até 3)
-  const [emotionsSelected, setEmotionsSelected] = useState<string[]>(["radiant"]);
+  const [emotionsSelected, setEmotionsSelected] = useState<string[]>(INITIAL_EMOTIONS_SELECTED);
 
   // ── step 3: fatores
   const [selectedFactors, setSelectedFactors] = useState<string[]>([]);
@@ -487,11 +501,7 @@ export function CheckinPage() {
                       key={em.id}
                       className={`emotion-chip${isSelected ? " active" : ""}`}
                       onClick={() => {
-                        if (isSelected) {
-                          setEmotionsSelected(prev => prev.length > 1 ? prev.filter(id => id !== em.id) : prev);
-                        } else if (!isDisabled) {
-                          setEmotionsSelected(prev => [...prev, em.id]);
-                        }
+                        setEmotionsSelected((prev) => toggleEmotionSelection(prev, em.id));
                       }}
                       style={{
                         border: "none",
@@ -858,4 +868,3 @@ export function CheckinPage() {
     </div>
   );
 }
-

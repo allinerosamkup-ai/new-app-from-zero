@@ -206,6 +206,14 @@ model TimelineBlock {
   isAiSuggested Boolean  @default(false) @map("is_ai_suggested")
   gcalEventId   String?  @map("gcal_event_id")
   aiReasoning   String?  @map("ai_reasoning") @db.Text
+  noteMode      String   @default("text") @map("note_mode")
+  note          String?  @db.Text
+  checklist     Json     @default("[]")
+  recurring     Json     @default("{\"enabled\":false,\"frequency\":\"daily\",\"days\":[],\"everyNDays\":1}")
+  energyLevel   String?  @default("media") @map("energy_level")
+  lastResetDate DateTime? @map("last_reset_date") @db.Date
+  persistentReminderEnabled Boolean @default(false) @map("persistent_reminder_enabled")
+  persistentReminderIntervalMinutes Int? @map("persistent_reminder_interval_minutes")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -243,10 +251,13 @@ model Habit {
   icon             String?  // emoji
   frequency        String   @default("daily") // daily | weekly | monthly
   targetDays       Int[]    @default([]) @map("target_days") // 0-6 (dom-sab) para weekly
+  targetCount      Int      @default(1) @map("target_count")
   timeOfDay        String?  @map("time_of_day") // morning | afternoon | evening | anytime
   durationMinutes  Int?     @map("duration_minutes")
   reminderEnabled  Boolean  @default(false) @map("reminder_enabled")
   reminderTime     String?  @map("reminder_time") // HH:mm
+  persistentReminderEnabled Boolean @default(false) @map("persistent_reminder_enabled")
+  persistentReminderIntervalMinutes Int? @map("persistent_reminder_interval_minutes")
   streakCount      Int      @default(0) @map("streak_count")
   bestStreak       Int      @default(0) @map("best_streak")
   totalCompletions Int      @default(0) @map("total_completions")
@@ -267,6 +278,7 @@ model HabitCompletion {
   habitId     String    @map("habit_id") @db.Uuid
   date        DateTime  @db.Date
   completedAt DateTime? @default(now()) @map("completed_at") @db.Timestamptz(6)
+  completionCount Int    @default(1) @map("completion_count")
   notes       String?   @db.Text
   moodBefore  Int?      @map("mood_before")
   moodAfter   Int?      @map("mood_after")

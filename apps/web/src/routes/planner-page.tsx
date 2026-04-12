@@ -14,6 +14,7 @@ import {
   buildTimelineBlockInput,
   mapIntensityToEnergyLevel,
   normalizePlannerCategory,
+  resolvePlannerBlockDate,
   type TimelineBlockIntensity,
   type TimelineBlockStatus,
 } from "./planner-page.helpers";
@@ -100,6 +101,7 @@ const EMPTY_TIMELINE_CARD_STYLE: React.CSSProperties = {
 };
 
 type FormState = {
+  date: string;
   title: string;
   time: string;
   endTime: string;
@@ -110,6 +112,9 @@ type FormState = {
   checklistInput: string;
   recurring: RecurringConfig;
   energyLevel: "alta" | "media" | "leve";
+  lastResetDate?: string;
+  persistentReminderEnabled: boolean;
+  persistentReminderIntervalMinutes: number;
 };
 
 type PlannerTask = {
@@ -121,9 +126,18 @@ type PlannerTask = {
   category?: string | null;
   intensity?: string | null;
   status?: string | null;
+  noteMode?: NoteMode | null;
+  note?: string | null;
+  checklist?: ChecklistItem[] | null;
+  recurring?: RecurringConfig | null;
+  energyLevel?: "alta" | "media" | "leve" | null;
+  lastResetDate?: string | null;
+  persistentReminderEnabled?: boolean | null;
+  persistentReminderIntervalMinutes?: number | null;
 };
 
 const EMPTY_FORM: FormState = {
+  date: "",
   title: "",
   time: "09:00",
   endTime: "10:00",
@@ -134,6 +148,8 @@ const EMPTY_FORM: FormState = {
   checklistInput: "",
   recurring: { ...DEFAULT_RECURRING },
   energyLevel: "media",
+  persistentReminderEnabled: false,
+  persistentReminderIntervalMinutes: 60,
 };
 
 function buildChecklistItems(items: string[]): ChecklistItem[] {
@@ -191,25 +207,98 @@ function mapTaskFromApi(task: any): PlannerTask {
     category: task.category,
     intensity: task.intensity,
     status: task.status,
+    noteMode: normalizeNoteMode(task.noteMode),
+    note: typeof task.note === "string" ? task.note : null,
+    checklist: normalizeChecklist(task.checklist),
+    recurring: normalizeRecurring(task.recurring),
+    energyLevel: normalizeEnergyLevel(task.energyLevel, null),
+    lastResetDate: typeof task.lastResetDate === "string" ? task.lastResetDate : null,
+    persistentReminderEnabled: Boolean(task.persistentReminderEnabled),
+    persistentReminderIntervalMinutes: typeof task.persistentReminderIntervalMinutes === "number" ? task.persistentReminderIntervalMinutes : null,
   };
+}
+
+function normalizeNoteMode(value: unknown): NoteMode | null {
+  return value === "text" || value === "checklist" ? value : null;
+}
+
+function normalizeChecklist(value: unknown): ChecklistItem[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const candidate = item as Partial<ChecklistItem>;
+      const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id : "";
+      const text = typeof candidate.text === "string" ? candidate.text.trim() : "";
+      if (!id || !text) return null;
+      return { id, text, done: Boolean(candidate.done) };
+    })
+    .filter((item): item is ChecklistItem => item !== null);
+}
+
+function normalizeRecurring(value: unknown): RecurringConfig | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<RecurringConfig>;
+  const frequency = candidate.frequency === "weekly" || candidate.frequency === "custom" ? candidate.frequency : "daily";
+  const days = Array.isArray(candidate.days)
+    ? candidate.days.filter((day): day is number => Number.isInteger(day) && day >= 0 && day <= 6)
+    : [];
+  const everyNDays = Number.isInteger(candidate.everyNDays) && Number(candidate.everyNDays) > 0
+    ? Number(candidate.everyNDays)
+    : 1;
+
+  return {
+    enabled: Boolean(candidate.enabled),
+    frequency,
+    days,
+    everyNDays,
+  };
+}
+
+function normalizeEnergyLevel(value: unknown, fallbackIntensity?: string | null): FormState["energyLevel"] | null {
+  if (value === "alta" || value === "media" || value === "leve") return value;
+  return fallbackIntensity ? mapIntensityToEnergyLevel(fallbackIntensity) : null;
+}
+
+function hasApiMetadata(task: PlannerTask): boolean {
+  const hasNote = typeof task.note === "string" && task.note.trim().length > 0;
+  const hasChecklist = Array.isArray(task.checklist) && task.checklist.length > 0;
+  const hasRecurring = Boolean(task.recurring?.enabled);
+  const hasNonDefaultEnergy = task.energyLevel === "alta" || task.energyLevel === "leve";
+  const hasResetDate = Boolean(task.lastResetDate);
+  const hasPersistentReminder = Boolean(task.persistentReminderEnabled);
+
+  return hasNote || hasChecklist || hasRecurring || hasNonDefaultEnergy || hasResetDate || hasPersistentReminder;
 }
 
 function buildFormStateFromTask(task: PlannerTask): FormState {
   const meta = getTaskMeta(task.id);
-  const checklist = meta.checklist ?? [];
-  const note = meta.note ?? "";
+  const useApiMetadata = hasApiMetadata(task);
+  const checklist = useApiMetadata ? (task.checklist ?? []) : (meta.checklist ?? []);
+  const note = useApiMetadata ? (task.note ?? "") : (meta.note ?? "");
+  const recurring = useApiMetadata ? (task.recurring ?? { ...DEFAULT_RECURRING }) : (meta.recurring ?? { ...DEFAULT_RECURRING });
+  const energyLevel = useApiMetadata
+    ? (task.energyLevel ?? mapIntensityToEnergyLevel(task.intensity))
+    : (meta.energyLevel ?? mapIntensityToEnergyLevel(task.intensity));
 
   return {
     ...EMPTY_FORM,
+    date: "",
     title: task.title,
     time: task.time,
     endTime: task.endTime,
     category: normalizePlannerCategory(task.category, task.title),
     note,
     checklist,
-    noteMode: resolveStoredNoteMode(note, checklist),
-    recurring: meta.recurring ?? { ...DEFAULT_RECURRING },
-    energyLevel: meta.energyLevel ?? mapIntensityToEnergyLevel(task.intensity),
+    noteMode: useApiMetadata ? (task.noteMode ?? resolveStoredNoteMode(note, checklist)) : (meta.noteMode ?? resolveStoredNoteMode(note, checklist)),
+    recurring,
+    energyLevel,
+    lastResetDate: useApiMetadata ? task.lastResetDate ?? undefined : meta.lastResetDate,
+    persistentReminderEnabled: useApiMetadata ? Boolean(task.persistentReminderEnabled) : Boolean(meta.persistentReminderEnabled),
+    persistentReminderIntervalMinutes: useApiMetadata
+      ? (task.persistentReminderIntervalMinutes ?? 60)
+      : (meta.persistentReminderIntervalMinutes ?? 60),
   };
 }
 
@@ -432,6 +521,7 @@ function RecurringSection({
   );
 }
 
+
 function PlannerSheetBody({
   form,
   setForm,
@@ -463,6 +553,16 @@ function PlannerSheetBody({
         autoFocus
       />
 
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <span style={LABEL_STYLE}>Dia</span>
+        <input
+          type="date"
+          value={form.date}
+          onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
+          style={{ ...INPUT_STYLE, width: "100%" }}
+        />
+      </div>
+
       <div style={{ display: 'flex', gap: 12 }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <span style={LABEL_STYLE}>Início</span>
@@ -482,6 +582,41 @@ function PlannerSheetBody({
             style={INPUT_STYLE}
           />
         </div>
+      </div>
+
+      <div style={{ border: "1px solid rgba(17,24,39,.06)", borderRadius: 14, padding: 12, background: "rgba(255,255,255,.58)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <span style={LABEL_STYLE}>Notificação insistente</span>
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+              Repetir depois do horário até marcar como concluído.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={form.persistentReminderEnabled}
+            onChange={async (event) => {
+              if (event.target.checked) {
+                const { requestNotificationPermission } = await import("../hooks/useHabitReminders");
+                await requestNotificationPermission();
+              }
+              setForm((current) => ({ ...current, persistentReminderEnabled: event.target.checked }));
+            }}
+            style={{ width: 18, height: 18, accentColor: "var(--accent-peach)", flexShrink: 0 }}
+          />
+        </div>
+        {form.persistentReminderEnabled && (
+          <select
+            value={form.persistentReminderIntervalMinutes}
+            onChange={(event) => setForm((current) => ({ ...current, persistentReminderIntervalMinutes: Number(event.target.value) }))}
+            style={{ ...INPUT_STYLE, width: "100%", marginTop: 10 }}
+          >
+            <option value={30}>Repetir a cada 30 min</option>
+            <option value={60}>Repetir a cada 1 hora</option>
+            <option value={120}>Repetir a cada 2 horas</option>
+            <option value={180}>Repetir a cada 3 horas</option>
+          </select>
+        )}
       </div>
       
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -985,7 +1120,7 @@ export function PlannerPage() {
 
   function openNewFormAt(time: string) {
     const defaultEnd = addMinutesToTime(time, 60);
-    setNewForm({ ...EMPTY_FORM, time, endTime: defaultEnd });
+    setNewForm({ ...EMPTY_FORM, date: selectedDateKey, time, endTime: defaultEnd });
     setShowNewForm(true);
   }
 
@@ -996,15 +1131,26 @@ export function PlannerPage() {
 
   function openEditForm(task: PlannerTask) {
     setEditingTaskId(task.id);
-    setEditForm(buildFormStateFromTask(task));
+    setEditForm({ ...buildFormStateFromTask(task), date: selectedDateKey });
+  }
+
+  function getOffsetForDateKey(dateKey: string) {
+    const target = new Date(`${dateKey}T12:00:00`);
+    if (Number.isNaN(target.getTime())) return offsetDias;
+
+    const base = new Date(todayAnchor);
+    base.setHours(12, 0, 0, 0);
+    return Math.round((target.getTime() - base.getTime()) / 86_400_000);
   }
 
   async function handleAddBlock() {
     if (!newForm.title.trim()) return;
 
+    const targetDate = resolvePlannerBlockDate(newForm.date, selectedDateKey);
+
     try {
       const res: any = await api.post("/timeline", {
-        date: selectedDateKey,
+        date: targetDate,
         forceSave: true,
         blocks: [buildTimelineBlockInput(newForm)],
       });
@@ -1013,13 +1159,21 @@ export function PlannerPage() {
       if (!savedBlock) return;
 
       setTaskMeta(savedBlock.id, {
+        noteMode: newForm.noteMode,
         note: newForm.note,
         checklist: newForm.checklist,
         recurring: newForm.recurring,
         energyLevel: newForm.energyLevel,
+        lastResetDate: newForm.lastResetDate,
+        persistentReminderEnabled: newForm.persistentReminderEnabled,
+        persistentReminderIntervalMinutes: newForm.persistentReminderIntervalMinutes,
       });
 
-      await reloadPlannerTasks();
+      if (targetDate === selectedDateKey) {
+        await reloadPlannerTasks();
+      } else {
+        setOffsetDias(getOffsetForDateKey(targetDate));
+      }
       await refreshData();
       closeNewForm();
       showSuccess("Bloco adicionado.");
@@ -1034,9 +1188,11 @@ export function PlannerPage() {
     const currentTask = plannerTasks.find((task) => task.id === editingTaskId);
     if (!currentTask || !editForm.title.trim()) return;
 
+    const targetDate = resolvePlannerBlockDate(editForm.date, selectedDateKey);
+
     try {
       await api.post("/timeline", {
-        date: selectedDateKey,
+        date: targetDate,
         forceSave: true,
         blocks: [
           buildTimelineBlockInput(editForm, {
@@ -1049,13 +1205,21 @@ export function PlannerPage() {
       });
 
       setTaskMeta(currentTask.id, {
+        noteMode: editForm.noteMode,
         note: editForm.note,
         checklist: editForm.checklist,
         recurring: editForm.recurring,
         energyLevel: editForm.energyLevel,
+        lastResetDate: editForm.lastResetDate,
+        persistentReminderEnabled: editForm.persistentReminderEnabled,
+        persistentReminderIntervalMinutes: editForm.persistentReminderIntervalMinutes,
       });
 
-      await reloadPlannerTasks();
+      if (targetDate === selectedDateKey) {
+        await reloadPlannerTasks();
+      } else {
+        setOffsetDias(getOffsetForDateKey(targetDate));
+      }
       await refreshData();
       closeEditForm();
       showSuccess("Bloco salvo.");
@@ -1097,7 +1261,17 @@ export function PlannerPage() {
       await api.post("/timeline", {
         date: selectedDateKey,
         forceSave: true,
-        blocks: [ { id: task.id, title: task.title, startTime: task.time, endTime: task.endTime, status: task.done ? 'planned' : 'completed', category: task.category, intensity: task.intensity } ],
+        blocks: [ {
+          id: task.id,
+          title: task.title,
+          startTime: task.time,
+          endTime: task.endTime,
+          status: task.done ? 'planned' : 'completed',
+          category: task.category,
+          intensity: task.intensity,
+          persistentReminderEnabled: task.persistentReminderEnabled ?? false,
+          persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+        } ],
       });
       await reloadPlannerTasks();
       await refreshData();
@@ -1132,7 +1306,17 @@ export function PlannerPage() {
       await api.post("/timeline", {
         date: selectedDateKey,
         forceSave: true,
-        blocks: [ { id: task.id, title: task.title, startTime: newTime, endTime: newEndTime, status: task.status, category: task.category, intensity: task.intensity } ]
+        blocks: [ {
+          id: task.id,
+          title: task.title,
+          startTime: newTime,
+          endTime: newEndTime,
+          status: task.status,
+          category: task.category,
+          intensity: task.intensity,
+          persistentReminderEnabled: task.persistentReminderEnabled ?? false,
+          persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+        } ]
       });
       await reloadPlannerTasks();
       await refreshData();
@@ -1438,4 +1622,3 @@ export function PlannerPage() {
     </div>
   );
 }
-

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@app/database';
-import { startOfDay, format, subDays, isSameDay } from 'date-fns';
+import { startOfDay, subDays, isSameDay } from 'date-fns';
 
 const prisma = new PrismaClient();
 
@@ -11,10 +11,24 @@ export interface CreateHabitInput {
   icon?: string;
   frequency: 'daily' | 'weekly' | 'monthly';
   targetDays?: number[];
+  targetCount?: number;
   timeOfDay?: string;
   durationMinutes?: number;
   reminderEnabled?: boolean;
   reminderTime?: string;
+  persistentReminderEnabled?: boolean;
+  persistentReminderIntervalMinutes?: number;
+}
+
+function resolveTargetCount(value: unknown): number {
+  const count = Number(value);
+  if (!Number.isFinite(count)) return 1;
+  return Math.max(1, Math.min(24, Math.round(count)));
+}
+
+function getCompletionCount(completion: { completionCount?: number | null } | null | undefined): number {
+  if (!completion) return 0;
+  return Math.max(0, Number(completion.completionCount ?? 1));
 }
 
 export class HabitService {
@@ -50,10 +64,15 @@ export class HabitService {
         icon: input.icon,
         frequency: input.frequency,
         targetDays: input.targetDays || [],
+        targetCount: resolveTargetCount(input.targetCount),
         timeOfDay: input.timeOfDay,
         durationMinutes: input.durationMinutes,
         reminderEnabled: input.reminderEnabled || false,
         reminderTime: input.reminderTime,
+        persistentReminderEnabled: input.persistentReminderEnabled || false,
+        persistentReminderIntervalMinutes: input.persistentReminderEnabled
+          ? input.persistentReminderIntervalMinutes ?? 60
+          : null,
       },
     });
   }
@@ -67,7 +86,7 @@ export class HabitService {
 
     return habits.filter(habit => {
       if (habit.frequency === 'daily') return true;
-      if (habit.frequency === 'weekly') return habit.targetDays.includes(dayOfWeek);
+      if (habit.frequency === 'weekly') return habit.targetDays.length === 0 || habit.targetDays.includes(dayOfWeek);
       if (habit.frequency === 'monthly') return date.getDate() === 1; // Simplificado para dia 1
       return false;
     });
@@ -98,16 +117,31 @@ export class HabitService {
     });
 
     if (existingCompletion) {
-      // Remover conclusão
-      await prisma.habitCompletion.delete({
-        where: { id: existingCompletion.id },
-      });
+      const currentCount = getCompletionCount(existingCompletion);
+      const targetCount = resolveTargetCount(habit.targetCount);
+
+      if (currentCount >= targetCount) {
+        // Remover conclusão quando o hábito já estava completo.
+        await prisma.habitCompletion.delete({
+          where: { id: existingCompletion.id },
+        });
+      } else {
+        await prisma.habitCompletion.update({
+          where: { id: existingCompletion.id },
+          data: {
+            completionCount: currentCount + 1,
+            notes,
+            completedAt: new Date(),
+          },
+        });
+      }
     } else {
       // Adicionar conclusão
       await prisma.habitCompletion.create({
         data: {
           habitId,
           date: localDate,
+          completionCount: 1,
           notes,
         },
       });
@@ -126,10 +160,9 @@ export class HabitService {
       orderBy: { date: 'desc' },
     });
 
-    const totalCompletions = completions.length;
-    const currentStreak = this.calculateCurrentStreak(completions);
-    
     const habit = await prisma.habit.findUnique({ where: { id: habitId } });
+    const totalCompletions = completions.reduce((sum, completion) => sum + getCompletionCount(completion), 0);
+    const currentStreak = this.calculateCurrentStreak(completions, resolveTargetCount(habit?.targetCount));
     const bestStreak = Math.max(habit?.bestStreak || 0, currentStreak);
 
     return prisma.habit.update({
@@ -142,16 +175,17 @@ export class HabitService {
     });
   }
 
-  private static calculateCurrentStreak(completions: any[]): number {
+  private static calculateCurrentStreak(completions: any[], targetCount: number): number {
     if (completions.length === 0) return 0;
 
     let streak = 0;
     const today = startOfDay(new Date());
     let checkDate = today;
+    const completedOnDate = (date: Date) => completions.some(c => isSameDay(c.date, date) && getCompletionCount(c) >= targetCount);
 
     // Se não completou hoje, verifica se completou ontem para manter a streak ativa
-    const completedToday = completions.some(c => isSameDay(c.date, today));
-    const completedYesterday = completions.some(c => isSameDay(c.date, subDays(today, 1)));
+    const completedToday = completedOnDate(today);
+    const completedYesterday = completedOnDate(subDays(today, 1));
 
     if (!completedToday && !completedYesterday) return 0;
     
@@ -164,7 +198,7 @@ export class HabitService {
     
     let expectedDate = checkDate;
     for (const comp of sortedCompletions) {
-      if (isSameDay(comp.date, expectedDate)) {
+      if (isSameDay(comp.date, expectedDate) && getCompletionCount(comp) >= targetCount) {
         streak++;
         expectedDate = subDays(expectedDate, 1);
       } else if (comp.date < expectedDate) {

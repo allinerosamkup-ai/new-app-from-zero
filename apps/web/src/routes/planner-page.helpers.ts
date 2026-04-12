@@ -1,13 +1,35 @@
 export type TimelineBlockStatus = "planned" | "completed" | "postponed";
 export type TimelineBlockIntensity = "L" | "M" | "P";
 export type PlannerCategory = "trabalho" | "autocuidado" | "social" | "pessoal";
+export type TimelineBlockNoteMode = "text" | "checklist";
+
+export type TimelineChecklistItem = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
+export type TimelineRecurringConfig = {
+  enabled: boolean;
+  frequency: "daily" | "weekly" | "custom";
+  days: number[];
+  everyNDays: number;
+};
 
 export type FormStateLike = {
+  date?: string;
   title: string;
   time: string;
   endTime?: string;
   category: string;
   energyLevel: "alta" | "media" | "leve";
+  noteMode?: TimelineBlockNoteMode;
+  note?: string;
+  checklist?: TimelineChecklistItem[];
+  recurring?: TimelineRecurringConfig;
+  lastResetDate?: string;
+  persistentReminderEnabled?: boolean;
+  persistentReminderIntervalMinutes?: number | null;
 };
 
 export type PlannerTaskLike = {
@@ -19,6 +41,8 @@ export type PlannerTaskLike = {
   category?: string | null;
   source?: string;
   link?: string;
+  persistentReminderEnabled?: boolean;
+  persistentReminderIntervalMinutes?: number | null;
 };
 
 export type PlannerAgendaSlot =
@@ -66,6 +90,8 @@ const EMPTY_AGENDA_TEMPLATE: Array<Pick<Extract<PlannerAgendaSlot, { kind: "empt
     description: "Reserve um encerramento gentil para não deixar a agenda sumir ao anoitecer.",
   },
 ];
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
@@ -117,8 +143,10 @@ export function normalizePlannerCategory(category?: string | null, title = "") {
 
   if (value === "trabalho") return "trabalho";
   if (value === "autocuidado" || value === "saude" || value === "saúde") return "autocuidado";
+  if (value === "self-care" || value === "selfcare" || value === "health" || value === "energia" || value === "humor") return "autocuidado";
   if (value === "social") return "social";
-  if (value === "pessoal" || value === "geral" || value === "rotina" || value === "outro") return "pessoal";
+  if (value === "foco") return "trabalho";
+  if (value === "pessoal" || value === "geral" || value === "rotina" || value === "casa" || value === "lazer" || value === "planning" || value === "outro") return "pessoal";
   return deriveCategoryFromTitle(title);
 }
 
@@ -149,7 +177,7 @@ export function buildTimelineBlockInput(
     fallbackStatus?: TimelineBlockStatus;
   },
 ) {
-  return {
+  const payload = {
     ...(options?.id ? { id: options.id } : {}),
     title: form.title.trim(),
     startTime: form.time,
@@ -158,6 +186,36 @@ export function buildTimelineBlockInput(
     intensity: mapEnergyLevelToIntensity(form.energyLevel, options?.fallbackIntensity),
     status: options?.fallbackStatus ?? "planned",
   };
+
+  const hasMetadata =
+    form.noteMode !== undefined ||
+    form.note !== undefined ||
+    form.checklist !== undefined ||
+    form.recurring !== undefined ||
+    form.lastResetDate !== undefined ||
+    form.persistentReminderEnabled !== undefined ||
+    form.persistentReminderIntervalMinutes !== undefined;
+
+  if (!hasMetadata) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    noteMode: form.noteMode,
+    note: form.note,
+    checklist: form.checklist,
+    recurring: form.recurring,
+    energyLevel: form.energyLevel,
+    lastResetDate: form.lastResetDate,
+    persistentReminderEnabled: form.persistentReminderEnabled,
+    persistentReminderIntervalMinutes: form.persistentReminderIntervalMinutes,
+  };
+}
+
+export function resolvePlannerBlockDate(formDate: string | undefined, fallbackDate: string): string {
+  const candidate = (formDate ?? "").trim();
+  return DATE_PATTERN.test(candidate) ? candidate : fallbackDate;
 }
 
 export function formatTimelineDurationLabel(startTime: string, endTime: string): string {

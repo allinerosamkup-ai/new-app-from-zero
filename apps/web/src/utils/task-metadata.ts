@@ -23,6 +23,8 @@ export type TaskMeta = {
   recurring: RecurringConfig;
   energyLevel?: 'alta' | 'media' | 'leve';
   lastResetDate?: string;
+  persistentReminderEnabled?: boolean;
+  persistentReminderIntervalMinutes?: number | null;
 };
 
 export const DEFAULT_RECURRING: RecurringConfig = {
@@ -38,6 +40,8 @@ export const DEFAULT_META: TaskMeta = {
   checklist: [],
   recurring: { ...DEFAULT_RECURRING },
   energyLevel: 'media',
+  persistentReminderEnabled: false,
+  persistentReminderIntervalMinutes: null,
 };
 
 const STORAGE_KEY = 'aura-task-meta-v2';

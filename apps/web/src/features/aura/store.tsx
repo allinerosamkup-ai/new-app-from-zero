@@ -9,6 +9,8 @@ import {
 } from "react";
 import { initialAuraState, labelMood } from "./data";
 import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodOption, PhaseTransitionAlert, ProactiveNudge } from "./types";
+import { createEmptyOnboardingDraft, type OnboardingDraft } from "./onboarding";
+import { normalizeReminderPreferences } from "./settings";
 import { api } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
@@ -70,10 +72,15 @@ type AuraStoreContextValue = {
   setJournal: (value: string) => void;
   toggleTask: (id: string | number) => Promise<void>;
   toggleQuietMode: () => void;
-  toggleCheckinReminder: () => void;
+  toggleCheckinReminder: () => Promise<void>;
+  setCheckinReminderTimes: (times: { morning?: string; evening?: string }) => Promise<void>;
   toggleTheme: () => void;
   nextOnboardingStep: () => void;
   prevOnboardingStep: () => void;
+  updateOnboardingDraft: (patch: Partial<OnboardingDraft>) => void;
+  resetOnboardingDraft: () => void;
+  saveProfile: () => Promise<void>;
+  signOut: () => Promise<void>;
   prepareJournalFromMood: () => void;
   addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<void>;
   addGoal: (title: string) => Promise<void>;
@@ -92,7 +99,21 @@ type AuraStoreContextValue = {
   reorderTasks: (fromIdx: number, toIdx: number) => void;
   toggleHabit: (habitId: string) => Promise<void>;
   archiveHabit: (habitId: string) => Promise<void>;
-  addHabit: (habit: { title: string; category: string; frequency: string; icon?: string; timeOfDay?: string; description?: string; durationMinutes?: number; reminderEnabled?: boolean; reminderTime?: string }) => Promise<void>;
+  addHabit: (habit: {
+    title: string;
+    category: string;
+    frequency: string;
+    targetDays?: number[];
+    targetCount?: number;
+    icon?: string;
+    timeOfDay?: string;
+    description?: string;
+    durationMinutes?: number;
+    reminderEnabled?: boolean;
+    reminderTime?: string;
+    persistentReminderEnabled?: boolean;
+    persistentReminderIntervalMinutes?: number;
+  }) => Promise<void>;
   setAutonomousInsight: (insight: AutonomousInsight | null) => void;
   setPhaseTransitionAlert: (alert: PhaseTransitionAlert | null) => void;
   dismissPhaseTransitionAlert: () => void;
@@ -160,6 +181,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       setState(current => ({
         ...current,
         name: (preferences as any)?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
+        email: session.user.email ?? current.email,
         checkinHistory: mappedCheckins && mappedCheckins.length > 0
           ? mappedCheckins
           : current.checkinHistory,
@@ -172,6 +194,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           done: t.status === 'completed',
           category: t.category,
           intensity: t.intensity,
+          persistentReminderEnabled: t.persistentReminderEnabled ?? false,
+          persistentReminderIntervalMinutes: t.persistentReminderIntervalMinutes ?? null,
           }))
           : current.tasks,
         goals: objectives
@@ -196,18 +220,28 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           icon: h.icon,
           frequency: h.frequency,
           targetDays: h.targetDays,
+          targetCount: h.targetCount ?? 1,
           streakCount: h.streakCount,
           bestStreak: h.bestStreak,
           totalCompletions: h.totalCompletions,
-          completions: Array.isArray(h.completions) ? h.completions : [],
+          completions: Array.isArray(h.completions)
+            ? h.completions.map((completion: any) => ({
+              ...completion,
+              completionCount: completion.completionCount ?? 1,
+            }))
+            : [],
           reminderEnabled: h.reminderEnabled ?? false,
           reminderTime: h.reminderTime ?? null,
+          persistentReminderEnabled: h.persistentReminderEnabled ?? false,
+          persistentReminderIntervalMinutes: h.persistentReminderIntervalMinutes ?? null,
           }))
           : current.habits,
         theme: (preferences as any)?.aiTone === 'warm' ? 'Tema suave' : current.theme,
-        quietMode: typeof (preferences as any)?.notificationsOn === 'boolean'
-          ? !(preferences as any).notificationsOn
-          : current.quietMode
+        ...normalizeReminderPreferences(preferences, {
+          morningCheckinTime: current.morningCheckinTime,
+          eveningCheckinTime: current.eveningCheckinTime,
+          checkinReminder: current.checkinReminder,
+        }),
       }));
     } catch (err) {
       console.error("Failed to sync with backend:", err);
@@ -226,6 +260,13 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    try {
+      const storedQuietMode = window.localStorage.getItem("airia.quietMode");
+      if (storedQuietMode === "true" || storedQuietMode === "false") {
+        setState((current) => ({ ...current, quietMode: storedQuietMode === "true" }));
+      }
+    } catch {}
+
     refreshData();
   }, []);
 
@@ -254,21 +295,58 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             endTime: task.endTime ?? addMinutesToTime(task.time, 30),
             category: normalizeTaskCategory(task.category),
             intensity: task.intensity ?? 'M',
+            persistentReminderEnabled: task.persistentReminderEnabled ?? false,
+            persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
             status: newStatus
           }]
         });
         await refreshData();
       },
       toggleQuietMode: () =>
+        setState((current) => {
+          const quietMode = !current.quietMode;
+          try {
+            window.localStorage.setItem("airia.quietMode", String(quietMode));
+          } catch {}
+          return { ...current, quietMode };
+        }),
+      toggleCheckinReminder: async () => {
+        const next = !state.checkinReminder;
         setState((current) => ({
           ...current,
-          quietMode: !current.quietMode,
-        })),
-      toggleCheckinReminder: () =>
+          checkinReminder: next,
+        }));
+        try {
+          await api.patch('/preferences', {
+            notificationsOn: next,
+            morningCheckinTime: state.morningCheckinTime,
+            eveningReviewTime: state.eveningCheckinTime,
+          });
+        } catch (err) {
+          console.error("Failed to persist check-in reminder preference.", err);
+          setState((current) => ({ ...current, checkinReminder: !next }));
+        }
+      },
+      setCheckinReminderTimes: async (times) => {
+        const morningCheckinTime = times.morning ?? state.morningCheckinTime;
+        const eveningCheckinTime = times.evening ?? state.eveningCheckinTime;
+
         setState((current) => ({
           ...current,
-          checkinReminder: !current.checkinReminder,
-        })),
+          morningCheckinTime,
+          eveningCheckinTime,
+        }));
+
+        try {
+          await api.patch('/preferences', {
+            morningCheckinTime,
+            eveningReviewTime: eveningCheckinTime,
+          });
+        } catch (err) {
+          console.error("Failed to persist check-in reminder times.", err);
+          await refreshData();
+        }
+      },
       toggleTheme: () =>
         setState((current) => ({
           ...current,
@@ -284,6 +362,39 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           ...current,
           onboardingStep: Math.max(1, current.onboardingStep - 1),
         })),
+      updateOnboardingDraft: (patch) =>
+        setState((current) => ({
+          ...current,
+          name: typeof patch.fullName === "string" ? patch.fullName : current.name,
+          onboardingDraft: {
+            ...current.onboardingDraft,
+            ...patch,
+          },
+        })),
+      resetOnboardingDraft: () =>
+        setState((current) => ({
+          ...current,
+          onboardingStep: 0,
+          onboardingDraft: createEmptyOnboardingDraft(),
+        })),
+      saveProfile: async () => {
+        const fullName = state.name.trim();
+        if (!fullName) return;
+        await api.patch('/profile', { fullName });
+        await refreshData();
+      },
+      signOut: async () => {
+        await supabase.auth.signOut();
+        setState({
+          ...initialAuraState,
+          onboardingDraft: createEmptyOnboardingDraft(),
+          checkinHistory: [],
+          tasks: [],
+          goals: [],
+          habits: [],
+        });
+        setHydrated(true);
+      },
       prepareJournalFromMood: () =>
         setState((current) => ({
           ...current,

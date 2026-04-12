@@ -1,19 +1,21 @@
 // Onboarding: Mapa de Energia — chips drena mais/menos + slider foco
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
 
 const DRAINS_MORE = ["Reuniões", "Crises", "Criar conteúdo", "Feedbacks difíceis", "Multitarefas", "Ruídos", "Decisões"];
 const DRAINS_LESS = ["E-mails", "Listas", "Caminhada", "Leitura", "Organização", "Música", "Rotina"];
 
-const STEP = 1;
-const TOTAL = 7;
+const STEP = 2;
+const TOTAL = 5;
 
 export function OnboardingEnergyPage() {
   const navigate = useNavigate();
-  const [drainsMore, setDrainsMore] = useState<Set<string>>(new Set());
-  const [drainsLess, setDrainsLess] = useState<Set<string>>(new Set());
-  const [foco, setFoco] = useState(6);
+  const { state, updateOnboardingDraft } = useAuraStore();
+  const [drainsMore, setDrainsMore] = useState<Set<string>>(new Set(state.onboardingDraft.energyDrainsMore));
+  const [drainsLess, setDrainsLess] = useState<Set<string>>(new Set(state.onboardingDraft.energyDrainsLess));
+  const [foco, setFoco] = useState(state.onboardingDraft.focusScore);
 
   const focoPct = ((foco - 1) / 9) * 100;
 
@@ -21,6 +23,22 @@ export function OnboardingEnergyPage() {
     const next = new Set(set);
     next.has(item) ? next.delete(item) : next.add(item);
     setSet(next);
+  }
+
+  function persistAndGo(path: string) {
+    const energyDrainsMore = Array.from(drainsMore);
+    const energyDrainsLess = Array.from(drainsLess);
+    updateOnboardingDraft({
+      energyDrainsMore,
+      energyDrainsLess,
+      focusScore: foco,
+      mainEnergyPressure: [
+        energyDrainsMore.length ? `Drena mais: ${energyDrainsMore.join(", ")}.` : null,
+        energyDrainsLess.length ? `Recupera energia: ${energyDrainsLess.join(", ")}.` : null,
+        `Foco disponível em dia bom: ${foco}/10.`,
+      ].filter(Boolean).join(" "),
+    });
+    navigate(path);
   }
 
   return (
@@ -125,7 +143,7 @@ export function OnboardingEnergyPage() {
 
         {/* CTAs */}
         <button
-          onClick={() => navigate("/onboarding/cycle")}
+          onClick={() => persistAndGo("/onboarding/cycle")}
           style={{
             width: "100%", height: 46,
             background: "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)",
@@ -138,7 +156,7 @@ export function OnboardingEnergyPage() {
           Continuar →
         </button>
         <button
-          onClick={() => navigate("/onboarding/cycle")}
+          onClick={() => persistAndGo("/onboarding/cycle")}
           style={{
             width: "100%", height: 40, background: "none", border: "none",
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer",

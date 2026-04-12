@@ -1,10 +1,11 @@
 // Onboarding: Como você pensa melhor? — cards de preferência cognitiva
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
 
-const STEP = 4;
-const TOTAL = 7;
+const STEP = 5;
+const TOTAL = 5;
 
 const PREF_CARDS = [
   { id: "morning",   emoji: "🌅", label: "Foco máximo de manhã",   sub: "Criativa antes das 12h" },
@@ -18,7 +19,10 @@ const PREF_CARDS = [
 
 export function OnboardingPreferencesPage() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { state, updateOnboardingDraft } = useAuraStore();
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(PREF_CARDS.filter((card) => state.onboardingDraft.cognitivePreferences.includes(card.label)).map((card) => card.id)),
+  );
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -28,6 +32,19 @@ export function OnboardingPreferencesPage() {
       next.add(id);
     }
     setSelected(next);
+  }
+
+  function persistAndGo(path: string) {
+    const labels = PREF_CARDS
+      .filter((card) => selected.has(card.id))
+      .map((card) => card.label);
+
+    updateOnboardingDraft({
+      cognitivePreferences: labels,
+      supportGoals: labels,
+      primaryGoal: labels[0] ?? state.onboardingDraft.primaryGoal,
+    });
+    navigate(path);
   }
 
   return (
@@ -97,7 +114,7 @@ export function OnboardingPreferencesPage() {
 
         {/* CTAs */}
         <button
-          onClick={() => navigate("/onboarding/done")}
+          onClick={() => persistAndGo("/onboarding/done")}
           disabled={selected.size === 0}
           style={{
             width: "100%", height: 46,
@@ -112,7 +129,7 @@ export function OnboardingPreferencesPage() {
           Continuar →
         </button>
         <button
-          onClick={() => navigate("/onboarding/done")}
+          onClick={() => persistAndGo("/onboarding/done")}
           style={{ width: "100%", height: 40, background: "none", border: "none", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer" }}
         >
           Pular por enquanto
@@ -121,4 +138,3 @@ export function OnboardingPreferencesPage() {
     </div>
   );
 }
-

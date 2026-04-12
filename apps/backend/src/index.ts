@@ -6,13 +6,14 @@ import path from 'path';
 import { PrismaClient } from '@app/database';
 import { requireAuth, AuthRequest } from './middleware/auth';
 import { AIService } from './services/ai.service';
-import { PlannerService } from './services/planner.service';
+import { PlannerService, type TimelineBlockInput } from './services/planner.service';
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
 import { GCalService } from './services/gcal.service';
 import { CheckinCreateSchema } from './contracts/checkin.contract';
 import { deriveCheckinSlot } from './contracts/checkin-slot';
 import { PlannerSyncSchema } from './contracts/planner.contract';
+import { HabitCreateSchema, HabitPatchSchema } from './contracts/habit.contract';
 import { JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { OnboardingProcessSchema } from './contracts/onboarding.contract';
 import {
@@ -53,6 +54,7 @@ const port = process.env.PORT || 3000;
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
 const defaultAllowed = ['localhost', '127.0.0.1', 'replit', 'replit.dev', 'replit.app', 'airia.pro'];
 const defaultPrisma = new PrismaClient();
+const DEFAULT_TIMELINE_RECURRING = { enabled: false, frequency: 'daily', days: [], everyNDays: 1 };
 
 type AppDependencies = {
   prisma?: PrismaClient;
@@ -62,6 +64,32 @@ type AppDependencies = {
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
 };
+
+function buildTimelineMetadataData(block: TimelineBlockInput) {
+  const metadata: Record<string, unknown> = {};
+
+  if (block.noteMode !== undefined) metadata.noteMode = block.noteMode;
+  if (block.note !== undefined) metadata.note = block.note ?? null;
+  if (block.checklist !== undefined) metadata.checklist = block.checklist;
+  if (block.recurring !== undefined) metadata.recurring = block.recurring;
+  if (block.energyLevel !== undefined) metadata.energyLevel = block.energyLevel;
+  if (block.lastResetDate !== undefined) {
+    metadata.lastResetDate = block.lastResetDate ? new Date(`${block.lastResetDate}T00:00:00.000Z`) : null;
+  }
+  if (block.persistentReminderEnabled !== undefined) metadata.persistentReminderEnabled = block.persistentReminderEnabled;
+  if (block.persistentReminderIntervalMinutes !== undefined) {
+    metadata.persistentReminderIntervalMinutes = block.persistentReminderIntervalMinutes ?? null;
+  }
+
+  return metadata;
+}
+
+function formatDateOnly(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
 
 function writeSseEvent(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\n`);
@@ -295,6 +323,34 @@ function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record
       .slice(0, 3);
 
     return filtered;
+  }
+
+  if (type === 'agenda-blocks') {
+    const targetDate = typeof context.targetAgendaDate === 'string'
+      ? context.targetAgendaDate
+      : (typeof context.localDate === 'string' ? context.localDate : new Date().toISOString().slice(0, 10));
+    const existingBusyWindows = Array.isArray(context.existingAgendaBusyWindows)
+      ? context.existingAgendaBusyWindows.filter((item): item is { startTime: string; endTime: string } =>
+          !!item &&
+          typeof item === 'object' &&
+          typeof (item as any).startTime === 'string' &&
+          typeof (item as any).endTime === 'string',
+        )
+      : [];
+    const externalBusyWindows = Array.isArray(context.externalBusyWindows)
+      ? context.externalBusyWindows.filter((item): item is { startTime: string; endTime: string } =>
+          !!item &&
+          typeof item === 'object' &&
+          typeof (item as any).startTime === 'string' &&
+          typeof (item as any).endTime === 'string',
+        )
+      : [];
+
+    return PlannerService.scheduleAgendaSuggestions({
+      targetDate,
+      busyWindows: [...existingBusyWindows, ...externalBusyWindows],
+      blocks: suggestion,
+    });
   }
 
   return suggestion;
@@ -1351,6 +1407,44 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
     }
 
+    if (!forceSave) {
+      const incomingIds = new Set(blocks.map((block) => block.id).filter(Boolean));
+      const dayStart = new Date(`${date}T00:00:00.000Z`);
+      const dayEnd = new Date(`${date}T23:59:59.999Z`);
+      const existingBlocks = await prisma.timelineBlock.findMany({
+        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+        select: { id: true, title: true, startAt: true, endAt: true },
+      });
+
+      const existingConflicts = blocksForConflictCheck.flatMap((incoming) => {
+        return existingBlocks
+          .filter((existing) => !incomingIds.has(existing.id))
+          .filter((existing) => {
+            const incomingStart = new Date(incoming.startAt).getTime();
+            const incomingEnd = new Date(incoming.endAt).getTime();
+            const existingStart = new Date(existing.startAt).getTime();
+            const existingEnd = new Date(existing.endAt).getTime();
+            return incomingStart < existingEnd && incomingEnd > existingStart;
+          })
+          .map((existing) => {
+            const overlapStart = Math.max(new Date(incoming.startAt).getTime(), new Date(existing.startAt).getTime());
+            const overlapEnd = Math.min(new Date(incoming.endAt).getTime(), new Date(existing.endAt).getTime());
+            return {
+              block1: incoming.title,
+              block2: existing.title,
+              overlapMinutes: Math.round((overlapEnd - overlapStart) / 60000),
+            };
+          });
+      });
+
+      if (existingConflicts.length > 0) {
+        return res.status(409).json({
+          error: 'Conflitos de horário detectados. Use forceSave=true para ignorar.',
+          conflicts: existingConflicts,
+        });
+      }
+    }
+
     // Processar Upserts em uma transação
     const savedBlocks = await prisma.$transaction(
       blocks.map((block) => {
@@ -1366,12 +1460,14 @@ export function createApp(dependencies: AppDependencies = {}) {
           category: block.category,
           intensity: block.intensity,
           status: block.status || 'planned',
+          ...buildTimelineMetadataData(block),
         };
 
         if (block.id) {
-          return prisma.timelineBlock.update({
+          return prisma.timelineBlock.upsert({
             where: { id: block.id },
-            data,
+            update: data,
+            create: { id: block.id, ...data },
           });
         } else {
           return prisma.timelineBlock.create({
@@ -1627,6 +1723,15 @@ export function createApp(dependencies: AppDependencies = {}) {
           intensity: block.intensity,
           status: block.status,
           isAiSuggested: block.isAiSuggested,
+          aiReasoning: block.aiReasoning,
+          noteMode: block.noteMode ?? 'text',
+          note: block.note ?? '',
+          checklist: Array.isArray(block.checklist) ? block.checklist : [],
+          recurring: block.recurring ?? DEFAULT_TIMELINE_RECURRING,
+          energyLevel: block.energyLevel ?? null,
+          lastResetDate: formatDateOnly(block.lastResetDate),
+          persistentReminderEnabled: block.persistentReminderEnabled ?? false,
+          persistentReminderIntervalMinutes: block.persistentReminderIntervalMinutes ?? null,
         }))
       );
     } catch (error: any) {
@@ -2014,30 +2119,59 @@ JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..
         const previousAgendaLabels = (context.previousAgendaLabels as string[] | undefined) || [];
         const previousAgendaTasks = (context.previousAgendaTasks as string[] | undefined) || [];
         const previousAutocuidado = (context.previousAutocuidado as string[] | undefined) || [];
-        const wakeTime = context.wakeTime || '07:00';
-        const sleepTime = context.sleepTime || '22:00';
+        const requestedLocalDate = typeof context.localDate === 'string'
+          ? context.localDate
+          : new Date().toISOString().slice(0, 10);
+        const requestHour = Number.isFinite(Number(context.hour)) ? Number(context.hour) : new Date().getHours();
+        const targetAgendaDate = PlannerService.resolveSuggestedAgendaDate(requestedLocalDate, requestHour);
+        const targetDayStart = new Date(`${targetAgendaDate}T00:00:00.000Z`);
+        const targetDayEnd = new Date(`${targetAgendaDate}T23:59:59.999Z`);
+        const existingAgendaBlocks = await prisma.timelineBlock.findMany({
+          where: { userId, localDate: { gte: targetDayStart, lte: targetDayEnd } },
+          select: { title: true, startAt: true, endAt: true },
+        });
+        const formatAgendaTime = (date: Date) => {
+          const hours = date.getUTCHours().toString().padStart(2, '0');
+          const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+          return `${hours}:${minutes}`;
+        };
+        const existingAgendaBusyWindows = existingAgendaBlocks.map((block) => ({
+          title: block.title,
+          startTime: formatAgendaTime(block.startAt),
+          endTime: formatAgendaTime(block.endAt),
+        }));
+        context = {
+          ...context,
+          targetAgendaDate,
+          existingAgendaBusyWindows,
+        };
         const history = (context.history || []).slice(0, 3).map((h: any) =>
           `${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}`
         ).join('; ');
-        prompt = `Você é a Airia, uma concierge pessoal e assistente de rotina sofisticada de ${userName}. Monte a agenda personalizada do dia de hoje.
+        const existingBusyText = existingAgendaBusyWindows.length
+          ? `Horários já ocupados em ${targetAgendaDate}: ${existingAgendaBusyWindows.map((block) => `${block.startTime}-${block.endTime} ${block.title}`).join(' | ')}.`
+          : `Sem blocos salvos em ${targetAgendaDate}.`;
+        prompt = `Você é a Airia, assistente de rotina de ${userName}. Sugira apenas complementos opcionais para a Agenda do dia.
 
 Estado atual: ${moodLabel} (${mood}), energia ${humanizeScore(energia, 'energy')}.
-Horário acordar: ${wakeTime} | Dormir: ${sleepTime}.
+Data alvo das sugestões: ${targetAgendaDate}. ${requestHour >= 18 ? 'Como o pedido veio após 18:00, as sugestões devem ser para amanhã.' : 'As sugestões podem ser para hoje.'}
 Padrão recente: ${history || 'iniciando agora'}.
 ${context.moodCycleContext ? `Contexto vivo recente: ${context.moodCycleContext}.` : ''}
 ${goals.length ? `Metas ativas: ${goals.join(' | ')}.` : ''}
 ${pendingTaskTitles.length ? `Pendências já abertas no planner: ${pendingTaskTitles.join(' | ')}.` : ''}
+${existingBusyText}
 ${previousAgendaLabels.length ? `Blocos recentes para NÃO reciclar: ${previousAgendaLabels.join(' | ')}.` : ''}
 ${previousAgendaTasks.length ? `Tarefas recentes para NÃO repetir: ${previousAgendaTasks.join(' | ')}.` : ''}
 ${previousAutocuidado.length ? `Micro-ações recentes da home: ${previousAutocuidado.join(' | ')}.` : ''}
 ${context.requestVariant ? `Tentativa atual de geração: ${context.requestVariant}. Se for maior que 1, trate como "refazer" e entregue uma alternativa materialmente diferente.` : ''}
 ${ragContext}
 
-Monte uma rotina completa e equilibrada:
-- Crie 6-8 blocos cobrindo o dia inteiro de ${wakeTime} a ${sleepTime}
+Monte complementos, não uma rotina inteira:
+- Crie 1-4 blocos opcionais, somente se acrescentarem algo útil ao que já existe
 - Tipos: trabalho, autocuidado, casa, social, descanso, refeicao, flexivel
-- Inclua tarefas de casa (limpar cômodo, organizar), autocuidado (skincare, exercício), clientes/trabalho e refeições
-- Balanceie: trabalho + casa + autocuidado + descanso
+- Não cubra o dia inteiro
+- Não recrie compromissos já abertos no planner
+- Inclua no máximo 1 tarefa por bloco, salvo se forem micro-passos inseparáveis
 - Se energia baixa/tensa → mais autocuidado e descanso, menos trabalho
 - Se focada → trabalho no pico da manhã (8h-12h)
 - Tarefas concretas e específicas, sem repetir títulos entre blocos
@@ -2046,14 +2180,18 @@ Monte uma rotina completa e equilibrada:
 - Se esta for uma nova tentativa, mude pelo menos 60% dos títulos e das tarefas em relação à tentativa anterior
 - Não repita nem reescreva superficialmente itens das listas recentes acima
 - Evite absolutamente: "organizar documentos", "planejar a semana", "fazer lista", "revisar prioridades", "alinhamento geral", "colocar a vida em ordem"
-- razao_ia: frase carinhosa e motivadora explicando o bloco
+- Horários sugeridos pela IA devem ficar entre 08:00 e 20:00; o backend ainda vai validar e remanejar para horário livre.
+- intensity deve representar o esforço: L leve, M medio, P pesado
+- razao_ia: frase carinhosa de 1 linha explicando por que esse encaixe combina com o estado atual
 
 Retorne SOMENTE array JSON:
-[{"horario_inicio":"HH:MM","horario_fim":"HH:MM","tipo":"trabalho|autocuidado|casa|social|descanso|refeicao|flexivel","label":"Nome motivador do bloco","tarefas_sugeridas":["Tarefa específica 1","Tarefa 2"],"razao_ia":"Frase carinhosa de 1 linha"}]
+[{"horario_inicio":"HH:MM","horario_fim":"HH:MM","tipo":"trabalho|autocuidado|casa|social|descanso|refeicao|flexivel","label":"Nome motivador do bloco","tarefas_sugeridas":["Tarefa específica"],"razao_ia":"Frase carinhosa de 1 linha","intensity":"L|M|P"}]
 Sem texto fora do JSON.`;
       } else if (type === 'checkin-response') {
         const moodLabel = context.moodLabel || 'Equilíbrio';
-        const nota = context.nota ? `Nota de ${userName}: "${context.nota}"` : '';
+        const nota = context.nota
+          ? `NOTA ESCRITA DO CHECK-IN (SINAL PRIORITÁRIO): "${context.nota}". Use esta nota para interpretar a energia, o humor e a sugestão antes de inferir padrões pelos números. Se ela explicar doença, dor, ciclo, sono ruim ou outro contexto físico/situacional, diferencie capacidade baixa de piora emocional.`
+          : '';
         const crStreak = typeof context.streak === 'number' ? context.streak : 0;
         const crHistory = (context.checkinHistory || []) as Array<{date:string;humor:number;energia:number}>;
         const crPreviousSuggestion = typeof context.previousSuggestion === 'string' ? context.previousSuggestion.trim() : '';
@@ -2085,6 +2223,7 @@ REGRAS:
 - "message" deve ter 2-3 frases curtas. A primeira precisa ler um padrão, contraste ou nuance do momento; não repita o rótulo do estado como eco.
 - Se o histórico ajudar, cite o padrão real de forma natural (ex: "nos últimos dias..." ou "hoje veio mais baixo que ontem...").
 - Se houver contexto vivo do diário ou da rotina, use pelo menos 1 detalhe concreto disso quando for relevante.
+- Se houver NOTA ESCRITA DO CHECK-IN, ela tem prioridade sobre leitura genérica dos números; a sugestão deve responder diretamente à nuance da nota.
 - Se streak ≥ 3 dias, mencione a sequência no máximo uma vez e só se encaixar organicamente.
 - NÃO use frases genéricas de autoajuda.
 - NÃO use sermão, diagnóstico ou tom maternal demais.
@@ -2566,18 +2705,6 @@ JSON APENAS: {"profileSummary":"..."}`,
    */
   app.post('/api/habits', requireAuth, async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
-    const HabitCreateSchema = z.object({
-      title: z.string().min(1),
-      description: z.string().optional(),
-      category: z.string().optional(),
-      icon: z.string().optional(),
-      frequency: z.enum(['daily', 'weekly', 'monthly']),
-      targetDays: z.array(z.number()).optional(),
-      timeOfDay: z.string().optional(),
-      durationMinutes: z.number().optional(),
-      reminderEnabled: z.boolean().optional(),
-      reminderTime: z.string().optional(),
-    });
     try {
       const data = HabitCreateSchema.parse(req.body);
       const { HabitService } = await import('./services/habit.service');
@@ -2645,9 +2772,10 @@ JSON APENAS: {"profileSummary":"..."}`,
     const userId = (req as AuthRequest).userId;
     const { id } = req.params;
     try {
+      const data = HabitPatchSchema.parse(req.body);
       const habit = await prisma.habit.updateMany({
         where: { id, userId },
-        data: req.body,
+        data,
       });
       if (habit.count === 0) return res.status(404).json({ error: 'Habit not found' });
       const updated = await prisma.habit.findUnique({ where: { id } });

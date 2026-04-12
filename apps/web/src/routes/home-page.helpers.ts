@@ -5,6 +5,9 @@ export type AgendaBlock = {
   label: string;
   tarefas_sugeridas: string[];
   razao_ia: string;
+  local_date?: string;
+  intensity?: "L" | "M" | "P";
+  blocked_reason?: string;
 };
 
 export type HomeAiMsg = {
@@ -22,6 +25,22 @@ type HomeAiRequestKeyInput = {
   pendingTaskTitles: string[];
   latestCheckinKey: string | null;
   refreshBucket: string;
+};
+
+export type HomeAgendaTaskItem = {
+  id: string | number;
+  kind: "task";
+  title: string;
+  time: string;
+  category?: string;
+};
+
+export type HomeAgendaHabitItem = {
+  id: string;
+  kind: "habit";
+  title: string;
+  icon?: string;
+  reminderTime?: string | null;
 };
 
 function normalizeWhitespace(value: string): string {
@@ -49,6 +68,25 @@ function uniqueStrings(values: string[]): string[] {
   return result;
 }
 
+function safeTimeValue(time: string | undefined): string {
+  return typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : "23:59";
+}
+
+function habitCompletionCount(habit: { completions?: Array<{ completionCount?: number | null } | unknown> }): number {
+  const completion = habit.completions?.[0];
+  if (!completion) return 0;
+  if (completion !== null && typeof completion === "object" && "completionCount" in completion) {
+    const count = Number((completion as { completionCount?: number | null }).completionCount ?? 1);
+    return Number.isFinite(count) ? Math.max(1, Math.round(count)) : 1;
+  }
+  return 1;
+}
+
+function habitTargetCount(habit: { targetCount?: number | null }): number {
+  const count = Number(habit.targetCount ?? 1);
+  return Number.isFinite(count) ? Math.max(1, Math.round(count)) : 1;
+}
+
 export function buildQuarterHourRefreshBucket(referenceDate: Date): string {
   const quarter = Math.floor(referenceDate.getMinutes() / 15);
   return [
@@ -71,6 +109,53 @@ export function buildHomeAiRequestKey(input: HomeAiRequestKeyInput): string {
     latestCheckinKey: input.latestCheckinKey ?? "",
     refreshBucket: input.refreshBucket,
   });
+}
+
+export function buildHomeAgendaPreview(input: {
+  tasks: Array<{ id: string | number; title: string; time: string; done: boolean; category?: string }>;
+  habits: Array<{ id: string; title: string; icon?: string; targetCount?: number | null; completions?: Array<{ completionCount?: number | null } | unknown>; reminderEnabled?: boolean; reminderTime?: string | null }>;
+}): { tasks: HomeAgendaTaskItem[]; habit: HomeAgendaHabitItem | null } {
+  const tasks = input.tasks
+    .filter((task) => !task.done && normalizeWhitespace(task.title).length > 0)
+    .sort((a, b) => safeTimeValue(a.time).localeCompare(safeTimeValue(b.time)))
+    .slice(0, 3)
+    .map((task) => ({
+      id: task.id,
+      kind: "task" as const,
+      title: normalizeWhitespace(task.title),
+      time: safeTimeValue(task.time),
+      category: task.category,
+    }));
+
+  const taskTitles = new Set(tasks.map((task) => comparableKey(task.title)));
+  const habit = input.habits
+    .filter((habit) => normalizeWhitespace(habit.title).length > 0)
+    .filter((habit) => habitCompletionCount(habit) < habitTargetCount(habit))
+    .filter((habit) => !taskTitles.has(comparableKey(habit.title)))
+    .sort((a, b) => safeTimeValue(a.reminderTime ?? undefined).localeCompare(safeTimeValue(b.reminderTime ?? undefined)))
+    .map((habit) => ({
+      id: habit.id,
+      kind: "habit" as const,
+      title: normalizeWhitespace(habit.title),
+      icon: habit.icon,
+      reminderTime: habit.reminderTime,
+    }))[0] ?? null;
+
+  return { tasks, habit };
+}
+
+export function resolveHomeAgendaSuggestionDate(localDate: string, hour: number): string {
+  if (hour < 18) {
+    return localDate;
+  }
+
+  const date = new Date(`${localDate}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) {
+    return localDate;
+  }
+
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
 }
 
 export function extractHomeRepeatContext(message: HomeAiMsg | null): {

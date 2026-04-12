@@ -5,28 +5,33 @@ import { createApp } from './index';
 
 async function run() {
   const createdBlocks: any[] = [];
-  const updatedBlocks: any[] = [];
+  const upsertedBlocks: any[] = [];
+  let existingBlocks: any[] = [];
+  const storedBlocks = new Map<string, any>();
 
   const prisma = {
     $queryRaw: async () => [],
     $executeRaw: async () => ({}),
     $transaction: async (operations: Promise<unknown>[]) => Promise.all(operations),
     timelineBlock: {
+      findMany: async () => existingBlocks,
       create: async ({ data }: any) => {
         const created = {
-          id: '11111111-1111-1111-1111-111111111111',
+          id: `11111111-1111-4111-8111-${String(createdBlocks.length + 1).padStart(12, '0')}`,
           ...data,
         };
         createdBlocks.push(created);
+        storedBlocks.set(created.id, created);
         return created;
       },
-      update: async ({ where, data }: any) => {
-        const updated = {
-          id: where.id,
-          ...data,
-        };
-        updatedBlocks.push(updated);
-        return updated;
+      upsert: async ({ where, update, create }: any) => {
+        const previous = storedBlocks.get(where.id);
+        const upserted = previous
+          ? { ...previous, ...update, id: where.id }
+          : { ...create, id: where.id };
+        upsertedBlocks.push(upserted);
+        storedBlocks.set(where.id, upserted);
+        return upserted;
       },
     },
   };
@@ -96,9 +101,167 @@ async function run() {
     });
 
     assert.equal(updateResponse.status, 200);
-    assert.equal(updatedBlocks.length, 1);
-    assert.equal(updatedBlocks[0].id, '22222222-2222-4222-8222-222222222222');
-    assert.equal(updatedBlocks[0].status, 'completed');
+    assert.equal(upsertedBlocks.length, 1);
+    assert.equal(upsertedBlocks[0].id, '22222222-2222-4222-8222-222222222222');
+    assert.equal(upsertedBlocks[0].status, 'completed');
+
+    const metadataCreateResponse = await fetch(`${baseUrl}/api/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-06',
+        forceSave: true,
+        blocks: [
+          {
+            title: 'Preparar consulta',
+            startTime: '16:00',
+            endTime: '16:30',
+            category: 'pessoal',
+            intensity: 'M',
+            status: 'planned',
+            noteMode: 'checklist',
+            note: 'Levar exames anteriores.',
+            checklist: [{ id: 'item-1', text: 'Separar exames', done: false }],
+            recurring: { enabled: true, frequency: 'weekly', days: [0, 2], everyNDays: 1 },
+            energyLevel: 'leve',
+            lastResetDate: '2026-04-05',
+            persistentReminderEnabled: true,
+            persistentReminderIntervalMinutes: 60,
+          },
+        ],
+      }),
+    });
+
+    assert.equal(metadataCreateResponse.status, 200);
+    assert.equal(createdBlocks.length, 2);
+    assert.equal(createdBlocks[1].noteMode, 'checklist');
+    assert.equal(createdBlocks[1].note, 'Levar exames anteriores.');
+    assert.deepEqual(createdBlocks[1].checklist, [{ id: 'item-1', text: 'Separar exames', done: false }]);
+    assert.equal(createdBlocks[1].recurring.frequency, 'weekly');
+    assert.equal(createdBlocks[1].energyLevel, 'leve');
+    assert.equal(createdBlocks[1].lastResetDate.toISOString(), '2026-04-05T00:00:00.000Z');
+    assert.equal(createdBlocks[1].persistentReminderEnabled, true);
+    assert.equal(createdBlocks[1].persistentReminderIntervalMinutes, 60);
+
+    const metadataBlockId = '44444444-4444-4444-8444-444444444444';
+    const metadataUpsertResponse = await fetch(`${baseUrl}/api/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-06',
+        forceSave: true,
+        blocks: [
+          {
+            id: metadataBlockId,
+            title: 'Bloco com nota',
+            startTime: '17:00',
+            endTime: '17:30',
+            category: 'pessoal',
+            intensity: 'M',
+            status: 'planned',
+            noteMode: 'text',
+            note: 'Nota que nao pode sumir.',
+            checklist: [],
+            recurring: { enabled: false, frequency: 'daily', days: [], everyNDays: 1 },
+            energyLevel: 'media',
+          },
+        ],
+      }),
+    });
+
+    assert.equal(metadataUpsertResponse.status, 200);
+
+    const partialUpdateResponse = await fetch(`${baseUrl}/api/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-06',
+        forceSave: true,
+        blocks: [
+          {
+            id: metadataBlockId,
+            title: 'Bloco com nota',
+            startTime: '18:00',
+            endTime: '18:30',
+            category: 'pessoal',
+            intensity: 'M',
+            status: 'completed',
+          },
+        ],
+      }),
+    });
+
+    const partialUpdateBody = await partialUpdateResponse.json();
+    assert.equal(partialUpdateResponse.status, 200);
+    assert.equal(partialUpdateBody.savedBlocks[0].status, 'completed');
+    assert.equal(partialUpdateBody.savedBlocks[0].note, 'Nota que nao pode sumir.');
+    assert.equal(partialUpdateBody.savedBlocks[0].noteMode, 'text');
+
+    existingBlocks = [
+      {
+        id: '33333333-3333-4333-8333-333333333333',
+        title: 'Bloco existente',
+        startAt: new Date('2026-04-06T10:00:00.000Z'),
+        endAt: new Date('2026-04-06T11:00:00.000Z'),
+      },
+    ];
+
+    const conflictResponse = await fetch(`${baseUrl}/api/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-06',
+        forceSave: false,
+        blocks: [
+          {
+            title: 'Sugestão da Airia',
+            startTime: '10:30',
+            endTime: '11:30',
+            category: 'autocuidado',
+            intensity: 'L',
+            status: 'planned',
+          },
+        ],
+      }),
+    });
+
+    const conflictBody = await conflictResponse.json();
+    assert.equal(conflictResponse.status, 409);
+    assert.match(conflictBody.error, /Conflitos de horário/);
+    assert.equal(createdBlocks.length, 2);
+
+    existingBlocks = [
+      {
+        id: '55555555-5555-4555-8555-555555555555',
+        title: 'Bloco retornado',
+        startAt: new Date('2026-04-06T08:00:00.000Z'),
+        endAt: new Date('2026-04-06T08:30:00.000Z'),
+        category: 'autocuidado',
+        intensity: 'L',
+        status: 'planned',
+        isAiSuggested: true,
+        noteMode: 'checklist',
+        note: 'Respirar antes de abrir mensagens.',
+        checklist: [{ id: 'item-1', text: 'Respirar 3 vezes', done: true }],
+        recurring: { enabled: true, frequency: 'daily', days: [], everyNDays: 1 },
+        energyLevel: 'leve',
+        lastResetDate: new Date('2026-04-05T00:00:00.000Z'),
+        persistentReminderEnabled: true,
+        persistentReminderIntervalMinutes: 120,
+      },
+    ];
+
+    const getResponse = await fetch(`${baseUrl}/api/timeline/2026-04-06`);
+    const getBody = await getResponse.json();
+    assert.equal(getResponse.status, 200);
+    assert.equal(getBody[0].noteMode, 'checklist');
+    assert.equal(getBody[0].note, 'Respirar antes de abrir mensagens.');
+    assert.equal(getBody[0].checklist[0].done, true);
+    assert.equal(getBody[0].recurring.frequency, 'daily');
+    assert.equal(getBody[0].energyLevel, 'leve');
+    assert.equal(getBody[0].lastResetDate, '2026-04-05');
+    assert.equal(getBody[0].persistentReminderEnabled, true);
+    assert.equal(getBody[0].persistentReminderIntervalMinutes, 120);
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {

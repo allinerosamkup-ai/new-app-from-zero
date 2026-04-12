@@ -79,6 +79,10 @@ export class CheckinService {
       ? `- Fatores que ajudaram: ${posFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}`
       : '';
     const contextLines = [emotionLine, negLine, posLine].filter(Boolean).join('\n');
+    const trimmedNote = data.note?.trim() ?? '';
+    const noteLine = trimmedNote
+      ? `- Nota escrita (SINAL PRIORITÁRIO - dê mais peso a isto do que a inferências genéricas dos números): "${trimmedNote}"`
+      : '- Nota escrita: Nenhuma';
 
     const prompt = `
 Analise os dados de check-in e retorne uma leitura humanizada, específica e útil.
@@ -88,13 +92,15 @@ DADOS:
 - Humor ${humanizeScore(data.moodScore, 'mood')}, energia ${humanizeScore(data.energyScore, 'energy')} e clareza ${humanizeScore(data.clarityScore, 'generic')}
 - Irritabilidade ${humanizeScore(data.irritabilityScore, 'generic')}, estado físico ${humanizeScore(data.physicalScore, 'generic')}
 - Social ${humanizeScore(data.socialScore, 'generic')} e sono ${humanizeScore(data.sleepScore, 'sleep')}
-- Nota: ${data.note || 'Nenhuma'}${contextLines ? `\n${contextLines}` : ''}
+${noteLine}${contextLines ? `\n${contextLines}` : ''}
 
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
 - stateLabel: nome curto, humano e sóbrio do estado; evite rótulos dramáticos.
-- analysis: 1-2 frases que leiam o momento sem repetir os números; se há emoções ou fatores negativos específicos, mencione-os concretamente.
-- recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si, sem clichês; se há fatores negativos, pelo menos 1 ação deve endereçar diretamente um deles.
+- Se houver nota escrita, ela é o sinal de maior contexto: use a nota para reinterpretar humor, energia e sugestões antes de concluir qualquer padrão.
+- Se a nota explicar uma causa física ou situacional concreta, como doença, dor, gripe, febre, menstruação, noite ruim ou crise externa, não trate energia baixa como piora emocional; diferencie capacidade baixa de humor ruim.
+- analysis: 1-2 frases que leiam o momento sem repetir os números; se há nota, emoções ou fatores específicos, mencione a nuance concreta.
+- recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si, sem clichês; se há nota escrita, pelo menos 1 ação deve responder diretamente ao que ela revelou.
 - suggestedIntensity: 'L' (energia baixa/sensível), 'M' (equilibrada), 'P' (energia alta/focada).
 - rationale: explicação interna curta e técnica, sem linguagem clínica pesada.
 - Evite frases genéricas como "vá com calma", "um passo de cada vez" ou "você consegue" sem contexto.

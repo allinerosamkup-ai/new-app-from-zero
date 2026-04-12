@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
 import { AuraIcon } from "../components/AuraIcon";
+import { useHabitReminders } from "../hooks/useHabitReminders";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -84,6 +85,8 @@ export function AuraLayout() {
   const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+
+  useHabitReminders(state.habits ?? [], state.tasks ?? []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

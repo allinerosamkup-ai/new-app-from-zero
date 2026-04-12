@@ -1,10 +1,11 @@
 // Onboarding: Sono — slider horas + cards qualidade + time pickers
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
 
-const STEP = 3;
-const TOTAL = 7;
+const STEP = 4;
+const TOTAL = 5;
 
 type SleepQuality = "bem" | "irregular" | "mal";
 
@@ -16,12 +17,25 @@ const QUALITY_CARDS: { id: SleepQuality; emoji: string; label: string; sub: stri
 
 export function OnboardingSleepPage() {
   const navigate = useNavigate();
-  const [horas, setHoras] = useState(7);
-  const [quality, setQuality] = useState<SleepQuality | null>(null);
-  const [bedTime, setBedTime] = useState("23:00");
-  const [wakeTime, setWakeTime] = useState("07:00");
+  const { state, updateOnboardingDraft } = useAuraStore();
+  const [horas, setHoras] = useState(state.onboardingDraft.sleepHours);
+  const [quality, setQuality] = useState<SleepQuality | null>(state.onboardingDraft.sleepQuality || null);
+  const [bedTime, setBedTime] = useState(state.onboardingDraft.sleepTime);
+  const [wakeTime, setWakeTime] = useState(state.onboardingDraft.wakeTime);
 
   const horasPct = ((horas - 4) / 6) * 100;
+
+  function persistAndGo(path: string) {
+    const qualityLabel = QUALITY_CARDS.find((card) => card.id === quality)?.label ?? "Qualidade não informada";
+    updateOnboardingDraft({
+      sleepHours: horas,
+      sleepQuality: quality ?? "",
+      sleepTime: bedTime,
+      wakeTime,
+      sleepQualityNote: `${qualityLabel}; média de ${horas}h por noite; dorme por volta de ${bedTime} e acorda por volta de ${wakeTime}.`,
+    });
+    navigate(path);
+  }
 
   return (
     <div className="aura-page-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -135,7 +149,7 @@ export function OnboardingSleepPage() {
 
         {/* CTAs */}
         <button
-          onClick={() => navigate("/onboarding/preferences")}
+          onClick={() => persistAndGo("/onboarding/preferences")}
           style={{
             width: "100%", height: 46,
             background: "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)",
@@ -147,7 +161,7 @@ export function OnboardingSleepPage() {
           Continuar →
         </button>
         <button
-          onClick={() => navigate("/onboarding/preferences")}
+          onClick={() => persistAndGo("/onboarding/preferences")}
           style={{ width: "100%", height: 40, background: "none", border: "none", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer" }}
         >
           Pular por enquanto

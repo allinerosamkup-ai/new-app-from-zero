@@ -1,10 +1,11 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
 
-type ToggleProps = { on: boolean; onToggle: () => void };
+type ToggleProps = { on: boolean; onToggle: () => void | Promise<void> };
 
 function Toggle({ on, onToggle }: ToggleProps) {
   return (
@@ -16,11 +17,48 @@ function Toggle({ on, onToggle }: ToggleProps) {
 
 export function PreferencesPage() {
   const navigate = useNavigate();
-  const { state, setName, setEmail, toggleCheckinReminder, toggleQuietMode, toggleTheme } = useAuraStore();
+  const {
+    state,
+    setName,
+    toggleCheckinReminder,
+    setCheckinReminderTimes,
+    toggleQuietMode,
+    toggleTheme,
+    resetOnboardingDraft,
+    saveProfile,
+    signOut,
+  } = useAuraStore();
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const displayName = state.name
     ? state.name.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
     : "";
+
+  async function handleSaveProfile() {
+    setAccountStatus(null);
+    try {
+      await saveProfile();
+      setAccountStatus("Perfil salvo.");
+    } catch {
+      setAccountStatus("Não consegui salvar o perfil agora.");
+    }
+  }
+
+  async function handleSignOut() {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      navigate("/login", { replace: true });
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
+  function handleRedoOnboarding() {
+    resetOnboardingDraft();
+    navigate("/onboarding");
+  }
 
   return (
     <div className="aura-page-shell">
@@ -64,8 +102,8 @@ export function PreferencesPage() {
             </p>
             <p style={{ fontSize: "11px", color: "var(--text-3)", margin: "2px 0 0" }}>{state.email}</p>
           </div>
-          <AuraButtonV2 className="aura-btn-pill">
-            Editar
+          <AuraButtonV2 className="aura-btn-pill" onClick={handleSaveProfile}>
+            Salvar
           </AuraButtonV2>
         </div>
 
@@ -90,12 +128,18 @@ export function PreferencesPage() {
               <input
                 type="email"
                 value={state.email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="voce@exemplo.com"
+                readOnly
+                placeholder="E-mail de login"
                 className="aura-inline-input"
+                style={{ color: "var(--text-3)" }}
               />
             </div>
           </div>
+          {accountStatus && (
+            <p style={{ fontSize: 11, color: "var(--text-3)", margin: "8px 0 0" }}>
+              {accountStatus}
+            </p>
+          )}
         </div>
 
         {/* Notificações section */}
@@ -109,11 +153,42 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Lembrete de check-in</p>
-                <p className="config-row-sub">Diário às 8h da manhã</p>
+                <p className="config-row-text">Lembretes de check-in</p>
+                <p className="config-row-sub">Manhã às {state.morningCheckinTime} e noite às {state.eveningCheckinTime}</p>
               </div>
             </div>
             <Toggle on={state.checkinReminder ?? true} onToggle={toggleCheckinReminder} />
+          </div>
+          <div className="config-row">
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(150,199,179,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Horários do check-in</p>
+                <p className="config-row-sub">Ajuste fino dos dois lembretes diários</p>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="time"
+                value={state.morningCheckinTime}
+                onChange={(event) => setCheckinReminderTimes({ morning: event.target.value })}
+                className="aura-inline-input"
+                style={{ width: 82, fontSize: 12, fontWeight: 700 }}
+                aria-label="Horário do check-in da manhã"
+              />
+              <input
+                type="time"
+                value={state.eveningCheckinTime}
+                onChange={(event) => setCheckinReminderTimes({ evening: event.target.value })}
+                className="aura-inline-input"
+                style={{ width: 82, fontSize: 12, fontWeight: 700 }}
+                aria-label="Horário do check-in da noite"
+              />
+            </div>
           </div>
           <div className="config-row">
             <div className="config-row-label">
@@ -124,7 +199,7 @@ export function PreferencesPage() {
               </div>
               <div>
                 <p className="config-row-text">Modo Tranquilo</p>
-                <p className="config-row-sub">Sem notificações das 22h às 8h</p>
+                <p className="config-row-sub">Sem notificações das {state.quietModeStartTime} às {state.quietModeEndTime}</p>
               </div>
             </div>
             <Toggle on={state.quietMode ?? false} onToggle={toggleQuietMode} />
@@ -153,14 +228,26 @@ export function PreferencesPage() {
         {/* Conta section */}
         <div className="config-section">
           <p className="config-section-title">Conta</p>
-          <div className="config-row" style={{ cursor: "pointer" }}>
+          <div
+            className="config-row"
+            style={{ cursor: isSigningOut ? "wait" : "pointer", opacity: isSigningOut ? 0.7 : 1 }}
+            onClick={handleSignOut}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                void handleSignOut();
+              }
+            }}
+          >
             <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(197,165,147,.1)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
                 </svg>
               </div>
-              <p className="config-row-text">Sair da conta</p>
+              <p className="config-row-text">{isSigningOut ? "Saindo..." : "Sair da conta"}</p>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
@@ -170,7 +257,7 @@ export function PreferencesPage() {
 
         {/* Link onboarding */}
         <AuraButtonV2
-          onClick={() => navigate("/onboarding")}
+          onClick={handleRedoOnboarding}
           className="btn btn-ghost btn-full"
           style={{ marginTop: 20, color: "var(--accent-peach)" }}
         >

@@ -58,6 +58,9 @@ async function run() {
   assert.equal(capturedModel, 'gpt-5.4-nano');
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Analise os dados de check-in/i);
+  assert.match(capturedMessages[1]?.content || '', /SINAL PRIORITÁRIO/i);
+  assert.match(capturedMessages[1]?.content || '', /Acordei mais arrastada hoje\./i);
+  assert.match(capturedMessages[1]?.content || '', /não trate energia baixa como piora emocional/i);
 }
 
 run()

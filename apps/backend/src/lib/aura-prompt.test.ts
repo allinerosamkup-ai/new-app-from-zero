@@ -10,7 +10,7 @@ async function run() {
     domain: 'onboarding',
   });
 
-  assert.match(onboardingPrompt, /Você é Aura/i);
+  assert.match(onboardingPrompt, /Você é Airia/i);
   assert.match(onboardingPrompt, /Não presuma diagnósticos/i);
   assert.match(onboardingPrompt, /BOAS-VINDAS/i);
   assert.match(onboardingPrompt, /Humor em queda suave/i);

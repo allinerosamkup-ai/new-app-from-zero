@@ -1,3 +1,5 @@
+import type { OnboardingDraft } from "./onboarding";
+
 export type MoodOption =
   | "equilibrada"
   | "focada"
@@ -14,6 +16,8 @@ export type Task = {
   done: boolean;
   category?: string;
   intensity?: string;
+  persistentReminderEnabled?: boolean;
+  persistentReminderIntervalMinutes?: number | null;
 };
 
 export type SubGoal = {
@@ -103,8 +107,13 @@ export type AuraState = {
   goals: Goal[];
   theme: string;
   quietMode: boolean;
+  quietModeStartTime: string;
+  quietModeEndTime: string;
   checkinReminder: boolean;
+  morningCheckinTime: string;
+  eveningCheckinTime: string;
   onboardingStep: number;
+  onboardingDraft: OnboardingDraft;
   checkinHistory: CheckinEntry[];
   autonomousInsight: AutonomousInsight | null;
   phaseTransitionAlert: PhaseTransitionAlert | null;
@@ -124,12 +133,15 @@ export type Habit = {
   icon?: string;
   frequency: 'daily' | 'weekly' | 'monthly';
   targetDays: number[];
+  targetCount: number;
   streakCount: number;
   bestStreak: number;
   totalCompletions: number;
   completions?: HabitCompletion[];
   reminderEnabled: boolean;
   reminderTime?: string | null;
+  persistentReminderEnabled?: boolean;
+  persistentReminderIntervalMinutes?: number | null;
 };
 
 export type HabitCompletion = {
@@ -137,4 +149,5 @@ export type HabitCompletion = {
   habitId: string;
   date: string;
   completedAt?: string;
+  completionCount?: number;
 };

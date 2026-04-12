@@ -1,4 +1,11 @@
 import { AuraState, Goal, MoodOption, Task } from "./types";
+import { createEmptyOnboardingDraft } from "./onboarding";
+import {
+  DEFAULT_EVENING_CHECKIN_TIME,
+  DEFAULT_MORNING_CHECKIN_TIME,
+  QUIET_MODE_END_TIME,
+  QUIET_MODE_START_TIME,
+} from "./settings";
 
 export const moodContent: Record<
   MoodOption,
@@ -85,8 +92,13 @@ export const initialAuraState: AuraState = {
   goals: initialGoals,
   theme: "Tema claro",
   quietMode: true,
+  quietModeStartTime: QUIET_MODE_START_TIME,
+  quietModeEndTime: QUIET_MODE_END_TIME,
   checkinReminder: true,
+  morningCheckinTime: DEFAULT_MORNING_CHECKIN_TIME,
+  eveningCheckinTime: DEFAULT_EVENING_CHECKIN_TIME,
   onboardingStep: 0,
+  onboardingDraft: createEmptyOnboardingDraft(),
   autonomousInsight: null,
   phaseTransitionAlert: null,
   pendingFollowUp: null,

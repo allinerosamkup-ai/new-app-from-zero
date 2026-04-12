@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
+import { buildOnboardingProcessPayload } from "../features/aura/onboarding";
+import { api } from "../lib/api";
 import "../styles/aura.css";
 
 function ConfettiPiece({ delay, x }: { delay: number; x: number }) {
@@ -23,15 +25,35 @@ function ConfettiPiece({ delay, x }: { delay: number; x: number }) {
 
 export function OnboardingDonePage() {
   const navigate = useNavigate();
-  const { state } = useAuraStore();
+  const { state, refreshData } = useAuraStore();
   const [show, setShow] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setShow(true), 100);
     return () => clearTimeout(t);
   }, []);
 
-  const name = state.name ? state.name.split(" ")[0] : "você";
+  const nameSource = state.onboardingDraft.fullName || state.name;
+  const name = nameSource ? nameSource.split(" ")[0] : "você";
+  const preferredFocus = state.onboardingDraft.cognitivePreferences[0] ?? "A calibrar";
+  const sleepQuality = state.onboardingDraft.sleepQuality || "não informado";
+
+  async function handleFinish() {
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      await api.post("/onboarding/process", buildOnboardingProcessPayload(state.onboardingDraft));
+      await refreshData();
+      navigate("/home");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível salvar o onboarding.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <>
@@ -98,10 +120,10 @@ export function OnboardingDonePage() {
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              { emoji: "🌙", label: "Fase atual",        value: "Folicular (estimada)" },
-              { emoji: "⚡", label: "Energia biológica", value: "Moderada-alta" },
-              { emoji: "😴", label: "Sono",              value: "7h (padrão)" },
-              { emoji: "🎯", label: "Foco preferido",    value: "Blocos de manhã" },
+              { emoji: "🌙", label: "Ciclo",             value: state.onboardingDraft.cycleStart ? "Informado" : "A calibrar" },
+              { emoji: "⚡", label: "Energia",           value: `${state.onboardingDraft.focusScore}/10 em dia bom` },
+              { emoji: "😴", label: "Sono",              value: `${state.onboardingDraft.sleepHours}h (${sleepQuality})` },
+              { emoji: "🎯", label: "Foco preferido",    value: preferredFocus },
             ].map(item => (
               <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -114,22 +136,39 @@ export function OnboardingDonePage() {
           </div>
         </div>
 
+        {error && (
+          <p style={{
+            width: "100%",
+            color: "var(--accent-peach-ink)",
+            background: "rgba(215,137,127,.1)",
+            border: "1px solid rgba(215,137,127,.22)",
+            borderRadius: 14,
+            padding: "10px 12px",
+            fontSize: 12,
+            lineHeight: 1.5,
+            margin: "0 0 14px",
+          }}>
+            {error}
+          </p>
+        )}
+
         {/* CTA */}
         <button
-          onClick={() => navigate("/home")}
+          onClick={handleFinish}
+          disabled={submitting}
           style={{
             width: "100%", height: 50,
             background: "linear-gradient(135deg, #5A7A64 0%, #4E6B57 100%)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", boxShadow: "0 14px 26px rgba(90,122,100,.18)",
+            cursor: submitting ? "wait" : "pointer", boxShadow: "0 14px 26px rgba(90,122,100,.18)",
+            opacity: submitting ? 0.72 : 1,
             animation: "fade-up 0.6s ease 0.65s both",
           }}
         >
-          Começar minha jornada 🌸
+          {submitting ? "Salvando perfil..." : "Começar minha jornada 🌸"}
         </button>
       </div>
     </>
   );
 }
-

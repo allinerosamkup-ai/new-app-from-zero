@@ -122,6 +122,7 @@ export function CheckinResultPage() {
   // Fatores e emoções do check-in mais recente — alimentam a IA com contexto real
   const todayFactors = useMemo(() => (state.checkinHistory || [])[0]?.factors ?? [], [state.checkinHistory]);
   const todayEmotions = useMemo(() => (state.checkinHistory || [])[0]?.emotions ?? [], [state.checkinHistory]);
+  const todayNote = useMemo(() => (state.checkinHistory || [])[0]?.note ?? "", [state.checkinHistory]);
   const previousCheckinSuggestion = useMemo(
     () => localStorage.getItem("aura_last_checkin_suggestion") ?? "",
     [],
@@ -145,7 +146,7 @@ export function CheckinResultPage() {
         moodLabel: v.label,
         moodCycleContext: cycleReport.aiContext,
         checkinHistory: recentHistory,
-        nota: state.journal,
+        nota: todayNote || state.journal,
         streak,
         hour: dayContext.hour,
         partOfDay: dayContext.partOfDay,
@@ -611,4 +612,3 @@ export function CheckinResultPage() {
     </div>
   );
 }
-

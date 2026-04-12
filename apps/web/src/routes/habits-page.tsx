@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { Habit } from "../features/aura/types";
-import { HABIT_SUGGESTIONS, type HabitSuggestion } from "../features/aura/habit-presets";
+import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
+import { getHabitCompletionCount, getHabitProgressLabel, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from "../features/aura/habit-helpers";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive } from "lucide-react";
 import { api } from "../lib/api";
-import { useHabitReminders } from "../hooks/useHabitReminders";
+import { getLocalDateKey } from "../utils/day-context";
 
 // ─── Confetti burst (CSS-only, no dependency) ────────────────────────────────
 const CONFETTI_COLORS = ["#D7897F","#96C7B3","#6398A9","#B5A4C8","#F9C784","#fff"];
@@ -141,22 +142,6 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string
   geral:        { label: "Geral",         color: "var(--text-3)",    bg: "rgba(150,150,150,0.10)" },
 };
 
-const TIME_OF_DAY_LABELS: Record<string, string> = {
-  morning:   "Manhã",
-  afternoon: "Tarde",
-  evening:   "Noite",
-  anytime:   "Qualquer hora",
-};
-
-// ─── Suggested habits ────────────────────────────────────────────────────────
-// ─── Emoji picker options ─────────────────────────────────────────────────────
-const EMOJI_OPTIONS = [
-  "🧘","🏃","💧","📚","✍️","🙏","🎯","💤","🥗","🎨",
-  "🎵","🌿","💪","🧠","🌅","☕","🚶","🤸","📝","🌸",
-  "✨","🔥","💚","🎋","📔","💊","🧹","🧴","🌙","⭐",
-  "🦋","🎈","🌈","🧡","💛","💙","🌻","🍃","🎶","🏋️",
-];
-
 // ─── Streak dots visualization ─────────────────────────────────────────────
 function StreakDots({ streakCount, completedToday }: { streakCount: number; completedToday: boolean }) {
   const totalDots = 7;
@@ -193,14 +178,18 @@ function StreakDots({ streakCount, completedToday }: { streakCount: number; comp
 // ─── Habit card (today view) ──────────────────────────────────────────────
 function HabitCard({
   habit,
+  dateKey,
   onToggle,
   isToggling,
 }: {
   habit: Habit;
+  dateKey: string;
   onToggle: () => void;
   isToggling: boolean;
 }) {
-  const completedToday = (habit.completions?.length ?? 0) > 0;
+  const completedToday = isHabitCompleteForDate(habit, dateKey);
+  const progressLabel = getHabitProgressLabel(habit, dateKey);
+  const targetCount = getHabitTargetCount(habit);
   const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
 
   return (
@@ -259,6 +248,11 @@ function HabitCard({
           <span style={{ fontSize: 11, color: "var(--accent-peach)", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
             <Flame size={11} /> {habit.streakCount}
           </span>
+          {targetCount > 1 && (
+            <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700 }}>
+              {progressLabel}
+            </span>
+          )}
         </div>
       </div>
 
@@ -281,7 +275,11 @@ function HabitCard({
           opacity: isToggling ? 0.5 : 1,
         }}
       >
-        {completedToday && <Check size={18} color="#fff" strokeWidth={3} />}
+        {completedToday ? <Check size={18} color="#fff" strokeWidth={3} /> : targetCount > 1 ? (
+          <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 900 }}>
+            {Math.min(getHabitCompletionCount(habit, dateKey), targetCount)}
+          </span>
+        ) : null}
       </button>
     </div>
   );
@@ -376,9 +374,9 @@ function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
 }
 
 // ─── All habits card (expandable with calendar) ───────────────────────────
-function AllHabitCard({ habit, onArchive }: { habit: Habit; onArchive: () => void }) {
+function AllHabitCard({ habit, dateKey, onArchive }: { habit: Habit; dateKey: string; onArchive: () => void }) {
   const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
-  const completedToday = (habit.completions?.length ?? 0) > 0;
+  const completedToday = isHabitCompleteForDate(habit, dateKey);
   const [expanded, setExpanded] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
@@ -444,6 +442,11 @@ function AllHabitCard({ habit, onArchive }: { habit: Habit; onArchive: () => voi
             <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
               {habit.totalCompletions} total
             </span>
+            {getHabitTargetCount(habit) > 1 && (
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
+                {getHabitProgressLabel(habit, dateKey)}
+              </span>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -517,378 +520,6 @@ function AllHabitCard({ habit, onArchive }: { habit: Habit; onArchive: () => voi
   );
 }
 
-// ─── Add Habit Modal ──────────────────────────────────────────────────────
-function AddHabitModal({
-  onClose,
-  onAdd,
-}: {
-  onClose: () => void;
-  onAdd: (data: {
-    title: string;
-    category: string;
-    frequency: string;
-    icon: string;
-    timeOfDay: string;
-    description: string;
-    reminderEnabled: boolean;
-    reminderTime?: string;
-  }) => Promise<void>;
-}) {
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("health");
-  const [frequency] = useState("daily");
-  const [icon, setIcon] = useState("✨");
-  const [timeOfDay, setTimeOfDay] = useState("anytime");
-  const [description, setDescription] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [reminderEnabled, setReminderEnabled] = useState(false);
-  const [reminderTime, setReminderTime] = useState("08:00");
-
-  function applysuggestion(s: HabitSuggestion) {
-    setTitle(s.title);
-    setIcon(s.icon);
-    setCategory(s.category);
-    setTimeOfDay(s.timeOfDay);
-  }
-
-  async function handleSave() {
-    if (!title.trim()) return;
-    setIsSaving(true);
-    await onAdd({
-      title,
-      category,
-      frequency,
-      icon,
-      timeOfDay,
-      description,
-      reminderEnabled,
-      reminderTime: reminderEnabled ? reminderTime : undefined,
-    });
-    setIsSaving(false);
-  }
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-        zIndex: 1000,
-        backdropFilter: "blur(4px)",
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "var(--warm-bg)",
-          borderRadius: "24px 24px 0 0",
-          padding: "24px 20px 40px",
-          width: "100%",
-          maxWidth: 480,
-          maxHeight: "90vh",
-          overflowY: "auto",
-        }}
-      >
-        {/* Handle */}
-        <div style={{ width: 40, height: 4, background: "var(--warm-border)", borderRadius: 4, margin: "0 auto 20px" }} />
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Novo Hábito</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4 }}>
-            ✕
-          </button>
-        </div>
-
-        {/* Suggestions strip */}
-        <div style={{ marginBottom: 20 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", margin: "0 0 10px" }}>
-            Escolha uma sugestão
-          </p>
-          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-            {HABIT_SUGGESTIONS.map((s) => (
-              <button
-                key={s.title}
-                onClick={() => applysuggestion(s)}
-                style={{
-                  flexShrink: 0,
-                  background: title === s.title ? "var(--accent-peach)" : "var(--warm-border)",
-                  color: title === s.title ? "#fff" : "var(--text-2)",
-                  border: "none",
-                  borderRadius: 20,
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                  transition: "all 0.15s",
-                }}
-              >
-                {s.icon} {s.title}
-                {s.socialProof != null && (
-                  <span style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    opacity: 0.65,
-                    marginLeft: 2,
-                    color: title === s.title ? "rgba(255,255,255,0.9)" : "var(--menthe)",
-                  }}>
-                    {s.socialProof}%
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Icon + Title row */}
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-            <div style={{ flexShrink: 0 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
-                Ícone
-              </label>
-              <button
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
-                  border: "1.5px solid var(--warm-border)",
-                  background: CATEGORY_CONFIG[category]?.bg || "var(--warm-border)",
-                  fontSize: 24,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {icon}
-              </button>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
-                Nome do hábito *
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex: Meditação matinal"
-                autoFocus
-                style={{
-                  width: "100%",
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: "1.5px solid var(--warm-border)",
-                  background: "transparent",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: "var(--text-1)",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Emoji picker */}
-          {showEmojiPicker && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(8, 1fr)",
-                gap: 6,
-                padding: 14,
-                background: "var(--warm-border)",
-                borderRadius: 14,
-              }}
-            >
-              {EMOJI_OPTIONS.map((e) => (
-                <button
-                  key={e}
-                  onClick={() => { setIcon(e); setShowEmojiPicker(false); }}
-                  style={{
-                    background: icon === e ? "var(--accent-peach)" : "transparent",
-                    border: "none",
-                    borderRadius: 8,
-                    fontSize: 20,
-                    cursor: "pointer",
-                    padding: "6px 4px",
-                    lineHeight: 1,
-                  }}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Category */}
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase" }}>
-              Categoria
-            </label>
-            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-              {Object.entries(CATEGORY_CONFIG).filter(([k]) => k !== "geral").map(([key, cfg]) => (
-                <button
-                  key={key}
-                  onClick={() => setCategory(key)}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 20,
-                    border: `1.5px solid ${category === key ? cfg.color : "var(--warm-border)"}`,
-                    background: category === key ? cfg.bg : "transparent",
-                    color: category === key ? cfg.color : "var(--text-3)",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {cfg.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Time of day */}
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase" }}>
-              Período
-            </label>
-            <div style={{ display: "flex", gap: 7 }}>
-              {Object.entries(TIME_OF_DAY_LABELS).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setTimeOfDay(key)}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: 20,
-                    border: `1.5px solid ${timeOfDay === key ? "var(--accent-sky)" : "var(--warm-border)"}`,
-                    background: timeOfDay === key ? "rgba(99,152,169,0.12)" : "transparent",
-                    color: timeOfDay === key ? "var(--accent-sky)" : "var(--text-3)",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    flex: 1,
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Reminder */}
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Lembrete</div>
-                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>Notificação no horário escolhido</div>
-              </div>
-              <button
-                onClick={async () => {
-                  if (!reminderEnabled) {
-                    const { requestNotificationPermission } = await import('../hooks/useHabitReminders');
-                    await requestNotificationPermission();
-                  }
-                  setReminderEnabled(!reminderEnabled);
-                }}
-                style={{
-                  width: 44,
-                  height: 26,
-                  borderRadius: 13,
-                  border: "none",
-                  background: reminderEnabled ? "var(--menthe)" : "var(--warm-border)",
-                  cursor: "pointer",
-                  position: "relative",
-                  transition: "background 0.2s",
-                  flexShrink: 0,
-                }}
-                aria-label="Ativar lembrete"
-              >
-                <span style={{
-                  position: "absolute",
-                  top: 3,
-                  left: reminderEnabled ? 21 : 3,
-                  width: 20,
-                  height: 20,
-                  borderRadius: "50%",
-                  background: "#fff",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
-                  transition: "left 0.2s",
-                }} />
-              </button>
-            </div>
-            {reminderEnabled && (
-              <input
-                type="time"
-                value={reminderTime}
-                onChange={(e) => setReminderTime(e.target.value)}
-                style={{
-                  marginTop: 12,
-                  width: "100%",
-                  padding: "10px 14px",
-                  borderRadius: 12,
-                  border: "1.5px solid var(--menthe)",
-                  background: "rgba(150,199,179,0.08)",
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: "var(--text-1)",
-                  outline: "none",
-                  boxSizing: "border-box",
-                  cursor: "pointer",
-                }}
-              />
-            )}
-          </div>
-
-          {/* Motivation note */}
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, textTransform: "uppercase" }}>
-              Por que isso importa? <span style={{ fontWeight: 400, textTransform: "none" }}>(opcional)</span>
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Lembrete pessoal do motivo desse hábito..."
-              rows={2}
-              style={{
-                width: "100%",
-                padding: "10px 14px",
-                borderRadius: 12,
-                border: "1.5px solid var(--warm-border)",
-                background: "transparent",
-                fontSize: 13,
-                color: "var(--text-1)",
-                resize: "none",
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          <AuraButtonV2
-            variant="primary"
-            onClick={handleSave}
-            disabled={!title.trim() || isSaving}
-            style={{ marginTop: 4, height: 50, fontSize: 15, fontWeight: 800 }}
-          >
-            {isSaving ? "Criando..." : "Criar Hábito"}
-          </AuraButtonV2>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────
 export function HabitsPage() {
   const { state, addHabit, toggleHabit, archiveHabit } = useAuraStore();
@@ -897,25 +528,30 @@ export function HabitsPage() {
   const [tab, setTab] = useState<"today" | "all" | "badges">("today");
   const [showAddModal, setShowAddModal] = useState(false);
 
-  useHabitReminders(state.habits ?? []);
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [showConfetti, setShowConfetti] = useState(false);
 
   const habits = state.habits || [];
-  const todayHabits = habits.filter((h) => h.frequency === "daily");
-  const completedToday = todayHabits.filter((h) => (h.completions?.length ?? 0) > 0).length;
+  const todayKey = getLocalDateKey();
+  const todayWeekday = new Date(`${todayKey}T12:00:00`).getDay();
+  const todayHabits = habits.filter((h) => isHabitDueOnWeekday(h, todayWeekday));
+  const completedToday = todayHabits.filter((h) => isHabitCompleteForDate(h, todayKey)).length;
   const bestStreak = habits.reduce((max, h) => Math.max(max, h.streakCount), 0);
-  const pendingToday = todayHabits.filter((h) => (h.completions?.length ?? 0) === 0);
-  const doneToday = todayHabits.filter((h) => (h.completions?.length ?? 0) > 0);
+  const pendingToday = todayHabits.filter((h) => !isHabitCompleteForDate(h, todayKey));
+  const doneToday = todayHabits.filter((h) => isHabitCompleteForDate(h, todayKey));
 
   async function handleToggle(habitId: string) {
     if (togglingIds.has(habitId)) return;
-    const wasCompleted = (habits.find(h => h.id === habitId)?.completions?.length ?? 0) > 0;
+    const habit = habits.find(h => h.id === habitId);
+    const wasCompleted = habit ? isHabitCompleteForDate(habit, todayKey) : false;
+    const willComplete = habit
+      ? !wasCompleted && getHabitCompletionCount(habit, todayKey) + 1 >= getHabitTargetCount(habit)
+      : false;
     setTogglingIds((prev) => new Set([...prev, habitId]));
     try {
       await toggleHabit(habitId);
       // Disparar confetti se acabou de completar o último hábito pendente
-      if (!wasCompleted && pendingToday.length === 1 && todayHabits.length > 0) {
+      if (willComplete && pendingToday.length === 1 && todayHabits.length > 0) {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 3000);
       }
@@ -930,22 +566,15 @@ export function HabitsPage() {
     }
   }
 
-  async function handleAddHabit(data: {
-    title: string;
-    category: string;
-    frequency: string;
-    icon: string;
-    timeOfDay: string;
-    description: string;
-    reminderEnabled: boolean;
-    reminderTime?: string;
-  }) {
+  async function handleAddHabit(data: HabitModalPayload) {
     try {
       await addHabit(data);
       setShowAddModal(false);
-      showSuccess("Hábito criado! 🎉");
+      showSuccess("Hábito criado.");
+      return true;
     } catch {
       showError("Erro ao criar hábito.");
+      return false;
     }
   }
 
@@ -1084,6 +713,7 @@ export function HabitsPage() {
                         <HabitCard
                           key={h.id}
                           habit={h}
+                          dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
                           isToggling={togglingIds.has(h.id)}
                         />
@@ -1103,6 +733,7 @@ export function HabitsPage() {
                         <HabitCard
                           key={h.id}
                           habit={h}
+                          dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
                           isToggling={togglingIds.has(h.id)}
                         />
@@ -1170,7 +801,7 @@ export function HabitsPage() {
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {catHabits.map((h) => (
-                          <AllHabitCard key={h.id} habit={h} onArchive={() => archiveHabit(h.id)} />
+                          <AllHabitCard key={h.id} habit={h} dateKey={todayKey} onArchive={() => archiveHabit(h.id)} />
                         ))}
                       </div>
                     </div>
@@ -1277,12 +908,11 @@ export function HabitsPage() {
 
       {/* Add modal */}
       {showAddModal && (
-        <AddHabitModal
+        <HabitIdeasModal
           onClose={() => setShowAddModal(false)}
-          onAdd={handleAddHabit}
+          onSave={handleAddHabit}
         />
       )}
     </div>
   );
 }
-
