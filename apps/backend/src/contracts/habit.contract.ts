@@ -5,7 +5,7 @@ const ReminderIntervalSchema = z.number().int().min(5).max(720);
 export const HabitCreateSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional().nullable(),
-  category: z.string().optional().nullable(),
+  category: z.string().optional(),
   icon: z.string().optional().nullable(),
   frequency: z.enum(['daily', 'weekly', 'monthly']),
   targetDays: z.array(z.number().int().min(0).max(6)).optional().nullable(),
