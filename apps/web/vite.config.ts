@@ -90,6 +90,29 @@ export default defineConfig({
             purpose: 'any',
           },
         ],
+        shortcuts: [
+          {
+            name: 'Check-in',
+            short_name: 'Check-in',
+            description: 'Fazer meu check-in de humor e energia',
+            url: '/checkin',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          },
+          {
+            name: 'Diário',
+            short_name: 'Diário',
+            description: 'Conversar com a Airia no Journal',
+            url: '/journal',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          },
+          {
+            name: 'Planner',
+            short_name: 'Planner',
+            description: 'Ver meu planner de energia',
+            url: '/planner',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          }
+        ],
         screenshots: [
           { src: '/screenshots/home-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Home — Ciclagem de Humor' },
           { src: '/screenshots/checkin-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Check-in Diário' },
