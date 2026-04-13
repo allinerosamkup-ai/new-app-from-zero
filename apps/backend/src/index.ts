@@ -707,15 +707,8 @@ export function createApp(dependencies: AppDependencies = {}) {
     });
   });
 
-  // Todas as rotas /api exigem autenticação Supabase, exceto o callback OAuth público.
-  const apiAuthMiddleware = dependencies.authMiddleware ?? requireAuth;
-  app.use('/api', (req, res, next) => {
-    if (req.method === 'GET' && req.path === '/gcal/callback') {
-      return next();
-    }
-
-    return apiAuthMiddleware(req, res, next);
-  });
+  // Todas as rotas abaixo exigem autenticação Supabase
+  app.use('/api', dependencies.authMiddleware ?? requireAuth);
 
   app.post('/api/onboarding/process', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
@@ -1400,40 +1393,8 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.post('/api/timeline', async (req: Request, res: Response) => {
   try {
-    const parsedInput = PlannerSyncSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
-    const { userId, date, forceSave } = parsedInput;
-    let blocks = parsedInput.blocks;
+    const { userId, date, forceSave, blocks } = PlannerSyncSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
     const baseDate = new Date(date);
-    const dayStart = new Date(`${date}T00:00:00.000Z`);
-    const dayEnd = new Date(`${date}T23:59:59.999Z`);
-    const formatTime = (value: Date): string => {
-      const hours = value.getUTCHours().toString().padStart(2, '0');
-      const minutes = value.getUTCMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
-    };
-
-    const needsSuggestedScheduling = blocks.some((block) => block.isAiSuggested === true && !block.id);
-    let existingBlocks: Array<{ id: string; title: string; startAt: Date; endAt: Date }> = [];
-
-    if (!forceSave || needsSuggestedScheduling) {
-      existingBlocks = await prisma.timelineBlock.findMany({
-        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
-        select: { id: true, title: true, startAt: true, endAt: true },
-      });
-    }
-
-    if (needsSuggestedScheduling) {
-      const incomingIds = new Set(blocks.map((block) => block.id).filter(Boolean));
-      blocks = PlannerService.normalizeSuggestedTimelineBlocks({
-        blocks,
-        busyWindows: existingBlocks
-          .filter((existing) => !incomingIds.has(existing.id))
-          .map((existing) => ({
-            startTime: formatTime(existing.startAt),
-            endTime: formatTime(existing.endAt),
-          })),
-      });
-    }
 
     // Aprimoramento: Validar conflitos ANTES de salvar, a menos que forceSave = true
     const blocksForConflictCheck = blocks.map(b => ({
@@ -1453,6 +1414,12 @@ export function createApp(dependencies: AppDependencies = {}) {
 
     if (!forceSave) {
       const incomingIds = new Set(blocks.map((block) => block.id).filter(Boolean));
+      const dayStart = new Date(`${date}T00:00:00.000Z`);
+      const dayEnd = new Date(`${date}T23:59:59.999Z`);
+      const existingBlocks = await prisma.timelineBlock.findMany({
+        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+        select: { id: true, title: true, startAt: true, endAt: true },
+      });
 
       const existingConflicts = blocksForConflictCheck.flatMap((incoming) => {
         return existingBlocks
@@ -2229,7 +2196,7 @@ Monte complementos, não uma rotina inteira:
 - Se esta for uma nova tentativa, mude pelo menos 60% dos títulos e das tarefas em relação à tentativa anterior
 - Não repita nem reescreva superficialmente itens das listas recentes acima
 - Evite absolutamente: "organizar documentos", "planejar a semana", "fazer lista", "revisar prioridades", "alinhamento geral", "colocar a vida em ordem"
-- REGRA MÁXIMA E ABSOLUTA: Os horários para sugestões devem RIGOROSAMENTE estar entre 08:00 e 20:00 da noite. É ESTRITAMENTE PROIBIDO e INACEITÁVEL fornecer sugestões para madrugadas (como 04:00 da manhã) sob qualquer pretexto. O planner geral é livre (pode ter blocos até de madrugada inseridos pelo usuário no calendário em outros momentos criados por ele MANUALMENTE), MAS VOCÊ SÓ TEM AUTORIZAÇÃO ENTRE O HORÁRIO COMERCIAL + NOITE, OU SEJA, 08:00 ATÉ AS 20:00!
+- Horários sugeridos pela IA devem ficar entre 08:00 e 20:00; o backend ainda vai validar e remanejar para horário livre.
 - intensity deve representar o esforço: L leve, M medio, P pesado
 - razao_ia: frase carinhosa de 1 linha explicando por que esse encaixe combina com o estado atual
 
@@ -2606,47 +2573,81 @@ JSON APENAS: {"profileSummary":"..."}`,
     }
     const currentOrigin = `${protocol}://${frontendHost}`;
     
-    // Para logs de debug
-    process.env.NODE_ENV !== 'production' && console.log(`[GCal Callback] Host: ${host}, Redirecting to: ${currentOrigin}`);
+    // Log SEMPRE — essencial para diagnosticar callback em produção
+    console.log(`[GCal Callback] Received callback. Host: ${host}, Protocol: ${protocol}, FrontendHost: ${frontendHost}, Origin: ${currentOrigin}`);
 
     // Fallback para FRONTEND_URL se estiver definido, senão usa a origem calculada
-    const frontendUrl = process.env.FRONTEND_URL || currentOrigin;
+    const frontendUrl = (process.env.FRONTEND_URL || currentOrigin).replace(/\/$/, '');
+    
     if (error) {
-      process.env.NODE_ENV !== 'production' && console.error('Google OAuth Error:', error);
-      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=${encodeURIComponent(error)}`);
+      console.error('[GCal Callback] Google OAuth Error:', error);
+      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=${encodeURIComponent(error as string)}`);
     }
 
     if (!code || !userId) {
+      console.error('[GCal Callback] Missing code or userId (state):', { code: !!code, userId: !!userId });
       return res.redirect(`${frontendUrl}/planner?gcal=error&reason=missing_code_or_state`);
     }
+
     try {
       const clientId = process.env.GOOGLE_CLIENT_ID!;
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET!;
-      const host = req.get('host') || 'www.airia.pro';
-      const protocol = (req.protocol === 'https' || !host.includes('localhost')) ? 'https' : 'http';
-      const redirectUri = `${protocol}://${host}/api/gcal/callback`;
+      
+      // O redirectUri aqui deve ser IDENTICO ao usado na geracao da URL de auth
+      const hostForRedirect = req.get('host') || 'airia.pro';
+      const protocolForRedirect = (req.protocol === 'https' || !hostForRedirect.includes('localhost')) ? 'https' : 'http';
+      const redirectUri = `${protocolForRedirect}://${hostForRedirect}/api/gcal/callback`;
+
+      console.log(`[GCal Callback] Exchanging code for user: ${userId}`);
+      
       const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' }).toString(),
+        body: new URLSearchParams({ 
+          code: code as string, 
+          client_id: clientId, 
+          client_secret: clientSecret, 
+          redirect_uri: redirectUri, 
+          grant_type: 'authorization_code' 
+        }).toString(),
       });
+      
       const tokens = await tokenRes.json() as any;
-      if (!tokens.access_token) throw new Error('No access token received');
-      const existingPref = await prisma.userPreference.findUnique({
-        where: { userId },
-        select: { gcalRefreshToken: true },
-      });
-      const refreshToken = tokens.refresh_token ?? existingPref?.gcalRefreshToken ?? null;
-      // Store token encrypted in user preferences
+      
+      if (!tokenRes.ok) {
+        console.error('[GCal Callback] Error exchanging code for tokens:', tokens);
+        return res.redirect(`${frontendUrl}/planner?gcal=error&reason=${encodeURIComponent(tokens.error_description || tokens.error || 'token_exchange_failed')}`);
+      }
+
+      if (!tokens.access_token) {
+        console.error('[GCal Callback] No access token in response:', tokens);
+        return res.redirect(`${frontendUrl}/planner?gcal=error&reason=no_access_token`);
+      }
+
+      // Store tokens in user preferences
+      console.log(`[GCal Callback] Successfully received tokens for userId: ${userId}. Refresh token present: ${!!tokens.refresh_token}`);
+      
+      // Upsert robusto: não subscreve refresh_token se Google não enviou um novo (comum em reconexões)
+      const updateData: any = { gcalAccessToken: tokens.access_token };
+      if (tokens.refresh_token) {
+        updateData.gcalRefreshToken = tokens.refresh_token;
+      }
+
       await prisma.userPreference.upsert({
         where: { userId },
-        update: { gcalAccessToken: tokens.access_token, gcalRefreshToken: refreshToken },
-        create: { userId, gcalAccessToken: tokens.access_token, gcalRefreshToken: refreshToken },
+        update: updateData,
+        create: { 
+          userId, 
+          gcalAccessToken: tokens.access_token, 
+          gcalRefreshToken: tokens.refresh_token || null 
+        },
       });
+
+      console.log(`[GCal Callback] Success. Redirecting to: ${frontendUrl}/planner?gcal=connected`);
       return res.redirect(`${frontendUrl}/planner?gcal=connected`);
-    } catch (err) {
-      console.error('[gcal/callback]', err);
-      return res.redirect(`${frontendUrl}/planner?gcal=error`);
+    } catch (err: any) {
+      console.error('[GCal Callback] Unexpected error during callback processing:', err);
+      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=internal_server_error`);
     }
   });
 
@@ -2698,57 +2699,6 @@ JSON APENAS: {"profileSummary":"..."}`,
     } catch (err) {
       console.error('[gcal/events]', err);
       return res.json({ connected: false, events: [] });
-    }
-  });
-
-  app.patch('/api/gcal/events/:eventId', requireAuth, async (req: Request, res: Response) => {
-    const userId = (req as AuthRequest).userId;
-    const { eventId } = req.params;
-    const UpdateGCalEventSchema = z.object({
-      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      title: z.string().min(1),
-      startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-      endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
-    });
-
-    try {
-      const data = UpdateGCalEventSchema.parse(req.body);
-      const event = await GCalService.updatePrimaryEvent(prisma, userId, eventId, data);
-      if (!event) {
-        return res.status(502).json({ error: 'Não consegui sincronizar com o Google Agenda agora.' });
-      }
-
-      return res.json({
-        updated: true,
-        event: {
-          id: event.id,
-          summary: event.summary ?? data.title,
-          start: event.start,
-          end: event.end,
-          link: event.htmlLink,
-        },
-      });
-    } catch (err) {
-      if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
-      console.error('[gcal/events/update]', err);
-      return res.status(500).json({ error: 'Failed to update Google Calendar event' });
-    }
-  });
-
-  app.delete('/api/gcal/events/:eventId', requireAuth, async (req: Request, res: Response) => {
-    const userId = (req as AuthRequest).userId;
-    const { eventId } = req.params;
-
-    try {
-      const deleted = await GCalService.deletePrimaryEvent(prisma, userId, eventId);
-      if (!deleted) {
-        return res.status(502).json({ error: 'Não consegui excluir no Google Agenda agora.' });
-      }
-
-      return res.status(204).send();
-    } catch (err) {
-      console.error('[gcal/events/delete]', err);
-      return res.status(500).json({ error: 'Failed to delete Google Calendar event' });
     }
   });
 
