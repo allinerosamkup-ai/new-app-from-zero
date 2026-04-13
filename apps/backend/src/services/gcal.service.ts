@@ -1,8 +1,19 @@
 import { PrismaClient } from '@app/database';
 
 export class GCalService {
-  private static clientId = process.env.GOOGLE_CLIENT_ID;
-  private static clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  private static getTimeZone(): string {
+    return process.env.GOOGLE_CALENDAR_TIME_ZONE || 'America/Sao_Paulo';
+  }
+
+  private static formatUtcTime(date: Date): string {
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }
+
+  private static buildLocalDateTime(date: string, time: string): string {
+    return `${date}T${time}:00`;
+  }
 
   static async getValidToken(prisma: PrismaClient, userId: string): Promise<string | null> {
     const pref = await prisma.userPreference.findUnique({
@@ -23,8 +34,8 @@ export class GCalService {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
-          client_id: this.clientId!,
-          client_secret: this.clientSecret!,
+          client_id: process.env.GOOGLE_CLIENT_ID!,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           refresh_token: refreshToken,
           grant_type: 'refresh_token',
         }).toString(),
@@ -50,11 +61,13 @@ export class GCalService {
     const token = await this.getValidToken(prisma, userId);
     if (!token) return null;
 
+    const startTime = this.formatUtcTime(block.startAt);
+    const endTime = this.formatUtcTime(block.endAt);
     const event = {
       summary: block.title,
       description: `Airia Task: ${block.category}`,
-      start: { dateTime: block.startAt.toISOString() },
-      end: { dateTime: block.endAt.toISOString() },
+      start: { dateTime: this.buildLocalDateTime(date, startTime), timeZone: this.getTimeZone() },
+      end: { dateTime: this.buildLocalDateTime(date, endTime), timeZone: this.getTimeZone() },
     };
 
     try {
@@ -105,6 +118,98 @@ export class GCalService {
     } catch (err) {
       console.error('[GCal.sync] Exception:', err);
       return null;
+    }
+  }
+
+  static async updatePrimaryEvent(
+    prisma: PrismaClient,
+    userId: string,
+    eventId: string,
+    input: { date: string; title: string; startTime: string; endTime: string },
+  ): Promise<any | null> {
+    const token = await this.getValidToken(prisma, userId);
+    if (!token) return null;
+
+    const event = {
+      summary: input.title,
+      start: { dateTime: this.buildLocalDateTime(input.date, input.startTime), timeZone: this.getTimeZone() },
+      end: { dateTime: this.buildLocalDateTime(input.date, input.endTime), timeZone: this.getTimeZone() },
+    };
+
+    const requestUpdate = (accessToken: string) => fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(event),
+      },
+    );
+
+    try {
+      let res = await requestUpdate(token);
+
+      if (res.status === 401) {
+        const pref = await prisma.userPreference.findUnique({ where: { userId }, select: { gcalRefreshToken: true } });
+        if (pref?.gcalRefreshToken) {
+          const newToken = await this.refreshAccessToken(prisma, userId, pref.gcalRefreshToken);
+          if (newToken) {
+            res = await requestUpdate(newToken);
+          }
+        }
+      }
+
+      if (!res.ok) {
+        const err = await res.text();
+        console.error('[GCal.update] Error:', err);
+        return null;
+      }
+
+      return res.json();
+    } catch (err) {
+      console.error('[GCal.update] Exception:', err);
+      return null;
+    }
+  }
+
+  static async deletePrimaryEvent(prisma: PrismaClient, userId: string, eventId: string): Promise<boolean> {
+    const token = await this.getValidToken(prisma, userId);
+    if (!token) return false;
+
+    const requestDelete = (accessToken: string) => fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+
+    try {
+      let res = await requestDelete(token);
+
+      if (res.status === 401) {
+        const pref = await prisma.userPreference.findUnique({ where: { userId }, select: { gcalRefreshToken: true } });
+        if (pref?.gcalRefreshToken) {
+          const newToken = await this.refreshAccessToken(prisma, userId, pref.gcalRefreshToken);
+          if (newToken) {
+            res = await requestDelete(newToken);
+          }
+        }
+      }
+
+      if (res.status === 404 || res.status === 410) return true;
+      if (!res.ok) {
+        const err = await res.text();
+        console.error('[GCal.delete] Error:', err);
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('[GCal.delete] Exception:', err);
+      return false;
     }
   }
 }

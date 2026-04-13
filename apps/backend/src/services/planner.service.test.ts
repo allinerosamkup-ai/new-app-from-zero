@@ -116,4 +116,45 @@ import { PlannerService } from './planner.service';
   ]);
 }
 
+{
+  const blocks = PlannerService.normalizeSuggestedTimelineBlocks({
+    blocks: [
+      {
+        title: 'Sugestao gerada de madrugada',
+        startTime: '04:00',
+        endTime: '05:00',
+        category: 'trabalho',
+        intensity: 'P',
+        status: 'planned',
+        isAiSuggested: true,
+      },
+    ],
+    busyWindows: [{ startTime: '08:00', endTime: '10:00' }],
+  });
+
+  assert.equal(blocks[0].startTime, '10:00');
+  assert.equal(blocks[0].endTime, '11:00');
+}
+
+{
+  const blocks = PlannerService.normalizeSuggestedTimelineBlocks({
+    blocks: [
+      {
+        id: '22222222-2222-4222-8222-222222222222',
+        title: 'Sugestao editada pela usuaria',
+        startTime: '04:00',
+        endTime: '05:00',
+        category: 'pessoal',
+        intensity: 'M',
+        status: 'planned',
+        isAiSuggested: true,
+      },
+    ],
+    busyWindows: [],
+  });
+
+  assert.equal(blocks[0].startTime, '04:00');
+  assert.equal(blocks[0].endTime, '05:00');
+}
+
 console.log('planner.service tests passed');

@@ -17,6 +17,8 @@ import {
   resolveTaskCardSwipeAction,
   resolvePlannerBlockDate,
   shouldNavigateAgendaBySwipe,
+  stripGoogleCalendarTaskId,
+  stripGoogleCalendarTaskTitle,
   type TimelineBlockIntensity,
   type TimelineBlockStatus,
 } from "./planner-page.helpers";
@@ -129,6 +131,7 @@ type PlannerTask = {
   intensity?: string | null;
   status?: string | null;
   source?: string;
+  link?: string;
   noteMode?: NoteMode | null;
   note?: string | null;
   checklist?: ChecklistItem[] | null;
@@ -202,6 +205,17 @@ function diffMinutes(start: string, end: string) {
   return delta > 0 ? delta : 30;
 }
 
+function timeToMinutesValue(time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function formatMinutesAsTime(totalMinutes: number) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
 function mapTaskFromApi(task: any): PlannerTask {
   return {
     id: String(task.id),
@@ -222,6 +236,34 @@ function mapTaskFromApi(task: any): PlannerTask {
     persistentReminderIntervalMinutes: typeof task.persistentReminderIntervalMinutes === "number" ? task.persistentReminderIntervalMinutes : null,
     isAiSuggested: Boolean(task.isAiSuggested),
     aiReasoning: typeof task.aiReasoning === "string" ? task.aiReasoning : null,
+  };
+}
+
+function mapGoogleCalendarEventFromApi(event: any, selectedDateKey: string): PlannerTask | null {
+  const rawDate = event.start?.dateTime || event.start?.date || "";
+  const eventDate = event.start?.date
+    ? event.start.date
+    : rawDate
+      ? new Date(rawDate).toLocaleDateString("sv-SE")
+      : "";
+
+  if (eventDate !== selectedDateKey) return null;
+
+  const startTime = event.start?.dateTime ? event.start.dateTime.slice(11, 16) : "00:00";
+  const endTime = event.end?.dateTime ? event.end.dateTime.slice(11, 16) : "23:59";
+  const summary = typeof event.summary === "string" && event.summary.trim() ? event.summary.trim() : "Evento";
+
+  return {
+    id: `gcal-${event.id}`,
+    title: `📅 ${summary}`,
+    time: startTime,
+    endTime,
+    category: "social",
+    intensity: "L",
+    status: "planned",
+    done: false,
+    source: "gcal",
+    link: event.link,
   };
 }
 
@@ -292,7 +334,7 @@ function buildFormStateFromTask(task: PlannerTask): FormState {
   return {
     ...EMPTY_FORM,
     date: "",
-    title: task.title,
+    title: task.source === "gcal" ? stripGoogleCalendarTaskTitle(task.title) : task.title,
     time: task.time,
     endTime: task.endTime,
     category: normalizePlannerCategory(task.category, task.title),
@@ -832,7 +874,7 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
   );
 }
 
-function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onDragStart }: any) {
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onDragStart, onPointerDragStart }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -884,15 +926,14 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 
   return (
     <div 
-       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 12 }}
-       draggable={!isGcal}
+       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 8, background: "transparent" }}
+       draggable
        onDragStart={(e) => {
-         if (!isGcal) onDragStart(e, slot.task.id);
-         else e.preventDefault();
+         onDragStart(e, slot.task.id);
        }}
     >
       {!isGcal && (
-        <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: offset < 0 ? 'flex-end' : 'flex-start', padding: '0 20px', color: '#fff', zIndex: 0, borderRadius: 12, transition: 'background 0.2s', background: offset < 0 ? 'var(--accent-sage)' : 'var(--error-color, #E5A08A)' }}>
+        <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: offset < 0 ? 'flex-end' : 'flex-start', padding: '0 20px', color: '#fff', zIndex: 0, borderRadius: 8, transition: 'background 0.2s', background: offset < 0 ? 'var(--accent-sage)' : 'var(--error-color, #E5A08A)' }}>
            <span style={{ fontWeight: 800, fontSize: 13 }}>{offset < 0 ? '✓ Concluir' : '🗑️ Excluir'}</span>
         </div>
       )}
@@ -901,33 +942,34 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         tabIndex={0}
         className="timeline-block-card interactive-card"
         onClick={() => { 
-          if(isGcal) return; 
           if(Math.abs(offset) < 10) onClick(); 
         }}
         onKeyDown={(event) => {
-          if (!isGcal && (event.key === "Enter" || event.key === " ")) {
+          if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onClick();
           }
         }}
-        draggable={!isGcal}
+        draggable
         onDragStart={(e) => {
-          if (!isGcal) onDragStart(e, slot.task.id);
-          else e.preventDefault();
+          onDragStart(e, slot.task.id);
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left", 
-          border: isGcal ? '1px dashed var(--accent-sky)' : `2px solid ${categoryOption.cor}`,
+          border: isGcal ? `2px dashed ${categoryOption.cor}` : `2px solid ${categoryOption.cor}`,
+          borderColor: categoryOption.cor,
+          borderLeftColor: categoryOption.cor,
+          borderRadius: 8,
           opacity: slot.task.done ? 0.74 : 1, 
           transform: `translateX(${offset}px)`, 
           transition: dragging ? 'none' : 'transform 0.2s', 
           position: 'relative', 
           zIndex: 1, 
           background: isGcal ? 'var(--accent-sky-a3)' : 'rgba(255,255,255,0.98)',
-          cursor: isGcal ? 'default' : 'pointer',
+          cursor: 'pointer',
           touchAction: "pan-y"
         }}
       >
@@ -946,10 +988,36 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
               Airia
             </div>
           )}
+          {isGcal && (
+            <div className="block-chip" style={{ background: "rgba(99,152,169,.12)", color: "var(--accent-sky)", border: "1px solid rgba(99,152,169,.25)" }}>
+              Google
+            </div>
+          )}
+          <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 800 }}>arraste para mudar horário</span>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              onPointerDragStart(event, slot.task.id);
+            }}
+            onClick={(event) => event.stopPropagation()}
+            style={{ border: `1px solid ${categoryOption.cor}55`, background: categoryOption.bg, color: categoryOption.textColor, borderRadius: 7, padding: "4px 7px", fontSize: 10, fontWeight: 800, cursor: "grab" }}
+          >
+            Mover
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onClick();
+            }}
+            style={{ border: "1px solid rgba(99,152,169,.26)", background: "rgba(99,152,169,.08)", color: "var(--accent-sky)", borderRadius: 7, padding: "4px 7px", fontSize: 10, fontWeight: 800 }}
+          >
+            Editar
+          </button>
           {!isGcal && (
             <>
-              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 800 }}>arraste para mudar horário</span>
-              <span style={{ flex: 1 }} />
               <button
                 type="button"
                 onClick={(event) => {
@@ -999,6 +1067,7 @@ export function PlannerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
   const openedTaskFromLocationRef = useRef<string | null>(null);
+  const [activeDropTime, setActiveDropTime] = useState<string | null>(null);
 
   // Feedback do Google Calendar OAuth
   useEffect(() => {
@@ -1051,6 +1120,20 @@ export function PlannerPage() {
 
   const [gcalConnected, setGcalConnected] = useState(false);
 
+  async function handleGCalConnect() {
+    try {
+      const res = await api.get("/gcal/auth-url");
+      const url = res?.url || res?.authUrl;
+      if (typeof url === "string" && url) {
+        window.location.href = url;
+      } else {
+        showError("Não consegui abrir a conexão com o Google Agenda.");
+      }
+    } catch (error: any) {
+      showError(error.message || "Não consegui conectar o Google Agenda.");
+    }
+  }
+
   // ── Foco do dia — GTD tasks + first uncompleted goal subtask ──
   const [gtdFocusItems, setGtdFocusItems] = useState<Array<{
     id: string; text: string; type: "tarefa" | "meta"; goalTitle?: string; goalId?: number | string;
@@ -1099,24 +1182,9 @@ export function PlannerPage() {
         if (gcalRes && gcalRes.connected) {
           setGcalConnected(true);
           if (Array.isArray(gcalRes.events)) {
-             const dayEvents = gcalRes.events.filter((e: any) => {
-                  const dateStr = (e.start?.dateTime || e.start?.date || '');
-                  const eventDate = dateStr ? new Date(dateStr).toLocaleDateString('sv-SE') : '';
-                 return eventDate === selectedDateKey;
-             }).map((e: any) => {
-                 const startStr = e.start?.dateTime ? e.start.dateTime.slice(11,16) : '00:00';
-                 const endStr = e.end?.dateTime ? e.end.dateTime.slice(11,16) : '23:59';
-                 return {
-                    id: `gcal-${e.id}`,
-                    title: `📅 ${e.summary}`,
-                    time: startStr,
-                    endTime: endStr,
-                    category: "social",
-                    intensity: 2,
-                    done: false,
-                    source: 'gcal'
-                 };
-             });
+             const dayEvents = gcalRes.events
+               .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
+               .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
              merged = [...merged, ...dayEvents];
              merged.sort((a,b) => a.time.localeCompare(b.time));
           }
@@ -1149,7 +1217,7 @@ export function PlannerPage() {
     const normalizedTaskId = String(taskId);
     if (openedTaskFromLocationRef.current === normalizedTaskId) return;
     const task = plannerTasks.find((item) => item.id === normalizedTaskId);
-    if (!task || task.source === "gcal") return;
+    if (!task) return;
 
     openedTaskFromLocationRef.current = normalizedTaskId;
     openEditForm(task);
@@ -1166,24 +1234,9 @@ export function PlannerPage() {
         if (gcalRes && gcalRes.connected) {
           setGcalConnected(true);
           if (Array.isArray(gcalRes.events)) {
-             const dayEvents = gcalRes.events.filter((e: any) => {
-                  const dateStr = (e.start?.dateTime || e.start?.date || '');
-                  const eventDate = dateStr ? new Date(dateStr).toLocaleDateString('sv-SE') : '';
-                 return eventDate === selectedDateKey;
-             }).map((e: any) => {
-                 const startStr = e.start?.dateTime ? e.start.dateTime.slice(11,16) : '00:00';
-                 const endStr = e.end?.dateTime ? e.end.dateTime.slice(11,16) : '23:59';
-                 return {
-                    id: `gcal-${e.id}`,
-                    title: `📅 ${e.summary}`,
-                    time: startStr,
-                    endTime: endStr,
-                    category: "social",
-                    intensity: 2,
-                    done: false,
-                    source: 'gcal'
-                 };
-             });
+             const dayEvents = gcalRes.events
+               .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
+               .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
              merged = [...merged, ...dayEvents];
              merged.sort((a,b) => a.time.localeCompare(b.time));
           }
@@ -1274,6 +1327,24 @@ export function PlannerPage() {
     const targetDate = resolvePlannerBlockDate(editForm.date, selectedDateKey);
 
     try {
+      if (currentTask.source === "gcal") {
+        await api.patch(`/gcal/events/${encodeURIComponent(stripGoogleCalendarTaskId(currentTask.id))}`, {
+          date: targetDate,
+          title: editForm.title.trim(),
+          startTime: editForm.time,
+          endTime: editForm.endTime || addMinutesToTime(editForm.time, diffMinutes(currentTask.time, currentTask.endTime)),
+        });
+
+        if (targetDate === selectedDateKey) {
+          await reloadPlannerTasks();
+        } else {
+          setOffsetDias(getOffsetForDateKey(targetDate));
+        }
+        closeEditForm();
+        showSuccess("Evento salvo no Google Agenda.");
+        return;
+      }
+
       await api.post("/timeline", {
         date: targetDate,
         forceSave: true,
@@ -1283,6 +1354,8 @@ export function PlannerPage() {
             durationMinutes: diffMinutes(currentTask.time, currentTask.endTime),
             fallbackIntensity: ((currentTask.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
             fallbackStatus: ((currentTask.status ?? (currentTask.done ? "completed" : "planned")) as TimelineBlockStatus),
+            isAiSuggested: currentTask.isAiSuggested ? false : undefined,
+            aiReasoning: currentTask.isAiSuggested ? null : undefined,
           }),
         ],
       });
@@ -1315,6 +1388,15 @@ export function PlannerPage() {
     if (!editingTaskId) return;
 
     try {
+      const currentTask = plannerTasks.find((task) => task.id === editingTaskId);
+      if (currentTask?.source === "gcal") {
+        await api.delete(`/gcal/events/${encodeURIComponent(stripGoogleCalendarTaskId(currentTask.id))}`);
+        await reloadPlannerTasks();
+        closeEditForm();
+        showSuccess("Evento excluído no Google Agenda.");
+        return;
+      }
+
       await api.delete(`/timeline/${editingTaskId}`);
       await reloadPlannerTasks();
       await refreshData();
@@ -1372,6 +1454,13 @@ export function PlannerPage() {
 
   async function handleDeleteTaskDirect(task: PlannerTask) {
     try {
+      if (task.source === "gcal") {
+        await api.delete(`/gcal/events/${encodeURIComponent(stripGoogleCalendarTaskId(task.id))}`);
+        await reloadPlannerTasks();
+        showSuccess("Evento excluído no Google Agenda.");
+        return;
+      }
+
       await api.delete(`/timeline/${task.id}`);
       await reloadPlannerTasks();
       await refreshData();
@@ -1381,17 +1470,87 @@ export function PlannerPage() {
     }
   }
 
+  function findDropTimeAtPoint(clientX: number, clientY: number) {
+    const element = document.elementFromPoint(clientX, clientY);
+    const target = element?.closest<HTMLElement>("[data-drop-time]");
+    return target?.dataset.dropTime ?? null;
+  }
+
+  function handlePointerDragStart(event: React.PointerEvent, taskId: string) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = "none";
+    setActiveDropTime(findDropTimeAtPoint(event.clientX, event.clientY));
+
+    let cleanup = () => {};
+
+    const handlePointerMove = (pointerEvent: PointerEvent) => {
+      pointerEvent.preventDefault();
+      setActiveDropTime(findDropTimeAtPoint(pointerEvent.clientX, pointerEvent.clientY));
+    };
+
+    const handlePointerUp = (pointerEvent: PointerEvent) => {
+      pointerEvent.preventDefault();
+      const dropTime = findDropTimeAtPoint(pointerEvent.clientX, pointerEvent.clientY);
+      cleanup();
+      if (dropTime) {
+        void handleDropTaskToTime(taskId, dropTime);
+      }
+    };
+
+    const handlePointerCancel = () => cleanup();
+
+    cleanup = () => {
+      document.body.style.userSelect = previousUserSelect;
+      setActiveDropTime(null);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerCancel);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", handlePointerUp, { passive: false });
+    window.addEventListener("pointercancel", handlePointerCancel, { passive: false });
+  }
+
   async function handleDropTaskToTime(taskId: string, newTime: string) {
     const task = plannerTasks.find(t => t.id === taskId);
     if (!task) return;
     const durMinutes = diffMinutes(task.time, task.endTime);
-    const [h, m] = newTime.split(':').map(Number);
-    const endTotal = h * 60 + m + durMinutes;
-    const endH = Math.floor(endTotal / 60);
-    const endM = endTotal % 60;
-    const newEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    const startTotal = timeToMinutesValue(newTime);
+    const endTotal = startTotal + durMinutes;
+    if (endTotal >= 24 * 60) {
+      showError("Esse bloco não cabe nesse horário.");
+      return;
+    }
+    const newEndTime = formatMinutesAsTime(endTotal);
+    const hasConflict = plannerTasks.some((candidate) => {
+      if (candidate.id === task.id) return false;
+      const candidateStart = timeToMinutesValue(candidate.time);
+      const candidateEnd = timeToMinutesValue(candidate.endTime);
+      return startTotal < candidateEnd && endTotal > candidateStart;
+    });
+
+    if (hasConflict) {
+      showError("Esse horário já está ocupado.");
+      return;
+    }
 
     try {
+      if (task.source === "gcal") {
+        await api.patch(`/gcal/events/${encodeURIComponent(stripGoogleCalendarTaskId(task.id))}`, {
+          date: selectedDateKey,
+          title: stripGoogleCalendarTaskTitle(task.title),
+          startTime: newTime,
+          endTime: newEndTime,
+        });
+        await reloadPlannerTasks();
+        showSuccess("Horário atualizado no Google Agenda.");
+        return;
+      }
+
       await api.post("/timeline", {
         date: selectedDateKey,
         forceSave: true,
@@ -1405,6 +1564,8 @@ export function PlannerPage() {
           intensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
           persistentReminderEnabled: task.persistentReminderEnabled ?? false,
           persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+          isAiSuggested: task.isAiSuggested ? false : undefined,
+          aiReasoning: task.isAiSuggested ? null : undefined,
         } ]
       });
       await reloadPlannerTasks();
@@ -1481,6 +1642,49 @@ export function PlannerPage() {
             {plannerBadgeLabel}
           </span>
         </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 14,
+          padding: "12px 14px",
+          borderRadius: 8,
+          background: gcalConnected ? "rgba(150,199,179,.10)" : "rgba(255,255,255,.72)",
+          border: gcalConnected ? "1px solid rgba(150,199,179,.30)" : "1px solid var(--warm-border)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <CalendarRange size={17} color={gcalConnected ? "var(--accent-sage)" : "var(--accent-sky)"} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: "var(--text-1)" }}>
+              Google Agenda
+            </p>
+            <p style={{ margin: "2px 0 0", fontSize: 10.5, color: "var(--text-3)", lineHeight: 1.4 }}>
+              {gcalConnected ? "Conectada. Eventos aparecem aqui e podem ser movidos." : "Conecte para puxar e sincronizar compromissos."}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleGCalConnect}
+          style={{
+            border: "1px solid rgba(99,152,169,.28)",
+            background: "rgba(99,152,169,.08)",
+            color: "var(--accent-sky)",
+            borderRadius: 7,
+            padding: "8px 10px",
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {gcalConnected ? "Reconectar" : "Conectar"}
+        </button>
       </div>
 
       {/* ── Foco do dia — GTD tasks + next goal actions ── */}
@@ -1566,9 +1770,21 @@ export function PlannerPage() {
         {visibleAgendaSlots.map((slot) => {
           if (slot.kind === "task") {
             const categoryOption = getCategoryStyles(slot.category);
+            const isActiveDrop = activeDropTime === slot.time;
 
             return (
-              <div key={slot.key} className="timeline-slot">
+              <div
+                key={slot.key}
+                className="timeline-slot"
+                data-drop-time={slot.time}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  const tid = e.dataTransfer.getData('text/plain');
+                  if (tid) handleDropTaskToTime(tid, slot.time);
+                }}
+                style={{ borderRadius: 8, background: isActiveDrop ? "rgba(99,152,169,.08)" : "transparent" }}
+              >
                 <span className="timeline-time">{slot.time}</span>
                 <div className="timeline-line" />
                 <SwipeableTaskCard 
@@ -1577,6 +1793,7 @@ export function PlannerPage() {
                    onClick={() => openEditForm(slot.task)}
                    onComplete={handleCompleteTaskDirect}
                    onDelete={handleDeleteTaskDirect}
+                   onPointerDragStart={handlePointerDragStart}
                    onDragStart={(e: any, id: string) => {
                       e.dataTransfer.setData('text/plain', id);
                       e.dataTransfer.effectAllowed = "move";
@@ -1586,8 +1803,10 @@ export function PlannerPage() {
             );
           }
 
+          const isActiveDrop = activeDropTime === slot.time;
+
           return (
-            <div key={slot.key} className="timeline-slot" style={{ minHeight: slot.title ? 100 : 54 }}
+            <div key={slot.key} className="timeline-slot" data-drop-time={slot.time} style={{ minHeight: slot.title ? 100 : 54, borderRadius: 8, background: isActiveDrop ? "rgba(99,152,169,.08)" : "transparent" }}
                  onDragOver={e => e.preventDefault()}
                  onDrop={e => {
                     e.preventDefault();

@@ -707,8 +707,15 @@ export function createApp(dependencies: AppDependencies = {}) {
     });
   });
 
-  // Todas as rotas abaixo exigem autenticação Supabase
-  app.use('/api', dependencies.authMiddleware ?? requireAuth);
+  // Todas as rotas /api exigem autenticação Supabase, exceto o callback OAuth público.
+  const apiAuthMiddleware = dependencies.authMiddleware ?? requireAuth;
+  app.use('/api', (req, res, next) => {
+    if (req.method === 'GET' && req.path === '/gcal/callback') {
+      return next();
+    }
+
+    return apiAuthMiddleware(req, res, next);
+  });
 
   app.post('/api/onboarding/process', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
@@ -1393,8 +1400,40 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.post('/api/timeline', async (req: Request, res: Response) => {
   try {
-    const { userId, date, forceSave, blocks } = PlannerSyncSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+    const parsedInput = PlannerSyncSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+    const { userId, date, forceSave } = parsedInput;
+    let blocks = parsedInput.blocks;
     const baseDate = new Date(date);
+    const dayStart = new Date(`${date}T00:00:00.000Z`);
+    const dayEnd = new Date(`${date}T23:59:59.999Z`);
+    const formatTime = (value: Date): string => {
+      const hours = value.getUTCHours().toString().padStart(2, '0');
+      const minutes = value.getUTCMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
+    };
+
+    const needsSuggestedScheduling = blocks.some((block) => block.isAiSuggested === true && !block.id);
+    let existingBlocks: Array<{ id: string; title: string; startAt: Date; endAt: Date }> = [];
+
+    if (!forceSave || needsSuggestedScheduling) {
+      existingBlocks = await prisma.timelineBlock.findMany({
+        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+        select: { id: true, title: true, startAt: true, endAt: true },
+      });
+    }
+
+    if (needsSuggestedScheduling) {
+      const incomingIds = new Set(blocks.map((block) => block.id).filter(Boolean));
+      blocks = PlannerService.normalizeSuggestedTimelineBlocks({
+        blocks,
+        busyWindows: existingBlocks
+          .filter((existing) => !incomingIds.has(existing.id))
+          .map((existing) => ({
+            startTime: formatTime(existing.startAt),
+            endTime: formatTime(existing.endAt),
+          })),
+      });
+    }
 
     // Aprimoramento: Validar conflitos ANTES de salvar, a menos que forceSave = true
     const blocksForConflictCheck = blocks.map(b => ({
@@ -1414,12 +1453,6 @@ export function createApp(dependencies: AppDependencies = {}) {
 
     if (!forceSave) {
       const incomingIds = new Set(blocks.map((block) => block.id).filter(Boolean));
-      const dayStart = new Date(`${date}T00:00:00.000Z`);
-      const dayEnd = new Date(`${date}T23:59:59.999Z`);
-      const existingBlocks = await prisma.timelineBlock.findMany({
-        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
-        select: { id: true, title: true, startAt: true, endAt: true },
-      });
 
       const existingConflicts = blocksForConflictCheck.flatMap((incoming) => {
         return existingBlocks
@@ -2599,11 +2632,16 @@ JSON APENAS: {"profileSummary":"..."}`,
       });
       const tokens = await tokenRes.json() as any;
       if (!tokens.access_token) throw new Error('No access token received');
+      const existingPref = await prisma.userPreference.findUnique({
+        where: { userId },
+        select: { gcalRefreshToken: true },
+      });
+      const refreshToken = tokens.refresh_token ?? existingPref?.gcalRefreshToken ?? null;
       // Store token encrypted in user preferences
       await prisma.userPreference.upsert({
         where: { userId },
-        update: { gcalAccessToken: tokens.access_token, gcalRefreshToken: tokens.refresh_token ?? null },
-        create: { userId, gcalAccessToken: tokens.access_token, gcalRefreshToken: tokens.refresh_token ?? null },
+        update: { gcalAccessToken: tokens.access_token, gcalRefreshToken: refreshToken },
+        create: { userId, gcalAccessToken: tokens.access_token, gcalRefreshToken: refreshToken },
       });
       return res.redirect(`${frontendUrl}/planner?gcal=connected`);
     } catch (err) {
@@ -2660,6 +2698,57 @@ JSON APENAS: {"profileSummary":"..."}`,
     } catch (err) {
       console.error('[gcal/events]', err);
       return res.json({ connected: false, events: [] });
+    }
+  });
+
+  app.patch('/api/gcal/events/:eventId', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { eventId } = req.params;
+    const UpdateGCalEventSchema = z.object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      title: z.string().min(1),
+      startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
+      endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),
+    });
+
+    try {
+      const data = UpdateGCalEventSchema.parse(req.body);
+      const event = await GCalService.updatePrimaryEvent(prisma, userId, eventId, data);
+      if (!event) {
+        return res.status(502).json({ error: 'Não consegui sincronizar com o Google Agenda agora.' });
+      }
+
+      return res.json({
+        updated: true,
+        event: {
+          id: event.id,
+          summary: event.summary ?? data.title,
+          start: event.start,
+          end: event.end,
+          link: event.htmlLink,
+        },
+      });
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+      console.error('[gcal/events/update]', err);
+      return res.status(500).json({ error: 'Failed to update Google Calendar event' });
+    }
+  });
+
+  app.delete('/api/gcal/events/:eventId', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { eventId } = req.params;
+
+    try {
+      const deleted = await GCalService.deletePrimaryEvent(prisma, userId, eventId);
+      if (!deleted) {
+        return res.status(502).json({ error: 'Não consegui excluir no Google Agenda agora.' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('[gcal/events/delete]', err);
+      return res.status(500).json({ error: 'Failed to delete Google Calendar event' });
     }
   });
 

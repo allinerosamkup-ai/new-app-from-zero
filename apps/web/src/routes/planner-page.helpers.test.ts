@@ -8,6 +8,8 @@ import {
   resolveTaskCardSwipeAction,
   resolvePlannerBlockDate,
   shouldNavigateAgendaBySwipe,
+  stripGoogleCalendarTaskId,
+  stripGoogleCalendarTaskTitle,
   type FormStateLike,
   type PlannerTaskLike,
 } from "./planner-page.helpers.ts";
@@ -41,6 +43,17 @@ describe("planner page helpers", () => {
     assert.equal(updateResult.id, "550e8400-e29b-41d4-a716-446655440000");
     assert.equal(updateResult.intensity, "P");
     assert.equal(updateResult.status, "completed");
+  });
+
+  it("can transfer Airia suggestions to user-owned planner blocks after editing", () => {
+    const result = buildTimelineBlockInput(baseForm, {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      isAiSuggested: false,
+      aiReasoning: null,
+    });
+
+    assert.equal(result.isAiSuggested, false);
+    assert.equal(result.aiReasoning, null);
   });
 
   it("includes planner metadata when the form provides it", () => {
@@ -166,5 +179,12 @@ describe("planner page helpers", () => {
     assert.equal(shouldNavigateAgendaBySwipe({ deltaX: -140, deltaY: 40 }), true);
     assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 105, deltaY: 10 }), false);
     assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 150, deltaY: 120 }), false);
+  });
+
+  it("normalizes Google Calendar task labels for editing and syncing", () => {
+    assert.equal(stripGoogleCalendarTaskId("gcal-abc123"), "abc123");
+    assert.equal(stripGoogleCalendarTaskId("local-task"), "local-task");
+    assert.equal(stripGoogleCalendarTaskTitle("📅 Reunião com equipe"), "Reunião com equipe");
+    assert.equal(stripGoogleCalendarTaskTitle("   "), "Evento");
   });
 });

@@ -393,64 +393,77 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
       }}
     >
       {/* Main row */}
-      <button
-        onClick={() => setExpanded((v) => !v)}
+      <div
         style={{
           width: "100%",
           padding: "12px 14px",
           display: "flex",
           alignItems: "center",
-          gap: 12,
+          gap: 10,
           background: "none",
-          border: "none",
-          cursor: "pointer",
           textAlign: "left",
+          boxSizing: "border-box",
         }}
       >
-        <div
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
           style={{
-            width: 38,
-            height: 38,
-            borderRadius: 10,
-            background: cat.bg,
+            flex: 1,
+            minWidth: 0,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            fontSize: 18,
-            flexShrink: 0,
+            gap: 12,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            padding: 0,
           }}
         >
-          {habit.icon || "✨"}
-        </div>
-        <div style={{ flex: 1 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{habit.title}</p>
-          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <span
-              style={{
-                fontSize: 10,
-                background: cat.bg,
-                color: cat.color,
-                borderRadius: 6,
-                padding: "2px 7px",
-                fontWeight: 700,
-              }}
-            >
-              {cat.label}
-            </span>
-            <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
-              <Flame size={10} /> {habit.streakCount}d
-            </span>
-            <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
-              {habit.totalCompletions} total
-            </span>
-            {getHabitTargetCount(habit) > 1 && (
-              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
-                {getHabitProgressLabel(habit, dateKey)}
-              </span>
-            )}
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 8,
+              background: cat.bg,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+              flexShrink: 0,
+            }}
+          >
+            {habit.icon || "✨"}
           </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{habit.title}</p>
+            <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  background: cat.bg,
+                  color: cat.color,
+                  borderRadius: 6,
+                  padding: "2px 7px",
+                  fontWeight: 700,
+                }}
+              >
+                {cat.label}
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
+                <Flame size={10} /> {habit.streakCount}d
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
+                {habit.totalCompletions} total
+              </span>
+              {getHabitTargetCount(habit) > 1 && (
+                <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
+                  {getHabitProgressLabel(habit, dateKey)}
+                </span>
+              )}
+            </div>
+          </div>
           {completedToday && (
             <div
               style={{
@@ -461,6 +474,7 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
               }}
             >
               <Check size={12} color="#fff" strokeWidth={3} />
@@ -472,10 +486,56 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
             style={{
               transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
               transition: "transform 0.2s ease",
+              flexShrink: 0,
             }}
           />
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label={`Editar ${habit.title}`}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              border: "1.5px solid rgba(99,152,169,0.25)",
+              background: "rgba(99,152,169,0.08)",
+              color: "var(--accent-sky)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              if (archiving) return;
+              setArchiving(true);
+              await onArchive();
+            }}
+            disabled={archiving}
+            aria-label={`Excluir ${habit.title}`}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              border: "1.5px solid rgba(215,137,127,0.25)",
+              background: "rgba(215,137,127,0.06)",
+              color: archiving ? "var(--text-3)" : "var(--accent-peach)",
+              cursor: archiving ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Archive size={13} />
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Calendar + archive expand */}
       {expanded && (

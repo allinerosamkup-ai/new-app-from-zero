@@ -193,6 +193,8 @@ export function buildTimelineBlockInput(
     durationMinutes?: number;
     fallbackIntensity?: TimelineBlockIntensity;
     fallbackStatus?: TimelineBlockStatus;
+    isAiSuggested?: boolean;
+    aiReasoning?: string | null;
   },
 ) {
   const payload = {
@@ -203,6 +205,8 @@ export function buildTimelineBlockInput(
     category: normalizePlannerCategory(form.category, form.title),
     intensity: mapEnergyLevelToIntensity(form.energyLevel, options?.fallbackIntensity),
     status: options?.fallbackStatus ?? "planned",
+    ...(options?.isAiSuggested !== undefined ? { isAiSuggested: options.isAiSuggested } : {}),
+    ...(options?.aiReasoning !== undefined ? { aiReasoning: options.aiReasoning } : {}),
   };
 
   const hasMetadata =
@@ -315,4 +319,13 @@ export function shouldNavigateAgendaBySwipe(
   const absY = Math.abs(gesture.deltaY);
 
   return absX >= threshold && absX >= absY * 1.5;
+}
+
+export function stripGoogleCalendarTaskId(taskId: string): string {
+  return taskId.startsWith("gcal-") ? taskId.slice(5) : taskId;
+}
+
+export function stripGoogleCalendarTaskTitle(title: string): string {
+  const cleaned = title.replace(/^📅\s*/u, "").trim();
+  return cleaned || "Evento";
 }

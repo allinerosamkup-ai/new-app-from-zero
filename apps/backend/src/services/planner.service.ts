@@ -340,6 +340,52 @@ export class PlannerService {
     return scheduled;
   }
 
+  static normalizeSuggestedTimelineBlocks(input: {
+    blocks: TimelineBlockInput[];
+    busyWindows: BusyWindow[];
+  }): TimelineBlockInput[] {
+    let busyWindows = this.normalizeBusyWindows(input.busyWindows);
+    const normalizedBlocks: TimelineBlockInput[] = [];
+
+    for (const block of input.blocks) {
+      const start = parseTimeToMinutes(block.startTime);
+      const end = parseTimeToMinutes(block.endTime);
+      const durationMinutes = start !== null && end !== null && end > start ? end - start : 30;
+      const shouldAutoSchedule = block.isAiSuggested === true && !block.id;
+
+      if (!shouldAutoSchedule) {
+        normalizedBlocks.push(block);
+        busyWindows = this.normalizeBusyWindows([
+          ...busyWindows,
+          { startTime: block.startTime, endTime: block.endTime },
+        ]);
+        continue;
+      }
+
+      const slot = this.findSuggestedSlot({
+        intensity: block.intensity,
+        category: block.category,
+        durationMinutes,
+        busyWindows,
+      });
+
+      if (!slot) {
+        continue;
+      }
+
+      const scheduledBlock = {
+        ...block,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+      };
+
+      normalizedBlocks.push(scheduledBlock);
+      busyWindows = this.normalizeBusyWindows([...busyWindows, slot]);
+    }
+
+    return normalizedBlocks;
+  }
+
   /**
    * Converte uma string "HH:mm" e uma data base em um objeto Date completo.
    */

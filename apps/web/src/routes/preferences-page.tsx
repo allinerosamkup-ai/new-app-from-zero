@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { NotificationPreferences } from "../features/aura/types";
 import { useAuraStore } from "../features/aura/store";
+import { api } from "../lib/api";
 import "../styles/aura.css";
 
 type ToggleProps = { on: boolean; onToggle: () => void | Promise<void> };
@@ -71,9 +72,18 @@ export function PreferencesPage() {
     await updateNotificationPreferences(patch);
   }
 
-  function handleGCalConnect() {
-    const baseUrl = (import.meta.env.VITE_API_URL || "").replace(/\/api$/, "");
-    window.location.href = `${baseUrl}/auth/gcal`;
+  async function handleGCalConnect() {
+    try {
+      const res = await api.get("/gcal/auth-url");
+      const url = res?.url || res?.authUrl;
+      if (typeof url === "string" && url) {
+        window.location.href = url;
+        return;
+      }
+      setAccountStatus("Não consegui abrir a conexão com o Google Agenda.");
+    } catch {
+      setAccountStatus("Não consegui conectar o Google Agenda agora.");
+    }
   }
 
   const notificationPrefs = state.notificationPreferences;
