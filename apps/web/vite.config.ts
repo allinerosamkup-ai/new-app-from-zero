@@ -92,6 +92,13 @@ export default defineConfig({
         ],
         shortcuts: [
           {
+            name: 'Abrir Airia',
+            short_name: 'Chat Airia',
+            description: 'Conversar com a inteligência central da Airia',
+            url: '/aura',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          },
+          {
             name: 'Check-in',
             short_name: 'Check-in',
             description: 'Fazer meu check-in de humor e energia',
