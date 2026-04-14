@@ -26,7 +26,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, 2200);
   }, []);
 
   const showError = useCallback((m: string) => add(m, "error"), [add]);
@@ -38,13 +38,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div
         style={{
           position: "fixed",
-          bottom: 90,
+          bottom: 80,
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 9999,
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 6,
           alignItems: "center",
           pointerEvents: "none",
         }}
@@ -53,16 +53,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             style={{
-              background: t.type === "error" ? "#B94040" : t.type === "success" ? "#3A8C65" : "#444",
+              background: t.type === "error" ? "var(--accent-peach)" : t.type === "success" ? "var(--accent-sage)" : "var(--text-2)",
               color: "#fff",
-              padding: "10px 20px",
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 600,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
-              maxWidth: 300,
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              boxShadow: "0 2px 12px rgba(0,0,0,0.12)",
+              maxWidth: 280,
               textAlign: "center",
-              animation: "fadeInUp 0.2s ease",
+              animation: "toastPop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
             }}
           >
             {t.message}
@@ -70,9 +70,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ))}
       </div>
       <style>{`
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to   { opacity: 1; transform: translateY(0); }
+        @keyframes toastPop {
+          from { opacity: 0; transform: translateY(8px) scale(0.95); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
         }
       `}</style>
     </ToastContext.Provider>

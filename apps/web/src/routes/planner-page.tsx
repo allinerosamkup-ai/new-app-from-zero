@@ -720,28 +720,36 @@ function PlannerSheetBody({
 }) {
   void _onCancel; // kept in contract for parent callers
   const [showConfig, setShowConfig] = useState(false);
-  const [showTimeExpanded, setShowTimeExpanded] = useState(true);
   const [showAddAlert, setShowAddAlert] = useState(false);
 
-  const setDuration = (mins: number) => {
-    setForm(prev => ({
-      ...prev,
-      endTime: addMinutesToTime(prev.time, mins)
-    }));
+  const STITLE: React.CSSProperties = {
+    fontSize: "13px",
+    fontWeight: 800,
+    color: "var(--text-2)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: "12px",
+    display: "block",
   };
 
-  const durationPresets = [
-    { label: "1", mins: 1 },
-    { label: "15", mins: 15 },
-    { label: "30m", mins: 30 },
-    { label: "45", mins: 45 },
-    { label: "1h", mins: 60 },
-    { label: "1,5h", mins: 90 },
-  ];
+  const INPUT_WRAP: React.CSSProperties = {
+    background: "var(--surface-variant)",
+    borderRadius: "16px",
+    padding: "14px 18px",
+    border: "1px solid var(--outline-variant)",
+    width: "100%",
+    fontSize: "16px",
+    fontWeight: 600,
+    color: "var(--text-1)",
+    outline: "none",
+    transition: "all 0.2s",
+  };
 
   const currentDuration = diffMinutes(form.time, form.endTime);
+  const setDuration = (mins: number) => {
+    setForm(prev => ({ ...prev, endTime: addMinutesToTime(prev.time, mins) }));
+  };
 
-  // Frequency derived from recurring config
   const frequency = !form.recurring.enabled ? "once"
     : form.recurring.frequency === "daily" ? "daily"
     : form.recurring.frequency === "weekly" ? "weekly"
@@ -761,385 +769,246 @@ function PlannerSheetBody({
     }));
   }
 
-  function removeAlert(alertId: string) {
-    setForm(c => ({ ...c, alerts: c.alerts.filter(a => a !== alertId) }));
-  }
+  const dateDisplay = form.date ? (() => { const [y, m, d] = form.date.split("-"); return `${d}/${m}/${y}`; })() : "Hoje";
 
-  function addAlert(alertId: string) {
-    setForm(c => ({ ...c, alerts: [...c.alerts, alertId] }));
-    setShowAddAlert(false);
-  }
-
-  const availableAlerts = ALERT_PRESETS.filter(a => !form.alerts.includes(a.id));
-
-  // Time scroll context
-  const beforeStart1 = timeToMinutesValue(form.time) - 30;
-  const beforeStart2 = timeToMinutesValue(form.time) - 15;
-  const afterEnd1 = timeToMinutesValue(form.endTime);
-  const afterEnd2 = timeToMinutesValue(form.endTime) + 15;
-  const contextBefore = [beforeStart1, beforeStart2].filter(m => m >= 0).map(m => formatMinutesAsTime(m));
-  const contextAfter = [afterEnd1, afterEnd2].filter(m => m < 1440).map(m => formatMinutesAsTime(m));
-
-  const dateDisplay = form.date ? (() => { const [y, m, d] = form.date.split("-"); return `${d}/${m}/${y}`; })() : "Escolher data";
-
-  const STITLE: React.CSSProperties = { fontSize: 16, fontWeight: 700, color: "var(--text-2)", margin: 0 };
-  const MAIS: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--accent-peach)", cursor: "pointer", background: "none", border: "none", padding: 0 };
+  const contextBefore = [
+    subtractMinutesFromTime(form.time, 30),
+    subtractMinutesFromTime(form.time, 15),
+  ].filter(t => t !== form.time);
+  
+  const contextAfter = [
+    addMinutesToTime(form.endTime, 0), // current end
+    addMinutesToTime(form.endTime, 15),
+  ].filter(t => t !== form.time);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "32px", paddingBottom: "20px" }}>
-
+    <div style={{ display: "flex", flexDirection: "column", gap: "32px", paddingBottom: "40px" }}>
+      
       {/* ── 1. Título + Ícone ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          type="button"
-          onClick={() => setShowConfig(!showConfig)}
-          style={{
-            width: 44, height: 44, borderRadius: 12, border: "1.5px solid var(--warm-border-2)",
-            background: "var(--surface-variant)", color: form.color || "var(--accent-peach)",
-            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
-            cursor: "pointer"
-          }}
-        >
-          {form.icon ? <i className={form.icon}></i> : "@"}
-        </button>
-        <input
-          value={form.title}
-          onChange={(e) => setForm(c => ({ ...c, title: e.target.value }))}
-          style={{
-            flex: 1, fontSize: "22px", fontWeight: 800, border: "none",
-            background: "transparent", padding: "0 0 8px", outline: "none", color: "var(--text-1)",
-            fontFamily: "inherit", borderBottom: "1.5px solid var(--warm-border-2)"
-          }}
-          placeholder="Responder E-mails"
-          autoFocus
-        />
-      </div>
-
-      {showConfig && (
-        <section style={{
-          background: "var(--surface-variant)", padding: 16, borderRadius: 16,
-          display: "flex", flexDirection: "column", gap: 16, border: "1px solid var(--warm-border)"
-        }}>
-          <div>
-            <h4 style={LABEL_STYLE}>ÍCONE</h4>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-              {ICON_GRID.map(ic => (
-                <button key={ic} type="button" onClick={() => setForm(c => ({...c, icon: ic}))} style={{
-                  width: 32, height: 32, borderRadius: 8, border: form.icon === ic ? "2px solid var(--text-1)" : "1.5px solid transparent",
-                  background: "#fff", cursor: "pointer"
-                }}>
-                  <i className={ic} style={{ fontSize: 14 }}></i>
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── 2. Quando? ── */}
       <section>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h4 style={STITLE}>Quando?</h4>
-          <button type="button" style={MAIS} onClick={() => setShowTimeExpanded(!showTimeExpanded)}>Mais...</button>
+        <label style={STITLE}>O que vamos realizar?</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            type="button"
+            onClick={() => setShowConfig(!showConfig)}
+            style={{
+              width: 48, height: 48, borderRadius: 16, border: "1.5px solid var(--outline-variant)",
+              background: "var(--surface-variant)", color: form.color || "var(--accent-peach)",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
+              cursor: "pointer", flexShrink: 0
+            }}
+          >
+            {form.icon ? <i className={form.icon}></i> : <Sparkles size={20} />}
+          </button>
+          <input
+            value={form.title}
+            onChange={(e) => setForm(c => ({ ...c, title: e.target.value }))}
+            style={{
+              ...INPUT_WRAP,
+              fontSize: "20px", fontWeight: 800, border: "none", borderBottom: "2px solid var(--outline-variant)", borderRadius: 0, background: "transparent", padding: "8px 0"
+            }}
+            placeholder="Ex: Treino de perna"
+            autoFocus
+          />
         </div>
-
-        {showTimeExpanded ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, marginBottom: 12 }}>
-            {contextBefore.map((t, i) => (
-              <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: "5px 16px", fontSize: i === 0 ? 13 : 14, fontWeight: 500, color: "var(--text-3)", opacity: i === 0 ? 0.4 : 0.65, transition: "all 0.2s" }}
-              >{t}</button>
-            ))}
-            <div style={{
-              background: "var(--accent-peach)", color: "#fff",
-              padding: "13px 36px", borderRadius: 16, fontSize: 16, fontWeight: 800,
-              margin: "4px 0", textAlign: "center", minWidth: 210,
-              boxShadow: "0 4px 16px rgba(244,190,168,0.35)"
-            }}>
-              {form.time} - {form.endTime}
-            </div>
-            {contextAfter.map((t, i) => (
-              <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
-                style={{ background: "none", border: "none", cursor: "pointer", padding: "5px 16px", fontSize: i === 0 ? 14 : 13, fontWeight: 500, color: "var(--text-3)", opacity: i === 0 ? 0.65 : 0.4, transition: "all 0.2s" }}
-              >{t}</button>
-            ))}
-          </div>
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", padding: "10px 0" }}>
-            <input type="time" value={form.time} onChange={(e) => setForm(c => ({ ...c, time: e.target.value }))} style={{ ...INPUT_STYLE, textAlign: "center", width: 100 }} />
-            <span style={{ color: "var(--text-3)" }}>—</span>
-            <input type="time" value={form.endTime} onChange={(e) => setForm(c => ({ ...c, endTime: e.target.value }))} style={{ ...INPUT_STYLE, textAlign: "center", width: 100 }} />
+        {showConfig && (
+          <div style={{ marginTop: 16, background: "var(--surface-variant)", padding: 16, borderRadius: 20, border: "1px solid var(--outline-variant)" }}>
+             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {ICON_GRID.map(ic => (
+                  <button key={ic} type="button" onClick={() => { setForm(c => ({...c, icon: ic})); setShowConfig(false); }} style={{
+                    width: 36, height: 36, borderRadius: 10, border: form.icon === ic ? "2px solid var(--accent-peach)" : "none",
+                    background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
+                  }}>
+                    <i className={ic} style={{ fontSize: 16 }}></i>
+                  </button>
+                ))}
+             </div>
           </div>
         )}
+      </section>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, position: "relative" }}>
-          <Calendar size={14} color="var(--accent-peach)" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--accent-peach)" }}>{dateDisplay}</span>
+      {/* ── 2. Horário & Data ── */}
+      <section>
+        <label style={STITLE}>Horário & Data</label>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "10px 0" }}>
+          {contextBefore.map((t) => (
+            <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--text-3)", opacity: 0.4 }}
+            >{t}</button>
+          ))}
+          <div style={{
+            background: "var(--accent-peach)", color: "#fff",
+            padding: "14px 28px", borderRadius: "18px", fontSize: "18px", fontWeight: 800,
+            boxShadow: "0 8px 24px rgba(244,168,150,0.3)",
+            display: "flex", alignItems: "center", gap: 8
+          }}>
+            <Clock size={18} /> {form.time}
+          </div>
+          {contextAfter.slice(1).map((t) => (
+            <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--text-3)", opacity: 0.4 }}
+            >{t}</button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, position: "relative" }}>
+          <div style={{ background: "var(--surface-variant)", padding: "8px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--outline-variant)" }}>
+            <Calendar size={14} color="var(--accent-peach)" />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>{dateDisplay}</span>
+          </div>
           <input type="date" value={form.date} onChange={(e) => setForm(c => ({ ...c, date: e.target.value }))}
-            style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer", top: 0, left: 0 }}
+            style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
           />
         </div>
       </section>
 
-      {/* ── 3. Quanto tempo? ── */}
+      {/* ── 3. Duração ── */}
       <section>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <h4 style={STITLE}>Quanto tempo?</h4>
-          <button type="button" style={MAIS}>Mais...</button>
-        </div>
+        <label style={STITLE}>Quanto tempo?</label>
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 0,
-          background: "var(--surface-variant)", padding: 4, borderRadius: 14
+          display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8,
+          background: "var(--surface-variant)", padding: "6px", borderRadius: "18px", border: "1px solid var(--outline-variant)"
         }}>
-          {durationPresets.map(p => {
-            const isSel = currentDuration === p.mins;
+          {[15, 30, 45, 60, 90].map(mins => {
+            const isSel = currentDuration === mins;
             return (
               <button
-                key={p.mins}
+                key={mins}
                 type="button"
-                onClick={() => setDuration(p.mins)}
+                onClick={() => setDuration(mins)}
                 style={{
-                  padding: "12px 0", borderRadius: 10, fontSize: 13, fontWeight: 700,
-                  background: isSel ? "var(--accent-peach)" : "transparent",
-                  color: isSel ? "#fff" : "var(--accent-peach)",
-                  border: "none", cursor: "pointer", transition: "all 0.25s"
+                  padding: "12px 0", borderRadius: "12px", fontSize: "13px", fontWeight: 800,
+                  background: isSel ? "#fff" : "transparent",
+                  color: isSel ? "var(--accent-peach)" : "var(--text-3)",
+                  border: "none", cursor: "pointer", transition: "all 0.2s",
+                  boxShadow: isSel ? "0 4px 12px rgba(0,0,0,0.05)" : "none"
                 }}
               >
-                {p.label}
+                {mins}m
               </button>
             );
           })}
         </div>
       </section>
 
-      {/* ── 4. Quanta energia? (ícones cinza SVG) ── */}
+      {/* ── 4. Quanta energia? ── */}
       <section>
-        <h4 style={{ ...STITLE, marginBottom: 16 }}>Quanta energia?</h4>
+        <h4 style={STITLE}>Quanta energia exige?</h4>
         <div style={{
-          display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 0,
-          background: "var(--surface-variant)", padding: 6, borderRadius: 16
+          display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8,
+          background: "var(--surface-variant)", padding: 8, borderRadius: 20, border: "1px solid var(--outline-variant)"
         }}>
           {([1,2,3,4,5] as const).map(level => {
             const isSel = form.energyLevel === level;
+            const labels = ["Exausto", "Baixo", "Médio", "Alto", "Pico"];
             return (
               <button
                 key={level}
                 type="button"
                 onClick={() => setForm(c => ({ ...c, energyLevel: level }))}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  padding: "10px 0", borderRadius: 12, border: "none",
-                  background: "transparent",
-                  cursor: "pointer", transition: "all 0.25s"
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                  padding: "10px 0", borderRadius: 14, border: "none",
+                  background: isSel ? "#fff" : "transparent",
+                  boxShadow: isSel ? "0 4px 12px rgba(0,0,0,0.05)" : "none",
+                  cursor: "pointer", transition: "all 0.25s", gap: 6
                 }}
               >
                 <div style={{
-                  width: 38, height: 38, borderRadius: "50%",
+                  width: 36, height: 36, borderRadius: "50%",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   background: isSel ? "var(--accent-peach)" : "transparent",
-                  boxShadow: isSel ? "0 4px 12px rgba(244,190,168,0.3)" : "none",
                   transition: "all 0.25s"
                 }}>
-                  {renderEnergyIcon(level, isSel ? "#fff" : ENERGY_GRAY)}
+                  {renderEnergyIcon(level, isSel ? "#fff" : "var(--text-3)")}
                 </div>
+                <span style={{ fontSize: 9, fontWeight: 800, color: isSel ? "var(--accent-peach)" : "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                  {labels[level - 1]}
+                </span>
               </button>
             );
           })}
         </div>
       </section>
 
-      {/* ── 5. Qual cor? ── */}
-      <section>
-        <h4 style={{ ...STITLE, marginBottom: 14 }}>Qual cor?</h4>
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4, paddingLeft: 2 }}>
-          {COLOR_GRID.map(color => {
-            const isSel = form.color === color;
-            return (
+      {/* ── 5. Categoria & Cor ── */}
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+          <label style={STITLE}>Categoria</label>
+          <select 
+            value={form.category}
+            onChange={(e) => setForm(c => ({ ...c, category: e.target.value }))}
+            style={{ ...INPUT_WRAP, padding: "10px 14px", fontSize: "14px" }}
+          >
+            <option value="trabalho">Trabalho</option>
+            <option value="pessoal">Pessoal</option>
+            <option value="autocuidado">Autocuidado</option>
+            <option value="social">Social</option>
+            <option value="casa">Casa</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <label style={STITLE}>Cor</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 0" }}>
+            {COLOR_GRID.slice(0, 4).map(color => (
               <button
                 key={color}
                 type="button"
                 onClick={() => setForm(c => ({ ...c, color }))}
                 style={{
-                  width: 32, height: 32, borderRadius: "50%",
-                  background: "transparent",
-                  border: `2.5px solid ${color}`,
-                  cursor: "pointer", flexShrink: 0,
-                  position: "relative",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 0.2s"
+                  width: 28, height: 28, borderRadius: "50%",
+                  background: color, border: form.color === color ? "3px solid #fff" : "none",
+                  boxShadow: form.color === color ? `0 0 0 2px ${color}` : "none",
+                  cursor: "pointer", transition: "all 0.2s"
                 }}
-              >
-                {isSel && (
-                  <div style={{
-                    width: 14, height: 14, borderRadius: "50%",
-                    background: color
-                  }} />
-                )}
-              </button>
-            );
-          })}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* ── 6. Com que frequência? ── */}
+      {/* ── 6. Notificação Insistente ── */}
       <section>
-        <h4 style={{ ...STITLE, marginBottom: 14 }}>Com que frequência?</h4>
-        <div style={{
-          display: "flex", gap: 0,
-          background: "var(--surface-variant)", padding: 4, borderRadius: 14
-        }}>
-          {[
-            { id: "once", label: "Uma vez" },
-            { id: "daily", label: "Diária" },
-            { id: "weekly", label: "Semanal" },
-            { id: "monthly", label: "Mensal" },
-          ].map(f => {
-            const isSel = frequency === f.id;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFrequency(f.id)}
-                style={{
-                  flex: 1, padding: "10px 0", borderRadius: 10,
-                  fontSize: 13, fontWeight: 700,
-                  background: isSel ? "var(--accent-peach)" : "transparent",
-                  color: isSel ? "#fff" : "var(--accent-peach)",
-                  border: "none", cursor: "pointer", transition: "all 0.25s"
-                }}
-              >
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-        {frequency === "weekly" && (
-          <div style={{ marginTop: 16 }}>
-            <RecurringSection
-              recurring={form.recurring}
-              setRecurring={(r) => setForm(c => ({ ...c, recurring: { ...r, enabled: true } }))}
-            />
-          </div>
-        )}
-      </section>
-
-      {/* ── 7. Precisa de alertas? ── */}
-      <section>
-        <h4 style={STITLE}>Alertas & Notificações</h4>
-        <div style={{ display: "flex", flexDirection: "column", gap: 0, marginTop: 14 }}>
-          {form.alerts.map(alertId => {
-            const preset = ALERT_PRESETS.find(a => a.id === alertId);
-            if (!preset) return null;
-            return (
-              <div
-                key={alertId}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "14px 16px",
-                  borderBottom: "1px solid var(--warm-border)"
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <Bell size={18} color="var(--accent-peach)" />
-                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-1)" }}>{preset.label}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeAlert(alertId)}
-                  style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    fontSize: 16, color: "var(--text-3)", padding: 4
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        
-        {availableAlerts.length > 0 && (
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              onClick={() => setShowAddAlert(!showAddAlert)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                width: "100%", padding: "14px",
-                background: "none", border: "none", cursor: "pointer",
-                color: "var(--accent-peach)", fontSize: 14, fontWeight: 600
-              }}
-            >
-              <span style={{ fontSize: 18 }}>＋</span> Adicionar Alerta
-            </button>
-            {showAddAlert && (
-              <div style={{
-                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
-                background: "#fff", borderRadius: 12, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                border: "1px solid var(--warm-border)", overflow: "hidden"
-              }}>
-                {availableAlerts.map(alert => (
-                  <button
-                    key={alert.id}
-                    type="button"
-                    onClick={() => addAlert(alert.id)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      width: "100%", padding: "12px 16px",
-                      background: "none", border: "none", borderBottom: "1px solid var(--warm-border)",
-                      cursor: "pointer", fontSize: 13, color: "var(--text-1)", textAlign: "left" as const
-                    }}
-                  >
-                    <Bell size={14} color="var(--accent-peach)" />
-                    {alert.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Notificação Insistente (Persistent Reminder) */}
         <div style={{ 
-          marginTop: 12, 
-          padding: "16px", 
-          background: "rgba(244,190,168,0.06)", 
-          borderRadius: 16,
+          padding: "20px", 
+          background: "rgba(244,190,168,0.08)", 
+          borderRadius: "24px",
           border: "1px solid rgba(244,190,168,0.15)",
           display: "flex",
           flexDirection: "column",
-          gap: 12
+          gap: 16
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ 
-                width: 32, height: 32, borderRadius: 10, 
+                width: 40, height: 40, borderRadius: "12px", 
                 background: form.persistentReminderEnabled ? "var(--accent-peach)" : "rgba(17,24,39,0.05)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "all 0.3s"
               }}>
-                <Bell size={16} color={form.persistentReminderEnabled ? "#fff" : "var(--text-3)"} />
+                <Bell size={20} color={form.persistentReminderEnabled ? "#fff" : "var(--text-3)"} />
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Notificação Insistente</div>
-                <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-3)" }}>Avisar até marcar como cumprida</div>
+                <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-1)" }}>Notificação Insistente</div>
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-3)" }}>Até marcar como concluída</div>
               </div>
             </div>
             <label className="aura-toggle" style={{ cursor: "pointer" }}>
               <input 
                 type="checkbox" 
                 checked={form.persistentReminderEnabled}
-                onChange={(e) => setForm(c => ({ ...c, persistentReminderEnabled: e.target.checked }))}
+                onChange={(e) => setForm((c: any) => ({ ...c, persistentReminderEnabled: e.target.checked }))}
                 style={{ display: "none" }}
               />
               <div style={{ 
-                width: 44, height: 24, borderRadius: 20, 
+                width: 48, height: 26, borderRadius: 24, 
                 background: form.persistentReminderEnabled ? "var(--accent-peach)" : "rgba(17,24,39,0.1)",
                 position: "relative", transition: "all 0.3s"
               }}>
                 <div style={{ 
-                  width: 18, height: 18, borderRadius: "50%", background: "#fff",
-                  position: "absolute", top: 3, left: form.persistentReminderEnabled ? 23 : 3,
+                  width: 20, height: 20, borderRadius: "50%", background: "#fff",
+                  position: "absolute", top: 3, left: form.persistentReminderEnabled ? 25 : 3,
                   transition: "all 0.3s", boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
                 }} />
               </div>
@@ -1147,22 +1016,22 @@ function PlannerSheetBody({
           </div>
 
           {form.persistentReminderEnabled && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0 0" }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>Repetir a cada:</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
-                {[5, 10, 15, 30, 60].map(mins => (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0 0", borderTop: "1px solid rgba(244,190,168,0.1)" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-2)" }}>Repetir:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                {[5, 15, 30, 60].map(mins => (
                   <button
                     key={mins}
                     type="button"
-                    onClick={() => setForm(c => ({ ...c, persistentReminderIntervalMinutes: mins }))}
+                    onClick={() => setForm((c: any) => ({ ...c, persistentReminderIntervalMinutes: mins }))}
                     style={{
-                      flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      flex: 1, padding: "10px 0", borderRadius: "10px", fontSize: "12px", fontWeight: 800,
                       background: form.persistentReminderIntervalMinutes === mins ? "var(--accent-peach)" : "#fff",
                       color: form.persistentReminderIntervalMinutes === mins ? "#fff" : "var(--accent-peach)",
                       border: "1.5px solid rgba(244,190,168,0.2)", cursor: "pointer", transition: "all 0.2s"
                     }}
                   >
-                    {mins < 60 ? `${mins}m` : "1h"}
+                    {mins}m
                   </button>
                 ))}
               </div>
@@ -1171,30 +1040,9 @@ function PlannerSheetBody({
         </div>
       </section>
 
-      {/* ── 8. Algum detalhe? ── */}
+      {/* ── 7. Notas & Checklist ── */}
       <section>
-        <h4 style={{ ...STITLE, marginBottom: 14 }}>Algum detalhe?</h4>
-
-        {/* Adicionar Subtarefa */}
-        <button
-          type="button"
-          onClick={() => setForm(c => ({
-            ...c,
-            noteMode: "checklist" as NoteMode,
-            checklist: [...c.checklist, { id: crypto.randomUUID(), text: "", done: false }]
-          }))}
-          style={{
-            width: "100%", padding: "12px 16px", marginBottom: 14,
-            background: "var(--accent-peach-a3)", borderRadius: 12,
-            border: "none", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 8,
-            color: "var(--accent-peach-ink)", fontSize: 14, fontWeight: 700
-          }}
-        >
-          <span style={{ color: "var(--accent-sage)", fontSize: 18, fontWeight: 800 }}>＋</span>
-          Adicionar Subtarefa
-        </button>
-
+        <h4 style={STITLE}>Notas e Detalhes</h4>
         <NoteSection
           form={form}
           setForm={setForm}
@@ -1202,17 +1050,15 @@ function PlannerSheetBody({
         />
       </section>
 
-      {/* ── 9. Ação principal ── */}
-      <AuraButtonV2
-        onClick={onSave}
-        style={{
-          width: "100%", padding: "16px",
-          fontSize: 16, fontWeight: 700,
-          borderRadius: 14
-        }}
-      >
-        {saveLabel}
-      </AuraButtonV2>
+      {/* ── 8. Ações ── */}
+      <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+        <AuraButtonV2
+          onClick={onSave}
+          style={{ flex: 1, padding: "18px", borderRadius: "18px", fontSize: "16px", fontWeight: 800 }}
+        >
+          {saveLabel}
+        </AuraButtonV2>
+      </div>
     </div>
   );
 }
@@ -1447,7 +1293,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left", 
-          borderLeft: `5px solid ${categoryOption.cor}`,
+          border: `2px solid ${categoryOption.cor}66`,
+          borderLeft: `6px solid ${categoryOption.cor}`,
           borderRadius: 18,
           opacity: slot.task.done ? 0.55 : 1, 
           transform: `translateX(${offset}px)`, 
@@ -1467,14 +1314,15 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         {/* Energy Icon em destaque à esquerda */}
         <div style={{ 
           width: 46, height: 46, borderRadius: 14, 
-          background: slot.task.done ? 'var(--surface-variant)' : 'rgba(244,190,168,0.08)',
+          background: slot.task.done ? 'var(--surface-variant)' : `${categoryOption.cor}15`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
           flexShrink: 0,
-          border: slot.task.done ? 'none' : '1px solid rgba(244,190,168,0.15)'
+          border: slot.task.done ? 'none' : `1.5px solid ${categoryOption.cor}30`
         }}>
            { (() => { 
                 const meta = getTaskMeta(slot.task.id);
-                const lvl = meta.energyLevel || slot.task.energyLevel || 3;
+                const rawLvl = meta.energyLevel || slot.task.energyLevel || 3;
+                const lvl = normalizeEnergyLevel(rawLvl);
                 if (lvl === 1) return '🌸';
                 if (lvl === 2) return '🎯';
                 if (lvl === 3) return '⚡';
@@ -1485,6 +1333,11 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
+          {isGcal && (
+            <div style={{ fontSize: 9, color: categoryOption.cor, display: "flex", alignItems: "center", gap: 4, fontWeight: 800, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <img src="https://www.google.com/favicon.ico" width={10} height={10} alt="GCal" style={{ filter: 'grayscale(0.2)' }} /> Google Agenda
+            </div>
+          )}
           <div className="block-title" style={{ 
             fontSize: 15,
             fontWeight: 800,
@@ -1564,11 +1417,14 @@ export function PlannerPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
+  const [now, setNow] = useState(() => new Date());
+  const [dragOverTime, setDragOverTime] = useState<string | null>(null);
   const openedTaskFromLocationRef = useRef<string | null>(null);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       setTodayAnchor(createBaseDate());
+      setNow(new Date());
     }, 60_000);
 
     return () => {
@@ -2028,17 +1884,6 @@ export function PlannerPage() {
       return;
     }
     const newEndTime = formatMinutesAsTime(endTotal);
-    const hasConflict = plannerTasks.some((candidate) => {
-      if (candidate.id === task.id) return false;
-      const candidateStart = timeToMinutesValue(candidate.time);
-      const candidateEnd = timeToMinutesValue(candidate.endTime);
-      return startTotal < candidateEnd && endTotal > candidateStart;
-    });
-
-    if (hasConflict) {
-      showError("Esse horário já está ocupado.");
-      return;
-    }
 
     try {
       if (task.source === "gcal") {
@@ -2053,27 +1898,39 @@ export function PlannerPage() {
         return;
       }
 
+      // Sync local meta to ensures fields like checklist/notes are preserved
+      const meta = getTaskMeta(task.id);
+      
+      const payload = buildTimelineBlockInput({
+        title: task.title,
+        time: newTime,
+        endTime: newEndTime,
+        category: task.category || "pessoal",
+        energyLevel: normalizeEnergyLevel(meta.energyLevel || task.energyLevel || 3),
+        note: meta.note || task.note || undefined,
+        noteMode: meta.noteMode || task.noteMode || undefined,
+        checklist: meta.checklist || task.checklist || undefined,
+        recurring: meta.recurring || task.recurring || undefined,
+        persistentReminderEnabled: meta.persistentReminderEnabled || task.persistentReminderEnabled || undefined,
+        persistentReminderIntervalMinutes: meta.persistentReminderIntervalMinutes || task.persistentReminderIntervalMinutes || undefined,
+        alarmEnabled: meta.alarmEnabled || task.alarmEnabled || undefined,
+        vibrateEnabled: meta.vibrateEnabled || task.vibrateEnabled || undefined,
+        recurringNotificationEnabled: meta.recurringNotificationEnabled || task.recurringNotificationEnabled || undefined,
+        visualRepeatEnabled: meta.visualRepeatEnabled || task.visualRepeatEnabled || undefined,
+        icon: meta.icon || task.icon || undefined,
+        color: meta.color || task.color || undefined,
+      }, {
+        id: task.id,
+        fallbackIntensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
+        fallbackStatus: ((task.status ?? (task.done ? "completed" : "planned")) as TimelineBlockStatus),
+        isAiSuggested: task.isAiSuggested ? false : undefined,
+        aiReasoning: task.isAiSuggested ? null : undefined,
+      });
+
       await api.post("/timeline", {
         date: selectedDateKey,
         forceSave: true,
-        blocks: [ {
-          id: task.id,
-          title: task.title,
-          startTime: newTime,
-          endTime: newEndTime,
-          status: ((task.status ?? (task.done ? "completed" : "planned")) as TimelineBlockStatus),
-          category: normalizePlannerCategory(task.category, task.title),
-          intensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
-          persistentReminderEnabled: task.persistentReminderEnabled ?? false,
-          persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
-          vibrateEnabled: task.vibrateEnabled ?? false,
-          alarmEnabled: task.alarmEnabled ?? false,
-          recurringNotificationEnabled: task.recurringNotificationEnabled ?? false,
-          icon: task.icon,
-          color: task.color,
-          isAiSuggested: task.isAiSuggested ? false : undefined,
-          aiReasoning: task.isAiSuggested ? null : undefined,
-        } ]
+        blocks: [ payload ]
       });
       await reloadPlannerTasks();
       await refreshData();
@@ -2146,6 +2003,7 @@ export function PlannerPage() {
                 style={{
                   padding: "10px 12px",
                   borderRadius: 16,
+                  border: `1.5px solid ${getCategoryStyles(task.category || "").cor}30`,
                   borderLeft: `4px solid ${getCategoryStyles(task.category || "").cor}`,
                   display: "flex",
                   flexDirection: "column",
@@ -2274,11 +2132,13 @@ export function PlannerPage() {
          onTouchEnd={handleAgendaTouchEnd}
       >
         <TimelineProgressIndicator 
-           nowMinutes={todayAnchor.getHours() * 60 + todayAnchor.getMinutes()} 
+           nowMinutes={now.getHours() * 60 + now.getMinutes()} 
            slots={agendaWithAi} 
         />
         
         {agendaWithAi.map((slot) => {
+          const isDragOver = dragOverTime === slot.time;
+
           if (slot.kind === "task") {
             const categoryOption = getCategoryStyles(slot.category);
 
@@ -2287,14 +2147,19 @@ export function PlannerPage() {
                 key={slot.key}
                 className="timeline-slot"
                 data-drop-time={slot.time}
-                onDragOver={e => e.preventDefault()}
+                onDragOver={e => { e.preventDefault(); setDragOverTime(slot.time); }}
+                onDragLeave={() => setDragOverTime(null)}
                 onDrop={e => {
                   e.preventDefault();
                   e.stopPropagation();
                   const tid = e.dataTransfer.getData('text/plain');
                   if (tid) handleDropTaskToTime(tid, slot.time);
                 }}
-                style={{ borderRadius: 12, background: "transparent", paddingLeft: 24 }}
+                style={{ 
+                  borderRadius: 12, background: "transparent", paddingLeft: 24,
+                  border: isDragOver ? "2px dashed var(--accent-peach)" : "none",
+                  transition: "all 0.2s"
+                }}
               >
                 <span className="timeline-time" style={{ fontWeight: 700, fontSize: 13 }}>{slot.time}</span>
                 <div className="timeline-line" style={{ left: 10 }} />
@@ -2314,8 +2179,14 @@ export function PlannerPage() {
           }
 
           return (
-            <div key={slot.key} className="timeline-slot" data-drop-time={slot.time} style={{ minHeight: slot.title ? 110 : 60, borderRadius: 12, background: "transparent", paddingLeft: 24 }}
-                 onDragOver={e => e.preventDefault()}
+            <div key={slot.key} className="timeline-slot" data-drop-time={slot.time} 
+                 style={{ 
+                   minHeight: slot.title ? 110 : 60, borderRadius: 12, background: "transparent", paddingLeft: 24,
+                   border: isDragOver ? "2px dashed var(--accent-peach)" : "none",
+                   transition: "all 0.2s"
+                 }}
+                 onDragOver={e => { e.preventDefault(); setDragOverTime(slot.time); }}
+                 onDragLeave={() => setDragOverTime(null)}
                  onDrop={e => {
                     e.preventDefault();
                     e.stopPropagation();

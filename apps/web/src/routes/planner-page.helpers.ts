@@ -217,7 +217,7 @@ export function buildTimelineBlockInput(
     endTime: form.endTime || addMinutesToTime(form.time, options?.durationMinutes ?? 30),
     category: normalizePlannerCategory(form.category, form.title),
     intensity: mapEnergyLevelToIntensity(form.energyLevel, options?.fallbackIntensity),
-    energyLevel: form.energyLevel,
+    energyLevel: form.energyLevel >= 4 ? 'alta' : form.energyLevel <= 2 ? 'leve' : 'media',
     status: options?.fallbackStatus ?? "planned",
     ...(options?.isAiSuggested !== undefined ? { isAiSuggested: options.isAiSuggested } : {}),
     ...(options?.aiReasoning !== undefined ? { aiReasoning: options.aiReasoning } : {}),

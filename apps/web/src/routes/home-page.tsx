@@ -737,7 +737,6 @@ export function HomePage() {
   async function handleHomeHabitDone(habit: NonNullable<typeof homeAgendaPreview.habit>) {
     try {
       await toggleHabit(habit.id);
-      showSuccess("Hábito atualizado.");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel atualizar o habito.");
     }
@@ -2153,52 +2152,54 @@ export function HomePage() {
                 <div key={i} style={{ height: 36, borderRadius: 9, background: "rgba(0,0,0,.04)", border: "1px solid rgba(161,140,120,.1)" }} />
               ))
             ) : autocuidadoFinal ? (
-              autocuidadoFinal.map((item, i) => {
-                const isDone = completedAutocuidadoIdx.has(i);
-                return (
-                  <div key={i} className="home-soft-row" style={{ 
-                    background: isDone ? "rgba(150,199,179,.08)" : "var(--warm-bg)", 
-                    border: "1px solid rgba(161,140,120,.2)",
-                    display: "flex", alignItems: "center", gap: 8, paddingRight: 8,
-                  }}>
-                    <p style={{ fontSize: 12, color: isDone ? "var(--text-3)" : "var(--text-2)", margin: 0, flex: 1, textDecoration: isDone ? "line-through" : "none" }}>{item}</p>
-                    <button
-                      onClick={() => {
-                        setCompletedAutocuidadoIdx(prev => new Set([...prev, i]));
-                        showSuccess("Cuidado marcado ✓");
-                      }}
-                      title="Marcar como cumprido"
-                      style={{
-                        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                        border: "1.5px solid var(--accent-sage)",
-                        background: "transparent",
-                        cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}
-                    >
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => showSuccess("Nova sugestao carregada")}
-                      title="Ver outra sugestao"
-                      style={{
-                        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                        border: "1.5px solid var(--text-3)",
-                        background: "transparent",
-                        cursor: "pointer",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}
-                    >
-                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round">
-                        <polyline points="1 4 1 10 7 10" />
-                        <polyline points="23 20 23 14 17 14" />
-                      </svg>
-                    </button>
-                  </div>
-                );
-              })}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {autocuidadoFinal.map((item, i) => {
+                  const isDone = completedAutocuidadoIdx.has(i);
+                  return (
+                    <div key={i} className="home-soft-row" style={{ 
+                      background: isDone ? "rgba(150,199,179,.08)" : "var(--warm-bg)", 
+                      border: "1px solid rgba(161,140,120,.2)",
+                      display: "flex", alignItems: "center", gap: 8, paddingRight: 8,
+                    }}>
+                      <p style={{ fontSize: 12, color: isDone ? "var(--text-3)" : "var(--text-2)", margin: 0, flex: 1, textDecoration: isDone ? "line-through" : "none" }}>{item}</p>
+                      <button
+                        onClick={() => {
+                          setCompletedAutocuidadoIdx(prev => new Set([...prev, i]));
+                          showSuccess("Cuidado marcado ✓");
+                        }}
+                        title="Marcar como cumprido"
+                        style={{
+                          width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                          border: "1.5px solid var(--accent-sage)",
+                          background: "transparent",
+                          cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}
+                      >
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => showSuccess("Nova sugestao carregada")}
+                        title="Ver outra sugestao"
+                        style={{
+                          width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                          border: "1.5px solid var(--text-3)",
+                          background: "transparent",
+                          cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}
+                      >
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round">
+                          <polyline points="1 4 1 10 7 10" />
+                          <polyline points="23 20 23 14 17 14" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0, fontStyle: "italic", textAlign: "center", padding: "8px 0" }}>
                 Faça um check-in para receber sugestões de autocuidado personalizadas.
