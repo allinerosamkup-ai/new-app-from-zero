@@ -23,14 +23,27 @@ interface PlannerState {
   // Actions
   setSelectedDate: (date: string) => void;
   fetchBlocks: (userId: string, date: string) => Promise<void>;
-  moveBlock: (blockId: string, newStart: string) => Promise<void>;
   syncBlocks: (userId: string, date: string, blocks: Partial<TimelineBlock>[]) => Promise<boolean>;
+  completeBlock: (blockId: string) => Promise<void>;
+  deleteBlock: (blockId: string) => Promise<void>;
+  duplicateBlock: (blockId: string) => Promise<void>;
+  updateBlock: (blockId: string, updates: Partial<Omit<TimelineBlock, 'id'>>) => Promise<void>;
 }
 
-/**
- * Store Zustand para gerenciar o Planner Adaptativo.
- * Tradução do timelineProvider do Flutter.
- */
+/** Serializa todos os blocos atuais para persistência no backend. */
+function serializeBlocks(blocks: TimelineBlock[]) {
+  return blocks.map(b => ({
+    id: b.id,
+    title: b.title,
+    startTime: b.startTime,
+    endTime: b.endTime,
+    category: b.category,
+    intensity: b.intensity,
+    status: b.status,
+    isAiSuggested: b.isAiSuggested,
+  }));
+}
+
 export const usePlannerStore = create<PlannerState>((set, get) => ({
   selectedDate: new Date().toISOString().split('T')[0],
   blocks: [],
@@ -51,38 +64,6 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     }
   },
 
-  moveBlock: async (blockId: string, newStart: string) => {
-    // Atualiza UI instantaneamente (otimista)
-    const updatedBlocks = get().blocks.map(b =>
-      b.id === blockId ? { ...b, startTime: newStart } : b
-    );
-    set({ blocks: updatedBlocks });
-
-    // Persiste no backend
-    const { selectedDate } = get();
-    const userId = useAuthStore.getState().userId;
-    if (userId) {
-      try {
-        await api.post('/api/timeline', {
-          userId,
-          date: selectedDate,
-          forceSave: true,
-          blocks: updatedBlocks.map(b => ({
-            id: b.id,
-            title: b.title,
-            startTime: b.startTime,
-            endTime: b.endTime,
-            category: b.category,
-            intensity: b.intensity,
-            status: b.status,
-          })),
-        });
-      } catch {
-        // Falha silenciosa: UI já reflete o novo estado
-      }
-    }
-  },
-
   syncBlocks: async (userId: string, date: string, blocks: Partial<TimelineBlock>[]) => {
     set({ isLoading: true, error: null });
     try {
@@ -92,6 +73,98 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     } catch (err: any) {
       set({ isLoading: false, error: err.response?.data?.error || err.message });
       return false;
+    }
+  },
+
+  completeBlock: async (blockId: string) => {
+    const { blocks, selectedDate } = get();
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return;
+
+    const newStatus = block.status === 'completed' ? 'planned' : 'completed';
+    const updatedBlocks = blocks.map(b =>
+      b.id === blockId ? { ...b, status: newStatus } : b
+    );
+    set({ blocks: updatedBlocks });
+
+    const userId = useAuthStore.getState().userId;
+    if (userId) {
+      try {
+        await api.post('/api/timeline', {
+          userId,
+          date: selectedDate,
+          forceSave: true,
+          blocks: serializeBlocks(updatedBlocks),
+        });
+      } catch { /* optimistic — UI já atualizado */ }
+    }
+  },
+
+  deleteBlock: async (blockId: string) => {
+    const { blocks, selectedDate } = get();
+    const updatedBlocks = blocks.filter(b => b.id !== blockId);
+    set({ blocks: updatedBlocks });
+
+    const userId = useAuthStore.getState().userId;
+    if (userId) {
+      try {
+        await api.post('/api/timeline', {
+          userId,
+          date: selectedDate,
+          forceSave: true,
+          blocks: serializeBlocks(updatedBlocks),
+        });
+      } catch { /* silent */ }
+    }
+  },
+
+  duplicateBlock: async (blockId: string) => {
+    const { blocks, selectedDate } = get();
+    const block = blocks.find(b => b.id === blockId);
+    if (!block) return;
+
+    const copy: TimelineBlock = {
+      ...block,
+      id: `dup-${Date.now()}`,
+      title: `${block.title} (cópia)`,
+      status: 'planned',
+    };
+
+    const updatedBlocks = [...blocks, copy].sort((a, b) =>
+      a.startTime.localeCompare(b.startTime)
+    );
+    set({ blocks: updatedBlocks });
+
+    const userId = useAuthStore.getState().userId;
+    if (userId) {
+      try {
+        await api.post('/api/timeline', {
+          userId,
+          date: selectedDate,
+          forceSave: true,
+          blocks: serializeBlocks(updatedBlocks),
+        });
+      } catch { /* silent */ }
+    }
+  },
+
+  updateBlock: async (blockId: string, updates: Partial<Omit<TimelineBlock, 'id'>>) => {
+    const { blocks, selectedDate } = get();
+    const updatedBlocks = blocks.map(b =>
+      b.id === blockId ? { ...b, ...updates } : b
+    );
+    set({ blocks: updatedBlocks });
+
+    const userId = useAuthStore.getState().userId;
+    if (userId) {
+      try {
+        await api.post('/api/timeline', {
+          userId,
+          date: selectedDate,
+          forceSave: true,
+          blocks: serializeBlocks(updatedBlocks),
+        });
+      } catch { /* silent */ }
     }
   },
 }));
