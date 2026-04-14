@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -94,9 +95,15 @@ type AuraStoreContextValue = {
     title: string,
     time: string,
     category?: string,
-    options?: { date?: string; forceSave?: boolean }
-  ) => Promise<{ id: string | number; title: string; time: string; endTime: string; done: boolean; category?: string; intensity?: string; isAiSuggested?: boolean; aiReasoning?: string | null } | null>;
-  updateTask: (id: string | number, updates: { title?: string; time?: string; category?: string }) => Promise<void>;
+    options?: { 
+      date?: string; 
+      forceSave?: boolean;
+      note?: string;
+      persistentReminderEnabled?: boolean;
+      persistentReminderIntervalMinutes?: number | null;
+    }
+  ) => Promise<{ id: string | number; title: string; time: string; endTime: string; done: boolean; category?: string; intensity?: string; isAiSuggested?: boolean; aiReasoning?: string | null; note?: string | null; persistentReminderEnabled?: boolean; persistentReminderIntervalMinutes?: number | null } | null>;
+  updateTask: (id: string | number, updates: { title?: string; time?: string; category?: string; note?: string; persistentReminderEnabled?: boolean; persistentReminderIntervalMinutes?: number | null; done?: boolean }) => Promise<void>;
   removeTask: (id: string | number) => Promise<void>;
   reorderTasks: (fromIdx: number, toIdx: number) => void;
   toggleHabit: (habitId: string) => Promise<void>;
@@ -149,128 +156,130 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const refreshInFlightRef = useRef<Promise<void> | null>(null);
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     if (refreshInFlightRef.current) {
       return refreshInFlightRef.current;
     }
 
     const run = (async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setHydrated(true);
-      return;
-    }
-    setLoading(true);
-    try {
-      const today = getLocalDateKey();
-      const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw] = await Promise.all([
-        api.get('/checkins?days=45').catch(e => { console.error(e); return null; }),
-        api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; }),
-        api.get('/objectives').catch(e => { console.error(e); return null; }),
-        api.get('/preferences').catch(e => { console.error(e); return null; }),
-        api.get('/habits').catch(e => { console.error(e); return null; })
-      ]);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setHydrated(true);
+        return;
+      }
+      setLoading(true);
+      try {
+        const today = getLocalDateKey();
+        const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw] = await Promise.all([
+          api.get('/checkins?days=45').catch(e => { console.error(e); return null; }),
+          api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; }),
+          api.get('/objectives').catch(e => { console.error(e); return null; }),
+          api.get('/preferences').catch(e => { console.error(e); return null; }),
+          api.get('/habits').catch(e => { console.error(e); return null; })
+        ]);
 
-      const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : null;
-      const mappedCheckins = checkins
-        ? checkins.map((c: any) => ({
-          date: normalizeDateKey(c.localDate ?? c.recordedAt ?? c.date),
-          recordedAt: c.recordedAt,
-          checkinSlot: c.checkinSlot,
-          humor: toScore(c.moodScore),
-          energia: toScore(c.energyScore),
-          emotion: c.stateLabelType || 'calm',
-          emotions: Array.isArray(c.emotions)
-            ? c.emotions
-            : (Array.isArray(c.aiState?.emotions) ? c.aiState.emotions : undefined),
-          fisico: c.physicalScore != null ? toScore(c.physicalScore) : undefined,
-          social: c.socialScore != null ? toScore(c.socialScore) : undefined,
-          sono: c.sleepScore != null ? toScore(c.sleepScore) : undefined,
-          factors: Array.isArray(c.factors) && c.factors.length > 0 ? c.factors : undefined,
-          note: typeof c.note === 'string' ? c.note : undefined,
+        const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : null;
+        const mappedCheckins = checkins
+          ? checkins.map((c: any) => ({
+            date: normalizeDateKey(c.localDate ?? c.recordedAt ?? c.date),
+            recordedAt: c.recordedAt,
+            checkinSlot: c.checkinSlot,
+            humor: toScore(c.moodScore),
+            energia: toScore(c.energyScore),
+            emotion: c.stateLabelType || 'calm',
+            emotions: Array.isArray(c.emotions)
+              ? c.emotions
+              : (Array.isArray(c.aiState?.emotions) ? c.aiState.emotions : undefined),
+            fisico: c.physicalScore != null ? toScore(c.physicalScore) : undefined,
+            social: c.socialScore != null ? toScore(c.socialScore) : undefined,
+            sono: c.sleepScore != null ? toScore(c.sleepScore) : undefined,
+            factors: Array.isArray(c.factors) && c.factors.length > 0 ? c.factors : undefined,
+            note: typeof c.note === 'string' ? c.note : undefined,
           })).filter((entry) => Boolean(entry.date))
-        : null;
-      const timeline = Array.isArray(timelineRaw) ? timelineRaw : null;
-      const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : null;
-      const preferences = (preferencesRaw && typeof preferencesRaw === 'object') ? preferencesRaw : null;
-      const habits = Array.isArray(habitsRaw) ? habitsRaw : null;
+          : null;
 
-      setState(current => ({
-        ...current,
-        name: (preferences as any)?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
-        email: session.user.email ?? current.email,
-        checkinHistory: mappedCheckins && mappedCheckins.length > 0
-          ? mappedCheckins
-          : current.checkinHistory,
-        tasks: timeline
-          ? timeline.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          time: t.startTime,
-          endTime: t.endTime,
-          done: t.status === 'completed',
-          category: t.category,
-          intensity: t.intensity,
-          persistentReminderEnabled: t.persistentReminderEnabled ?? false,
-          persistentReminderIntervalMinutes: t.persistentReminderIntervalMinutes ?? null,
-          isAiSuggested: t.isAiSuggested ?? false,
-          aiReasoning: t.aiReasoning ?? null,
-          }))
-          : current.tasks,
-        goals: objectives
-          ? objectives.map((o: any) => ({
-          id: o.id,
-          title: o.title,
-          progress: o.description || 'Em andamento',
-          completedPct: o.progress,
-          subtasks: Array.isArray(o.subgoals) ? o.subgoals.map((s: any) => ({
-            id: s.id,
-            title: s.title,
-            done: s.done
-          })) : []
-          }))
-          : current.goals,
-        habits: habits
-          ? habits.map((h: any) => ({
-          id: h.id,
-          title: h.title,
-          description: h.description,
-          category: h.category,
-          icon: h.icon,
-          frequency: h.frequency,
-          targetDays: h.targetDays,
-          targetCount: h.targetCount ?? 1,
-          timeOfDay: h.timeOfDay ?? null,
-          durationMinutes: h.durationMinutes ?? null,
-          streakCount: h.streakCount,
-          bestStreak: h.bestStreak,
-          totalCompletions: h.totalCompletions,
-          completions: Array.isArray(h.completions)
-            ? h.completions.map((completion: any) => ({
-              ...completion,
-              completionCount: completion.completionCount ?? 1,
+        const timeline = Array.isArray(timelineRaw) ? timelineRaw : null;
+        const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : null;
+        const preferences = (preferencesRaw && typeof preferencesRaw === 'object') ? preferencesRaw : null;
+        const habits = Array.isArray(habitsRaw) ? habitsRaw : null;
+
+        setState(current => ({
+          ...current,
+          name: (preferences as any)?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
+          email: session.user.email ?? current.email,
+          checkinHistory: mappedCheckins && mappedCheckins.length > 0
+            ? mappedCheckins
+            : current.checkinHistory,
+          tasks: timeline
+            ? timeline.map((t: any) => ({
+              id: t.id,
+              title: t.title,
+              time: t.startTime,
+              endTime: t.endTime,
+              done: t.status === 'completed',
+              category: t.category,
+              intensity: t.intensity,
+              persistentReminderEnabled: t.persistentReminderEnabled ?? false,
+              persistentReminderIntervalMinutes: t.persistentReminderIntervalMinutes ?? null,
+              isAiSuggested: t.isAiSuggested ?? false,
+              aiReasoning: t.aiReasoning ?? null,
+              note: t.note ?? null,
             }))
-            : [],
-          reminderEnabled: h.reminderEnabled ?? false,
-          reminderTime: h.reminderTime ?? null,
-          persistentReminderEnabled: h.persistentReminderEnabled ?? false,
-          persistentReminderIntervalMinutes: h.persistentReminderIntervalMinutes ?? null,
-          }))
-          : current.habits,
-        theme: (preferences as any)?.aiTone === 'warm' ? 'Tema suave' : current.theme,
-        ...normalizeReminderPreferences(preferences, {
-          morningCheckinTime: current.morningCheckinTime,
-          eveningCheckinTime: current.eveningCheckinTime,
-          checkinReminder: current.checkinReminder,
-          notificationPreferences: current.notificationPreferences,
-        }),
-      }));
-    } catch (err) {
-      console.error("Failed to sync with backend:", err);
-    } finally {
-      setLoading(false);
-      setHydrated(true);
-    }
+            : current.tasks,
+          goals: objectives
+            ? objectives.map((o: any) => ({
+              id: o.id,
+              title: o.title,
+              progress: o.description || 'Em andamento',
+              completedPct: o.progress,
+              subtasks: Array.isArray(o.subgoals) ? o.subgoals.map((s: any) => ({
+                id: s.id,
+                title: s.title,
+                done: s.done
+              })) : []
+            }))
+            : current.goals,
+          habits: habits
+            ? habits.map((h: any) => ({
+              id: h.id,
+              title: h.title,
+              description: h.description,
+              category: h.category,
+              icon: h.icon,
+              frequency: h.frequency,
+              targetDays: h.targetDays,
+              targetCount: h.targetCount ?? 1,
+              timeOfDay: h.timeOfDay ?? null,
+              durationMinutes: h.durationMinutes ?? null,
+              streakCount: h.streakCount,
+              bestStreak: h.bestStreak,
+              totalCompletions: h.totalCompletions,
+              completions: Array.isArray(h.completions)
+                ? h.completions.map((completion: any) => ({
+                  ...completion,
+                  completionCount: completion.completionCount ?? 1,
+                }))
+                : [],
+              reminderEnabled: h.reminderEnabled ?? false,
+              reminderTime: h.reminderTime ?? null,
+              persistentReminderEnabled: h.persistentReminderEnabled ?? false,
+              persistentReminderIntervalMinutes: h.persistentReminderIntervalMinutes ?? null,
+            }))
+            : current.habits,
+          theme: (preferences as any)?.aiTone === 'warm' ? 'Tema suave' : current.theme,
+          ...normalizeReminderPreferences(preferences, {
+            morningCheckinTime: current.morningCheckinTime,
+            eveningCheckinTime: current.eveningCheckinTime,
+            checkinReminder: current.checkinReminder,
+            notificationPreferences: current.notificationPreferences,
+          }),
+        }));
+      } catch (err) {
+        console.error('Error refreshing AuraStore data:', err);
+      } finally {
+        setLoading(false);
+        setHydrated(true);
+      }
     })();
 
     refreshInFlightRef.current = run;
@@ -279,7 +288,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       refreshInFlightRef.current = null;
     }
-  };
+  }, []);
 
   useEffect(() => {
     try {
@@ -321,6 +330,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
             isAiSuggested: task.isAiSuggested ?? false,
             aiReasoning: task.aiReasoning ?? null,
+            note: task.note,
             status: newStatus
           }]
         });
@@ -568,6 +578,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             intensity: 'M',
             isAiSuggested: options?.forceSave ?? false,
             aiReasoning: options?.forceSave ? 'Criado por sugestão da Airia.' : undefined,
+            note: options?.note,
+            persistentReminderEnabled: options?.persistentReminderEnabled ?? false,
+            persistentReminderIntervalMinutes: options?.persistentReminderIntervalMinutes ?? null,
           }]
         });
         if (today === getLocalDateKey()) {
@@ -585,6 +598,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
               intensity: 'M',
               isAiSuggested: options?.forceSave ?? false,
               aiReasoning: options?.forceSave ? 'Criado por sugestão da Airia.' : undefined,
+              note: savedBlock.note ?? options?.note ?? null,
+              persistentReminderEnabled: savedBlock.persistentReminderEnabled ?? options?.persistentReminderEnabled ?? false,
+              persistentReminderIntervalMinutes: savedBlock.persistentReminderIntervalMinutes ?? options?.persistentReminderIntervalMinutes ?? null,
             }
           : null;
       },
@@ -603,10 +619,12 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             endTime,
             category: normalizeTaskCategory(updates.category ?? task.category),
             intensity: task.intensity ?? 'M',
-            persistentReminderEnabled: task.persistentReminderEnabled ?? false,
-            persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+            persistentReminderEnabled: updates.persistentReminderEnabled ?? task.persistentReminderEnabled ?? false,
+            persistentReminderIntervalMinutes: updates.persistentReminderIntervalMinutes === undefined ? task.persistentReminderIntervalMinutes : updates.persistentReminderIntervalMinutes,
             isAiSuggested: task.isAiSuggested ?? false,
             aiReasoning: task.aiReasoning ?? null,
+            note: updates.note ?? task.note,
+            status: updates.done !== undefined ? (updates.done ? 'completed' : 'planned') : (task.done ? 'completed' : 'planned'),
           }]
         });
         await refreshData();

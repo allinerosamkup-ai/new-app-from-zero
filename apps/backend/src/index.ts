@@ -1451,36 +1451,47 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
 
     // Processar Upserts em uma transação
-    const savedBlocks = await prisma.$transaction(
-      blocks.map((block) => {
-        const startAt = PlannerService.parseTimeToDate(baseDate, block.startTime);
-        const endAt = PlannerService.parseTimeToDate(baseDate, block.endTime);
+    const savedBlocks = await prisma.$transaction(async (tx) => {
+      // Se overwrite for true, remove todos os blocos do dia antes de salvar novos
+      if (req.body.overwrite === true) {
+        const dayStart = new Date(`${date}T00:00:00.000Z`);
+        const dayEnd = new Date(`${date}T23:59:59.999Z`);
+        await tx.timelineBlock.deleteMany({
+          where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+        });
+      }
 
-        const data = {
-          userId,
-          localDate: baseDate,
-          startAt,
-          endAt,
-          title: block.title,
-          category: block.category,
-          intensity: block.intensity,
-          status: block.status || 'planned',
-          ...buildTimelineMetadataData(block),
-        };
+      return Promise.all(
+        blocks.map((block) => {
+          const startAt = PlannerService.parseTimeToDate(baseDate, block.startTime);
+          const endAt = PlannerService.parseTimeToDate(baseDate, block.endTime);
 
-        if (block.id) {
-          return prisma.timelineBlock.upsert({
-            where: { id: block.id },
-            update: data,
-            create: { id: block.id, ...data },
-          });
-        } else {
-          return prisma.timelineBlock.create({
-            data,
-          });
-        }
-      })
-    );
+          const data = {
+            userId,
+            localDate: baseDate,
+            startAt,
+            endAt,
+            title: block.title,
+            category: block.category,
+            intensity: block.intensity,
+            status: block.status || 'planned',
+            ...buildTimelineMetadataData(block),
+          };
+
+          if (block.id && req.body.overwrite !== true) {
+            return tx.timelineBlock.upsert({
+              where: { id: block.id },
+              update: data,
+              create: { id: block.id, ...data },
+            });
+          } else {
+            return tx.timelineBlock.create({
+              data,
+            });
+          }
+        })
+      );
+    });
 
     // Sync
     try {
@@ -1499,6 +1510,33 @@ export function createApp(dependencies: AppDependencies = {}) {
     console.error('[timeline/sync] Error:', error);
     return res.status(500).json({ error: 'Failed to sync timeline blocks' });
   }
+  });
+
+  /**
+   * DELETE /api/timeline/day/:date
+   * Remove todos os blocos do planner para um dia específico.
+   */
+  app.delete('/api/timeline/day/:date', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { date } = req.params;
+
+    if (!date) {
+      return res.status(400).json({ error: 'date (path, YYYY-MM-DD) is required' });
+    }
+
+    try {
+      const dayStart = new Date(`${date}T00:00:00.000Z`);
+      const dayEnd = new Date(`${date}T23:59:59.999Z`);
+      
+      const { count } = await prisma.timelineBlock.deleteMany({
+        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+      });
+
+      return res.json({ deletedCount: count });
+    } catch (error: any) {
+      console.error('[timeline/deleteDay] Error:', error);
+      return res.status(500).json({ error: 'Failed to clear timeline day' });
+    }
   });
 
   /**
@@ -2538,7 +2576,7 @@ JSON APENAS: {"profileSummary":"..."}`,
    * POST /api/gcal/disconnect → removes stored token
    */
 
-  app.get('/api/gcal/auth-url', requireAuth, async (req: Request, res: Response) => {
+  app.get('/api/gcal/auth-url', async (req: Request, res: Response) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     if (!clientId || !clientSecret) {
@@ -2581,12 +2619,12 @@ JSON APENAS: {"profileSummary":"..."}`,
     
     if (error) {
       console.error('[GCal Callback] Google OAuth Error:', error);
-      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=${encodeURIComponent(error as string)}`);
+      return res.redirect(`${frontendUrl}/preferences?gcal=error&reason=${encodeURIComponent(error as string)}`);
     }
 
     if (!code || !userId) {
       console.error('[GCal Callback] Missing code or userId (state):', { code: !!code, userId: !!userId });
-      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=missing_code_or_state`);
+      return res.redirect(`${frontendUrl}/preferences?gcal=error&reason=missing_code_or_state`);
     }
 
     try {
@@ -2616,12 +2654,12 @@ JSON APENAS: {"profileSummary":"..."}`,
       
       if (!tokenRes.ok) {
         console.error('[GCal Callback] Error exchanging code for tokens:', tokens);
-        return res.redirect(`${frontendUrl}/planner?gcal=error&reason=${encodeURIComponent(tokens.error_description || tokens.error || 'token_exchange_failed')}`);
+        return res.redirect(`${frontendUrl}/preferences?gcal=error&reason=${encodeURIComponent(tokens.error_description || tokens.error || 'token_exchange_failed')}`);
       }
 
       if (!tokens.access_token) {
         console.error('[GCal Callback] No access token in response:', tokens);
-        return res.redirect(`${frontendUrl}/planner?gcal=error&reason=no_access_token`);
+        return res.redirect(`${frontendUrl}/preferences?gcal=error&reason=no_access_token`);
       }
 
       // Store tokens in user preferences
@@ -2643,58 +2681,110 @@ JSON APENAS: {"profileSummary":"..."}`,
         },
       });
 
-      console.log(`[GCal Callback] Success. Redirecting to: ${frontendUrl}/planner?gcal=connected`);
-      return res.redirect(`${frontendUrl}/planner?gcal=connected`);
+      console.log(`[GCal Callback] Success. Redirecting to: ${frontendUrl}/preferences?gcal=connected`);
+      return res.redirect(`${frontendUrl}/preferences?gcal=connected`);
     } catch (err: any) {
       console.error('[GCal Callback] Unexpected error during callback processing:', err);
-      return res.redirect(`${frontendUrl}/planner?gcal=error&reason=internal_server_error`);
+      return res.redirect(`${frontendUrl}/preferences?gcal=error&reason=internal_server_error`);
     }
   });
 
-  app.get('/api/gcal/events', requireAuth, async (req: Request, res: Response) => {
+  app.get('/api/gcal/events', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     const requestedDate = req.query.date as string;
     try {
       let token = await GCalService.getValidToken(prisma, userId);
       if (!token) return res.json({ connected: false, events: [] });
 
-      const fetchEvents = async (t: string) => {
-        let timeMin: Date = new Date(Date.now() - 24 * 3600_000);
-        let timeMax: Date = new Date(Date.now() + 14 * 24 * 3600_000);
-        if (requestedDate) {
-          // Fetch a slightly wider window to allow for timezone shifts (GMT-12 to GMT+14)
-          timeMin = new Date(`${requestedDate}T00:00:00Z`);
-          timeMin.setHours(timeMin.getHours() - 14); // Buffer for ahead timezones
-          timeMax = new Date(`${requestedDate}T23:59:59Z`);
-          timeMax.setHours(timeMax.getHours() + 14); // Buffer for behind timezones
-        }
+      const pref = await prisma.userPreference.findUnique({
+        where: { userId },
+        select: { gcalSelectedCalendars: true, gcalRefreshToken: true }
+      });
 
-        const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin.toISOString())}&timeMax=${encodeURIComponent(timeMax.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=100`;
+      let timeMin: Date = new Date(Date.now() - 24 * 3600_000);
+      let timeMax: Date = new Date(Date.now() + 14 * 24 * 3600_000);
+      if (requestedDate) {
+        timeMin = new Date(`${requestedDate}T00:00:00Z`);
+        timeMin.setHours(timeMin.getHours() - 14);
+        timeMax = new Date(`${requestedDate}T23:59:59Z`);
+        timeMax.setHours(timeMax.getHours() + 14);
+      }
+
+      const fetchEventsFromCalendar = async (t: string, calendarId: string) => {
+        const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${encodeURIComponent(timeMin.toISOString())}&timeMax=${encodeURIComponent(timeMax.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=100`;
         return fetch(url, { headers: { Authorization: `Bearer ${t}` } });
       };
 
-      let eventsRes = await fetchEvents(token);
+      const fetchCalendarList = async (t: string) =>
+        fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+          headers: { Authorization: `Bearer ${t}` },
+        });
 
-      if (eventsRes.status === 401) {
-        const pref = await prisma.userPreference.findUnique({ where: { userId }, select: { gcalRefreshToken: true } });
-        if (pref?.gcalRefreshToken) {
+      const getDefaultCalendarIds = async (): Promise<string[]> => {
+        let listRes = await fetchCalendarList(token!);
+
+        if (listRes.status === 401 && pref?.gcalRefreshToken) {
           const newToken = await GCalService.refreshAccessToken(prisma, userId, pref.gcalRefreshToken);
           if (newToken) {
-            eventsRes = await fetchEvents(newToken);
+            token = newToken;
+            listRes = await fetchCalendarList(newToken);
           }
         }
-      }
 
-      if (!eventsRes.ok) return res.json({ connected: false, events: [] });
+        if (!listRes.ok) return ['primary'];
 
-      const data = await eventsRes.json() as any;
-      const events = (data.items || []).map((e: any) => ({
-        id: e.id,
-        summary: e.summary ?? 'Evento',
-        start: { dateTime: e.start?.dateTime, date: e.start?.date },
-        end: e.end ? { dateTime: e.end?.dateTime, date: e.end?.date } : undefined,
-        link: e.htmlLink
-      }));
+        const data = await listRes.json() as any;
+        const calendarIds = (data.items || [])
+          .filter((calendar: any) => calendar?.selected !== false && calendar?.accessRole !== 'none')
+          .map((calendar: any) => String(calendar.id || '').trim())
+          .filter(Boolean);
+
+        return calendarIds.length > 0 ? calendarIds : ['primary'];
+      };
+
+      const savedCalendarIds = Array.isArray(pref?.gcalSelectedCalendars)
+        ? (pref?.gcalSelectedCalendars as unknown[]).map((id) => String(id).trim()).filter(Boolean)
+        : [];
+      const selectedCalendars = savedCalendarIds.length > 0 ? savedCalendarIds : await getDefaultCalendarIds();
+
+      // Helper to attempt fetch, auto-refresh token on 401
+      const fetchWithRetry = async (calendarId: string): Promise<any[]> => {
+        let eventsRes = await fetchEventsFromCalendar(token!, calendarId);
+        
+        if (eventsRes.status === 401 && pref?.gcalRefreshToken) {
+          const newToken = await GCalService.refreshAccessToken(prisma, userId, pref.gcalRefreshToken);
+          if (newToken) {
+            token = newToken;
+            eventsRes = await fetchEventsFromCalendar(newToken, calendarId);
+          }
+        }
+
+        if (!eventsRes.ok) return [];
+
+        const data = await eventsRes.json() as any;
+        return (data.items || []).map((e: any) => ({
+          id: e.id,
+          summary: e.summary ?? 'Evento',
+          start: { dateTime: e.start?.dateTime, date: e.start?.date },
+          end: e.end ? { dateTime: e.end?.dateTime, date: e.end?.date } : undefined,
+          link: e.htmlLink,
+          calendarId,
+          color: e.colorId || undefined,
+          note: e.description || '',
+          airiaStatus: e.extendedProperties?.private?.airiaStatus === 'completed' ? 'completed' : 'planned',
+        }));
+      };
+
+      // Fetch from all selected calendars in parallel
+      const allEventsArrays = await Promise.all(
+        selectedCalendars.map(calId => fetchWithRetry(calId))
+      );
+      const events = allEventsArrays.flat().sort((a, b) => {
+        const aTime = a.start?.dateTime || a.start?.date || '';
+        const bTime = b.start?.dateTime || b.start?.date || '';
+        return aTime.localeCompare(bTime);
+      });
+
       return res.json({ connected: true, events });
     } catch (err) {
       console.error('[gcal/events]', err);
@@ -2702,11 +2792,149 @@ JSON APENAS: {"profileSummary":"..."}`,
     }
   });
 
-  app.post('/api/gcal/disconnect', requireAuth, async (req: Request, res: Response) => {
+  /**
+   * GET /api/gcal/calendars — list all calendars available in the user's Google account
+   */
+  app.get('/api/gcal/calendars', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      let token = await GCalService.getValidToken(prisma, userId);
+      if (!token) return res.json({ connected: false, calendars: [] });
+
+      const fetchCalendarList = async (t: string) =>
+        fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+          headers: { Authorization: `Bearer ${t}` },
+        });
+
+      let listRes = await fetchCalendarList(token);
+
+      if (listRes.status === 401) {
+        const pref = await prisma.userPreference.findUnique({ where: { userId }, select: { gcalRefreshToken: true } });
+        if (pref?.gcalRefreshToken) {
+          const newToken = await GCalService.refreshAccessToken(prisma, userId, pref.gcalRefreshToken);
+          if (newToken) {
+            listRes = await fetchCalendarList(newToken);
+          }
+        }
+      }
+
+      if (!listRes.ok) return res.json({ connected: false, calendars: [] });
+
+      const data = await listRes.json() as any;
+      const calendars = (data.items || []).map((c: any) => ({
+        id: c.id,
+        summary: c.summary || c.id,
+        description: c.description || '',
+        primary: c.primary === true,
+        backgroundColor: c.backgroundColor || '#4285F4',
+        selected: c.selected !== false,
+        accessRole: c.accessRole || 'reader',
+      }));
+
+      // Also fetch user's saved selection
+      const pref = await prisma.userPreference.findUnique({
+        where: { userId },
+        select: { gcalSelectedCalendars: true }
+      });
+      const savedSelectedIds = Array.isArray(pref?.gcalSelectedCalendars)
+        ? (pref?.gcalSelectedCalendars as unknown[]).map((id) => String(id).trim()).filter(Boolean)
+        : [];
+      const defaultSelectedIds = calendars
+        .filter((calendar: any) => calendar.selected && calendar.accessRole !== 'none')
+        .map((calendar: any) => calendar.id);
+      const selectedIds = savedSelectedIds.length > 0 ? savedSelectedIds : defaultSelectedIds;
+
+      return res.json({ connected: true, calendars, selectedIds });
+    } catch (err) {
+      console.error('[gcal/calendars]', err);
+      return res.json({ connected: false, calendars: [] });
+    }
+  });
+
+  /**
+   * PUT /api/gcal/calendars — save the user's selected calendar IDs
+   */
+  app.put('/api/gcal/calendars', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { calendarIds } = req.body as { calendarIds: string[] };
+    if (!Array.isArray(calendarIds) || calendarIds.length === 0) {
+      return res.status(400).json({ error: 'At least one calendar must be selected' });
+    }
+    try {
+      await prisma.userPreference.upsert({
+        where: { userId },
+        update: { gcalSelectedCalendars: calendarIds } as any,
+        create: { userId, gcalSelectedCalendars: calendarIds } as any,
+      });
+      return res.json({ ok: true, calendarIds });
+    } catch (err) {
+      console.error('[gcal/calendars PUT]', err);
+      return res.status(500).json({ error: 'Failed to save calendar selection' });
+    }
+  });
+
+  app.patch('/api/gcal/events/:eventId', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { eventId } = req.params;
+    const calendarId = typeof req.query.calendarId === 'string' && req.query.calendarId.trim()
+      ? req.query.calendarId.trim()
+      : 'primary';
+    const body = req.body as {
+      date?: string;
+      title?: string;
+      startTime?: string;
+      endTime?: string;
+      status?: string;
+      note?: string;
+    };
+    const status = body.status === 'completed' ? 'completed' : body.status === 'planned' ? 'planned' : undefined;
+
+    try {
+      const updated = await GCalService.updateEvent(prisma, userId, calendarId, eventId, {
+        date: body.date,
+        title: typeof body.title === 'string' ? body.title.trim() : undefined,
+        startTime: body.startTime,
+        endTime: body.endTime,
+        status,
+        note: body.note,
+      });
+
+      if (!updated) {
+        return res.status(502).json({ error: 'Não consegui atualizar esse evento do Google Agenda.' });
+      }
+
+      return res.json({ updated: true, event: updated });
+    } catch (err) {
+      console.error('[gcal/events PATCH]', err);
+      return res.status(500).json({ error: 'Failed to update Google Calendar event' });
+    }
+  });
+
+  app.delete('/api/gcal/events/:eventId', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { eventId } = req.params;
+    const calendarId = typeof req.query.calendarId === 'string' && req.query.calendarId.trim()
+      ? req.query.calendarId.trim()
+      : 'primary';
+
+    try {
+      const deleted = await GCalService.deleteEvent(prisma, userId, calendarId, eventId);
+      if (!deleted) {
+        return res.status(502).json({ error: 'Não consegui excluir esse evento do Google Agenda.' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('[gcal/events DELETE]', err);
+      return res.status(500).json({ error: 'Failed to delete Google Calendar event' });
+    }
+  });
+
+  app.post('/api/gcal/disconnect', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     await prisma.userPreference.update({
       where: { userId },
-      data: { gcalAccessToken: null, gcalRefreshToken: null },
+      data: { gcalAccessToken: null, gcalRefreshToken: null, gcalSelectedCalendars: [] } as any,
     }).catch(() => {});
     return res.json({ disconnected: true });
   });

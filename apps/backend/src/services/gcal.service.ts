@@ -63,11 +63,12 @@ export class GCalService {
 
     const startTime = this.formatUtcTime(block.startAt);
     const endTime = this.formatUtcTime(block.endAt);
+    const isAllDay = startTime === '00:00' && endTime === '23:59';
     const event = {
       summary: block.title,
-      description: `Airia Task: ${block.category}`,
-      start: { dateTime: this.buildLocalDateTime(date, startTime), timeZone: this.getTimeZone() },
-      end: { dateTime: this.buildLocalDateTime(date, endTime), timeZone: this.getTimeZone() },
+      description: block.note || `Airia Task: ${block.category}`,
+      start: isAllDay ? { date } : { dateTime: this.buildLocalDateTime(date, startTime), timeZone: this.getTimeZone() },
+      end: isAllDay ? { date } : { dateTime: this.buildLocalDateTime(date, endTime), timeZone: this.getTimeZone() },
     };
 
     try {
@@ -125,19 +126,42 @@ export class GCalService {
     prisma: PrismaClient,
     userId: string,
     eventId: string,
-    input: { date: string; title: string; startTime: string; endTime: string },
+    input: { date: string; title: string; startTime: string; endTime: string; note?: string },
+  ): Promise<any | null> {
+    return this.updateEvent(prisma, userId, 'primary', eventId, input);
+  }
+
+  static async updateEvent(
+    prisma: PrismaClient,
+    userId: string,
+    calendarId: string,
+    eventId: string,
+    input: {
+      date?: string;
+      title?: string;
+      startTime?: string;
+      endTime?: string;
+      status?: 'planned' | 'completed';
+      note?: string;
+    },
   ): Promise<any | null> {
     const token = await this.getValidToken(prisma, userId);
     if (!token) return null;
 
-    const event = {
-      summary: input.title,
-      start: { dateTime: this.buildLocalDateTime(input.date, input.startTime), timeZone: this.getTimeZone() },
-      end: { dateTime: this.buildLocalDateTime(input.date, input.endTime), timeZone: this.getTimeZone() },
-    };
+    const event: Record<string, unknown> = {};
+    if (input.title) event.summary = input.title;
+    if (input.note !== undefined) event.description = input.note;
+    if (input.date && input.startTime && input.endTime) {
+      const isAllDay = input.startTime === '00:00' && input.endTime === '23:59';
+      event.start = isAllDay ? { date: input.date } : { dateTime: this.buildLocalDateTime(input.date, input.startTime), timeZone: this.getTimeZone() };
+      event.end = isAllDay ? { date: input.date } : { dateTime: this.buildLocalDateTime(input.date, input.endTime), timeZone: this.getTimeZone() };
+    }
+    if (input.status) {
+      event.extendedProperties = { private: { airiaStatus: input.status } };
+    }
 
     const requestUpdate = (accessToken: string) => fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId || 'primary')}/events/${encodeURIComponent(eventId)}`,
       {
         method: 'PATCH',
         headers: {
@@ -175,11 +199,15 @@ export class GCalService {
   }
 
   static async deletePrimaryEvent(prisma: PrismaClient, userId: string, eventId: string): Promise<boolean> {
+    return this.deleteEvent(prisma, userId, 'primary', eventId);
+  }
+
+  static async deleteEvent(prisma: PrismaClient, userId: string, calendarId: string, eventId: string): Promise<boolean> {
     const token = await this.getValidToken(prisma, userId);
     if (!token) return false;
 
     const requestDelete = (accessToken: string) => fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId || 'primary')}/events/${encodeURIComponent(eventId)}`,
       {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${accessToken}` },

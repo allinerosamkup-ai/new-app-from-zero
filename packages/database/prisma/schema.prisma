@@ -85,6 +85,7 @@ model UserPreference {
   aiTone             String   @default("warm") @map("ai_tone")
   gcalAccessToken    String?  @map("gcal_access_token") @db.Text
   gcalRefreshToken   String?  @map("gcal_refresh_token") @db.Text
+  gcalSelectedCalendars Json? @map("gcal_selected_calendars")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

@@ -65,7 +65,7 @@ const RecurringConfigSchema = z.object({
 });
 
 export const TimelineBlockSchema = z.object({
-  id: z.string().optional().nullable(),
+  id: z.string().uuid().optional().nullable(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/), // HH:mm
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/),   // HH:mm
   title: z.string().min(1),
@@ -290,14 +290,14 @@ export class PlannerService {
       const type = normalizeSuggestionType(block.tipo);
       const tasks = Array.isArray(block.tarefas_sugeridas)
         ? block.tarefas_sugeridas
-            .map((task) => normalizeText(task))
-            .filter(Boolean)
-            .filter((task) => {
-              const key = suggestionKey(task);
-              if (!key || seenTasks.has(key)) return false;
-              seenTasks.add(key);
-              return true;
-            })
+          .map((task) => normalizeText(task))
+          .filter(Boolean)
+          .filter((task) => {
+            const key = suggestionKey(task);
+            if (!key || seenTasks.has(key)) return false;
+            seenTasks.add(key);
+            return true;
+          })
         : [];
 
       if (tasks.length === 0 || type === 'descanso' || type === 'refeicao') {

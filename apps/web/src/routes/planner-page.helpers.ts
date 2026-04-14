@@ -272,6 +272,9 @@ export function buildPlannerAgendaSlots(tasks: PlannerTaskLike[]): PlannerAgenda
   }
 
   tasks.forEach((task) => {
+    // Skip all-day tasks from the vertical timeline
+    if (task.time === "00:00" && task.endTime === "23:59") return;
+
     slots.push({
       kind: "task",
       key: task.id,
@@ -322,7 +325,30 @@ export function shouldNavigateAgendaBySwipe(
 }
 
 export function stripGoogleCalendarTaskId(taskId: string): string {
-  return taskId.startsWith("gcal-") ? taskId.slice(5) : taskId;
+  return parseGoogleCalendarTaskId(taskId).eventId;
+}
+
+export function buildGoogleCalendarTaskId(calendarId: string | null | undefined, eventId: string): string {
+  const safeCalendarId = encodeURIComponent(calendarId?.trim() || "primary");
+  const safeEventId = encodeURIComponent(eventId);
+  return `gcal-${safeCalendarId}::${safeEventId}`;
+}
+
+export function parseGoogleCalendarTaskId(taskId: string): { calendarId: string; eventId: string } {
+  if (!taskId.startsWith("gcal-")) {
+    return { calendarId: "primary", eventId: taskId };
+  }
+
+  const payload = taskId.slice(5);
+  const separatorIndex = payload.indexOf("::");
+  if (separatorIndex === -1) {
+    return { calendarId: "primary", eventId: payload };
+  }
+
+  return {
+    calendarId: decodeURIComponent(payload.slice(0, separatorIndex)) || "primary",
+    eventId: decodeURIComponent(payload.slice(separatorIndex + 2)),
+  };
 }
 
 export function stripGoogleCalendarTaskTitle(title: string): string {
