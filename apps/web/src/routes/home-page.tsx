@@ -440,6 +440,9 @@ export function HomePage() {
 
   const [homeAiMsg, setHomeAiMsg] = useState<HomeAiMsg | null>(null);
   const [homeAiLoading, setHomeAiLoading] = useState(true);
+  const [autonomyExpanded, setAutonomyExpanded] = useState(true);
+  const [completedAutocuidadoIdx, setCompletedAutocuidadoIdx] = useState<Set<number>>(new Set());
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const previousHomeAiMsgRef = useRef<HomeAiMsg | null>(null);
   const lastHomeAiRequestKeyRef = useRef<string | null>(null);
   const latestCheckinKey = useMemo(() => {
@@ -1879,8 +1882,17 @@ export function HomePage() {
               background: hasInsight && isUrgent ? cfg.bg : "rgba(255,253,249,.97)",
               ...(hasInsight && isUrgent ? { boxShadow: `0 0 0 3px ${cfg.color}15` } : {}),
             }}>
-              <div className="home-ai-card-header" style={{ background: cfg.bg, borderBottom: `1px solid ${cfg.color}22` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div 
+                className="home-ai-card-header" 
+                style={{ 
+                  background: cfg.bg, 
+                  borderBottom: `1px solid ${cfg.color}22`,
+                  cursor: "pointer",
+                }}
+                role="button"
+                onClick={() => setAutonomyExpanded(!autonomyExpanded)}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 7, flex: 1 }}>
                   <span style={{ fontSize: 16, color: cfg.color }}>{hasInsight ? (isUrgent ? "🚨" : "♡") : "♡"}</span>
                   <div>
                     <p className="home-ai-card-title" style={{ color: cfg.color }}>
@@ -1925,15 +1937,29 @@ export function HomePage() {
                   </div>
                 </div>
                 {hasInsight ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{ width: 48, height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                    <div style={{ width: 48, height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden", flex: 1 }}>
                       <div style={{ width: `${score}%`, height: "100%", borderRadius: 999, background: cfg.color }} />
                     </div>
                   </div>
                 ) : null}
+                <svg 
+                  width="12" height="12" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="var(--text-3)" 
+                  strokeWidth="2"
+                  style={{ 
+                    transform: autonomyExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                    flexShrink: 0,
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
               </div>
 
-              <div className="home-ai-card-body">
+              <div className="home-ai-card-body" style={{ display: autonomyExpanded ? "block" : "none" }}>
                 {hasInsight ? (
                   <>
                     <p className="home-ai-quote" style={isUrgent ? { fontSize: 13, fontWeight: 600, color: cfg.color } : {}}>
