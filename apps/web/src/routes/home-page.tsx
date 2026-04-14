@@ -1593,16 +1593,25 @@ export function HomePage() {
                         <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>
                           {task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa"}
                         </p>
-                        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                           <button
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
                               void handleHomeTaskDone(task);
                             }}
-                            style={{ border: "1px solid rgba(150,199,179,.35)", background: "rgba(150,199,179,.12)", color: "var(--accent-sage)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
+                            title="Marcar como feito"
+                            style={{
+                              width: 20, height: 20, borderRadius: "50%",
+                              border: "1.5px solid var(--accent-sage)",
+                              background: "transparent",
+                              cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
                           >
-                            Feito
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
                           </button>
                           <button
                             type="button"
@@ -1610,13 +1619,23 @@ export function HomePage() {
                               event.stopPropagation();
                               void handleHomeTaskDelete(task);
                             }}
-                            style={{ border: "1px solid rgba(215,137,127,.28)", background: "rgba(215,137,127,.08)", color: "var(--accent-peach)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
+                            title="Excluir"
+                            style={{
+                              width: 20, height: 20, borderRadius: "50%",
+                              border: "1.5px solid var(--accent-peach)",
+                              background: "transparent",
+                              cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
                           >
-                            Excluir
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
                           </button>
                           {task.isAiSuggested && (
-                            <span style={{ alignSelf: "center", fontSize: 10, color: "var(--accent-peach-ink)", fontWeight: 800 }}>
-                              Airia repõe ao sair
+                            <span style={{ fontSize: 9, color: "var(--accent-peach-ink)", fontWeight: 600 }}>
+                              IA
                             </span>
                           )}
                         </div>
