@@ -80,6 +80,12 @@ export const TimelineBlockSchema = z.object({
   lastResetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   persistentReminderEnabled: z.boolean().optional(),
   persistentReminderIntervalMinutes: z.number().int().min(5).max(720).optional().nullable(),
+  vibrateEnabled: z.boolean().optional(),
+  alarmEnabled: z.boolean().optional(),
+  recurringNotificationEnabled: z.boolean().optional(),
+  visualRepeatEnabled: z.boolean().optional(),
+  icon: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
   isAiSuggested: z.boolean().optional(),
   aiReasoning: z.string().optional().nullable(),
 });

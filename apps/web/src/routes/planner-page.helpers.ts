@@ -22,7 +22,7 @@ export type FormStateLike = {
   time: string;
   endTime?: string;
   category: string;
-  energyLevel: "alta" | "media" | "leve";
+  energyLevel: 1 | 2 | 3 | 4 | 5;
   noteMode?: TimelineBlockNoteMode;
   note?: string;
   checklist?: TimelineChecklistItem[];
@@ -30,6 +30,12 @@ export type FormStateLike = {
   lastResetDate?: string;
   persistentReminderEnabled?: boolean;
   persistentReminderIntervalMinutes?: number | null;
+  alarmEnabled?: boolean;
+  vibrateEnabled?: boolean;
+  recurringNotificationEnabled?: boolean;
+  visualRepeatEnabled?: boolean;
+  icon?: string;
+  color?: string;
 };
 
 export type PlannerTaskLike = {
@@ -43,6 +49,14 @@ export type PlannerTaskLike = {
   link?: string;
   persistentReminderEnabled?: boolean;
   persistentReminderIntervalMinutes?: number | null;
+  alarmEnabled?: boolean;
+  vibrateEnabled?: boolean;
+  recurringNotificationEnabled?: boolean;
+  visualRepeatEnabled?: boolean;
+  icon?: string | null;
+  color?: string | null;
+  intensity?: string | null;
+  energyLevel?: 1 | 2 | 3 | 4 | 5 | null;
   isAiSuggested?: boolean;
   aiReasoning?: string | null;
 };
@@ -172,18 +186,17 @@ export function mapEnergyLevelToIntensity(
   energyLevel: FormStateLike["energyLevel"],
   fallback: TimelineBlockIntensity = "M",
 ): TimelineBlockIntensity {
-  if (energyLevel === "alta") return "P";
-  if (energyLevel === "leve") return "L";
-  if (energyLevel === "media") return "M";
-  return fallback;
+  if (energyLevel >= 4) return "P";
+  if (energyLevel <= 2) return "L";
+  return "M";
 }
 
 export function mapIntensityToEnergyLevel(intensity?: string | null): FormStateLike["energyLevel"] {
   const value = (intensity ?? "").trim().toUpperCase();
 
-  if (value === "P") return "alta";
-  if (value === "L") return "leve";
-  return "media";
+  if (value === "P") return 4;
+  if (value === "L") return 2;
+  return 3;
 }
 
 export function buildTimelineBlockInput(
@@ -197,13 +210,14 @@ export function buildTimelineBlockInput(
     aiReasoning?: string | null;
   },
 ) {
-  const payload = {
+  const payload: any = {
     ...(options?.id ? { id: options.id } : {}),
     title: form.title.trim(),
     startTime: form.time,
     endTime: form.endTime || addMinutesToTime(form.time, options?.durationMinutes ?? 30),
     category: normalizePlannerCategory(form.category, form.title),
     intensity: mapEnergyLevelToIntensity(form.energyLevel, options?.fallbackIntensity),
+    energyLevel: form.energyLevel,
     status: options?.fallbackStatus ?? "planned",
     ...(options?.isAiSuggested !== undefined ? { isAiSuggested: options.isAiSuggested } : {}),
     ...(options?.aiReasoning !== undefined ? { aiReasoning: options.aiReasoning } : {}),
@@ -216,7 +230,10 @@ export function buildTimelineBlockInput(
     form.recurring !== undefined ||
     form.lastResetDate !== undefined ||
     form.persistentReminderEnabled !== undefined ||
-    form.persistentReminderIntervalMinutes !== undefined;
+    form.persistentReminderIntervalMinutes !== undefined ||
+    form.alarmEnabled !== undefined ||
+    form.vibrateEnabled !== undefined ||
+    form.visualRepeatEnabled !== undefined;
 
   if (!hasMetadata) {
     return payload;
@@ -228,10 +245,15 @@ export function buildTimelineBlockInput(
     note: form.note,
     checklist: form.checklist,
     recurring: form.recurring,
-    energyLevel: form.energyLevel,
     lastResetDate: form.lastResetDate,
     persistentReminderEnabled: form.persistentReminderEnabled,
     persistentReminderIntervalMinutes: form.persistentReminderIntervalMinutes,
+    alarmEnabled: form.alarmEnabled,
+    vibrateEnabled: form.vibrateEnabled,
+    recurringNotificationEnabled: form.recurringNotificationEnabled,
+    visualRepeatEnabled: form.visualRepeatEnabled,
+    icon: form.icon,
+    color: form.color,
   };
 }
 

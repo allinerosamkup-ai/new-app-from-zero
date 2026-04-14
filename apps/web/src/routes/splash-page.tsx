@@ -1,4 +1,4 @@
-import { ArrowRight, BrainCircuit, CalendarRange, HeartHandshake, ShieldCheck, Sparkles, Waves, type LucideIcon } from "lucide-react";
+import { ArrowRight, BrainCircuit, CalendarRange, ClipboardList, HeartHandshake, ShieldCheck, Sparkles, Waves, type LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -47,7 +47,7 @@ const AIRIA_SERIF = "'Playfair Display', Georgia, serif";
 
 const audienceCards: InfoCard[] = [
   {
-    title: "Para quem percebe tarde demais que saiu do eixo",
+    title: "Para quem só entende o que aconteceu quando já passou",
     description:
       "Humor, energia, foco e sobrecarga não aparecem em linha reta. A Airia ajuda a notar sinais de queda, aceleração e desgaste antes que isso vire resposta atravessada, promessa demais ou sumiço de si.",
   },
@@ -60,6 +60,11 @@ const audienceCards: InfoCard[] = [
     title: "Para quem quer melhorar a vida prática",
     description:
       "Quando o ritmo interno fica mais claro, também fica mais simples proteger relações, organizar o trabalho, respeitar limites e aproveitar melhor os dias bons.",
+  },
+  {
+    title: "Para quem quer dados reais para levar ao médico",
+    description:
+      "O histórico de ciclo vira um panorama clínico: fases, estabilidade, gatilhos recorrentes e impacto do sono. Útil para o psiquiatra ou terapeuta enxergar o que uma consulta mensal não consegue capturar — inclusive se o medicamento está estabilizando o ciclo.",
   },
 ];
 
@@ -108,6 +113,12 @@ const features: FeatureCard[] = [
     title: "Airia como camada de apoio",
     description:
       "A leitura interna vira atitude concreta: conversar melhor, recuar a tempo, reorganizar o dia, descansar ou focar com mais intenção.",
+  },
+  {
+    icon: ClipboardList,
+    title: "Dados para o seu acompanhamento",
+    description:
+      "Leve histórico real para consultas com psiquiatra ou terapeuta: ciclos, estabilidade, gatilhos e correlações — tudo visível para quem te acompanha clinicamente.",
   },
 ];
 
@@ -417,22 +428,7 @@ export function SplashPage() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 18,
-                background: "rgba(255,255,255,.78)",
-                border: "1px solid rgba(255,255,255,.72)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 18px 34px rgba(107,91,87,.10)",
-                overflow: "hidden",
-              }}
-            >
-              <AiriaConstellationLogo size={54} />
-            </div>
+            <AiriaConstellationLogo size={62} hybrid />
             <AiriaWordmark compact />
           </div>
 
@@ -464,13 +460,28 @@ export function SplashPage() {
             alignItems: "center",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 28, position: "relative" }}>
+            <div
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -54%)",
+                opacity: 0.13,
+                pointerEvents: "none",
+                zIndex: -1,
+              }}
+            >
+              <AiriaConstellationLogo size={480} hybrid />
+            </div>
             <div
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 8,
                 width: "fit-content",
+                position: "relative",
+                zIndex: 1,
                 padding: "10px 14px",
                 borderRadius: 999,
                 background: "rgba(255,255,255,.78)",
@@ -499,7 +510,7 @@ export function SplashPage() {
                   maxWidth: 720,
                 }}
               >
-                  Seu dia não precisa depender da sorte.
+                  Você não é difícil. Você cicla.
               </h1>
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
                 <p
@@ -511,8 +522,8 @@ export function SplashPage() {
                   }}
                 >
                   Tem dia em que tudo encaixa. Tem dia em que qualquer conversa pesa. E tem dia em que a energia sobe
-                  tanto que parece que vai dar para abraçar o mundo inteiro, até passar do ponto. A Airia te ajuda a
-                  perceber isso antes.
+                  tanto que parece que vai dar para abraçar o mundo — até você perceber que passou do ponto.
+                  A Airia te ajuda a perceber isso antes.
                 </p>
                 <p
                   style={{
@@ -522,8 +533,8 @@ export function SplashPage() {
                     color: BRAND.textSoft,
                   }}
                 >
-                  Com o tempo, fica mais fácil identificar padrões, entender se hoje é um bom dia ou um dia de
-                  proteção, evitar decisões no impulso e cuidar melhor do trabalho, das relações e de si.
+                  Com o tempo, fica mais fácil entender se hoje é dia de avançar ou de se proteger. Tomar decisões
+                  melhores. Cuidar melhor do trabalho, das relações e de si.
                 </p>
               </div>
             </div>
@@ -710,8 +721,8 @@ export function SplashPage() {
                     }}
                   />
                   <img
-                    src="/screenshots/planner-page.png"
-                    alt="Mood Energy planner"
+                    src="/screenshots/home-page.png"
+                    alt="Mood Energy home"
                     style={{
                       width: "100%",
                       height: "100%",
@@ -725,37 +736,55 @@ export function SplashPage() {
               <div
                 style={{
                   position: "absolute",
-                  top: 76,
-                  right: -10,
-                  padding: "12px 14px",
-                  borderRadius: 18,
-                  background: "rgba(255,255,255,.92)",
+                  top: 172,
+                  right: -20,
+                  padding: "10px 13px",
+                  borderRadius: 16,
+                  background: "rgba(255,255,255,.96)",
                   border: "1px solid rgba(17,24,39,.06)",
-                  boxShadow: "0 18px 36px rgba(107,91,87,.08)",
+                  boxShadow: "0 14px 32px rgba(107,91,87,.10)",
                   display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
+                  alignItems: "center",
+                  gap: 9,
+                  maxWidth: 170,
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 800, color: "var(--text-3)", letterSpacing: ".08em", textTransform: "uppercase" }}>
-                  Check-in
-                </span>
-                <span style={{ fontSize: 13, color: "var(--text-1)", fontWeight: 700 }}>Leitura do dia em poucos toques</span>
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 10,
+                    background: "rgba(244,168,150,.22)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Waves size={14} color="#B86D4C" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-3)", letterSpacing: ".08em", textTransform: "uppercase" }}>
+                    Check-in
+                  </span>
+                  <span style={{ fontSize: 12, color: "var(--text-1)", fontWeight: 700, lineHeight: 1.3 }}>Leitura do dia em poucos toques</span>
+                </div>
               </div>
 
               <div
                 style={{
                   position: "absolute",
-                  left: -14,
+                  left: 12,
                   bottom: 42,
-                  padding: "12px 14px",
-                  borderRadius: 18,
+                  padding: "10px 13px",
+                  borderRadius: 16,
                   background: "rgba(255,255,255,.94)",
                   border: "1px solid rgba(17,24,39,.06)",
                   boxShadow: "0 18px 36px rgba(107,91,87,.08)",
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
+                  maxWidth: 200,
                 }}
               >
                 <div
@@ -804,8 +833,8 @@ export function SplashPage() {
                 minHeight: 220,
                 display: "flex",
                 flexDirection: "column",
-                  justifyContent: "space-between",
-                  gap: 24,
+                  justifyContent: "flex-start",
+                  gap: 16,
                 }}
               >
                 <div
@@ -830,9 +859,79 @@ export function SplashPage() {
           </div>
         </SplashSection>
 
+        <section
+          style={{
+            padding: "clamp(28px, 4vw, 44px)",
+            borderRadius: 32,
+            background: "rgba(255,255,255,.86)",
+            border: "1px solid rgba(17,24,39,.06)",
+            boxShadow: "0 18px 44px rgba(107,91,87,.06)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 24,
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: ".18em",
+              textTransform: "uppercase",
+              color: "var(--text-3)",
+            }}
+          >
+            O que é a Airia
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {["App de saúde mental", "Terapeuta digital", "Planner de produtividade", "Tracker genérico"].map((label) => (
+              <div
+                key={label}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 16px",
+                  borderRadius: 999,
+                  background: "rgba(239,68,68,.06)",
+                  border: "1px solid rgba(239,68,68,.12)",
+                  color: "#A05050",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textDecoration: "line-through",
+                  textDecorationColor: "rgba(160,80,80,.4)",
+                }}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 14,
+              padding: "18px 24px",
+              borderRadius: 20,
+              background: "rgba(244,168,150,.12)",
+              border: "1px solid rgba(244,168,150,.28)",
+            }}
+          >
+            <Sparkles size={20} color="#B86D4C" style={{ flexShrink: 0, marginTop: 2 }} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <p style={{ margin: 0, fontSize: "clamp(17px, 2.2vw, 22px)", fontWeight: 700, color: BRAND.textWarm, lineHeight: 1.3 }}>
+                Inteligência de ciclo — um mapa do seu ritmo interno.
+              </p>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, color: BRAND.textSoft }}>
+                A Airia usa algoritmo real (EWMA + análise de tendência de 7 dias) para detectar sua fase de humor atual — elevada, estável, caindo, baixa ou em recuperação. Esse dado alimenta o planner, a IA, os insights e pode ser compartilhado com quem te acompanha clinicamente.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <SplashSection
           kicker="Como funciona"
-          title="Menos suposição. Mais leitura real do seu ritmo."
+          title="Menos surpresa. Mais clareza antes do atrito."
           subtitle="Tudo começa com uma leitura honesta do agora. Depois, os registros revelam o que se repete. E, com isso, fica muito mais fácil entender quando seguir, quando reduzir e quando se proteger."
         >
           <div
@@ -1009,7 +1108,7 @@ export function SplashPage() {
                 boxShadow: "0 22px 34px rgba(243,176,140,.24)",
               }}
             >
-              Criar minha conta
+              Quero entender meu ciclo
             </button>
             <button
               type="button"
@@ -1029,6 +1128,40 @@ export function SplashPage() {
             </button>
           </div>
         </section>
+
+        <footer
+          style={{
+            marginTop: 40,
+            paddingTop: 30,
+            borderTop: "1px solid rgba(107,91,87,0.08)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 20
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <AiriaConstellationLogo size={32} />
+            <span style={{ fontSize: 13, color: BRAND.textSoft, fontWeight: 500 }}>
+              &copy; {new Date().getFullYear()} Airia Health. Todos os direitos reservados.
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: 24 }}>
+            <button 
+              onClick={() => navigate("/privacy")}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: BRAND.textSoft, fontWeight: 600 }}
+            >
+              Política de Privacidade
+            </button>
+            <button 
+              onClick={() => navigate("/terms")}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: BRAND.textSoft, fontWeight: 600 }}
+            >
+              Termos de Uso
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   );

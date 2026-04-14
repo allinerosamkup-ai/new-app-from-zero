@@ -37,7 +37,7 @@ export type EnergyForecast = "high" | "moderate" | "low" | "rest";
 
 export type WarningFlag =
   | "high_volatility"       // Variabilidade acima de 1.2 — ciclo instável
-  | "sustained_low"         // 5+ dias abaixo de 2.5 — alerta depressivo
+  | "sustained_low"         // 3+ dias abaixo de 3.0 — alerta depressivo crítico
   | "rapid_drop"            // Queda de >1.5 pts em 48h — alerta de episódio
   | "sustained_elevated"    // 5+ dias acima de 4.2 — alerta hipomaníaco
   | "sleep_impact_high"     // Correlação sono-humor > 0.6
@@ -320,9 +320,9 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
 
   if (recent3avg >= 8.4 && volatility14d < 2.0) {
     phase = "elevated";
-  } else if (recent3avg < 3.6 || recent5avg < 4.0) {
+  } else if (recent3avg < 3.0 || recent5avg < 3.0) {
     phase = "depleted";
-  } else if (recent5avg < 5.0) {
+  } else if (recent3avg < 5.0 || recent5avg < 5.0) {
     phase = "low";
   } else if (
     (previousPhase === "low" || previousPhase === "depleted") &&
@@ -347,14 +347,14 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // ── Dias na fase atual ──────────────────────────────────
   let daysInPhase = 1;
   const phaseThresholds: Record<MoodPhase, (h: number) => boolean> = {
-    elevated:          h => h >= 8.0,
-    flowing:           h => h >= 7.0,
-    stable:            h => h >= 5.6 && h < 7.2,
-    falling:           _h => true, // baseado em tendência, não em valor absoluto
-    low:               h => h < 5.0,
-    depleted:          h => h < 4.0,
-    recovering:        h => h >= 5.0,
-    mixed:             _h => true,
+    elevated: h => h >= 8.0,
+    flowing: h => h >= 7.0,
+    stable: h => h >= 5.6 && h < 7.2,
+    falling: _h => true, // baseado em tendência, não em valor absoluto
+    low: h => h < 5.0,
+    depleted: h => h < 3.0,
+    recovering: h => h >= 5.0,
+    mixed: _h => true,
     insufficient_data: _h => true,
   };
   const phaseCheck = phaseThresholds[phase];
@@ -372,7 +372,9 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   stabilityScore -= Math.min(30, volatility14d * 9);       // variabilidade
   stabilityScore -= Math.min(20, Math.abs(trend7d) * 5);  // mudança brusca
   const lowDays = humors14.filter(h => h <= 5.0).length;
-  stabilityScore -= Math.min(25, lowDays * 4);              // dias baixos
+  const criticalDays = humors14.filter(h => h <= 3.0).length;
+  stabilityScore -= Math.min(25, lowDays * 5);              // dias baixos
+  stabilityScore -= Math.min(35, criticalDays * 10);        // dias críticos
   const highDays = humors14.filter(h => h >= 9.0).length;
   stabilityScore -= Math.min(10, highDays * 3);             // dias muito altos
   if (sorted.length < 7) stabilityScore -= 15;              // poucos dados
@@ -382,7 +384,8 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   const warningFlags: WarningFlag[] = [];
 
   if (volatility14d > 2.4) warningFlags.push("high_volatility");
-  if (lowDays >= 5) warningFlags.push("sustained_low");
+  if (criticalDays >= 3) warningFlags.push("sustained_low"); // 3+ dias abaixo de 3.0 (crítico)
+  if (lowDays >= 5 && criticalDays < 3) warningFlags.push("sustained_low"); // Mantendo alerta se persistir abaixo de 5.0 por muito tempo (5 dias)
   if (highDays >= 5) warningFlags.push("sustained_elevated");
 
   // Queda rápida: últimos 2 dias vs 2 dias anteriores
@@ -503,8 +506,8 @@ export function forecastMood7d(history: CheckinEntry[]): number[] {
 
   for (let i = 1; i < humors.length; i++) {
     const prevLevel = level;
-    level  = alpha * humors[i] + (1 - alpha) * (level + trend);
-    trend  = beta  * (level - prevLevel) + (1 - beta) * trend;
+    level = alpha * humors[i] + (1 - alpha) * (level + trend);
+    trend = beta * (level - prevLevel) + (1 - beta) * trend;
   }
 
   const forecast: number[] = [];

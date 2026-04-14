@@ -11,10 +11,10 @@ describe("SplashPage", () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain("Seu dia não precisa depender da sorte");
+    expect(html).toContain("Você não é difícil. Você cicla.");
     expect(html).toContain("Como funciona");
     expect(html).toContain("Veja o app em ação");
-    expect(html).toContain("Criar minha conta");
+    expect(html).toContain("Quero entender meu ciclo");
     expect(html).toContain("Gratuito durante o preview");
   });
 });

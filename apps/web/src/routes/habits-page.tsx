@@ -180,17 +180,22 @@ function HabitCard({
   habit,
   dateKey,
   onToggle,
+  onEdit,
+  onArchive,
   isToggling,
 }: {
   habit: Habit;
   dateKey: string;
   onToggle: () => void;
+  onEdit: () => void;
+  onArchive: () => void;
   isToggling: boolean;
 }) {
   const completedToday = isHabitCompleteForDate(habit, dateKey);
   const progressLabel = getHabitProgressLabel(habit, dateKey);
   const targetCount = getHabitTargetCount(habit);
   const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
+  const [archiving, setArchiving] = useState(false);
 
   return (
     <div
@@ -199,29 +204,30 @@ function HabitCard({
           ? "rgba(150,199,179,0.06)"
           : "var(--card-bg, rgba(255,255,255,0.04))",
         border: `1.5px solid ${completedToday ? "rgba(150,199,179,0.22)" : "var(--warm-border)"}`,
-        borderRadius: 16,
-        padding: "14px 14px 14px 16px",
+        borderRadius: 18, // Ligeiramente maior para respiro
+        padding: "12px 12px 12px 16px",
         display: "flex",
         alignItems: "center",
-        gap: 14,
+        gap: 12,
         transition: "all 0.25s ease",
         opacity: completedToday ? 0.72 : 1,
         position: "relative",
         overflow: "hidden",
       }}
     >
-      {/* Icon */}
+      {/* Icon Area */}
       <div
         style={{
-          width: 46,
-          height: 46,
+          width: 44,
+          height: 44,
           borderRadius: 12,
           background: cat.bg,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: 22,
+          fontSize: 20,
           flexShrink: 0,
+          border: "1px solid rgba(255,255,255,0.05)", // Polimento na borda do ícone
         }}
       >
         {habit.icon || "✨"}
@@ -244,26 +250,75 @@ function HabitCard({
         >
           {habit.title}
         </p>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
           <StreakDots streakCount={habit.streakCount} completedToday={completedToday} />
-          <span style={{ fontSize: 11, color: "var(--accent-peach)", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
-            <Flame size={11} /> {habit.streakCount}
+          <span style={{ fontSize: 10, color: "var(--accent-peach)", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
+            <Flame size={10} /> {habit.streakCount}
           </span>
           {targetCount > 1 && (
-            <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700 }}>
+            <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>
               {progressLabel}
             </span>
           )}
         </div>
       </div>
 
+      {/* Actions (Surgem quando não completado para facilitar edição) */}
+      {!completedToday && (
+        <div style={{ display: "flex", gap: 4, marginRight: 4 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "1.5px solid rgba(99,152,169,0.2)",
+              background: "rgba(99,152,169,0.06)",
+              color: "var(--accent-sky)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (archiving) return;
+              if (confirm("Deseja mesmo excluir este hábito?")) {
+                setArchiving(true);
+                await onArchive();
+                setArchiving(false);
+              }
+            }}
+            disabled={archiving}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "1.5px solid rgba(215,137,127,0.2)",
+              background: "rgba(215,137,127,0.04)",
+              color: archiving ? "var(--text-3)" : "var(--accent-peach)",
+              cursor: archiving ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Archive size={13} />
+          </button>
+        </div>
+      )}
+
       {/* Toggle button */}
       <button
         onClick={onToggle}
         disabled={isToggling}
         style={{
-          width: 42,
-          height: 42,
+          width: 44,
+          height: 44,
           borderRadius: "50%",
           border: `2px solid ${completedToday ? "var(--accent-sage)" : "var(--warm-border)"}`,
           background: completedToday ? "var(--accent-sage)" : "transparent",
@@ -276,8 +331,8 @@ function HabitCard({
           opacity: isToggling ? 0.5 : 1,
         }}
       >
-        {completedToday ? <Check size={18} color="#fff" strokeWidth={3} /> : targetCount > 1 ? (
-          <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 900 }}>
+        {completedToday ? <Check size={20} color="#fff" strokeWidth={3} /> : targetCount > 1 ? (
+          <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 900 }}>
             {Math.min(getHabitCompletionCount(habit, dateKey), targetCount)}
           </span>
         ) : null}
@@ -838,6 +893,8 @@ export function HabitsPage() {
                           habit={h}
                           dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
+                          onEdit={() => setEditingHabit(h)}
+                          onArchive={() => archiveHabit(h.id)}
                           isToggling={togglingIds.has(h.id)}
                         />
                       ))}
@@ -858,6 +915,8 @@ export function HabitsPage() {
                           habit={h}
                           dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
+                          onEdit={() => setEditingHabit(h)}
+                          onArchive={() => archiveHabit(h.id)}
                           isToggling={togglingIds.has(h.id)}
                         />
                       ))}

@@ -2123,6 +2123,11 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes auraFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* ─── Skeleton Loader ─────────────────────────────────────── */
 .skeleton {
   background: linear-gradient(90deg, var(--warm-border) 25%, rgba(17,24,39,.04) 50%, var(--warm-border) 75%);

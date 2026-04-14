@@ -9,6 +9,15 @@ async function run() {
   const previousClientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const previousFrontendUrl = process.env.FRONTEND_URL;
   const upserts: any[] = [];
+  const updates: any[] = [];
+  const calendarEventRequests: string[] = [];
+  const patchedEvents: any[] = [];
+  const deletedEvents: string[] = [];
+  const userPreference = {
+    gcalAccessToken: 'access-token',
+    gcalRefreshToken: 'refresh-token',
+    gcalSelectedCalendars: null as string[] | null,
+  };
 
   process.env.GOOGLE_CLIENT_ID = 'google-client';
   process.env.GOOGLE_CLIENT_SECRET = 'google-secret';
@@ -16,33 +25,106 @@ async function run() {
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (!url.includes('oauth2.googleapis.com/token')) {
-      return previousFetch(input, init);
+    if (url.includes('oauth2.googleapis.com/token')) {
+      return new Response(JSON.stringify({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    return new Response(JSON.stringify({
-      access_token: 'access-token',
-      refresh_token: 'refresh-token',
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    if (url.includes('/calendar/v3/users/me/calendarList')) {
+      return new Response(JSON.stringify({
+        items: [
+          {
+            id: 'primary',
+            summary: 'Principal',
+            primary: true,
+            selected: true,
+            accessRole: 'owner',
+            backgroundColor: '#4285F4',
+          },
+          {
+            id: 'terapia@example.com',
+            summary: 'Terapia',
+            selected: true,
+            accessRole: 'writer',
+            backgroundColor: '#16A765',
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const eventMatch = url.match(/\/calendar\/v3\/calendars\/([^/]+)\/events(?:\/([^?]+))?/);
+    if (eventMatch) {
+      const calendarId = decodeURIComponent(eventMatch[1]);
+      const eventId = eventMatch[2] ? decodeURIComponent(eventMatch[2]) : null;
+
+      if (init?.method === 'PATCH' && eventId) {
+        const body = JSON.parse(String(init.body ?? '{}'));
+        patchedEvents.push({ calendarId, eventId, body });
+        return new Response(JSON.stringify({ id: eventId, ...body }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (init?.method === 'DELETE' && eventId) {
+        deletedEvents.push(`${calendarId}:${eventId}`);
+        return new Response(null, { status: 204 });
+      }
+
+      calendarEventRequests.push(calendarId);
+      return new Response(JSON.stringify({
+        items: [
+          {
+            id: `${calendarId}-event`,
+            summary: `${calendarId} evento`,
+            start: { dateTime: '2026-04-13T09:00:00-03:00' },
+            end: { dateTime: '2026-04-13T10:00:00-03:00' },
+            htmlLink: `https://calendar.google.com/${calendarId}`,
+            extendedProperties: {
+              private: {
+                airiaStatus: calendarId === 'terapia@example.com' ? 'completed' : 'planned',
+              },
+            },
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return previousFetch(input, init);
   }) as typeof fetch;
 
   const prisma = {
     userPreference: {
       upsert: async (input: any) => {
         upserts.push(input);
+        Object.assign(userPreference, input.create, input.update);
         return input.create;
       },
-      findUnique: async () => null,
+      findUnique: async () => userPreference,
+      update: async (input: any) => {
+        updates.push(input);
+        Object.assign(userPreference, input.data);
+        return userPreference;
+      },
     },
   };
 
   const app = createApp({
     prisma: prisma as any,
-    authMiddleware: (_req: any, res: any) => {
-      res.status(401).json({ error: 'auth required' });
+    authMiddleware: (req: any, _res: any, next: any) => {
+      req.userId = '550e8400-e29b-41d4-a716-446655440000';
+      next();
     },
   });
 
@@ -54,16 +136,64 @@ async function run() {
     throw new Error('failed to open test server');
   }
 
+  const baseUrl = `http://127.0.0.1:${address.port}`;
+
   try {
     const response = await fetch(
-      `http://127.0.0.1:${address.port}/api/gcal/callback?code=ok&state=550e8400-e29b-41d4-a716-446655440000`,
+      `${baseUrl}/api/gcal/callback?code=ok&state=550e8400-e29b-41d4-a716-446655440000`,
       { redirect: 'manual' },
     );
 
     assert.equal(response.status, 302);
-    assert.match(response.headers.get('location') ?? '', /\/planner\?gcal=connected$/);
+    assert.match(response.headers.get('location') ?? '', /\/preferences\?gcal=connected$/);
     assert.equal(upserts.length, 1);
     assert.equal(upserts[0].where.userId, '550e8400-e29b-41d4-a716-446655440000');
+
+    userPreference.gcalSelectedCalendars = null;
+    calendarEventRequests.length = 0;
+
+    const calendarsResponse = await fetch(`${baseUrl}/api/gcal/calendars`);
+    const calendarsBody = await calendarsResponse.json();
+    assert.equal(calendarsResponse.status, 200);
+    assert.deepEqual(calendarsBody.selectedIds, ['primary', 'terapia@example.com']);
+
+    const eventsResponse = await fetch(`${baseUrl}/api/gcal/events?date=2026-04-13`);
+    const eventsBody = await eventsResponse.json();
+    assert.equal(eventsResponse.status, 200);
+    assert.equal(eventsBody.connected, true);
+    assert.deepEqual(calendarEventRequests.sort(), ['primary', 'terapia@example.com']);
+    assert.equal(eventsBody.events.length, 2);
+    assert.equal(eventsBody.events[1].calendarId, 'terapia@example.com');
+    assert.equal(eventsBody.events[1].airiaStatus, 'completed');
+
+    const saveCalendarsResponse = await fetch(`${baseUrl}/api/gcal/calendars`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ calendarIds: ['terapia@example.com'] }),
+    });
+    assert.equal(saveCalendarsResponse.status, 200);
+    assert.deepEqual(userPreference.gcalSelectedCalendars, ['terapia@example.com']);
+
+    const patchResponse = await fetch(`${baseUrl}/api/gcal/events/therapy-event?calendarId=${encodeURIComponent('terapia@example.com')}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-13',
+        title: 'Consulta',
+        startTime: '11:00',
+        endTime: '12:00',
+        status: 'completed',
+      }),
+    });
+    assert.equal(patchResponse.status, 200);
+    assert.equal(patchedEvents[0].calendarId, 'terapia@example.com');
+    assert.equal(patchedEvents[0].body.extendedProperties.private.airiaStatus, 'completed');
+
+    const deleteResponse = await fetch(`${baseUrl}/api/gcal/events/therapy-event?calendarId=${encodeURIComponent('terapia@example.com')}`, {
+      method: 'DELETE',
+    });
+    assert.equal(deleteResponse.status, 204);
+    assert.deepEqual(deletedEvents, ['terapia@example.com:therapy-event']);
   } finally {
     globalThis.fetch = previousFetch;
     process.env.GOOGLE_CLIENT_ID = previousClientId;

@@ -24,6 +24,10 @@ const notificationPreferencesMigration = fs.readFileSync(
   path.resolve(__dirname, '../../../../supabase/migrations/20260412170000_add_notification_preferences.sql'),
   'utf8',
 );
+const gcalSelectedCalendarsMigration = fs.readFileSync(
+  path.resolve(__dirname, '../../../../supabase/migrations/20260413190000_add_gcal_selected_calendars.sql'),
+  'utf8',
+);
 
 assert.match(migration, /suggestions\s+text\[\]/);
 assert.match(migration, /age\s+integer/);
@@ -57,5 +61,6 @@ assert.match(habitTargetsMigration, /persistent_reminder_interval_minutes\s+inte
 assert.match(notificationPreferencesMigration, /notification_preferences\s+jsonb/);
 assert.match(notificationPreferencesMigration, /journalMorningTime/);
 assert.match(notificationPreferencesMigration, /aiSuggestions/);
+assert.match(gcalSelectedCalendarsMigration, /gcal_selected_calendars\s+jsonb/);
 
 console.log('schema alignment tests passed');

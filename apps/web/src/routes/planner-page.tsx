@@ -1,12 +1,13 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Bell } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
+// AuraToggle removed — no longer needed in PlannerSheetBody
 import { parseAiSuggestion } from "../lib/ai";
 import {
   addMinutesToTime,
@@ -98,12 +99,43 @@ const PLANNER_SUMMARY_CARD_STYLE: React.CSSProperties = {
 };
 
 const EMPTY_TIMELINE_CARD_STYLE: React.CSSProperties = {
-  width: "100%",
-  textAlign: "left",
-  background: "rgba(255,251,247,.78)",
-  border: "1.5px dashed rgba(243,176,140,.22)",
-  borderLeft: "4px solid rgba(243,176,140,.42)",
+  width: '100%',
+  padding: '12px 14px',
+  borderRadius: 12,
+  background: 'rgba(255,255,255,0.4)',
+  border: '1px dashed rgba(17,24,39,0.08)',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  textAlign: 'left',
+  gap: 4,
+  boxShadow: 'none',
 };
+
+function TimelineProgressIndicator({ nowMinutes, slots }: { nowMinutes: number; slots: any[] }) {
+  // Glow effect based on current mood or generic warm tone
+  return (
+    <div style={{ position: "absolute", left: 4, top: 0, bottom: 0, width: 5, background: "rgba(17,24,39,0.02)", zIndex: 0, borderRadius: 99, overflow: 'hidden' }}>
+       <div style={{
+         position: "absolute", top: 0, left: 0, width: "100%",
+         background: "linear-gradient(to bottom, var(--accent-peach) 0%, var(--accent-sky) 50%, var(--accent-sage) 100%)", 
+         borderRadius: 99, transition: "height 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
+         boxShadow: "0 0 15px var(--accent-peach-a3)",
+         height: (() => {
+            const firstSlot = slots[0];
+            const lastSlot = slots[slots.length - 1];
+            if (!firstSlot || !lastSlot) return "0%";
+            const startMinutes = timeToMinutesValue(firstSlot.time);
+            const lastMinutes = timeToMinutesValue(lastSlot.time) + 60; 
+            const totalRange = lastMinutes - startMinutes;
+            if (totalRange <= 0) return "0%";
+            const progress = Math.max(0, Math.min(1, (nowMinutes - startMinutes) / totalRange));
+            return `${progress * 100}%`;
+         })()
+       }} />
+    </div>
+  );
+}
 
 type FormState = {
   date: string;
@@ -116,10 +148,17 @@ type FormState = {
   checklist: ChecklistItem[];
   checklistInput: string;
   recurring: RecurringConfig;
-  energyLevel: "alta" | "media" | "leve";
+  energyLevel: 1 | 2 | 3 | 4 | 5;
   lastResetDate?: string;
   persistentReminderEnabled: boolean;
   persistentReminderIntervalMinutes: number;
+  vibrateEnabled: boolean;
+  alarmEnabled: boolean;
+  recurringNotificationEnabled: boolean;
+  visualRepeatEnabled: boolean;
+  icon?: string;
+  color?: string;
+  alerts: string[];
 };
 
 type PlannerTask = {
@@ -137,13 +176,19 @@ type PlannerTask = {
   note?: string | null;
   checklist?: ChecklistItem[] | null;
   recurring?: RecurringConfig | null;
-  energyLevel?: "alta" | "media" | "leve" | null;
+  energyLevel?: 1 | 2 | 3 | 4 | 5 | null;
   lastResetDate?: string | null;
   persistentReminderEnabled?: boolean | null;
   persistentReminderIntervalMinutes?: number | null;
+  vibrateEnabled?: boolean | null;
+  alarmEnabled?: boolean | null;
+  recurringNotificationEnabled?: boolean | null;
   isAiSuggested?: boolean | null;
   aiReasoning?: string | null;
   calendarId?: string | null;
+  visualRepeatEnabled?: boolean | null;
+  icon?: string | null;
+  color?: string | null;
 };
 
 const EMPTY_FORM: FormState = {
@@ -157,9 +202,16 @@ const EMPTY_FORM: FormState = {
   checklist: [],
   checklistInput: "",
   recurring: { ...DEFAULT_RECURRING },
-  energyLevel: "media",
+  energyLevel: 3,
   persistentReminderEnabled: false,
   persistentReminderIntervalMinutes: 60,
+  vibrateEnabled: true,
+  alarmEnabled: false,
+  recurringNotificationEnabled: false,
+  visualRepeatEnabled: false,
+  icon: "lucide-check",
+  color: "var(--accent-peach)",
+  alerts: ["start", "end", "before-15"],
 };
 
 function buildChecklistItems(items: string[]): ChecklistItem[] {
@@ -232,10 +284,16 @@ function mapTaskFromApi(task: any): PlannerTask {
     note: typeof task.note === "string" ? task.note : null,
     checklist: normalizeChecklist(task.checklist),
     recurring: normalizeRecurring(task.recurring),
-    energyLevel: normalizeEnergyLevel(task.energyLevel, null),
+    energyLevel: normalizeEnergyLevel(task.energyLevel),
     lastResetDate: typeof task.lastResetDate === "string" ? task.lastResetDate : null,
     persistentReminderEnabled: Boolean(task.persistentReminderEnabled),
     persistentReminderIntervalMinutes: typeof task.persistentReminderIntervalMinutes === "number" ? task.persistentReminderIntervalMinutes : null,
+    vibrateEnabled: Boolean(task.vibrateEnabled),
+    alarmEnabled: Boolean(task.alarmEnabled),
+    recurringNotificationEnabled: Boolean(task.recurringNotificationEnabled),
+    visualRepeatEnabled: Boolean(task.visualRepeatEnabled),
+    icon: typeof task.icon === "string" ? task.icon : null,
+    color: typeof task.color === "string" ? task.color : null,
     isAiSuggested: Boolean(task.isAiSuggested),
     aiReasoning: typeof task.aiReasoning === "string" ? task.aiReasoning : null,
   };
@@ -309,31 +367,43 @@ function normalizeRecurring(value: unknown): RecurringConfig | null {
   };
 }
 
-function normalizeEnergyLevel(value: unknown, fallbackIntensity?: string | null): FormState["energyLevel"] | null {
-  if (value === "alta" || value === "media" || value === "leve") return value;
-  return fallbackIntensity ? mapIntensityToEnergyLevel(fallbackIntensity) : null;
+function normalizeEnergyLevel(val: any): 1 | 2 | 3 | 4 | 5 {
+  if (typeof val === "number") {
+    if (val >= 1 && val <= 5) return val as 1 | 2 | 3 | 4 | 5;
+    return 3;
+  }
+  if (val === "alta" || val === "P") return 4;
+  if (val === "leve" || val === "L") return 2;
+  return 3;
 }
 
 function hasApiMetadata(task: PlannerTask): boolean {
   const hasNote = typeof task.note === "string" && task.note.trim().length > 0;
   const hasChecklist = Array.isArray(task.checklist) && task.checklist.length > 0;
   const hasRecurring = Boolean(task.recurring?.enabled);
-  const hasNonDefaultEnergy = task.energyLevel === "alta" || task.energyLevel === "leve";
+  const hasNonDefaultEnergy = task.energyLevel !== 3 && task.energyLevel !== null;
   const hasResetDate = Boolean(task.lastResetDate);
   const hasPersistentReminder = Boolean(task.persistentReminderEnabled);
+  const hasVibrate = Boolean(task.vibrateEnabled);
+  const hasAlarm = Boolean(task.alarmEnabled);
 
-  return hasNote || hasChecklist || hasRecurring || hasNonDefaultEnergy || hasResetDate || hasPersistentReminder;
+  return hasNote || hasChecklist || hasRecurring || hasNonDefaultEnergy || hasResetDate || hasPersistentReminder || hasVibrate || hasAlarm;
 }
 
 function buildFormStateFromTask(task: PlannerTask): FormState {
   const meta = getTaskMeta(task.id);
   const useApiMetadata = hasApiMetadata(task);
-  const checklist = useApiMetadata ? (task.checklist ?? []) : (meta.checklist ?? []);
-  const note = useApiMetadata ? (task.note ?? "") : (meta.note ?? "");
-  const recurring = useApiMetadata ? (task.recurring ?? { ...DEFAULT_RECURRING }) : (meta.recurring ?? { ...DEFAULT_RECURRING });
-  const energyLevel = useApiMetadata
-    ? (task.energyLevel ?? mapIntensityToEnergyLevel(task.intensity))
-    : (meta.energyLevel ?? mapIntensityToEnergyLevel(task.intensity));
+  const energyLevel = normalizeEnergyLevel(task.energyLevel ?? task.intensity);
+
+  const note = useApiMetadata
+    ? (typeof task.note === "string" ? task.note : "")
+    : (meta.note ?? "");
+  const checklist = useApiMetadata
+    ? normalizeChecklist(task.checklist)
+    : (meta.checklist ?? []);
+  const recurring = useApiMetadata
+    ? (normalizeRecurring(task.recurring) ?? { ...DEFAULT_RECURRING })
+    : (meta.recurring ?? { ...DEFAULT_RECURRING });
 
   return {
     ...EMPTY_FORM,
@@ -352,6 +422,13 @@ function buildFormStateFromTask(task: PlannerTask): FormState {
     persistentReminderIntervalMinutes: useApiMetadata
       ? (task.persistentReminderIntervalMinutes ?? 60)
       : (meta.persistentReminderIntervalMinutes ?? 60),
+    vibrateEnabled: useApiMetadata ? Boolean(task.vibrateEnabled) : Boolean(meta.vibrateEnabled),
+    alarmEnabled: useApiMetadata ? Boolean(task.alarmEnabled) : Boolean(meta.alarmEnabled),
+    recurringNotificationEnabled: useApiMetadata ? Boolean(task.recurringNotificationEnabled) : Boolean(meta.recurringNotificationEnabled),
+    visualRepeatEnabled: useApiMetadata ? Boolean(task.visualRepeatEnabled) : Boolean(meta.visualRepeatEnabled),
+    icon: (useApiMetadata ? task.icon : meta.icon) || "lucide-check",
+    color: (useApiMetadata ? task.color : meta.color) || "var(--accent-peach)",
+    alerts: [],
   };
 }
 
@@ -541,245 +618,601 @@ function RecurringSection({
 }) {
   return (
     <div style={{ marginBottom: "12px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={LABEL_STYLE}>Recorrente</span>
-        <input type="checkbox" checked={recurring.enabled} onChange={(event) => setRecurring({ ...recurring, enabled: event.target.checked })} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: ".05em" }}>Repetir nos dias</span>
+        <span style={{ fontSize: 10, color: "var(--accent-peach)", fontWeight: 700 }}>{recurring.days.length} DIAS</span>
       </div>
-      {recurring.enabled && (
-        <div style={{ display: "flex", gap: "6px", marginTop: "10px", justifyContent: "space-between" }}>
-          {DIAS_RECORRENCIA.map(d => {
-            const isSelected = recurring.days.includes(d.val);
-            return (
-               <button
-                 key={d.val}
-                 type="button"
-                 onClick={() => {
-                   const cur = new Set(recurring.days);
-                   if (cur.has(d.val)) cur.delete(d.val);
-                   else cur.add(d.val);
-                   setRecurring({ ...recurring, days: Array.from(cur) });
-                 }}
-                 style={{
-                   width: 34, height: 34, borderRadius: '50%', border: 'none',
-                   background: isSelected ? 'var(--accent-sage)' : 'var(--warm-border-2)',
-                   color: isSelected ? 'var(--accent-sage-ink)' : 'var(--text-2)',
-                   fontWeight: 700, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s'
-                 }}
-               >{d.label}</button>
-            )
-          })}
-        </div>
-      )}
+      <div style={{ display: "flex", gap: "6px", justifyContent: "space-between" }}>
+        {DIAS_RECORRENCIA.map(d => {
+          const isSelected = recurring.days.includes(d.val);
+          return (
+             <button
+               key={d.val}
+               type="button"
+               onClick={() => {
+                 const cur = new Set(recurring.days);
+                 if (cur.has(d.val)) cur.delete(d.val);
+                 else cur.add(d.val);
+                 setRecurring({ ...recurring, days: Array.from(cur) });
+               }}
+               style={{
+                 width: 38, height: 38, borderRadius: '12px', border: '1.5px solid transparent',
+                 background: isSelected ? 'var(--accent-peach)' : 'var(--surface-variant)',
+                 color: isSelected ? '#fff' : 'var(--text-2)',
+                 fontWeight: 800, fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
+                 boxShadow: isSelected ? '0 4px 12px rgba(244,190,168,0.25)' : 'none'
+               }}
+             >{d.label}</button>
+          )
+        })}
+      </div>
     </div>
   );
 }
 
 
+const ICON_GRID = [
+  "lucide-check", "lucide-calendar", "lucide-clock", "lucide-star", 
+  "lucide-heart", "lucide-briefcase", "lucide-home", "lucide-shopping-cart",
+  "lucide-coffee", "lucide-dumbell", "lucide-book", "lucide-music"
+];
+
+const COLOR_GRID = [
+  "var(--accent-peach)", "#E8A0A0", "#E8C080", "#C8D8A0", "var(--accent-sky)", "var(--accent-sage)", "#D9A0C3", "#A5AADA"
+];
+
+const ALERT_PRESETS: { id: string; label: string }[] = [
+  { id: "start", label: "No início de tarefas" },
+  { id: "end", label: "Ao final de tarefas" },
+  { id: "before-15", label: "15m antes do início" },
+  { id: "before-30", label: "30m antes do início" },
+  { id: "before-60", label: "1h antes do início" },
+];
+
+const ENERGY_GRAY = "#C5B5A8";
+
+function renderEnergyIcon(level: number, color: string) {
+  switch (level) {
+    case 1: return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 19c-3.5 0-6-2.5-6-6 0-4.5 6-10 6-10s6 5.5 6 10c0 3.5-2.5 6-6 6z"/>
+        <path d="M12 19c-1.5 0-2.5-1.2-2.5-3s2.5-4 2.5-4 2.5 2.2 2.5 4-1 3-2.5 3z"/>
+      </svg>
+    );
+    case 2: return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6">
+        <circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>
+      </svg>
+    );
+    case 3: return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+      </svg>
+    );
+    case 4: return (
+      <svg width="24" height="20" viewBox="0 0 30 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round">
+        <path d="M10 2L3 12h6l-1 8 7-10H9l3-8z"/><path d="M22 2l-7 10h6l-1 8 7-10h-6l3-8z"/>
+      </svg>
+    );
+    case 5: return (
+      <svg width="24" height="20" viewBox="0 0 28 22" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round">
+        <path d="M2 6c3-2.5 5 2.5 8 0s5 2.5 8 0s5 2.5 8 0"/>
+        <path d="M2 11c3-2.5 5 2.5 8 0s5 2.5 8 0s5 2.5 8 0"/>
+        <path d="M2 16c3-2.5 5 2.5 8 0s5 2.5 8 0s5 2.5 8 0"/>
+      </svg>
+    );
+    default: return null;
+  }
+}
+
 function PlannerSheetBody({
   form,
   setForm,
   onSave,
-  onCancel,
+  onCancel: _onCancel,
   saveLabel,
-  extraBtn,
 }: {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   onSave: () => void | Promise<void>;
   onCancel: () => void;
   saveLabel: string;
-  extraBtn?: React.ReactNode;
 }) {
-  const [customTag, setCustomTag] = useState("");
-  const [showCustomConfig, setShowCustomConfig] = useState(false);
+  void _onCancel; // kept in contract for parent callers
+  const [showConfig, setShowConfig] = useState(false);
+  const [showTimeExpanded, setShowTimeExpanded] = useState(true);
+  const [showAddAlert, setShowAddAlert] = useState(false);
 
-  // Derive active options
-  const isCustomActive = form.category && !CATEGORY_OPTIONS.some(o => o.value === form.category);
+  const setDuration = (mins: number) => {
+    setForm(prev => ({
+      ...prev,
+      endTime: addMinutesToTime(prev.time, mins)
+    }));
+  };
+
+  const durationPresets = [
+    { label: "1", mins: 1 },
+    { label: "15", mins: 15 },
+    { label: "30m", mins: 30 },
+    { label: "45", mins: 45 },
+    { label: "1h", mins: 60 },
+    { label: "1,5h", mins: 90 },
+  ];
+
+  const currentDuration = diffMinutes(form.time, form.endTime);
+
+  // Frequency derived from recurring config
+  const frequency = !form.recurring.enabled ? "once"
+    : form.recurring.frequency === "daily" ? "daily"
+    : form.recurring.frequency === "weekly" ? "weekly"
+    : (form.recurring.everyNDays ?? 0) >= 28 ? "monthly"
+    : "once";
+
+  function setFrequency(f: string) {
+    setForm(c => ({
+      ...c,
+      recurring: f === "once"
+        ? { ...DEFAULT_RECURRING, enabled: false }
+        : f === "daily"
+          ? { enabled: true, frequency: "daily" as const, days: [0,1,2,3,4,5,6], everyNDays: 1 }
+          : f === "weekly"
+            ? { enabled: true, frequency: "weekly" as const, days: c.recurring.days.length > 0 ? c.recurring.days : [1,2,3,4,5], everyNDays: 1 }
+            : { enabled: true, frequency: "custom" as const, days: [], everyNDays: 30 }
+    }));
+  }
+
+  function removeAlert(alertId: string) {
+    setForm(c => ({ ...c, alerts: c.alerts.filter(a => a !== alertId) }));
+  }
+
+  function addAlert(alertId: string) {
+    setForm(c => ({ ...c, alerts: [...c.alerts, alertId] }));
+    setShowAddAlert(false);
+  }
+
+  const availableAlerts = ALERT_PRESETS.filter(a => !form.alerts.includes(a.id));
+
+  // Time scroll context
+  const beforeStart1 = timeToMinutesValue(form.time) - 30;
+  const beforeStart2 = timeToMinutesValue(form.time) - 15;
+  const afterEnd1 = timeToMinutesValue(form.endTime);
+  const afterEnd2 = timeToMinutesValue(form.endTime) + 15;
+  const contextBefore = [beforeStart1, beforeStart2].filter(m => m >= 0).map(m => formatMinutesAsTime(m));
+  const contextAfter = [afterEnd1, afterEnd2].filter(m => m < 1440).map(m => formatMinutesAsTime(m));
+
+  const dateDisplay = form.date ? (() => { const [y, m, d] = form.date.split("-"); return `${d}/${m}/${y}`; })() : "Escolher data";
+
+  const STITLE: React.CSSProperties = { fontSize: 16, fontWeight: 700, color: "var(--text-2)", margin: 0 };
+  const MAIS: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--accent-peach)", cursor: "pointer", background: "none", border: "none", padding: 0 };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "16px 0" }}>
-      <textarea
-        value={form.title}
-        onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-        rows={2}
-        style={{ ...INPUT_STYLE, minHeight: "64px", padding: "12px 14px", fontSize: "16px", fontWeight: 700, lineHeight: 1.35, resize: "none", fontFamily: "inherit" }}
-        placeholder="O que você vai fazer?"
-        autoFocus
-      />
+    <div style={{ display: "flex", flexDirection: "column", gap: "32px", paddingBottom: "20px" }}>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={LABEL_STYLE}>Dia</span>
+      {/* ── 1. Título + Ícone ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          type="button"
+          onClick={() => setShowConfig(!showConfig)}
+          style={{
+            width: 44, height: 44, borderRadius: 12, border: "1.5px solid var(--warm-border-2)",
+            background: "var(--surface-variant)", color: form.color || "var(--accent-peach)",
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20,
+            cursor: "pointer"
+          }}
+        >
+          {form.icon ? <i className={form.icon}></i> : "@"}
+        </button>
         <input
-          type="date"
-          value={form.date}
-          onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
-          style={{ ...INPUT_STYLE, width: "100%" }}
+          value={form.title}
+          onChange={(e) => setForm(c => ({ ...c, title: e.target.value }))}
+          style={{
+            flex: 1, fontSize: "22px", fontWeight: 800, border: "none",
+            background: "transparent", padding: "0 0 8px", outline: "none", color: "var(--text-1)",
+            fontFamily: "inherit", borderBottom: "1.5px solid var(--warm-border-2)"
+          }}
+          placeholder="Responder E-mails"
+          autoFocus
         />
       </div>
 
-      <div style={{ display: 'flex', gap: 12 }}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <span style={LABEL_STYLE}>Início</span>
-          <input
-            type="time"
-            value={form.time}
-            onChange={(event) => setForm((current) => ({ ...current, time: event.target.value }))}
-            style={INPUT_STYLE}
-          />
-        </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <span style={LABEL_STYLE}>Fim</span>
-          <input
-            type="time"
-            value={form.endTime || ''}
-            onChange={(event) => setForm((current) => ({ ...current, endTime: event.target.value }))}
-            style={INPUT_STYLE}
-          />
-        </div>
-      </div>
-
-      <div style={{ border: "1px solid rgba(17,24,39,.06)", borderRadius: 14, padding: 12, background: "rgba(255,255,255,.58)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      {showConfig && (
+        <section style={{
+          background: "var(--surface-variant)", padding: 16, borderRadius: 16,
+          display: "flex", flexDirection: "column", gap: 16, border: "1px solid var(--warm-border)"
+        }}>
           <div>
-            <span style={LABEL_STYLE}>Notificação insistente</span>
-            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
-              Repetir depois do horário até marcar como concluído.
-            </p>
+            <h4 style={LABEL_STYLE}>ÍCONE</h4>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              {ICON_GRID.map(ic => (
+                <button key={ic} type="button" onClick={() => setForm(c => ({...c, icon: ic}))} style={{
+                  width: 32, height: 32, borderRadius: 8, border: form.icon === ic ? "2px solid var(--text-1)" : "1.5px solid transparent",
+                  background: "#fff", cursor: "pointer"
+                }}>
+                  <i className={ic} style={{ fontSize: 14 }}></i>
+                </button>
+              ))}
+            </div>
           </div>
-          <input
-            type="checkbox"
-            checked={form.persistentReminderEnabled}
-            onChange={async (event) => {
-              if (event.target.checked) {
-                const { requestNotificationPermission } = await import("../hooks/useHabitReminders");
-                await requestNotificationPermission();
-              }
-              setForm((current) => ({ ...current, persistentReminderEnabled: event.target.checked }));
-            }}
-            style={{ width: 18, height: 18, accentColor: "var(--accent-peach)", flexShrink: 0 }}
+        </section>
+      )}
+
+      {/* ── 2. Quando? ── */}
+      <section>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h4 style={STITLE}>Quando?</h4>
+          <button type="button" style={MAIS} onClick={() => setShowTimeExpanded(!showTimeExpanded)}>Mais...</button>
+        </div>
+
+        {showTimeExpanded ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, marginBottom: 12 }}>
+            {contextBefore.map((t, i) => (
+              <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "5px 16px", fontSize: i === 0 ? 13 : 14, fontWeight: 500, color: "var(--text-3)", opacity: i === 0 ? 0.4 : 0.65, transition: "all 0.2s" }}
+              >{t}</button>
+            ))}
+            <div style={{
+              background: "var(--accent-peach)", color: "#fff",
+              padding: "13px 36px", borderRadius: 16, fontSize: 16, fontWeight: 800,
+              margin: "4px 0", textAlign: "center", minWidth: 210,
+              boxShadow: "0 4px 16px rgba(244,190,168,0.35)"
+            }}>
+              {form.time} - {form.endTime}
+            </div>
+            {contextAfter.map((t, i) => (
+              <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "5px 16px", fontSize: i === 0 ? 14 : 13, fontWeight: 500, color: "var(--text-3)", opacity: i === 0 ? 0.65 : 0.4, transition: "all 0.2s" }}
+              >{t}</button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", padding: "10px 0" }}>
+            <input type="time" value={form.time} onChange={(e) => setForm(c => ({ ...c, time: e.target.value }))} style={{ ...INPUT_STYLE, textAlign: "center", width: 100 }} />
+            <span style={{ color: "var(--text-3)" }}>—</span>
+            <input type="time" value={form.endTime} onChange={(e) => setForm(c => ({ ...c, endTime: e.target.value }))} style={{ ...INPUT_STYLE, textAlign: "center", width: 100 }} />
+          </div>
+        )}
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, position: "relative" }}>
+          <Calendar size={14} color="var(--accent-peach)" />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--accent-peach)" }}>{dateDisplay}</span>
+          <input type="date" value={form.date} onChange={(e) => setForm(c => ({ ...c, date: e.target.value }))}
+            style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer", top: 0, left: 0 }}
           />
         </div>
-        {form.persistentReminderEnabled && (
-          <select
-            value={form.persistentReminderIntervalMinutes}
-            onChange={(event) => setForm((current) => ({ ...current, persistentReminderIntervalMinutes: Number(event.target.value) }))}
-            style={{ ...INPUT_STYLE, width: "100%", marginTop: 10 }}
-          >
-            <option value={30}>Repetir a cada 30 min</option>
-            <option value={60}>Repetir a cada 1 hora</option>
-            <option value={120}>Repetir a cada 2 horas</option>
-            <option value={180}>Repetir a cada 3 horas</option>
-          </select>
-        )}
-      </div>
-      
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={LABEL_STYLE}>Tag de Evento</span>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {CATEGORY_OPTIONS.map(opt => {
-            const isSel = form.category === opt.value;
+      </section>
+
+      {/* ── 3. Quanto tempo? ── */}
+      <section>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h4 style={STITLE}>Quanto tempo?</h4>
+          <button type="button" style={MAIS}>Mais...</button>
+        </div>
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 0,
+          background: "var(--surface-variant)", padding: 4, borderRadius: 14
+        }}>
+          {durationPresets.map(p => {
+            const isSel = currentDuration === p.mins;
             return (
               <button
-                key={opt.value}
-                onClick={() => setForm(c => ({...c, category: opt.value}))}
+                key={p.mins}
+                type="button"
+                onClick={() => setDuration(p.mins)}
                 style={{
-                  padding: "4px 10px",
-                  borderRadius: 99,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  border: `1px solid ${isSel ? opt.cor : 'transparent'}`,
-                  background: isSel ? opt.bg : 'var(--warm-border-2)',
-                  color: isSel ? opt.textColor : 'var(--text-2)',
-                  cursor: "pointer"
+                  padding: "12px 0", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                  background: isSel ? "var(--accent-peach)" : "transparent",
+                  color: isSel ? "#fff" : "var(--accent-peach)",
+                  border: "none", cursor: "pointer", transition: "all 0.25s"
                 }}
-              >{opt.label}</button>
-            )
+              >
+                {p.label}
+              </button>
+            );
           })}
-          
-          {isCustomActive && (
-              <button
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 99,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  border: `1px solid var(--text-2)`,
-                  background: 'transparent',
-                  color: 'var(--text-1)',
-                }}
-              >{form.category}</button>
-          )}
-
-          <button
-            onClick={() => setShowCustomConfig(!showCustomConfig)}
-            style={{
-               padding: "4px 10px", borderRadius: 99, fontSize: 11, fontWeight: 700,
-               border: '1px dashed var(--text-3)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer'
-            }}
-          >+ Nova</button>
         </div>
+      </section>
 
-        {showCustomConfig && (
-          <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-            <input 
-              value={customTag} 
-              onChange={e => setCustomTag(e.target.value)} 
-              placeholder="Nome da tag..."
-              style={{ ...INPUT_STYLE, height: 32, fontSize: 12 }}
+      {/* ── 4. Quanta energia? (ícones cinza SVG) ── */}
+      <section>
+        <h4 style={{ ...STITLE, marginBottom: 16 }}>Quanta energia?</h4>
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 0,
+          background: "var(--surface-variant)", padding: 6, borderRadius: 16
+        }}>
+          {([1,2,3,4,5] as const).map(level => {
+            const isSel = form.energyLevel === level;
+            return (
+              <button
+                key={level}
+                type="button"
+                onClick={() => setForm(c => ({ ...c, energyLevel: level }))}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: "10px 0", borderRadius: 12, border: "none",
+                  background: "transparent",
+                  cursor: "pointer", transition: "all 0.25s"
+                }}
+              >
+                <div style={{
+                  width: 38, height: 38, borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: isSel ? "var(--accent-peach)" : "transparent",
+                  boxShadow: isSel ? "0 4px 12px rgba(244,190,168,0.3)" : "none",
+                  transition: "all 0.25s"
+                }}>
+                  {renderEnergyIcon(level, isSel ? "#fff" : ENERGY_GRAY)}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── 5. Qual cor? ── */}
+      <section>
+        <h4 style={{ ...STITLE, marginBottom: 14 }}>Qual cor?</h4>
+        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4, paddingLeft: 2 }}>
+          {COLOR_GRID.map(color => {
+            const isSel = form.color === color;
+            return (
+              <button
+                key={color}
+                type="button"
+                onClick={() => setForm(c => ({ ...c, color }))}
+                style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  background: "transparent",
+                  border: `2.5px solid ${color}`,
+                  cursor: "pointer", flexShrink: 0,
+                  position: "relative",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.2s"
+                }}
+              >
+                {isSel && (
+                  <div style={{
+                    width: 14, height: 14, borderRadius: "50%",
+                    background: color
+                  }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── 6. Com que frequência? ── */}
+      <section>
+        <h4 style={{ ...STITLE, marginBottom: 14 }}>Com que frequência?</h4>
+        <div style={{
+          display: "flex", gap: 0,
+          background: "var(--surface-variant)", padding: 4, borderRadius: 14
+        }}>
+          {[
+            { id: "once", label: "Uma vez" },
+            { id: "daily", label: "Diária" },
+            { id: "weekly", label: "Semanal" },
+            { id: "monthly", label: "Mensal" },
+          ].map(f => {
+            const isSel = frequency === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFrequency(f.id)}
+                style={{
+                  flex: 1, padding: "10px 0", borderRadius: 10,
+                  fontSize: 13, fontWeight: 700,
+                  background: isSel ? "var(--accent-peach)" : "transparent",
+                  color: isSel ? "#fff" : "var(--accent-peach)",
+                  border: "none", cursor: "pointer", transition: "all 0.25s"
+                }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+        {frequency === "weekly" && (
+          <div style={{ marginTop: 16 }}>
+            <RecurringSection
+              recurring={form.recurring}
+              setRecurring={(r) => setForm(c => ({ ...c, recurring: { ...r, enabled: true } }))}
             />
-            <AuraButtonV2 size="sm" variant="outline" onClick={() => {
-              if (customTag.trim()) {
-                setForm(c => ({...c, category: customTag.trim().toLowerCase()}));
-              }
-              setShowCustomConfig(false);
-              setCustomTag("");
-            }}>Salvar</AuraButtonV2>
           </div>
         )}
-      </div>
+      </section>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={LABEL_STYLE}>Energia Gasta</span>
-        <div style={{ display: "flex", gap: 6 }}>
-           {(["leve", "media", "alta"] as const).map(lvl => {
-              const isSel = form.energyLevel === lvl;
-              const emoji = lvl === 'leve' ? '🔋 Leve' : lvl === 'media' ? '⚡ Média' : '🔥 Alta';
-              return (
-                 <button
-                   key={lvl}
-                   type="button"
-                   onClick={() => setForm(c => ({...c, energyLevel: lvl}))}
-                   style={{
-                     flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                     border: `1.5px solid ${isSel ? 'var(--accent-peach)' : 'var(--warm-border-2)'}`,
-                     background: isSel ? 'var(--accent-peach-a3)' : 'var(--warm-bg)',
-                     color: isSel ? 'var(--accent-peach-ink)' : 'var(--text-2)'
-                   }}
-                 >{emoji}</button>
-              )
-           })}
+      {/* ── 7. Precisa de alertas? ── */}
+      <section>
+        <h4 style={STITLE}>Alertas & Notificações</h4>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0, marginTop: 14 }}>
+          {form.alerts.map(alertId => {
+            const preset = ALERT_PRESETS.find(a => a.id === alertId);
+            if (!preset) return null;
+            return (
+              <div
+                key={alertId}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "14px 16px",
+                  borderBottom: "1px solid var(--warm-border)"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Bell size={18} color="var(--accent-peach)" />
+                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text-1)" }}>{preset.label}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeAlert(alertId)}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    fontSize: 16, color: "var(--text-3)", padding: 4
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
-      </div>
+        
+        {availableAlerts.length > 0 && (
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setShowAddAlert(!showAddAlert)}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                width: "100%", padding: "14px",
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--accent-peach)", fontSize: 14, fontWeight: 600
+              }}
+            >
+              <span style={{ fontSize: 18 }}>＋</span> Adicionar Alerta
+            </button>
+            {showAddAlert && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10,
+                background: "#fff", borderRadius: 12, boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                border: "1px solid var(--warm-border)", overflow: "hidden"
+              }}>
+                {availableAlerts.map(alert => (
+                  <button
+                    key={alert.id}
+                    type="button"
+                    onClick={() => addAlert(alert.id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      width: "100%", padding: "12px 16px",
+                      background: "none", border: "none", borderBottom: "1px solid var(--warm-border)",
+                      cursor: "pointer", fontSize: 13, color: "var(--text-1)", textAlign: "left" as const
+                    }}
+                  >
+                    <Bell size={14} color="var(--accent-peach)" />
+                    {alert.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-      <NoteSection
-        form={form}
-        setForm={setForm}
-        context={{
-          title: form.title,
-          category: form.category,
-          energyLevel: form.energyLevel,
+        {/* Notificação Insistente (Persistent Reminder) */}
+        <div style={{ 
+          marginTop: 12, 
+          padding: "16px", 
+          background: "rgba(244,190,168,0.06)", 
+          borderRadius: 16,
+          border: "1px solid rgba(244,190,168,0.15)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ 
+                width: 32, height: 32, borderRadius: 10, 
+                background: form.persistentReminderEnabled ? "var(--accent-peach)" : "rgba(17,24,39,0.05)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "all 0.3s"
+              }}>
+                <Bell size={16} color={form.persistentReminderEnabled ? "#fff" : "var(--text-3)"} />
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Notificação Insistente</div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-3)" }}>Avisar até marcar como cumprida</div>
+              </div>
+            </div>
+            <label className="aura-toggle" style={{ cursor: "pointer" }}>
+              <input 
+                type="checkbox" 
+                checked={form.persistentReminderEnabled}
+                onChange={(e) => setForm(c => ({ ...c, persistentReminderEnabled: e.target.checked }))}
+                style={{ display: "none" }}
+              />
+              <div style={{ 
+                width: 44, height: 24, borderRadius: 20, 
+                background: form.persistentReminderEnabled ? "var(--accent-peach)" : "rgba(17,24,39,0.1)",
+                position: "relative", transition: "all 0.3s"
+              }}>
+                <div style={{ 
+                  width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                  position: "absolute", top: 3, left: form.persistentReminderEnabled ? 23 : 3,
+                  transition: "all 0.3s", boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+                }} />
+              </div>
+            </label>
+          </div>
+
+          {form.persistentReminderEnabled && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0 0" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>Repetir a cada:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                {[5, 10, 15, 30, 60].map(mins => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setForm(c => ({ ...c, persistentReminderIntervalMinutes: mins }))}
+                    style={{
+                      flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                      background: form.persistentReminderIntervalMinutes === mins ? "var(--accent-peach)" : "#fff",
+                      color: form.persistentReminderIntervalMinutes === mins ? "#fff" : "var(--accent-peach)",
+                      border: "1.5px solid rgba(244,190,168,0.2)", cursor: "pointer", transition: "all 0.2s"
+                    }}
+                  >
+                    {mins < 60 ? `${mins}m` : "1h"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── 8. Algum detalhe? ── */}
+      <section>
+        <h4 style={{ ...STITLE, marginBottom: 14 }}>Algum detalhe?</h4>
+
+        {/* Adicionar Subtarefa */}
+        <button
+          type="button"
+          onClick={() => setForm(c => ({
+            ...c,
+            noteMode: "checklist" as NoteMode,
+            checklist: [...c.checklist, { id: crypto.randomUUID(), text: "", done: false }]
+          }))}
+          style={{
+            width: "100%", padding: "12px 16px", marginBottom: 14,
+            background: "var(--accent-peach-a3)", borderRadius: 12,
+            border: "none", cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 8,
+            color: "var(--accent-peach-ink)", fontSize: 14, fontWeight: 700
+          }}
+        >
+          <span style={{ color: "var(--accent-sage)", fontSize: 18, fontWeight: 800 }}>＋</span>
+          Adicionar Subtarefa
+        </button>
+
+        <NoteSection
+          form={form}
+          setForm={setForm}
+          context={{ title: form.title, category: form.category, energyLevel: form.energyLevel }}
+        />
+      </section>
+
+      {/* ── 9. Ação principal ── */}
+      <AuraButtonV2
+        onClick={onSave}
+        style={{
+          width: "100%", padding: "16px",
+          fontSize: 16, fontWeight: 700,
+          borderRadius: 14
         }}
-      />
-      <RecurringSection recurring={form.recurring} setRecurring={(recurring) => setForm((current) => ({ ...current, recurring }))} />
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        {extraBtn}
-        <AuraButtonV2 variant="ghost" onClick={onCancel}>
-          Cancelar
-        </AuraButtonV2>
-        <AuraButtonV2 variant="primary" onClick={onSave}>
-          {saveLabel}
-        </AuraButtonV2>
-      </div>
+      >
+        {saveLabel}
+      </AuraButtonV2>
     </div>
   );
 }
@@ -787,6 +1220,7 @@ function PlannerSheetBody({
 function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayAnchor: Date; offsetDias: number; setOffsetDias: (v: any) => void }) {
   const selectedDate = new Date(todayAnchor);
   selectedDate.setDate(selectedDate.getDate() + offsetDias);
+  const selectedDateDateString = selectedDate.toDateString();
 
   const currentDayOfWeek = selectedDate.getDay(); 
   const startOfWeek = new Date(selectedDate);
@@ -812,22 +1246,22 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
   const formattedDate = `${yyyy}-${mm}-${dd}`;
 
   return (
-    <div style={{ marginBottom: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+    <div style={{ marginBottom: "24px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <button 
-           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}
+           style={{ border: 'none', background: 'var(--surface-variant)', borderRadius: "50%", width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
            onClick={() => setOffsetDias((c: number) => c - 7)}
         >
-          <ChevronLeft size={24} color="var(--text-2)" />
+          <ChevronLeft size={18} color="var(--text-1)" />
         </button>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, textTransform: 'capitalize', color: 'var(--text-1)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, textTransform: 'capitalize', color: 'var(--text-1)', letterSpacing: "-0.01em" }}>
             {selectedDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
           </h3>
           
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Calendar size={18} color="var(--text-2)" />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: "50%", background: "var(--surface-variant)" }}>
+            <Calendar size={14} color="var(--text-2)" />
             <input 
               type="date"
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
@@ -838,15 +1272,15 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
         </div>
 
         <button 
-           style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 4, display: 'flex' }}
+           style={{ border: 'none', background: 'var(--surface-variant)', borderRadius: "50%", width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
            onClick={() => setOffsetDias((c: number) => c + 7)}
         >
-          <ChevronRight size={24} color="var(--text-2)" />
+          <ChevronRight size={18} color="var(--text-1)" />
         </button>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
         {days.map(d => {
-          const isSelected = d.toDateString() === selectedDate.toDateString();
+          const isSelected = d.toDateString() === selectedDateDateString;
           const isToday = d.toDateString() === todayAnchor.toDateString();
           const DIAS_CURTOS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
           return (
@@ -857,23 +1291,73 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
                 setOffsetDias(Math.round(timeDiff / (1000 * 3600 * 24)));
               }}
               style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                padding: '8px', borderRadius: 16,
-                background: isSelected ? 'var(--accent-peach)' : 'transparent',
-                color: isSelected ? 'var(--accent-peach-ink)' : 'var(--text-1)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                padding: '10px 0', borderRadius: 16, flex: 1,
+                background: isSelected ? 'var(--accent-peach)' : 'var(--surface-variant)',
+                color: isSelected ? '#fff' : 'var(--text-1)',
                 cursor: 'pointer',
-                minWidth: 40
+                transition: "all 0.2s",
+                boxShadow: isSelected ? '0 8px 16px rgba(244,190,168,0.25)' : 'none'
               }}
             >
-              <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? 'var(--accent-peach-ink)' : 'var(--text-3)' }}>
+              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-3)', letterSpacing: "0.05em" }}>
                 {DIAS_CURTOS[d.getDay()]}
               </span>
-              <span style={{ fontSize: 16, fontWeight: 800 }}>{d.getDate()}</span>
-              {isToday && <div style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? 'var(--accent-peach-ink)' : 'var(--accent-peach)', marginTop: 2 }} />}
+              <span style={{ fontSize: 15, fontWeight: 800 }}>{d.getDate()}</span>
+              {isToday && <div style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? '#fff' : 'var(--accent-peach)', marginTop: 2 }} />}
             </div>
           )
         })}
       </div>
+    </div>
+  );
+}
+
+function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
+  const percent = Math.min(100, Math.max(0, (used / capacity) * 100));
+  const isOver = used > capacity;
+  
+  return (
+    <div className="glass-card" style={{ 
+      padding: "16px", borderRadius: 20, 
+      display: "flex", flexDirection: "column", gap: 10,
+      marginBottom: 24,
+      background: "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.4))",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ 
+            width: 28, height: 28, borderRadius: 8, 
+            background: isOver ? "var(--accent-peach-a3)" : "var(--accent-sage-a3)",
+            display: "flex", alignItems: "center", justifyContent: "center"
+          }}>
+            <span style={{ fontSize: 14 }}>{isOver ? "⚠️" : "🔋"}</span>
+          </div>
+          <div>
+            <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: isOver ? "var(--accent-peach-ink)" : "var(--accent-sage-ink)" }}>
+              {isOver ? "Limite Excedido" : "Energia Disponível"}
+            </span>
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-1)" }}>
+            {used.toFixed(0)} <span style={{ opacity: 0.4, fontWeight: 600, fontSize: 10 }}>/ {capacity.toFixed(0)} UP</span>
+          </span>
+        </div>
+      </div>
+      <div style={{ height: 8, background: "rgba(0,0,0,0.04)", borderRadius: 10, overflow: "hidden", position: "relative" }}>
+        <div style={{ 
+          position: "absolute", left: 0, top: 0, bottom: 0, 
+          width: `${percent}%`, 
+          background: isOver ? "var(--accent-peach)" : "var(--accent-sage)",
+          borderRadius: 10, transition: "width 0.8s cubic-bezier(0.16, 1, 0.3, 1)"
+        }} />
+      </div>
+      <p style={{ margin: 0, fontSize: 11, color: "var(--text-2)", lineHeight: 1.5, fontWeight: 500 }}>
+        {isOver 
+          ? "Você ultrapassou seu limite planejado. Tente delegar ou adiar blocos pesados."
+          : `Você ainda tem ${(capacity - used).toFixed(0)} UP para investir hoje sem esgotamento.`}
+      </p>
     </div>
   );
 }
@@ -928,19 +1412,27 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 
   return (
     <div 
-       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 8, background: "transparent" }}
+       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 18, background: "transparent", marginBottom: "10px" }}
        draggable
        onDragStart={(e) => {
          onDragStart(e, slot.task.id);
        }}
     >
-      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, display: 'flex', alignItems: 'center', justifyContent: offset < 0 ? 'flex-end' : 'flex-start', padding: '0 20px', color: '#fff', zIndex: 0, borderRadius: 8, transition: 'background 0.2s', background: offset < 0 ? 'var(--accent-sage)' : 'var(--error-color, #E5A08A)' }}>
-         <span style={{ fontWeight: 800, fontSize: 13 }}>{offset < 0 ? 'Concluir' : 'Excluir'}</span>
+      <div style={{ 
+        position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, 
+        display: 'flex', alignItems: 'center', 
+        justifyContent: offset < 0 ? 'flex-end' : 'flex-start', 
+        padding: '0 28px', color: '#fff', zIndex: 0, borderRadius: 18, 
+        transition: 'all 0.2s ease', 
+        background: offset === 0 ? 'transparent' : (offset < 0 ? 'var(--accent-sage)' : 'var(--accent-peach)'),
+        opacity: Math.abs(offset) > 10 ? 1 : 0
+      }}>
+         <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "0.05em", textTransform: "uppercase" }}>{offset < 0 ? 'Concluir' : 'Excluir'}</span>
       </div>
       <div
         role="button"
         tabIndex={0}
-        className="timeline-block-card interactive-card"
+        className="timeline-block-card interactive-card glass-card"
         onClick={() => { 
           if(Math.abs(offset) < 10) onClick(); 
         }}
@@ -950,62 +1442,103 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             onClick();
           }
         }}
-        draggable
-        onDragStart={(e) => {
-          onDragStart(e, slot.task.id);
-        }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left", 
-          border: isGcal ? `1.5px dashed ${categoryOption.cor}88` : `1.5px solid ${categoryOption.cor}44`,
-          borderLeft: `3.5px solid ${categoryOption.cor}`,
-          borderRadius: 12,
-          opacity: slot.task.done ? 0.74 : 1, 
+          borderLeft: `5px solid ${categoryOption.cor}`,
+          borderRadius: 18,
+          opacity: slot.task.done ? 0.55 : 1, 
           transform: `translateX(${offset}px)`, 
-          transition: dragging ? 'none' : 'transform 0.2s', 
+          transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)', 
           position: 'relative', 
           zIndex: 1, 
-          background: isGcal ? 'var(--accent-sky-a3)' : 'rgba(255,255,255,0.98)',
+          background: '#FFFFFF',
           cursor: 'pointer',
           touchAction: "pan-y",
-          padding: "8px 12px",
-          boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
+          padding: "18px 20px",
+          boxShadow: slot.task.done ? 'none' : '0 10px 32px rgba(17,24,39,0.04)',
+          display: "flex",
+          gap: 18,
+          alignItems: "center"
         }}
       >
-        <div className="block-title" style={{ 
-          fontSize: 13,
-          fontWeight: 700,
-          marginBottom: 2,
-          color: 'var(--text-1)',
-          textDecoration: slot.task.done ? "line-through" : "none" 
-        }}>{slot.task.title}</div>
-        <div className="block-meta" style={{ fontSize: 10, opacity: 0.8, fontWeight: 500 }}>
-          {slot.time} — {slot.endTime} · {slot.durationLabel} · { (() => { 
-                const meta = getTaskMeta(slot.task.id); if (meta.energyLevel === 'leve') return '🔋'; if (meta.energyLevel === 'alta') return '🔥'; return '⚡';
-          })() }
+        {/* Energy Icon em destaque à esquerda */}
+        <div style={{ 
+          width: 46, height: 46, borderRadius: 14, 
+          background: slot.task.done ? 'var(--surface-variant)' : 'rgba(244,190,168,0.08)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+          flexShrink: 0,
+          border: slot.task.done ? 'none' : '1px solid rgba(244,190,168,0.15)'
+        }}>
+           { (() => { 
+                const meta = getTaskMeta(slot.task.id);
+                const lvl = meta.energyLevel || slot.task.energyLevel || 3;
+                if (lvl === 1) return '🌸';
+                if (lvl === 2) return '🎯';
+                if (lvl === 3) return '⚡';
+                if (lvl === 4) return '⚡⚡';
+                if (lvl === 5) return '🔥';
+                return '⚡';
+           })() }
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
-          <div className="block-chip" style={{ 
-            padding: '2px 6px',
-            fontSize: 9,
-            background: categoryOption.bg, 
-            color: categoryOption.textColor, 
-            border: `1px solid ${categoryOption.cor}12` 
-          }}>
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: categoryOption.cor }} />{categoryOption.shortLabel}
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="block-title" style={{ 
+            fontSize: 15,
+            fontWeight: 800,
+            marginBottom: 3,
+            color: 'var(--text-1)',
+            textDecoration: slot.task.done ? "line-through" : "none",
+            letterSpacing: "-0.01em"
+          }}>{slot.task.title}</div>
+          
+          <div className="block-meta" style={{ fontSize: 11, opacity: 0.5, fontWeight: 600, marginBottom: 8, color: "var(--text-2)" }}>
+            {slot.time} — {slot.endTime} · {slot.durationLabel}
           </div>
-          {slot.task.isAiSuggested && (
-            <div className="block-chip" style={{ background: "rgba(244,190,168,.14)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.35)" }}>
-              Airia
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div className="block-chip" style={{ 
+              padding: '3px 10px',
+              fontSize: 10,
+              fontWeight: 800,
+              borderRadius: 8,
+              background: categoryOption.bg, 
+              color: categoryOption.textColor, 
+              border: `1px solid ${categoryOption.cor}22`,
+              display: "flex", alignItems: "center", gap: 5,
+              textTransform: "uppercase",
+              letterSpacing: "0.03em"
+            }}>
+              {slot.task.icon ? (
+                <i className={slot.task.icon} style={{ fontSize: 11 }}></i>
+              ) : (
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: categoryOption.cor }} />
+              )}
+              {categoryOption.shortLabel}
             </div>
-          )}
-          {isGcal && (
-            <div className="block-chip" style={{ padding: '2px 6px', fontSize: 9, background: "rgba(99,152,169,.08)", color: "var(--accent-sky)", border: "1px solid rgba(99,152,169,.15)" }}>
-              Google
-            </div>
-          )}
+
+            {slot.task.persistentReminderEnabled && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(244,190,168,0.1)", padding: "2px 8px", borderRadius: 6, border: "1px solid rgba(244,190,168,0.2)" }}>
+                <Bell size={10} color="var(--accent-peach)" />
+                <span style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach-ink)" }}>{slot.task.persistentReminderIntervalMinutes}m</span>
+              </div>
+            )}
+
+            {(slot.task.alarmEnabled || slot.task.vibrateEnabled) && (
+               <div style={{ display: "flex", gap: 5, opacity: 0.7 }}>
+                  {slot.task.alarmEnabled && <span style={{ fontSize: 12 }}>⏰</span>}
+                  {slot.task.vibrateEnabled && <span style={{ fontSize: 12 }}>📳</span>}
+               </div>
+            )}
+
+            {slot.task.isAiSuggested && (
+              <div className="block-chip" style={{ background: "rgba(244,190,168,.12)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.30)", fontWeight: 800, fontSize: 9 }}>
+                AIRIA
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1053,6 +1586,83 @@ export function PlannerPage() {
   const allDayTasks = useMemo(() => plannerTasks.filter(t => t.time === "00:00" && t.endTime === "23:59"), [plannerTasks]);
   const agendaSlots = useMemo(() => buildPlannerAgendaSlots(plannerTasks), [plannerTasks]);
   const visibleAgendaSlots = plannerLoading ? emptyAgendaSlots : agendaSlots;
+  
+  // ── Inteligência de Energia (Bateria) ───────────────────────
+  const dailyCapacity = useMemo(() => {
+    // Escala de Capacidade Biológica (UP - Units of Power)
+    // Se não houver histórico, começamos com 15 UP (média basal conservadora)
+    const baseCap = (cycleReport.avgEnergy7d || 5) * 3; 
+    return Math.max(10, baseCap);
+  }, [cycleReport.avgEnergy7d]);
+
+  const usedEnergy = useMemo(() => {
+    return plannerTasks.reduce((acc, t) => {
+      // Use numeric energyLevel if available, otherwise map from intensity string
+      const lvl = t.energyLevel ?? mapIntensityToEnergyLevel(t.intensity);
+      // Level 1-5 corresponds directly to 1-5 UP (Units of Power)
+      return acc + (lvl || 3);
+    }, 0);
+  }, [plannerTasks]);
+
+  // ── Proatividade da IA: Sugestões de Brechas ────────────────
+  const [gapSuggestions, setGapSuggestions] = useState<Record<string, { title: string, description: string }>>({});
+
+  useEffect(() => {
+    if (plannerLoading || plannerTasks.length === 0) return;
+
+    const findGaps = () => {
+       return agendaSlots
+         .filter(s => s.kind === "empty" && !s.title)
+         .slice(0, 3); // Apenas as 3 primeiras para não sobrecarregar
+    };
+
+    const gaps = findGaps();
+    if (gaps.length === 0) return;
+
+    async function fetchGapSuggestions() {
+      try {
+        const promptContext = {
+          date: selectedDateKey,
+          phase: cycleReport.phaseLabel,
+          energyRemaining: dailyCapacity - usedEnergy,
+          existingTasks: plannerTasks.map(t => t.title).join(", "),
+          gaps: gaps.map(g => g.time)
+        };
+
+        const res = await api.post("/ai/suggest", {
+          type: "agenda-blocks",
+          context: promptContext
+        });
+
+        if (res && res.suggestions) {
+          const newSuggestions = { ...gapSuggestions };
+          res.suggestions.forEach((s: any) => {
+            if (s.time) newSuggestions[s.time] = { title: s.title, description: s.description };
+          });
+          setGapSuggestions(newSuggestions);
+        }
+      } catch (e) {
+        // Falha silenciosa conforme lei do sistema
+        console.warn("[Aura/AI] Gap suggestion failed - keeping silent");
+      }
+    }
+
+    fetchGapSuggestions();
+  }, [selectedDateKey, plannerTasks.length, plannerLoading]);
+
+  const agendaWithAi = useMemo(() => {
+    return visibleAgendaSlots.map(slot => {
+      if (slot.kind === "empty" && gapSuggestions[slot.time]) {
+        return {
+          ...slot,
+          title: gapSuggestions[slot.time].title,
+          description: gapSuggestions[slot.time].description,
+        };
+      }
+      return slot;
+    });
+  }, [visibleAgendaSlots, gapSuggestions]);
+
   const plannerSummary = plannerLoading
     ? "Montando a visualização da sua agenda."
     : plannerTasks.length === 0
@@ -1232,7 +1842,12 @@ export function PlannerPage() {
         lastResetDate: newForm.lastResetDate,
         persistentReminderEnabled: newForm.persistentReminderEnabled,
         persistentReminderIntervalMinutes: newForm.persistentReminderIntervalMinutes,
-        note: newForm.note, // Make sure note is passed
+        vibrateEnabled: newForm.vibrateEnabled,
+        alarmEnabled: newForm.alarmEnabled,
+        recurringNotificationEnabled: newForm.recurringNotificationEnabled,
+        visualRepeatEnabled: newForm.visualRepeatEnabled,
+        icon: newForm.icon,
+        color: newForm.color,
       });
 
       if (targetDate === selectedDateKey) {
@@ -1300,6 +1915,12 @@ export function PlannerPage() {
         lastResetDate: editForm.lastResetDate,
         persistentReminderEnabled: editForm.persistentReminderEnabled,
         persistentReminderIntervalMinutes: editForm.persistentReminderIntervalMinutes,
+        vibrateEnabled: editForm.vibrateEnabled,
+        alarmEnabled: editForm.alarmEnabled,
+        recurringNotificationEnabled: editForm.recurringNotificationEnabled,
+        visualRepeatEnabled: editForm.visualRepeatEnabled,
+        icon: editForm.icon,
+        color: editForm.color,
       });
 
       if (targetDate === selectedDateKey) {
@@ -1363,6 +1984,11 @@ export function PlannerPage() {
           intensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
           persistentReminderEnabled: task.persistentReminderEnabled ?? false,
           persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+          vibrateEnabled: task.vibrateEnabled ?? false,
+          alarmEnabled: task.alarmEnabled ?? false,
+          recurringNotificationEnabled: task.recurringNotificationEnabled ?? false,
+          icon: task.icon,
+          color: task.color,
         } ],
       });
       await reloadPlannerTasks();
@@ -1440,6 +2066,11 @@ export function PlannerPage() {
           intensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
           persistentReminderEnabled: task.persistentReminderEnabled ?? false,
           persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+          vibrateEnabled: task.vibrateEnabled ?? false,
+          alarmEnabled: task.alarmEnabled ?? false,
+          recurringNotificationEnabled: task.recurringNotificationEnabled ?? false,
+          icon: task.icon,
+          color: task.color,
           isAiSuggested: task.isAiSuggested ? false : undefined,
           aiReasoning: task.isAiSuggested ? null : undefined,
         } ]
@@ -1453,37 +2084,40 @@ export function PlannerPage() {
   }
 
   return (
-    <div style={{ flex: 1, padding: "20px", background: "var(--warm-bg)", overflowX: 'hidden' }}>
+    <div className="bg-white min-h-screen" style={{ flex: 1, padding: "20px", overflowX: 'hidden' }}>
       <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
+
+      <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
 
 
 
       {/* ── Banner: Modo Proteção de Fase Baixa ── */}
       {isLowPhase && (
         <div style={{
-          borderRadius: 14, padding: "12px 14px", marginBottom: 14,
+          borderRadius: 18, padding: "14px 16px", marginBottom: 18,
           background: cycleReport.phase === "depleted"
-            ? "rgba(161,125,108,.12)"
-            : "rgba(197,165,147,.10)",
+            ? "rgba(161,125,108,.08)"
+            : "rgba(197,165,147,.08)",
           border: cycleReport.phase === "depleted"
-            ? "1.5px solid rgba(161,125,108,.30)"
-            : "1.5px solid rgba(197,165,147,.28)",
+            ? "1px solid rgba(161,125,108,.15)"
+            : "1px solid rgba(197,165,147,.15)",
         }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
             <span style={{ fontSize: 20, flexShrink: 0 }}>
               {cycleReport.phase === "depleted" ? "😴" : "🌙"}
             </span>
             <div style={{ flex: 1 }}>
               <p style={{
-                fontSize: 12, fontWeight: 800, margin: "0 0 3px",
-                color: cycleReport.phase === "depleted" ? "#A17D6C" : "var(--accent-peach)",
+                fontSize: 12, fontWeight: 800, margin: "0 0 4px",
+                color: cycleReport.phase === "depleted" ? "#A17D6C" : "var(--accent-peach-ink)",
+                textTransform: "uppercase", letterSpacing: "0.05em"
               }}>
-                Modo Proteção Ativo — {cycleReport.phaseLabel}
+                Modo Proteção — {cycleReport.phaseLabel}
               </p>
-              <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
+              <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0, lineHeight: 1.6, fontWeight: 500 }}>
                 {cycleReport.phase === "depleted"
-                  ? "Você está em esgotamento. Considere adiar tarefas não urgentes e priorizar descanso."
-                  : "Fase baixa detectada. Evite sobrecarregar a agenda — tarefas leves e autocuidado em primeiro lugar."}
+                  ? "Seu sistema está em exaustão. Priorize apenas o essencial e reserve janelas de silêncio."
+                  : "Fase de baixa energia detectada. Otimize sua agenda para tarefas leves e evite grandes pressões hoje."}
               </p>
             </div>
           </div>
@@ -1492,8 +2126,8 @@ export function PlannerPage() {
 
       {/* ── All-Day Tasks Section (Smaller Cards) ── */}
       {allDayTasks.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, paddingLeft: 4 }}>
             <Calendar size={12} color="var(--accent-sage)" />
             <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--accent-sage-ink)" }}>
               Dia Inteiro
@@ -1501,32 +2135,30 @@ export function PlannerPage() {
           </div>
           <div style={{ 
             display: "grid", 
-            gridTemplateColumns: allDayTasks.length > 1 ? "repeat(auto-fill, minmax(140px, 1fr))" : "1fr",
-            gap: 8 
+            gridTemplateColumns: allDayTasks.length > 1 ? "repeat(auto-fill, minmax(150px, 1fr))" : "1fr",
+            gap: 10 
           }}>
             {allDayTasks.map(task => (
               <div 
                 key={task.id}
                 onClick={() => openEditForm(task)}
+                className="glass-card"
                 style={{
-                  padding: "8px 10px",
-                  borderRadius: 12,
-                  background: "rgba(255,255,255,0.6)",
-                  border: "1px solid rgba(17,24,39,0.06)",
-                  borderLeft: `3px solid ${getCategoryStyles(task.category || "").cor}`,
+                  padding: "10px 12px",
+                  borderRadius: 16,
+                  borderLeft: `4px solid ${getCategoryStyles(task.category || "").cor}`,
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 3,
                   cursor: "pointer",
-                  backdropFilter: "blur(8px)"
                 }}
               >
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {task.title}
                 </div>
                 {task.source === "gcal" && (
-                  <div style={{ fontSize: 9, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 3 }}>
-                    <img src="https://www.google.com/favicon.ico" width={8} height={8} alt="GCal" /> Google Agenda
+                  <div style={{ fontSize: 9, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 4, fontWeight: 600 }}>
+                    <img src="https://www.google.com/favicon.ico" width={10} height={10} alt="GCal" /> Google Agenda
                   </div>
                 )}
               </div>
@@ -1535,12 +2167,12 @@ export function PlannerPage() {
         </div>
       )}
 
-      <div className="glass-card" style={PLANNER_SUMMARY_CARD_STYLE}>
+      <div className="glass-card" style={{ ...PLANNER_SUMMARY_CARD_STYLE, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", marginBottom: 6 }}>Agenda</div>
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.2 }}>Timeline do dia</h2>
-            <p style={{ marginTop: 8, fontSize: 12, lineHeight: 1.6, color: "var(--text-3)" }}>{plannerSummary}</p>
+            <div style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", marginBottom: 8 }}>Planejamento</div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.1 }}>Sua Timeline</h2>
+            <p style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6, color: "var(--text-2)", fontWeight: 500 }}>{plannerSummary}</p>
           </div>
           <span
             style={{
@@ -1549,15 +2181,15 @@ export function PlannerPage() {
               alignItems: "center",
               justifyContent: "center",
               minHeight: 28,
-              padding: "0 10px",
+              padding: "0 12px",
               borderRadius: 999,
               fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: ".08em",
+              fontWeight: 800,
+              letterSpacing: ".05em",
               textTransform: "uppercase",
               color: "var(--accent-peach-ink)",
               background: "var(--accent-peach-a3)",
-              border: "1px solid var(--accent-peach-a5)",
+              border: "1.5px solid var(--accent-peach-a5)",
             }}
           >
             {plannerBadgeLabel}
@@ -1567,70 +2199,66 @@ export function PlannerPage() {
 
       {/* ── Foco do dia — GTD tasks + next goal actions ── */}
       {(gtdFocusItems.length > 0 || goalFocusItems.length > 0) && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.2" strokeLinecap="round">
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, paddingLeft: 4 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.5" strokeLinecap="round">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
-            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
-              Foco do dia
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
+              Foco Prioritário
             </span>
             <span style={{
               background: "var(--accent-peach-a3)", color: "var(--accent-peach-ink)",
-              borderRadius: 999, padding: "0 6px", fontSize: 10, fontWeight: 700,
-              border: "1px solid var(--accent-peach-a5)",
+              borderRadius: 999, padding: "0 8px", fontSize: 10, fontWeight: 800,
+              border: "1.5px solid var(--accent-peach-a5)",
             }}>{gtdFocusItems.length + goalFocusItems.length}</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {gtdFocusItems.map(item => (
-              <div key={item.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                background: "rgba(255,255,255,0.68)", backdropFilter: "blur(12px)",
-                border: "1px solid rgba(99,152,169,0.18)",
-                borderLeft: "3px solid var(--accent-sky)",
-                borderRadius: 12, padding: "8px 12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              <div key={item.id} className="glass-card" style={{
+                display: "flex", alignItems: "center", gap: 12,
+                borderLeft: "4px solid var(--accent-sky)",
+                borderRadius: 16, padding: "12px 16px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
               }}>
                 <button
                   onClick={() => toggleGtdFocusItem(item.id)}
                   style={{
-                    width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer",
-                    background: "transparent", border: "1.5px solid var(--accent-sky)",
+                    width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                    background: "transparent", border: "2px solid var(--accent-sky)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".07em", color: "var(--accent-sky)", textTransform: "uppercase", marginBottom: 1 }}>
-                    ⚡ Tarefa
+                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-sky)", textTransform: "uppercase", marginBottom: 2 }}>
+                    ⚡ Captura
                   </div>
-                  <div style={{ fontSize: 12.5, color: "var(--text-1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {item.text}
                   </div>
                 </div>
               </div>
             ))}
             {goalFocusItems.map(item => (
-              <div key={item.id} style={{
-                display: "flex", alignItems: "center", gap: 10,
-                background: "rgba(255,255,255,0.68)", backdropFilter: "blur(12px)",
-                border: "1px solid rgba(215,137,127,0.18)",
-                borderLeft: "3px solid var(--accent-peach)",
-                borderRadius: 12, padding: "8px 12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              <div key={item.id} className="glass-card" style={{
+                display: "flex", alignItems: "center", gap: 12,
+                borderLeft: "4px solid var(--accent-peach)",
+                borderRadius: 16, padding: "12px 16px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
               }}>
                 <button
                   onClick={() => { toggleSubGoal(item.goalId, item.subId); }}
                   style={{
-                    width: 17, height: 17, borderRadius: 5, flexShrink: 0, cursor: "pointer",
-                    background: "rgba(215,137,127,0.12)", border: "1.5px solid var(--accent-peach)",
+                    width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                    background: "rgba(215,137,127,0.08)", border: "2px solid var(--accent-peach)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".07em", color: "var(--accent-peach)", textTransform: "uppercase", marginBottom: 1 }}>
+                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-peach)", textTransform: "uppercase", marginBottom: 2 }}>
                     🎯 {item.goalTitle}
                   </div>
-                  <div style={{ fontSize: 12.5, color: "var(--text-1)", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {item.text}
                   </div>
                 </div>
@@ -1641,11 +2269,16 @@ export function PlannerPage() {
       )}
 
       <div
-         style={{ display: "flex", flexDirection: "column", paddingBottom: 88, overflowX: "hidden" }}
+         style={{ display: "flex", flexDirection: "column", paddingBottom: 100, overflowX: "hidden", position: "relative" }}
          onTouchStart={handleAgendaTouchStart}
          onTouchEnd={handleAgendaTouchEnd}
       >
-        {visibleAgendaSlots.map((slot) => {
+        <TimelineProgressIndicator 
+           nowMinutes={todayAnchor.getHours() * 60 + todayAnchor.getMinutes()} 
+           slots={agendaWithAi} 
+        />
+        
+        {agendaWithAi.map((slot) => {
           if (slot.kind === "task") {
             const categoryOption = getCategoryStyles(slot.category);
 
@@ -1657,13 +2290,14 @@ export function PlannerPage() {
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => {
                   e.preventDefault();
+                  e.stopPropagation();
                   const tid = e.dataTransfer.getData('text/plain');
                   if (tid) handleDropTaskToTime(tid, slot.time);
                 }}
-                style={{ borderRadius: 8, background: "transparent" }}
+                style={{ borderRadius: 12, background: "transparent", paddingLeft: 24 }}
               >
-                <span className="timeline-time">{slot.time}</span>
-                <div className="timeline-line" />
+                <span className="timeline-time" style={{ fontWeight: 700, fontSize: 13 }}>{slot.time}</span>
+                <div className="timeline-line" style={{ left: 10 }} />
                 <SwipeableTaskCard 
                    slot={slot} 
                    categoryOption={categoryOption} 
@@ -1680,28 +2314,29 @@ export function PlannerPage() {
           }
 
           return (
-            <div key={slot.key} className="timeline-slot" data-drop-time={slot.time} style={{ minHeight: slot.title ? 100 : 54, borderRadius: 8, background: "transparent" }}
+            <div key={slot.key} className="timeline-slot" data-drop-time={slot.time} style={{ minHeight: slot.title ? 110 : 60, borderRadius: 12, background: "transparent", paddingLeft: 24 }}
                  onDragOver={e => e.preventDefault()}
                  onDrop={e => {
                     e.preventDefault();
+                    e.stopPropagation();
                     const tid = e.dataTransfer.getData('text/plain');
                     if (tid) handleDropTaskToTime(tid, slot.time);
                  }}
             >
-              <span className="timeline-time" style={{ opacity: slot.title ? 1 : 0.45 }}>{slot.time}</span>
-              <div className="timeline-line" style={{ opacity: slot.title ? 1 : 0.2 }} />
+              <span className="timeline-time" style={{ opacity: slot.title ? 1 : 0.4, fontWeight: 700, fontSize: 13 }}>{slot.time}</span>
+              <div className="timeline-line" style={{ opacity: slot.title ? 0.8 : 0.15, left: 10 }} />
               <button
                 type="button"
-                className="timeline-block-card interactive-card"
+                className="timeline-block-card interactive-card glass-card"
                 onClick={() => openNewFormAt(slot.time)}
-                style={slot.title ? EMPTY_TIMELINE_CARD_STYLE : { width: '100%', background: 'transparent', border: 'none', borderLeft: '2px solid transparent', textAlign: 'left', opacity: 0.6, display: 'flex', alignItems: 'center', boxShadow: 'none' }}
+                style={slot.title ? { ...EMPTY_TIMELINE_CARD_STYLE, borderRadius: 16 } : { width: '100%', background: 'transparent', border: 'none', borderLeft: '2px solid transparent', textAlign: 'left', opacity: 0.5, display: 'flex', alignItems: 'center', boxShadow: 'none' }}
               >
                 {slot.title ? (
                   <>
-                    <div className="block-title" style={{ color: "var(--text-2)" }}>
+                    <div className="block-title" style={{ color: "var(--text-1)", fontWeight: 700, fontSize: 15 }}>
                       {slot.title}
                     </div>
-                    <div className="block-meta" style={{ marginTop: 4, lineHeight: 1.6 }}>
+                    <div className="block-meta" style={{ marginTop: 6, lineHeight: 1.6, fontSize: 12, color: "var(--text-2)" }}>
                       {slot.description}
                     </div>
                     <div
@@ -1710,15 +2345,18 @@ export function PlannerPage() {
                         background: "var(--accent-peach-a3)",
                         color: "var(--accent-peach-ink)",
                         border: "1px solid var(--accent-peach-a5)",
-                        marginTop: 10
+                        marginTop: 12,
+                        borderRadius: 10,
+                        padding: "4px 10px",
+                        fontSize: 10,
+                        fontWeight: 800
                       }}
                     >
-                      <span style={{ fontSize: 11, lineHeight: 1 }}>+</span>
-                      Criar bloco
+                      + CRIAR BLOCO
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 13, color: 'var(--text-3)' }}>&nbsp;&nbsp;+&nbsp;</div>
+                  <div style={{ fontSize: 16, color: 'var(--text-3)', paddingLeft: 12 }}>+</div>
                 )}
               </button>
             </div>
@@ -1756,19 +2394,38 @@ export function PlannerPage() {
         </svg>
       </button>
 
+
       {showNewForm ? (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "flex-end", zIndex: 100 }}>
-          <div style={{ background: "#fff", width: "100%", padding: 20, borderRadius: "20px 20px 0 0" }}>
-            <h3>Novo Bloco</h3>
-            <PlannerSheetBody form={newForm} setForm={setNewForm} onSave={handleAddBlock} onCancel={closeNewForm} saveLabel="Adicionar" />
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" }}>
+          <div style={{ 
+            background: "#fff", width: "100%", padding: "24px 20px", 
+            borderRadius: "32px 32px 0 0", maxHeight: "92vh", overflowY: "auto",
+            boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+            position: "relative"
+          }}>
+            <div style={{ width: 40, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 20px" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+              <button onClick={closeNewForm} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text-2)", padding: 4 }}>✕</button>
+              <h3 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>Nova <span style={{ color: "var(--accent-peach)" }}>Tarefa</span></h3>
+            </div>
+            <PlannerSheetBody form={newForm} setForm={setNewForm} onSave={handleAddBlock} onCancel={closeNewForm} saveLabel="Criar Tarefa" />
           </div>
         </div>
       ) : null}
 
       {editingTaskId ? (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "flex-end", zIndex: 100 }}>
-          <div style={{ background: "#fff", width: "100%", padding: 20, borderRadius: "20px 20px 0 0" }}>
-            <h3>Editar Bloco</h3>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" }}>
+          <div style={{ 
+            background: "#fff", width: "100%", padding: "24px 20px", 
+            borderRadius: "32px 32px 0 0", maxHeight: "92vh", overflowY: "auto",
+            boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+            position: "relative"
+          }}>
+            <div style={{ width: 40, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 20px" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+              <button onClick={closeEditForm} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text-2)", padding: 4 }}>✕</button>
+              <h3 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>Editar <span style={{ color: "var(--accent-peach)" }}>Tarefa</span></h3>
+            </div>
             <PlannerSheetBody
               form={editForm}
               setForm={setEditForm}

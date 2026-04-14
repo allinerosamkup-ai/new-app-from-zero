@@ -4,7 +4,9 @@ import { describe, it } from "vitest";
 import {
   buildPlannerAgendaSlots,
   buildTimelineBlockInput,
+  buildGoogleCalendarTaskId,
   formatTimelineDurationLabel,
+  parseGoogleCalendarTaskId,
   resolveTaskCardSwipeAction,
   resolvePlannerBlockDate,
   shouldNavigateAgendaBySwipe,
@@ -182,6 +184,16 @@ describe("planner page helpers", () => {
   });
 
   it("normalizes Google Calendar task labels for editing and syncing", () => {
+    const multiCalendarId = buildGoogleCalendarTaskId("terapia@example.com", "abc/123");
+    assert.deepEqual(parseGoogleCalendarTaskId(multiCalendarId), {
+      calendarId: "terapia@example.com",
+      eventId: "abc/123",
+    });
+    assert.deepEqual(parseGoogleCalendarTaskId("gcal-abc123"), {
+      calendarId: "primary",
+      eventId: "abc123",
+    });
+    assert.equal(stripGoogleCalendarTaskId(multiCalendarId), "abc/123");
     assert.equal(stripGoogleCalendarTaskId("gcal-abc123"), "abc123");
     assert.equal(stripGoogleCalendarTaskId("local-task"), "local-task");
     assert.equal(stripGoogleCalendarTaskTitle("📅 Reunião com equipe"), "Reunião com equipe");

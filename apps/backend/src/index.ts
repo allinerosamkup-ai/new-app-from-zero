@@ -3075,6 +3075,20 @@ JSON APENAS: {"profileSummary":"..."}`,
 export const app = createApp();
 
 if (require.main === module) {
+  const FIFTEEN_MINUTES = 15 * 60 * 1000;
+  setInterval(async () => {
+    console.log('[AI Background] Processing pending jobs...');
+    try {
+      const { AiBackgroundService } = await import('./services/ai-background.service');
+      const result = await AiBackgroundService.processPendingJobs();
+      if (result.processed > 0) {
+        console.log(`[AI Background] Processed ${result.processed} jobs, ${result.errors} errors`);
+      }
+    } catch (err) {
+      console.error('[AI Background] Error:', err);
+    }
+  }, FIFTEEN_MINUTES);
+
   app.listen(port, () => {
     console.log(`[backend]: Server is running at http://localhost:${port}`);
   });

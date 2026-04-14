@@ -29,6 +29,8 @@ const loadOnboardingCyclePage = () => import("./routes/onboarding-cycle-page");
 const loadOnboardingSleepPage = () => import("./routes/onboarding-sleep-page");
 const loadOnboardingPreferencesPage = () => import("./routes/onboarding-preferences-page");
 const loadOnboardingDonePage = () => import("./routes/onboarding-done-page");
+const loadPrivacyPage = () => import("./routes/privacy-page");
+const loadTermsPage = () => import("./routes/terms-page");
 
 const AuraLayout = lazy(() => loadAuraLayout().then((module) => ({ default: module.AuraLayout })));
 const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
@@ -57,6 +59,8 @@ const OnboardingCyclePage = lazy(() => loadOnboardingCyclePage().then((module) =
 const OnboardingSleepPage = lazy(() => loadOnboardingSleepPage().then((module) => ({ default: module.OnboardingSleepPage })));
 const OnboardingPreferencesPage = lazy(() => loadOnboardingPreferencesPage().then((module) => ({ default: module.OnboardingPreferencesPage })));
 const OnboardingDonePage = lazy(() => loadOnboardingDonePage().then((module) => ({ default: module.OnboardingDonePage })));
+const PrivacyPage = lazy(() => loadPrivacyPage().then((module) => ({ default: module.PrivacyPage })));
+const TermsPage = lazy(() => loadTermsPage().then((module) => ({ default: module.TermsPage })));
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
@@ -155,6 +159,9 @@ export default function App() {
         <Route path="/onboarding/done" element={<OnboardingDonePage />} />
         <Route path="/editorial-showcase" element={<EditorialShowcase />} />
         <Route path="/auth-v2" element={<AuthV2Page />} />
+        <Route path="/auth/callback" element={<Navigate to={`/planner${location.search}`} replace />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
 
         {/* Rotas de preview sem auth — só desenvolvimento */}
         <Route path="/dev" element={<DevLayout />}>

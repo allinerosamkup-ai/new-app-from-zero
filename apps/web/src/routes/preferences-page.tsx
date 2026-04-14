@@ -1,11 +1,264 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { NotificationPreferences } from "../features/aura/types";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import "../styles/aura.css";
+
+type GCalCalendar = {
+  id: string;
+  summary: string;
+  description: string;
+  primary: boolean;
+  backgroundColor: string;
+  selected: boolean;
+  accessRole?: string;
+};
+
+function getDefaultSelectedCalendarIds(calendars: GCalCalendar[]) {
+  return calendars
+    .filter((calendar) => calendar.selected && calendar.accessRole !== "none")
+    .map((calendar) => calendar.id);
+}
+
+function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [calendars, setCalendars] = useState<GCalCalendar[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [calendarsOpen, setCalendarsOpen] = useState(false);
+
+  const checkConnection = useCallback(async () => {
+    try {
+      const res = await api.get("/gcal/calendars");
+      const isConnected = !!res?.connected;
+      setConnected(isConnected);
+
+      if (isConnected && Array.isArray(res.calendars)) {
+        const nextCalendars = res.calendars as GCalCalendar[];
+        const saved = Array.isArray(res.selectedIds) ? (res.selectedIds as string[]) : [];
+        setCalendars(nextCalendars);
+        setSelectedIds(saved.length > 0 ? saved : getDefaultSelectedCalendarIds(nextCalendars));
+      }
+    } catch {
+      setConnected(false);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { checkConnection(); }, [checkConnection]);
+
+  async function loadCalendars() {
+    try {
+      const res = await api.get("/gcal/calendars");
+      if (res?.connected && res?.calendars) {
+        const nextCalendars = res.calendars as GCalCalendar[];
+        setCalendars(nextCalendars);
+        const saved = Array.isArray(res.selectedIds) ? (res.selectedIds as string[]) : [];
+        setSelectedIds(saved.length > 0 ? saved : getDefaultSelectedCalendarIds(nextCalendars));
+        setCalendarsOpen(true);
+      }
+    } catch {
+      onStatusChange("Não consegui carregar as agendas.");
+    }
+  }
+
+  async function handleConnect() {
+    try {
+      const res = await api.get("/gcal/auth-url");
+      const url = res?.url || res?.authUrl;
+      if (typeof url === "string" && url) {
+        window.location.href = url;
+        return;
+      }
+      onStatusChange("Não consegui abrir a conexão com o Google Agenda.");
+    } catch {
+      onStatusChange("Não consegui conectar o Google Agenda agora.");
+    }
+  }
+
+  async function handleDisconnect() {
+    try {
+      await api.post("/gcal/disconnect");
+      setConnected(false);
+      setCalendars([]);
+      setSelectedIds([]);
+      setCalendarsOpen(false);
+      onStatusChange("Google Agenda desconectado.");
+    } catch {
+      onStatusChange("Erro ao desconectar.");
+    }
+  }
+
+  function toggleCalendar(calId: string) {
+    setSelectedIds(prev => {
+      if (prev.includes(calId)) {
+        if (prev.length <= 1) return prev; // at least 1
+        return prev.filter(id => id !== calId);
+      }
+      return [...prev, calId];
+    });
+  }
+
+  async function saveSelection() {
+    setSaving(true);
+    try {
+      await api.put("/gcal/calendars", { calendarIds: selectedIds });
+      onStatusChange("Agendas selecionadas salvas!");
+      setTimeout(() => onStatusChange(null), 2000);
+    } catch {
+      onStatusChange("Erro ao salvar seleção de agendas.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="config-row">
+        <div className="config-row-label">
+          <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </div>
+          <div>
+            <p className="config-row-text">Google Agenda</p>
+            <p className="config-row-sub">Verificando conexão...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Connection status row */}
+      <div className="config-row" style={{ cursor: "pointer" }} onClick={connected ? () => { if (!calendarsOpen) loadCalendars(); setCalendarsOpen(o => !o); } : handleConnect}>
+        <div className="config-row-label">
+          <div className="icon-bg" style={{ background: connected ? "rgba(150,199,179,.14)" : "rgba(176,180,196,.12)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={connected ? "var(--accent-sage)" : "var(--accent-sky)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </div>
+          <div>
+            <p className="config-row-text">Google Agenda</p>
+            <p className="config-row-sub">
+              {connected ? `${selectedIds.length || calendars.length} agenda${(selectedIds.length || calendars.length) === 1 ? "" : "s"} sincronizada${(selectedIds.length || calendars.length) === 1 ? "" : "s"}` : "Toque para conectar sua agenda"}
+            </p>
+          </div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: calendarsOpen ? "rotate(90deg)" : "none", transition: "transform .2s" }}>
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </div>
+
+      {/* Calendar selection panel */}
+      {connected && calendarsOpen && (
+        <div style={{
+          padding: "12px 16px",
+          background: "var(--bg-2, rgba(0,0,0,.02))",
+          borderRadius: "8px",
+          margin: "4px 0 8px",
+        }}>
+          {calendars.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "12px 0" }}>
+              <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 8px" }}>Carregando agendas...</p>
+              <button
+                onClick={loadCalendars}
+                style={{
+                  background: "none", border: "1px solid var(--accent-sky)", borderRadius: 8,
+                  padding: "6px 16px", fontSize: 12, fontWeight: 600, color: "var(--accent-sky)", cursor: "pointer"
+                }}
+              >
+                Carregar agendas
+              </button>
+            </div>
+          ) : (
+            <>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                Agendas sincronizadas no Planner
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {calendars.map(cal => (
+                  <label
+                    key={cal.id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "8px 10px", borderRadius: 8,
+                      background: selectedIds.includes(cal.id) ? "rgba(150,199,179,.08)" : "transparent",
+                      cursor: "pointer", transition: "background .15s",
+                    }}
+                  >
+                    <span style={{
+                      width: 12, height: 12, borderRadius: 3,
+                      background: cal.backgroundColor, flexShrink: 0,
+                    }} />
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(cal.id)}
+                      onChange={() => toggleCalendar(cal.id)}
+                      style={{ display: "none" }}
+                    />
+                    <span style={{
+                      width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                      border: selectedIds.includes(cal.id) ? "none" : "1.5px solid var(--text-3)",
+                      background: selectedIds.includes(cal.id) ? "var(--accent-sage)" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all .15s",
+                    }}>
+                      {selectedIds.includes(cal.id) && (
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {cal.summary} {cal.primary && <span style={{ fontSize: 10, color: "var(--text-3)" }}>(principal)</span>}
+                      </p>
+                      {cal.description && (
+                        <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {cal.description}
+                        </p>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, gap: 8 }}>
+                <button
+                  onClick={handleDisconnect}
+                  style={{
+                    background: "none", border: "1px solid rgba(197,165,147,.3)", borderRadius: 8,
+                    padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "var(--accent-peach)", cursor: "pointer",
+                  }}
+                >
+                  Desconectar
+                </button>
+                <button
+                  onClick={saveSelection}
+                  disabled={saving}
+                  style={{
+                    background: "var(--accent-sage)", border: "none", borderRadius: 8,
+                    padding: "6px 18px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: saving ? "wait" : "pointer",
+                    opacity: saving ? .7 : 1,
+                  }}
+                >
+                  {saving ? "Salvando..." : "Salvar seleção"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
 
 type ToggleProps = { on: boolean; onToggle: () => void | Promise<void> };
 
@@ -19,6 +272,7 @@ function Toggle({ on, onToggle }: ToggleProps) {
 
 export function PreferencesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     state,
     setName,
@@ -34,6 +288,22 @@ export function PreferencesPage() {
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(true);
+
+  useEffect(() => {
+    const gcalStatus = searchParams.get("gcal");
+    if (!gcalStatus) return;
+
+    if (gcalStatus === "connected") {
+      setAccountStatus("Google Agenda conectado.");
+    } else if (gcalStatus === "error") {
+      setAccountStatus("Não consegui conectar o Google Agenda.");
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("gcal");
+    nextParams.delete("reason");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const displayName = state.name
     ? state.name.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ")
@@ -70,20 +340,6 @@ export function PreferencesPage() {
       await requestNotificationPermission();
     }
     await updateNotificationPreferences(patch);
-  }
-
-  async function handleGCalConnect() {
-    try {
-      const res = await api.get("/gcal/auth-url");
-      const url = res?.url || res?.authUrl;
-      if (typeof url === "string" && url) {
-        window.location.href = url;
-        return;
-      }
-      setAccountStatus("Não consegui abrir a conexão com o Google Agenda.");
-    } catch {
-      setAccountStatus("Não consegui conectar o Google Agenda agora.");
-    }
   }
 
   const notificationPrefs = state.notificationPreferences;
@@ -389,22 +645,7 @@ export function PreferencesPage() {
         <div className="config-section">
           <p className="config-section-title">Conta e Integrações</p>
           
-          <div className="config-row" onClick={handleGCalConnect} style={{ cursor: "pointer" }}>
-            <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </div>
-              <div>
-                <p className="config-row-text">Sincronizar Google Agenda</p>
-                <p className="config-row-sub">Conecte sua agenda pessoal</p>
-              </div>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </div>
+          <GCalSettingsSection onStatusChange={setAccountStatus} />
           
           <div
             className="config-row"

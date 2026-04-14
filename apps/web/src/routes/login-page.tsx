@@ -22,6 +22,7 @@ export function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showConfirmEmail, setShowConfirmEmail] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -60,6 +61,10 @@ export function LoginPage() {
       } else {
         window.localStorage.setItem(REMEMBER_ME_KEY, "false");
         window.localStorage.removeItem(REMEMBERED_EMAIL_KEY);
+      }
+      if (tab === "criar") {
+        setShowConfirmEmail(true);
+        return;
       }
       navigate("/home");
     } catch (err: any) {
@@ -263,7 +268,6 @@ export function LoginPage() {
           </>
         )}
 
-        {/* Tab: Criar conta */}
         {tab === "criar" && (
           <>
             <div className="aura-input-wrap">
@@ -383,7 +387,86 @@ export function LoginPage() {
             </AuraButtonV2>
           </>
         )}
+
+        {/* Overlay de Confirmação de E-mail */}
+        {showConfirmEmail && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            animation: 'auraFadeIn 300ms ease-out'
+          }}>
+            <div className="aura-card" style={{ maxWidth: '340px', textAlign: 'center' }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                background: 'var(--accent-sage)',
+                borderRadius: '22px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 20px',
+                color: 'var(--accent-sage-ink)',
+                boxShadow: 'var(--shadow-3d)'
+              }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="4" width="20" height="16" rx="3" />
+                  <path d="m2 7 10 7 10-7" />
+                </svg>
+              </div>
+              
+              <h2 className="aura-page-title" style={{ marginBottom: '12px' }}>Quase lá!</h2>
+              <p className="aura-page-subtitle" style={{ marginBottom: '24px', fontSize: '14px' }}>
+                Enviamos um link de confirmação para <b>{state.email}</b>.
+                Por favor, verifique sua caixa de entrada (e o spam) para ativar sua conta.
+              </p>
+
+              <AuraButtonV2 
+                className="aura-btn-primary" 
+                onClick={() => {
+                  setShowConfirmEmail(false);
+                  setTab("entrar");
+                }}
+              >
+                Entendi, ir para o login
+              </AuraButtonV2>
+
+              <button 
+                onClick={() => setShowConfirmEmail(false)}
+                style={{
+                  marginTop: '16px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-3)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Voltar e corrigir e-mail
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+      
+      {/* Footer legal */}
+      <footer className="auth-footer" style={{ padding: '20px', textAlign: 'center', backgroundColor: 'var(--warm-bg)' }}>
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', fontSize: '12px', color: 'var(--text-3)' }}>
+          <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }} className="hover:text-black transition-colors">Termos de Uso</Link>
+          <span style={{ color: 'var(--warm-border)' }}>|</span>
+          <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }} className="hover:text-black transition-colors">Política de Privacidade</Link>
+        </div>
+        <p style={{ marginTop: '12px', fontSize: '10px', color: 'var(--text-3)', opacity: 0.6 }}>
+          &copy; 2026 Aura (AirIA). Todos os direitos reservados.
+        </p>
+      </footer>
     </div>
   );
 }

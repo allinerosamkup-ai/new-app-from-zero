@@ -98,12 +98,16 @@ export function AuraLayout() {
       if (session) refreshData();
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setHasSession(!!session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        setHasSession(true);
+      } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        setHasSession(false);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [refreshData, navigate]);
 
   if (!authChecked) {
     return (
@@ -272,4 +276,3 @@ export function AuraLayout() {
     </div>
   );
 }
-

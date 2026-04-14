@@ -15,8 +15,9 @@ async function handleResponse(response: Response) {
   if (response.ok) return response.status === 204 ? null : response.json();
 
   if (response.status === 401) {
-    await supabase.auth.signOut();
-    throw new Error('Sessão expirada. Faça login novamente.');
+    // Não deslogamos mais automaticamente para evitar "kick outs" agressivos.
+    // O getSession() no getAuthHeaders tentará renovar o token na próxima chamada.
+    throw new Error('Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
   }
 
   let message = `Erro ${response.status}`;
@@ -51,6 +52,16 @@ export const api = {
     const headers = await getAuthHeaders();
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'PATCH',
+      headers,
+      body: JSON.stringify(body),
+    });
+    return handleResponse(response);
+  },
+
+  async put(endpoint: string, body: unknown) {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method: 'PUT',
       headers,
       body: JSON.stringify(body),
     });

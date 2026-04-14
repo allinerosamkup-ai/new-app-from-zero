@@ -21,10 +21,16 @@ export type TaskMeta = {
   note: string;
   checklist: ChecklistItem[];
   recurring: RecurringConfig;
-  energyLevel?: 'alta' | 'media' | 'leve';
+  energyLevel?: number | 'alta' | 'media' | 'leve';
   lastResetDate?: string;
   persistentReminderEnabled?: boolean;
   persistentReminderIntervalMinutes?: number | null;
+  vibrateEnabled?: boolean;
+  alarmEnabled?: boolean;
+  recurringNotificationEnabled?: boolean;
+  visualRepeatEnabled?: boolean;
+  icon?: string;
+  color?: string;
 };
 
 export const DEFAULT_RECURRING: RecurringConfig = {
@@ -39,9 +45,15 @@ export const DEFAULT_META: TaskMeta = {
   note: '',
   checklist: [],
   recurring: { ...DEFAULT_RECURRING },
-  energyLevel: 'media',
+  energyLevel: 3,
   persistentReminderEnabled: false,
   persistentReminderIntervalMinutes: null,
+  vibrateEnabled: true,
+  alarmEnabled: false,
+  recurringNotificationEnabled: false,
+  visualRepeatEnabled: false,
+  icon: 'lucide-check',
+  color: 'var(--accent-peach)',
 };
 
 const STORAGE_KEY = 'aura-task-meta-v2';

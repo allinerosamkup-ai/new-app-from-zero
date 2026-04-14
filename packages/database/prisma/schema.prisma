@@ -216,8 +216,14 @@ model TimelineBlock {
   lastResetDate DateTime? @map("last_reset_date") @db.Date
   persistentReminderEnabled Boolean @default(false) @map("persistent_reminder_enabled")
   persistentReminderIntervalMinutes Int? @map("persistent_reminder_interval_minutes")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  alarmEnabled                 Boolean  @default(false) @map("alarm_enabled")
+  vibrateEnabled               Boolean  @default(false) @map("vibrate_enabled")
+  recurringNotificationEnabled Boolean  @default(false) @map("recurring_notification_enabled")
+  icon                         String?
+  color                        String?
+  createdAt                    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
