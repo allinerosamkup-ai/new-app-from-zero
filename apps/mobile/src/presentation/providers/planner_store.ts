@@ -23,6 +23,7 @@ interface PlannerState {
   // Actions
   setSelectedDate: (date: string) => void;
   fetchBlocks: (userId: string, date: string) => Promise<void>;
+  moveBlock: (blockId: string, newStart: string) => Promise<void>;
   syncBlocks: (userId: string, date: string, blocks: Partial<TimelineBlock>[]) => Promise<boolean>;
   completeBlock: (blockId: string) => Promise<void>;
   deleteBlock: (blockId: string) => Promise<void>;
@@ -30,7 +31,7 @@ interface PlannerState {
   updateBlock: (blockId: string, updates: Partial<Omit<TimelineBlock, 'id'>>) => Promise<void>;
 }
 
-/** Serializa todos os blocos atuais para persistência no backend. */
+/** Serializa blocos para persistência no backend. */
 function serializeBlocks(blocks: TimelineBlock[]) {
   return blocks.map(b => ({
     id: b.id,
@@ -61,6 +62,29 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       set({ blocks: response.data, isLoading: false });
     } catch (err: any) {
       set({ isLoading: false, error: err.response?.data?.error || err.message });
+    }
+  },
+
+  moveBlock: async (blockId: string, newStart: string) => {
+    // Atualização otimista imediata
+    const updatedBlocks = get().blocks.map(b =>
+      b.id === blockId ? { ...b, startTime: newStart } : b
+    );
+    set({ blocks: updatedBlocks });
+
+    const { selectedDate } = get();
+    const userId = useAuthStore.getState().userId;
+    if (userId) {
+      try {
+        await api.post('/api/timeline', {
+          userId,
+          date: selectedDate,
+          forceSave: true,
+          blocks: serializeBlocks(updatedBlocks),
+        });
+      } catch {
+        // Falha silenciosa — UI já reflete o novo estado
+      }
     }
   },
 
@@ -96,7 +120,7 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
           forceSave: true,
           blocks: serializeBlocks(updatedBlocks),
         });
-      } catch { /* optimistic — UI já atualizado */ }
+      } catch { /* optimistic */ }
     }
   },
 
@@ -129,7 +153,6 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
       title: `${block.title} (cópia)`,
       status: 'planned',
     };
-
     const updatedBlocks = [...blocks, copy].sort((a, b) =>
       a.startTime.localeCompare(b.startTime)
     );
