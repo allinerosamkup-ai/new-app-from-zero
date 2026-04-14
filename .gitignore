@@ -16,6 +16,10 @@ vite.config.previewbridge.js
 
 # D.U.M.M.Y. OS memory
 .dummy/
+
+# Worktrees (isolated workspaces)
+.worktrees/
+worktrees/
 tmp/
 scratch/
 **/*.cjs
