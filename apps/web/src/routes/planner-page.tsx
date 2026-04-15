@@ -1501,9 +1501,9 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left",
-          border: "1px solid rgba(0,0,0,0.07)",
-          borderLeft: `4px solid ${categoryOption.cor}`,
-          borderRadius: 18,
+          border: `1.5px solid ${categoryOption.cor}45`,
+          borderLeft: `3px solid ${categoryOption.cor}`,
+          borderRadius: 14,
           opacity: slot.task.done ? 0.55 : 1,
           transform: `translateX(${offset}px)`,
           transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1512,20 +1512,20 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
           background: '#FFFFFF',
           cursor: 'pointer',
           touchAction: "pan-y",
-          padding: "10px 14px",
-          boxShadow: slot.task.done ? 'none' : '0 4px 16px rgba(0,0,0,0.06)',
+          padding: "8px 12px",
+          boxShadow: slot.task.done ? 'none' : '0 2px 8px rgba(0,0,0,0.05)',
           display: "flex",
-          gap: 10,
+          gap: 8,
           alignItems: "center"
         }}
       >
         {/* Energy Icon em destaque à esquerda */}
         <div style={{
-          width: 36, height: 36, borderRadius: 10,
-          background: slot.task.done ? 'var(--surface-variant)' : `${categoryOption.cor}15`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+          width: 28, height: 28, borderRadius: 8,
+          background: slot.task.done ? 'var(--surface-variant)' : `${categoryOption.cor}18`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13,
           flexShrink: 0,
-          border: slot.task.done ? 'none' : `1.5px solid ${categoryOption.cor}30`
+          border: slot.task.done ? 'none' : `1px solid ${categoryOption.cor}40`
         }}>
            { (() => { 
                 const meta = getTaskMeta(slot.task.id);
@@ -1546,16 +1546,17 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
               <img src="https://www.google.com/favicon.ico" width={10} height={10} alt="GCal" style={{ filter: 'grayscale(0.2)' }} /> Google Agenda
             </div>
           )}
-          <div className="block-title" style={{ 
-            fontSize: 15,
-            fontWeight: 800,
-            marginBottom: 3,
+          <div className="block-title" style={{
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 2,
             color: 'var(--text-1)',
             textDecoration: slot.task.done ? "line-through" : "none",
-            letterSpacing: "-0.01em"
+            letterSpacing: "-0.01em",
+            lineHeight: 1.3,
           }}>{slot.task.title}</div>
-          
-          <div className="block-meta" style={{ fontSize: 11, opacity: 0.5, fontWeight: 600, marginBottom: 8, color: "var(--text-2)" }}>
+
+          <div className="block-meta" style={{ fontSize: 10, opacity: 0.5, fontWeight: 500, marginBottom: 6, color: "var(--text-2)" }}>
             {slot.time} — {slot.endTime} · {slot.durationLabel}
           </div>
 
