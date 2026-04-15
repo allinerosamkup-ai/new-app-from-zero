@@ -191,6 +191,7 @@ type PlannerTask = {
   visualRepeatEnabled?: boolean | null;
   icon?: string | null;
   color?: string | null;
+  gcalEventId?: string | null;
 };
 
 const EMPTY_FORM: FormState = {
@@ -298,6 +299,7 @@ function mapTaskFromApi(task: any): PlannerTask {
     color: typeof task.color === "string" ? task.color : null,
     isAiSuggested: Boolean(task.isAiSuggested),
     aiReasoning: typeof task.aiReasoning === "string" ? task.aiReasoning : null,
+    gcalEventId: typeof task.gcalEventId === "string" ? task.gcalEventId : null,
   };
 }
 
@@ -1782,12 +1784,17 @@ export function PlannerPage() {
         
         if (gcalRes && gcalRes.connected) {
           if (Array.isArray(gcalRes.events)) {
-             const dayEvents = gcalRes.events
+             // Dedup: filtrar eventos GCal cujo gcalEventId já está salvo como bloco local
+             const localGcalEventIds = new Set(
+               merged.filter((t: any) => t.gcalEventId).map((t: any) => String(t.gcalEventId))
+             );
+             const filteredRawEvents = gcalRes.events.filter(
+               (event: any) => !localGcalEventIds.has(String(event.id))
+             );
+             const dayEvents = filteredRawEvents
                .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
                .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
-             const localIds = new Set(merged.map(t => String(t.id)));
-             const deduped = dayEvents.filter(e => !localIds.has(String(e.id)));
-             merged = [...merged, ...deduped];
+             merged = [...merged, ...dayEvents];
              merged.sort((a,b) => a.time.localeCompare(b.time));
           }
         }
@@ -1833,12 +1840,17 @@ export function PlannerPage() {
 
         if (gcalRes && gcalRes.connected) {
           if (Array.isArray(gcalRes.events)) {
-             const dayEvents = gcalRes.events
+             // Dedup: filtrar eventos GCal cujo gcalEventId já está salvo como bloco local
+             const localGcalEventIds = new Set(
+               merged.filter((t: any) => t.gcalEventId).map((t: any) => String(t.gcalEventId))
+             );
+             const filteredRawEvents = gcalRes.events.filter(
+               (event: any) => !localGcalEventIds.has(String(event.id))
+             );
+             const dayEvents = filteredRawEvents
                .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
                .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
-             const localIds = new Set(merged.map(t => String(t.id)));
-             const deduped = dayEvents.filter(e => !localIds.has(String(e.id)));
-             merged = [...merged, ...deduped];
+             merged = [...merged, ...dayEvents];
              merged.sort((a,b) => a.time.localeCompare(b.time));
           }
         }

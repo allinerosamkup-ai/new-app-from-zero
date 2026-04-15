@@ -1017,6 +1017,14 @@ export function createApp(dependencies: AppDependencies = {}) {
       plannerContext: checkinPlannerContext,
     });
 
+    // DEBUG: Log the aiState response from CheckinService
+    console.log('[DEBUG] aiState from CheckinService:', {
+      stateLabel: aiState.stateLabel,
+      analysis: aiState.analysis?.substring?.(0, 50),
+      recommendations: aiState.recommendations,
+      suggestedIntensity: aiState.suggestedIntensity,
+    });
+
     // 3. Atualizar com Resultado da IA
     const updatedCheckin = await prisma.dailyCheckin.update({
       where: { id: checkin.id },
@@ -1029,6 +1037,18 @@ export function createApp(dependencies: AppDependencies = {}) {
           emotions: data.emotions ?? [],
           factors: data.factors ?? [],
         } as any,
+      }
+    });
+
+    // DEBUG: Log what was stored and what will be returned
+    console.log('[DEBUG] updatedCheckin being returned:', {
+      id: updatedCheckin.id,
+      stateLabel: updatedCheckin.stateLabel,
+      stateSummary: updatedCheckin.stateSummary?.substring?.(0, 50),
+      aiState: {
+        analysis: (updatedCheckin.aiState as any)?.analysis?.substring?.(0, 50),
+        recommendations: (updatedCheckin.aiState as any)?.recommendations,
+        suggestedIntensity: (updatedCheckin.aiState as any)?.suggestedIntensity,
       }
     });
 
@@ -1538,7 +1558,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.post('/api/timeline', async (req: Request, res: Response) => {
   try {
     const { userId, date, forceSave, blocks } = PlannerSyncSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
-    const baseDate = new Date(date);
+    const baseDate = parseLocalDateInput(date);
 
     // Aprimoramento: Validar conflitos ANTES de salvar, a menos que forceSave = true
     const blocksForConflictCheck = blocks.map(b => ({
@@ -1558,10 +1578,8 @@ export function createApp(dependencies: AppDependencies = {}) {
 
     if (!forceSave) {
       const incomingIds = new Set(blocks.map((block) => block.id).filter(Boolean));
-      const dayStart = new Date(`${date}T00:00:00.000Z`);
-      const dayEnd = new Date(`${date}T23:59:59.999Z`);
       const existingBlocks = await prisma.timelineBlock.findMany({
-        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+        where: { userId, localDate: baseDate },
         select: { id: true, title: true, startAt: true, endAt: true },
       });
 
@@ -1598,10 +1616,8 @@ export function createApp(dependencies: AppDependencies = {}) {
     const savedBlocks = await prisma.$transaction(async (tx) => {
       // Se overwrite for true, remove todos os blocos do dia antes de salvar novos
       if (req.body.overwrite === true) {
-        const dayStart = new Date(`${date}T00:00:00.000Z`);
-        const dayEnd = new Date(`${date}T23:59:59.999Z`);
         await tx.timelineBlock.deleteMany({
-          where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+          where: { userId, localDate: baseDate },
         });
       }
 
@@ -1669,13 +1685,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
 
     try {
-      const dayStart = new Date(`${date}T00:00:00.000Z`);
-      const dayEnd = new Date(`${date}T23:59:59.999Z`);
-      
-      const { count } = await prisma.timelineBlock.deleteMany({
-        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
-      });
+      const baseDate = parseLocalDateInput(date);
 
+      const { count } = await prisma.timelineBlock.deleteMany({
+        where: { userId, localDate: baseDate },
+      });
       return res.json({ deletedCount: count });
     } catch (error: any) {
       console.error('[timeline/deleteDay] Error:', error);
@@ -1893,15 +1907,10 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
 
     try {
-      // Fix timezone: busca pelo início e fim do dia em UTC para evitar dessincronização
-      const dayStart = new Date(`${date}T00:00:00.000Z`);
-      const dayEnd   = new Date(`${date}T23:59:59.999Z`);
-      if (isNaN(dayStart.getTime())) {
-        return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
-      }
+      const baseDate = parseLocalDateInput(date);
 
       const blocks = await prisma.timelineBlock.findMany({
-        where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+        where: { userId, localDate: baseDate },
         orderBy: { startAt: 'asc' },
       });
 
@@ -1936,6 +1945,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           alarmEnabled: (block as any).alarmEnabled ?? false,
           recurringNotificationEnabled: (block as any).recurringNotificationEnabled ?? false,
           visualRepeatEnabled: (block as any).visualRepeatEnabled ?? false,
+          gcalEventId: block.gcalEventId ?? null,
         }))
       );
     } catch (error: any) {
@@ -2425,11 +2435,12 @@ Responda como Airia, com leitura específica e útil para este momento.
 
 REGRAS:
 - "message" deve ter 2-3 frases curtas. A primeira precisa ler um padrão, contraste ou nuance do momento; não repita o rótulo do estado como eco.
+- NÃO REPITA A NOTA DO USUÁRIO. Use-a apenas como contexto para sua análise.
 - Se o histórico ajudar, cite o padrão real de forma natural (ex: "nos últimos dias..." ou "hoje veio mais baixo que ontem...").
 - Se houver contexto vivo do diário ou da rotina, use pelo menos 1 detalhe concreto disso quando for relevante.
-- Se houver NOTA ESCRITA DO CHECK-IN, ela tem prioridade sobre leitura genérica dos números; a sugestão deve responder diretamente à nuance da nota.
+- Se houver NOTA ESCRITA DO CHECK-IN, ela tem prioridade sobre leitura genérica dos números; a sugestão deve responder diretamente à nuance da nota SEM parafraseá-la.
 - Se streak ≥ 3 dias, mencione a sequência no máximo uma vez e só se encaixar organicamente.
-- NÃO use frases genéricas de autoajuda.
+- NÃO use frases genéricas de autoajuda nem conselhos óbvios como "o objetivo não é esforço extra".
 - NÃO use sermão, diagnóstico ou tom maternal demais.
 - "suggestion" deve ser uma micro-ação de 5-10 minutos que caiba nas próximas 2 horas.
 - A sugestão deve ser específica o bastante para a pessoa começar sem precisar planejar mais nada.

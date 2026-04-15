@@ -220,6 +220,7 @@ model TimelineBlock {
   alarmEnabled                 Boolean  @default(false) @map("alarm_enabled")
   vibrateEnabled               Boolean  @default(false) @map("vibrate_enabled")
   recurringNotificationEnabled Boolean  @default(false) @map("recurring_notification_enabled")
+  visualRepeatEnabled          Boolean  @default(false) @map("visual_repeat_enabled")
   icon                         String?
   color                        String?
   createdAt                    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
