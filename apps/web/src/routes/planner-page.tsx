@@ -40,11 +40,11 @@ import "../styles/aura.css";
 import "../styles/editorial.css";
 
 const CATEGORY_OPTIONS = [
-  { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "var(--accent-sky)", bg: "rgba(176,180,196,.14)", textColor: "var(--accent-sky-ink)" },
-  { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", textColor: "var(--accent-sage-ink)" },
-  { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-color)", bg: "rgba(229,219,247,.32)", textColor: "var(--social-text)" },
-  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--accent-peach)", bg: "rgba(244,190,168,.30)", textColor: "var(--accent-peach-ink)" },
-  { value: "casa" as const, label: "Casa", shortLabel: "CASA", cor: "var(--buttercup)", bg: "rgba(247,231,166,.38)", textColor: "#7C641A" }
+  { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "var(--accent-sky-ink)", bg: "rgba(176,180,196,.14)", textColor: "var(--accent-sky-ink)" },
+  { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--accent-sage-ink)", bg: "rgba(180,185,169,.14)", textColor: "var(--accent-sage-ink)" },
+  { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-text)", bg: "rgba(229,219,247,.32)", textColor: "var(--social-text)" },
+  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--accent-peach-ink)", bg: "rgba(244,190,168,.30)", textColor: "var(--accent-peach-ink)" },
+  { value: "casa" as const, label: "Casa", shortLabel: "CASA", cor: "#7C641A", bg: "rgba(247,231,166,.38)", textColor: "#7C641A" }
 ];
 
 function getCategoryStyles(val: string) {
