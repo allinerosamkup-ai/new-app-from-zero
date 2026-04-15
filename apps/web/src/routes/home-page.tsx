@@ -23,6 +23,7 @@ import {
   resolveHomeAgendaSuggestionDate,
   shouldRefreshHomeSuggestionAfterAction,
 } from "./home-page.helpers";
+import { findSmartPlannerSlot } from "./planner-page.helpers";
 import { 
   MessageSquareText,
   LayoutDashboard,
@@ -293,10 +294,11 @@ export function HomePage() {
   // Refresh on mount to pick up any check-ins done since the app loaded
   useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [addedActionTitles, setAddedActionTitles] = useState<Set<string>>(new Set());
   const [addingActionTitle, setAddingActionTitle] = useState<string | null>(null);
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
+  const [doneTaskIds, setDoneTaskIds] = useState<Set<string | number>>(new Set());
   const [checkinChartMode, setCheckinChartMode] = useState<"week" | "day">("week");
   const [forecastTab, setForecastTab] = useState<"forecast" | "monthly">("forecast");
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
@@ -711,10 +713,13 @@ export function HomePage() {
   }
 
   async function handleHomeTaskDone(task: (typeof homeAgendaPreview.tasks)[number]) {
+    // Feedback visual imediato (otimista)
+    setDoneTaskIds(prev => new Set([...prev, task.id]));
     try {
       await toggleTask(task.id);
       await refreshSuggestionQueueIfNeeded(task);
     } catch (error) {
+      setDoneTaskIds(prev => { const s = new Set(prev); s.delete(task.id); return s; });
       showError(error instanceof Error ? error.message : "Nao foi possivel concluir o compromisso.");
     }
   }
@@ -1552,7 +1557,9 @@ export function HomePage() {
                 </div>
               ) : (
                 <>
-                  {homeAgendaPreview.tasks.map((task, index) => (
+                  {homeAgendaPreview.tasks.map((task, index) => {
+                    const isTaskDone = doneTaskIds.has(task.id);
+                    return (
                     <div
                       key={task.id}
                       role="button"
@@ -1574,39 +1581,42 @@ export function HomePage() {
                         background: "transparent",
                         cursor: "pointer",
                         textAlign: "left",
+                        opacity: isTaskDone ? 0.6 : 1,
+                        transition: "opacity 0.2s",
                       }}
                     >
                       <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
                         <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>{task.time}</p>
                         <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hoje</p>
                       </div>
-                      <div style={{ width: 3, borderRadius: 999, background: "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
+                      <div style={{ width: 3, borderRadius: 999, background: isTaskDone ? "var(--accent-sage)" : "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28, transition: "background 0.2s" }} />
                       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: isTaskDone ? "var(--text-3)" : "var(--text-1)", margin: 0, textDecoration: isTaskDone ? "line-through" : "none", transition: "all 0.2s" }}>
                             {task.title}
                           </p>
                           <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                            {task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa"}
+                            {isTaskDone ? "Concluído" : (task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa")}
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-                            void handleHomeTaskDone(task);
+                            if (!isTaskDone) void handleHomeTaskDone(task);
                           }}
-                          title="Marcar como feito"
+                          title={isTaskDone ? "Concluído" : "Marcar como feito"}
                           style={{
                             width: 18, height: 18, borderRadius: "50%",
                             border: "1.5px solid var(--accent-sage)",
-                            background: "transparent",
-                            cursor: "pointer",
+                            background: isTaskDone ? "var(--accent-sage)" : "transparent",
+                            cursor: isTaskDone ? "default" : "pointer",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             flexShrink: 0,
+                            transition: "background 0.2s",
                           }}
                         >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={isTaskDone ? "white" : "var(--accent-sage)"} strokeWidth="2.5" strokeLinecap="round">
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
                         </button>
@@ -1633,7 +1643,7 @@ export function HomePage() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                  );})}
                   {homeAgendaPreview.habit && (
                     <div
                       role="button"
@@ -2008,10 +2018,14 @@ export function HomePage() {
                                     if (isAdding) return;
                                     setAddingActionTitle(action.title);
                                     try {
-                                      const saved = await addTask(action.title, "09:00", action.category, { forceSave: true });
+                                      const slot = findSmartPlannerSlot(state.tasks || [], new Date());
+                                      const saved = await addTask(action.title, slot.time, action.category, { forceSave: true, date: slot.date });
                                       if (!saved) throw new Error("A sugestao nao entrou no planner.");
                                       setAddedActionTitles(prev => new Set([...prev, action.title]));
-                                      const scheduledFor = new Date(Date.now() + 2 * 3600_000).toISOString();
+                                      if (slot.isNextDay) {
+                                        showSuccess(`Agendado para amanhã às ${slot.time}`);
+                                      }
+                                      const scheduledFor = new Date(`${slot.date}T${slot.time}:00`).toISOString();
                                       const followUp: FollowUpPending = {
                                         suggestionTitle: action.title,
                                         suggestionCategory: action.category,

@@ -10,6 +10,8 @@ import { useToast } from "../components/Toast";
 import type { MoodOption } from "../features/aura/types";
 import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
+import { findSmartPlannerSlot } from "./planner-page.helpers";
+import { RefreshCcw, X } from "lucide-react";
 import "../styles/aura.css";
 
 type ResultVariant = {
@@ -94,6 +96,7 @@ const CAT_COLOR: Record<string, string> = {
 export function CheckinResultPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  console.log('[DEBUG] location.state in checkin-result-page:', location.state);
   const checkinAI = (location.state as {
     stateLabel?: string | null;
     analysis?: string | null;
@@ -146,11 +149,17 @@ export function CheckinResultPage() {
   useEffect(() => {
     if (auraMsgRan.current) return;
     auraMsgRan.current = true;
+
+    // DEBUG: Log router state
+    console.log('[DEBUG] checkin-result-page received checkinAI from router state:', checkinAI);
+
     // Se o backend já retornou análise via router state, usar diretamente
     if (checkinAI?.analysis) {
+      console.log('[DEBUG] Using backend analysis directly');
       setAuraMsgLoading(false);
       return;
     }
+    console.log('[DEBUG] checkinAI?.analysis is falsy, falling back to generic /ai/suggest call');
     api.post("/ai/suggest", {
       type: "checkin-response",
       context: {
@@ -311,13 +320,34 @@ export function CheckinResultPage() {
 
     setSavingTasks(true);
     let savedCount = 0;
+    let nextDayCount = 0;
     let lastError: unknown = null;
+
+    // Snapshot das tarefas atuais para calcular slots sem conflito entre si
+    let currentTasks = [...(state.tasks || [])];
 
     for (const task of accepted) {
       try {
-        const saved = await addTask(task.title, task.time, task.category, { forceSave: true });
+        const now = new Date();
+        const taskTimeMins = task.time ? (parseInt(task.time.split(":")[0]) * 60 + parseInt(task.time.split(":")[1])) : -1;
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+
+        // Usa o horário sugerido pela IA se for futuro; caso contrário, acha slot livre
+        const useAiTime = taskTimeMins > nowMins;
+        const slot = useAiTime
+          ? { time: task.time, date: undefined, isNextDay: false }
+          : findSmartPlannerSlot(currentTasks, now);
+
+        const saved = await addTask(task.title, slot.time, task.category, {
+          forceSave: true,
+          ...(slot.date ? { date: slot.date } : {}),
+        });
+
         if (saved) {
           savedCount += 1;
+          if (slot.isNextDay) nextDayCount += 1;
+          // Adicionar ao snapshot local para evitar conflito com a próxima tarefa
+          currentTasks = [...currentTasks, saved as any];
         } else {
           lastError = new Error("A tarefa nao foi aceita pelo planner.");
         }
@@ -330,11 +360,13 @@ export function CheckinResultPage() {
 
     if (savedCount > 0) {
       setPhase("done");
-      showSuccess(
-        savedCount === accepted.length
-          ? "Sugestoes adicionadas ao planner."
-          : `${savedCount} sugest${savedCount > 1 ? "oes foram" : "ao foi"} adicionada${savedCount > 1 ? "s" : ""} ao planner.`,
-      );
+      const baseMsg = savedCount === accepted.length
+        ? "Sugestoes adicionadas ao planner."
+        : `${savedCount} sugest${savedCount > 1 ? "oes foram" : "ao foi"} adicionada${savedCount > 1 ? "s" : ""} ao planner.`;
+      const nextDayMsg = nextDayCount > 0
+        ? ` (${nextDayCount} para amanhã — hoje já está cheio)`
+        : "";
+      showSuccess(baseMsg + nextDayMsg);
     }
 
     if (savedCount < accepted.length) {
@@ -553,27 +585,35 @@ export function CheckinResultPage() {
                           disabled={regenIdx === idx}
                           title="Gerar outra sugestão"
                           style={{
-                            width: 28, height: 28, borderRadius: 8, border: "1.5px solid var(--warm-border-2)",
+                            width: 32, height: 32, borderRadius: 10, border: "1.5px solid var(--warm-border-2)",
                             background: "transparent", cursor: "pointer", display: "flex",
-                            alignItems: "center", justifyContent: "center", fontSize: 13,
+                            alignItems: "center", justifyContent: "center",
                             opacity: regenIdx === idx ? 0.4 : 1,
                           }}
                         >
-                          {regenIdx === idx ? "⏳" : "🔄"}
+                          {regenIdx === idx ? (
+                            <RefreshCcw size={14} className="animate-spin" />
+                          ) : (
+                            <RefreshCcw size={14} color="var(--text-3)" />
+                          )}
                         </AuraButtonV2>
                         {/* aceitar / descartar */}
                         <AuraButtonV2
                           onClick={() => toggleDiscard(idx)}
                           title={task.discarded ? "Incluir" : "Descartar"}
                           style={{
-                            width: 28, height: 28, borderRadius: 8,
-                            border: `1.5px solid ${task.discarded ? "var(--warm-border)" : "#e05c5c55"}`,
-                            background: task.discarded ? "var(--warm-bg)" : "rgba(224,92,92,.08)",
+                            width: 32, height: 32, borderRadius: 10,
+                            border: `1.5px solid ${task.discarded ? "var(--accent-sage)" : "var(--accent-peach)40"}`,
+                            background: task.discarded ? "var(--accent-sage)10" : "var(--accent-peach)08",
                             cursor: "pointer", display: "flex", alignItems: "center",
-                            justifyContent: "center", fontSize: 13,
+                            justifyContent: "center",
                           }}
                         >
-                          {task.discarded ? "↩" : "✕"}
+                          {task.discarded ? (
+                            <RefreshCcw size={14} color="var(--accent-sage)" />
+                          ) : (
+                            <X size={14} color="var(--accent-peach)" />
+                          )}
                         </AuraButtonV2>
                       </div>
                     )}

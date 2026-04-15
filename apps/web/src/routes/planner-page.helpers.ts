@@ -47,18 +47,19 @@ export type PlannerTaskLike = {
   category?: string | null;
   source?: string;
   link?: string;
-  persistentReminderEnabled?: boolean;
+  persistentReminderEnabled?: boolean | null;
   persistentReminderIntervalMinutes?: number | null;
-  alarmEnabled?: boolean;
-  vibrateEnabled?: boolean;
-  recurringNotificationEnabled?: boolean;
-  visualRepeatEnabled?: boolean;
+  alarmEnabled?: boolean | null;
+  vibrateEnabled?: boolean | null;
+  recurringNotificationEnabled?: boolean | null;
+  visualRepeatEnabled?: boolean | null;
   icon?: string | null;
   color?: string | null;
   intensity?: string | null;
   energyLevel?: 1 | 2 | 3 | 4 | 5 | null;
-  isAiSuggested?: boolean;
+  isAiSuggested?: boolean | null;
   aiReasoning?: string | null;
+  gcalEventId?: string | null;
 };
 
 export type PlannerAgendaSlot =
@@ -117,6 +118,54 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
+}
+
+function formatDateKeyFromDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Encontra o próximo slot livre no planner a partir do horário atual.
+ * - Se tiver slot livre hoje até 18:00, retorna o primeiro horário livre.
+ * - Se não tiver (ou já for tarde), agenda para amanhã às 09:00.
+ */
+export function findSmartPlannerSlot(
+  tasks: Array<{ time: string; endTime?: string | null }>,
+  now: Date = new Date(),
+): { time: string; date: string; isNextDay: boolean } {
+  const todayKey = formatDateKeyFromDate(now);
+  const tomorrow = new Date(now.getTime() + 86_400_000);
+  const tomorrowKey = formatDateKeyFromDate(tomorrow);
+
+  const currentMins = now.getHours() * 60 + now.getMinutes();
+  // Arredonda para o próximo bloco de 30 min
+  const startMins = Math.ceil((currentMins + 1) / 30) * 30;
+
+  const DAY_END = 18 * 60; // 18:00
+  const SLOT_DURATION = 30;
+
+  if (startMins + SLOT_DURATION > DAY_END) {
+    return { time: "09:00", date: tomorrowKey, isNextDay: true };
+  }
+
+  for (let s = startMins; s + SLOT_DURATION <= DAY_END; s += 30) {
+    const slotEnd = s + SLOT_DURATION;
+    const conflict = tasks.some((t) => {
+      const ts = timeToMinutes(t.time);
+      const te = t.endTime ? timeToMinutes(t.endTime) : ts + 30;
+      return s < te && slotEnd > ts;
+    });
+    if (!conflict) {
+      const h = String(Math.floor(s / 60)).padStart(2, "0");
+      const m = String(s % 60).padStart(2, "0");
+      return { time: `${h}:${m}`, date: todayKey, isNextDay: false };
+    }
+  }
+
+  return { time: "09:00", date: tomorrowKey, isNextDay: true };
 }
 
 export function addMinutesToTime(time: string, minutesToAdd: number): string {
