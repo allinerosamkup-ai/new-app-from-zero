@@ -9,6 +9,21 @@ export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cd "$PROJECT_DIR/deploy/airia"
 
 echo "== Pre-check =="
+
+# Valida que o env file existe e tem as vars obrigatórias do frontend
+if [ ! -f "$ENV_FILE" ]; then
+  echo "ERRO: $ENV_FILE não encontrado em $(pwd)"
+  echo "Crie o arquivo com VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY e VITE_API_URL"
+  exit 1
+fi
+
+for VAR in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; do
+  if ! grep -q "^${VAR}=." "$ENV_FILE"; then
+    echo "ERRO: $VAR está ausente ou vazio em $ENV_FILE"
+    exit 1
+  fi
+done
+
 docker network inspect easypanel >/dev/null
 
 echo "== Deploy =="
