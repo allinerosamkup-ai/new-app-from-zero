@@ -1,6 +1,6 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import {
   addMinutesToTime,
+  subtractMinutesFromTime,
   buildGoogleCalendarTaskId,
   buildPlannerAgendaSlots,
   buildTimelineBlockInput,
@@ -451,7 +452,11 @@ const NoteSection = React.memo(function NoteSection({
     try {
       const res = await api.post("/ai/suggest", {
         type: "task-content",
-        context: { ...context, currentNote: form.note, currentChecklist: form.checklist.map((item) => item.text) },
+        context: { 
+          ...context, 
+          currentNote: `[SYSTEM: Use OBRIGATORIAMENTE o título "${context.title}" como base única. Não sugira nada aleatório. Foque apenas em desdobramentos e detalhes do que está escrito no título. Notas atuais: ${form.note}]`, 
+          currentChecklist: form.checklist.map((item) => item.text) 
+        },
       });
 
       if (!res.suggestion) return;
@@ -481,7 +486,7 @@ const NoteSection = React.memo(function NoteSection({
         type: "task-content",
         context: { 
           ...context, 
-          currentNote: `[SYSTEM: Ignore notes, strictly split the main task "${context.title}" into highly actionable, step-by-step subtasks. Return as items array in JSON]`, 
+          currentNote: `[SYSTEM: Ignore notes. Use OBRIGATORIAMENTE o título "${context.title}" como base. Split em sub-tarefas altamente acionáveis e específicas APENAS para este título. JSON items array.]`, 
           currentChecklist: [] 
         },
       });
@@ -540,7 +545,7 @@ const NoteSection = React.memo(function NoteSection({
   return (
     <div style={{ marginBottom: "12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={LABEL_STYLE}>Notas e checklist</span>
+        <span style={LABEL_STYLE}>Algum detalhe?</span>
         <div style={{ display: "flex", gap: 6 }}>
           <AuraButtonV2 variant="outline" size="sm" onClick={letAuraOrganize} disabled={aiLoading !== null}>
             {aiLoading === "content" ? "Lendo..." : "Airia"}
@@ -572,6 +577,38 @@ const NoteSection = React.memo(function NoteSection({
           }}
         >
           🎙️
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input
+          value={form.checklistInput}
+          onChange={(e) => setForm(c => ({ ...c, checklistInput: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const val = form.checklistInput.trim();
+              if (val) {
+                setForm(c => ({ ...c, checklist: [...c.checklist, ...buildChecklistItems([val])], checklistInput: "" }));
+              }
+            }
+          }}
+          placeholder="Adicionar item..."
+          style={{ ...INPUT_STYLE, height: "38px" }}
+        />
+        <button
+          onClick={() => {
+            const val = form.checklistInput.trim();
+            if (val) {
+              setForm(c => ({ ...c, checklist: [...c.checklist, ...buildChecklistItems([val])], checklistInput: "" }));
+            }
+          }}
+          style={{
+            padding: "0 16px", borderRadius: "8px", border: "none",
+            background: "rgba(244,190,168,0.2)", color: "var(--accent-peach-ink)",
+            fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap"
+          }}
+        >
+          Adicionar Subtarefa
         </button>
       </div>
       {form.checklist.length > 0 && (
@@ -931,113 +968,158 @@ function PlannerSheetBody({
         </div>
       </section>
 
-      {/* ── 5. Categoria & Cor ── */}
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
-          <label style={STITLE}>Categoria</label>
-          <select 
-            value={form.category}
-            onChange={(e) => setForm(c => ({ ...c, category: e.target.value }))}
-            style={{ ...INPUT_WRAP, padding: "10px 14px", fontSize: "14px" }}
-          >
-            <option value="trabalho">Trabalho</option>
-            <option value="pessoal">Pessoal</option>
-            <option value="autocuidado">Autocuidado</option>
-            <option value="social">Social</option>
-            <option value="casa">Casa</option>
-            <option value="outro">Outro</option>
-          </select>
-        </div>
-        <div>
-          <label style={STITLE}>Cor</label>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "4px 0" }}>
-            {COLOR_GRID.slice(0, 4).map(color => (
+      {/* ── 5. Categoria ── */}
+      <section>
+        <label style={STITLE}>Categoria</label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {CATEGORY_OPTIONS.map(opt => {
+            const isSel = form.category === opt.value;
+            return (
               <button
-                key={color}
+                key={opt.value}
                 type="button"
-                onClick={() => setForm(c => ({ ...c, color }))}
+                onClick={() => setForm(c => ({ ...c, category: opt.value }))}
                 style={{
-                  width: 28, height: 28, borderRadius: "50%",
-                  background: color, border: form.color === color ? "3px solid #fff" : "none",
-                  boxShadow: form.color === color ? `0 0 0 2px ${color}` : "none",
+                  display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: "16px",
+                  border: isSel ? `2px solid ${opt.cor}` : "1.5px solid var(--outline-variant)",
+                  background: isSel ? opt.bg : "var(--surface-variant)",
                   cursor: "pointer", transition: "all 0.2s"
                 }}
-              />
-            ))}
-          </div>
+              >
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: opt.cor }} />
+                <span style={{ fontSize: "13px", fontWeight: 700, color: isSel ? opt.textColor : "var(--text-2)" }}>
+                  {opt.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
 
-      {/* ── 6. Notificação Insistente ── */}
+      {/* ── 6. Cor Personalizada ── */}
       <section>
-        <div style={{ 
-          padding: "20px", 
-          background: "rgba(244,190,168,0.08)", 
-          borderRadius: "24px",
-          border: "1px solid rgba(244,190,168,0.15)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 16
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ 
-                width: 40, height: 40, borderRadius: "12px", 
-                background: form.persistentReminderEnabled ? "var(--accent-peach)" : "rgba(17,24,39,0.05)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all 0.3s"
-              }}>
-                <Bell size={20} color={form.persistentReminderEnabled ? "#fff" : "var(--text-3)"} />
-              </div>
-              <div>
-                <div style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-1)" }}>Notificação Insistente</div>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-3)" }}>Até marcar como concluída</div>
-              </div>
-            </div>
-            <label className="aura-toggle" style={{ cursor: "pointer" }}>
-              <input 
-                type="checkbox" 
-                checked={form.persistentReminderEnabled}
-                onChange={(e) => setForm((c: any) => ({ ...c, persistentReminderEnabled: e.target.checked }))}
-                style={{ display: "none" }}
-              />
-              <div style={{ 
-                width: 48, height: 26, borderRadius: 24, 
-                background: form.persistentReminderEnabled ? "var(--accent-peach)" : "rgba(17,24,39,0.1)",
-                position: "relative", transition: "all 0.3s"
-              }}>
-                <div style={{ 
-                  width: 20, height: 20, borderRadius: "50%", background: "#fff",
-                  position: "absolute", top: 3, left: form.persistentReminderEnabled ? 25 : 3,
-                  transition: "all 0.3s", boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                }} />
-              </div>
-            </label>
-          </div>
-
-          {form.persistentReminderEnabled && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0 0", borderTop: "1px solid rgba(244,190,168,0.1)" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-2)" }}>Repetir:</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-                {[5, 15, 30, 60].map(mins => (
-                  <button
-                    key={mins}
-                    type="button"
-                    onClick={() => setForm((c: any) => ({ ...c, persistentReminderIntervalMinutes: mins }))}
-                    style={{
-                      flex: 1, padding: "10px 0", borderRadius: "10px", fontSize: "12px", fontWeight: 800,
-                      background: form.persistentReminderIntervalMinutes === mins ? "var(--accent-peach)" : "#fff",
-                      color: form.persistentReminderIntervalMinutes === mins ? "#fff" : "var(--accent-peach)",
-                      border: "1.5px solid rgba(244,190,168,0.2)", cursor: "pointer", transition: "all 0.2s"
-                    }}
-                  >
-                    {mins}m
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        <label style={STITLE}>Cor do Bloco</label>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {COLOR_GRID.map(color => (
+            <button
+              key={color}
+              type="button"
+              onClick={() => setForm(c => ({ ...c, color }))}
+              style={{
+                width: 32, height: 32, borderRadius: "50%",
+                background: color, border: form.color === color ? "3px solid #fff" : "none",
+                boxShadow: form.color === color ? `0 0 0 2px ${color}` : "none",
+                cursor: "pointer", transition: "all 0.2s"
+              }}
+            />
+          ))}
         </div>
+      </section>
+
+      {/* ── 6. Alertas ── */}
+      <section>
+        <label style={STITLE}>Alertas</label>
+        
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+          {form.alerts.map((alertId) => {
+            const preset = ALERT_PRESETS.find(p => p.id === alertId);
+            const label = preset ? preset.label : alertId;
+            return (
+              <div key={alertId} style={{ 
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "12px 16px", background: "var(--surface-variant)", borderRadius: "14px",
+                border: "1px solid var(--outline-variant)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Bell size={16} color="var(--accent-peach)" />
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)" }}>{label}</span>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setForm(c => ({ ...c, alerts: c.alerts.filter(a => a !== alertId) }))}
+                  style={{ border: "none", background: "transparent", cursor: "pointer", padding: 4 }}
+                >
+                  <Trash2 size={16} color="var(--text-3)" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowAddAlert(!showAddAlert)}
+          style={{
+            width: "100%", padding: "12px", borderRadius: "14px", border: "1.5px dashed var(--accent-peach)",
+            background: "rgba(244,190,168,0.05)", color: "var(--accent-peach-ink)",
+            fontSize: "14px", fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+          }}
+        >
+          <Plus size={18} /> Adicionar Alerta
+        </button>
+
+        {showAddAlert && (
+          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8, background: "var(--surface-variant)", padding: 12, borderRadius: 16, border: "1px solid var(--outline-variant)" }}>
+            {ALERT_PRESETS.filter(p => !form.alerts.includes(p.id)).map(p => (
+              <button key={p.id} type="button" onClick={() => {
+                setForm(c => ({ ...c, alerts: [...c.alerts, p.id] }));
+                setShowAddAlert(false);
+              }} style={{
+                textAlign: "left", padding: "12px", borderRadius: "10px", border: "none", background: "#fff",
+                fontSize: "13px", fontWeight: 700, color: "var(--text-1)", cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.02)"
+              }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── 7. Recorrência ── */}
+      <section>
+        <label style={STITLE}>Repetir compromisso</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          {["once", "daily", "weekly", "monthly"].map(f => (
+            <button key={f} type="button" onClick={() => setFrequency(f)}
+              style={{ 
+                flex: 1, padding: "10px", borderRadius: "12px", fontSize: "12px", fontWeight: 800,
+                background: frequency === f ? "var(--accent-peach)" : "var(--surface-variant)",
+                color: frequency === f ? "#fff" : "var(--text-3)",
+                border: "1px solid var(--outline-variant)"
+              }}
+            >
+              {f === "once" ? "Uma vez" : f === "daily" ? "Diária" : f === "weekly" ? "Semanal" : "Mensal"}
+            </button>
+          ))}
+        </div>
+
+        {frequency === "weekly" && (
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 4 }}>
+            {[
+              { label: "D", val: 0 }, { label: "S", val: 1 }, { label: "T", val: 2 },
+              { label: "Q", val: 3 }, { label: "Q", val: 4 }, { label: "S", val: 5 }, { label: "S", val: 6 }
+            ].map(d => {
+              const isSel = form.recurring.days.includes(d.val);
+              return (
+                <button key={d.val} type="button" 
+                  onClick={() => {
+                    const days = form.recurring.days.includes(d.val) 
+                      ? form.recurring.days.filter(v => v !== d.val)
+                      : [...form.recurring.days, d.val];
+                    setForm(c => ({ ...c, recurring: { ...c.recurring, days, enabled: true, frequency: "weekly" } }));
+                  }}
+                  style={{ 
+                    width: 36, height: 36, borderRadius: "50%", fontSize: "12px", fontWeight: 800,
+                    background: isSel ? "var(--accent-peach)" : "var(--surface-variant)",
+                    color: isSel ? "#fff" : "var(--text-3)",
+                    border: "1px solid var(--outline-variant)", cursor: "pointer"
+                  }}
+                >{d.label}</button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* ── 7. Notas & Checklist ── */}
@@ -1260,9 +1342,9 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
     <div 
        style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 18, background: "transparent", marginBottom: "10px" }}
        draggable
-       onDragStart={(e) => {
-         onDragStart(e, slot.task.id);
-       }}
+onDragStart={(e) => {
+          onDragStart(e, slot.task.id);
+        }}
     >
       <div style={{ 
         position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, 
@@ -1293,8 +1375,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left", 
-          border: `2px solid ${categoryOption.cor}66`,
-          borderLeft: `6px solid ${categoryOption.cor}`,
+          border: `1px solid ${categoryOption.cor}44`,
+          borderLeft: `4px solid ${categoryOption.cor}`,
           borderRadius: 18,
           opacity: slot.task.done ? 0.55 : 1, 
           transform: `translateX(${offset}px)`, 
@@ -1305,7 +1387,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
           cursor: 'pointer',
           touchAction: "pan-y",
           padding: "18px 20px",
-          boxShadow: slot.task.done ? 'none' : '0 10px 32px rgba(17,24,39,0.04)',
+          boxShadow: slot.task.done ? 'none' : '0 10px 40px rgba(0,0,0,0.06)',
           display: "flex",
           gap: 18,
           alignItems: "center"
@@ -1894,7 +1976,6 @@ export function PlannerPage() {
           endTime: newEndTime,
         });
         await reloadPlannerTasks();
-        showSuccess("Horário atualizado no Google Agenda.");
         return;
       }
 
@@ -1934,7 +2015,6 @@ export function PlannerPage() {
       });
       await reloadPlannerTasks();
       await refreshData();
-      showSuccess("Horário atualizado.");
     } catch (error: any) {
       showError(error.message);
     }
@@ -2169,10 +2249,10 @@ export function PlannerPage() {
                    onClick={() => openEditForm(slot.task)}
                    onComplete={handleCompleteTaskDirect}
                    onDelete={handleDeleteTaskDirect}
-                   onDragStart={(e: any, id: string) => {
-                      e.dataTransfer.setData('text/plain', id);
-                      e.dataTransfer.effectAllowed = "move";
-                   }}
+onDragStart={(e: any, id: string) => {
+                       e.dataTransfer.setData('text/plain', id);
+                       e.dataTransfer.effectAllowed = "move";
+                    }}
                 />
               </div>
             );

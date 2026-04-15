@@ -127,6 +127,10 @@ export function addMinutesToTime(time: string, minutesToAdd: number): string {
   return `${nextHours}:${nextMinutes}`;
 }
 
+export function subtractMinutesFromTime(time: string, minutesToSubtract: number): string {
+  return addMinutesToTime(time, -minutesToSubtract);
+}
+
 function deriveCategoryFromTitle(title: string) {
   const normalizedTitle = title.toLowerCase();
 

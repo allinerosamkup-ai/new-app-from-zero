@@ -1588,59 +1588,57 @@ export function HomePage() {
                         <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hoje</p>
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: "0 0 3px" }}>
-                          {task.title}
-                        </p>
-                        <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>
-                          {task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa"}
-                        </p>
-                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleHomeTaskDone(task);
-                            }}
-                            title="Marcar como feito"
-                            style={{
-                              width: 20, height: 20, borderRadius: "50%",
-                              border: "1.5px solid var(--accent-sage)",
-                              background: "transparent",
-                              cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          >
-                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleHomeTaskDelete(task);
-                            }}
-                            title="Excluir"
-                            style={{
-                              width: 20, height: 20, borderRadius: "50%",
-                              border: "1.5px solid var(--accent-peach)",
-                              background: "transparent",
-                              cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                          >
-                            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
-                              <line x1="18" y1="6" x2="6" y2="18" />
-                              <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                          </button>
-                          {task.isAiSuggested && (
-                            <span style={{ fontSize: 9, color: "var(--accent-peach-ink)", fontWeight: 600 }}>
-                              IA
-                            </span>
-                          )}
+<div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                            {task.title}
+                          </p>
+                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
+                            {task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa"}
+                          </p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeTaskDone(task);
+                          }}
+                          title="Marcar como feito"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-sage)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeTaskDelete(task);
+                          }}
+                          title="Excluir"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-peach)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
                       </div>
                     </div>
                   ))}
@@ -1673,35 +1671,56 @@ export function HomePage() {
                         <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hábito</p>
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: "var(--accent-sage)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: "0 0 3px" }}>
-                          {homeAgendaPreview.habit.icon ? `${homeAgendaPreview.habit.icon} ` : ""}{homeAgendaPreview.habit.title}
-                        </p>
-                        <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>
-                          Ritual pendente de hoje
-                        </p>
-                        <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleHomeHabitDone(homeAgendaPreview.habit!);
-                            }}
-                            style={{ border: "1px solid rgba(150,199,179,.35)", background: "rgba(150,199,179,.12)", color: "var(--accent-sage)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
-                          >
-                            Feito
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleHomeHabitDelete(homeAgendaPreview.habit!);
-                            }}
-                            style={{ border: "1px solid rgba(215,137,127,.28)", background: "rgba(215,137,127,.08)", color: "var(--accent-peach)", borderRadius: 7, padding: "4px 8px", fontSize: 10, fontWeight: 800 }}
-                          >
-                            Excluir
-                          </button>
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                            {homeAgendaPreview.habit.icon ? `${homeAgendaPreview.habit.icon} ` : ""}{homeAgendaPreview.habit.title}
+                          </p>
+                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
+                            Ritual pendente de hoje
+                          </p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeHabitDone(homeAgendaPreview.habit!);
+                          }}
+                          title="Marcar como feito"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-sage)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeHabitDelete(homeAgendaPreview.habit!);
+                          }}
+                          title="Excluir"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-peach)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   )}

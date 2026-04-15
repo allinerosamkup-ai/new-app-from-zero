@@ -54,7 +54,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env'), override: true });
 
 const port = process.env.PORT || 3000;
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
-const defaultAllowed = ['localhost', '127.0.0.1', 'replit', 'replit.dev', 'replit.app', 'airia.pro'];
+const defaultAllowed = ['localhost', '127.0.0.1', 'localhost:5051', 'localhost:5173', 'replit', 'replit.dev', 'replit.app', 'airia.pro'];
 const defaultPrisma = new PrismaClient();
 const DEFAULT_TIMELINE_RECURRING = { enabled: false, frequency: 'daily', days: [], everyNDays: 1 };
 
