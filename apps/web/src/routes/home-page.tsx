@@ -293,8 +293,10 @@ export function HomePage() {
   // Refresh on mount to pick up any check-ins done since the app loaded
   useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate();
-  const { showError, showSuccess } = useToast();
-  const [addedActionIdx, setAddedActionIdx] = useState<Set<number>>(new Set());
+  const { showError } = useToast();
+  const [addedActionTitles, setAddedActionTitles] = useState<Set<string>>(new Set());
+  const [addingActionTitle, setAddingActionTitle] = useState<string | null>(null);
+  const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
   const [checkinChartMode, setCheckinChartMode] = useState<"week" | "day">("week");
   const [forecastTab, setForecastTab] = useState<"forecast" | "monthly">("forecast");
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
@@ -442,6 +444,7 @@ export function HomePage() {
   const [homeAiLoading, setHomeAiLoading] = useState(true);
   const [autonomyExpanded, setAutonomyExpanded] = useState(true);
   const [completedAutocuidadoIdx, setCompletedAutocuidadoIdx] = useState<Set<number>>(new Set());
+  const [skippedAutocuidadoIdx, setSkippedAutocuidadoIdx] = useState<Set<number>>(new Set());
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const previousHomeAiMsgRef = useRef<HomeAiMsg | null>(null);
   const lastHomeAiRequestKeyRef = useRef<string | null>(null);
@@ -666,13 +669,7 @@ export function HomePage() {
       await refreshData();
       setSavedAgendaTaskKeys(savedKeys);
       setAgendaPhase("approved");
-      const dates = Array.from(batches.keys());
-      const onlyFuture = dates.every((date) => date !== today);
-      showSuccess(
-        onlyFuture
-          ? `${totalToCreate} sugest${totalToCreate > 1 ? "oes entraram" : "ao entrou"} no planner de amanha.`
-          : `${totalToCreate} sugest${totalToCreate > 1 ? "oes foram" : "ao foi"} adicionada${totalToCreate > 1 ? "s" : ""} ao planner.`,
-      );
+      // feedback visual pela transição de fase (agendaPhase → "approved")
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (/conflito|conflitos|horário|horario/i.test(message)) {
@@ -701,7 +698,6 @@ export function HomePage() {
   async function handleHabitSave(payload: HabitModalPayload) {
     try {
       await addHabit(payload);
-      showSuccess(`"${payload.title}" entrou nos seus hábitos.`);
       return true;
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel adicionar o habito.");
@@ -717,7 +713,6 @@ export function HomePage() {
   async function handleHomeTaskDone(task: (typeof homeAgendaPreview.tasks)[number]) {
     try {
       await toggleTask(task.id);
-      showSuccess("Compromisso concluído.");
       await refreshSuggestionQueueIfNeeded(task);
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel concluir o compromisso.");
@@ -727,7 +722,6 @@ export function HomePage() {
   async function handleHomeTaskDelete(task: (typeof homeAgendaPreview.tasks)[number]) {
     try {
       await removeTask(task.id);
-      showSuccess("Compromisso excluído.");
       await refreshSuggestionQueueIfNeeded(task);
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel excluir o compromisso.");
@@ -745,7 +739,6 @@ export function HomePage() {
   async function handleHomeHabitDelete(habit: NonNullable<typeof homeAgendaPreview.habit>) {
     try {
       await archiveHabit(habit.id);
-      showSuccess("Hábito excluído da lista ativa.");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel excluir o habito.");
     }
@@ -1588,7 +1581,7 @@ export function HomePage() {
                         <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hoje</p>
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-<div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ flex: 1 }}>
                           <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
                             {task.title}
@@ -1986,100 +1979,117 @@ export function HomePage() {
                       {ins!.pattern}
                     </p>
 
-                    {ins!.actions.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-                          PRÓXIMOS MOVIMENTOS SUGERIDOS
-                        </p>
-                        {ins!.actions.map((action, idx) => {
-                          const added = addedActionIdx.has(idx);
-                          return (
-                            <div key={idx} style={{
-                              display: "flex", alignItems: "center", gap: 6,
-                              padding: "8px 10px", borderRadius: 9,
-                              background: "var(--warm-bg)",
-                              border: `1px solid ${cfg.color}30`,
-                            }}>
-                              <div style={{ flex: 1 }}>
-                                <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
-                                <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
-                              </div>
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const saved = await addTask(action.title, "09:00", action.category, { forceSave: true });
-                                    if (!saved) {
-                                      throw new Error("A sugestao nao entrou no planner.");
+                    {ins!.actions.length > 0 && (() => {
+                      const visibleActions = ins!.actions.filter(
+                        a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title)
+                      );
+                      if (visibleActions.length === 0) return null;
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
+                            PRÓXIMOS MOVIMENTOS SUGERIDOS
+                          </p>
+                          {visibleActions.map((action) => {
+                            const isAdding = addingActionTitle === action.title;
+                            return (
+                              <div key={action.title} style={{
+                                display: "flex", alignItems: "center", gap: 6,
+                                padding: "8px 10px", borderRadius: 9,
+                                background: "var(--warm-bg)",
+                                border: `1px solid ${cfg.color}30`,
+                              }}>
+                                <div style={{ flex: 1 }}>
+                                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
+                                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
+                                </div>
+                                {/* Botão + adicionar ao planner */}
+                                <button
+                                  onClick={async () => {
+                                    if (isAdding) return;
+                                    setAddingActionTitle(action.title);
+                                    try {
+                                      const saved = await addTask(action.title, "09:00", action.category, { forceSave: true });
+                                      if (!saved) throw new Error("A sugestao nao entrou no planner.");
+                                      setAddedActionTitles(prev => new Set([...prev, action.title]));
+                                      const scheduledFor = new Date(Date.now() + 2 * 3600_000).toISOString();
+                                      const followUp: FollowUpPending = {
+                                        suggestionTitle: action.title,
+                                        suggestionCategory: action.category,
+                                        scheduledFor,
+                                        response: null,
+                                        followUpMessage: null,
+                                        source: "autonomous",
+                                      };
+                                      setPendingFollowUp(followUp);
+                                    } catch (error) {
+                                      showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao no planner.");
+                                    } finally {
+                                      setAddingActionTitle(null);
                                     }
-                                    setAddedActionIdx(prev => new Set([...prev, idx]));
-                                    showSuccess("Sugestao adicionada ao planner.");
-                                    const scheduledFor = new Date(Date.now() + 2 * 3600_000).toISOString();
-                                    const followUp: FollowUpPending = {
-                                      suggestionTitle: action.title,
-                                      suggestionCategory: action.category,
-                                      scheduledFor,
-                                      response: null,
-                                      followUpMessage: null,
-                                      source: "autonomous",
-                                    };
-                                    setPendingFollowUp(followUp);
-                                  } catch (error) {
-                                    showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao no planner.");
+                                  }}
+                                  disabled={isAdding}
+                                  style={{
+                                    width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                                    border: `1.5px solid ${cfg.color}60`,
+                                    background: isAdding ? cfg.color + "30" : "transparent",
+                                    cursor: isAdding ? "default" : "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    transition: "background 0.2s",
+                                  }}
+                                >
+                                  {isAdding
+                                    ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }}><path d="M12 2a10 10 0 1 0 10 10" /></svg>
+                                    : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                                   }
-                                }}
-                                disabled={added}
-                                style={{
-                                  width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-                                  border: `1.5px solid ${added ? cfg.color : cfg.color + "60"}`,
-                                  background: added ? cfg.color : "transparent",
-                                  cursor: added ? "default" : "pointer",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                }}
-                              >
-                                {added
-                                  ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
-                                  : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                                }
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setAddedActionIdx(prev => new Set([...prev, idx]));
-                                  showSuccess("Movimento cuidado ✓");
-                                }}
-                                title="Marcar como cumprido"
-                                style={{
-                                  width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                                  border: "1.5px solid var(--accent-peach)",
-                                  background: "transparent",
-                                  cursor: "pointer",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                }}
-                              >
-                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.5" strokeLinecap="round">
-                                  <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => showSuccess("Nova sugestao carregada")}
-                                title="Ver outra sugestao"
-                                style={{
-                                  width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                                  border: "1.5px solid var(--text-3)",
-                                  background: "transparent",
-                                  cursor: "pointer",
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                }}
-                              >
-                                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round">
-                                  <polyline points="1 4 1 10 7 10" />
-                                  <polyline points="23 20 23 14 17 14" />
-                                </svg>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                                </button>
+                                {/* Botão marcar como feito */}
+                                <button
+                                  onClick={() => setAddedActionTitles(prev => new Set([...prev, action.title]))}
+                                  title="Marcar como cumprido"
+                                  style={{
+                                    width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                                    border: "1.5px solid var(--accent-peach)",
+                                    background: "transparent",
+                                    cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                  }}
+                                >
+                                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.5" strokeLinecap="round">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                </button>
+                                {/* Botão próxima sugestão */}
+                                <button
+                                  onClick={() => {
+                                    const remaining = ins!.actions.filter(
+                                      a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && a.title !== action.title
+                                    );
+                                    if (remaining.length === 0) {
+                                      setSkippedActionTitles(new Set());
+                                    } else {
+                                      setSkippedActionTitles(prev => new Set([...prev, action.title]));
+                                    }
+                                  }}
+                                  title="Ver outra sugestao"
+                                  style={{
+                                    width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                                    border: "1.5px solid var(--text-3)",
+                                    background: "transparent",
+                                    cursor: "pointer",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                  }}
+                                >
+                                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round">
+                                    <polyline points="1 4 1 10 7 10" />
+                                    <polyline points="23 20 23 14 17 14" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </>
                 ) : (
                   <>
@@ -2171,20 +2181,18 @@ export function HomePage() {
               ))
             ) : autocuidadoFinal ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {autocuidadoFinal.map((item, i) => {
-                  const isDone = completedAutocuidadoIdx.has(i);
-                  return (
-                    <div key={i} className="home-soft-row" style={{ 
-                      background: isDone ? "rgba(150,199,179,.08)" : "var(--warm-bg)", 
+                {autocuidadoFinal
+                  .map((item, i) => ({ item, i }))
+                  .filter(({ i }) => !completedAutocuidadoIdx.has(i) && !skippedAutocuidadoIdx.has(i))
+                  .map(({ item, i }) => (
+                    <div key={i} className="home-soft-row" style={{
+                      background: "var(--warm-bg)",
                       border: "1px solid rgba(161,140,120,.2)",
                       display: "flex", alignItems: "center", gap: 8, paddingRight: 8,
                     }}>
-                      <p style={{ fontSize: 12, color: isDone ? "var(--text-3)" : "var(--text-2)", margin: 0, flex: 1, textDecoration: isDone ? "line-through" : "none" }}>{item}</p>
+                      <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, flex: 1 }}>{item}</p>
                       <button
-                        onClick={() => {
-                          setCompletedAutocuidadoIdx(prev => new Set([...prev, i]));
-                          showSuccess("Cuidado marcado ✓");
-                        }}
+                        onClick={() => setCompletedAutocuidadoIdx(prev => new Set([...prev, i]))}
                         title="Marcar como cumprido"
                         style={{
                           width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
@@ -2199,7 +2207,16 @@ export function HomePage() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => showSuccess("Nova sugestao carregada")}
+                        onClick={() => {
+                          const remaining = autocuidadoFinal.filter(
+                            (_, j) => !completedAutocuidadoIdx.has(j) && !skippedAutocuidadoIdx.has(j) && j !== i
+                          );
+                          if (remaining.length === 0) {
+                            setSkippedAutocuidadoIdx(new Set());
+                          } else {
+                            setSkippedAutocuidadoIdx(prev => new Set([...prev, i]));
+                          }
+                        }}
                         title="Ver outra sugestao"
                         style={{
                           width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
@@ -2215,8 +2232,8 @@ export function HomePage() {
                         </svg>
                       </button>
                     </div>
-                  );
-                })}
+                  ))
+                }
               </div>
             ) : (
               <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0, fontStyle: "italic", textAlign: "center", padding: "8px 0" }}>
@@ -2276,7 +2293,6 @@ export function HomePage() {
                     <button
                       onClick={() => {
                         setDismissedAlerts(prev => new Set([...prev, alert.key]));
-                        showSuccess("Alerta removido");
                       }}
                       title="Dismissar alerta"
                       style={{
