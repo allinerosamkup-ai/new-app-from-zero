@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info
 import { useLocation } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { AuraToggle } from "../components/editorial/AuraToggle";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -210,7 +211,7 @@ const EMPTY_FORM: FormState = {
   alarmEnabled: false,
   recurringNotificationEnabled: false,
   visualRepeatEnabled: false,
-  icon: "lucide-check",
+  icon: "✅",
   color: "var(--accent-peach)",
   alerts: ["start", "end", "before-15"],
 };
@@ -434,7 +435,7 @@ function buildFormStateFromTask(task: PlannerTask): FormState {
     alarmEnabled: useApiMetadata ? Boolean(task.alarmEnabled) : Boolean(meta.alarmEnabled),
     recurringNotificationEnabled: useApiMetadata ? Boolean(task.recurringNotificationEnabled) : Boolean(meta.recurringNotificationEnabled),
     visualRepeatEnabled: useApiMetadata ? Boolean(task.visualRepeatEnabled) : Boolean(meta.visualRepeatEnabled),
-    icon: (useApiMetadata ? task.icon : meta.icon) || "lucide-check",
+    icon: (useApiMetadata ? task.icon : meta.icon) || "",
     color: (useApiMetadata ? task.color : meta.color) || "var(--accent-peach)",
     alerts: [],
   };
@@ -1114,6 +1115,81 @@ function PlannerSheetBody({
         )}
       </section>
 
+      {/* ── 7. Notificações ── */}
+      <section>
+        <label style={STITLE}>Notificações & Alertas</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, background: "var(--surface-variant)", padding: 16, borderRadius: 20, border: "1px solid var(--outline-variant)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Bell size={18} color="var(--accent-peach)" />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Notificação persistente</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Repete até você concluir</span>
+              </div>
+            </div>
+            <AuraToggle
+              checked={form.persistentReminderEnabled}
+              onCheckChange={(v) => setForm(c => ({ ...c, persistentReminderEnabled: v }))}
+            />
+            </div>
+
+            {form.persistentReminderEnabled && (
+            <div style={{ padding: "0 0 10px 28px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)" }}>Repetir a cada:</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[15, 30, 60, 120].map(mins => (
+                  <button
+                    key={mins}
+                    type="button"
+                    onClick={() => setForm(c => ({ ...c, persistentReminderIntervalMinutes: mins }))}
+                    style={{
+                      flex: 1, padding: "6px", borderRadius: "8px", fontSize: "11px", fontWeight: 700,
+                      background: form.persistentReminderIntervalMinutes === mins ? "var(--accent-peach)" : "var(--surface-variant)",
+                      color: form.persistentReminderIntervalMinutes === mins ? "#fff" : "var(--text-3)",
+                      border: "1px solid var(--outline-variant)",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {mins >= 60 ? `${mins / 60}h` : `${mins}m`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            )}
+
+            <div style={{ height: 1, background: "var(--outline-variant)", opacity: 0.5 }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Mic size={18} color="var(--accent-sage)" />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Vibrar</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Feedback tátil</span>
+              </div>
+            </div>
+            <AuraToggle 
+              checked={form.vibrateEnabled} 
+              onCheckChange={(v) => setForm(c => ({ ...c, vibrateEnabled: v }))} 
+            />
+          </div>
+
+          <div style={{ height: 1, background: "var(--outline-variant)", opacity: 0.5 }} />
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Clock size={18} color="var(--accent-sky)" />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Alarme sonoro</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Tocar som no início</span>
+              </div>
+            </div>
+            <AuraToggle 
+              checked={form.alarmEnabled} 
+              onCheckChange={(v) => setForm(c => ({ ...c, alarmEnabled: v }))} 
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ── 7. Recorrência ── */}
       <section>
         <label style={STITLE}>Repetir compromisso</label>
@@ -1342,7 +1418,7 @@ function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
   );
 }
 
-function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onDragStart }: any) {
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -1391,12 +1467,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
   }
 
   return (
-    <div 
+    <div
        style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 18, background: "transparent", marginBottom: "10px" }}
-       draggable
-onDragStart={(e) => {
-          onDragStart(e, slot.task.id);
-        }}
     >
       <div style={{ 
         position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, 
@@ -1426,30 +1498,30 @@ onDragStart={(e) => {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{
-          width: "100%", textAlign: "left", 
-          border: `1px solid ${categoryOption.cor}44`,
+          width: "100%", textAlign: "left",
+          border: "1px solid rgba(0,0,0,0.07)",
           borderLeft: `4px solid ${categoryOption.cor}`,
           borderRadius: 18,
-          opacity: slot.task.done ? 0.55 : 1, 
-          transform: `translateX(${offset}px)`, 
-          transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)', 
-          position: 'relative', 
-          zIndex: 1, 
+          opacity: slot.task.done ? 0.55 : 1,
+          transform: `translateX(${offset}px)`,
+          transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+          position: 'relative',
+          zIndex: 1,
           background: '#FFFFFF',
           cursor: 'pointer',
           touchAction: "pan-y",
-          padding: "18px 20px",
-          boxShadow: slot.task.done ? 'none' : '0 10px 40px rgba(0,0,0,0.06)',
+          padding: "10px 14px",
+          boxShadow: slot.task.done ? 'none' : '0 4px 16px rgba(0,0,0,0.06)',
           display: "flex",
-          gap: 18,
+          gap: 10,
           alignItems: "center"
         }}
       >
         {/* Energy Icon em destaque à esquerda */}
-        <div style={{ 
-          width: 46, height: 46, borderRadius: 14, 
+        <div style={{
+          width: 36, height: 36, borderRadius: 10,
           background: slot.task.done ? 'var(--surface-variant)' : `${categoryOption.cor}15`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
           flexShrink: 0,
           border: slot.task.done ? 'none' : `1.5px solid ${categoryOption.cor}30`
         }}>
@@ -1498,8 +1570,8 @@ onDragStart={(e) => {
               textTransform: "uppercase",
               letterSpacing: "0.03em"
             }}>
-              {slot.task.icon ? (
-                <i className={slot.task.icon} style={{ fontSize: 11 }}></i>
+              {slot.task.icon && !/^lucide/i.test(slot.task.icon) ? (
+                <span style={{ fontSize: 11 }}>{slot.task.icon}</span>
               ) : (
                 <span style={{ width: 5, height: 5, borderRadius: "50%", background: categoryOption.cor }} />
               )}
@@ -1552,7 +1624,6 @@ export function PlannerPage() {
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
   const [now, setNow] = useState(() => new Date());
-  const [dragOverTime, setDragOverTime] = useState<string | null>(null);
   const openedTaskFromLocationRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -1714,7 +1785,9 @@ export function PlannerPage() {
              const dayEvents = gcalRes.events
                .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
                .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
-             merged = [...merged, ...dayEvents];
+             const localIds = new Set(merged.map(t => String(t.id)));
+             const deduped = dayEvents.filter(e => !localIds.has(String(e.id)));
+             merged = [...merged, ...deduped];
              merged.sort((a,b) => a.time.localeCompare(b.time));
           }
         }
@@ -1763,7 +1836,9 @@ export function PlannerPage() {
              const dayEvents = gcalRes.events
                .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
                .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
-             merged = [...merged, ...dayEvents];
+             const localIds = new Set(merged.map(t => String(t.id)));
+             const deduped = dayEvents.filter(e => !localIds.has(String(e.id)));
+             merged = [...merged, ...deduped];
              merged.sort((a,b) => a.time.localeCompare(b.time));
           }
         }
@@ -1777,6 +1852,15 @@ export function PlannerPage() {
   function closeNewForm() {
     setShowNewForm(false);
     setNewForm({ ...EMPTY_FORM });
+  }
+
+  function getCurrentTimeRounded(intervalMins = 30): string {
+    const now = new Date();
+    const totalMins = now.getHours() * 60 + now.getMinutes();
+    const rounded = Math.ceil(totalMins / intervalMins) * intervalMins;
+    const h = Math.floor(rounded / 60) % 24;
+    const m = rounded % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
 
   function openNewFormAt(time: string) {
@@ -1822,7 +1906,10 @@ export function PlannerPage() {
       });
 
       const savedBlock = Array.isArray(res.savedBlocks) ? res.savedBlocks[0] : null;
-      if (!savedBlock) return;
+      if (!savedBlock) {
+        showError("Não foi possível salvar a tarefa. Tente novamente.");
+        return;
+      }
 
       setTaskMeta(savedBlock.id, {
         noteMode: newForm.noteMode,
@@ -2003,71 +2090,6 @@ export function PlannerPage() {
       await reloadPlannerTasks();
       await refreshData();
       showSuccess("Bloco excluído.");
-    } catch (error: any) {
-      showError(error.message);
-    }
-  }
-
-  async function handleDropTaskToTime(taskId: string, newTime: string) {
-    const task = plannerTasks.find(t => t.id === taskId);
-    if (!task) return;
-    const durMinutes = diffMinutes(task.time, task.endTime);
-    const startTotal = timeToMinutesValue(newTime);
-    const endTotal = startTotal + durMinutes;
-    if (endTotal >= 24 * 60) {
-      showError("Esse bloco não cabe nesse horário.");
-      return;
-    }
-    const newEndTime = formatMinutesAsTime(endTotal);
-
-    try {
-      if (task.source === "gcal") {
-        await api.patch(getGoogleCalendarEventEndpoint(task), {
-          date: selectedDateKey,
-          title: stripGoogleCalendarTaskTitle(task.title),
-          startTime: newTime,
-          endTime: newEndTime,
-        });
-        await reloadPlannerTasks();
-        return;
-      }
-
-      // Sync local meta to ensures fields like checklist/notes are preserved
-      const meta = getTaskMeta(task.id);
-      
-      const payload = buildTimelineBlockInput({
-        title: task.title,
-        time: newTime,
-        endTime: newEndTime,
-        category: task.category || "pessoal",
-        energyLevel: normalizeEnergyLevel(meta.energyLevel || task.energyLevel || 3),
-        note: meta.note || task.note || undefined,
-        noteMode: meta.noteMode || task.noteMode || undefined,
-        checklist: meta.checklist || task.checklist || undefined,
-        recurring: meta.recurring || task.recurring || undefined,
-        persistentReminderEnabled: meta.persistentReminderEnabled || task.persistentReminderEnabled || undefined,
-        persistentReminderIntervalMinutes: meta.persistentReminderIntervalMinutes || task.persistentReminderIntervalMinutes || undefined,
-        alarmEnabled: meta.alarmEnabled || task.alarmEnabled || undefined,
-        vibrateEnabled: meta.vibrateEnabled || task.vibrateEnabled || undefined,
-        recurringNotificationEnabled: meta.recurringNotificationEnabled || task.recurringNotificationEnabled || undefined,
-        visualRepeatEnabled: meta.visualRepeatEnabled || task.visualRepeatEnabled || undefined,
-        icon: meta.icon || task.icon || undefined,
-        color: meta.color || task.color || undefined,
-      }, {
-        id: task.id,
-        fallbackIntensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
-        fallbackStatus: ((task.status ?? (task.done ? "completed" : "planned")) as TimelineBlockStatus),
-        isAiSuggested: task.isAiSuggested ? false : undefined,
-        aiReasoning: task.isAiSuggested ? null : undefined,
-      });
-
-      await api.post("/timeline", {
-        date: selectedDateKey,
-        forceSave: true,
-        blocks: [ payload ]
-      });
-      await reloadPlannerTasks();
-      await refreshData();
     } catch (error: any) {
       showError(error.message);
     }
@@ -2270,8 +2292,6 @@ export function PlannerPage() {
         />
         
         {agendaWithAi.map((slot) => {
-          const isDragOver = dragOverTime === slot.time;
-
           if (slot.kind === "task") {
             const categoryOption = getCategoryStyles(slot.category);
 
@@ -2279,52 +2299,27 @@ export function PlannerPage() {
               <div
                 key={slot.key}
                 className="timeline-slot"
-                data-drop-time={slot.time}
-                onDragOver={e => { e.preventDefault(); setDragOverTime(slot.time); }}
-                onDragLeave={() => setDragOverTime(null)}
-                onDrop={e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const tid = e.dataTransfer.getData('text/plain');
-                  if (tid) handleDropTaskToTime(tid, slot.time);
-                }}
-                style={{ 
+                style={{
                   borderRadius: 12, background: "transparent", paddingLeft: 24,
-                  border: isDragOver ? "2px dashed var(--accent-peach)" : "none",
-                  transition: "all 0.2s"
                 }}
               >
                 <span className="timeline-time" style={{ fontWeight: 700, fontSize: 13 }}>{slot.time}</span>
                 <div className="timeline-line" style={{ left: 10 }} />
-                <SwipeableTaskCard 
-                   slot={slot} 
-                   categoryOption={categoryOption} 
+                <SwipeableTaskCard
+                   slot={slot}
+                   categoryOption={categoryOption}
                    onClick={() => openEditForm(slot.task)}
                    onComplete={handleCompleteTaskDirect}
                    onDelete={handleDeleteTaskDirect}
-onDragStart={(e: any, id: string) => {
-                       e.dataTransfer.setData('text/plain', id);
-                       e.dataTransfer.effectAllowed = "move";
-                    }}
                 />
               </div>
             );
           }
 
           return (
-            <div key={slot.key} className="timeline-slot" data-drop-time={slot.time} 
-                 style={{ 
-                   minHeight: slot.title ? 110 : 60, borderRadius: 12, background: "transparent", paddingLeft: 24,
-                   border: isDragOver ? "2px dashed var(--accent-peach)" : "none",
-                   transition: "all 0.2s"
-                 }}
-                 onDragOver={e => { e.preventDefault(); setDragOverTime(slot.time); }}
-                 onDragLeave={() => setDragOverTime(null)}
-                 onDrop={e => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const tid = e.dataTransfer.getData('text/plain');
-                    if (tid) handleDropTaskToTime(tid, slot.time);
+            <div key={slot.key} className="timeline-slot"
+                 style={{
+                   minHeight: slot.title ? 72 : 60, borderRadius: 12, background: "transparent", paddingLeft: 24,
                  }}
             >
               <span className="timeline-time" style={{ opacity: slot.title ? 1 : 0.4, fontWeight: 700, fontSize: 13 }}>{slot.time}</span>
@@ -2370,7 +2365,7 @@ onDragStart={(e: any, id: string) => {
 
       {/* FAB — Novo bloco */}
       <button
-        onClick={() => openNewFormAt("09:00")}
+        onClick={() => openNewFormAt(getCurrentTimeRounded())}
         aria-label="Novo bloco"
         style={{
           position: "fixed",
