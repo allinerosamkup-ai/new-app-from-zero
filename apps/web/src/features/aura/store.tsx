@@ -85,7 +85,7 @@ type AuraStoreContextValue = {
   saveProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   prepareJournalFromMood: () => void;
-  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<void>;
+  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<{ stateLabel: string | null; analysis: string | null; recommendations: string[]; suggestedIntensity: string | null } | null>;
   addGoal: (title: string) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
   setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
@@ -493,7 +493,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (!session) return;
 
         try {
-          await api.post('/checkins', {
+          const checkinResponse = await api.post('/checkins', {
             localDate: today,
             checkinSlot,
             moodScore: entry.humor,
@@ -510,10 +510,18 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             flowDay: entry.flowDay,
             flowIntensity: entry.flowIntensity,
             symptomLevels: entry.symptomLevels,
-          });
+          }) as any;
           await refreshData();
+          // Retorna dados ricos da IA para uso na tela de resultado
+          return {
+            stateLabel: checkinResponse?.stateLabel ?? null,
+            analysis: checkinResponse?.stateSummary ?? (checkinResponse?.aiState as any)?.analysis ?? null,
+            recommendations: (checkinResponse?.aiState as any)?.recommendations ?? [],
+            suggestedIntensity: (checkinResponse?.aiState as any)?.suggestedIntensity ?? null,
+          };
         } catch (err) {
           console.error("Failed to persist checkin; kept local copy.", err);
+          return null;
         }
       },
       addGoal: async (title) => {

@@ -27,6 +27,7 @@ import {
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
+import { AiBackgroundService } from './services/ai-background.service';
 import {
   buildUnifiedSuggestContext,
   getSuggestFallback,
@@ -84,6 +85,12 @@ function buildTimelineMetadataData(block: TimelineBlockInput) {
   }
   if (block.isAiSuggested !== undefined) metadata.isAiSuggested = block.isAiSuggested;
   if (block.aiReasoning !== undefined) metadata.aiReasoning = block.aiReasoning ?? null;
+  if (block.icon !== undefined) metadata.icon = block.icon ?? null;
+  if (block.color !== undefined) metadata.color = block.color ?? null;
+  if (block.vibrateEnabled !== undefined) metadata.vibrateEnabled = block.vibrateEnabled;
+  if (block.alarmEnabled !== undefined) metadata.alarmEnabled = block.alarmEnabled;
+  if (block.recurringNotificationEnabled !== undefined) metadata.recurringNotificationEnabled = block.recurringNotificationEnabled;
+  if (block.visualRepeatEnabled !== undefined) metadata.visualRepeatEnabled = block.visualRepeatEnabled;
 
   return metadata;
 }
@@ -98,6 +105,64 @@ function formatDateOnly(value: Date | string | null | undefined): string | null 
 function writeSseEvent(res: Response, event: string, data: unknown) {
   res.write(`event: ${event}\n`);
   res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+/** Formata hora UTC de um Date como HH:MM */
+function fmtUtcTime(d: Date): string {
+  return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+}
+
+/**
+ * Busca as tarefas de hoje do banco e do Google Calendar (se conectado)
+ * e retorna um bloco de texto para injetar no prompt da Aura.
+ */
+async function buildTodayPlannerContext(prisma: PrismaClient, userId: string): Promise<string | null> {
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const dayStart = new Date(`${todayStr}T00:00:00.000Z`);
+  const dayEnd   = new Date(`${todayStr}T23:59:59.999Z`);
+
+  const lines: string[] = [];
+
+  // 1. Tarefas do planner interno
+  const blocks = await prisma.timelineBlock.findMany({
+    where: { userId, localDate: { gte: dayStart, lte: dayEnd } },
+    orderBy: { startAt: 'asc' },
+    select: { id: true, title: true, startAt: true, endAt: true, category: true, status: true },
+  }).catch(() => []);
+
+  for (const b of blocks) {
+    const status = b.status === 'completed' ? '✓' : '·';
+    lines.push(`${status} [id:${b.id}] "${b.title}" — ${fmtUtcTime(b.startAt)}–${fmtUtcTime(b.endAt)} — ${b.category}`);
+  }
+
+  // 2. Eventos do Google Calendar (se conectado e não duplicados)
+  try {
+    const token = await GCalService.getValidToken(prisma, userId);
+    if (token) {
+      const timeMin = `${todayStr}T00:00:00Z`;
+      const timeMax = `${todayStr}T23:59:59Z`;
+      const gcalRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime&maxResults=20`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (gcalRes.ok) {
+        const gcalData = await gcalRes.json() as any;
+        const gcalItems: any[] = gcalData.items ?? [];
+        // Só adiciona eventos do GCal que não estão no planner local (sem gcalEventId match)
+        const localGcalIds = new Set(blocks.map((b: any) => b.gcalEventId).filter(Boolean));
+        for (const ev of gcalItems) {
+          if (localGcalIds.has(ev.id)) continue; // já está no planner, não duplicar
+          const start = ev.start?.dateTime ? new Date(ev.start.dateTime) : null;
+          const end   = ev.end?.dateTime   ? new Date(ev.end.dateTime)   : null;
+          const timeStr = start && end ? `${fmtUtcTime(start)}–${fmtUtcTime(end)}` : 'dia todo';
+          lines.push(`· [gcal:${ev.id}] "${ev.summary ?? 'Evento'}" — ${timeStr} — google-agenda`);
+        }
+      }
+    }
+  } catch { /* GCal indisponível — não bloqueia */ }
+
+  if (lines.length === 0) return null;
+  return `AGENDA DE HOJE (${todayStr}):\n${lines.join('\n')}`;
 }
 
 async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, context: Record<string, unknown>) {
@@ -929,8 +994,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       },
     });
 
-    // 2. Chamar IA para Avaliar Estado
-    const checkinRuntimeContext = await resolveAiRuntimeContext(prisma, data.userId, {});
+    // 2. Chamar IA para Avaliar Estado (com contexto completo do dia)
+    const [checkinRuntimeContext, checkinPlannerContext] = await Promise.all([
+      resolveAiRuntimeContext(prisma, data.userId, {}),
+      buildTodayPlannerContext(prisma, data.userId),
+    ]);
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -946,6 +1014,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       moodCycleContext: checkinRuntimeContext.moodCycleContext,
       emotions: (data as any).emotions,
       factors: data.factors,
+      plannerContext: checkinPlannerContext,
     });
 
     // 3. Atualizar com Resultado da IA
@@ -978,6 +1047,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         },
       }).catch(() => {}); // fire-and-forget
     }
+
+    // 5. Agendar jobs de background para manter IA atualizada
+    AiBackgroundService.scheduleJob(data.userId, 'rag-indexing', '1h').catch(() => {});
+    AiBackgroundService.scheduleJob(data.userId, 'profile-update', '6h').catch(() => {});
 
     return res.json(updatedCheckin);
 
@@ -1086,8 +1159,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const data = JournalMessageStreamSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
       const existingMessages = await journalService.getSessionMessages(prisma, data.sessionId);
-      const routineCtx = await journalService.buildRoutineContext(prisma, data.userId);
-      const runtimeContext = await resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext });
+      const [routineCtx, runtimeContext, journalPlannerContext] = await Promise.all([
+        journalService.buildRoutineContext(prisma, data.userId),
+        resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
+        buildTodayPlannerContext(prisma, data.userId),
+      ]);
       const context = { ...routineCtx, moodCycleContext: runtimeContext.moodCycleContext };
       const userOrderIndex = journalService.nextOrderIndex(existingMessages);
 
@@ -1135,6 +1211,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           userProfileSummary: runtimeContext.userProfileSummary,
           longTermMemory: runtimeContext.longTermMemory,
           ragContext: journalRagContext,
+          plannerContext: journalPlannerContext,
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
@@ -1236,6 +1313,9 @@ export function createApp(dependencies: AppDependencies = {}) {
       const commandMemories = await memoryService.retrieve(data.userId, data.message, 3).catch(() => []);
       const commandRagContext = memoryService.formatForPrompt(commandMemories);
 
+      // Planner Brain: injeta agenda completa de hoje (planner interno + Google Calendar)
+      const plannerContext = await buildTodayPlannerContext(prisma, data.userId);
+
       const commandResponse = await auraCommandService.interpretCommand({
         message: data.message,
         history: data.history,
@@ -1243,9 +1323,70 @@ export function createApp(dependencies: AppDependencies = {}) {
         profileSummary: runtimeContext.userProfileSummary,
         moodCycleContext: runtimeContext.moodCycleContext,
         ragContext: commandRagContext,
+        plannerContext,
       });
 
       const responsePayload = { ...commandResponse.payload };
+
+      // Executar update de tarefa existente
+      if (commandResponse.action === 'update_task') {
+        try {
+          const { taskId, newDate, newStartTime } = commandResponse.payload as Record<string, string>;
+          if (taskId && newDate && newStartTime) {
+            const block = await prisma.timelineBlock.findFirst({ where: { id: taskId, userId: data.userId } });
+            if (block) {
+              const durationMs = block.endAt.getTime() - block.startAt.getTime();
+              const newStartAt = new Date(`${newDate}T${newStartTime}:00.000Z`);
+              const newEndAt = new Date(newStartAt.getTime() + durationMs);
+              const newEndTime = fmtUtcTime(newEndAt);
+
+              await prisma.timelineBlock.update({
+                where: { id: taskId },
+                data: {
+                  localDate: new Date(`${newDate}T00:00:00.000Z`),
+                  startAt: newStartAt,
+                  endAt: newEndAt,
+                },
+              });
+
+              if (block.gcalEventId) {
+                await GCalService.updatePrimaryEvent(prisma, data.userId, block.gcalEventId, {
+                  date: newDate,
+                  title: block.title,
+                  startTime: newStartTime,
+                  endTime: newEndTime,
+                }).catch(() => null);
+              }
+
+              Object.assign(responsePayload, {
+                updatedTaskId: taskId,
+                updatedBlock: { id: taskId, title: block.title, newDate, newStartTime, newEndTime },
+              });
+            }
+          }
+        } catch (updateErr) {
+          console.error('[aura/command] update_task error:', updateErr);
+        }
+      }
+
+      // Executar delete de tarefa existente
+      if (commandResponse.action === 'delete_task') {
+        try {
+          const { taskId } = commandResponse.payload as Record<string, string>;
+          if (taskId) {
+            const block = await prisma.timelineBlock.findFirst({ where: { id: taskId, userId: data.userId } });
+            if (block) {
+              await prisma.timelineBlock.delete({ where: { id: taskId } });
+              if (block.gcalEventId) {
+                await GCalService.deletePrimaryEvent(prisma, data.userId, block.gcalEventId).catch(() => null);
+              }
+              Object.assign(responsePayload, { deletedTaskId: taskId, deletedTitle: block.title });
+            }
+          }
+        } catch (deleteErr) {
+          console.error('[aura/command] delete_task error:', deleteErr);
+        }
+      }
 
       if (commandResponse.action === 'handoff_to_journal') {
         const journalEntry = await persistAuraJournalSummary({
@@ -1366,6 +1507,9 @@ export function createApp(dependencies: AppDependencies = {}) {
       moodCycleContext: runtimeContext.moodCycleContext,
       longTermMemory: runtimeContext.longTermMemory,
     });
+
+    // Agendar RAG indexing para absorver o que foi escrito no diário
+    AiBackgroundService.scheduleJob(userId, 'rag-indexing', '1h').catch(() => {});
 
     return res.json({
       sessionId: finalization.updatedSession.id,
@@ -1786,6 +1930,12 @@ export function createApp(dependencies: AppDependencies = {}) {
           lastResetDate: formatDateOnly(block.lastResetDate),
           persistentReminderEnabled: block.persistentReminderEnabled ?? false,
           persistentReminderIntervalMinutes: block.persistentReminderIntervalMinutes ?? null,
+          icon: (block as any).icon ?? null,
+          color: (block as any).color ?? null,
+          vibrateEnabled: (block as any).vibrateEnabled ?? false,
+          alarmEnabled: (block as any).alarmEnabled ?? false,
+          recurringNotificationEnabled: (block as any).recurringNotificationEnabled ?? false,
+          visualRepeatEnabled: (block as any).visualRepeatEnabled ?? false,
         }))
       );
     } catch (error: any) {

@@ -91,41 +91,73 @@ export class AiBackgroundService {
   }
 
   private static async updateUserProfile(userId: string) {
-    const recentCheckins = await prisma.dailyCheckin.findMany({
-      where: { userId },
-      orderBy: { localDate: 'desc' },
-      take: 30,
-    });
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [recentCheckins, recentBlocks] = await Promise.all([
+      prisma.dailyCheckin.findMany({
+        where: { userId },
+        orderBy: { localDate: 'desc' },
+        take: 30,
+        select: { localDate: true, moodScore: true, energyScore: true, emotions: true, note: true, stateLabel: true },
+      }),
+      prisma.timelineBlock.findMany({
+        where: { userId, localDate: { gte: thirtyDaysAgo } },
+        select: { localDate: true, category: true, status: true, energyLevel: true },
+      }),
+    ]);
 
     if (recentCheckins.length < 3) return;
+
+    // Cruzar humor com carga do planner por dia
+    const blocksByDate: Record<string, { total: number; completed: number; categories: string[] }> = {};
+    for (const b of recentBlocks) {
+      const d = b.localDate.toISOString().split('T')[0];
+      if (!blocksByDate[d]) blocksByDate[d] = { total: 0, completed: 0, categories: [] };
+      blocksByDate[d].total++;
+      if (b.status === 'completed') blocksByDate[d].completed++;
+      if (b.category && !blocksByDate[d].categories.includes(b.category)) {
+        blocksByDate[d].categories.push(b.category);
+      }
+    }
+
+    const checkinsData = recentCheckins.map(c => {
+      const dateKey = c.localDate.toISOString().split('T')[0];
+      const dayBlocks = blocksByDate[dateKey];
+      return {
+        date: dateKey,
+        mood: c.moodScore,
+        energy: c.energyScore,
+        stateLabel: c.stateLabel,
+        emotions: c.emotions ?? [],
+        note: c.note,
+        plannerLoad: dayBlocks
+          ? { taskTotal: dayBlocks.total, tasksDone: dayBlocks.completed, categories: dayBlocks.categories }
+          : null,
+      };
+    });
 
     const OpenAI = (await import('openai')).default;
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const checkinsData = recentCheckins.map(c => ({
-      date: c.localDate.toISOString().split('T')[0],
-      mood: c.moodScore,
-      energy: c.energyScore,
-      emotions: c.emotions ?? [],
-      note: c.note,
-    }));
-
-    const prompt = `Analise os últimos ${recentCheckins.length} check-ins do usuário e gere um resumo corto do perfil emocional/comportamental atual em formato JSON:
+    const prompt = `Analise os últimos ${recentCheckins.length} check-ins do usuário — incluindo dados cruzados com a carga de tarefas de cada dia (plannerLoad).
+Identifique padrões reais: dias com muitas tarefas de trabalho correlacionam com humor baixo? Dias com autocuidado no planner correlacionam com energia mais alta?
+Retorne JSON:
 {
-  "moodTrend": "descrição curta da tendência de humor",
-  "energyPattern": "padrão de energia identificado",
-  "mainTriggers": ["fator 1", "fator 2"],
-  "recommendedActions": ["ação 1", "ação 2"]
+  "moodTrend": "descrição curta da tendência de humor nos últimos 30 dias",
+  "energyPattern": "padrão de energia identificado (ex: cai às terças, sobe quando tem menos tarefas)",
+  "mainTriggers": ["fator 1 com evidência", "fator 2 com evidência"],
+  "plannerCorrelation": "como a carga e tipo de tarefas impacta o humor/energia",
+  "recommendedActions": ["ação concreta 1", "ação concreta 2"]
 }`;
 
     const completion = await openai.chat.completions.create({
       model: getOpenAiModel(),
       messages: [
         { role: 'system', content: prompt },
-        { role: 'user', content: JSON.stringify(checkinsData) }
+        { role: 'user', content: JSON.stringify(checkinsData) },
       ],
       temperature: 0.3,
-      max_tokens: 500,
+      max_tokens: 700,
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -133,7 +165,7 @@ export class AiBackgroundService {
       await prisma.onboardingResponse.update({
         where: { userId },
         data: { aiProfileSummary: content },
-      });
+      }).catch(() => {}); // ignora se onboarding não existir ainda
     }
   }
 
@@ -141,8 +173,9 @@ export class AiBackgroundService {
     const oneHourAgo = new Date(Date.now() - INTERVALS['1h']);
     const memoryService = this.getMemoryService();
 
+    // 1. Indexar mensagens novas do diário
     const newJournals = await prisma.journalMessage.findMany({
-      where: { userId, createdAt: { gte: oneHourAgo } },
+      where: { userId, createdAt: { gte: oneHourAgo }, role: 'user' },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
@@ -154,7 +187,56 @@ export class AiBackgroundService {
           contentType: 'journal',
           contentId: journal.id,
           content: journal.content,
-        });
+        }).catch(() => {});
+      }
+    }
+
+    // 2. Indexar notas de check-in recentes
+    const recentCheckins = await prisma.dailyCheckin.findMany({
+      where: { userId, createdAt: { gte: oneHourAgo }, note: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: { id: true, note: true, localDate: true, moodScore: true, energyScore: true, stateLabel: true },
+    });
+
+    for (const checkin of recentCheckins) {
+      if (checkin.note && checkin.note.trim().length >= 10) {
+        await memoryService.store({
+          userId,
+          contentType: 'checkin_note',
+          contentId: checkin.id,
+          content: `${checkin.localDate.toISOString().split('T')[0]}: ${checkin.note.trim()}`,
+          metadata: {
+            moodScore: checkin.moodScore,
+            energyScore: checkin.energyScore,
+            stateLabel: checkin.stateLabel,
+          },
+        }).catch(() => {});
+      }
+    }
+
+    // 3. Indexar objetivos ativos (não precisam de janela de tempo — upsert é idempotente)
+    const objectives = await prisma.objective.findMany({
+      where: { userId, archived: false },
+      take: 10,
+      select: { id: true, title: true, description: true, category: true, aiInsight: true },
+    }).catch(() => []);
+
+    for (const obj of objectives) {
+      const content = [
+        `Objetivo: ${obj.title}`,
+        obj.description ? `Descrição: ${obj.description}` : null,
+        obj.aiInsight ? `Insight: ${obj.aiInsight}` : null,
+      ].filter(Boolean).join('\n');
+
+      if (content.length > 10) {
+        await memoryService.store({
+          userId,
+          contentType: 'goal',
+          contentId: obj.id,
+          content,
+          metadata: { category: obj.category },
+        }).catch(() => {});
       }
     }
   }

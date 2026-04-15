@@ -14,6 +14,8 @@ export const AuraCommandIntentSchema = z.enum([
   'agenda_plan',
   'clarify',
   'reflective_handoff',
+  'reschedule',
+  'delete_task',
 ]);
 
 export const AuraCommandActionSchema = z.enum([
@@ -23,6 +25,8 @@ export const AuraCommandActionSchema = z.enum([
   'create_agenda',
   'ask_clarification',
   'handoff_to_journal',
+  'update_task',
+  'delete_task',
 ]);
 
 export const AuraCommandPayloadSchema = z.object({}).catchall(z.unknown());

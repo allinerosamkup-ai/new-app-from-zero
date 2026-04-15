@@ -301,6 +301,13 @@ function mapTaskFromApi(task: any): PlannerTask {
 }
 
 function mapGoogleCalendarEventFromApi(event: any, selectedDateKey: string): PlannerTask | null {
+  const toLocalHHMM = (iso: string): string => {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    } catch { return iso.slice(11, 16); }
+  };
+
   const rawDate = event.start?.dateTime || event.start?.date || "";
   const eventDate = event.start?.date
     ? event.start.date
@@ -310,8 +317,8 @@ function mapGoogleCalendarEventFromApi(event: any, selectedDateKey: string): Pla
 
   if (eventDate !== selectedDateKey) return null;
 
-  const startTime = event.start?.dateTime ? event.start.dateTime.slice(11, 16) : "00:00";
-  const endTime = event.end?.dateTime ? event.end.dateTime.slice(11, 16) : "23:59";
+  const startTime = event.start?.dateTime ? toLocalHHMM(event.start.dateTime) : "00:00";
+  const endTime = event.end?.dateTime ? toLocalHHMM(event.end.dateTime) : "23:59";
   const summary = typeof event.summary === "string" && event.summary.trim() ? event.summary.trim() : "Evento";
 
   return {
@@ -689,9 +696,8 @@ function RecurringSection({
 
 
 const ICON_GRID = [
-  "lucide-check", "lucide-calendar", "lucide-clock", "lucide-star", 
-  "lucide-heart", "lucide-briefcase", "lucide-home", "lucide-shopping-cart",
-  "lucide-coffee", "lucide-dumbell", "lucide-book", "lucide-music"
+  "✅", "📅", "🕐", "⭐", "❤️", "💼", "🏠", "🛒",
+  "☕", "💪", "📚", "🎵", "🏃", "🧘", "🎯", "🔥", "✍️", "💡"
 ];
 
 const COLOR_GRID = [
@@ -758,6 +764,10 @@ function PlannerSheetBody({
   void _onCancel; // kept in contract for parent callers
   const [showConfig, setShowConfig] = useState(false);
   const [showAddAlert, setShowAddAlert] = useState(false);
+  const [titleTouched, setTitleTouched] = useState(false);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const timeInputRef = useRef<HTMLInputElement>(null);
+  const titleEmpty = !form.title.trim();
 
   const STITLE: React.CSSProperties = {
     fontSize: "13px",
@@ -835,14 +845,17 @@ function PlannerSheetBody({
               cursor: "pointer", flexShrink: 0
             }}
           >
-            {form.icon ? <i className={form.icon}></i> : <Sparkles size={20} />}
+            {form.icon ? <span style={{ fontSize: 22 }}>{form.icon}</span> : <Sparkles size={20} />}
           </button>
           <input
             value={form.title}
             onChange={(e) => setForm(c => ({ ...c, title: e.target.value }))}
+            onBlur={() => setTitleTouched(true)}
             style={{
               ...INPUT_WRAP,
-              fontSize: "20px", fontWeight: 800, border: "none", borderBottom: "2px solid var(--outline-variant)", borderRadius: 0, background: "transparent", padding: "8px 0"
+              fontSize: "20px", fontWeight: 800, border: "none",
+              borderBottom: `2px solid ${titleTouched && titleEmpty ? "var(--accent-peach)" : "var(--outline-variant)"}`,
+              borderRadius: 0, background: "transparent", padding: "8px 0"
             }}
             placeholder="Ex: Treino de perna"
             autoFocus
@@ -856,7 +869,7 @@ function PlannerSheetBody({
                     width: 36, height: 36, borderRadius: 10, border: form.icon === ic ? "2px solid var(--accent-peach)" : "none",
                     background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center"
                   }}>
-                    <i className={ic} style={{ fontSize: 16 }}></i>
+                    <span style={{ fontSize: 18 }}>{ic}</span>
                   </button>
                 ))}
              </div>
@@ -873,13 +886,30 @@ function PlannerSheetBody({
               style={{ background: "none", border: "none", cursor: "pointer", padding: "5px 8px", fontSize: 13, fontWeight: 600, color: "var(--text-3)", opacity: 0.4 }}
             >{t}</button>
           ))}
-          <div style={{
-            background: "var(--accent-peach)", color: "#fff",
-            padding: "14px 28px", borderRadius: "18px", fontSize: "18px", fontWeight: 800,
-            boxShadow: "0 8px 24px rgba(244,168,150,0.3)",
-            display: "flex", alignItems: "center", gap: 8
-          }}>
-            <Clock size={18} /> {form.time}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => timeInputRef.current?.showPicker?.() ?? timeInputRef.current?.click()}
+              style={{
+                background: "var(--accent-peach)", color: "#fff",
+                padding: "14px 28px", borderRadius: "18px", fontSize: "18px", fontWeight: 800,
+                boxShadow: "0 8px 24px rgba(244,168,150,0.3)",
+                display: "flex", alignItems: "center", gap: 8, border: "none", cursor: "pointer"
+              }}
+            >
+              <Clock size={18} /> {form.time}
+            </button>
+            <input
+              ref={timeInputRef}
+              type="time"
+              value={form.time}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const d = currentDuration;
+                setForm(c => ({ ...c, time: e.target.value, endTime: addMinutesToTime(e.target.value, d) }));
+              }}
+              style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
+            />
           </div>
           {contextAfter.slice(1).map((t) => (
             <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
@@ -888,13 +918,21 @@ function PlannerSheetBody({
           ))}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, position: "relative" }}>
-          <div style={{ background: "var(--surface-variant)", padding: "8px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--outline-variant)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12 }}>
+          <button
+            type="button"
+            onClick={() => dateInputRef.current?.showPicker?.() ?? dateInputRef.current?.click()}
+            style={{ background: "var(--surface-variant)", padding: "8px 16px", borderRadius: "12px", display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--outline-variant)", cursor: "pointer" }}
+          >
             <Calendar size={14} color="var(--accent-peach)" />
             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>{dateDisplay}</span>
-          </div>
-          <input type="date" value={form.date} onChange={(e) => setForm(c => ({ ...c, date: e.target.value }))}
-            style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
+          </button>
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm(c => ({ ...c, date: e.target.value }))}
+            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
           />
         </div>
       </section>
@@ -1135,17 +1173,26 @@ function PlannerSheetBody({
       {/* ── 8. Ações ── */}
       <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
         <AuraButtonV2
-          onClick={onSave}
-          style={{ flex: 1, padding: "18px", borderRadius: "18px", fontSize: "16px", fontWeight: 800 }}
+          onClick={() => { setTitleTouched(true); if (!titleEmpty) onSave(); }}
+          style={{
+            flex: 1, padding: "18px", borderRadius: "18px", fontSize: "16px", fontWeight: 800,
+            opacity: titleEmpty ? 0.5 : 1,
+          }}
         >
           {saveLabel}
         </AuraButtonV2>
       </div>
+      {titleTouched && titleEmpty && (
+        <p style={{ fontSize: 12, color: "var(--accent-peach)", textAlign: "center", marginTop: -8 }}>
+          Dá um nome pra tarefa primeiro
+        </p>
+      )}
     </div>
   );
 }
 
 function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayAnchor: Date; offsetDias: number; setOffsetDias: (v: any) => void }) {
+  const headerDateRef = useRef<HTMLInputElement>(null);
   const selectedDate = new Date(todayAnchor);
   selectedDate.setDate(selectedDate.getDate() + offsetDias);
   const selectedDateDateString = selectedDate.toDateString();
@@ -1188,15 +1235,20 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
             {selectedDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
           </h3>
           
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: "50%", background: "var(--surface-variant)" }}>
+          <button
+            type="button"
+            onClick={() => headerDateRef.current?.showPicker?.() ?? headerDateRef.current?.click()}
+            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: "50%", background: "var(--surface-variant)", border: "none", cursor: "pointer" }}
+          >
             <Calendar size={14} color="var(--text-2)" />
-            <input 
+            <input
+              ref={headerDateRef}
               type="date"
-              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+              style={{ position: 'absolute', opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
               onChange={handleDateChange}
               value={formattedDate}
             />
-          </div>
+          </button>
         </div>
 
         <button 
@@ -1717,7 +1769,8 @@ export function PlannerPage() {
         }
         setPlannerTasks(merged);
     } catch (e) {
-        console.error(e);
+        console.error('[reloadPlannerTasks]', e);
+        showError("Erro ao carregar agenda. Tente novamente.");
     }
   }
 

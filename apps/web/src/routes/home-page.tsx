@@ -1639,7 +1639,6 @@ export function HomePage() {
                           </svg>
                         </button>
                       </div>
-                      </div>
                     </div>
                   ))}
                   {homeAgendaPreview.habit && (

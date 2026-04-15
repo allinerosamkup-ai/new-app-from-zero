@@ -44,6 +44,7 @@ export class CheckinService {
     moodCycleContext?: string | null;
     emotions?: string[];
     factors?: string[];
+    plannerContext?: string | null;
   }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState> {
     const checkinMoment = data.checkinSlot?.split('-')[0] || 'não informado';
 
@@ -94,8 +95,10 @@ DADOS:
 - Social ${humanizeScore(data.socialScore, 'generic')} e sono ${humanizeScore(data.sleepScore, 'sleep')}
 ${noteLine}${contextLines ? `\n${contextLines}` : ''}
 
+${data.plannerContext ? `${data.plannerContext}\n` : ''}
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
+- Se houver agenda hoje, leve em conta o peso e tipo de compromissos ao calibrar as recomendações e suggestedIntensity.
 - stateLabel: nome curto, humano e sóbrio do estado; evite rótulos dramáticos.
 - Se houver nota escrita, ela é o sinal de maior contexto: use a nota para reinterpretar humor, energia e sugestões antes de concluir qualquer padrão.
 - Se a nota explicar uma causa física ou situacional concreta, como doença, dor, gripe, febre, menstruação, noite ruim ou crise externa, não trate energia baixa como piora emocional; diferencie capacidade baixa de humor ruim.

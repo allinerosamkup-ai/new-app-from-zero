@@ -24,7 +24,8 @@ model Profile {
   habits           Habit[]
   weeklyInsights   WeeklyInsight[]
   objectives       Objective[]
-  memoryEmbeddings MemoryEmbedding[]
+  memoryEmbeddings  MemoryEmbedding[]
+  aiBackgroundJobs  AiBackgroundJob[]
 
   @@map("profiles")
 }
@@ -314,4 +315,22 @@ model WeeklyInsight {
   @@unique([userId, weekStart])
   @@index([userId, weekStart])
   @@map("weekly_insights")
+}
+
+model AiBackgroundJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  jobType     String    @map("job_type")
+  status      String    @default("pending")
+  runAt       DateTime  @map("run_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  error       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobType], name: "userId_jobType")
+  @@index([status, runAt], name: "idx_ai_jobs_pending")
+  @@map("ai_background_jobs")
 }

@@ -44,6 +44,7 @@ export type JournalPromptContext = {
   topPlannerCategories: string[];
   moodCycleContext?: string | null;
   ragContext?: string;
+  plannerContext?: string | null;
   checkinToday?: {
     moodScore: number;
     energyScore: number;
@@ -137,6 +138,9 @@ export class AIService {
                 : 'Não sugira NADA. Apenas reflita o que foi dito ou pergunte sobre como o corpo está reagindo a isso.',
               ...(input.context.ragContext
                 ? [`MEMÓRIAS RELEVANTES DO HISTÓRICO DE ${input.context.userName ?? 'você'}:\n${input.context.ragContext}`]
+                : []),
+              ...(input.context.plannerContext
+                ? [`AGENDA DE HOJE — use para contextualizar o que foi planejado e o peso do dia:\n${input.context.plannerContext}`]
                 : []),
             ],
           }),

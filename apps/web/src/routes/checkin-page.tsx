@@ -310,7 +310,7 @@ export function CheckinPage() {
       const primaryEmotion = emotionsSelected[0] ?? "calm";
       const mood = emotionToMood[primaryEmotion] ?? "equilibrada";
       setMood(mood);
-      await addCheckin({
+      const checkinAI = await addCheckin({
         humor,
         energia,
         emotion: primaryEmotion,
@@ -325,7 +325,7 @@ export function CheckinPage() {
         flowIntensity: flowIntensity ?? undefined,
         symptomLevels: Object.keys(symptomLvls).length > 0 ? symptomLvls : undefined,
       });
-      navigate("/checkin-result");
+      navigate("/checkin-result", { state: checkinAI ?? undefined });
     } catch (err) {
       console.error("Erro ao registrar check-in:", err);
     } finally {

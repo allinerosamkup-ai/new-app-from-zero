@@ -1,7 +1,7 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // CheckinResult Page v4 — Airia auto-responde ao check-in + fluxo "ajustar meu dia"
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { computeMoodCycle, computeStreak } from '../utils/mood-cycle-engine';
 import { api } from "../lib/api";
@@ -93,6 +93,13 @@ const CAT_COLOR: Record<string, string> = {
 
 export function CheckinResultPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const checkinAI = (location.state as {
+    stateLabel?: string | null;
+    analysis?: string | null;
+    recommendations?: string[];
+    suggestedIntensity?: string | null;
+  } | null) ?? null;
   const { state, addTask, prepareJournalFromMood, refreshData, hydrated } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
@@ -102,7 +109,7 @@ export function CheckinResultPage() {
 
   // Airia auto-response ao check-in
   const [auraMsg, setAuraMsg] = useState<AuraMsg | null>(null);
-  const [auraMsgLoading, setAuraMsgLoading] = useState(true);
+  const [auraMsgLoading, setAuraMsgLoading] = useState(!checkinAI?.analysis);
   const auraMsgRan = useRef(false);
   const autoTasksRan = useRef(false);
 
@@ -139,6 +146,11 @@ export function CheckinResultPage() {
   useEffect(() => {
     if (auraMsgRan.current) return;
     auraMsgRan.current = true;
+    // Se o backend já retornou análise via router state, usar diretamente
+    if (checkinAI?.analysis) {
+      setAuraMsgLoading(false);
+      return;
+    }
     api.post("/ai/suggest", {
       type: "checkin-response",
       context: {
@@ -369,13 +381,27 @@ export function CheckinResultPage() {
 
         {/* Card Airia diz — resposta personalizada ao check-in */}
         <div className="aura-card" style={{ marginBottom: 16, borderLeft: `3px solid ${v.accent}`, background: "rgba(255,253,250,.9)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent, margin: 0 }}>
               Airia diz
             </p>
-            {!auraMsgLoading && auraMsg && (
+            {!auraMsgLoading && (checkinAI?.analysis || auraMsg) && (
               <span style={{ fontSize: 9, background: isMenuthe ? "rgba(180,185,169,.15)" : "var(--accent-peach-a3)", color: v.accent, borderRadius: 999, padding: "2px 6px", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
                 <AuraIcon size={8} /> IA
+              </span>
+            )}
+            {checkinAI?.stateLabel && !auraMsgLoading && (
+              <span style={{ fontSize: 9, background: "rgba(0,0,0,.05)", color: "var(--text-2)", borderRadius: 999, padding: "2px 7px", fontWeight: 600 }}>
+                {checkinAI.stateLabel}
+              </span>
+            )}
+            {checkinAI?.suggestedIntensity && !auraMsgLoading && (
+              <span style={{
+                fontSize: 9, borderRadius: 999, padding: "2px 7px", fontWeight: 700,
+                background: checkinAI.suggestedIntensity === "P" ? "rgba(99,152,169,.15)" : checkinAI.suggestedIntensity === "M" ? "rgba(150,199,179,.15)" : "rgba(215,137,127,.15)",
+                color: checkinAI.suggestedIntensity === "P" ? "var(--accent-sky)" : checkinAI.suggestedIntensity === "M" ? "var(--accent-sage)" : "var(--accent-peach)",
+              }}>
+                {checkinAI.suggestedIntensity === "P" ? "Ritmo intenso" : checkinAI.suggestedIntensity === "M" ? "Ritmo médio" : "Ritmo leve"}
               </span>
             )}
             {auraMsgLoading && (
@@ -387,6 +413,22 @@ export function CheckinResultPage() {
               <div style={{ height: 9, width: "92%", background: "rgba(0,0,0,.05)", borderRadius: 5, marginBottom: 5 }} />
               <div style={{ height: 9, width: "75%", background: "rgba(0,0,0,.05)", borderRadius: 5, marginBottom: 5 }} />
               <div style={{ height: 9, width: "60%", background: "rgba(0,0,0,.05)", borderRadius: 5 }} />
+            </>
+          ) : checkinAI?.analysis ? (
+            <>
+              <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.65, fontStyle: "italic", marginBottom: checkinAI.recommendations?.length ? 10 : 0 }}>
+                {checkinAI.analysis}
+              </p>
+              {checkinAI.recommendations && checkinAI.recommendations.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {checkinAI.recommendations.map((rec, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: "7px 10px", borderRadius: 8, background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)", border: `1px solid ${v.accent}25` }}>
+                      <span style={{ fontSize: 11, color: v.accent, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>→</span>
+                      <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{rec}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           ) : auraMsg ? (
             <>

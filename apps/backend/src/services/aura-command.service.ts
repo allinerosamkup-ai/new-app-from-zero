@@ -35,6 +35,7 @@ export class AuraCommandService {
       profileSummary?: string | null;
       moodCycleContext?: string | null;
       ragContext?: string | null;
+      plannerContext?: string | null;
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<AuraCommandResponse> {
@@ -50,6 +51,7 @@ PEDIDO ATUAL:
 
 ${historyBlock ? `HISTÓRICO RECENTE:\n${historyBlock}\n` : 'HISTÓRICO RECENTE: sem contexto anterior relevante.\n'}
 ${input.ragContext ? `MEMÓRIAS RELEVANTES:\n${input.ragContext}\n` : ''}
+${input.plannerContext ? `${input.plannerContext}\n` : ''}
 INTENTS PERMITIDOS:
 - planner_task
 - checklist
@@ -57,6 +59,8 @@ INTENTS PERMITIDOS:
 - agenda_plan
 - clarify
 - reflective_handoff
+- reschedule (para mover/reagendar uma tarefa existente)
+- delete_task (para remover uma tarefa existente)
 
 ACTIONS PERMITIDAS:
 - create_task
@@ -65,8 +69,10 @@ ACTIONS PERMITIDAS:
 - create_agenda
 - ask_clarification
 - handoff_to_journal
+- update_task (para alterar horário, data ou título de tarefa existente)
+- delete_task (para remover tarefa existente)
 
-REGRAS:
+REGRAS GERAIS:
 - Se o pedido já estiver claro e executável, escolha a ação direta.
 - Se for compromisso/agendamento com data ou horário (ex: "amanhã", "quarta", "às 14h"), use create_task e marque "needsConfirmation": true.
 - Se for uma sequência de tarefas para o dia (ex: "organize meu dia", "planeje minha manhã"), use create_agenda.
@@ -77,6 +83,13 @@ REGRAS:
 - assistantMessage deve ser curta. Se "needsConfirmation" for true, diga que a proposta está pronta para revisão e NUNCA diga que já salvou no planner.
 - payload para create_task DEVE conter: { "title": string, "date": "YYYY-MM-DD", "startTime": "HH:MM", "category": string }.
 - payload para create_agenda DEVE conter OU { "blocks": [ { "title": string, "date": "YYYY-MM-DD", "startTime": "HH:MM", "category": string } ] } OU { "title": string, "category": string, "recurrence": { "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD", "weekdays": ["seg","ter","qua","qui","sex","sab","dom"], "startTime": "HH:MM" } }.
+
+REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
+- Quando o pedido mencionar mover, reagendar, adiar, cancelar ou excluir uma tarefa, consulte a lista "TAREFAS DE HOJE" fornecida acima.
+- Identifique a tarefa pelo horário, título ou contexto. Se apenas uma tarefa corresponder, aja diretamente. Se houver ambiguidade, use ask_clarification listando as opções.
+- Para update_task, payload DEVE conter: { "taskId": string, "newDate": "YYYY-MM-DD", "newStartTime": "HH:MM" }. O endTime é calculado automaticamente mantendo a duração original.
+- Para delete_task, payload DEVE conter: { "taskId": string }.
+- assistantMessage deve confirmar qual tarefa foi identificada e o que foi feito. Ex: "Encontrei 'Reunião com João' às 19:00. Remarcado para amanhã às 05:00."
 - Retorne APENAS JSON.
 `;
 
@@ -97,7 +110,7 @@ REGRAS:
           content: prompt,
         },
       ],
-      response_format: { type: 'json_object' },
+      response_format: { type: 'json_object' } as any,
       max_completion_tokens: getOpenAiMaxCompletionTokens(1200),
     } as any);
 
