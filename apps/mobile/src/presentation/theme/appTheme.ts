@@ -1,16 +1,47 @@
+import { MD3LightTheme } from 'react-native-paper';
+
 export const appColors = {
-  background: '#fffaf0',
-  surface: 'rgba(255,255,255,0.82)',
-  surfaceAlt: 'rgba(255,248,242,0.92)',
-  primary: '#f3b08c',
-  primaryStrong: '#e39a73',
-  primarySoft: 'rgba(243,176,140,0.16)',
-  textPrimary: '#4a443f',
-  textSecondary: '#8d7b68',
-  borderSubtle: 'rgba(192,143,117,0.22)',
+  // Design tokens — aligned with web app
+  nectarine: '#D7897F',
+  menthe: '#96C7B3',
+  lagune: '#6398A9',
+  background: '#FAF8F5',
+  surface: '#FFFFFF',
+  text1: '#1A1A1A',
+  text2: '#4A4A4A',
+  text3: '#8A8A8A',
+  border: 'rgba(0,0,0,0.07)',
+  borderWarm: 'rgba(215,137,127,0.18)',
+
+  // Legacy aliases — kept for backwards compatibility
+  primary: '#D7897F',
+  primaryStrong: '#c47a70',
+  primarySoft: 'rgba(215,137,127,0.16)',
+  surfaceAlt: 'rgba(250,248,245,0.92)',
+  textPrimary: '#1A1A1A',
+  textSecondary: '#4A4A4A',
+  borderSubtle: 'rgba(215,137,127,0.18)',
   success: '#96C7B3',
   info: '#6398A9',
   danger: '#c05a55',
+};
+
+export const paperTheme = {
+  ...MD3LightTheme,
+  colors: {
+    ...MD3LightTheme.colors,
+    primary: appColors.nectarine,
+    secondary: appColors.menthe,
+    tertiary: appColors.lagune,
+    background: appColors.background,
+    surface: appColors.surface,
+    onPrimary: '#FFFFFF',
+    onSecondary: '#FFFFFF',
+    onTertiary: '#FFFFFF',
+    onBackground: appColors.text1,
+    onSurface: appColors.text1,
+    outline: appColors.border,
+  },
 };
 
 export const appSpacing = {
@@ -49,7 +80,7 @@ export const appTypography = {
 
 export const appGlass = {
   cardBorder: 'rgba(255,255,255,0.55)',
-  cardShadow: '#cb997e22',
+  cardShadow: '#D7897F22',
 };
 
 export const appTabBarConfig = {

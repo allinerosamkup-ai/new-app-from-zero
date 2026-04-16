@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
 
-export const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+export const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://airia.pro';
 
 const api = axios.create({
   baseURL: apiBaseUrl,
@@ -9,7 +9,6 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Injeta o Bearer token do Supabase em todas as requisições
 api.interceptors.request.use(async (config) => {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
