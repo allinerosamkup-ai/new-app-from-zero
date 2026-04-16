@@ -787,7 +787,8 @@ export function HomePage() {
       });
     }
 
-    if (cycleReport.warningFlags.includes("sustained_low") || cycleReport.warningFlags.includes("rapid_drop") || cycleReport.stabilityScore <= 35) {
+    const moodIsActivelyPositive = ["recovering", "stable", "flowing", "elevated"].includes(cycleReport.phase) || cycleReport.trend7d > 0.4;
+    if (!moodIsActivelyPositive && (cycleReport.warningFlags.includes("sustained_low") || cycleReport.warningFlags.includes("rapid_drop") || cycleReport.stabilityScore <= 35)) {
       const sustainedLow = cycleReport.warningFlags.includes("sustained_low");
       const rapidDrop = cycleReport.warningFlags.includes("rapid_drop");
       alerts.push({

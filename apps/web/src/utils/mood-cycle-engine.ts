@@ -384,12 +384,21 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   const warningFlags: WarningFlag[] = [];
 
   if (volatility14d > 2.4) warningFlags.push("high_volatility");
-  if (criticalDays >= 3) warningFlags.push("sustained_low"); // 3+ dias abaixo de 3.0 (crítico)
-  if (lowDays >= 5 && criticalDays < 3) warningFlags.push("sustained_low"); // Mantendo alerta se persistir abaixo de 5.0 por muito tempo (5 dias)
+
+  // sustained_low: só dispara se o humor ainda está baixo AGORA.
+  // Se a tendência é positiva ou a fase é de recuperação, não alarmar por dias antigos.
+  const isTrendingUpNow = trend7d > 0.4;
+  const isInPositivePhase = phase === "recovering" || phase === "stable" || phase === "flowing" || phase === "elevated";
+  if (!isTrendingUpNow && !isInPositivePhase) {
+    if (criticalDays >= 3) warningFlags.push("sustained_low");
+    if (lowDays >= 5 && criticalDays < 3) warningFlags.push("sustained_low");
+  }
+
   if (highDays >= 5) warningFlags.push("sustained_elevated");
 
   // Queda rápida: últimos 2 dias vs 2 dias anteriores
-  if (sorted.length >= 4) {
+  // Só dispara se a queda é recente E o humor não está subindo agora
+  if (sorted.length >= 4 && !isTrendingUpNow) {
     const last2avg = mean(sorted.slice(-2).map(e => e.humor));
     const prev2avg = mean(sorted.slice(-4, -2).map(e => e.humor));
     if (prev2avg - last2avg > 3.0) warningFlags.push("rapid_drop");
