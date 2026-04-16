@@ -1486,7 +1486,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
       <div
         role="button"
         tabIndex={0}
-        className="timeline-block-card interactive-card glass-card"
+        className="timeline-block-card"
         onClick={() => { 
           if(Math.abs(offset) < 10) onClick(); 
         }}
