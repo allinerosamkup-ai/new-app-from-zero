@@ -40,10 +40,10 @@ import "../styles/aura.css";
 import "../styles/editorial.css";
 
 const CATEGORY_OPTIONS = [
-  { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "var(--accent-sky-ink)", bg: "rgba(176,180,196,.14)", textColor: "var(--accent-sky-ink)" },
-  { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "var(--accent-sage-ink)", bg: "rgba(180,185,169,.14)", textColor: "var(--accent-sage-ink)" },
-  { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "var(--social-text)", bg: "rgba(229,219,247,.32)", textColor: "var(--social-text)" },
-  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "var(--accent-peach-ink)", bg: "rgba(244,190,168,.30)", textColor: "var(--accent-peach-ink)" },
+  { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "#4E7E93", bg: "rgba(176,200,218,.15)", textColor: "#4E7E93" },
+  { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "#50705B", bg: "rgba(180,210,192,.15)", textColor: "#50705B" },
+  { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "#74628B", bg: "rgba(229,219,247,.32)", textColor: "#74628B" },
+  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "#A86855", bg: "rgba(244,190,168,.28)", textColor: "#A86855" },
   { value: "casa" as const, label: "Casa", shortLabel: "CASA", cor: "#7C641A", bg: "rgba(247,231,166,.38)", textColor: "#7C641A" }
 ];
 
@@ -1501,7 +1501,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left",
-          border: `1.5px solid ${categoryOption.cor}45`,
+          border: `1.5px solid ${categoryOption.cor}`,
           borderLeft: `3px solid ${categoryOption.cor}`,
           borderRadius: 14,
           opacity: slot.task.done ? 0.55 : 1,
