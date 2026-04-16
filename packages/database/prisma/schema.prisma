@@ -26,6 +26,7 @@ model Profile {
   objectives       Objective[]
   memoryEmbeddings  MemoryEmbedding[]
   aiBackgroundJobs  AiBackgroundJob[]
+  pushSubscriptions PushSubscription[]
 
   @@map("profiles")
 }
@@ -334,4 +335,18 @@ model AiBackgroundJob {
   @@unique([userId, jobType], name: "userId_jobType")
   @@index([status, runAt], name: "idx_ai_jobs_pending")
   @@map("ai_background_jobs")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id") @db.Uuid
+  endpoint  String   @unique
+  p256dhKey String   @map("p256dh_key")
+  authKey   String   @map("auth_key")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
 }

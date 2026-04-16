@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
+import { usePushNotifications } from "../hooks/usePushNotifications";
+import { supabase } from "../lib/supabase";
 import type { FollowUpPending } from "../features/aura/types";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { api } from "../lib/api";
@@ -290,6 +292,15 @@ export function HomePage() {
   const { state, addTask, addHabit, refreshData, toggleTask, removeTask, toggleHabit, archiveHabit, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
+
+  // Push notifications — get userId from supabase session
+  const [pushUserId, setPushUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setPushUserId(session?.user?.id ?? null);
+    });
+  }, []);
+  usePushNotifications(pushUserId);
 
   // Refresh on mount to pick up any check-ins done since the app loaded
   useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps

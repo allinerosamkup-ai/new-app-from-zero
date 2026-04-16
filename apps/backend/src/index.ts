@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import webpush from 'web-push';
+import cron from 'node-cron';
 import path from 'path';
 import { PrismaClient } from '@app/database';
 import { requireAuth, AuthRequest } from './middleware/auth';
@@ -52,6 +54,17 @@ import { z } from 'zod';
 import { startOfDay, subDays, format } from 'date-fns';
 
 dotenv.config({ path: path.join(__dirname, '..', '.env'), override: true });
+
+// VAPID setup for Web Push
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:admin@airia.pro',
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+}
 
 const port = process.env.PORT || 3000;
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
@@ -3230,12 +3243,128 @@ JSON APENAS: {"profileSummary":"..."}`,
     }
   });
 
+  // POST /api/push/subscribe — save push subscription
+  app.post('/api/push/subscribe', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { endpoint, keys, userAgent } = req.body;
+      if (!endpoint || !keys?.p256dh || !keys?.auth) {
+        return res.status(400).json({ error: 'Missing subscription fields' });
+      }
+      await prisma.pushSubscription.upsert({
+        where: { endpoint },
+        update: { userId, p256dhKey: keys.p256dh, authKey: keys.auth, userAgent: userAgent || null },
+        create: { userId, endpoint, p256dhKey: keys.p256dh, authKey: keys.auth, userAgent: userAgent || null },
+      });
+      return res.json({ ok: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // DELETE /api/push/subscribe — remove subscription
+  app.delete('/api/push/subscribe', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { endpoint } = req.body;
+      if (!endpoint) return res.status(400).json({ error: 'Missing endpoint' });
+      await prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
+      return res.json({ ok: true });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/push/vapid-public-key — expose public key to frontend
+  app.get('/api/push/vapid-public-key', (_req: Request, res: Response) => {
+    return res.json({ publicKey: VAPID_PUBLIC_KEY });
+  });
+
   return app;
 }
 
 export const app = createApp();
 
+async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  const subs = await defaultPrisma.pushSubscription.findMany({ where: { userId } });
+  const data = JSON.stringify(payload);
+  await Promise.allSettled(
+    subs.map(sub =>
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dhKey, auth: sub.authKey } },
+        data
+      ).catch(async (err: any) => {
+        // 410 Gone = subscription expired, remove it
+        if (err.statusCode === 410) {
+          await defaultPrisma.pushSubscription.delete({ where: { endpoint: sub.endpoint } }).catch(() => {});
+        }
+      })
+    )
+  );
+}
+
 if (require.main === module) {
+  // Push notification cron — runs every minute
+  cron.schedule('* * * * *', async () => {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+    try {
+      const now = new Date();
+      const hh = String(now.getUTCHours()).padStart(2, '0');
+      const mm = String(now.getUTCMinutes()).padStart(2, '0');
+      const currentTimeStr = `${hh}:${mm}`;
+
+      // 1. Habit reminders
+      const habitsNow = await defaultPrisma.habit.findMany({
+        where: { reminderEnabled: true, reminderTime: currentTimeStr },
+      });
+      for (const habit of habitsNow) {
+        await sendPushToUser(habit.userId, {
+          title: `⏰ ${habit.title}`,
+          body: 'Hora do seu hábito!',
+          url: '/home',
+          tag: `habit-${habit.id}`,
+        });
+      }
+
+      // 2. Task/planner reminders — tasks starting in the current UTC minute
+      const windowStart = new Date(now);
+      windowStart.setUTCSeconds(0, 0);
+      const windowEnd = new Date(windowStart.getTime() + 60000);
+      const tasksNow = await defaultPrisma.timelineBlock.findMany({
+        where: { startAt: { gte: windowStart, lt: windowEnd }, status: 'planned' },
+      });
+      for (const task of tasksNow) {
+        await sendPushToUser(task.userId, {
+          title: `📅 ${task.title}`,
+          body: `Começa agora — ${currentTimeStr}`,
+          url: '/planner',
+          tag: `task-${task.id}`,
+        });
+      }
+
+      // 3. Check-in reminders
+      const prefsCheckin = await defaultPrisma.userPreference.findMany({
+        where: { notificationsOn: true },
+      });
+      for (const pref of prefsCheckin) {
+        const notifPrefs = (pref.notificationPreferences as any) || {};
+        if (!notifPrefs.checkin) continue;
+        const checkinTime = pref.morningCheckinTime || '09:00';
+        if (checkinTime === currentTimeStr) {
+          await sendPushToUser(pref.userId, {
+            title: '✨ Como você está agora?',
+            body: 'Hora do check-in de humor.',
+            url: '/checkin',
+            tag: 'checkin-reminder',
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[push-cron] error:', e);
+    }
+  });
+
   const FIFTEEN_MINUTES = 15 * 60 * 1000;
   setInterval(async () => {
     console.log('[AI Background] Processing pending jobs...');
