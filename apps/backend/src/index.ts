@@ -785,6 +785,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     });
   });
 
+  // GET /api/push/vapid-public-key — rota pública (antes do requireAuth)
+  app.get('/api/push/vapid-public-key', (_req: Request, res: Response) => {
+    return res.json({ publicKey: VAPID_PUBLIC_KEY });
+  });
+
   // Todas as rotas abaixo exigem autenticação Supabase
   app.use('/api', dependencies.authMiddleware ?? requireAuth);
 
