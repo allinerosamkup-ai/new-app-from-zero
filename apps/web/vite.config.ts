@@ -65,10 +65,13 @@ export default defineConfig({
       manifest: {
         name: 'Airia — Ciclagem de Humor',
         short_name: 'Airia',
+        lang: 'pt-BR',
+        dir: 'ltr',
         description: 'Seu assistente pessoal de ciclagem de humor. Entenda seus padrões, preveja suas fases.',
         theme_color: '#F4A896',
         background_color: '#FDF9F5',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui'],
         orientation: 'portrait',
         scope: '/',
         start_url: '/',

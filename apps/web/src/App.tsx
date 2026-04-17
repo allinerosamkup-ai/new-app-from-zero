@@ -145,6 +145,7 @@ export default function App() {
 
   return (
     <Suspense fallback={<RouteLoader />}>
+      <div className="app-viewport">
       <div key={location.pathname} className="page-transition">
       <Routes>
         <Route path="/" element={<Navigate to="/splash" replace />} />
@@ -201,6 +202,7 @@ export default function App() {
       </Routes>
       </div>
       <InstallPWA />
+      </div>
     </Suspense>
   );
 }

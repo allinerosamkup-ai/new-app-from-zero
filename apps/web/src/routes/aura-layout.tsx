@@ -144,7 +144,7 @@ export function AuraLayout() {
             background: "rgba(255,255,255,.94)", borderBottom: `1px solid ${cfg.border}`,
             backdropFilter: "blur(16px)",
             padding: "10px 16px 12px",
-            maxWidth: 448, margin: "0 auto",
+            width: "min(100%, 480px)", marginLeft: "auto", marginRight: "auto",
             boxShadow: "0 10px 24px rgba(17,24,39,.05)",
           }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -183,8 +183,8 @@ export function AuraLayout() {
         const followUp = state.pendingFollowUp!;
         return (
           <div style={{
-            position: "fixed", bottom: "calc(80px + env(safe-area-inset-bottom))", left: 12, right: 12, zIndex: 450,
-            maxWidth: 424, margin: "0 auto",
+            position: "fixed", bottom: "calc(80px + env(safe-area-inset-bottom))", left: 0, right: 0, zIndex: 450,
+            width: "min(calc(100% - 24px), 424px)", marginLeft: "auto", marginRight: "auto",
             background: "rgba(255,255,255,.96)", borderRadius: 22, border: "1px solid rgba(17,24,39,.06)",
             boxShadow: "0 18px 30px rgba(17,24,39,.08)", backdropFilter: "blur(16px)",
             padding: "12px 14px",
@@ -242,9 +242,11 @@ export function AuraLayout() {
       <div className="bottom-nav" style={{
         position: "fixed",
         bottom: "calc(16px + env(safe-area-inset-bottom))",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "calc(100% - 32px)",
+        left: 0,
+        right: 0,
+        marginLeft: "auto",
+        marginRight: "auto",
+        width: "calc(min(100%, 480px) - 32px)",
         maxWidth: 448,
         borderRadius: 28,
         zIndex: 50,

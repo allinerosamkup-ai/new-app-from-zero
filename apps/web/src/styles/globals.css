@@ -492,3 +492,19 @@ button {
   }
 }
 
+/* ──── PWA Mobile Frame — força layout mobile-column em qualquer viewport ──── */
+.app-viewport {
+  max-width: 480px;
+  min-height: 100vh;
+  margin: 0 auto;
+  position: relative;
+  background: var(--warm-bg);
+  box-shadow: 0 0 40px rgba(17, 24, 39, 0.06);
+}
+
+@media (min-width: 520px) {
+  body {
+    background: linear-gradient(180deg, #F4EEE6 0%, #EEE6DB 100%);
+  }
+}
+

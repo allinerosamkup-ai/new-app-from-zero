@@ -2,6 +2,7 @@ import { ArrowRight, BrainCircuit, CalendarRange, ClipboardList, HeartHandshake,
 import type { CSSProperties, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { InstallCTA } from "../components/InstallCTA";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -47,78 +48,78 @@ const AIRIA_SERIF = "'Playfair Display', Georgia, serif";
 
 const audienceCards: InfoCard[] = [
   {
-    title: "Para quem só entende o que aconteceu quando já passou",
+    title: "A Airia te ouve e entende que o seu ritmo não é uma linha reta",
     description:
-      "Humor, energia, foco e sobrecarga não aparecem em linha reta. A Airia ajuda a notar sinais de queda, aceleração e desgaste antes que isso vire resposta atravessada, promessa demais ou sumiço de si.",
+      "Para quem só percebe o esgotamento quando ele já chegou. A Airia monitora seu humor, energia e sinais sutis, ajudando você a reconhecer as fases de queda ou aceleração antes que elas se tornem conflitos ou burnout.",
   },
   {
-    title: "Para quem quer entender o próprio ciclo sem se julgar",
+    title: "Um espaço onde o seu ritmo é respeitado, não corrigido",
     description:
-      "Com o histórico dos check-ins, fica mais fácil reconhecer padrões: dias em que tudo pesa, dias em que a energia sobe demais e dias em que o corpo pede freio, silêncio e proteção.",
+      "Diferente dos trackers de produtividade que te cobram metas lineares, aqui nós focamos na aterrissagem. Entenda seus padrões sem julgamento: aceite os dias de silêncio e aproveite com intenção os picos de energia.",
   },
   {
-    title: "Para quem quer melhorar a vida prática",
+    title: "Bio-previsibilidade para proteger suas relações e seu trabalho",
     description:
-      "Quando o ritmo interno fica mais claro, também fica mais simples proteger relações, organizar o trabalho, respeitar limites e aproveitar melhor os dias bons.",
+      "Quando você sabe que sua sensibilidade está alta, você escolhe melhor suas batalhas. A Airia te dá o mapa para saber quando recuar para se proteger e quando avançar com clareza e segurança.",
   },
   {
-    title: "Para quem quer dados reais para levar ao médico",
+    title: "Dados reais para um acompanhamento clínico profundo",
     description:
-      "O histórico de ciclo vira um panorama clínico: fases, estabilidade, gatilhos recorrentes e impacto do sono. Útil para o psiquiatra ou terapeuta enxergar o que uma consulta mensal não consegue capturar — inclusive se o medicamento está estabilizando o ciclo.",
+      "Transforme sensações vagas em um panorama clínico de bio-sincronia. Leve para seu psiquiatra ou terapeuta um histórico detalhado de ciclos, estabilidade e gatilhos que uma consulta mensal sozinha não consegue capturar.",
   },
 ];
 
 const flowSteps: StepCard[] = [
   {
     eyebrow: "01",
-    title: "Perceba o dia antes do dia te levar",
+    title: "Aterrissagem diária",
     description:
-      "Check-ins rápidos capturam humor, energia e sinais do corpo sem exigir esforço demais, justamente para caber também nos dias mais confusos.",
+      "Através de check-ins táteis e rápidos, você registra como está se sentindo agora. Sem pressão por metas, apenas uma leitura honesta do seu estado interno.",
   },
   {
     eyebrow: "02",
-    title: "Veja o padrão se formando",
+    title: "A Airia reconhece o padrão",
     description:
-      "A Airia cruza seus registros ao longo do tempo para mostrar gatilhos, repetições, dias de baixa, dias de aceleração e janelas em que tudo costuma funcionar melhor.",
+      "Cruzamos seus registros com inteligência de dados (EWMA) para identificar tendências. Você começa a ver o 'mapa' do seu humor se formando ao longo das semanas.",
   },
   {
     eyebrow: "03",
-    title: "Escolha melhor antes do atrito",
+    title: "Sincronia, não rotina",
     description:
-      "Em vez de reagir no susto, você passa a entender se hoje é dia de avançar, recuar, proteger energia, evitar conflito ou aproveitar uma janela boa de foco.",
+      "Com o padrão em mãos, você ajusta o seu dia. Menos culpa por não render no vale, mais intenção para realizar no pico. A vida flui conforme o seu ritmo natural.",
   },
 ];
 
 const features: FeatureCard[] = [
   {
     icon: Waves,
-    title: "Check-ins de humor e energia",
+    title: "Bio-Sincronia em tempo real",
     description:
-      "Em poucos toques, você entende se o dia está estável, sensível, acelerado ou pedindo mais proteção.",
+      "Entenda instantaneamente se o seu ciclo está em fase estável, sensível, acelerada ou pedindo proteção imediata.",
   },
   {
     icon: CalendarRange,
-    title: "Planner adaptativo",
+    title: "O Planner que te ouve",
     description:
-      "A rotina deixa de tratar todo dia como igual. Isso ajuda a respeitar limite real e usar melhor os dias em que a energia está boa.",
+      "Sua agenda deixa de ser uma lista fria e passa a respeitar o seu limite real de energia do dia.",
   },
   {
     icon: BrainCircuit,
-    title: "Insights que fazem sentido",
+    title: "Insights de Acolhimento",
     description:
-      "Os padrões ficam mais visíveis: baixa sustentada, aceleração, estabilidade, gatilhos recorrentes e mudanças que antes passavam batido.",
+      "A Airia identifica padrões que você não vê: a relação entre seu sono, seus gatilhos e a estabilidade do seu humor.",
   },
   {
     icon: HeartHandshake,
-    title: "Airia como camada de apoio",
+    title: "Sua 'Babá Digital'",
     description:
-      "A leitura interna vira atitude concreta: conversar melhor, recuar a tempo, reorganizar o dia, descansar ou focar com mais intenção.",
+      "Uma presença que te ajuda a reorganizar o dia, descansar sem culpa ou focar quando a janela está aberta.",
   },
   {
     icon: ClipboardList,
-    title: "Dados para o seu acompanhamento",
+    title: "Relatório Clínico de Precisão",
     description:
-      "Leve histórico real para consultas com psiquiatra ou terapeuta: ciclos, estabilidade, gatilhos e correlações — tudo visível para quem te acompanha clinicamente.",
+      "Leve dados concretos para seu médico ou terapeuta. Mostre a realidade do seu ciclo entre as consultas.",
   },
 ];
 
@@ -144,8 +145,8 @@ const screenshots: ScreenshotCard[] = [
     src: "/screenshots/insights-page.png",
   },
   {
-    title: "Airia como apoio prático",
-    description: "Uma conversa que ajuda a organizar o dia, destravar prioridades e transformar contexto em ação.",
+    title: "Airia: Sua Babá Digital",
+    description: "Uma conversa pelo diário que ajuda a organizar o dia, acolher o esgotamento e transformar contexto em ação prática.",
     src: "/screenshots/aura-page.png",
   },
 ];
@@ -410,12 +411,12 @@ export function SplashPage() {
     >
       <div
         style={{
-          maxWidth: 1240,
+          maxWidth: "100%",
           margin: "0 auto",
-          padding: "28px 20px 80px",
+          padding: "20px 16px 60px",
           display: "flex",
           flexDirection: "column",
-          gap: 88,
+          gap: 52,
         }}
       >
         <header
@@ -455,8 +456,8 @@ export function SplashPage() {
         <section
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-            gap: 36,
+            gridTemplateColumns: "1fr",
+            gap: 28,
             alignItems: "center",
           }}
         >
@@ -493,7 +494,7 @@ export function SplashPage() {
               }}
             >
               <Sparkles size={14} color="#B86D4C" />
-              Quando o humor muda, a vida sente junto
+              Um lugar seguro para sua mente aterrissar
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -501,13 +502,13 @@ export function SplashPage() {
               <h1
                 style={{
                   margin: 0,
-                  fontSize: "clamp(42px, 7vw, 84px)",
-                  lineHeight: 0.94,
-                  letterSpacing: "-0.06em",
+                  fontSize: "clamp(36px, 9vw, 56px)",
+                  lineHeight: 0.98,
+                  letterSpacing: "-0.05em",
                   color: BRAND.textWarm,
                   fontWeight: 700,
                   fontFamily: "'Plus Jakarta Sans', sans-serif",
-                  maxWidth: 720,
+                  maxWidth: "100%",
                 }}
               >
                   Você não é difícil. Você cicla.
@@ -521,9 +522,8 @@ export function SplashPage() {
                     color: BRAND.textSoft,
                   }}
                 >
-                  Tem dia em que tudo encaixa. Tem dia em que qualquer conversa pesa. E tem dia em que a energia sobe
-                  tanto que parece que vai dar para abraçar o mundo — até você perceber que passou do ponto.
-                  A Airia te ajuda a perceber isso antes.
+                  Sua energia não é o problema. Sua sincronia é. Existem dias de genialidade e dias de exaustão profunda. 
+                  A Airia te ajuda a reconhecer os sinais de queda e aceleração antes que o dia te leve.
                 </p>
                 <p
                   style={{
@@ -533,13 +533,13 @@ export function SplashPage() {
                     color: BRAND.textSoft,
                   }}
                 >
-                  Com o tempo, fica mais fácil entender se hoje é dia de avançar ou de se proteger. Tomar decisões
-                  melhores. Cuidar melhor do trabalho, das relações e de si.
+                  Mais que um organizador, um copiloto para neurodivergentes de alta performance. Entenda o seu ritmo, proteja sua mente e descubra a paz de viver em bio-sincronia.
                 </p>
               </div>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <InstallCTA />
               <button
                 type="button"
                 onClick={() => navigate("/login?tab=criar")}
@@ -555,10 +555,12 @@ export function SplashPage() {
                   boxShadow: "0 20px 34px rgba(243,176,140,.24)",
                   display: "inline-flex",
                   alignItems: "center",
+                  justifyContent: "center",
                   gap: 8,
+                  width: "100%",
                 }}
               >
-                Criar minha conta
+                Quero aterrissar agora
                 <ArrowRight size={16} />
               </button>
               <button
@@ -569,14 +571,15 @@ export function SplashPage() {
                   background: "rgba(255,255,255,.82)",
                   color: BRAND.textWarm,
                   borderRadius: 18,
-                  padding: "16px 22px",
+                  padding: "14px 22px",
                   fontSize: 14,
                   fontWeight: 700,
                   cursor: "pointer",
                   backdropFilter: "blur(14px)",
+                  width: "100%",
                 }}
               >
-                Entrar na Airia
+                Já tenho conta
               </button>
             </div>
             <div
@@ -595,7 +598,7 @@ export function SplashPage() {
               }}
             >
               <Sparkles size={14} color="#50705B" />
-              Gratuito durante o preview
+              Acesso Beta: Gratuito hoje
             </div>
 
             <div
@@ -626,7 +629,7 @@ export function SplashPage() {
             </div>
           </div>
 
-          <div style={{ position: "relative", minHeight: 620, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ position: "relative", minHeight: 480, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 8 }}>
             <div
               style={{
                 position: "absolute",
@@ -920,7 +923,7 @@ export function SplashPage() {
             <Sparkles size={20} color="#B86D4C" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <p style={{ margin: 0, fontSize: "clamp(17px, 2.2vw, 22px)", fontWeight: 700, color: BRAND.textWarm, lineHeight: 1.3 }}>
-                Inteligência de ciclo — um mapa do seu ritmo interno.
+                Bio-Sincronia: O mapa do seu ritmo interno.
               </p>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, color: BRAND.textSoft }}>
                 A Airia usa algoritmo real (EWMA + análise de tendência de 7 dias) para detectar sua fase de humor atual — elevada, estável, caindo, baixa ou em recuperação. Esse dado alimenta o planner, a IA, os insights e pode ser compartilhado com quem te acompanha clinicamente.
@@ -1084,7 +1087,7 @@ export function SplashPage() {
                 fontWeight: 800,
               }}
             >
-              Quanto mais cedo você entende o seu ciclo, menos ele te pega no susto.
+              O fim da montanha-russa emocional para quem faz acontecer.
             </h2>
             <p style={{ margin: 0, fontSize: 16, lineHeight: 1.8, color: BRAND.textSoft, maxWidth: 620 }}>
               A Airia te ajuda a reconhecer padrão, ajustar o dia e viver com menos culpa, menos conflito e mais
@@ -1108,7 +1111,7 @@ export function SplashPage() {
                 boxShadow: "0 22px 34px rgba(243,176,140,.24)",
               }}
             >
-              Quero entender meu ciclo
+              Iniciar minha bio-sincronia
             </button>
             <button
               type="button"
@@ -1124,7 +1127,7 @@ export function SplashPage() {
                 cursor: "pointer",
               }}
             >
-              Entrar na Airia
+              Entrar na conta
             </button>
           </div>
         </section>
