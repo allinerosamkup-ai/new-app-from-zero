@@ -27,6 +27,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "27c441ce-76c7-4508-b0fd-4f431cdd04d0"
+      }
+    },
+    "owner": "allinerosamkup"
   }
 }
