@@ -295,16 +295,16 @@ const gridStyle: CSSProperties = {
 const cardStyle: CSSProperties = {
   border: "1px solid",
   borderRadius: 8,
-  padding: 16,
+  padding: 13,
   display: "flex",
   flexDirection: "column",
-  gap: 12,
+  gap: 9,
   minHeight: 0,
-  boxShadow: "0 18px 42px rgba(107,91,87,.08)",
+  boxShadow: "0 14px 32px rgba(107,91,87,.07)",
 };
 
 const eyebrowStyle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   lineHeight: 1,
   fontWeight: 900,
   letterSpacing: ".16em",
@@ -313,7 +313,7 @@ const eyebrowStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 18,
+  fontSize: 15,
   lineHeight: 1.18,
   fontWeight: 800,
   color: "#4A3B37",
@@ -321,21 +321,21 @@ const titleStyle: CSSProperties = {
 
 const descriptionStyle: CSSProperties = {
   margin: 0,
-  fontSize: 13,
-  lineHeight: 1.55,
+  fontSize: 12,
+  lineHeight: 1.5,
   color: "#7C6D68",
 };
 
 const buttonStyle: CSSProperties = {
   border: "none",
   borderRadius: 8,
-  padding: "13px 16px",
-  fontSize: 14,
+  padding: "10px 14px",
+  fontSize: 13,
   fontWeight: 800,
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
-  gap: 9,
+  gap: 8,
   width: "100%",
   justifyContent: "center",
 };
@@ -343,8 +343,8 @@ const buttonStyle: CSSProperties = {
 const secondaryButtonStyle: CSSProperties = {
   border: "1px solid rgba(17,24,39,.08)",
   borderRadius: 8,
-  padding: "11px 14px",
-  fontSize: 13,
+  padding: "9px 12px",
+  fontSize: 12,
   fontWeight: 800,
   cursor: "pointer",
   color: "#6B5B57",
