@@ -170,12 +170,18 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         const today = getLocalDateKey();
-        const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw] = await Promise.all([
+        const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw, profileRaw] = await Promise.all([
           api.get('/checkins?days=45').catch(e => { console.error(e); return null; }),
           api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; }),
           api.get('/objectives').catch(e => { console.error(e); return null; }),
           api.get('/preferences').catch(e => { console.error(e); return null; }),
-          api.get('/habits').catch(e => { console.error(e); return null; })
+          api.get('/habits').catch(e => { console.error(e); return null; }),
+          (async () => {
+            try {
+              const r = await supabase.from('profiles').select('cycle_start, cycle_length, luteal_length').eq('id', session.user.id).maybeSingle();
+              return r.data;
+            } catch (e) { console.error(e); return null; }
+          })(),
         ]);
 
         const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : null;
@@ -202,6 +208,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : null;
         const preferences = (preferencesRaw && typeof preferencesRaw === 'object') ? preferencesRaw : null;
         const habits = Array.isArray(habitsRaw) ? habitsRaw : null;
+        const profile = (profileRaw && typeof profileRaw === 'object') ? profileRaw as { cycle_start: string | null; cycle_length: number | null; luteal_length: number | null } : null;
 
         setState(current => ({
           ...current,
@@ -267,6 +274,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             }))
             : current.habits,
           theme: (preferences as any)?.aiTone === 'warm' ? 'Tema suave' : current.theme,
+          cycleStart: profile?.cycle_start ? profile.cycle_start.slice(0, 10) : current.cycleStart,
+          cycleLength: profile?.cycle_length ?? current.cycleLength,
+          lutealLength: profile?.luteal_length ?? current.lutealLength,
           ...normalizeReminderPreferences(preferences, {
             morningCheckinTime: current.morningCheckinTime,
             eveningCheckinTime: current.eveningCheckinTime,
@@ -511,14 +521,28 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             flowIntensity: entry.flowIntensity,
             symptomLevels: entry.symptomLevels,
           }) as any;
+
+          // DEBUG: Log response structure to diagnose data flow
+          console.log('[DEBUG] checkinResponse structure:', {
+            hasStateSummary: !!checkinResponse?.stateSummary,
+            stateSummary: checkinResponse?.stateSummary?.substring?.(0, 50),
+            hasAiState: !!checkinResponse?.aiState,
+            aiStateAnalysis: (checkinResponse?.aiState as any)?.analysis?.substring?.(0, 50),
+            aiStateRecommendations: (checkinResponse?.aiState as any)?.recommendations,
+            aiStateSuggestedIntensity: (checkinResponse?.aiState as any)?.suggestedIntensity,
+            stateLabel: checkinResponse?.stateLabel,
+          });
+
           await refreshData();
           // Retorna dados ricos da IA para uso na tela de resultado
-          return {
+          const extracted = {
             stateLabel: checkinResponse?.stateLabel ?? null,
             analysis: checkinResponse?.stateSummary ?? (checkinResponse?.aiState as any)?.analysis ?? null,
             recommendations: (checkinResponse?.aiState as any)?.recommendations ?? [],
             suggestedIntensity: (checkinResponse?.aiState as any)?.suggestedIntensity ?? null,
           };
+          console.log('[DEBUG] extracted for router state:', extracted);
+          return extracted;
         } catch (err) {
           console.error("Failed to persist checkin; kept local copy.", err);
           return null;

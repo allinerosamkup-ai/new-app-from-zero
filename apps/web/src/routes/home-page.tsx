@@ -12,6 +12,7 @@ import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, computeStreak, forecastMood7d, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import {
   type AgendaBlock,
@@ -357,6 +358,20 @@ export function HomePage() {
     () => computeMoodCycle(aggregatedCheckinHistory),
     [aggregatedCheckinHistory]
   );
+  // Ciclo menstrual — modulador secundário, nunca foco principal
+  const menstrualReport = useMemo(
+    () => computeMenstrualPhase({
+      cycleStart: state.cycleStart,
+      cycleLength: state.cycleLength,
+      lutealLength: state.lutealLength,
+    }),
+    [state.cycleStart, state.cycleLength, state.lutealLength],
+  );
+  const moodCycleContextForAi = useMemo(() => {
+    const parts = [cycleReport.aiContext];
+    if (menstrualReport?.aiContext) parts.push(menstrualReport.aiContext);
+    return parts.filter(Boolean).join(" · ");
+  }, [cycleReport.aiContext, menstrualReport?.aiContext]);
   const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
   const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
@@ -525,7 +540,7 @@ export function HomePage() {
             partOfDay: dayContext.partOfDay,
             weekday: dayContext.weekday,
             localDate: dayContext.localDate,
-            moodCycleContext: cycleReport.aiContext,
+            moodCycleContext: moodCycleContextForAi,
             previousMotivacional: previousHomeContext.previousMotivacional,
             previousAutocuidado: previousHomeContext.previousAutocuidado,
             refreshBucket,
@@ -594,7 +609,7 @@ export function HomePage() {
             moodLabel: mood.label,
             energia: state.energia,
             history: (state.checkinHistory || []).slice(0, 3),
-            moodCycleContext: cycleReport.aiContext,
+            moodCycleContext: moodCycleContextForAi,
             goals: goalTitles,
             pendingTaskTitles,
             hour: dayContext.hour,
@@ -900,17 +915,34 @@ export function HomePage() {
               </p>
             </div>
           </div>
-          {/* State chip */}
-          <div style={{
-            marginTop: "12px",
-            display: "inline-flex", alignItems: "center", gap: 6,
-            background: "rgba(255,255,255,.72)",
-            border: "1px solid rgba(17,24,39,.05)",
-            borderRadius: 999, padding: "5px 14px",
-            boxShadow: "0 8px 14px rgba(17,24,39,.04)",
-          }}>
-            <span style={{ fontSize: 13 }}>{mood.emoji}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)" }}>{mood.chipLabel}</span>
+          {/* State chip + menstrual chip (modulador secundário) */}
+          <div style={{ marginTop: "12px", display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              background: "rgba(255,255,255,.72)",
+              border: "1px solid rgba(17,24,39,.05)",
+              borderRadius: 999, padding: "5px 14px",
+              boxShadow: "0 8px 14px rgba(17,24,39,.04)",
+            }}>
+              <span style={{ fontSize: 13 }}>{mood.emoji}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)" }}>{mood.chipLabel}</span>
+            </div>
+            {menstrualReport && (
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 5,
+                background: "rgba(247,230,230,.55)",
+                border: "1px solid rgba(184,109,124,.12)",
+                borderRadius: 999, padding: "4px 10px",
+                opacity: 0.88,
+              }}
+              title={`Ciclo menstrual: ${menstrualReport.label} · dia ${menstrualReport.dayOfCycle}/${menstrualReport.cycleLength}`}
+              >
+                <span style={{ fontSize: 11 }}>{menstrualReport.emoji}</span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#8B5B68", letterSpacing: ".01em" }}>
+                  {menstrualReport.label} · d{menstrualReport.dayOfCycle}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
