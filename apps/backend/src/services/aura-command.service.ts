@@ -1,11 +1,16 @@
 import OpenAI from 'openai';
 
 import {
+  AuraCommandActionSchema,
+  AuraCommandIntentSchema,
   AuraCommandResponseSchema,
+  type AuraCommandAction,
   type AuraCommandHistoryMessage,
+  type AuraCommandIntent,
   type AuraCommandResponse,
 } from '../contracts/aura-command.contract';
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
+import { extractJsonValue } from '../lib/extract-json';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 
 let _openai: OpenAI | null = null;
@@ -23,6 +28,160 @@ const openai = new Proxy({} as OpenAI, {
     return (getOpenAI() as any)[prop];
   },
 });
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function asBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function isValidIntent(value: unknown): value is AuraCommandIntent {
+  return AuraCommandIntentSchema.safeParse(value).success;
+}
+
+function isValidAction(value: unknown): value is AuraCommandAction {
+  return AuraCommandActionSchema.safeParse(value).success;
+}
+
+function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandIntent | null {
+  switch (action) {
+    case 'create_task':
+      return 'planner_task';
+    case 'create_checklist':
+      return 'checklist';
+    case 'create_goal':
+      return 'goal_project';
+    case 'create_agenda':
+      return 'agenda_plan';
+    case 'ask_clarification':
+      return 'clarify';
+    case 'handoff_to_journal':
+      return 'reflective_handoff';
+    case 'update_task':
+      return 'reschedule';
+    case 'delete_task':
+      return 'delete_task';
+    default:
+      return null;
+  }
+}
+
+function inferActionFromIntent(intent: AuraCommandIntent | null): AuraCommandAction | null {
+  switch (intent) {
+    case 'planner_task':
+      return 'create_task';
+    case 'checklist':
+      return 'create_checklist';
+    case 'goal_project':
+      return 'create_goal';
+    case 'agenda_plan':
+      return 'create_agenda';
+    case 'clarify':
+      return 'ask_clarification';
+    case 'reflective_handoff':
+      return 'handoff_to_journal';
+    case 'reschedule':
+      return 'update_task';
+    case 'delete_task':
+      return 'delete_task';
+    default:
+      return null;
+  }
+}
+
+function inferActionFromPayload(payload: Record<string, unknown>): AuraCommandAction | null {
+  if (Array.isArray(payload.blocks) || isRecord(payload.recurrence)) return 'create_agenda';
+  if (asString(payload.taskId) && (asString(payload.newDate) || asString(payload.newStartTime))) return 'update_task';
+  if (asString(payload.taskId)) return 'delete_task';
+  if (asString(payload.date) || asString(payload.startTime) || asString(payload.time)) return 'create_task';
+  if (Array.isArray(payload.items) || Array.isArray(payload.steps) || Array.isArray(payload.checklist)) return 'create_checklist';
+  if (Array.isArray(payload.subgoals) || Array.isArray(payload.subtasks) || asString(payload.goalTitle)) return 'create_goal';
+  return null;
+}
+
+function shouldTreatAsJournal(message: string): boolean {
+  return /\b(desabafar|di[aá]rio|senti|sinto|sentindo|ansios|triste|raiva|medo|culpa|chorei|mexida)\b/i.test(message);
+}
+
+function buildPayloadFromRoot(value: unknown): Record<string, unknown> {
+  if (Array.isArray(value)) {
+    return { blocks: value };
+  }
+
+  const root = asObject(value);
+  const explicitPayload = asObject(root.payload);
+
+  if (Object.keys(explicitPayload).length > 0) {
+    return explicitPayload;
+  }
+
+  const payload: Record<string, unknown> = {};
+  for (const key of ['title', 'date', 'startTime', 'time', 'category', 'blocks', 'items', 'steps', 'checklist', 'subgoals', 'subtasks', 'recurrence', 'taskId', 'newDate', 'newStartTime']) {
+    if (key in root) {
+      payload[key] = root[key];
+    }
+  }
+
+  return payload;
+}
+
+export function parseAuraCommandResponse(content: string, originalMessage = ''): AuraCommandResponse {
+  const parsed = extractJsonValue(content);
+  const root = asObject(parsed);
+  const payload = buildPayloadFromRoot(parsed);
+  const rawAction = root.action;
+  const rawIntent = root.intent;
+  const payloadAction = inferActionFromPayload(payload);
+
+  let action: AuraCommandAction | null = isValidAction(rawAction) ? rawAction : payloadAction;
+  let intent: AuraCommandIntent | null = isValidIntent(rawIntent) ? rawIntent : inferIntentFromAction(action);
+
+  if (!action && intent) {
+    action = inferActionFromIntent(intent);
+  }
+
+  if (!action || !intent) {
+    if (shouldTreatAsJournal(originalMessage)) {
+      action = 'handoff_to_journal';
+      intent = 'reflective_handoff';
+    } else {
+      action = 'ask_clarification';
+      intent = 'clarify';
+    }
+  }
+
+  const needsClarification = asBoolean(root.needsClarification, intent === 'clarify' || action === 'ask_clarification');
+  const assistantMessage =
+    asString(root.assistantMessage) ??
+    asString(root.message) ??
+    (needsClarification
+      ? 'Recebi bastante coisa de uma vez. Posso transformar isso em tarefa, checklist, agenda ou só organizar a ideia?'
+      : 'Recebi seu texto e já organizei a próxima ação.');
+
+  const normalized = {
+    assistantMessage,
+    intent,
+    action,
+    payload,
+    needsConfirmation: asBoolean(root.needsConfirmation, false),
+    needsClarification,
+    clarifyingQuestion:
+      asString(root.clarifyingQuestion) ??
+      (needsClarification ? 'Você quer que eu transforme isso em tarefa, checklist, agenda ou só organize a ideia?' : null),
+  };
+
+  return AuraCommandResponseSchema.parse(normalized);
+}
 
 export class AuraCommandService {
   private static readonly MODEL = getOpenAiModel();
@@ -119,6 +278,6 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
       throw new Error('Falha ao interpretar o comando da Airia');
     }
 
-    return AuraCommandResponseSchema.parse(JSON.parse(content));
+    return parseAuraCommandResponse(content, input.message);
   }
 }

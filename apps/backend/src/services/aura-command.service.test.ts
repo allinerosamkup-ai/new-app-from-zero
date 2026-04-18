@@ -1,8 +1,43 @@
 import assert from 'node:assert/strict';
 
-import { AuraCommandService } from './aura-command.service';
+import { AuraCommandService, parseAuraCommandResponse } from './aura-command.service';
 
 async function run() {
+  const recoveredAgenda = parseAuraCommandResponse(
+    JSON.stringify({
+      assistantMessage: 'Separei a proposta em blocos para você revisar.',
+      action: 'create_agenda',
+      payload: {
+        blocks: [
+          {
+            title: 'Check-in do dia',
+            date: '2026-04-18',
+            startTime: '09:00',
+            category: 'rotina',
+          },
+        ],
+      },
+      needsConfirmation: true,
+    }),
+    'Organize esse texto grande no planner: ' + 'bloco '.repeat(900),
+  );
+
+  assert.equal(recoveredAgenda.intent, 'agenda_plan');
+  assert.equal(recoveredAgenda.action, 'create_agenda');
+  assert.equal(recoveredAgenda.needsConfirmation, true);
+
+  const recoveredClarification = parseAuraCommandResponse(
+    JSON.stringify({
+      assistantMessage: 'Recebi bastante coisa de uma vez. Posso organizar, resumir ou transformar em passos.',
+      payload: {},
+    }),
+    'texto longo '.repeat(900),
+  );
+
+  assert.equal(recoveredClarification.intent, 'clarify');
+  assert.equal(recoveredClarification.action, 'ask_clarification');
+  assert.equal(recoveredClarification.needsClarification, true);
+
   const capturedMessages: Array<{ role: string; content: string }> = [];
   const capturedModels: string[] = [];
   const queuedResponses = [

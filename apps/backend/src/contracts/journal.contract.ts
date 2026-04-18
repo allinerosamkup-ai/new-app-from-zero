@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const LONG_TEXT_LIMIT = 30000;
+
 export const JournalRoleSchema = z.enum(['user', 'assistant']);
 
 export const JournalStartSchema = z.object({
@@ -10,7 +12,7 @@ export const JournalStartSchema = z.object({
 export const JournalMessageStreamSchema = z.object({
   userId: z.string().uuid(),
   sessionId: z.string().uuid(),
-  message: z.string().trim().min(1).max(4000),
+  message: z.string().trim().min(1).max(LONG_TEXT_LIMIT),
   moodCycleContext: z.string().optional().nullable(),
 });
 

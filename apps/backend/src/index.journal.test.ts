@@ -39,6 +39,9 @@ async function run() {
         stateSummary: 'Energia mais baixa no começo do dia.',
       }),
     },
+    timelineBlock: {
+      findMany: async () => [],
+    },
     journalMessage: {
       create: async ({ data }: any) => {
         savedMessages.push(data);
@@ -151,6 +154,21 @@ async function run() {
     assert.equal(savedMessages[0].role, 'user');
     assert.equal(savedMessages[1].role, 'assistant');
     assert.equal(savedMessages[1].content, 'Olá, estou com você.');
+
+    const longStreamResponse = await fetch(`${baseUrl}/api/journal/message/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        sessionId,
+        message: 'entrada longa no diário '.repeat(650),
+      }),
+    });
+
+    assert.equal(longStreamResponse.status, 200);
 
     const finalizeResponse = await fetch(`${baseUrl}/api/journal/finalize`, {
       method: 'POST',

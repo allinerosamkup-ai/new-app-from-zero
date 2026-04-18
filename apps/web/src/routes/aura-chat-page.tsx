@@ -521,7 +521,7 @@ export function AuraChatPage() {
             )}
             <div
               style={{
-                maxWidth: "76%",
+                maxWidth: "min(92%, 440px)",
                 padding: "9px 13px",
                 borderRadius: message.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
                 background: message.role === "user" ? "rgba(243,176,140,.58)" : "rgba(255,255,255,.68)",
@@ -535,6 +535,8 @@ export function AuraChatPage() {
                 border: "1px solid rgba(255,255,255,.82)",
                 fontFamily: "'Plus Jakarta Sans', sans-serif",
                 backdropFilter: "blur(18px)",
+                overflowWrap: "anywhere",
+                whiteSpace: "pre-wrap",
               }}
             >
               {message.content}
@@ -558,7 +560,7 @@ export function AuraChatPage() {
             />
             <div
               style={{
-                maxWidth: "76%",
+                maxWidth: "min(92%, 440px)",
                 padding: "9px 13px",
                 borderRadius: "16px 16px 16px 4px",
                 background: "rgba(255,255,255,.68)",
@@ -762,7 +764,7 @@ export function AuraChatPage() {
               color: "var(--text-1)",
               background: "transparent",
               lineHeight: 1.5,
-              maxHeight: 100,
+              maxHeight: 180,
               overflowY: "auto",
             }}
           />

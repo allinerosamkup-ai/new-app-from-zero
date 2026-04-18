@@ -36,6 +36,16 @@ const validSessionId = '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11';
   const result = JournalMessageStreamSchema.safeParse({
     userId: validUserId,
     sessionId: validSessionId,
+    message: 'texto longo do diário '.repeat(650),
+  });
+
+  assert.equal(result.success, true);
+}
+
+{
+  const result = JournalMessageStreamSchema.safeParse({
+    userId: validUserId,
+    sessionId: validSessionId,
     message: '',
   });
 

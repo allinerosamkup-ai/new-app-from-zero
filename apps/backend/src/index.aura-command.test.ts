@@ -39,6 +39,9 @@ async function run() {
         stateSummary: 'Emoções à flor da pele.',
       }),
     },
+    timelineBlock: {
+      findMany: async () => [],
+    },
     journalSession: {
       create: async ({ data }: any) => {
         const session = { id: `session-${createdSessions.length + 1}`, ...data };
@@ -122,6 +125,23 @@ async function run() {
     assert.match(streamBody, /assistant\.completed/);
     assert.match(streamBody, /Resumo salvo pela Aura/);
     assert.match(streamBody, /journalSummary/i);
+
+    const longCommandResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+      },
+      body: JSON.stringify({
+        sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d12',
+        message: 'Organize esse texto grande no planner. '.repeat(650),
+        history: [
+          { role: 'assistant', content: 'Pode colar tudo aqui.' },
+        ],
+      }),
+    });
+
+    assert.equal(longCommandResponse.status, 200);
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
