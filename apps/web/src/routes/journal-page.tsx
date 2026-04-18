@@ -81,15 +81,11 @@ function buildCommitmentSuggestions(summary: JournalSummary | null, temporalLabe
   return summary.suggestions.slice(0, 3).map((suggestion) => `${temporalLabel}: ${suggestion}`);
 }
 
-function buildGoalSuggestions(summary: JournalSummary | null, phaseLabel: string): string[] {
-  if (!summary) return [];
-  const fromThemes = (summary.themes || []).slice(0, 2).map((theme) => `Consolidar progresso no tema "${theme}"`);
-  const emotionalGoal = summary.emotions?.[0]
-    ? `Reduzir intensidade de "${summary.emotions[0]}" com uma rotina de regulação emocional`
-    : null;
-  const phaseGoal = `Ajustar metas ao estado atual (${phaseLabel}) para manter consistência sem sobrecarga`;
-
-  return [phaseGoal, ...fromThemes, emotionalGoal].filter((item): item is string => Boolean(item)).slice(0, 3);
+function buildGoalSuggestions(summary: JournalSummary | null, _phaseLabel: string): string[] {
+  // Only show AI-generated goals — never synthesized templates.
+  // If the IA não retornou metas concretas, a seção "Metas sugeridas" não renderiza.
+  if (!summary?.suggestions?.length) return [];
+  return summary.suggestions.slice(0, 3);
 }
 
 function formatSessionDate(localDate: string, startedAt: string): string {
@@ -548,16 +544,18 @@ export function JournalPage() {
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>
-            Metas sugeridas
-          </p>
-          {goalSuggestions.map((goal) => (
-            <div key={goal} style={{ borderRadius: 12, border: "1px solid rgba(99,152,169,.24)", background: "rgba(99,152,169,.08)", padding: "10px 12px", fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>
-              {goal}
-            </div>
-          ))}
-        </div>
+        {goalSuggestions.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>
+              Metas sugeridas
+            </p>
+            {goalSuggestions.map((goal) => (
+              <div key={goal} style={{ borderRadius: 12, border: "1px solid rgba(99,152,169,.24)", background: "rgba(99,152,169,.08)", padding: "10px 12px", fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>
+                {goal}
+              </div>
+            ))}
+          </div>
+        )}
 
         <AuraButtonV2 className="ui-btn-gradient" onClick={() => setShowFinalizationModal(false)}>
           Continuar
