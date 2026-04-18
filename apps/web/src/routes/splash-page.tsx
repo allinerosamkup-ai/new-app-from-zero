@@ -498,7 +498,6 @@ export function SplashPage() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <AiriaWordmark />
               <h1
                 style={{
                   margin: 0,
@@ -513,6 +512,7 @@ export function SplashPage() {
               >
                   Você não é difícil. Você cicla.
               </h1>
+              <InstallCTA />
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
                 <p
                   style={{
@@ -539,7 +539,6 @@ export function SplashPage() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <InstallCTA />
               <button
                 type="button"
                 onClick={() => navigate("/login?tab=criar")}
@@ -604,7 +603,7 @@ export function SplashPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                gridTemplateColumns: "1fr",
                 gap: 12,
               }}
             >
@@ -820,7 +819,7 @@ export function SplashPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+              gridTemplateColumns: "1fr",
               gap: 18,
             }}
           >
@@ -940,7 +939,7 @@ export function SplashPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gridTemplateColumns: "1fr",
               gap: 18,
             }}
           >
@@ -988,7 +987,7 @@ export function SplashPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: "1fr",
               gap: 18,
             }}
           >
@@ -1040,7 +1039,7 @@ export function SplashPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+              gridTemplateColumns: "1fr",
               gap: 22,
             }}
           >
@@ -1059,7 +1058,7 @@ export function SplashPage() {
             border: "1px solid rgba(17,24,39,.06)",
             boxShadow: "0 24px 56px rgba(107,91,87,.08)",
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gridTemplateColumns: "1fr",
             gap: 24,
             alignItems: "center",
           }}

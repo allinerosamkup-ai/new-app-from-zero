@@ -53,10 +53,12 @@ body,
   margin: 0;
   padding: 0;
   min-height: 100%;
+  width: 100%;
   background: var(--warm-bg);
   color: var(--text-1);
   font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 a {
@@ -494,17 +496,26 @@ button {
 
 /* ──── PWA Mobile Frame — força layout mobile-column em qualquer viewport ──── */
 .app-viewport {
+  width: 100%;
   max-width: 480px;
-  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   position: relative;
   background: var(--warm-bg);
   box-shadow: 0 0 40px rgba(17, 24, 39, 0.06);
+  overflow-x: hidden;
 }
 
 @media (min-width: 520px) {
   body {
     background: linear-gradient(180deg, #F4EEE6 0%, #EEE6DB 100%);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .app-viewport {
+    max-width: none;
+    box-shadow: none;
   }
 }
 

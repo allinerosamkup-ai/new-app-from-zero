@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Apple, Download, Globe2, Home, Share2, Smartphone, X } from "lucide-react";
+import { Apple, CheckCircle2, Download, Globe2, Share2, Smartphone, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 type Platform = "ios" | "android" | "desktop";
@@ -67,25 +67,22 @@ export function InstallCTA() {
     setShowAndroidPwaHelp(true);
   };
 
-  if (isInstalled) {
-    return (
-      <div style={installedStyle}>
-        <Home size={18} color="#5A7A64" />
-        <span>Airia já está instalada neste aparelho.</span>
-      </div>
-    );
-  }
-
   if (platform === "ios") {
     return (
       <>
+        {isInstalled ? (
+          <div style={installedStyle}>
+            <CheckCircle2 size={18} color="#5A7A64" />
+            <span>PWA já instalada neste iPhone.</span>
+          </div>
+        ) : null}
         <InstallCard
           eyebrow="Instalação rápida"
-          title="Adicionar Airia ao iPhone"
-          description="Abre como app pela Tela de Início, sem App Store. Melhor caminho para iOS agora."
-          primaryLabel="Instalar PWA no iPhone"
+          title={isInstalled ? "Abrir Airia no iPhone" : "Adicionar Airia ao iPhone"}
+          description={isInstalled ? "Você já tem a versão PWA. O iPhone usa essa instalação pela Tela de Início." : "Abre como app pela Tela de Início, sem App Store. Melhor caminho para iOS agora."}
+          primaryLabel={isInstalled ? "Abrir app" : "Instalar PWA no iPhone"}
           primaryIcon={<Apple size={18} />}
-          onPrimary={handlePwaInstall}
+          onPrimary={() => (isInstalled ? window.location.assign("/home") : handlePwaInstall())}
           secondaryLabel="Usar no navegador"
           onSecondary={() => window.location.assign("/login?tab=criar")}
           tone="ios"
@@ -110,11 +107,11 @@ export function InstallCTA() {
           />
           <InstallCard
             eyebrow="Instalação rápida"
-            title="Instalar PWA"
-            description="Versão web cliente na tela inicial. Boa para acesso rápido, sem baixar APK."
-            primaryLabel="Instalar PWA"
-            primaryIcon={<Globe2 size={18} />}
-            onPrimary={handlePwaInstall}
+            title={isInstalled ? "PWA já instalada" : "Instalar PWA"}
+            description={isInstalled ? "Essa é a versão web cliente que você já tem. O APK acima é o app Android mais completo." : "Versão web cliente na tela inicial. Boa para acesso rápido, sem baixar APK."}
+            primaryLabel={isInstalled ? "Abrir PWA" : "Instalar PWA"}
+            primaryIcon={isInstalled ? <CheckCircle2 size={18} /> : <Globe2 size={18} />}
+            onPrimary={() => (isInstalled ? window.location.assign("/home") : handlePwaInstall())}
             tone="pwa"
           />
         </div>
@@ -290,7 +287,7 @@ const tonePalette = {
 
 const gridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gridTemplateColumns: "1fr",
   gap: 12,
   width: "100%",
 };
@@ -302,7 +299,7 @@ const cardStyle: CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 12,
-  minHeight: 210,
+  minHeight: 0,
   boxShadow: "0 18px 42px rgba(107,91,87,.08)",
 };
 
