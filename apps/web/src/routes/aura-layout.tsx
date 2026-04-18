@@ -223,7 +223,9 @@ export function AuraLayout() {
 
       {/* Conteúdo das rotas filhas */}
       <div className="aura-layout-content" style={{
-        paddingTop: state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed ? "80px" : "18px",
+        paddingTop: state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed
+          ? "calc(80px + env(safe-area-inset-top))"
+          : "calc(18px + env(safe-area-inset-top))",
         paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
       }}>
         <ErrorBoundary>
