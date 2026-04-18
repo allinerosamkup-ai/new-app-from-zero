@@ -494,7 +494,7 @@ export function SplashPage() {
               }}
             >
               <Sparkles size={14} color="#B86D4C" />
-              Um lugar seguro para sua mente aterrissar
+              BIO-SINCRONIA · NEURODIVERGENTES · IA QUE ACOLHE
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -510,7 +510,7 @@ export function SplashPage() {
                   maxWidth: "100%",
                 }}
               >
-                  Você não é difícil. Você cicla.
+                  Um lugar seguro para sua mente aterrissar.
               </h1>
               <InstallCTA />
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
@@ -522,18 +522,17 @@ export function SplashPage() {
                     color: BRAND.textSoft,
                   }}
                 >
-                  Sua energia não é o problema. Sua sincronia é. Existem dias de genialidade e dias de exaustão profunda. 
-                  A Airia te ajuda a reconhecer os sinais de queda e aceleração antes que o dia te leve.
+                  Um diário que responde com a sabedoria de quem entende que seu ritmo não é uma linha reta.
                 </p>
                 <p
                   style={{
                     margin: 0,
-                    fontSize: 17,
-                    lineHeight: 1.82,
-                    color: BRAND.textSoft,
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: "var(--text-3)",
                   }}
                 >
-                  Mais que um organizador, um copiloto para neurodivergentes de alta performance. Entenda o seu ritmo, proteja sua mente e descubra a paz de viver em bio-sincronia.
+                  Check-in de 30 segundos · A Airia cuida do resto · Grátis pra começar.
                 </p>
               </div>
             </div>
@@ -559,7 +558,7 @@ export function SplashPage() {
                   width: "100%",
                 }}
               >
-                Quero aterrissar agora
+                Começar grátis
                 <ArrowRight size={16} />
               </button>
               <button
