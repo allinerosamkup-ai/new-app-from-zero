@@ -88,7 +88,7 @@ export function usePushNotifications(userId: string | null) {
         if (finalStatus !== 'granted') return;
 
         const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: 'mood-energy',
+          projectId: '27c441ce-76c7-4508-b0fd-4f431cdd04d0',
         });
 
         const expoPushToken = tokenData.data;
