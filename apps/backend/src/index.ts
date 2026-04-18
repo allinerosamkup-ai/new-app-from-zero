@@ -811,7 +811,7 @@ export function createApp(dependencies: AppDependencies = {}) {
             cycleStart: data.cycleStart ? new Date(`${data.cycleStart}T00:00:00.000Z`) : null,
             cycleLength: data.cycleLength ?? null,
             lutealLength: data.lutealLength ?? null,
-          },
+          } as any,
           create: {
             id: userId,
             fullName: data.fullName,
@@ -819,7 +819,7 @@ export function createApp(dependencies: AppDependencies = {}) {
             cycleStart: data.cycleStart ? new Date(`${data.cycleStart}T00:00:00.000Z`) : null,
             cycleLength: data.cycleLength ?? null,
             lutealLength: data.lutealLength ?? null,
-          },
+          } as any,
         }),
         prisma.onboardingResponse.upsert({
           where: { userId },
@@ -2180,7 +2180,30 @@ Retorne SOMENTE array JSON: [{"title":"título específico e real","category":"t
         const timeWindow = nowHour >= 20
           ? 'ATENÇÃO: já são mais de 20h. Sugira tarefas para AMANHÃ com horários entre 08:00 e 12:00.'
           : `Sugira horários realistas entre ${Math.max(nowHour + 1, 8).toString().padStart(2, '0')}:00 e 20:00. NUNCA use horários após 20:00, meia-noite ou madrugada.`;
-        prompt = `Você é uma assistente pessoal carinhosa. Com base nessa conversa de diário:\n\n${context.messages}\n\nSugira 2-3 tarefas práticas e gentis que a pessoa pode fazer para apoiar o que foi discutido. Tom encorajador.\n\n${timeWindow}\n\nRetorne SOMENTE um array JSON: [{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
+        prompt = `Com base nesta conversa de diário:\n\n${context.messages}
+
+Gere 2-3 tarefas para apoiar o que foi dito, com tom gentil e ZERO abstração.
+
+${timeWindow}
+
+REGRAS INVIOLÁVEIS:
+1. Cada tarefa deve ter: VERBO DE AÇÃO + OBJETO CONCRETO + CONTEXTO + DURAÇÃO.
+2. O título precisa ser executável imediatamente e mensurável hoje.
+3. Use duração curta e explícita no título (5, 10, 15, 20 ou 30 min).
+4. Pelo menos 1 tarefa deve atacar diretamente o principal ponto emocional/prático da conversa.
+5. Evite duplicação entre tarefas.
+
+PROIBIDO:
+- "descansar", "se cuidar", "tomar água", "organizar a vida", "pensar sobre", "refletir"
+- qualquer frase genérica sem objeto real
+- tarefas vagas sem duração
+
+EXEMPLOS DE FORMATO BOM:
+- "Escrever por 10 min no bloco de notas 3 gatilhos que te esgotaram hoje"
+- "Separar por 15 min a roupa e os itens da manhã de amanhã"
+- "Enviar em 5 min uma mensagem objetiva pedindo ajuste de prazo"
+
+Retorne SOMENTE um array JSON: [{"title":"tarefa concreta","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
       } else if (type === 'goal-subtasks') {
         const existing = context.existingSubtasks?.length ? `\nSubtarefas já existentes: ${context.existingSubtasks.join(', ')}` : '';
         prompt = `${userName} pode estar com energia baixa ou oscilante. Gere micro-passos sem carga cognitiva e sem abstrações.
