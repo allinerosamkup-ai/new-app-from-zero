@@ -14,6 +14,9 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "plugins": [
+      "./plugins/withAiriaTodayWidget"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "pro.airia.app"

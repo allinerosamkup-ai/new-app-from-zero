@@ -10,7 +10,8 @@ import { appColors, appGlass, appRadius, appSpacing } from '../theme/appTheme';
 import {
   buildGentleGamificationSnapshot,
   resolveAdaptiveGuidance,
-} from '../../../../../packages/domain/src/adaptive-guidance';
+} from '../../domain/adaptive-guidance';
+import { buildTodayWidgetPayload, publishTodayWidgetData } from '../../widgets/todayWidgetData';
 
 /**
  * HomeScreen: Hub central do usuário.
@@ -29,6 +30,11 @@ export default function HomeScreen() {
     fetchHabits(userId, dateStr);
     void loadRecentCheckins(userId, 7);
   }, [userId, fetchBlocks, fetchHabits, loadRecentCheckins]);
+
+  useEffect(() => {
+    const payload = buildTodayWidgetPayload({ todayCheckin, blocks });
+    void publishTodayWidgetData(payload).catch(() => null);
+  }, [todayCheckin, blocks]);
 
   const stateColors: Record<string, { bg: string, border: string, text: string, icon: string }> = {
     leve: { bg: '#F0FDF4', border: '#BBF7D0', text: '#166534', icon: '#166534' },

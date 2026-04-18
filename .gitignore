@@ -14,6 +14,7 @@ build/
 
 # Expo
 .expo/
+apps/mobile/android/
 vite.config.previewbridge.js
 
 # D.U.M.M.Y. OS memory
@@ -29,4 +30,6 @@ scratch/
 # Mas permitir arquivos JS normais do projeto
 !apps/web/src/**/*.js
 !apps/backend/src/**/*.js
+!apps/mobile/*.js
+!apps/mobile/plugins/**/*.js
 !packages/**/*.js

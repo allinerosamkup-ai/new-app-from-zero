@@ -20,7 +20,7 @@ import { useCheckinStore } from '../providers/checkin_store';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
-import { resolveAdaptiveGuidance } from '../../../../../packages/domain/src/adaptive-guidance';
+import { resolveAdaptiveGuidance } from '../../domain/adaptive-guidance';
 
 /**
  * PlannerScreen: Versão com Drag-and-drop fluido e UI baseada no Paper.
