@@ -119,20 +119,20 @@ export function useHabitReminders(
             icon: '/favicon.ico',
             tag: `task-${task.id}`,
             // vibration pattern if enabled
-            ...(task.persistentReminderVibrate && { vibrate: [200, 100, 200] })
+            ...(task.vibrateEnabled && { vibrate: [200, 100, 200] })
           } as any);
 
           // Handle sound/alarm if enabled
-          if (task.persistentReminderAlarm) {
+          if (task.alarmEnabled) {
             try {
-              const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+              const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");        
               audio.play().catch(() => console.log("Audio play blocked by browser policy"));
             } catch (err) {
               console.error("Alarm sound failed", err);
             }
           }
-          
-          if (task.persistentReminderVibrate && "vibrate" in navigator) {
+
+          if (task.vibrateEnabled && "vibrate" in navigator) {
              navigator.vibrate([200, 100, 200]);
           }
         });

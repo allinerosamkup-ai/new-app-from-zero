@@ -18,6 +18,14 @@ export type Task = {
   intensity?: string;
   persistentReminderEnabled?: boolean;
   persistentReminderIntervalMinutes?: number | null;
+  vibrateEnabled?: boolean;
+  alarmEnabled?: boolean;
+  recurringNotificationEnabled?: boolean;
+  icon?: string;
+  color?: string;
+  note?: string;
+  noteMode?: string;
+  checklist?: Array<{ id: string; text: string; done: boolean }>;
   isAiSuggested?: boolean;
   aiReasoning?: string | null;
 };
@@ -125,6 +133,7 @@ export type AuraState = {
   proactiveNudge: ProactiveNudge | null;
   cycleStart?: string;
   cycleLength?: number;
+  lutealLength?: number;
   habits: Habit[];
 };
 

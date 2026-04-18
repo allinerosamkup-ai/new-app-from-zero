@@ -11,6 +11,9 @@ export const OnboardingProcessSchema = z.object({
   mainEnergyPressure: z.string().trim().min(2).max(2000),
   primaryGoal: z.string().trim().min(2).max(1000),
   supportGoals: z.array(z.string().trim().min(1)).max(6).default([]),
+  cycleStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  cycleLength: z.number().int().min(21).max(40).nullable().optional(),
+  lutealLength: z.number().int().min(9).max(17).nullable().optional(),
 });
 
 export type OnboardingProcessInput = z.infer<typeof OnboardingProcessSchema>;

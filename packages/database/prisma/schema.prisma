@@ -11,6 +11,9 @@ model Profile {
   id             String   @id @db.Uuid
   fullName       String?  @map("full_name")
   onboardingDone Boolean  @default(false) @map("onboarding_done")
+  cycleStart     DateTime? @map("cycle_start") @db.Date
+  cycleLength    Int?      @map("cycle_length")
+  lutealLength   Int?      @map("luteal_length")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 

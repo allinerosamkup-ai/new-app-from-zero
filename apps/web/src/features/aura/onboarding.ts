@@ -36,6 +36,9 @@ export type OnboardingProcessPayload = {
   mainEnergyPressure: string;
   primaryGoal: string;
   supportGoals: string[];
+  cycleStart: string | null;
+  cycleLength: number | null;
+  lutealLength: number | null;
 };
 
 export const ONBOARDING_BASIC_STEPS: Array<{
@@ -147,5 +150,8 @@ export function buildOnboardingProcessPayload(draft: OnboardingDraft): Onboardin
     supportGoals: supportGoals.length
       ? supportGoals
       : ["Entender meus ciclos", "Organizar a rotina por energia", "Criar check-ins consistentes"],
+    cycleStart: clean(draft.cycleStart) || null,
+    cycleLength: Number.isFinite(draft.cycleLength) ? draft.cycleLength : null,
+    lutealLength: Number.isFinite(draft.lutealLength) ? draft.lutealLength : null,
   };
 }

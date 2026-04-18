@@ -3,6 +3,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
+import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import cron from 'node-cron';
 import path from 'path';
 import { PrismaClient } from '@app/database';
@@ -65,6 +66,8 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
     VAPID_PRIVATE_KEY
   );
 }
+
+const expo = new Expo();
 
 const port = process.env.PORT || 3000;
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
@@ -805,11 +808,17 @@ export function createApp(dependencies: AppDependencies = {}) {
           update: {
             fullName: data.fullName,
             onboardingDone: true,
+            cycleStart: data.cycleStart ? new Date(`${data.cycleStart}T00:00:00.000Z`) : null,
+            cycleLength: data.cycleLength ?? null,
+            lutealLength: data.lutealLength ?? null,
           },
           create: {
             id: userId,
             fullName: data.fullName,
             onboardingDone: true,
+            cycleStart: data.cycleStart ? new Date(`${data.cycleStart}T00:00:00.000Z`) : null,
+            cycleLength: data.cycleLength ?? null,
+            lutealLength: data.lutealLength ?? null,
           },
         }),
         prisma.onboardingResponse.upsert({
@@ -3291,28 +3300,52 @@ JSON APENAS: {"profileSummary":"..."}`,
 export const app = createApp();
 
 async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
   const subs = await defaultPrisma.pushSubscription.findMany({ where: { userId } });
-  const data = JSON.stringify(payload);
+
+  const expoMessages: ExpoPushMessage[] = [];
+
   await Promise.allSettled(
-    subs.map(sub =>
-      webpush.sendNotification(
+    subs.map(async sub => {
+      if (Expo.isExpoPushToken(sub.endpoint)) {
+        expoMessages.push({
+          to: sub.endpoint,
+          title: payload.title,
+          body: payload.body,
+          data: { url: payload.url || '/' },
+          sound: 'default',
+        });
+        return;
+      }
+
+      if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+      const data = JSON.stringify(payload);
+      return webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dhKey, auth: sub.authKey } },
         data
       ).catch(async (err: any) => {
-        // 410 Gone = subscription expired, remove it
+        // subscription expired — remove to avoid future sends
         if (err.statusCode === 410) {
           await defaultPrisma.pushSubscription.delete({ where: { endpoint: sub.endpoint } }).catch(() => {});
         }
-      })
-    )
+      });
+    })
   );
+
+  if (expoMessages.length > 0) {
+    const chunks = expo.chunkPushNotifications(expoMessages);
+    for (const chunk of chunks) {
+      try {
+        await expo.sendPushNotificationsAsync(chunk);
+      } catch (e) {
+        console.error('[expo-push] send error:', e);
+      }
+    }
+  }
 }
 
 if (require.main === module) {
   // Push notification cron — runs every minute
   cron.schedule('* * * * *', async () => {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
     try {
       const now = new Date();
       const hh = String(now.getUTCHours()).padStart(2, '0');
