@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { buildOnboardingProcessPayload } from "../features/aura/onboarding";
 import { api } from "../lib/api";
+import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 
 function ConfettiPiece({ delay, x }: { delay: number; x: number }) {
@@ -80,16 +81,17 @@ export function OnboardingDonePage() {
           <ConfettiPiece key={i} delay={i * 0.1} x={Math.random() * 100} />
         ))}
 
-        {/* Ícone animado */}
+        {/* Logo Airia oficial */}
         <div style={{
-          width: 100, height: 100, borderRadius: 36,
-          background: "linear-gradient(135deg, #5A7A64 0%, #BFDCCB 100%)",
+          width: 84, height: 84, borderRadius: 28,
+          background: "linear-gradient(135deg, #FFFFFF 0%, #FAFBFB 100%)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 46, marginBottom: 24,
+          marginBottom: 22,
           boxShadow: "0 20px 38px rgba(17,24,39,.08), 0 4px 12px rgba(17,24,39,.05)",
+          border: "1px solid rgba(17,24,39,.04)",
           animation: "fade-up 0.6s ease both",
         }}>
-          🌸
+          <AuraIcon size={54} />
         </div>
 
         {/* Título */}
@@ -166,7 +168,7 @@ export function OnboardingDonePage() {
             animation: "fade-up 0.6s ease 0.65s both",
           }}
         >
-          {submitting ? "Salvando perfil..." : "Começar minha jornada 🌸"}
+          {submitting ? "Salvando perfil..." : "Começar minha jornada"}
         </button>
       </div>
     </>
