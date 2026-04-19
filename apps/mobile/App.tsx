@@ -32,18 +32,25 @@ const theme = {
  * Inicializa o container de navegação e o suporte a gestos.
  */
 export default function App() {
-  const { initialize, error } = useAuthStore();
+  const { initialize, error: authError } = useAuthStore();
+  const [runtimeError, setRuntimeError] = React.useState<string | null>(null);
   useNotifications();
 
   useEffect(() => {
-    void initialize();
+    try {
+      void initialize();
+    } catch (e: any) {
+      setRuntimeError(e.message || 'Erro fatal na inicializacao');
+    }
   }, [initialize]);
 
-  if (error && error.includes('env vars ausentes')) {
+  const error = runtimeError || authError;
+
+  if (error && (error.includes('env vars ausentes') || runtimeError)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: appColors.background }}>
-        <Text style={{ color: appColors.danger, textAlign: 'center', fontWeight: 'bold' }}>Erro de Configuração</Text>
-        <Text style={{ textAlign: 'center', marginTop: 10 }}>{error}</Text>
+        <Text style={{ color: appColors.danger, textAlign: 'center', fontWeight: 'bold', fontSize: 18 }}>Erro na Airia</Text>
+        <Text style={{ textAlign: 'center', marginTop: 10, color: '#666' }}>{error}</Text>
       </View>
     );
   }

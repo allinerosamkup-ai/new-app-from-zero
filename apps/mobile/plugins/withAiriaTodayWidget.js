@@ -514,8 +514,6 @@ function getWidgetColorsXml() {
 }
 
 module.exports = function withAiriaTodayWidget(config) {
-  config = withWorkspaceReactNativePath(config);
-  config = withExplicitAndroidEntryFile(config);
   config = withWidgetManifest(config);
   config = withWidgetPackage(config);
   config = withWidgetFiles(config);
