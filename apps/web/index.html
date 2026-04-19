@@ -43,6 +43,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
   </head>
   <body>
+    <script>
+      (function () {
+        var search = window.location.search || "";
+        if (search.indexOf("airia_native=1") >= 0 || window.ReactNativeWebView) {
+          document.documentElement.classList.add("airia-native-shell");
+        }
+      })();
+    </script>
     <div id="root"></div>
 
     <!-- Links estáticos para crawlers (Google OAuth Verification) -->

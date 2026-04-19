@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Apple, CheckCircle2, Download, Globe2, Share2, Smartphone, X } from "lucide-react";
+import { Apple, CheckCircle2, Globe2, Share2, Smartphone, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 type Platform = "ios" | "android" | "desktop";
@@ -23,10 +23,6 @@ function isStandalonePwa() {
   return window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true;
 }
 
-const APK_URL =
-  (import.meta.env.VITE_APK_URL as string | undefined)?.trim() ||
-  "https://airia.pro/airia.apk";
-
 export function InstallCTA() {
   const [platform, setPlatform] = useState<Platform>("desktop");
   const [showIosModal, setShowIosModal] = useState(false);
@@ -46,10 +42,6 @@ export function InstallCTA() {
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
-
-  const handleApkDownload = () => {
-    window.location.href = APK_URL;
-  };
 
   const handlePwaInstall = async () => {
     if (platform === "ios") {
@@ -95,53 +87,33 @@ export function InstallCTA() {
   if (platform === "android") {
     return (
       <>
-        <div style={gridStyle}>
-          <InstallCard
-            eyebrow="App completo"
-            title="Baixar APK Android"
-            description="Versão nativa com widget Hoje na Airia, melhor integração com o celular e experiência mais completa."
-            primaryLabel="Baixar APK"
-            primaryIcon={<Download size={18} />}
-            onPrimary={handleApkDownload}
-            tone="apk"
-          />
-          <InstallCard
-            eyebrow="Instalação rápida"
-            title={isInstalled ? "PWA já instalada" : "Instalar PWA"}
-            description={isInstalled ? "Essa é a versão web cliente que você já tem. O APK acima é o app Android mais completo." : "Versão web cliente na tela inicial. Boa para acesso rápido, sem baixar APK."}
-            primaryLabel={isInstalled ? "Abrir PWA" : "Instalar PWA"}
-            primaryIcon={isInstalled ? <CheckCircle2 size={18} /> : <Globe2 size={18} />}
-            onPrimary={() => (isInstalled ? window.location.assign("/home") : handlePwaInstall())}
-            tone="pwa"
-          />
-        </div>
+        <InstallCard
+          eyebrow="Instalação rápida"
+          title={isInstalled ? "PWA já instalada" : "Instalar PWA no Android"}
+          description={isInstalled ? "Você já tem a versão web instalada. Toque para abrir." : "Adicione airia.pro à tela inicial para usar como app leve, com acesso instantâneo."}
+          primaryLabel={isInstalled ? "Abrir app" : "Instalar PWA"}
+          primaryIcon={isInstalled ? <CheckCircle2 size={18} /> : <Globe2 size={18} />}
+          onPrimary={() => (isInstalled ? window.location.assign("/home") : handlePwaInstall())}
+          tone="pwa"
+        />
         {showAndroidPwaHelp ? <InstallHelpModal platform="android" onClose={() => setShowAndroidPwaHelp(false)} /> : null}
       </>
     );
   }
 
   return (
-    <div style={gridStyle}>
+    <>
       <InstallCard
-        eyebrow="Android"
-        title="Baixar APK completo"
-        description="Instale no celular Android para usar o app nativo com widget Hoje na Airia."
-        primaryLabel="Baixar APK"
-        primaryIcon={<Download size={18} />}
-        onPrimary={handleApkDownload}
-        tone="apk"
-      />
-      <InstallCard
-        eyebrow="iPhone e web"
+        eyebrow="iPhone, Android e web"
         title="Instalar PWA"
-        description="Abra airia.pro no celular e adicione à Tela de Início para usar como app leve."
+        description="Abra airia.pro no celular e adicione à Tela de Início para usar como app."
         primaryLabel="Ver instalação rápida"
         primaryIcon={<Smartphone size={18} />}
         onPrimary={() => setShowIosModal(true)}
         tone="pwa"
       />
       {showIosModal ? <InstallHelpModal platform="desktop" onClose={() => setShowIosModal(false)} /> : null}
-    </div>
+    </>
   );
 }
 
@@ -164,7 +136,7 @@ function InstallCard({
   onPrimary: () => void;
   secondaryLabel?: string;
   onSecondary?: () => void;
-  tone: "apk" | "pwa" | "ios";
+  tone: "pwa" | "ios";
 }) {
   const palette = tonePalette[tone];
 
@@ -251,7 +223,7 @@ function InstallHelpModal({
         </ol>
 
         <p style={{ margin: "18px 0 0", fontSize: 12, lineHeight: 1.6, color: "#8B7B77" }}>
-          PWA é a versão web cliente instalada na tela inicial. No Android, o APK é mais completo porque inclui widget nativo.
+          PWA é a versão web cliente instalada na tela inicial. A versão nativa fica oculta até estar estável.
         </p>
       </div>
     </div>
@@ -259,14 +231,6 @@ function InstallHelpModal({
 }
 
 const tonePalette = {
-  apk: {
-    background: "linear-gradient(180deg, rgba(255,255,255,.92), rgba(184,217,200,.24))",
-    border: "rgba(80,112,91,.18)",
-    eyebrow: "#50705B",
-    button: "#3A7A66",
-    buttonText: "#FFFFFF",
-    shadow: "0 18px 28px rgba(58,122,102,.18)",
-  },
   pwa: {
     background: "linear-gradient(180deg, rgba(255,255,255,.92), rgba(244,168,150,.18))",
     border: "rgba(184,109,76,.16)",
@@ -284,13 +248,6 @@ const tonePalette = {
     shadow: "0 18px 30px rgba(31,29,27,.18)",
   },
 } as const;
-
-const gridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: 12,
-  width: "100%",
-};
 
 const cardStyle: CSSProperties = {
   border: "1px solid",

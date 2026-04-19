@@ -30,6 +30,29 @@ export function buildInjectedSessionScript(session: Session | null) {
     (function () {
       try {
         window.__AIRIA_NATIVE_SHELL__ = true;
+        document.documentElement.classList.add('airia-native-shell');
+
+        var applyNativeShell = function () {
+          if (document.body) {
+            document.body.classList.add('airia-native-shell');
+          }
+
+          var viewport = document.querySelector('meta[name="viewport"]');
+          if (!viewport) {
+            viewport = document.createElement('meta');
+            viewport.setAttribute('name', 'viewport');
+            document.head.appendChild(viewport);
+          }
+
+          viewport.setAttribute(
+            'content',
+            'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
+          );
+        };
+
+        applyNativeShell();
+        document.addEventListener('DOMContentLoaded', applyNativeShell);
+
         var storageKey = ${JSON.stringify(storageKey)};
         var session = ${serializedSession ? JSON.stringify(serializedSession) : 'null'};
 
@@ -47,4 +70,3 @@ export function buildInjectedSessionScript(session: Session | null) {
     true;
   `;
 }
-

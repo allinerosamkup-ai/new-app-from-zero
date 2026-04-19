@@ -514,8 +514,24 @@ button {
 
 @media (hover: none) and (pointer: coarse) {
   .app-viewport {
-    max-width: none;
     box-shadow: none;
   }
+}
+
+html.airia-native-shell,
+html.airia-native-shell body,
+html.airia-native-shell #root {
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background: var(--warm-bg);
+}
+
+html.airia-native-shell .app-viewport {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  box-shadow: none;
 }
 

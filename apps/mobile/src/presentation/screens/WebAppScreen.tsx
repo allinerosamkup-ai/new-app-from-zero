@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Linking, StyleSheet, View } from 'react-native';
+import { BackHandler, Linking, Platform, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import type { Session } from '@supabase/supabase-js';
@@ -17,6 +17,9 @@ type WebViewLoadRequest = {
   url: string;
 };
 
+const MOBILE_USER_AGENT =
+  'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 AiriaNative/1.0';
+
 export default function WebAppScreen() {
   const webViewRef = useRef<WebView>(null);
   const canGoBackRef = useRef(false);
@@ -27,7 +30,15 @@ export default function WebAppScreen() {
   const [hasLoadError, setHasLoadError] = useState(false);
 
   const startUrl = useMemo(() => {
-    return `${getWebAppUrl()}${getWebAppStartPath(onboardingDone)}`;
+    const fallbackUrl = `${getWebAppUrl()}${getWebAppStartPath(onboardingDone)}?airia_native=1`;
+
+    try {
+      const url = new URL(`${getWebAppUrl()}${getWebAppStartPath(onboardingDone)}`);
+      url.searchParams.set('airia_native', '1');
+      return url.toString();
+    } catch {
+      return fallbackUrl;
+    }
   }, [onboardingDone]);
 
   const injectedSessionScript = useMemo(() => {
@@ -50,7 +61,10 @@ export default function WebAppScreen() {
   useEffect(() => {
     isMountedRef.current = true;
 
-    void syncSession();
+    void syncSession().catch((error) => {
+      console.error('Falha ao sincronizar sessao web:', error);
+      setHasLoadError(true);
+    });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMountedRef.current) return;
@@ -145,6 +159,12 @@ export default function WebAppScreen() {
         thirdPartyCookiesEnabled
         javaScriptEnabled
         domStorageEnabled
+        userAgent={Platform.OS === 'android' ? MOBILE_USER_AGENT : undefined}
+        applicationNameForUserAgent="AiriaNative/1.0"
+        scalesPageToFit={false}
+        textZoom={100}
+        overScrollMode="never"
+        bounces={false}
         setSupportMultipleWindows={false}
         injectedJavaScriptBeforeContentLoaded={injectedSessionScript}
         onLoadEnd={handleLoadEnd}
