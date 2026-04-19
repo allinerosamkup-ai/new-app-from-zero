@@ -25,7 +25,7 @@ function isStandalonePwa() {
 
 const APK_URL =
   (import.meta.env.VITE_APK_URL as string | undefined)?.trim() ||
-  "https://expo.dev/artifacts/eas/vFKEaemSkavUEzrmHqGbWK.apk";
+  "https://expo.dev/artifacts/eas/ww16QeLgR42aar78a189QF.apk";
 
 export function InstallCTA() {
   const [platform, setPlatform] = useState<Platform>("desktop");
