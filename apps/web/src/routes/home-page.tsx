@@ -39,6 +39,7 @@ import {
 import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { OnboardingTour } from "../components/OnboardingTour";
 import "../styles/aura.css";
+import "../styles/editorial.css";
 
 const STATE_CONFIG = {
   stable:  { emoji: "💚", label: "Estável",   color: "var(--accent-sage)",    bg: "rgba(180,185,169,.10)" },
