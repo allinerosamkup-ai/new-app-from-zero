@@ -90,7 +90,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   async initialize() {
     if (!authSubscriptionInitialized) {
       supabase.auth.onAuthStateChange((_event: any, session: any) => {
-        void syncAuthState(set, session?.user.id ?? null).catch((error) => {
+        void syncAuthState(set, session?.user?.id ?? null).catch((error) => {
           set({
             initialized: true,
             isLoading: false,

@@ -13,17 +13,42 @@ Notifications.setNotificationHandler({
 
 export function useNotifications() {
   useEffect(() => {
-    void setupNotifications();
+    setupNotifications().catch((error) => {
+      console.warn('[notifications] setup skipped:', error);
+    });
   }, []);
 }
 
+async function scheduleSafely(
+  label: string,
+  input: Notifications.NotificationRequestInput,
+) {
+  try {
+    await Notifications.scheduleNotificationAsync(input);
+  } catch (error) {
+    console.warn(`[notifications] schedule failed (${label}):`, error);
+  }
+}
+
 async function setupNotifications() {
-  const { status } = await Notifications.requestPermissionsAsync();
+  let status: Notifications.PermissionStatus | undefined;
+  try {
+    const result = await Notifications.requestPermissionsAsync();
+    status = result.status;
+  } catch (error) {
+    console.warn('[notifications] permission request failed:', error);
+    return;
+  }
+
   if (status !== 'granted') return;
 
-  await Notifications.cancelAllScheduledNotificationsAsync();
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (error) {
+    console.warn('[notifications] cancel all failed:', error);
+  }
 
-  await Notifications.scheduleNotificationAsync({
+  await scheduleSafely('checkin', {
     content: {
       title: 'Como foi hoje? 🌙',
       body: 'Que tal fazer seu check-in do dia? Leva só 1 minuto.',
@@ -36,7 +61,7 @@ async function setupNotifications() {
     } as Notifications.DailyTriggerInput,
   });
 
-  await Notifications.scheduleNotificationAsync({
+  await scheduleSafely('habits', {
     content: {
       title: 'Seus rituais te esperam ✦',
       body: 'Confira seus hábitos de hoje e mantenha a sequência.',
@@ -49,14 +74,14 @@ async function setupNotifications() {
     } as Notifications.DailyTriggerInput,
   });
 
-  await Notifications.scheduleNotificationAsync({
+  await scheduleSafely('weekly', {
     content: {
       title: 'Sua semana em padrões 📊',
       body: 'A Aura tem um resumo do seu ciclo de humor desta semana.',
       data: { screen: 'Insights' },
     },
     trigger: {
-      weekday: 1, // domingo (1 = domingo no Expo)
+      weekday: 1,
       hour: 10,
       minute: 0,
       repeats: true,

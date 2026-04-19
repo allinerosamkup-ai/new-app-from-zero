@@ -37,11 +37,9 @@ export default function App() {
   useNotifications();
 
   useEffect(() => {
-    try {
-      void initialize();
-    } catch (e: any) {
-      setRuntimeError(e.message || 'Erro fatal na inicializacao');
-    }
+    initialize().catch((e: any) => {
+      setRuntimeError(e?.message || 'Erro fatal na inicializacao');
+    });
   }, [initialize]);
 
   const error = runtimeError || authError;
