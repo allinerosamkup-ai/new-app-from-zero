@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { DefaultTheme as NavigationDefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect } from 'react';
+import { View, Text } from 'react-native';
 import { MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native-paper';
 import RootStackNavigator from './src/presentation/navigation/RootStackNavigator';
 import { useAuthStore } from './src/presentation/providers/auth_store';
@@ -31,12 +32,21 @@ const theme = {
  * Inicializa o container de navegação e o suporte a gestos.
  */
 export default function App() {
-  const { initialize } = useAuthStore();
+  const { initialize, error } = useAuthStore();
   useNotifications();
 
   useEffect(() => {
     void initialize();
   }, [initialize]);
+
+  if (error && error.includes('env vars ausentes')) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: appColors.background }}>
+        <Text style={{ color: appColors.danger, textAlign: 'center', fontWeight: 'bold' }}>Erro de Configuração</Text>
+        <Text style={{ textAlign: 'center', marginTop: 10 }}>{error}</Text>
+      </View>
+    );
+  }
 
   const navigationTheme = {
     ...LightTheme,

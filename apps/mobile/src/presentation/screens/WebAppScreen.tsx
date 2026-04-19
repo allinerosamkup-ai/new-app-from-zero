@@ -109,12 +109,22 @@ export default function WebAppScreen() {
   );
 
   const handleShouldStartLoad = useCallback((request: WebViewLoadRequest) => {
-    if (request.url.startsWith('http://') || request.url.startsWith('https://')) {
+    // Se for a URL da Airia, carrega na WebView
+    if (request.url.startsWith(getWebAppUrl()) || request.url.includes('supabase.co')) {
       return true;
     }
 
-    void Linking.openURL(request.url);
-    return false;
+    // Se for Google Auth ou links externos, abre no navegador externo
+    if (
+      request.url.includes('accounts.google.com') || 
+      request.url.includes('google.com/calendar') ||
+      !request.url.startsWith('http')
+    ) {
+      void Linking.openURL(request.url);
+      return false;
+    }
+
+    return true;
   }, []);
 
   if (!sessionReady) {

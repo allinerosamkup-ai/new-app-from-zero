@@ -55,100 +55,15 @@ export default function RootStackNavigator() {
     >
       {!userId ? (
         <Stack.Screen name="Auth" component={AuthScreen} />
-      ) : !onboardingDone ? (
-        <Stack.Screen name="Onboarding" component={WebAppScreen} />
       ) : (
-        <Stack.Screen name="MainTabs" component={WebAppScreen} />
+        <Stack.Screen name="WebShell" component={WebAppScreen} />
       )}
-      <Stack.Screen
-        name="DailySummary"
-        component={DailySummaryScreen}
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom'
-        }}
-      />
-      <Stack.Screen
-        name="Checkin"
-        component={CheckinScreen}
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-        }}
-      />
-      <Stack.Screen
-        name="CheckInResult"
-        component={CheckInResultScreen}
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-          gestureEnabled: false,
-        }}
-      />
-      <Stack.Screen
-        name="JournalChat"
-        component={JournalChatScreen}
-        options={{
-          animation: 'slide_from_right',
-        }}
-      />
       <Stack.Screen
         name="ForgotPassword"
         component={ForgotPasswordScreen}
         options={{
           animation: 'slide_from_right',
         }}
-      />
-      <Stack.Screen
-        name="HrvTest"
-        component={HrvTestScreen}
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-        }}
-      />
-      <Stack.Screen
-        name="HrvResult"
-        component={HrvResultScreen}
-        options={{
-          animation: 'slide_from_right',
-          gestureEnabled: false,
-        }}
-      />
-      <Stack.Screen
-        name="CycleCalendar"
-        component={CycleCalendarScreen}
-        options={{ animation: 'slide_from_right' }}
-      />
-      <Stack.Screen
-        name="DailyAgenda"
-        component={DailyAgendaScreen}
-        options={{ animation: 'slide_from_right' }}
-      />
-      <Stack.Screen
-        name="EnergyMap"
-        component={EnergyMapScreen}
-        options={{ animation: 'slide_from_right' }}
-      />
-      <Stack.Screen
-        name="Plans"
-        component={PlansScreen}
-        options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-      />
-      <Stack.Screen
-        name="PaymentSuccess"
-        component={PaymentSuccessScreen}
-        options={{ animation: 'slide_from_right', gestureEnabled: false }}
-      />
-      <Stack.Screen
-        name="GoogleCalendar"
-        component={GoogleCalendarScreen}
-        options={{ animation: 'slide_from_right' }}
-      />
-      <Stack.Screen
-        name="Habits"
-        component={HabitsScreen}
-        options={{ animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

@@ -14,7 +14,8 @@ export function getSupabaseWebStorageKey() {
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 
   if (!supabaseUrl) {
-    throw new Error('EXPO_PUBLIC_SUPABASE_URL ausente para montar a sessao web.');
+    console.warn('EXPO_PUBLIC_SUPABASE_URL ausente para montar a sessao web.');
+    return 'sb-missing-url-auth-token';
   }
 
   const hostname = new URL(supabaseUrl).hostname;
