@@ -5,6 +5,7 @@ PROJECT_DIR="${1:-/opt/airia/app}"
 COMPOSE_FILE="$PROJECT_DIR/deploy/airia/compose.yml"
 ENV_FILE=".env.web.build"
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
 
 cd "$PROJECT_DIR/deploy/airia"
 

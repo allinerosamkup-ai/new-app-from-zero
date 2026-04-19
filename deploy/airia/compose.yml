@@ -27,6 +27,7 @@ services:
         VITE_API_URL: /api
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_APK_URL: ${VITE_APK_URL}
     restart: unless-stopped
     depends_on:
       - airia_backend
