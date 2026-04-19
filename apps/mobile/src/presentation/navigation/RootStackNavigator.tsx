@@ -2,13 +2,12 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View } from 'react-native';
 import { ActivityIndicator } from 'react-native-paper';
-import MainTabNavigator from './MainTabNavigator';
 import DailySummaryScreen from '../screens/DailySummaryScreen';
 import CheckinScreen from '../screens/CheckinScreen';
 import CheckInResultScreen from '../screens/CheckInResultScreen';
 import AuthScreen from '../screens/AuthScreen';
+import WebAppScreen from '../screens/WebAppScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
-import OnboardingChatScreen from '../screens/OnboardingChatScreen';
 import HrvTestScreen from '../screens/HrvTestScreen';
 import HrvResultScreen from '../screens/HrvResultScreen';
 import CycleCalendarScreen from '../screens/CycleCalendarScreen';
@@ -57,9 +56,9 @@ export default function RootStackNavigator() {
       {!userId ? (
         <Stack.Screen name="Auth" component={AuthScreen} />
       ) : !onboardingDone ? (
-        <Stack.Screen name="Onboarding" component={OnboardingChatScreen} />
+        <Stack.Screen name="Onboarding" component={WebAppScreen} />
       ) : (
-        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+        <Stack.Screen name="MainTabs" component={WebAppScreen} />
       )}
       <Stack.Screen
         name="DailySummary"

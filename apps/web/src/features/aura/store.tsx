@@ -15,6 +15,7 @@ import { normalizeReminderPreferences } from "./settings";
 import { api } from "../../lib/api";
 import { supabase } from "../../lib/supabase";
 import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
+import { postNativeShellMessage } from "../../utils/native-shell";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -467,6 +468,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       },
       signOut: async () => {
         await supabase.auth.signOut();
+        postNativeShellMessage({ type: "auth.signOut" });
         setState({
           ...initialAuraState,
           onboardingDraft: createEmptyOnboardingDraft(),

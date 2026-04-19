@@ -23,7 +23,7 @@ type AuthMode = 'signin' | 'signup';
 
 export default function AuthScreen() {
   const navigation = useNavigation<any>();
-  const { signIn, signUp, isLoading, error, infoMessage, clearMessages } = useAuthStore();
+  const { signIn, signInWithGoogle, signUp, isLoading, error, infoMessage, clearMessages } = useAuthStore();
   const [mode, setMode] = useState<AuthMode>('signin');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -42,6 +42,11 @@ export default function AuthScreen() {
     } else {
       await signUp({ fullName, email, password });
     }
+  };
+
+  const handleGoogleLogin = async () => {
+    clearMessages();
+    await signInWithGoogle();
   };
 
   const isSignup = mode === 'signup';
@@ -155,6 +160,17 @@ export default function AuthScreen() {
               labelStyle={{ fontSize: 16, fontWeight: '700' }}
             >
               {isSignup ? 'Criar conta e continuar' : 'Entrar e continuar'}
+            </Button>
+
+            <Button
+              mode="outlined"
+              onPress={handleGoogleLogin}
+              disabled={isLoading}
+              contentStyle={{ paddingVertical: 10 }}
+              style={{ borderRadius: appRadius.pill, marginTop: appSpacing.md }}
+              labelStyle={{ fontSize: 15, fontWeight: '700', color: appColors.textPrimary }}
+            >
+              Entrar com Google
             </Button>
 
             <Text

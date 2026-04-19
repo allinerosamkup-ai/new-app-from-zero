@@ -10,7 +10,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ksdvzqvwhrmvgozobjbt.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzZHZ6cXZ3aHJtdmdvem9iamJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDkzMDQsImV4cCI6MjA4ODQ4NTMwNH0.djV19rOwSPpn3ImXbZe05_XInU9cHLbCWKf--gbCsY8",
-        "EXPO_PUBLIC_API_URL": "https://airia.pro"
+        "EXPO_PUBLIC_API_URL": "https://airia.pro",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://airia.pro"
       }
     },
     "preview": {
@@ -21,7 +22,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ksdvzqvwhrmvgozobjbt.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzZHZ6cXZ3aHJtdmdvem9iamJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDkzMDQsImV4cCI6MjA4ODQ4NTMwNH0.djV19rOwSPpn3ImXbZe05_XInU9cHLbCWKf--gbCsY8",
-        "EXPO_PUBLIC_API_URL": "https://airia.pro"
+        "EXPO_PUBLIC_API_URL": "https://airia.pro",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://airia.pro"
       }
     },
     "production": {
@@ -31,7 +33,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ksdvzqvwhrmvgozobjbt.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtzZHZ6cXZ3aHJtdmdvem9iamJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MDkzMDQsImV4cCI6MjA4ODQ4NTMwNH0.djV19rOwSPpn3ImXbZe05_XInU9cHLbCWKf--gbCsY8",
-        "EXPO_PUBLIC_API_URL": "https://airia.pro"
+        "EXPO_PUBLIC_API_URL": "https://airia.pro",
+        "EXPO_PUBLIC_WEB_APP_URL": "https://airia.pro"
       }
     }
   },
