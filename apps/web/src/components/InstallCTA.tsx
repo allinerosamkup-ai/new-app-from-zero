@@ -25,7 +25,7 @@ function isStandalonePwa() {
 
 const APK_URL =
   (import.meta.env.VITE_APK_URL as string | undefined)?.trim() ||
-  "https://expo.dev/artifacts/eas/eufyKWMoPvw9iPh11StDgy.apk";
+  "https://airia.pro/airia.apk";
 
 export function InstallCTA() {
   const [platform, setPlatform] = useState<Platform>("desktop");
