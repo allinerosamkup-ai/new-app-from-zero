@@ -793,6 +793,33 @@ export function createApp(dependencies: AppDependencies = {}) {
     return res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
+  // POST /api/admin/push-install-reminder — envia lembrete de instalação a todos os subscribers
+  app.post('/api/admin/push-install-reminder', async (req: Request, res: Response) => {
+    const adminKey = req.headers['x-admin-key'];
+    if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const subs = await prisma.pushSubscription.findMany({ select: { userId: true }, distinct: ['userId'] });
+      const userIds = subs.map(s => s.userId);
+      let sent = 0;
+      await Promise.allSettled(
+        userIds.map(async userId => {
+          await sendPushToUser(userId, {
+            title: 'Deixe a Airia sempre à mão',
+            body: 'Instale o app na sua tela inicial para acesso rápido — leva segundos.',
+            url: '/',
+            tag: 'install-reminder',
+          });
+          sent++;
+        })
+      );
+      return res.json({ ok: true, sent, total: userIds.length });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // POST /api/admin/push-onboarding-reminder — rota admin (x-admin-key), antes do requireAuth
   app.post('/api/admin/push-onboarding-reminder', async (req: Request, res: Response) => {
     const adminKey = req.headers['x-admin-key'];
