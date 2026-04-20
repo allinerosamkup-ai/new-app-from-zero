@@ -135,6 +135,7 @@ export type AuraState = {
   cycleLength?: number;
   lutealLength?: number;
   habits: Habit[];
+  onboardingDone: boolean;
 };
 
 export type NotificationPreferences = {

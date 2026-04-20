@@ -129,6 +129,10 @@ export function AuraLayout() {
     );
   }
 
+  if (!state.onboardingDone && !location.pathname.startsWith('/onboarding')) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return (
     <div className="aura-layout-root min-h-screen overflow-x-hidden" style={{ color: 'var(--on-surface)' }}>
       {/* Daemon IA proativa — invisível, roda após hydration */}

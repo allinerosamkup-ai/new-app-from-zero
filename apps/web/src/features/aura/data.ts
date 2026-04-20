@@ -108,6 +108,7 @@ export const initialAuraState: AuraState = {
   proactiveNudge: null,
   checkinHistory: [],
   habits: [],
+  onboardingDone: false,
 };
 
 export function labelMood(mood: MoodOption) {

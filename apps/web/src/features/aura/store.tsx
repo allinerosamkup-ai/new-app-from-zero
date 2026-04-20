@@ -179,7 +179,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           api.get('/habits').catch(e => { console.error(e); return null; }),
           (async () => {
             try {
-              const r = await supabase.from('profiles').select('cycle_start, cycle_length, luteal_length').eq('id', session.user.id).maybeSingle();
+              const r = await supabase.from('profiles').select('cycle_start, cycle_length, luteal_length, onboarding_done').eq('id', session.user.id).maybeSingle();
               return r.data;
             } catch (e) { console.error(e); return null; }
           })(),
@@ -209,7 +209,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : null;
         const preferences = (preferencesRaw && typeof preferencesRaw === 'object') ? preferencesRaw : null;
         const habits = Array.isArray(habitsRaw) ? habitsRaw : null;
-        const profile = (profileRaw && typeof profileRaw === 'object') ? profileRaw as { cycle_start: string | null; cycle_length: number | null; luteal_length: number | null } : null;
+        const profile = (profileRaw && typeof profileRaw === 'object') ? profileRaw as { cycle_start: string | null; cycle_length: number | null; luteal_length: number | null; onboarding_done: boolean | null } : null;
 
         setState(current => ({
           ...current,
@@ -278,6 +278,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           cycleStart: profile?.cycle_start ? profile.cycle_start.slice(0, 10) : current.cycleStart,
           cycleLength: profile?.cycle_length ?? current.cycleLength,
           lutealLength: profile?.luteal_length ?? current.lutealLength,
+          onboardingDone: profile?.onboarding_done ?? current.onboardingDone,
           ...normalizeReminderPreferences(preferences, {
             morningCheckinTime: current.morningCheckinTime,
             eveningCheckinTime: current.eveningCheckinTime,

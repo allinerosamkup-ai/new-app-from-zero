@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Apple, CheckCircle2, Globe2, Share2, Smartphone, X } from "lucide-react";
+import { CheckCircle2, Download, Smartphone, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 type Platform = "ios" | "android" | "desktop";
@@ -23,12 +23,17 @@ function isStandalonePwa() {
   return window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true;
 }
 
+function isIosSafari(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = window.navigator.userAgent;
+  return /iphone|ipad|ipod/i.test(ua) && !/crios|fxios|opios|chrome/i.test(ua) && /safari/i.test(ua);
+}
+
 export function InstallCTA() {
   const [platform, setPlatform] = useState<Platform>("desktop");
-  const [showIosModal, setShowIosModal] = useState(false);
-  const [showAndroidPwaHelp, setShowAndroidPwaHelp] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [showIosSheet, setShowIosSheet] = useState(false);
 
   useEffect(() => {
     setPlatform(detectPlatform());
@@ -43,9 +48,14 @@ export function InstallCTA() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  const handlePwaInstall = async () => {
+  const handleInstall = async () => {
+    if (isInstalled) {
+      window.location.assign("/home");
+      return;
+    }
+
     if (platform === "ios") {
-      setShowIosModal(true);
+      setShowIosSheet(true);
       return;
     }
 
@@ -56,66 +66,162 @@ export function InstallCTA() {
       return;
     }
 
-    setShowAndroidPwaHelp(true);
+    // Android sem prompt disponível ainda
+    setShowIosSheet(false);
   };
 
-  if (platform === "ios") {
-    return (
-      <>
-        {isInstalled ? (
-          <div style={installedStyle}>
-            <CheckCircle2 size={18} color="#5A7A64" />
-            <span>PWA já instalada neste iPhone.</span>
-          </div>
-        ) : null}
-        <InstallCard
-          eyebrow="Instalação rápida"
-          title={isInstalled ? "Abrir Airia no iPhone" : "Adicionar Airia ao iPhone"}
-          description={isInstalled ? "Você já tem a versão PWA. O iPhone usa essa instalação pela Tela de Início." : "Abre como app pela Tela de Início, sem App Store. Melhor caminho para iOS agora."}
-          primaryLabel={isInstalled ? "Abrir app" : "Instalar PWA no iPhone"}
-          primaryIcon={<Apple size={18} />}
-          onPrimary={() => (isInstalled ? window.location.assign("/home") : handlePwaInstall())}
-          secondaryLabel="Usar no navegador"
-          onSecondary={() => window.location.assign("/login?tab=criar")}
-          tone="ios"
-        />
-        {showIosModal ? <InstallHelpModal platform="ios" onClose={() => setShowIosModal(false)} /> : null}
-      </>
-    );
-  }
-
-  if (platform === "android") {
-    return (
-      <>
-        <InstallCard
-          eyebrow="Instalação rápida"
-          title={isInstalled ? "PWA já instalada" : "Instalar PWA no Android"}
-          description={isInstalled ? "Você já tem a versão web instalada. Toque para abrir." : "Adicione airia.pro à tela inicial para usar como app leve, com acesso instantâneo."}
-          primaryLabel={isInstalled ? "Abrir app" : "Instalar PWA"}
-          primaryIcon={isInstalled ? <CheckCircle2 size={18} /> : <Globe2 size={18} />}
-          onPrimary={() => (isInstalled ? window.location.assign("/home") : handlePwaInstall())}
-          tone="pwa"
-        />
-        {showAndroidPwaHelp ? <InstallHelpModal platform="android" onClose={() => setShowAndroidPwaHelp(false)} /> : null}
-      </>
-    );
-  }
+  const isIos = platform === "ios";
+  const title = isInstalled ? "Aplicativo instalado" : "Baixar aplicativo";
+  const description = isInstalled
+    ? "A Airia já está salva neste celular. Toque para abrir."
+    : isIos
+    ? "Instale a Airia na tela inicial e acesse direto pelo ícone."
+    : "Instale a Airia no celular e abra direto pela tela inicial.";
 
   return (
     <>
       <InstallCard
-        eyebrow="iPhone, Android e web"
-        title="Instalar PWA"
-        description="Abra airia.pro no celular e adicione à Tela de Início para usar como app."
-        primaryLabel="Ver instalação rápida"
-        primaryIcon={<Smartphone size={18} />}
-        onPrimary={() => setShowIosModal(true)}
-        tone="pwa"
+        eyebrow="Instalação rápida"
+        title={title}
+        description={description}
+        primaryLabel={isInstalled ? "Abrir app" : "Baixar aplicativo"}
+        primaryIcon={
+          isInstalled
+            ? <CheckCircle2 size={18} />
+            : isIos
+            ? <Smartphone size={18} />
+            : installPrompt
+            ? <Download size={18} />
+            : <Smartphone size={18} />
+        }
+        onPrimary={handleInstall}
+        secondaryLabel="Usar no navegador"
+        onSecondary={() => window.location.assign("/login?tab=criar")}
       />
-      {showIosModal ? <InstallHelpModal platform="desktop" onClose={() => setShowIosModal(false)} /> : null}
+
+      {showIosSheet && (
+        <IosInstallSheet inSafari={isIosSafari()} onClose={() => setShowIosSheet(false)} />
+      )}
     </>
   );
 }
+
+function IosInstallSheet({ inSafari, onClose }: { inSafari: boolean; onClose: () => void }) {
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,.4)",
+          zIndex: 900, backdropFilter: "blur(2px)",
+        }}
+      />
+      <div style={sheetStyle}>
+        <button type="button" onClick={onClose} style={closeButtonStyle} aria-label="Fechar">
+          <X size={18} />
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <img src="/icons/icon-192.png" alt="Airia" style={{ width: 36, height: 36, borderRadius: 8 }} />
+          <div>
+            <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#4A3B37" }}>Instalar Airia</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#7C6D68" }}>Adicionar à tela inicial</p>
+          </div>
+        </div>
+
+        {inSafari ? (
+          <ol style={stepsListStyle}>
+            <li style={stepItemStyle}>
+              <span style={stepNumStyle}>1</span>
+              <span>Toque no ícone de compartilhar
+                <span style={{ display: "inline-block", margin: "0 4px", fontSize: 16 }}>⎙</span>
+                na barra inferior do Safari
+              </span>
+            </li>
+            <li style={stepItemStyle}>
+              <span style={stepNumStyle}>2</span>
+              <span>Role para baixo e toque <strong>"Adicionar à Tela de Início"</strong></span>
+            </li>
+            <li style={stepItemStyle}>
+              <span style={stepNumStyle}>3</span>
+              <span>Toque <strong>"Adicionar"</strong> no canto superior direito</span>
+            </li>
+          </ol>
+        ) : (
+          <div style={{ padding: "12px 0 4px" }}>
+            <p style={{ margin: 0, fontSize: 14, color: "#4A3B37", lineHeight: 1.5 }}>
+              Para instalar no iPhone, abra este link no <strong>Safari</strong>.
+            </p>
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: "#7C6D68" }}>
+              Outros navegadores não permitem instalar PWA no iOS.
+            </p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+const sheetStyle: CSSProperties = {
+  position: "fixed",
+  bottom: 0,
+  left: "50%",
+  transform: "translateX(-50%)",
+  width: "min(100%, 480px)",
+  background: "#FEFEFE",
+  borderRadius: "20px 20px 0 0",
+  padding: "24px 20px calc(env(safe-area-inset-bottom, 0px) + 24px)",
+  zIndex: 901,
+  boxShadow: "0 -8px 40px rgba(17,24,39,.14)",
+};
+
+const closeButtonStyle: CSSProperties = {
+  position: "absolute",
+  top: 16,
+  right: 16,
+  background: "rgba(17,24,39,.06)",
+  border: "none",
+  borderRadius: "50%",
+  width: 30,
+  height: 30,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  color: "#6B5B57",
+};
+
+const stepsListStyle: CSSProperties = {
+  listStyle: "none",
+  margin: "16px 0 0",
+  padding: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: 12,
+};
+
+const stepItemStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 10,
+  fontSize: 14,
+  color: "#4A3B37",
+  lineHeight: 1.5,
+};
+
+const stepNumStyle: CSSProperties = {
+  minWidth: 22,
+  height: 22,
+  borderRadius: "50%",
+  background: "#F4A896",
+  color: "#5C3526",
+  fontSize: 12,
+  fontWeight: 800,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  marginTop: 1,
+};
 
 function InstallCard({
   eyebrow,
@@ -126,7 +232,6 @@ function InstallCard({
   onPrimary,
   secondaryLabel,
   onSecondary,
-  tone,
 }: {
   eyebrow: string;
   title: string;
@@ -136,13 +241,10 @@ function InstallCard({
   onPrimary: () => void;
   secondaryLabel?: string;
   onSecondary?: () => void;
-  tone: "pwa" | "ios";
 }) {
-  const palette = tonePalette[tone];
-
   return (
-    <section style={{ ...cardStyle, borderColor: palette.border, background: palette.background }}>
-      <span style={{ ...eyebrowStyle, color: palette.eyebrow }}>{eyebrow}</span>
+    <section style={cardStyle}>
+      <span style={eyebrowStyle}>{eyebrow}</span>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <h3 style={titleStyle}>{title}</h3>
         <p style={descriptionStyle}>{description}</p>
@@ -151,12 +253,7 @@ function InstallCard({
         <button
           type="button"
           onClick={onPrimary}
-          style={{
-            ...buttonStyle,
-            background: palette.button,
-            color: palette.buttonText,
-            boxShadow: palette.shadow,
-          }}
+          style={buttonStyle}
         >
           {primaryIcon}
           {primaryLabel}
@@ -171,86 +268,8 @@ function InstallCard({
   );
 }
 
-function InstallHelpModal({
-  platform,
-  onClose,
-}: {
-  platform: "ios" | "android" | "desktop";
-  onClose: () => void;
-}) {
-  const isAndroid = platform === "android";
-  const title = isAndroid ? "Instalar PWA no Android" : "Instalar PWA no iPhone";
-  const steps = isAndroid
-    ? [
-        "Abra este site no Chrome do Android.",
-        "Toque no menu de três pontos.",
-        "Escolha Instalar app ou Adicionar à tela inicial.",
-      ]
-    : [
-        "Abra airia.pro no Safari.",
-        "Toque em Compartilhar na barra inferior.",
-        "Escolha Adicionar à Tela de Início e confirme em Adicionar.",
-      ];
-
-  return (
-    <div role="dialog" aria-modal="true" style={modalBackdropStyle} onClick={onClose}>
-      <div style={modalStyle} onClick={(event) => event.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
-          <div>
-            <p style={modalEyebrowStyle}>Instalação rápida</p>
-            <h3 style={{ margin: "4px 0 0", fontSize: 20, lineHeight: 1.15, fontWeight: 800, color: "#4A3B37" }}>{title}</h3>
-          </div>
-          <button type="button" onClick={onClose} style={closeButtonStyle} aria-label="Fechar instruções">
-            <X size={20} />
-          </button>
-        </div>
-
-        <ol style={{ margin: "22px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 14 }}>
-          {steps.map((step, index) => (
-            <li key={step} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <span style={stepNumberStyle}>{index + 1}</span>
-              <p style={stepTextStyle}>
-                {index === 1 && !isAndroid ? (
-                  <>
-                    Toque em <Share2 size={14} style={{ display: "inline", verticalAlign: "middle", margin: "0 4px" }} /> Compartilhar na barra inferior.
-                  </>
-                ) : (
-                  step
-                )}
-              </p>
-            </li>
-          ))}
-        </ol>
-
-        <p style={{ margin: "18px 0 0", fontSize: 12, lineHeight: 1.6, color: "#8B7B77" }}>
-          PWA é a versão web cliente instalada na tela inicial. A versão nativa fica oculta até estar estável.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-const tonePalette = {
-  pwa: {
-    background: "linear-gradient(180deg, rgba(255,255,255,.92), rgba(244,168,150,.18))",
-    border: "rgba(184,109,76,.16)",
-    eyebrow: "#A45D3D",
-    button: "#F4A896",
-    buttonText: "#5C3526",
-    shadow: "0 18px 28px rgba(244,168,150,.22)",
-  },
-  ios: {
-    background: "linear-gradient(180deg, rgba(255,255,255,.94), rgba(212,196,224,.22))",
-    border: "rgba(107,91,87,.12)",
-    eyebrow: "#7B687D",
-    button: "#1F1D1B",
-    buttonText: "#FFFFFF",
-    shadow: "0 18px 30px rgba(31,29,27,.18)",
-  },
-} as const;
-
 const cardStyle: CSSProperties = {
-  border: "1px solid",
+  border: "1px solid rgba(184,109,76,.16)",
   borderRadius: 8,
   padding: 13,
   display: "flex",
@@ -258,6 +277,7 @@ const cardStyle: CSSProperties = {
   gap: 9,
   minHeight: 0,
   boxShadow: "0 14px 32px rgba(107,91,87,.07)",
+  background: "linear-gradient(180deg, rgba(255,255,255,.92), rgba(244,168,150,.18))",
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -266,6 +286,7 @@ const eyebrowStyle: CSSProperties = {
   fontWeight: 900,
   letterSpacing: ".16em",
   textTransform: "uppercase",
+  color: "#A45D3D",
 };
 
 const titleStyle: CSSProperties = {
@@ -295,6 +316,9 @@ const buttonStyle: CSSProperties = {
   gap: 8,
   width: "100%",
   justifyContent: "center",
+  background: "#F4A896",
+  color: "#5C3526",
+  boxShadow: "0 18px 28px rgba(244,168,150,.22)",
 };
 
 const secondaryButtonStyle: CSSProperties = {
@@ -306,79 +330,4 @@ const secondaryButtonStyle: CSSProperties = {
   cursor: "pointer",
   color: "#6B5B57",
   background: "rgba(255,255,255,.76)",
-};
-
-const installedStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "14px 16px",
-  borderRadius: 8,
-  background: "rgba(184,217,200,.22)",
-  border: "1px solid rgba(80,112,91,.16)",
-  color: "#50705B",
-  fontSize: 13,
-  lineHeight: 1.5,
-  fontWeight: 800,
-};
-
-const modalBackdropStyle: CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 1000,
-  background: "rgba(31,29,27,.52)",
-  display: "flex",
-  alignItems: "flex-end",
-  justifyContent: "center",
-  padding: 16,
-};
-
-const modalStyle: CSSProperties = {
-  background: "#FFFDFC",
-  borderRadius: 8,
-  padding: 22,
-  maxWidth: 430,
-  width: "100%",
-  boxShadow: "0 30px 80px rgba(31,29,27,.28)",
-  border: "1px solid rgba(255,255,255,.52)",
-};
-
-const modalEyebrowStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: ".16em",
-  textTransform: "uppercase",
-  color: "#A45D3D",
-};
-
-const closeButtonStyle: CSSProperties = {
-  background: "rgba(107,91,87,.06)",
-  border: "1px solid rgba(107,91,87,.08)",
-  borderRadius: 8,
-  cursor: "pointer",
-  padding: 8,
-  color: "#6B5B57",
-  display: "inline-flex",
-};
-
-const stepNumberStyle: CSSProperties = {
-  flexShrink: 0,
-  width: 28,
-  height: 28,
-  borderRadius: 8,
-  background: "#F4A896",
-  color: "#5C3526",
-  fontSize: 13,
-  fontWeight: 900,
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const stepTextStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 14,
-  lineHeight: 1.55,
-  color: "#4A3B37",
 };
