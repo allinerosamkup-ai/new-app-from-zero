@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { MoodOption } from "../features/aura/types";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { trackEvent } from "../lib/track";
 import { getClientDayContext } from "../utils/day-context";
 import { ChevronLeft, Check } from "lucide-react";
 import "../styles/aura.css";
@@ -324,6 +325,13 @@ export function CheckinPage() {
         flowDay: flowDay ?? undefined,
         flowIntensity: flowIntensity ?? undefined,
         symptomLevels: Object.keys(symptomLvls).length > 0 ? symptomLvls : undefined,
+      });
+      trackEvent("checkin_completed", {
+        step_count: STEPS.length,
+        emotions_count: emotionsSelected.length,
+        factors_count: selectedFactors.length,
+        has_note: Boolean(note.trim()),
+        optional_details_count: [detailEnabled.sono, detailEnabled.fisico, detailEnabled.social, showCiclo].filter(Boolean).length,
       });
       navigate("/checkin-result", { state: checkinAI ?? undefined });
     } catch (err) {

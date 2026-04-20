@@ -63,7 +63,7 @@ export function AutonomousAIEngine() {
     const history = aggregateCheckinsByDay(state.checkinHistory || []);
     if (history.length < MIN_CHECKINS) return;
 
-    const recentHistory = history.slice(0, 7);
+    const recentHistory = history.slice(-7);
     const historyKey = JSON.stringify(
       recentHistory.map((e) => [e.date, e.humor, e.energia, e.sono, e.fisico, e.social])
     );

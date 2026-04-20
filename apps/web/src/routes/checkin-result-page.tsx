@@ -6,6 +6,7 @@ import { useAuraStore } from "../features/aura/store";
 import { computeMoodCycle, computeStreak } from '../utils/mood-cycle-engine';
 import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
+import { trackEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
 import type { MoodOption } from "../features/aura/types";
 import { AuraIcon } from "../components/AuraIcon";
@@ -115,6 +116,7 @@ export function CheckinResultPage() {
   const [auraMsgLoading, setAuraMsgLoading] = useState(!checkinAI?.analysis);
   const auraMsgRan = useRef(false);
   const autoTasksRan = useRef(false);
+  const viewedTrackedRef = useRef(false);
 
   const recentHistory = useMemo(
     () => (state.checkinHistory || []).slice(0, 7).map(h => ({ date: h.date, humor: h.humor, energia: h.energia, sono: h.sono })),
@@ -188,6 +190,17 @@ export function CheckinResultPage() {
     }).catch((error) => {
       console.warn("Aura check-in auto-response failed:", error);
     }).finally(() => setAuraMsgLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (viewedTrackedRef.current) return;
+    viewedTrackedRef.current = true;
+    trackEvent("checkin_result_viewed", {
+      has_router_state: Boolean(checkinAI),
+      has_analysis: Boolean(checkinAI?.analysis),
+      recommendations_count: checkinAI?.recommendations?.length ?? 0,
+      mood: state.mood,
+    });
   }, []);
 
   const [phase, setPhase] = useState<AiPhase>("idle");
@@ -270,6 +283,14 @@ export function CheckinResultPage() {
       showError(error instanceof Error ? error.message : "Nao foi possivel gerar ajustes para o dia.");
       setPhase("idle");
     }
+  }
+
+  function handleAdjustDayClick() {
+    trackEvent("adjust_day_clicked", {
+      has_router_state: Boolean(checkinAI),
+      has_analysis: Boolean(checkinAI?.analysis),
+    });
+    void fetchDayTasks();
   }
 
   async function regenTask(idx: number) {
@@ -360,6 +381,12 @@ export function CheckinResultPage() {
 
     if (savedCount > 0) {
       setPhase("done");
+      trackEvent("tasks_added_to_planner", {
+        source: "checkin_result",
+        accepted_count: accepted.length,
+        saved_count: savedCount,
+        next_day_count: nextDayCount,
+      });
       const baseMsg = savedCount === accepted.length
         ? "Sugestoes adicionadas ao planner."
         : `${savedCount} sugest${savedCount > 1 ? "oes foram" : "ao foi"} adicionada${savedCount > 1 ? "s" : ""} ao planner.`;
@@ -498,7 +525,7 @@ export function CheckinResultPage() {
           <AuraButtonV2
             useAuraIcon
             className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
-            onClick={fetchDayTasks}
+            onClick={handleAdjustDayClick}
             style={{ marginBottom: 10 }}
           >
             Ajustar meu dia
@@ -567,7 +594,7 @@ export function CheckinResultPage() {
                       <p style={{
                         fontSize: 13, fontWeight: 600, color: "var(--text-1)",
                         textDecoration: task.discarded ? "line-through" : "none",
-                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        wordBreak: "break-word",
                       }}>
                         {task.title}
                       </p>

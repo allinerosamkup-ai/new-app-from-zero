@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase";
 import type { FollowUpPending } from "../features/aura/types";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
@@ -306,6 +307,7 @@ export function HomePage() {
 
   // Refresh on mount to pick up any check-ins done since the app loaded
   useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const homeOpenedRef = useRef(false);
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [addedActionTitles, setAddedActionTitles] = useState<Set<string>>(new Set());
@@ -581,6 +583,16 @@ export function HomePage() {
     state.mood,
     state.tasks.length,
   ]);
+
+  useEffect(() => {
+    if (!hydrated || homeOpenedRef.current) return;
+    homeOpenedRef.current = true;
+    trackEvent("home_opened", {
+      tasks_count: state.tasks.length,
+      habits_count: (state.habits || []).length,
+      checkins_count: (state.checkinHistory || []).length,
+    });
+  }, [hydrated, state.checkinHistory, state.habits, state.tasks.length]);
 
   // Mensagem motivacional — apenas IA
   const motivacionalFinal = homeAiMsg?.motivacional ?? null;
@@ -1140,6 +1152,323 @@ export function HomePage() {
           </div>
         </div>
 
+        {/* ── Agenda por Blocos ── */}
+        <div style={{ marginBottom: "calc(var(--a) * 1.2)" }}>
+          {/* Header */}
+          <div className="home-section-row">
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
+                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+              </svg>
+              <span className="section-title" style={{ fontSize: "14px" }}>Agenda do dia</span>
+            </div>
+            {agendaPhase === "approved" && (
+              <span style={{ fontSize: "11px", color: "var(--accent-sage)", fontWeight: 600 }}>✓ No Planner</span>
+            )}
+            {agendaPhase === "preview" && (
+              <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>
+                {selectedAgendaCount} selecionada{selectedAgendaCount !== 1 ? "s" : ""}
+              </span>
+            )}
+            {agendaPhase === "idle" && (
+              <AuraButtonV2 variant="primary" size="sm" onClick={fetchAgenda} useAuraIcon>
+                Montar com IA
+              </AuraButtonV2>
+            )}
+          </div>
+
+          {agendaPhase === "idle" && (
+            <div className="home-agenda-card" style={{
+              background: "rgba(255,253,249,.97)",
+              borderRadius: 14,
+              border: "1.5px solid var(--warm-border)",
+              overflow: "hidden",
+            }}>
+              {homeAgendaPreview.tasks.length === 0 && !homeAgendaPreview.habit ? (
+                <div style={{ padding: "14px 13px" }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
+                    Sem compromissos agora
+                  </p>
+                  <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: 0 }}>
+                    A Airia pode sugerir um encaixe leve para preencher o dia sem pesar.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {homeAgendaPreview.tasks.map((task, index) => {
+                    const isTaskDone = doneTaskIds.has(task.id);
+                    return (
+                    <div
+                      key={task.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate("/planner", { state: { openTaskId: task.id } })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate("/planner", { state: { openTaskId: task.id } });
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        gap: 10,
+                        padding: "10px 13px",
+                        border: "none",
+                        borderBottom: index < homeAgendaPreview.tasks.length - 1 || homeAgendaPreview.habit ? "1px solid var(--warm-border)" : "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        opacity: isTaskDone ? 0.6 : 1,
+                        transition: "opacity 0.2s",
+                      }}
+                    >
+                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>{task.time}</p>
+                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hoje</p>
+                      </div>
+                      <div style={{ width: 3, borderRadius: 999, background: isTaskDone ? "var(--accent-sage)" : "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28, transition: "background 0.2s" }} />
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: isTaskDone ? "var(--text-3)" : "var(--text-1)", margin: 0, textDecoration: isTaskDone ? "line-through" : "none", transition: "all 0.2s" }}>
+                            {task.title}
+                          </p>
+                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
+                            {isTaskDone ? "Concluído" : (task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa")}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!isTaskDone) void handleHomeTaskDone(task);
+                          }}
+                          title={isTaskDone ? "Concluído" : "Marcar como feito"}
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-sage)",
+                            background: isTaskDone ? "var(--accent-sage)" : "transparent",
+                            cursor: isTaskDone ? "default" : "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                            transition: "background 0.2s",
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={isTaskDone ? "white" : "var(--accent-sage)"} strokeWidth="2.5" strokeLinecap="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeTaskDelete(task);
+                          }}
+                          title="Excluir"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-peach)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );})}
+                  {homeAgendaPreview.habit && (
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate("/habits")}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate("/habits");
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        gap: 10,
+                        padding: "10px 13px",
+                        border: "none",
+                        background: "rgba(180,185,169,.08)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-sage)", margin: 0 }}>
+                          {homeAgendaPreview.habit.reminderTime ?? "--:--"}
+                        </p>
+                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hábito</p>
+                      </div>
+                      <div style={{ width: 3, borderRadius: 999, background: "var(--accent-sage)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                            {homeAgendaPreview.habit.icon ? `${homeAgendaPreview.habit.icon} ` : ""}{homeAgendaPreview.habit.title}
+                          </p>
+                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
+                            Ritual pendente de hoje
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeHabitDone(homeAgendaPreview.habit!);
+                          }}
+                          title="Marcar como feito"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-sage)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeHabitDelete(homeAgendaPreview.habit!);
+                          }}
+                          title="Excluir"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-peach)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {agendaPhase === "loading" && (
+            <div style={{
+              background: "rgba(255,253,249,.9)", borderRadius: 12, padding: "16px",
+              textAlign: "center", border: "1.5px solid var(--warm-border)",
+            }}>
+              <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
+              <p style={{ fontSize: 12, color: "var(--text-2)", fontStyle: "italic" }}>
+                Analisando seu estado e montando blocos personalizados...
+              </p>
+            </div>
+          )}
+
+          {(agendaPhase === "preview" || agendaPhase === "approved") && agendaBlocks.length > 0 && (
+            <div className="home-agenda-card" style={{
+              background: "rgba(255,253,249,.97)", borderRadius: 14,
+              border: "1.5px solid var(--warm-border)", overflow: "hidden",
+            }}>
+              {agendaBlocks.map((block, idx) => {
+                const cfg = BLOCK_CONFIG[block.tipo] ?? BLOCK_CONFIG.flexivel;
+                const isSkip = block.tipo === "descanso" || block.tipo === "refeicao";
+                const savedCount = block.tarefas_sugeridas.filter((_, taskIndex) => savedAgendaTaskKeys.has(agendaTaskKey(idx, taskIndex))).length;
+                return (
+                  <div key={idx} style={{
+                    display: "flex", gap: 10, padding: "10px 13px",
+                    borderBottom: idx < agendaBlocks.length - 1 ? "1px solid var(--warm-border)" : "none",
+                    opacity: isSkip ? 0.55 : 1,
+                  }}>
+                    {/* Time column */}
+                    <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, color: cfg.cor, margin: 0 }}>{block.horario_inicio}</p>
+                      <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>{block.horario_fim}</p>
+                    </div>
+                    {/* Color bar */}
+                    <div style={{ width: 3, borderRadius: 999, background: cfg.cor, flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
+                    {/* Content */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
+                        <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{block.label}</p>
+                        {savedCount > 0 && !isSkip && (
+                          <span style={{ fontSize: 9, fontWeight: 700, color: cfg.cor, background: cfg.bg, padding: "2px 6px", borderRadius: 999, border: `1px solid ${cfg.cor}40` }}>✓ {savedCount} salva{savedCount > 1 ? "s" : ""}</span>
+                        )}
+                      </div>
+                      {block.tarefas_sugeridas.length > 0 && !isSkip && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 3 }}>
+                          {block.tarefas_sugeridas.map((t, ti) => (
+                            <button
+                              key={ti}
+                              type="button"
+                              onClick={() => agendaPhase === "preview" && toggleAgendaTaskSelection(idx, ti)}
+                              style={{
+                                fontSize: 10,
+                                color: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor : "var(--text-2)",
+                                background: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? `${cfg.cor}18` : cfg.bg,
+                                border: `1px solid ${selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor + "70" : cfg.cor + "30"}`,
+                                borderRadius: 6,
+                                padding: "2px 7px",
+                                cursor: agendaPhase === "preview" ? "pointer" : "default",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                opacity: agendaPhase === "approved" && !savedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? 0.45 : 1,
+                              }}
+                            >
+                              {agendaPhase === "preview" && (
+                                <span style={{ fontSize: 9 }}>
+                                  {selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? "✓" : "○"}
+                                </span>
+                              )}
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <p style={{ fontSize: 10, color: "var(--text-3)", fontStyle: "italic", margin: 0 }}>
+                        {block.razao_ia}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Approve button */}
+              {agendaPhase === "preview" && (
+                <div style={{ padding: "10px 13px", display: "flex", gap: 8 }}>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ flex: 1 }}
+                    onClick={() => { setAgendaPhase("idle"); setAgendaBlocks([]); setSelectedAgendaTaskKeys(new Set()); setSavedAgendaTaskKeys(new Set()); }}
+                  >Refazer</button>
+                  <AuraButtonV2 variant="primary" size="sm" style={{ flex: 2 }} onClick={approveAgenda} disabled={selectedAgendaCount === 0 || agendaSaving}>
+                    {agendaSaving ? "Enviando..." : `Adicionar ${selectedAgendaCount > 0 ? selectedAgendaCount : ""} ao Planner`}
+                  </AuraButtonV2>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* ── CARD: Ciclo de Humor (identidade central do app) ── */}
         <div className="home-cycle-card" style={{ border: `1.5px solid ${phaseColor}30` }}>
           {/* Faixa colorida lateral */}
@@ -1558,323 +1887,6 @@ export function HomePage() {
           </button>
         </div>
 
-        {/* ── Agenda por Blocos ── */}
-        <div style={{ marginBottom: "calc(var(--a) * 1.2)" }}>
-          {/* Header */}
-          <div className="home-section-row">
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
-                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-              </svg>
-              <span className="section-title" style={{ fontSize: "14px" }}>Agenda do dia</span>
-            </div>
-            {agendaPhase === "approved" && (
-              <span style={{ fontSize: "11px", color: "var(--accent-sage)", fontWeight: 600 }}>✓ No Planner</span>
-            )}
-            {agendaPhase === "preview" && (
-              <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>
-                {selectedAgendaCount} selecionada{selectedAgendaCount !== 1 ? "s" : ""}
-              </span>
-            )}
-            {agendaPhase === "idle" && (
-              <AuraButtonV2 variant="primary" size="sm" onClick={fetchAgenda} useAuraIcon>
-                Montar com IA
-              </AuraButtonV2>
-            )}
-          </div>
-
-          {agendaPhase === "idle" && (
-            <div className="home-agenda-card" style={{
-              background: "rgba(255,253,249,.97)",
-              borderRadius: 14,
-              border: "1.5px solid var(--warm-border)",
-              overflow: "hidden",
-            }}>
-              {homeAgendaPreview.tasks.length === 0 && !homeAgendaPreview.habit ? (
-                <div style={{ padding: "14px 13px" }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
-                    Sem compromissos agora
-                  </p>
-                  <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: 0 }}>
-                    A Airia pode sugerir um encaixe leve para preencher o dia sem pesar.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {homeAgendaPreview.tasks.map((task, index) => {
-                    const isTaskDone = doneTaskIds.has(task.id);
-                    return (
-                    <div
-                      key={task.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate("/planner", { state: { openTaskId: task.id } })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigate("/planner", { state: { openTaskId: task.id } });
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        gap: 10,
-                        padding: "10px 13px",
-                        border: "none",
-                        borderBottom: index < homeAgendaPreview.tasks.length - 1 || homeAgendaPreview.habit ? "1px solid var(--warm-border)" : "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        opacity: isTaskDone ? 0.6 : 1,
-                        transition: "opacity 0.2s",
-                      }}
-                    >
-                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>{task.time}</p>
-                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hoje</p>
-                      </div>
-                      <div style={{ width: 3, borderRadius: 999, background: isTaskDone ? "var(--accent-sage)" : "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28, transition: "background 0.2s" }} />
-                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 12, fontWeight: 700, color: isTaskDone ? "var(--text-3)" : "var(--text-1)", margin: 0, textDecoration: isTaskDone ? "line-through" : "none", transition: "all 0.2s" }}>
-                            {task.title}
-                          </p>
-                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                            {isTaskDone ? "Concluído" : (task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa")}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (!isTaskDone) void handleHomeTaskDone(task);
-                          }}
-                          title={isTaskDone ? "Concluído" : "Marcar como feito"}
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-sage)",
-                            background: isTaskDone ? "var(--accent-sage)" : "transparent",
-                            cursor: isTaskDone ? "default" : "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                            transition: "background 0.2s",
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={isTaskDone ? "white" : "var(--accent-sage)"} strokeWidth="2.5" strokeLinecap="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleHomeTaskDelete(task);
-                          }}
-                          title="Excluir"
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-peach)",
-                            background: "transparent",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  );})}
-                  {homeAgendaPreview.habit && (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate("/habits")}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigate("/habits");
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        gap: 10,
-                        padding: "10px 13px",
-                        border: "none",
-                        background: "rgba(180,185,169,.08)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                      }}
-                    >
-                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-sage)", margin: 0 }}>
-                          {homeAgendaPreview.habit.reminderTime ?? "--:--"}
-                        </p>
-                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hábito</p>
-                      </div>
-                      <div style={{ width: 3, borderRadius: 999, background: "var(--accent-sage)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
-                            {homeAgendaPreview.habit.icon ? `${homeAgendaPreview.habit.icon} ` : ""}{homeAgendaPreview.habit.title}
-                          </p>
-                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                            Ritual pendente de hoje
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleHomeHabitDone(homeAgendaPreview.habit!);
-                          }}
-                          title="Marcar como feito"
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-sage)",
-                            background: "transparent",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleHomeHabitDelete(homeAgendaPreview.habit!);
-                          }}
-                          title="Excluir"
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-peach)",
-                            background: "transparent",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {agendaPhase === "loading" && (
-            <div style={{
-              background: "rgba(255,253,249,.9)", borderRadius: 12, padding: "16px",
-              textAlign: "center", border: "1.5px solid var(--warm-border)",
-            }}>
-              <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
-              <p style={{ fontSize: 12, color: "var(--text-2)", fontStyle: "italic" }}>
-                Analisando seu estado e montando blocos personalizados...
-              </p>
-            </div>
-          )}
-
-          {(agendaPhase === "preview" || agendaPhase === "approved") && agendaBlocks.length > 0 && (
-            <div className="home-agenda-card" style={{
-              background: "rgba(255,253,249,.97)", borderRadius: 14,
-              border: "1.5px solid var(--warm-border)", overflow: "hidden",
-            }}>
-              {agendaBlocks.map((block, idx) => {
-                const cfg = BLOCK_CONFIG[block.tipo] ?? BLOCK_CONFIG.flexivel;
-                const isSkip = block.tipo === "descanso" || block.tipo === "refeicao";
-                const savedCount = block.tarefas_sugeridas.filter((_, taskIndex) => savedAgendaTaskKeys.has(agendaTaskKey(idx, taskIndex))).length;
-                return (
-                  <div key={idx} style={{
-                    display: "flex", gap: 10, padding: "10px 13px",
-                    borderBottom: idx < agendaBlocks.length - 1 ? "1px solid var(--warm-border)" : "none",
-                    opacity: isSkip ? 0.55 : 1,
-                  }}>
-                    {/* Time column */}
-                    <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, color: cfg.cor, margin: 0 }}>{block.horario_inicio}</p>
-                      <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>{block.horario_fim}</p>
-                    </div>
-                    {/* Color bar */}
-                    <div style={{ width: 3, borderRadius: 999, background: cfg.cor, flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-                    {/* Content */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-                        <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{block.label}</p>
-                        {savedCount > 0 && !isSkip && (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: cfg.cor, background: cfg.bg, padding: "2px 6px", borderRadius: 999, border: `1px solid ${cfg.cor}40` }}>✓ {savedCount} salva{savedCount > 1 ? "s" : ""}</span>
-                        )}
-                      </div>
-                      {block.tarefas_sugeridas.length > 0 && !isSkip && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 3 }}>
-                          {block.tarefas_sugeridas.map((t, ti) => (
-                            <button
-                              key={ti}
-                              type="button"
-                              onClick={() => agendaPhase === "preview" && toggleAgendaTaskSelection(idx, ti)}
-                              style={{
-                                fontSize: 10,
-                                color: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor : "var(--text-2)",
-                                background: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? `${cfg.cor}18` : cfg.bg,
-                                border: `1px solid ${selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor + "70" : cfg.cor + "30"}`,
-                                borderRadius: 6,
-                                padding: "2px 7px",
-                                cursor: agendaPhase === "preview" ? "pointer" : "default",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4,
-                                opacity: agendaPhase === "approved" && !savedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? 0.45 : 1,
-                              }}
-                            >
-                              {agendaPhase === "preview" && (
-                                <span style={{ fontSize: 9 }}>
-                                  {selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? "✓" : "○"}
-                                </span>
-                              )}
-                              {t}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <p style={{ fontSize: 10, color: "var(--text-3)", fontStyle: "italic", margin: 0 }}>
-                        {block.razao_ia}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Approve button */}
-              {agendaPhase === "preview" && (
-                <div style={{ padding: "10px 13px", display: "flex", gap: 8 }}>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ flex: 1 }}
-                    onClick={() => { setAgendaPhase("idle"); setAgendaBlocks([]); setSelectedAgendaTaskKeys(new Set()); setSavedAgendaTaskKeys(new Set()); }}
-                  >Refazer</button>
-                  <AuraButtonV2 variant="primary" size="sm" style={{ flex: 2 }} onClick={approveAgenda} disabled={selectedAgendaCount === 0 || agendaSaving}>
-                    {agendaSaving ? "Enviando..." : `Adicionar ${selectedAgendaCount > 0 ? selectedAgendaCount : ""} ao Planner`}
-                  </AuraButtonV2>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         {/* ── Nudge proativo da Airia ──────────────────────────── */}
         {state.proactiveNudge && (() => {
           const nudge = state.proactiveNudge!;
@@ -2066,6 +2078,11 @@ export function HomePage() {
                                       const slot = findSmartPlannerSlot(state.tasks || [], new Date());
                                       const saved = await addTask(action.title, slot.time, action.category, { forceSave: true, date: slot.date });
                                       if (!saved) throw new Error("A sugestao nao entrou no planner.");
+                                      trackEvent("tasks_added_to_planner", {
+                                        source: "home",
+                                        item_count: 1,
+                                        next_day: slot.isNextDay,
+                                      });
                                       setAddedActionTitles(prev => new Set([...prev, action.title]));
                                       if (slot.isNextDay) {
                                         showSuccess(`Agendado para amanhã às ${slot.time}`);

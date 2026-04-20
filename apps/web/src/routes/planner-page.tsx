@@ -8,6 +8,7 @@ import { AuraToggle } from "../components/editorial/AuraToggle";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
 // AuraToggle removed — no longer needed in PlannerSheetBody
 import { parseAiSuggestion } from "../lib/ai";
 import {
@@ -1611,6 +1612,7 @@ export function PlannerPage() {
   const { refreshData, state, toggleSubGoal } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
+  const plannerOpenedRef = useRef(false);
 
   // ── Modo Proteção de Fase Baixa (7.2) ──────────────────────
   const cycleReport = useMemo(() => {
@@ -1639,6 +1641,15 @@ export function PlannerPage() {
       window.clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    if (plannerOpenedRef.current) return;
+    plannerOpenedRef.current = true;
+    const openTaskId = (location.state as { openTaskId?: string | number } | null)?.openTaskId;
+    trackEvent("planner_opened", {
+      has_open_task: Boolean(openTaskId),
+    });
+  }, [location.state]);
 
   const dataAtual = useMemo(() => {
     const date = new Date(todayAnchor);
@@ -1948,6 +1959,11 @@ export function PlannerPage() {
       }
       await refreshData();
       closeNewForm();
+      trackEvent("tasks_added_to_planner", {
+        source: "planner",
+        item_count: 1,
+        is_all_day: newForm.time === "00:00" && newForm.endTime === "23:59",
+      });
       showSuccess("Bloco adicionado.");
     } catch (error: any) {
       showError(error.message);

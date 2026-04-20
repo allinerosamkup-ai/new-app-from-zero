@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { Habit } from "../features/aura/types";
@@ -8,6 +8,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil } from "lucide-react";
 import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
 import { getLocalDateKey } from "../utils/day-context";
 
 // ─── Confetti burst (CSS-only, no dependency) ────────────────────────────────
@@ -670,6 +671,7 @@ export function HabitsPage() {
   const [tab, setTab] = useState<"today" | "all" | "badges">("today");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const habitsOpenedRef = useRef(false);
 
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [showConfetti, setShowConfetti] = useState(false);
@@ -686,6 +688,15 @@ export function HabitsPage() {
     () => (editingHabit ? buildHabitEditDraft(editingHabit) : undefined),
     [editingHabit],
   );
+
+  useEffect(() => {
+    if (habitsOpenedRef.current) return;
+    habitsOpenedRef.current = true;
+    trackEvent("habits_opened", {
+      habits_count: habits.length,
+      today_count: todayHabits.length,
+    });
+  }, [habits.length, todayHabits.length]);
 
   async function handleToggle(habitId: string) {
     if (togglingIds.has(habitId)) return;

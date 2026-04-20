@@ -1,10 +1,11 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { NotificationPreferences } from "../features/aura/types";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
 import "../styles/aura.css";
 
 type GCalCalendar = {
@@ -68,6 +69,9 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
   }
 
   async function handleConnect() {
+    trackEvent("gcal_connect_clicked", {
+      connected: false,
+    });
     try {
       const res = await api.get("/gcal/auth-url");
       const url = res?.url || res?.authUrl;
@@ -288,6 +292,7 @@ export function PreferencesPage() {
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(true);
+  const gcalConnectedTrackedRef = useRef(false);
 
   useEffect(() => {
     const gcalStatus = searchParams.get("gcal");
@@ -295,6 +300,12 @@ export function PreferencesPage() {
 
     if (gcalStatus === "connected") {
       setAccountStatus("Google Agenda conectado.");
+      if (!gcalConnectedTrackedRef.current) {
+        gcalConnectedTrackedRef.current = true;
+        trackEvent("gcal_connected", {
+          source: "oauth_return",
+        });
+      }
     } else if (gcalStatus === "error") {
       setAccountStatus("Não consegui conectar o Google Agenda.");
     }

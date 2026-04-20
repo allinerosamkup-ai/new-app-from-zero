@@ -17,7 +17,8 @@ import { CheckinCreateSchema } from './contracts/checkin.contract';
 import { deriveCheckinSlot } from './contracts/checkin-slot';
 import { PlannerSyncSchema } from './contracts/planner.contract';
 import { HabitCreateSchema, HabitPatchSchema } from './contracts/habit.contract';
-import { JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
+import { JournalExternalMessageSchema, JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
+import { EventLogCreateSchema } from './contracts/event-log.contract';
 import { OnboardingProcessSchema } from './contracts/onboarding.contract';
 import {
   DEFAULT_EVENING_REVIEW_TIME,
@@ -278,6 +279,7 @@ async function generateJournalSuggestedTasks(args: {
   userName: string;
   moodCycleContext?: string | null;
   recentMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  currentHour?: number;
 }): Promise<SuggestedTask[]> {
   const OpenAI = (await import('openai')).default;
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -292,7 +294,7 @@ async function generateJournalSuggestedTasks(args: {
       { role: 'system' as const, content: args.systemPrompt },
       {
         role: 'user' as const,
-        content: `Com base nesta conversa recente, sugira de 0 a 3 tarefas pequenas e concretas para hoje.
+        content: `Com base nesta conversa recente, sugira de 0 a 3 tarefas pequenas e concretas.
 
 CONVERSA:
 ${transcript}
@@ -302,6 +304,9 @@ REGRAS:
 - Priorize autocuidado, organização leve ou trabalho prático conforme o estado atual.
 - Se não fizer sentido sugerir nada, retorne [].
 - Use categorias: trabalho | saude | rotina | social.
+- Se o usuário mencionou planos concretos (ex: "vou encontrar fulano", "tenho reunião", "preciso ligar para X"), inclua como tarefa com categoria adequada (social/trabalho) e horário se mencionado.
+- Misture sugestões terapêuticas com compromissos práticos mencionados na conversa.${args.currentHour !== undefined ? `
+- A hora atual do usuário é ${args.currentHour}h. NUNCA sugira horários anteriores à hora atual. Se o horário natural de uma tarefa já passou, omita o campo time.` : ''}
 - Retorne APENAS JSON no formato:
 {"tasks":[{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]}`,
       },
@@ -535,6 +540,7 @@ async function finalizeJournalSession(args: {
   profileSummary?: string | null;
   moodCycleContext?: string | null;
   longTermMemory?: string | null;
+  currentHour?: number;
 }) {
   const summary = await args.aiService.summarizeJournalSession(args.messages);
 
@@ -550,6 +556,7 @@ async function finalizeJournalSession(args: {
       }),
       userName: args.userName,
       moodCycleContext: args.moodCycleContext,
+      currentHour: args.currentHour,
       recentMessages: args.messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')
         .map((message) => ({
@@ -952,6 +959,62 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * POST /api/events
+   * Registra um evento de produto do próprio usuário.
+   */
+  app.post('/api/events', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+
+    try {
+      const data = EventLogCreateSchema.parse(req.body);
+      const event = await prisma.eventLog.create({
+        data: {
+          userId,
+          eventName: data.eventName,
+          properties: data.properties ?? {},
+          path: data.path ?? null,
+          userAgent: req.get('user-agent') ?? null,
+        },
+      });
+
+      return res.status(201).json(event);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+
+      console.error('[events/create] Error:', error);
+      return res.status(500).json({ error: 'Failed to create event log' });
+    }
+  });
+
+  /**
+   * GET /api/events
+   * Debug das próprias trilhas de eventos com limite controlado.
+   */
+  app.get('/api/events', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+
+    try {
+      const limitParam = Number(req.query.limit ?? 100);
+      const limit = Number.isFinite(limitParam)
+        ? Math.min(Math.max(Math.trunc(limitParam), 1), 200)
+        : 100;
+
+      const events = await prisma.eventLog.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: 'desc' }],
+        take: limit,
+      });
+
+      return res.json({ events, limit });
+    } catch (error) {
+      console.error('[events/list] Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch event logs' });
+    }
+  });
+
+  /**
    * GET /api/checkins
    * Retorna os check-ins recentes de um usuário (padrão: últimos 7 dias).
    */
@@ -1215,6 +1278,123 @@ export function createApp(dependencies: AppDependencies = {}) {
     } catch (error: any) {
       console.error('[journal/sessions] Error:', error);
       return res.status(500).json({ error: 'Failed to fetch journal sessions' });
+    }
+  });
+
+  /**
+   * GET /api/journal/session/:sessionId
+   * Retorna uma sessão do diário + mensagens (para integrações externas).
+   * Query opcional: afterOrderIndex (number) para sync incremental.
+   */
+  app.get('/api/journal/session/:sessionId', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { sessionId } = req.params;
+
+    const afterOrderIndex = req.query.afterOrderIndex !== undefined
+      ? Number(req.query.afterOrderIndex)
+      : null;
+    if (afterOrderIndex !== null && (Number.isNaN(afterOrderIndex) || afterOrderIndex < -1)) {
+      return res.status(400).json({ error: 'afterOrderIndex must be a number >= -1' });
+    }
+
+    try {
+      const session = await prisma.journalSession.findUnique({
+        where: { id: sessionId },
+      });
+      if (!session || session.userId !== userId) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      const messages = await prisma.journalMessage.findMany({
+        where: {
+          sessionId,
+          ...(afterOrderIndex === null ? {} : { orderIndex: { gt: afterOrderIndex } }),
+        },
+        orderBy: { orderIndex: 'asc' },
+      });
+
+      return res.json({
+        id: session.id,
+        localDate: session.localDate.toISOString().split('T')[0],
+        status: session.status,
+        summary: session.summary,
+        emotions: session.emotions,
+        themes: session.themes,
+        suggestions: session.suggestions,
+        startedAt: session.startedAt.toISOString(),
+        finalizedAt: session.finalizedAt?.toISOString() ?? null,
+        messages: messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          orderIndex: m.orderIndex,
+          createdAt: m.createdAt.toISOString(),
+        })),
+      });
+    } catch (error: any) {
+      console.error('[journal/session] Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch journal session' });
+    }
+  });
+
+  /**
+   * POST /api/journal/external-message
+   * Cria uma mensagem "user" no diário sem SSE (para integrações).
+   * Body: { sessionId?, message, referenceDate? }
+   */
+  app.post('/api/journal/external-message', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+
+    let data: { sessionId?: string; message: string; referenceDate?: string };
+    try {
+      data = JournalExternalMessageSchema.parse({ ...req.body, userId });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
+    try {
+      let sessionId = data.sessionId;
+
+      if (!sessionId) {
+        const referenceDate = data.referenceDate ? new Date(`${data.referenceDate}T00:00:00.000Z`) : new Date();
+        const { session } = await journalService.startOrResumeSession(prisma, userId, referenceDate);
+        sessionId = session.id;
+      } else {
+        const session = await prisma.journalSession.findUnique({ where: { id: sessionId }, select: { userId: true } });
+        if (!session || session.userId !== userId) {
+          return res.status(404).json({ error: 'Session not found' });
+        }
+      }
+
+      const existing = await prisma.journalMessage.findMany({
+        where: { sessionId },
+        select: { orderIndex: true },
+      });
+      const orderIndex = journalService.nextOrderIndex(existing);
+
+      const created = await prisma.journalMessage.create({
+        data: {
+          sessionId,
+          userId,
+          role: 'user',
+          content: data.message,
+          orderIndex,
+        },
+        select: { id: true, orderIndex: true, createdAt: true },
+      });
+
+      return res.status(201).json({
+        sessionId,
+        messageId: created.id,
+        orderIndex: created.orderIndex,
+        createdAt: created.createdAt.toISOString(),
+      });
+    } catch (error: any) {
+      console.error('[journal/external-message] Error:', error);
+      return res.status(500).json({ error: 'Failed to store journal message' });
     }
   });
 
@@ -1611,6 +1791,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       profileSummary: runtimeContext.userProfileSummary,
       moodCycleContext: runtimeContext.moodCycleContext,
       longTermMemory: runtimeContext.longTermMemory,
+      currentHour: typeof req.body.currentHour === 'number' ? req.body.currentHour : undefined,
     });
 
     // Agendar RAG indexing para absorver o que foi escrito no diário

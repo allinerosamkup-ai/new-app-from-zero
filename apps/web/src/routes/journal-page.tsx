@@ -4,6 +4,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
 import { buildJournalPlannerSlot } from "./journal-page.helpers";
 import "../styles/aura.css";
@@ -81,12 +82,6 @@ function buildCommitmentSuggestions(summary: JournalSummary | null, temporalLabe
   return summary.suggestions.slice(0, 3).map((suggestion) => `${temporalLabel}: ${suggestion}`);
 }
 
-function buildGoalSuggestions(summary: JournalSummary | null, _phaseLabel: string): string[] {
-  // Only show AI-generated goals — never synthesized templates.
-  // If the IA não retornou metas concretas, a seção "Metas sugeridas" não renderiza.
-  if (!summary?.suggestions?.length) return [];
-  return summary.suggestions.slice(0, 3);
-}
 
 function formatSessionDate(localDate: string, startedAt: string): string {
   const date = localDate ? new Date(`${localDate}T12:00:00`) : new Date(startedAt);
@@ -123,6 +118,7 @@ export function JournalPage() {
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAutoOpenedRef = useRef(false);
+  const journalOpenedRef = useRef(false);
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -139,6 +135,15 @@ export function JournalPage() {
     hasAutoOpenedRef.current = true;
     void openJournal();
   }, []);
+
+  useEffect(() => {
+    if (journalOpenedRef.current || isSessionsLoading) return;
+    journalOpenedRef.current = true;
+    trackEvent("journal_opened", {
+      view: "chat",
+      has_active_session: Boolean(sessions.some((session) => session.status === "active")),
+    });
+  }, [isSessionsLoading, sessions]);
 
   async function loadSessions() {
     setIsSessionsLoading(true);
@@ -268,7 +273,7 @@ export function JournalPage() {
 
     setIsFinalizing(true);
     try {
-      const result = await api.post("/journal/finalize", { sessionId }) as {
+      const result = await api.post("/journal/finalize", { sessionId, currentHour: new Date().getHours() }) as {
         summary?: JournalSummary;
         suggestedTasks?: SuggestedTask[];
         sessionStatus?: string;
@@ -341,6 +346,10 @@ export function JournalPage() {
       });
 
       setAddedToPlanner(prev => new Set([...prev, key]));
+      trackEvent("tasks_added_to_planner", {
+        source: "journal",
+        day_offset: dayOffset,
+      });
       showSuccess(dayOffset === 0 ? "Adicionado à agenda de hoje!" : "Adicionado à agenda de amanhã!");
     } catch (error) {
       showError(error instanceof Error ? error.message : "Não foi possível adicionar ao planner.");
@@ -352,9 +361,9 @@ export function JournalPage() {
 
   function handleAddClick(key: string, task: SuggestedTask) {
     const nowHour = new Date().getHours();
-    const taskHour = task.time ? Number(task.time.split(":")[0]) : 9;
-    // After 20h or task time >= 20h → ask today or tomorrow
-    if (nowHour >= 20 || taskHour >= 20) {
+    const taskHour = task.time ? Number(task.time.split(":")[0]) : nowHour + 1;
+    // Ask today or tomorrow when: after 20h, task time >= 20h, or task time has already passed
+    if (nowHour >= 20 || taskHour >= 20 || taskHour <= nowHour) {
       setDayChoice({ key, task });
     } else {
       void addTaskToPlanner(key, task, 0);
@@ -365,7 +374,6 @@ export function JournalPage() {
   const mainButtonLabel = sessionId || activePersistedSession ? "Continuar meu diário" : "Abrir meu diário";
 
   const commitmentSuggestions = buildCommitmentSuggestions(finalizationResult?.summary ?? null, finalizationResult?.temporalLabel ?? "Hoje");
-  const goalSuggestions = buildGoalSuggestions(finalizationResult?.summary ?? null, cycleReport.phaseLabel);
 
   const finalizationModal = showFinalizationModal && finalizationResult ? (
     <div
@@ -544,18 +552,6 @@ export function JournalPage() {
           </div>
         )}
 
-        {goalSuggestions.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>
-              Metas sugeridas
-            </p>
-            {goalSuggestions.map((goal) => (
-              <div key={goal} style={{ borderRadius: 12, border: "1px solid rgba(99,152,169,.24)", background: "rgba(99,152,169,.08)", padding: "10px 12px", fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>
-                {goal}
-              </div>
-            ))}
-          </div>
-        )}
 
         <AuraButtonV2 className="ui-btn-gradient" onClick={() => setShowFinalizationModal(false)}>
           Continuar

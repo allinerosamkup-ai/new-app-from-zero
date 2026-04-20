@@ -25,6 +25,7 @@ model Profile {
   journalMessages  JournalMessage[]
   timelineBlocks   TimelineBlock[]
   habits           Habit[]
+  eventLogs        EventLog[]
   weeklyInsights   WeeklyInsight[]
   objectives       Objective[]
   memoryEmbeddings  MemoryEmbedding[]
@@ -302,6 +303,22 @@ model HabitCompletion {
   @@unique([habitId, date])
   @@index([habitId, date])
   @@map("habit_completions")
+}
+
+model EventLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  eventName  String   @map("event_name")
+  properties Json     @default("{}")
+  path       String?  @db.Text
+  userAgent  String?  @map("user_agent") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], name: "idx_event_logs_user_created")
+  @@index([userId, eventName], name: "idx_event_logs_user_event")
+  @@map("event_logs")
 }
 
 model WeeklyInsight {

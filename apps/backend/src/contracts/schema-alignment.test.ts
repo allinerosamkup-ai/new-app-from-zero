@@ -28,6 +28,10 @@ const gcalSelectedCalendarsMigration = fs.readFileSync(
   path.resolve(__dirname, '../../../../supabase/migrations/20260413190000_add_gcal_selected_calendars.sql'),
   'utf8',
 );
+const eventLogMigration = fs.readFileSync(
+  path.resolve(__dirname, '../../../../supabase/migrations/20260420120000_add_event_logs.sql'),
+  'utf8',
+);
 
 assert.match(migration, /suggestions\s+text\[\]/);
 assert.match(migration, /age\s+integer/);
@@ -62,5 +66,11 @@ assert.match(notificationPreferencesMigration, /notification_preferences\s+jsonb
 assert.match(notificationPreferencesMigration, /journalMorningTime/);
 assert.match(notificationPreferencesMigration, /aiSuggestions/);
 assert.match(gcalSelectedCalendarsMigration, /gcal_selected_calendars\s+jsonb/);
+assert.match(eventLogMigration, /create table if not exists public\.event_logs/);
+assert.match(eventLogMigration, /event_name\s+text/);
+assert.match(eventLogMigration, /properties\s+jsonb/);
+assert.match(eventLogMigration, /user_agent\s+text/);
+assert.match(eventLogMigration, /create index if not exists event_logs_user_id_created_at_idx/);
+assert.match(eventLogMigration, /create index if not exists event_logs_user_id_event_name_idx/);
 
 console.log('schema alignment tests passed');
