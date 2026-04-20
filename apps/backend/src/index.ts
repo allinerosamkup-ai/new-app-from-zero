@@ -793,6 +793,37 @@ export function createApp(dependencies: AppDependencies = {}) {
     return res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
+  // POST /api/admin/push-onboarding-reminder — rota admin (x-admin-key), antes do requireAuth
+  app.post('/api/admin/push-onboarding-reminder', async (req: Request, res: Response) => {
+    const adminKey = req.headers['x-admin-key'];
+    if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const profiles = await prisma.profile.findMany({
+        where: { onboardingDone: false, createdAt: { lte: twoDaysAgo } },
+        select: { id: true },
+      });
+      const userIds = profiles.map(p => p.id);
+      let sent = 0;
+      await Promise.allSettled(
+        userIds.map(async userId => {
+          await sendPushToUser(userId, {
+            title: 'Oi! Me conta mais sobre você',
+            body: 'Leva só 3 minutos para ativar sua Airia do jeito certo.',
+            url: '/onboarding',
+            tag: 'onboarding-reminder',
+          });
+          sent++;
+        })
+      );
+      return res.json({ ok: true, sent, total: userIds.length });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // Todas as rotas abaixo exigem autenticação Supabase
   app.use('/api', dependencies.authMiddleware ?? requireAuth);
 
@@ -3315,37 +3346,6 @@ JSON APENAS: {"profileSummary":"..."}`,
   // GET /api/push/vapid-public-key — expose public key to frontend
   app.get('/api/push/vapid-public-key', (_req: Request, res: Response) => {
     return res.json({ publicKey: VAPID_PUBLIC_KEY });
-  });
-
-  // POST /api/admin/push-onboarding-reminder — send push to users without onboarding (2+ days after signup)
-  app.post('/api/admin/push-onboarding-reminder', async (req: Request, res: Response) => {
-    const adminKey = req.headers['x-admin-key'];
-    if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-    try {
-      const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-      const profiles = await prisma.profile.findMany({
-        where: { onboardingDone: false, createdAt: { lte: twoDaysAgo } },
-        select: { id: true },
-      });
-      const userIds = profiles.map(p => p.id);
-      let sent = 0;
-      await Promise.allSettled(
-        userIds.map(async userId => {
-          await sendPushToUser(userId, {
-            title: 'Oi! Me conta mais sobre você',
-            body: 'Leva só 3 minutos para ativar sua Airia do jeito certo.',
-            url: '/onboarding',
-            tag: 'onboarding-reminder',
-          });
-          sent++;
-        })
-      );
-      return res.json({ ok: true, sent, total: userIds.length });
-    } catch (e: any) {
-      return res.status(500).json({ error: e.message });
-    }
   });
 
   return app;
