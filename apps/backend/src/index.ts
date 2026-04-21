@@ -1412,6 +1412,24 @@ export function createApp(dependencies: AppDependencies = {}) {
         resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
       ]);
 
+      // Se sessão recém-criada e sem mensagens, injeta nota do check-in como primeira mensagem
+      if (created && messages.length === 0 && context.checkinToday?.note) {
+        await prisma.journalMessage.create({
+          data: {
+            sessionId: session.id,
+            userId: data.userId,
+            role: 'user',
+            content: context.checkinToday.note,
+            orderIndex: 0,
+          },
+        });
+        messages.push({
+          role: 'user',
+          content: context.checkinToday.note,
+          orderIndex: 0,
+        });
+      }
+
       return res.json({
         sessionId: session.id,
         created,

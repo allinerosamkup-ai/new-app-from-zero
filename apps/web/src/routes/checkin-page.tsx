@@ -783,37 +783,40 @@ export function CheckinPage() {
                 )}
               </div>
 
-              {/* Nota livre */}
-              <div>
-                <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>
-                  Nota livre <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>(opcional)</span>
+              {/* Nota do dia */}
+              <div style={{
+                borderRadius: 16,
+                border: note.trim() ? "1.5px solid rgba(150,199,179,0.55)" : "1.5px solid var(--accent-peach)",
+                background: note.trim() ? "rgba(150,199,179,0.06)" : "rgba(215,137,127,0.05)",
+                padding: "14px 14px 10px",
+                transition: "border-color 0.2s, background 0.2s",
+              }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: note.trim() ? "var(--accent-sage)" : "var(--accent-peach)", margin: "0 0 8px" }}>
+                  ✏ Nota do dia
                 </p>
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Algo que queira registrar antes de finalizar... um pensamento, uma situação, um sentimento."
+                  placeholder="Um pensamento, uma situação... vai direto para o seu diário."
                   rows={3}
                   style={{
                     width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: 14,
-                    border: note.trim()
-                      ? "1.5px solid rgba(150,199,179,0.45)"
-                      : "1.5px solid var(--warm-border-2)",
+                    padding: "0",
+                    borderRadius: 0,
+                    border: "none",
                     background: "transparent",
                     fontSize: 13,
                     color: "var(--text-1)",
                     resize: "none",
                     outline: "none",
                     boxSizing: "border-box",
-                    lineHeight: 1.5,
+                    lineHeight: 1.6,
                     fontFamily: "'Plus Jakarta Sans', sans-serif",
-                    transition: "border-color 0.2s ease",
                   }}
                 />
                 {note.trim() && (
-                  <p style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 600, marginTop: 4 }}>
-                    ✓ Nota registrada
+                  <p style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 600, marginTop: 6 }}>
+                    ✓ Vai para o seu diário de hoje
                   </p>
                 )}
               </div>

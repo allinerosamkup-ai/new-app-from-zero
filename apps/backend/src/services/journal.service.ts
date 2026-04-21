@@ -29,6 +29,7 @@ type CheckinSnapshot = {
   stateLabel?: string | null;
   stateLabelType?: string | null;
   recordedAt?: Date;
+  note?: string | null;
 };
 
 export type RoutineContext = {
@@ -213,18 +214,46 @@ export class JournalService {
       recentBlocks.map((block: { category?: string | null }) => block.category ?? ''),
     );
 
-    const recentSessionHistory = pastSessionsHistory.length > 0
-      ? pastSessionsHistory
-          .map((s: { summary?: string | null; themes?: string[] | null; finalizedAt?: Date | null }) => {
-            const daysAgo = s.finalizedAt
-              ? Math.round((Date.now() - new Date(s.finalizedAt).getTime()) / 86_400_000)
-              : null;
-            const label = daysAgo === null ? 'anteriormente' : daysAgo === 0 ? 'hoje' : daysAgo === 1 ? 'ontem' : `${daysAgo} dias atrás`;
-            const themePart = s.themes?.length ? ` (temas: ${s.themes.join(', ')})` : '';
-            return `[${label}] ${s.summary?.trim() ?? ''}${themePart}`;
-          })
-          .join('\n')
-      : '';
+    const sessionDates = new Set(
+      pastSessionsHistory
+        .filter((s: { finalizedAt?: Date | null }) => s.finalizedAt)
+        .map((s: { finalizedAt?: Date | null }) => startOfUtcDay(new Date(s.finalizedAt!)).getTime()),
+    );
+
+    const recentCheckinsWithNotes = await prisma.dailyCheckin.findMany({
+      where: {
+        userId,
+        localDate: { gte: recentWindowStart, lte: today },
+        note: { not: null },
+      },
+      orderBy: { localDate: 'desc' },
+      take: 7,
+      select: { localDate: true, note: true },
+    });
+
+    const checkinNoteLines = recentCheckinsWithNotes
+      .filter((c: { localDate: Date; note?: string | null }) => {
+        const dayTs = startOfUtcDay(new Date(c.localDate)).getTime();
+        return !sessionDates.has(dayTs);
+      })
+      .map((c: { localDate: Date; note?: string | null }) => {
+        const daysAgo = Math.round((Date.now() - new Date(c.localDate).getTime()) / 86_400_000);
+        const label = daysAgo === 0 ? 'hoje' : daysAgo === 1 ? 'ontem' : `${daysAgo} dias atrás`;
+        return `[${label} - nota do check-in] ${c.note?.trim() ?? ''}`;
+      });
+
+    const sessionLines = pastSessionsHistory.length > 0
+      ? pastSessionsHistory.map((s: { summary?: string | null; themes?: string[] | null; finalizedAt?: Date | null }) => {
+          const daysAgo = s.finalizedAt
+            ? Math.round((Date.now() - new Date(s.finalizedAt).getTime()) / 86_400_000)
+            : null;
+          const label = daysAgo === null ? 'anteriormente' : daysAgo === 0 ? 'hoje' : daysAgo === 1 ? 'ontem' : `${daysAgo} dias atrás`;
+          const themePart = s.themes?.length ? ` (temas: ${s.themes.join(', ')})` : '';
+          return `[${label}] ${s.summary?.trim() ?? ''}${themePart}`;
+        })
+      : [];
+
+    const recentSessionHistory = [...sessionLines, ...checkinNoteLines].join('\n');
 
     const context = {
       routineSummary,
