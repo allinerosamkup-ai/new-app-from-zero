@@ -1,7 +1,7 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraToggle } from "../components/editorial/AuraToggle";
@@ -1612,6 +1612,7 @@ export function PlannerPage() {
   const { refreshData, state, toggleSubGoal } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
   const plannerOpenedRef = useRef(false);
 
   // ── Modo Proteção de Fase Baixa (7.2) ──────────────────────
@@ -2127,6 +2128,23 @@ export function PlannerPage() {
   return (
     <div className="bg-white min-h-screen" style={{ flex: 1, padding: "20px", overflowX: 'hidden' }}>
       <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
+
+      {/* ── Link para Metas ── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4, marginTop: -8 }}>
+        <button
+          onClick={() => navigate("/goals")}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: "transparent", border: "none", cursor: "pointer",
+            padding: "4px 2px",
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
+          </svg>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".04em" }}>Metas</span>
+        </button>
+      </div>
 
       <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
 
