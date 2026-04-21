@@ -1495,6 +1495,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           userName: runtimeContext.userName,
           userProfileSummary: runtimeContext.userProfileSummary,
           longTermMemory: runtimeContext.longTermMemory,
+          recentSessionHistory: routineCtx.recentSessionHistory,
           ragContext: journalRagContext,
           plannerContext: journalPlannerContext,
         },

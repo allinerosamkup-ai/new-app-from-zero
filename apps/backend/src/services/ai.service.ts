@@ -38,6 +38,7 @@ export type JournalPromptContext = {
   userName?: string;
   userProfileSummary?: string | null;
   longTermMemory?: string | null;
+  recentSessionHistory?: string | null;
   routineSummary?: string;
   promptSummary: string;
   topThemes: string[];
@@ -129,6 +130,7 @@ export class AIService {
             profileSummary: input.context.userProfileSummary || input.context.promptSummary,
             moodCycleContext: input.context.moodCycleContext,
             longTermMemory: input.context.longTermMemory,
+            recentSessionHistory: input.context.recentSessionHistory,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',

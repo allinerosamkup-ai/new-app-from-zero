@@ -39,6 +39,7 @@ export type RoutineContext = {
   topThemes: string[];
   topPlannerCategories: string[];
   recentSummaries: string[];
+  recentSessionHistory: string;
 };
 
 function startOfUtcDay(date: Date): Date {
@@ -154,7 +155,7 @@ export class JournalService {
     const recentWindowStart = new Date(today);
     recentWindowStart.setUTCDate(recentWindowStart.getUTCDate() - 7);
 
-    const [onboarding, preferences, checkinToday, recentSessions, recentBlocks] = await Promise.all([
+    const [onboarding, preferences, checkinToday, recentSessions, recentBlocks, pastSessionsHistory] = await Promise.all([
       prisma.onboardingResponse.findUnique({
         where: { userId },
       }),
@@ -182,6 +183,12 @@ export class JournalService {
         orderBy: { localDate: 'desc' },
         take: 20,
       }),
+      prisma.journalSession.findMany({
+        where: { userId, status: 'completed', summary: { not: null } },
+        orderBy: { finalizedAt: 'desc' },
+        take: 4,
+        select: { summary: true, themes: true, finalizedAt: true },
+      }),
     ]);
 
     const derivedRoutineSummary = [
@@ -206,6 +213,19 @@ export class JournalService {
       recentBlocks.map((block: { category?: string | null }) => block.category ?? ''),
     );
 
+    const recentSessionHistory = pastSessionsHistory.length > 0
+      ? pastSessionsHistory
+          .map((s: { summary?: string | null; themes?: string[] | null; finalizedAt?: Date | null }) => {
+            const daysAgo = s.finalizedAt
+              ? Math.round((Date.now() - new Date(s.finalizedAt).getTime()) / 86_400_000)
+              : null;
+            const label = daysAgo === null ? 'anteriormente' : daysAgo === 0 ? 'hoje' : daysAgo === 1 ? 'ontem' : `${daysAgo} dias atrás`;
+            const themePart = s.themes?.length ? ` (temas: ${s.themes.join(', ')})` : '';
+            return `[${label}] ${s.summary?.trim() ?? ''}${themePart}`;
+          })
+          .join('\n')
+      : '';
+
     const context = {
       routineSummary,
       preferences: preferences ?? undefined,
@@ -213,6 +233,7 @@ export class JournalService {
       topThemes,
       topPlannerCategories,
       recentSummaries,
+      recentSessionHistory,
     };
 
     return {

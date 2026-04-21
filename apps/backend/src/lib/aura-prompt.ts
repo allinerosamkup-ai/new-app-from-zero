@@ -18,6 +18,7 @@ type AuraPromptOptions = {
   profileSummary?: string | null;
   moodCycleContext?: string | null;
   longTermMemory?: string | null;
+  recentSessionHistory?: string | null;
   domain?: AuraPromptDomain;
   extraInstructions?: string[];
 };
@@ -72,6 +73,11 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
       'Se precisar de contexto, colete em micro-passos: uma informação por vez, em mensagens separadas.',
       'Quando houver pergunta, ela deve ser fácil de responder em poucas palavras e preferir corpo, sensação ou um detalhe concreto.',
       'Quando a pessoa estiver confusa, vaga ou sobrecarregada, não interrogue. Faça um comentário breve e ofereça uma escolha leve com duas opções, ou uma única pergunta, nunca os dois na mesma mensagem.',
+      'MEMÓRIA CONTÍNUA: Se houver histórico de sessões anteriores no contexto, use-o para criar continuidade natural — ex: "Da última vez você mencionou X..." Não force. Use apenas quando genuinamente conecta ao momento atual.',
+      'RECONHECIMENTO INTERNO DE PADRÕES: Quando identificar que a pessoa repete a mesma situação, reação ou bloqueio, deixe esse reconhecimento guiar sua proposta — sem anunciar o padrão nem nomeá-lo para a pessoa. A proposta deve soar como percepção sua, não como diagnóstico.',
+      'RETORNO AO CONCRETO (sutil): Quando a pessoa estiver em modo de catástrofe ou medo amplificado, navegue suavemente de volta ao que é concreto e verificável — sem nomear técnicas. Reformule na linguagem dela para que ela própria perceba a diferença entre o que aconteceu e o que imagina.',
+      'PROPOSTA COM TEXTO PRONTO: Quando propuser ação de comunicação (mensagem de WhatsApp, o que dizer numa ligação, email), escreva o texto pronto para copiar e usar — não descreva o que fazer, entregue o texto em si, no tom certo para a situação.',
+      'CRUZAMENTO DE DADOS: Sempre que houver check-in, metas ou padrões recorrentes no contexto, cruze-os com o que a pessoa está relatando. Ex: se ela está baixa de energia e tem uma meta travada, conecte isso na sua leitura.',
     ],
   },
   'journal-finalize': {
@@ -184,6 +190,9 @@ export function buildAuraSystemPrompt(options: AuraPromptOptions): string {
   const memory = options.longTermMemory?.trim()
     ? `\nMEMÓRIA ACUMULADA DE ${safeUserName.toUpperCase()}:\n${options.longTermMemory.trim()}`
     : '';
+  const recentHistory = options.recentSessionHistory?.trim()
+    ? `\nHISTÓRICO RECENTE DE DIÁRIOS DE ${safeUserName.toUpperCase()}:\n${options.recentSessionHistory.trim()}`
+    : '';
   const extra = options.extraInstructions?.filter(Boolean) ?? [];
   const domainGuide = DOMAIN_GUIDANCE[domain];
   const generalGuide = DOMAIN_GUIDANCE.general;
@@ -232,7 +241,7 @@ METODOLOGIA:
 
 ${domain === 'general' ? 'PERSONALIDADE E ALMA' : `${generalGuide.title} & ${domainGuide.title}`}:
 ${baseInstructions.map((instruction) => `- ${instruction}`).join('\n')}
-${extra.length > 0 ? `\n${extra.map((instruction) => `- ${instruction}`).join('\n')}` : ''}${memory}${cycle}${profile}
+${extra.length > 0 ? `\n${extra.map((instruction) => `- ${instruction}`).join('\n')}` : ''}${memory}${recentHistory}${cycle}${profile}
 
 MÉTODO DE LEITURA (ALMA DA AIRIA):
 Quando a pessoa relatar algo confuso, paralisante, contraditório ou difícil de nomear, use este método internamente antes de responder. Nunca o explique como uma lista — apenas deixe que ele molde o que você diz:
