@@ -105,7 +105,9 @@ const EMPTY_TIMELINE_CARD_STYLE: React.CSSProperties = {
   width: '100%',
   padding: '12px 14px',
   borderRadius: 12,
-  background: 'rgba(255,255,255,0.4)',
+  background: 'rgba(255,255,255,0.48)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
   border: '1px dashed rgba(17,24,39,0.08)',
   display: 'flex',
   flexDirection: 'column',
@@ -116,14 +118,29 @@ const EMPTY_TIMELINE_CARD_STYLE: React.CSSProperties = {
 };
 
 function TimelineProgressIndicator({ nowMinutes, slots }: { nowMinutes: number; slots: any[] }) {
-  // Glow effect based on current mood or generic warm tone
+  // Efeito Glass sofisticado atrás dos números
   return (
-    <div style={{ position: "absolute", left: 4, top: 0, bottom: 0, width: 5, background: "rgba(17,24,39,0.02)", zIndex: 0, borderRadius: 99, overflow: 'hidden' }}>
+    <div style={{ 
+      position: "absolute", 
+      left: 10, 
+      top: 0, 
+      bottom: 0, 
+      width: 44, 
+      background: "rgba(255, 255, 255, 0.03)", 
+      zIndex: 0, 
+      borderRadius: 14, 
+      overflow: 'hidden' 
+    }}>
        <div style={{
-         position: "absolute", top: 0, left: 0, width: "100%",
-         background: "linear-gradient(to bottom, var(--accent-peach) 0%, var(--accent-sky) 50%, var(--accent-sage) 100%)", 
-         borderRadius: 99, transition: "height 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
-         boxShadow: "0 0 15px var(--accent-peach-a3)",
+         position: "absolute", 
+         top: 0, 
+         left: 0, 
+         width: "100%",
+         background: "linear-gradient(to bottom, rgba(255,255,255,0.4) 0%, rgba(253,232,227,0.45) 15%, rgba(244,168,150,0.45) 45%, rgba(240,196,212,0.45) 65%, rgba(143,184,196,0.45) 85%, rgba(107,91,87,0.4) 100%)", 
+         backdropFilter: "blur(8px)",
+         WebkitBackdropFilter: "blur(8px)",
+         borderRight: "1px solid rgba(255,255,255,0.2)",
+         transition: "height 1.2s cubic-bezier(0.16, 1, 0.3, 1)",
          height: (() => {
             const firstSlot = slots[0];
             const lastSlot = slots[slots.length - 1];
@@ -1471,13 +1488,13 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 
   return (
     <div
-       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 18, background: "transparent", marginBottom: "10px" }}
+       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 32, background: "transparent", marginBottom: "12px" }}
     >
       <div style={{ 
         position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, 
         display: 'flex', alignItems: 'center', 
         justifyContent: offset < 0 ? 'flex-end' : 'flex-start', 
-        padding: '0 28px', color: '#fff', zIndex: 0, borderRadius: 18, 
+        padding: '0 28px', color: '#fff', zIndex: 0, borderRadius: 32, 
         transition: 'all 0.2s ease', 
         background: offset === 0 ? 'transparent' : (offset < 0 ? 'var(--accent-sage)' : 'var(--accent-peach)'),
         opacity: Math.abs(offset) > 10 ? 1 : 0
@@ -1502,9 +1519,9 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left",
-          border: `1.5px solid ${categoryOption.cor}`,
-          borderLeft: `3px solid ${categoryOption.cor}`,
-          borderRadius: 14,
+          border: `1.5px solid ${categoryOption.cor}50`,
+          borderLeft: `5px solid ${categoryOption.cor}`,
+          borderRadius: 32,
           opacity: slot.task.done ? 0.55 : 1,
           transform: `translateX(${offset}px)`,
           transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1513,10 +1530,10 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
           background: '#FFFFFF',
           cursor: 'pointer',
           touchAction: "pan-y",
-          padding: "8px 12px",
-          boxShadow: slot.task.done ? 'none' : '0 2px 8px rgba(0,0,0,0.05)',
+          padding: "16px 20px",
+          boxShadow: slot.task.done ? 'none' : '0 8px 24px rgba(0,0,0,0.02)',
           display: "flex",
-          gap: 8,
+          gap: 12,
           alignItems: "center"
         }}
       >
@@ -1662,6 +1679,9 @@ export function PlannerPage() {
   const agendaSlots = useMemo(() => buildPlannerAgendaSlots(plannerTasks), [plannerTasks]);
   const visibleAgendaSlots = plannerLoading ? emptyAgendaSlots : agendaSlots;
   
+  // Injetar tarefa fake para teste visual (se a lista estiver vazia)
+  // Removido daqui — movido para dentro do memo do agendaWithAi para evitar erro de inicialização
+
   // ── Inteligência de Energia (Bateria) ───────────────────────
   const dailyCapacity = useMemo(() => {
     // Escala de Capacidade Biológica (UP - Units of Power)
@@ -1686,7 +1706,7 @@ export function PlannerPage() {
     if (plannerLoading || plannerTasks.length === 0) return;
 
     const findGaps = () => {
-       return agendaSlots
+       return agendaWithAi
          .filter(s => s.kind === "empty" && !s.title)
          .slice(0, 3); // Apenas as 3 primeiras para não sobrecarregar
     };
@@ -1726,7 +1746,27 @@ export function PlannerPage() {
   }, [selectedDateKey, plannerTasks.length, plannerLoading]);
 
   const agendaWithAi = useMemo(() => {
-    return visibleAgendaSlots.map(slot => {
+    // 1. Pega os slots baseados nas tarefas atuais
+    const slots = visibleAgendaSlots;
+    
+    // 2. Injeta tarefa fake apenas para teste visual se a lista real estiver vazia
+    let finalSlots = slots;
+    if (!plannerLoading && plannerTasks.length === 0) {
+      const fakeTask: PlannerTask = {
+        id: "fake-123",
+        title: "☕ Café com Aura (Teste)",
+        time: "15:00",
+        endTime: "16:00",
+        done: false,
+        category: "pessoal",
+        source: "app",
+        intensity: "M"
+      };
+      finalSlots = buildPlannerAgendaSlots([fakeTask]);
+    }
+
+    // 3. Aplica sugestões da IA nos slots resultantes
+    return finalSlots.map(slot => {
       if (slot.kind === "empty" && gapSuggestions[slot.time]) {
         return {
           ...slot,
@@ -1736,7 +1776,7 @@ export function PlannerPage() {
       }
       return slot;
     });
-  }, [visibleAgendaSlots, gapSuggestions]);
+  }, [visibleAgendaSlots, gapSuggestions, plannerLoading, plannerTasks.length]);
 
   const plannerSummary = plannerLoading
     ? "Montando a visualização da sua agenda."
@@ -2125,45 +2165,67 @@ export function PlannerPage() {
   }
 
   return (
-    <div className="bg-white min-h-screen" style={{ flex: 1, padding: "20px", overflowX: 'hidden' }}>
-      <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
-
-      <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
-
-
-
+    <div className="bg-white min-h-screen" style={{ flex: 1, padding: "20px", overflowX: 'hidden', background: '#FDF9F5' }}>
+      
       {/* ── Banner: Modo Proteção de Fase Baixa ── */}
       {isLowPhase && (
         <div style={{
-          borderRadius: 18, padding: "14px 16px", marginBottom: 18,
-          background: cycleReport.phase === "depleted"
-            ? "rgba(161,125,108,.08)"
-            : "rgba(197,165,147,.08)",
-          border: cycleReport.phase === "depleted"
-            ? "1px solid rgba(161,125,108,.15)"
-            : "1px solid rgba(197,165,147,.15)",
+          borderRadius: 22, padding: "16px 18px", marginBottom: 24,
+          background: "linear-gradient(135deg, rgba(254,243,224,0.9), rgba(240,196,212,0.2))",
+          border: "1px solid rgba(184,109,76,0.12)",
+          boxShadow: "0 10px 30px rgba(184,109,76,0.06)",
+          position: "relative"
         }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <span style={{ fontSize: 20, flexShrink: 0 }}>
-              {cycleReport.phase === "depleted" ? "😴" : "🌙"}
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: "50%",
+              background: "#FFF", display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.05)", flexShrink: 0
+            }}>
+              <span style={{ fontSize: 24 }}>
+                {cycleReport.phase === "depleted" ? "😴" : "🌙"}
+              </span>
+            </div>
             <div style={{ flex: 1 }}>
               <p style={{
-                fontSize: 12, fontWeight: 800, margin: "0 0 4px",
-                color: cycleReport.phase === "depleted" ? "#A17D6C" : "var(--accent-peach-ink)",
-                textTransform: "uppercase", letterSpacing: "0.05em"
+                fontSize: 13, fontWeight: 800, margin: "0 0 2px",
+                color: "#4A3B37",
+                letterSpacing: "-0.01em"
               }}>
-                Modo Proteção — {cycleReport.phaseLabel}
+                Modo Proteção Ativo — {cycleReport.phaseLabel}
               </p>
-              <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0, lineHeight: 1.6, fontWeight: 500 }}>
+              <p style={{ fontSize: 12, color: "#7C6D68", margin: 0, lineHeight: 1.4, fontWeight: 500 }}>
                 {cycleReport.phase === "depleted"
-                  ? "Seu sistema está em exaustão. Priorize apenas o essencial e reserve janelas de silêncio."
-                  : "Fase de baixa energia detectada. Otimize sua agenda para tarefas leves e evite grandes pressões hoje."}
+                  ? "Você está em esgotamento. Considere adiar tarefas não urgentes e priorizar descanso."
+                  : "Fase de baixa energia. Otimize sua agenda para tarefas leves e evite pressões hoje."}
               </p>
             </div>
           </div>
         </div>
       )}
+
+      <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
+
+      <div style={{ marginTop: 24, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+          <div>
+            <span style={{ ...LABEL_STYLE, color: "#A45D3D", fontSize: 11, marginBottom: 4 }}>AGENDA</span>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: "#4A3B37", margin: 0, letterSpacing: "-0.02em" }}>Timeline do dia</h1>
+          </div>
+          <span style={{
+            padding: "6px 14px", borderRadius: 99, background: "rgba(244,168,150,0.12)",
+            color: "#A45D3D", fontSize: 11, fontWeight: 800, letterSpacing: "0.05em",
+            border: "1px solid rgba(244,168,150,0.2)"
+          }}>
+            {plannerBadgeLabel}
+          </span>
+        </div>
+        <p style={{ fontSize: 14, color: "#7C6D68", lineHeight: 1.6, maxWidth: "85%", margin: 0 }}>
+          {plannerSummary}
+        </p>
+      </div>
+
+      <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
 
       {/* ── All-Day Tasks Section (Smaller Cards) ── */}
       {allDayTasks.length > 0 && (
@@ -2208,36 +2270,6 @@ export function PlannerPage() {
           </div>
         </div>
       )}
-
-      <div className="glass-card" style={{ ...PLANNER_SUMMARY_CARD_STYLE, marginBottom: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", marginBottom: 8 }}>Planejamento</div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.1 }}>Sua Timeline</h2>
-            <p style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6, color: "var(--text-2)", fontWeight: 500 }}>{plannerSummary}</p>
-          </div>
-          <span
-            style={{
-              flexShrink: 0,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 28,
-              padding: "0 12px",
-              borderRadius: 999,
-              fontSize: 10,
-              fontWeight: 800,
-              letterSpacing: ".05em",
-              textTransform: "uppercase",
-              color: "var(--accent-peach-ink)",
-              background: "var(--accent-peach-a3)",
-              border: "1.5px solid var(--accent-peach-a5)",
-            }}
-          >
-            {plannerBadgeLabel}
-          </span>
-        </div>
-      </div>
 
       {/* ── Foco do dia — GTD tasks + next goal actions ── */}
       {(gtdFocusItems.length > 0 || goalFocusItems.length > 0) && (
@@ -2329,11 +2361,15 @@ export function PlannerPage() {
                 key={slot.key}
                 className="timeline-slot"
                 style={{
-                  borderRadius: 12, background: "transparent", paddingLeft: 24,
+                  borderRadius: 12, background: "transparent", paddingLeft: 78,
+                  marginBottom: 16, minHeight: 80, display: "flex", alignItems: "center"
                 }}
               >
-                <span className="timeline-time" style={{ fontWeight: 700, fontSize: 13 }}>{slot.time}</span>
-                <div className="timeline-line" style={{ left: 10 }} />
+                <span className="timeline-time" style={{ 
+                  position: "absolute", left: 10, width: 44, textAlign: "center",
+                  fontWeight: 800, fontSize: 13, color: "#4A3B37", zIndex: 1
+                }}>{slot.time}</span>
+                <div className="timeline-line" style={{ left: 62, width: 2, background: "rgba(184,109,76,0.08)" }} />
                 <SwipeableTaskCard
                    slot={slot}
                    categoryOption={categoryOption}
@@ -2348,43 +2384,45 @@ export function PlannerPage() {
           return (
             <div key={slot.key} className="timeline-slot"
                  style={{
-                   minHeight: slot.title ? 72 : 60, borderRadius: 12, background: "transparent", paddingLeft: 24,
+                   minHeight: slot.title ? 120 : 64, borderRadius: 12, background: "transparent", paddingLeft: 78,
+                   marginBottom: 16, display: "flex", alignItems: "center", position: 'relative'
                  }}
             >
-              <span className="timeline-time" style={{ opacity: slot.title ? 1 : 0.4, fontWeight: 700, fontSize: 13 }}>{slot.time}</span>
-              <div className="timeline-line" style={{ opacity: slot.title ? 0.8 : 0.15, left: 10 }} />
+              <span className="timeline-time" style={{ 
+                position: "absolute", left: 10, width: 44, textAlign: "center",
+                fontWeight: 800, fontSize: 13, color: "#4A3B37", zIndex: 1, opacity: slot.title ? 1 : 0.4
+              }}>{slot.time}</span>
+              <div className="timeline-line" style={{ left: 62, width: 2, background: "rgba(184,109,76,0.08)", opacity: slot.title ? 1 : 0.4 }} />
               <button
                 type="button"
                 className="timeline-block-card interactive-card glass-card"
                 onClick={() => openNewFormAt(slot.time)}
-                style={slot.title ? { ...EMPTY_TIMELINE_CARD_STYLE, borderRadius: 16 } : { width: '100%', background: 'transparent', border: 'none', borderLeft: '2px solid transparent', textAlign: 'left', opacity: 0.5, display: 'flex', alignItems: 'center', boxShadow: 'none' }}
+                style={{ 
+                  width: '100%',
+                  padding: slot.title ? "18px 20px" : "12px 14px",
+                  borderRadius: 24,
+                  background: slot.title ? "rgba(255, 255, 255, 0.75)" : "transparent",
+                  border: slot.title ? "1.5px dashed rgba(244, 168, 150, 0.4)" : "1px dashed rgba(184, 109, 76, 0.1)",
+                  borderLeft: slot.title ? "5px solid rgba(244, 168, 150, 0.3)" : "none",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  textAlign: 'left',
+                  gap: 4,
+                  transition: 'all 0.2s ease',
+                }}
               >
                 {slot.title ? (
                   <>
-                    <div className="block-title" style={{ color: "var(--text-1)", fontWeight: 700, fontSize: 15 }}>
+                    <div className="block-title" style={{ color: "#6B5B57", fontWeight: 700, fontSize: 16, marginBottom: 2 }}>
                       {slot.title}
                     </div>
-                    <div className="block-meta" style={{ marginTop: 6, lineHeight: 1.6, fontSize: 12, color: "var(--text-2)" }}>
+                    <div className="block-meta" style={{ lineHeight: 1.5, fontSize: 13, color: "#8B7B77", fontWeight: 500 }}>
                       {slot.description}
-                    </div>
-                    <div
-                      className="block-chip"
-                      style={{
-                        background: "var(--accent-peach-a3)",
-                        color: "var(--accent-peach-ink)",
-                        border: "1px solid var(--accent-peach-a5)",
-                        marginTop: 12,
-                        borderRadius: 10,
-                        padding: "4px 10px",
-                        fontSize: 10,
-                        fontWeight: 800
-                      }}
-                    >
-                      + CRIAR BLOCO
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 16, color: 'var(--text-3)', paddingLeft: 12 }}>+</div>
+                  <div style={{ fontSize: 18, color: 'rgba(184,109,76,0.3)', paddingLeft: 8 }}>+</div>
                 )}
               </button>
             </div>
@@ -2398,14 +2436,15 @@ export function PlannerPage() {
         aria-label="Novo bloco"
         style={{
           position: "fixed",
-          bottom: "calc(88px + env(safe-area-inset-bottom))",
+          bottom: "calc(100px + env(safe-area-inset-bottom))",
           right: 20,
-          width: 52,
-          height: 52,
+          width: 56,
+          height: 56,
           borderRadius: "50%",
-          background: "var(--accent-peach, #F4A896)",
-          border: "none",
-          boxShadow: "0 6px 20px rgba(244,168,150,.45)",
+          background: "#FFFFFF",
+          color: "#4A3B37",
+          border: "1.5px solid rgba(184,109,76,0.12)",
+          boxShadow: "0 12px 30px rgba(184,109,76,0.15)",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
@@ -2413,13 +2452,8 @@ export function PlannerPage() {
           zIndex: 40,
           transition: "transform 150ms, box-shadow 150ms",
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)"; }}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
+        <span style={{ fontSize: 24, color: "rgba(184,109,76,0.8)", fontWeight: 300 }}>+</span>
       </button>
 
 
@@ -2467,3 +2501,4 @@ export function PlannerPage() {
     </div>
   );
 }
+

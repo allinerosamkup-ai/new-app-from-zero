@@ -405,6 +405,8 @@ export function SplashPage() {
     <div
       style={{
         minHeight: "100vh",
+        position: "relative",
+        overflowX: "hidden",
         background:
           "radial-gradient(circle at top left, rgba(244,168,150,.22), transparent 28%), radial-gradient(circle at 82% 18%, rgba(184,217,200,.24), transparent 24%), radial-gradient(circle at 16% 82%, rgba(212,196,224,.18), transparent 24%), linear-gradient(180deg, #FDF9F5 0%, #FFFDFC 100%)",
       }}
@@ -512,7 +514,6 @@ export function SplashPage() {
               >
                   Um lugar seguro para sua mente aterrissar.
               </h1>
-              <InstallCTA />
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
                 <p
                   style={{

@@ -66,12 +66,13 @@ export function InstallCTA() {
       return;
     }
 
-    // Android sem prompt disponível ainda
+    // Android/Desktop sem prompt: apenas fecha ou ignora por enquanto
     setShowIosSheet(false);
   };
 
   const isIos = platform === "ios";
   const title = isInstalled ? "Aplicativo instalado" : "Baixar aplicativo";
+  
   const description = isInstalled
     ? "A Airia já está salva neste celular. Toque para abrir."
     : isIos

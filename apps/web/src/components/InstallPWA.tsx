@@ -10,10 +10,20 @@ export function InstallPWA() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
     const stored = localStorage.getItem("pwa-install-dismissed");
-    if (stored) setDismissed(true);
+    if (stored && !isLocal) setDismissed(true);
+
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+    // Se for iOS e não estiver instalado, simulamos o evento para mostrar o banner guia
+    if (isIos && !isStandalone) {
+      setInstallEvent({ prompt: async () => {}, userChoice: Promise.resolve({ outcome: 'accepted' }) } as any);
+    }
 
     const handler = (e: Event) => {
+      console.log("PWA: beforeinstallprompt event captured");
       e.preventDefault();
       setInstallEvent(e as BeforeInstallPromptEvent);
     };
@@ -40,25 +50,28 @@ export function InstallPWA() {
     setDismissed(true);
     setInstallEvent(null);
   };
+return (
+  <div style={{
+    position: "fixed",
+    bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "calc(100% - 32px)",
+    maxWidth: "420px",
+    background: "rgba(255, 255, 255, 0.85)",
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    border: "1px solid rgba(255, 255, 255, 0.4)",
+    borderRadius: "24px",
+    padding: "16px 20px",
+    boxShadow: "0 20px 50px rgba(0, 0, 0, 0.12)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    zIndex: 9999,
+    gap: 16,
+  }}>
 
-  return (
-    <div style={{
-      position: "fixed",
-      bottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)",
-      left: "50%",
-      transform: "translateX(-50%)",
-      width: "calc(100% - 32px)",
-      maxWidth: "400px",
-      background: "#FDF9F5",
-      border: "1px solid #F4D0C8",
-      borderRadius: "16px",
-      padding: "16px",
-      boxShadow: "0 8px 32px rgba(199, 112, 96, 0.15)",
-      display: "flex",
-      alignItems: "center",
-      gap: "12px",
-      zIndex: 9999,
-    }}>
       <img src="/icons/icon-192.png" alt="Airia" style={{ width: 44, height: 44, borderRadius: 10 }} />
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "#4A3B37", fontFamily: "var(--font-sans, sans-serif)" }}>
