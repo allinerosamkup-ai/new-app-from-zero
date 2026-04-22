@@ -29,6 +29,7 @@ type CheckinSnapshot = {
   stateLabel?: string | null;
   stateLabelType?: string | null;
   recordedAt?: Date;
+  note?: string | null;
 };
 
 export type RoutineContext = {
@@ -229,7 +230,14 @@ export class JournalService {
     const context = {
       routineSummary,
       preferences: preferences ?? undefined,
-      checkinToday: (checkinToday as CheckinSnapshot | null) ?? null,
+      checkinToday: checkinToday ? {
+        moodScore: checkinToday.moodScore,
+        energyScore: checkinToday.energyScore,
+        stateLabel: checkinToday.stateLabel,
+        stateLabelType: checkinToday.stateLabelType,
+        recordedAt: checkinToday.recordedAt,
+        note: checkinToday.note,
+      } : null,
       topThemes,
       topPlannerCategories,
       recentSummaries,
