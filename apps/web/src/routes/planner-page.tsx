@@ -2186,6 +2186,23 @@ export function PlannerPage() {
 
       <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
 
+      {/* ── Link para Metas ── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4, marginTop: -8 }}>
+        <button
+          onClick={() => navigate("/goals")}
+          style={{
+            display: "flex", alignItems: "center", gap: 5,
+            background: "transparent", border: "none", cursor: "pointer",
+            padding: "4px 2px",
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />   
+          </svg>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".04em" }}>Metas</span>
+        </button>
+      </div>
+
       <div style={{ marginTop: 24, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
           <div>
