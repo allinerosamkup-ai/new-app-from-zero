@@ -1746,27 +1746,7 @@ export function PlannerPage() {
   }, [selectedDateKey, plannerTasks.length, plannerLoading]);
 
   const agendaWithAi = useMemo(() => {
-    // 1. Pega os slots baseados nas tarefas atuais
-    const slots = visibleAgendaSlots;
-    
-    // 2. Injeta tarefa fake apenas para teste visual se a lista real estiver vazia
-    let finalSlots = slots;
-    if (!plannerLoading && plannerTasks.length === 0) {
-      const fakeTask: PlannerTask = {
-        id: "fake-123",
-        title: "☕ Café com Aura (Teste)",
-        time: "15:00",
-        endTime: "16:00",
-        done: false,
-        category: "pessoal",
-        source: "app",
-        intensity: "M"
-      };
-      finalSlots = buildPlannerAgendaSlots([fakeTask]);
-    }
-
-    // 3. Aplica sugestões da IA nos slots resultantes
-    return finalSlots.map(slot => {
+    return visibleAgendaSlots.map(slot => {
       if (slot.kind === "empty" && gapSuggestions[slot.time]) {
         return {
           ...slot,
@@ -1776,7 +1756,7 @@ export function PlannerPage() {
       }
       return slot;
     });
-  }, [visibleAgendaSlots, gapSuggestions, plannerLoading, plannerTasks.length]);
+  }, [visibleAgendaSlots, gapSuggestions]);
 
   const plannerSummary = plannerLoading
     ? "Montando a visualização da sua agenda."
