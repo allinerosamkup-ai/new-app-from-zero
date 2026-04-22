@@ -78,7 +78,17 @@
       "mcp__playwright__browser_resize",
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_take_screenshot",
-      "Bash(grep -E \"\\\\.tsx$\")"
+      "Bash(grep -E \"\\\\.tsx$\")",
+      "mcp__67a82d94-d27d-4df2-933c-a256070e9b4e__list_projects",
+      "mcp__67a82d94-d27d-4df2-933c-a256070e9b4e__execute_sql",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('workspaces:', d.get\\('workspaces'\\)\\); print\\('name:', d.get\\('name'\\)\\)\")",
+      "mcp__playwright__browser_console_messages",
+      "Bash(ping -c 3 195.35.17.102)",
+      "Bash(npx --yes eas-cli whoami)",
+      "Bash(npx eas-cli *)",
+      "Bash(env)",
+      "Bash(EXPO_TOKEN=\"3Ssr-a_fx0OUfQwxdBeZ0cqkHnWsYL5GoqCdpkWn\" npx eas-cli@latest whoami)",
+      "Bash(npx -w @app/backend tsc --noEmit)"
     ]
   },
   "enabledMcpjsonServers": [

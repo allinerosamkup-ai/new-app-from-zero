@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1080, initial-scale=1">
+  <title>Airia Instagram Carousel</title>
+  <style>
+    :root {
+      --off: #FAF6F2;
+      --graphite: #2A2A2A;
+      --salmon: #E8A598;
+      --peach: #F2C9B3;
+      --sage: #B8C9B0;
+      --green: #D4E2C4;
+      --blue: #A9C4D6;
+      --lilac: #C9B8D6;
+      --gray-lilac: #B5A8C4;
+      --beige: #E4D6C2;
+      --muted: #999999;
+      --serif: Fraunces, Georgia, "Times New Roman", serif;
+      --sans: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 1080px;
+      height: 1350px;
+      overflow: hidden;
+      background: var(--off);
+    }
+
+    body {
+      font-family: var(--sans);
+      color: var(--graphite);
+    }
+
+    .slide {
+      position: relative;
+      width: 1080px;
+      height: 1350px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 22%, rgba(42,42,42,0.018) 0 1px, transparent 1.4px),
+        radial-gradient(circle at 72% 64%, rgba(42,42,42,0.014) 0 1px, transparent 1.5px),
+        linear-gradient(var(--off), var(--off));
+      background-size: 13px 13px, 17px 17px, 100% 100%;
+      display: none;
+    }
+
+    body[data-slide="1"] #slide-1,
+    body[data-slide="2"] #slide-2,
+    body[data-slide="3"] #slide-3,
+    body[data-slide="4"] #slide-4,
+    body[data-slide="5"] #slide-5,
+    body[data-slide="6"] #slide-6 { display: block; }
+
+    .pad { padding-left: 80px; padding-right: 80px; }
+    .serif { font-family: var(--serif); letter-spacing: 0; }
+    .footer {
+      position: absolute;
+      left: 60px;
+      right: 60px;
+      top: 1210px;
+      display: block;
+      height: 32px;
+      font: 500 22px/1 var(--sans);
+      color: var(--muted);
+      z-index: 5;
+    }
+
+    .footer span:first-child {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    .footer span:last-child {
+      position: absolute;
+      right: 0;
+      top: 0;
+    }
+
+    .footer-note {
+      position: absolute;
+      left: 80px;
+      top: 1162px;
+      font: 400 24px/1.25 var(--sans);
+      color: #787878;
+      z-index: 5;
+    }
+
+    .title {
+      font-family: var(--serif);
+      color: var(--graphite);
+      letter-spacing: 0;
+    }
+
+    .cover-title {
+      position: absolute;
+      left: 80px;
+      top: 322px;
+      font: 700 110px/0.96 var(--serif);
+    }
+
+    .underline {
+      position: absolute;
+      left: 80px;
+      top: 718px;
+      width: 585px;
+      height: 34px;
+    }
+
+    .slide2-title {
+      position: absolute;
+      left: 80px;
+      top: 200px;
+      font: 500 64px/1.08 var(--serif);
+    }
+
+    .small-line {
+      position: absolute;
+      left: 80px;
+      top: 385px;
+      width: 120px;
+      height: 2px;
+      background: var(--sage);
+    }
+
+    .slide2-body {
+      position: absolute;
+      left: 80px;
+      top: 566px;
+      width: 870px;
+      font: 400 34px/1.5 var(--sans);
+      color: var(--graphite);
+    }
+
+    .slide3-title {
+      position: absolute;
+      left: 80px;
+      top: 128px;
+      font: 700 56px/1.04 var(--serif);
+    }
+
+    .phase-grid {
+      position: absolute;
+      left: 80px;
+      top: 405px;
+      width: 530px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .tag {
+      min-height: 76px;
+      padding: 20px 22px;
+      border-radius: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font: 500 28px/1 var(--sans);
+      color: var(--graphite);
+      box-shadow: inset 0 0 0 1px rgba(42,42,42,0.02);
+      white-space: nowrap;
+    }
+
+    .phone-wrap {
+      position: absolute;
+      filter: drop-shadow(0 24px 34px rgba(42,42,42,0.15));
+    }
+
+    .phone {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: 8px;
+      border-radius: 40px;
+      background: #161616;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 34px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .screen img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .slide3-phone { right: 74px; top: 312px; width: 380px; height: 790px; }
+    .slide4-phone { left: 270px; top: 350px; width: 540px; height: 855px; }
+    .slide5-phone { right: 72px; top: 420px; width: 380px; height: 790px; }
+    .slide6-phone { left: 270px; top: 96px; width: 540px; height: 555px; }
+
+    .crop-2640 img { transform: translateY(-87px); }
+    .crop-home img { transform: translateY(-126px); }
+    .crop-aura img { transform: translateY(-126px); }
+
+    .slide3-note {
+      position: absolute;
+      left: 80px;
+      top: 1162px;
+      font: 400 22px/1.25 var(--sans);
+      color: #777;
+    }
+
+    .slide4-title {
+      position: absolute;
+      left: 80px;
+      top: 124px;
+      font: 700 64px/1.05 var(--serif);
+    }
+
+    .annotation {
+      position: absolute;
+      right: 86px;
+      top: 620px;
+      width: 245px;
+      font: italic 400 26px/1.18 var(--sans);
+      color: #777;
+    }
+
+    .arrow-svg {
+      position: absolute;
+      right: 285px;
+      top: 650px;
+      width: 190px;
+      height: 150px;
+      overflow: visible;
+    }
+
+    .slide5-title {
+      position: absolute;
+      left: 80px;
+      top: 126px;
+      width: 830px;
+      font: 500 52px/1.08 var(--serif);
+    }
+
+    .bullets {
+      position: absolute;
+      left: 80px;
+      top: 430px;
+      width: 500px;
+      display: grid;
+      gap: 50px;
+    }
+
+    .bullet {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      column-gap: 22px;
+      align-items: start;
+      font: 500 28px/1.6 var(--sans);
+      color: var(--graphite);
+    }
+
+    .dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      margin-top: 12px;
+    }
+
+    .cta-title {
+      position: absolute;
+      left: 120px;
+      right: 120px;
+      top: 760px;
+      text-align: center;
+      font: 700 96px/0.98 var(--serif);
+    }
+
+    .final-foot {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 1210px;
+      text-align: center;
+      font: 400 24px/1 var(--sans);
+      color: #777;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <section id="slide-1" class="slide">
+    <div class="cover-title">
+      Por que<br>
+      alguns dias<br>
+      eu simplesmente<br>
+      não funciono?
+    </div>
+    <svg class="underline" viewBox="0 0 585 34" aria-hidden="true">
+      <path d="M5 20 C90 12, 145 28, 235 18 C328 8, 438 12, 578 15" fill="none" stroke="#E8A598" stroke-width="8" stroke-linecap="round"/>
+      <path d="M22 25 C130 17, 250 25, 356 18 C430 13, 500 18, 566 20" fill="none" stroke="#E8A598" stroke-width="4" stroke-linecap="round" opacity="0.55"/>
+    </svg>
+    <div class="footer-note">um fio sobre ciclagem de humor</div>
+    <div class="footer"><span>airia.pro</span><span>← deslize</span></div>
+  </section>
+
+  <section id="slide-2" class="slide">
+    <div class="slide2-title">Não é preguiça.<br>Não é falta de disciplina.</div>
+    <div class="small-line"></div>
+    <div class="slide2-body">
+      É ciclagem de humor: seu cérebro oscila entre fases de alta energia, estabilidade, queda e esgotamento. Todo mundo cicla. Quem tem TDAH, ciclotimia ou bipolar II, cicla mais forte.
+    </div>
+    <div class="footer"><span>airia.pro</span><span>← deslize</span></div>
+  </section>
+
+  <section id="slide-3" class="slide">
+    <div class="slide3-title">Seu humor tem<br>8 fases:</div>
+    <div class="phase-grid">
+      <div class="tag" style="background:#E8A598">elevada ⚡</div>
+      <div class="tag" style="background:#F2C9B3">fluindo 🌊</div>
+      <div class="tag" style="background:#B8C9B0">estável 🍃</div>
+      <div class="tag" style="background:#A9C4D6">em queda 🍂</div>
+      <div class="tag" style="background:#C9B8D6">baixa 🌧</div>
+      <div class="tag" style="background:#B5A8C4">esgotada 🌙</div>
+      <div class="tag" style="background:#D4E2C4">recuperando 🌱</div>
+      <div class="tag" style="background:#E4D6C2">mista 🌓</div>
+    </div>
+    <div class="phone-wrap slide3-phone">
+      <div class="phone"><div class="screen crop-2640"><img src="file:///C:/Users/allin/Downloads/Phone%20Link/1000042853.png" alt=""></div></div>
+    </div>
+    <div class="slide3-note">check-in de 30 segundos alimenta a detecção</div>
+    <div class="footer"><span>airia.pro</span><span>← deslize</span></div>
+  </section>
+
+  <section id="slide-4" class="slide">
+    <div class="slide4-title">Airia lê sua fase.<br>Todo dia.</div>
+    <div class="phone-wrap slide4-phone">
+      <div class="phone"><div class="screen crop-home"><img src="file:///C:/Users/allin/Downloads/Phone%20Link/1000042837.png" alt=""></div></div>
+    </div>
+    <svg class="arrow-svg" viewBox="0 0 190 150" aria-hidden="true">
+      <path d="M175 6 C128 28, 105 58, 86 84 C72 103, 56 113, 24 122" fill="none" stroke="#E8A598" stroke-width="4" stroke-linecap="round"/>
+      <path d="M30 106 L18 124 L40 128" fill="none" stroke="#E8A598" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="annotation">detecção automática<br>via check-in</div>
+    <div class="footer"><span>airia.pro</span><span>← deslize</span></div>
+  </section>
+
+  <section id="slide-5" class="slide">
+    <div class="slide5-title">O que muda<br>quando o app sabe da sua fase:</div>
+    <div class="bullets">
+      <div class="bullet"><span class="dot" style="background:#E8A598"></span><span>o planner rebaixa tarefas pesadas em fase baixa</span></div>
+      <div class="bullet"><span class="dot" style="background:#B8C9B0"></span><span>a Aura (IA) fala contigo sabendo como você está</span></div>
+      <div class="bullet"><span class="dot" style="background:#A9C4D6"></span><span>insights mostram padrões que você nunca viu sozinha</span></div>
+    </div>
+    <div class="phone-wrap slide5-phone">
+      <div class="phone"><div class="screen crop-2640"><img src="file:///C:/Users/allin/Downloads/Phone%20Link/1000042844.png" alt=""></div></div>
+    </div>
+    <div class="footer"><span>airia.pro</span><span>← deslize</span></div>
+  </section>
+
+  <section id="slide-6" class="slide">
+    <div class="phone-wrap slide6-phone">
+      <div class="phone"><div class="screen crop-aura"><img src="file:///C:/Users/allin/Downloads/Phone%20Link/1000042852.png" alt=""></div></div>
+    </div>
+    <div class="cta-title">pare de brigar<br>com seu ciclo.</div>
+    <div class="final-foot">web app · grátis pra começar</div>
+  </section>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    document.body.dataset.slide = params.get("slide") || "1";
+  </script>
+</body>
+</html>

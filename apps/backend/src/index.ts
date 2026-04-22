@@ -3260,7 +3260,16 @@ JSON APENAS: {"profileSummary":"..."}`,
       const allEventsArrays = await Promise.all(
         selectedCalendars.map(calId => fetchWithRetry(calId))
       );
-      const events = allEventsArrays.flat().sort((a, b) => {
+
+      // Deduplicate events by ID (in case the same calendar is selected via multiple aliases)
+      const uniqueEventsMap = new Map();
+      allEventsArrays.flat().forEach(e => {
+        if (!uniqueEventsMap.has(e.id)) {
+          uniqueEventsMap.set(e.id, e);
+        }
+      });
+
+      const events = Array.from(uniqueEventsMap.values()).sort((a: any, b: any) => {
         const aTime = a.start?.dateTime || a.start?.date || '';
         const bTime = b.start?.dateTime || b.start?.date || '';
         return aTime.localeCompare(bTime);

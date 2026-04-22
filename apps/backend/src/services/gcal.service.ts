@@ -108,11 +108,7 @@ export class GCalService {
       
       // Update local block with event ID if it was created
       if (!block.gcalEventId && data.id) {
-        await prisma.timelineBlock.update({
-          where: { id: block.id },
-          // The Prisma client in this workspace is lagging behind the schema field.
-          data: { gcalEventId: data.id } as any,
-        });
+        await prisma.$executeRaw`UPDATE "TimelineBlock" SET "gcal_event_id" = ${data.id} WHERE id = ${block.id}::uuid`;
       }
 
       return data.id;
