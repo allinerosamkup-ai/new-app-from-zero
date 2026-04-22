@@ -1,16 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Linking, Platform, StyleSheet, View } from 'react-native';
+import { BackHandler, Linking, Platform, StyleSheet, View, StatusBar } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from '../../lib/supabase';
-import { buildInjectedSessionScript, getWebAppStartPath, getWebAppUrl } from '../../lib/web-app';
+import { buildInjectedSessionScript, getSupabaseWebStorageKey, getWebAppStartPath, getWebAppUrl } from '../../lib/web-app';
 import { useAuthStore } from '../providers/auth_store';
 import { appColors } from '../theme/appTheme';
 
 type NativeShellEvent =
   | { type: 'auth.signOut' }
+  | { type: 'auth.googleSignIn' }
   | { type: 'external.open'; url: string };
 
 type WebViewLoadRequest = {
@@ -24,22 +25,22 @@ export default function WebAppScreen() {
   const webViewRef = useRef<WebView>(null);
   const canGoBackRef = useRef(false);
   const isMountedRef = useRef(true);
-  const { onboardingDone, signOut } = useAuthStore();
+  const { onboardingDone, signOut, signInWithGoogle, userId } = useAuthStore();
   const [webSession, setWebSession] = useState<Session | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [hasLoadError, setHasLoadError] = useState(false);
 
   const startUrl = useMemo(() => {
-    const fallbackUrl = `${getWebAppUrl()}${getWebAppStartPath(onboardingDone)}?airia_native=1`;
-
+    // Se nao estiver logado no nativo, carrega a splash que vai pro login
+    const path = userId ? getWebAppStartPath(onboardingDone) : '/splash';
     try {
-      const url = new URL(`${getWebAppUrl()}${getWebAppStartPath(onboardingDone)}`);
+      const url = new URL(`${getWebAppUrl()}${path}`);
       url.searchParams.set('airia_native', '1');
       return url.toString();
     } catch {
-      return fallbackUrl;
+      return `${getWebAppUrl()}${path}?airia_native=1`;
     }
-  }, [onboardingDone]);
+  }, [onboardingDone, userId]);
 
   const injectedSessionScript = useMemo(() => {
     return buildInjectedSessionScript(webSession);
@@ -69,6 +70,16 @@ export default function WebAppScreen() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMountedRef.current) return;
       setWebSession(session);
+      
+      // Se a sessao mudou com a pagina ja aberta, injeta o script de sincronizacao live
+      if (webViewRef.current) {
+        const storageKey = getSupabaseWebStorageKey();
+        const sessionStr = session ? JSON.stringify(JSON.stringify(session)) : 'null';
+        const script = session 
+          ? `localStorage.setItem("${storageKey}", ${sessionStr}); window.dispatchEvent(new StorageEvent("storage", { key: "${storageKey}", newValue: ${sessionStr} })); true;`
+          : `localStorage.removeItem("${storageKey}"); window.dispatchEvent(new StorageEvent("storage", { key: "${storageKey}", newValue: null })); true;`;
+        webViewRef.current.injectJavaScript(script);
+      }
     });
 
     return () => {
@@ -112,6 +123,11 @@ export default function WebAppScreen() {
           return;
         }
 
+        if (message.type === 'auth.googleSignIn') {
+          await signInWithGoogle();
+          return;
+        }
+
         if (message.type === 'external.open' && message.url) {
           await Linking.openURL(message.url);
         }
@@ -119,16 +135,18 @@ export default function WebAppScreen() {
         // Ignore non-JSON messages emitted by the page.
       }
     },
-    [signOut],
+    [signOut, signInWithGoogle],
   );
 
   const handleShouldStartLoad = useCallback((request: WebViewLoadRequest) => {
-    // Se for a URL da Airia, carrega na WebView
-    if (request.url.startsWith(getWebAppUrl()) || request.url.includes('supabase.co')) {
+    const webAppUrl = getWebAppUrl();
+    
+    // Allow the web app and its core services
+    if (request.url.startsWith(webAppUrl) || request.url.includes('supabase.co')) {
       return true;
     }
 
-    // Se for Google Auth ou links externos, abre no navegador externo
+    // External auth or links
     if (
       request.url.includes('accounts.google.com') || 
       request.url.includes('google.com/calendar') ||
@@ -151,6 +169,7 @@ export default function WebAppScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <WebView
         ref={webViewRef}
         source={{ uri: startUrl }}
@@ -159,7 +178,7 @@ export default function WebAppScreen() {
         thirdPartyCookiesEnabled
         javaScriptEnabled
         domStorageEnabled
-        userAgent={Platform.OS === 'android' ? MOBILE_USER_AGENT : undefined}
+        userAgent={MOBILE_USER_AGENT}
         applicationNameForUserAgent="AiriaNative/1.0"
         scalesPageToFit={false}
         textZoom={100}
@@ -179,6 +198,8 @@ export default function WebAppScreen() {
           </View>
         )}
         pullToRefreshEnabled
+        style={{ flex: 1 }}
+        containerStyle={{ flex: 1 }}
       />
 
       {hasLoadError ? (
@@ -194,6 +215,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: appColors.background,
+    // No padding here, we want it to bleed under the status bar
   },
   loader: {
     flex: 1,

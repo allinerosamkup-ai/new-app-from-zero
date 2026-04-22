@@ -24,10 +24,11 @@ import { appColors } from '../theme/appTheme';
 const Stack = createNativeStackNavigator();
 
 /**
- * RootStackNavigator: Gerencia a navegação global do App com UI do Paper.
+ * RootStackNavigator: Gerencia a navegação global do App.
+ * Focado no WebShell para paridade total com o Web App.
  */
 export default function RootStackNavigator() {
-  const { initialized, isLoading, userId, onboardingDone } = useAuthStore();
+  const { initialized, isLoading } = useAuthStore();
 
   if (!initialized && isLoading) {
     return (
@@ -53,11 +54,7 @@ export default function RootStackNavigator() {
         },
       }}
     >
-      {!userId ? (
-        <Stack.Screen name="Auth" component={AuthScreen} />
-      ) : (
-        <Stack.Screen name="WebShell" component={WebAppScreen} />
-      )}
+      <Stack.Screen name="WebShell" component={WebAppScreen} />
       <Stack.Screen
         name="ForgotPassword"
         component={ForgotPasswordScreen}
