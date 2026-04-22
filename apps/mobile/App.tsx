@@ -2,6 +2,7 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { DefaultTheme as NavigationDefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native-paper';
@@ -49,6 +50,7 @@ export default function App() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: appColors.background }}>
         <Text style={{ color: appColors.danger, textAlign: 'center', fontWeight: 'bold', fontSize: 18 }}>Erro na Airia</Text>
         <Text style={{ textAlign: 'center', marginTop: 10, color: '#666' }}>{error}</Text>
+        <Text style={{ marginTop: 20, fontSize: 12, color: '#999' }}>Tente reiniciar o app ou verificar sua conexao.</Text>
       </View>
     );
   }
@@ -66,13 +68,15 @@ export default function App() {
   };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <PaperProvider theme={theme}>
-        <NavigationContainer theme={navigationTheme}>
-          <RootStackNavigator />
-          <StatusBar style="dark" />
-        </NavigationContainer>
-      </PaperProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <PaperProvider theme={theme}>
+          <NavigationContainer theme={navigationTheme}>
+            <RootStackNavigator />
+            <StatusBar style="dark" translucent backgroundColor="transparent" />
+          </NavigationContainer>
+        </PaperProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
