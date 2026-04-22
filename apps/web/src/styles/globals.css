@@ -12,7 +12,7 @@
   --sweet-mint:       #AECD88;
   --buttercup:        #E7C875;
   --wisteria-purple:  #C6B3CA;
-  --warm-bg:          #F9F9F8;
+  --warm-bg:          #FDF9F5;
   --warm-surface:     #FFFFFF;
 
   /* ──── Legacy Remapping (Safety Net) ──── */
@@ -52,13 +52,29 @@ body,
 #root {
   margin: 0;
   padding: 0;
-  min-height: 100%;
+  min-height: 100dvh;
   width: 100%;
-  background: var(--warm-bg);
+  background: #F4EEE6; /* Desktop background */
   color: var(--text-1);
   font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
+  display: flex;
+  justify-content: center;
+}
+
+/* ──── PWA Mobile Frame — força layout mobile-column em qualquer viewport ──── */
+.app-viewport {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  position: relative;
+  background: var(--warm-bg);
+  box-shadow: 0 0 100px rgba(17, 24, 39, 0.1);
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 a {
@@ -246,8 +262,6 @@ button {
   grid-column: span 6;
 }
 
-/* .aura-card is defined in aura.css — removed duplicate */
-
 .aura-panel-header {
   display: flex;
   justify-content: space-between;
@@ -274,8 +288,6 @@ button {
   gap: 10px;
   margin-bottom: 14px;
 }
-
-/* .aura-chip, .aura-input*, .aura-input-wrap — defined in aura.css */
 
 .aura-textarea {
   width: 100%;
@@ -494,24 +506,6 @@ button {
   }
 }
 
-/* ──── PWA Mobile Frame — força layout mobile-column em qualquer viewport ──── */
-.app-viewport {
-  width: 100%;
-  max-width: 480px;
-  min-height: 100dvh;
-  margin: 0 auto;
-  position: relative;
-  background: var(--warm-bg);
-  box-shadow: 0 0 40px rgba(17, 24, 39, 0.06);
-  overflow-x: hidden;
-}
-
-@media (min-width: 520px) {
-  body {
-    background: linear-gradient(180deg, #F4EEE6 0%, #EEE6DB 100%);
-  }
-}
-
 @media (hover: none) and (pointer: coarse) {
   .app-viewport {
     box-shadow: none;
@@ -534,4 +528,3 @@ html.airia-native-shell .app-viewport {
   margin: 0 auto;
   box-shadow: none;
 }
-

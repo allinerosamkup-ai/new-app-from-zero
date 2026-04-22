@@ -514,6 +514,7 @@ export function SplashPage() {
               >
                   Um lugar seguro para sua mente aterrissar.
               </h1>
+              <InstallCTA />
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
                 <p
                   style={{
