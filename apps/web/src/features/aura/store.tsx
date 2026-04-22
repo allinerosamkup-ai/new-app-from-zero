@@ -92,6 +92,7 @@ type AuraStoreContextValue = {
   setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
   toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<void>;
   removeGoal: (goalId: string | number) => Promise<void>;
+  updateGoal: (goalId: string | number, updates: Partial<{ title: string; progress: number }>) => Promise<void>;
   addTask: (
     title: string,
     time: string,
@@ -596,6 +597,16 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       },
       removeGoal: async (goalId) => {
         await api.delete(`/objectives/${goalId}`);
+        await refreshData();
+      },
+      updateGoal: async (goalId, updates) => {
+        const goal = state.goals.find(g => g.id === goalId);
+        if (!goal) return;
+        await api.patch(`/objectives/${goalId}`, {
+          title: updates.title ?? goal.title,
+          progress: updates.progress ?? goal.completedPct,
+          subgoals: goal.subtasks.map(s => ({ ...s, id: String(s.id), aiGenerated: false }))
+        });
         await refreshData();
       },
       addTask: async (title, time, category = 'geral', options) => {

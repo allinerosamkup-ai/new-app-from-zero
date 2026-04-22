@@ -5,11 +5,11 @@ import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import {
   Plus, Mic, Trash2, ChevronDown, ChevronUp,
-  Link, X, Zap, Inbox,
+  Link, X, Zap, Inbox, Edit2, RefreshCw,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
@@ -65,20 +65,36 @@ const GOAL_COLORS = [
 
 // ── Checkbox quadrado (GTD) ────────────────────────────────────
 function TaskBox({ done, onClick, isNext = false }: { done: boolean; onClick: () => void; isNext?: boolean }) {
+  const [animating, setAnimating] = useState(false);
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (done) {
+       onClick();
+       return;
+    }
+    setAnimating(true);
+    setTimeout(() => {
+      onClick();
+      setAnimating(false);
+    }, 450);
+  };
+
   return (
     <div
-      onClick={e => { e.stopPropagation(); onClick(); }}
+      onClick={handleClick}
       style={{
-        width: 18, height: 18, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-        background: done ? "var(--accent-sage)" : isNext ? "rgba(215,137,127,0.15)" : "transparent",
-        border: done ? "none" : isNext ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--text-3)",
+        width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+        background: (done || animating) ? "var(--accent-sage)" : isNext ? "rgba(215,137,127,0.15)" : "transparent",
+        border: (done || animating) ? "none" : isNext ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--text-3)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        transition: "all 0.15s",
+        transition: "all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+        transform: animating ? 'scale(1.2)' : 'scale(1)'
       }}
     >
-      {done && (
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-          stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      {(done || animating) && (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       )}
@@ -88,7 +104,7 @@ function TaskBox({ done, onClick, isNext = false }: { done: boolean; onClick: ()
 
 // ── GoalCard v8 ───────────────────────────────────────────────
 function GoalCard({
-  goal, colorIndex, onToggleSubtask, onBreakDown, onAddSubtask, onRemove, loadingBreakdown, onJournalReflect,
+  goal, colorIndex, onToggleSubtask, onBreakDown, onAddSubtask, onRemove, loadingBreakdown, onJournalReflect, onUpdateTitle, onConvertToTask
 }: {
   goal: { id: number | string; title: string; completedPct: number; subtasks: Array<{ id: number | string; title: string; done: boolean }> };
   colorIndex: number;
@@ -98,11 +114,16 @@ function GoalCard({
   onRemove: () => void;
   loadingBreakdown: boolean;
   onJournalReflect: () => void;
+  onUpdateTitle: (newTitle: string) => void;
+  onConvertToTask: (goal: any) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [addingTask, setAddingTask] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(goal.title);
   const [newTask, setNewTask] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
   const color = GOAL_COLORS[colorIndex % GOAL_COLORS.length];
   const pct = goal.completedPct;
   const done = pct >= 100;
@@ -111,6 +132,14 @@ function GoalCard({
   const nextActionIdx = goal.subtasks.findIndex(s => !s.done);
 
   useEffect(() => { if (addingTask) inputRef.current?.focus(); }, [addingTask]);
+  useEffect(() => { if (isEditingTitle) editInputRef.current?.focus(); }, [isEditingTitle]);
+
+  const handleTitleSubmit = () => {
+    if (editedTitle.trim() && editedTitle !== goal.title) {
+      onUpdateTitle(editedTitle.trim());
+    }
+    setIsEditingTitle(false);
+  };
 
   return (
     <div style={{
@@ -139,7 +168,7 @@ function GoalCard({
 
         {/* Title + progress bar */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ marginBottom: 3 }}>
+          <div style={{ marginBottom: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 3,
               background: color.bg, border: `1px solid ${color.accent}44`,
@@ -148,14 +177,38 @@ function GoalCard({
               color: color.accent, textTransform: "uppercase" as const,
             }}>🎯 Meta</span>
           </div>
-          <p style={{
-            fontSize: 14, fontWeight: 700, margin: "0 0 6px",
-            color: done ? "var(--accent-sage)" : "var(--text-1)",
-            textDecoration: done ? "line-through" : "none",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {done ? "✓ " : ""}{goal.title}
-          </p>
+
+          {isEditingTitle ? (
+            <input
+              ref={editInputRef}
+              value={editedTitle}
+              onChange={e => setEditedTitle(e.target.value)}
+              onBlur={handleTitleSubmit}
+              onKeyDown={e => e.key === 'Enter' && handleTitleSubmit()}
+              style={{
+                width: '100%',
+                padding: '4px 8px',
+                borderRadius: '8px',
+                border: `2px solid ${color.accent}`,
+                fontSize: '14px',
+                fontWeight: 700,
+                color: 'var(--text-1)',
+                background: '#fff',
+                marginBottom: '6px',
+                outline: 'none'
+              }}
+            />
+          ) : (
+            <p style={{
+              fontSize: 14, fontWeight: 700, margin: "0 0 6px",
+              color: done ? "var(--accent-sage)" : "var(--text-1)",
+              textDecoration: done ? "line-through" : "none",
+              lineHeight: 1.4,
+            }}>
+              {done ? "✓ " : ""}{goal.title}
+            </p>
+          )}
+
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 5, borderRadius: 999, background: color.bg, overflow: "hidden" }}>
               <div style={{
@@ -171,6 +224,19 @@ function GoalCard({
 
         {/* Controls */}
         <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
+          <button
+            onClick={e => { e.stopPropagation(); setIsEditingTitle(true); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6 }}
+          >
+            <Edit2 size={13} />
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); onConvertToTask(goal); }}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6 }}
+            title="Converter em tarefa diária"
+          >
+            <RefreshCw size={13} />
+          </button>
           <button onClick={e => { e.stopPropagation(); onRemove(); }}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6 }}>
             <Trash2 size={13} />
@@ -354,9 +420,11 @@ function GoalCard({
 // ── Main Page ─────────────────────────────────────────────────
 
 export function GoalsPage() {
-  const { state, addGoal, addSubGoals, toggleSubGoal, removeGoal } = useAuraStore();
-  const { showError } = useToast();
+  const { state, addGoal, addSubGoals, toggleSubGoal, removeGoal, updateGoal, addTask, addHabit } = useAuraStore();
+  const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
   const isLowPhase = cycleReport.phase === "low" || cycleReport.phase === "depleted";
 
@@ -377,6 +445,15 @@ export function GoalsPage() {
   const recognitionRef = useRef<any>(null);
   const capturingRef = useRef(false);
   const [activeTab, setActiveTab] = useState<"capturar" | "metas" | "acoes">("capturar");
+
+  useEffect(() => {
+    const navState = location.state as any;
+    if (navState?.activeTab) setActiveTab(navState.activeTab);
+    if (navState?.openGoalId) {
+      setActiveTab("metas");
+      setMetasOpen(true);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     localStorage.setItem("gtd-inbox-v1", JSON.stringify(gtdItems));
@@ -572,15 +649,35 @@ export function GoalsPage() {
     }));
   }
 
-  async function linkToGoal(itemId: string, goalId: number | string) {
-    const item = gtdItems.find(i => i.id === itemId);
-    if (!item) return;
-    await addSubGoals(goalId, [item.titulo || item.text]);
-    setGtdItems(prev => prev.map(i =>
-      i.id === itemId ? { ...i, linkedGoalId: goalId, sentToGoal: true } : i
-    ));
-    setLinkingItem(null);
-    awardXP(5);
+  async function handleUpdateGoalTitle(goalId: string | number, newTitle: string) {
+    try {
+      await updateGoal(goalId, { title: newTitle });
+      showSuccess("Título da meta atualizado.");
+    } catch (err) {
+      showError("Erro ao atualizar título.");
+    }
+  }
+
+  async function handleConvertToTask(goal: any) {
+    const confirm = window.confirm(`Deseja transformar a meta "${goal.title}" em um checklist diário? A meta original será removida.`);
+    if (!confirm) return;
+
+    try {
+      // 1. Cria o Hábito (Checklist Diário)
+      await addHabit({
+        title: goal.title,
+        category: 'pessoal',
+        frequency: 'daily',
+        description: goal.subtasks.map((s: any) => `- ${s.title}`).join('\n'),
+      });
+
+      // 2. Remove a Meta original
+      await removeGoal(goal.id);
+      
+      showSuccess("Meta convertida em hábito diário com sucesso!");
+    } catch (err) {
+      showError("Erro ao converter meta.");
+    }
   }
 
   // ── Render ────────────────────────────────────────────────
@@ -853,6 +950,8 @@ export function GoalsPage() {
                 onRemove={() => removeGoal(goal.id)}
                 loadingBreakdown={loadingBreakdown === goal.id}
                 onJournalReflect={() => navigate("/journal")}
+                onUpdateTitle={newTitle => handleUpdateGoalTitle(goal.id, newTitle)}
+                onConvertToTask={handleConvertToTask}
               />
             ))
           )

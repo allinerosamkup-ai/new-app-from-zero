@@ -1800,6 +1800,21 @@ export function PlannerPage() {
     setGtdFocusItems(prev => prev.filter(i => i.id !== itemId));
   }
 
+  const [animatingFocusItems, setAnimatingFocusItems] = useState<string[]>([]);
+
+  function handleCompleteFocusItem(item: any, type: "tarefa" | "meta") {
+    if (animatingFocusItems.includes(item.id)) return;
+    setAnimatingFocusItems(prev => [...prev, item.id]);
+    setTimeout(() => {
+      if (type === "tarefa") {
+        toggleGtdFocusItem(item.id);
+      } else {
+        toggleSubGoal(item.goalId, item.subId);
+      }
+      setAnimatingFocusItems(prev => prev.filter(id => id !== item.id));
+    }, 450);
+  }
+
   useEffect(() => {
     let ignore = false;
 
@@ -2285,56 +2300,76 @@ export function PlannerPage() {
             }}>{gtdFocusItems.length + goalFocusItems.length}</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {gtdFocusItems.map(item => (
-              <div key={item.id} className="glass-card" style={{
-                display: "flex", alignItems: "center", gap: 12,
-                borderLeft: "4px solid var(--accent-sky)",
-                borderRadius: 16, padding: "12px 16px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
-              }}>
-                <button
-                  onClick={() => toggleGtdFocusItem(item.id)}
-                  style={{
-                    width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                    background: "transparent", border: "2px solid var(--accent-sky)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-sky)", textTransform: "uppercase", marginBottom: 2 }}>
-                    ⚡ Captura
-                  </div>
-                  <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {item.text}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {goalFocusItems.map(item => (
-              <div key={item.id} className="glass-card" style={{
-                display: "flex", alignItems: "center", gap: 12,
-                borderLeft: "4px solid var(--accent-peach)",
-                borderRadius: 16, padding: "12px 16px",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
-              }}>
-                <button
-                  onClick={() => { toggleSubGoal(item.goalId, item.subId); }}
-                  style={{
-                    width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                    background: "rgba(215,137,127,0.08)", border: "2px solid var(--accent-peach)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-peach)", textTransform: "uppercase", marginBottom: 2 }}>
-                    🎯 {item.goalTitle}
-                  </div>
-                  <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {item.text}
+            {gtdFocusItems.map(item => {
+              const isAnimating = animatingFocusItems.includes(item.id);
+              return (
+                <div key={item.id} className="glass-card" style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  borderLeft: "4px solid var(--accent-sky)",
+                  borderRadius: 16, padding: "12px 16px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+                  opacity: isAnimating ? 0.5 : 1,
+                  transform: isAnimating ? "scale(0.98)" : "scale(1)",
+                  transition: "all 0.3s ease"
+                }}>
+                  <button
+                    onClick={() => handleCompleteFocusItem(item, "tarefa")}
+                    style={{
+                      width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                      background: isAnimating ? "var(--accent-sky)" : "transparent",
+                      border: "2px solid var(--accent-sky)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    {isAnimating && <CheckCircle2 size={14} color="#fff" />}
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { activeTab: "acoes" } })}>
+                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-sky)", textTransform: "uppercase", marginBottom: 2 }}>
+                      ⚡ Captura
+                    </div>
+                    <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
+                      {item.text}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+            {goalFocusItems.map(item => {
+              const isAnimating = animatingFocusItems.includes(item.id);
+              return (
+                <div key={item.id} className="glass-card" style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  borderLeft: "4px solid var(--accent-peach)",
+                  borderRadius: 16, padding: "12px 16px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+                  opacity: isAnimating ? 0.5 : 1,
+                  transform: isAnimating ? "scale(0.98)" : "scale(1)",
+                  transition: "all 0.3s ease"
+                }}>
+                  <button
+                    onClick={() => handleCompleteFocusItem(item, "meta")}
+                    style={{
+                      width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                      background: isAnimating ? "var(--accent-peach)" : "transparent",
+                      border: "2px solid var(--accent-peach)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    {isAnimating && <CheckCircle2 size={14} color="#fff" />}
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { openGoalId: item.goalId } })}>
+                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-peach)", textTransform: "uppercase", marginBottom: 2 }}>
+                      🎯 {item.goalTitle}
+                    </div>
+                    <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
+                      {item.text}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
