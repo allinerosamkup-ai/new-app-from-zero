@@ -1407,12 +1407,42 @@ export function createApp(dependencies: AppDependencies = {}) {
       const data = JournalStartSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
       const { session, created } = await journalService.startOrResumeSession(prisma, data.userId);
       const [messages, context, runtimeContext] = await Promise.all([
-        journalService.getSessionMessages(prisma, session.id),
-        journalService.buildRoutineContext(prisma, data.userId),
-        resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
+       journalService.getSessionMessages(prisma, session.id),
+       journalService.buildRoutineContext(prisma, data.userId),
+       resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
       ]);
 
+      // Se sessão recém-criada e sem mensagens, injeta nota do check-in como primeira mensagem
+      if (created && messages.length === 0 && context.checkinToday?.note) {
+       await prisma.journalMessage.create({
+         data: {
+           sessionId: session.id,
+           userId: data.userId,
+           role: 'user',
+           content: context.checkinToday.note,
+           orderIndex: 0,
+         },
+       });
+       // Recarregar mensagens para incluir a nota injetada
+       const updatedMessages = await journalService.getSessionMessages(prisma, session.id);
+       return res.json({
+         sessionId: session.id,
+         created,
+         messages: updatedMessages.map((message) => ({
+           id: message.id,
+           role: message.role,
+           content: message.content,
+           createdAt: message.createdAt?.toISOString?.() ?? new Date().toISOString(),
+         })),
+         context: {
+           ...context,
+           runtimeContext,
+         }
+       });
+      }
+
       return res.json({
+
         sessionId: session.id,
         created,
         messages: messages.map((message) => ({

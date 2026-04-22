@@ -1801,6 +1801,11 @@ export function PlannerPage() {
   }
 
   const [animatingFocusItems, setAnimatingFocusItems] = useState<string[]>([]);
+  const [expandedFocusItems, setExpandedFocusItems] = useState<string[]>([]);
+
+  function toggleExpandFocus(id: string) {
+    setExpandedFocusItems(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   function handleCompleteFocusItem(item: any, type: "tarefa" | "meta") {
     if (animatingFocusItems.includes(item.id)) return;
@@ -2202,19 +2207,25 @@ export function PlannerPage() {
       <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
 
       {/* ── Link para Metas ── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4, marginTop: -8 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14, marginTop: -6 }}>
         <button
           onClick={() => navigate("/goals")}
           style={{
-            display: "flex", alignItems: "center", gap: 5,
-            background: "transparent", border: "none", cursor: "pointer",
-            padding: "4px 2px",
+            display: "flex", alignItems: "center", gap: 8,
+            background: "rgba(244, 168, 150, 0.12)", 
+            border: "1.5px solid rgba(244, 168, 150, 0.3)", 
+            borderRadius: 99,
+            cursor: "pointer",
+            padding: "8px 16px",
+            zIndex: 50,
+            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+            boxShadow: "0 4px 12px rgba(244, 168, 150, 0.1)"
           }}
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />   
           </svg>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".04em" }}>Metas</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-peach-ink)", letterSpacing: ".01em" }}>Metas</span>
         </button>
       </div>
 
@@ -2302,71 +2313,97 @@ export function PlannerPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {gtdFocusItems.map(item => {
               const isAnimating = animatingFocusItems.includes(item.id);
+              const isExpanded = expandedFocusItems.includes(item.id);
               return (
                 <div key={item.id} className="glass-card" style={{
-                  display: "flex", alignItems: "center", gap: 12,
+                  display: "flex", flexDirection: "column",
                   borderLeft: "4px solid var(--accent-sky)",
-                  borderRadius: 16, padding: "12px 16px",
+                  borderRadius: 16, padding: "10px 14px",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
                   opacity: isAnimating ? 0.5 : 1,
                   transform: isAnimating ? "scale(0.98)" : "scale(1)",
                   transition: "all 0.3s ease"
                 }}>
-                  <button
-                    onClick={() => handleCompleteFocusItem(item, "tarefa")}
-                    style={{
-                      width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                      background: isAnimating ? "var(--accent-sky)" : "transparent",
-                      border: "2px solid var(--accent-sky)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      transition: "all 0.2s ease"
-                    }}
-                  >
-                    {isAnimating && <CheckCircle2 size={14} color="#fff" />}
-                  </button>
-                  <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { activeTab: "acoes" } })}>
-                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-sky)", textTransform: "uppercase", marginBottom: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => toggleExpandFocus(item.id)}>
+                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", color: "var(--accent-peach)", textTransform: "uppercase", flex: 1 }}>
                       ⚡ Captura
                     </div>
-                    <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
-                      {item.text}
-                    </div>
+                    <ChevronRight size={10} style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--accent-peach)' }} />
                   </div>
+                  
+                  {isExpanded && (
+                    <div style={{ marginTop: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                      <button
+                        onClick={() => handleCompleteFocusItem(item, "tarefa")}
+                        style={{
+                          width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                          background: isAnimating ? "var(--accent-sky)" : "transparent",
+                          border: "2px solid var(--accent-sky)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "all 0.2s ease",
+                          marginTop: 2
+                        }}
+                      >
+                        {isAnimating && <CheckCircle2 size={14} color="#fff" />}
+                      </button>
+                      <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { activeTab: "acoes" } })}>
+                        <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
+                          {item.text}
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
+                          Toque para abrir em Metas →
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
             {goalFocusItems.map(item => {
               const isAnimating = animatingFocusItems.includes(item.id);
+              const isExpanded = expandedFocusItems.includes(item.id);
               return (
                 <div key={item.id} className="glass-card" style={{
-                  display: "flex", alignItems: "center", gap: 12,
+                  display: "flex", flexDirection: "column",
                   borderLeft: "4px solid var(--accent-peach)",
-                  borderRadius: 16, padding: "12px 16px",
+                  borderRadius: 16, padding: "10px 14px",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
                   opacity: isAnimating ? 0.5 : 1,
                   transform: isAnimating ? "scale(0.98)" : "scale(1)",
                   transition: "all 0.3s ease"
                 }}>
-                  <button
-                    onClick={() => handleCompleteFocusItem(item, "meta")}
-                    style={{
-                      width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                      background: isAnimating ? "var(--accent-peach)" : "transparent",
-                      border: "2px solid var(--accent-peach)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      transition: "all 0.2s ease"
-                    }}
-                  >
-                    {isAnimating && <CheckCircle2 size={14} color="#fff" />}
-                  </button>
-                  <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { openGoalId: item.goalId } })}>
-                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".08em", color: "var(--accent-peach)", textTransform: "uppercase", marginBottom: 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => toggleExpandFocus(item.id)}>
+                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", color: "var(--accent-peach)", textTransform: "uppercase", flex: 1 }}>
                       🎯 {item.goalTitle}
                     </div>
-                    <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
-                      {item.text}
-                    </div>
+                    <ChevronRight size={10} style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--accent-peach)' }} />
                   </div>
+
+                  {isExpanded && (
+                    <div style={{ marginTop: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                      <button
+                        onClick={() => handleCompleteFocusItem(item, "meta")}
+                        style={{
+                          width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                          background: isAnimating ? "var(--accent-peach)" : "transparent",
+                          border: "2px solid var(--accent-peach)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          transition: "all 0.2s ease",
+                          marginTop: 2
+                        }}
+                      >
+                        {isAnimating && <CheckCircle2 size={14} color="#fff" />}
+                      </button>
+                      <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { openGoalId: item.goalId } })}>
+                        <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
+                          {item.text}
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
+                          Toque para abrir em Metas →
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

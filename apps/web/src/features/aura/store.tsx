@@ -538,6 +538,19 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           });
 
           await refreshData();
+
+          // Sincronizar nota com o Diário (Journal)
+          if (entry.note && entry.note.trim().length > 0) {
+            try {
+              await api.post('/journal/external-message', {
+                message: entry.note.trim(),
+                referenceDate: today
+              });
+            } catch (journalErr) {
+              console.warn('[Sync] Falha ao enviar nota para o diário:', journalErr);
+            }
+          }
+
           // Retorna dados ricos da IA para uso na tela de resultado
           const extracted = {
             stateLabel: checkinResponse?.stateLabel ?? null,
