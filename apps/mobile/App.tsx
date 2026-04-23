@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { View, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { DefaultTheme as NavigationDefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useEffect } from 'react';
-import { View, Text } from 'react-native';
 import { MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native-paper';
+
 import RootStackNavigator from './src/presentation/navigation/RootStackNavigator';
 import { useAuthStore } from './src/presentation/providers/auth_store';
 import { appColors } from './src/presentation/theme/appTheme';
@@ -30,11 +30,10 @@ const theme = {
 
 /**
  * App: Ponto de entrada do aplicativo Mobile.
- * Inicializa o container de navegação e o suporte a gestos.
  */
 export default function App() {
   const { initialize, error: authError } = useAuthStore();
-  const [runtimeError, setRuntimeError] = React.useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
   useNotifications();
 
   useEffect(() => {
@@ -45,6 +44,7 @@ export default function App() {
 
   const error = runtimeError || authError;
 
+  // Tela de erro amigável se as env vars falharem
   if (error && (error.includes('env vars ausentes') || runtimeError)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: appColors.background }}>
