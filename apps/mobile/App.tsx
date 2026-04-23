@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { DefaultTheme as NavigationDefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -9,7 +9,9 @@ import { MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native
 import RootStackNavigator from './src/presentation/navigation/RootStackNavigator';
 import { useAuthStore } from './src/presentation/providers/auth_store';
 import { appColors } from './src/presentation/theme/appTheme';
-import { useNotifications } from './src/hooks/useNotifications';
+
+// Ignore specific warnings that might be noisy in production
+LogBox.ignoreLogs(['new URL()', 'URL.searchParams']);
 
 const { LightTheme } = adaptNavigationTheme({
   reactNavigationLight: NavigationDefaultTheme,
@@ -28,29 +30,26 @@ const theme = {
   },
 };
 
-/**
- * App: Ponto de entrada do aplicativo Mobile.
- */
 export default function App() {
   const { initialize, error: authError } = useAuthStore();
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  useNotifications();
 
   useEffect(() => {
+    // Initialize auth store but catch any errors to prevent crash
     initialize().catch((e: any) => {
-      setRuntimeError(e?.message || 'Erro fatal na inicializacao');
+      console.error('[App] Init failed:', e);
+      setRuntimeError(e?.message || 'Erro de inicializacao');
     });
   }, [initialize]);
 
   const error = runtimeError || authError;
 
-  // Tela de erro amigável se as env vars falharem
   if (error && (error.includes('env vars ausentes') || runtimeError)) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20, backgroundColor: appColors.background }}>
-        <Text style={{ color: appColors.danger, textAlign: 'center', fontWeight: 'bold', fontSize: 18 }}>Erro na Airia</Text>
-        <Text style={{ textAlign: 'center', marginTop: 10, color: '#666' }}>{error}</Text>
-        <Text style={{ marginTop: 20, fontSize: 12, color: '#999' }}>Tente reiniciar o app ou verificar sua conexao.</Text>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#FAF8F5' }}>
+        <Text style={{ color: '#A8544A', fontWeight: 'bold', fontSize: 20, marginBottom: 12 }}>Ops! Algo deu errado</Text>
+        <Text style={{ textAlign: 'center', color: '#3F3833', lineHeight: 20 }}>{error}</Text>
+        <Text style={{ marginTop: 24, fontSize: 13, color: '#81756D' }}>Tente fechar e abrir o app novamente.</Text>
       </View>
     );
   }
@@ -68,15 +67,15 @@ export default function App() {
   };
 
   return (
-    <SafeAreaProvider>
-      <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
         <PaperProvider theme={theme}>
           <NavigationContainer theme={navigationTheme}>
             <RootStackNavigator />
             <StatusBar style="dark" translucent backgroundColor="transparent" />
           </NavigationContainer>
         </PaperProvider>
-      </GestureHandlerRootView>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

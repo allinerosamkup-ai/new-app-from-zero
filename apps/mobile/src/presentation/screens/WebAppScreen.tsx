@@ -33,13 +33,9 @@ export default function WebAppScreen() {
   const startUrl = useMemo(() => {
     // Se nao estiver logado no nativo, carrega a splash que vai pro login
     const path = userId ? getWebAppStartPath(onboardingDone) : '/splash';
-    try {
-      const url = new URL(`${getWebAppUrl()}${path}`);
-      url.searchParams.set('airia_native', '1');
-      return url.toString();
-    } catch {
-      return `${getWebAppUrl()}${path}?airia_native=1`;
-    }
+    const baseUrl = getWebAppUrl();
+    const separator = path.includes('?') ? '&' : '?';
+    return `${baseUrl}${path}${separator}airia_native=1`;
   }, [onboardingDone, userId]);
 
   const injectedSessionScript = useMemo(() => {
