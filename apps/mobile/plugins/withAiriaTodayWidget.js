@@ -76,20 +76,36 @@ function withWidgetPackage(config) {
     const importLine = `import ${androidPackage}.widget.${PACKAGE_CLASS}`;
     const packageLine = `packages.add(${PACKAGE_CLASS}())`;
 
+    // 1. Injetar Import (funciona em Java e Kotlin)
     if (!contents.includes(importLine)) {
-      contents = contents.replace(/import com\.facebook\.react\.ReactPackage\n/, `import com.facebook.react.ReactPackage\n${importLine}\n`);
+      // Tenta inserir após o primeiro import de React ou no topo
+      if (contents.includes('import com.facebook.react.')) {
+        contents = contents.replace(/(import com\.facebook\.react\.[a-zA-Z.]+)/, `$1\n${importLine}`);
+      } else {
+        contents = contents.replace(/(package [a-zA-Z.]+)/, `$1\n\n${importLine}`);
+      }
     }
 
+    // 2. Injetar Package na lista (funciona com o padrao do Expo 51)
     if (!contents.includes(packageLine)) {
-      if (contents.includes('return PackageList(this).packages')) {
+      // Expo 51 + Kotlin
+      if (contents.includes('PackageList(this).packages')) {
         contents = contents.replace(
-          'return PackageList(this).packages',
-          `val packages = PackageList(this).packages\n            ${packageLine}\n            return packages`,
+          /val\s+packages\s*=\s*PackageList\(this\)\.packages/,
+          `val packages = PackageList(this).packages.toMutableList()\n            ${packageLine}`
         );
-      } else {
+        // Se ja tentamos converter para mutable e falhou, ou se eh o padrao direto:
+        if (!contents.includes('toMutableList()')) {
+            contents = contents.replace(
+                'return PackageList(this).packages',
+                `val packages = PackageList(this).packages.toMutableList()\n            ${packageLine}\n            return packages`
+            );
+        }
+      } else if (contents.includes('new PackageList(this).getPackages()')) {
+        // Legado Java
         contents = contents.replace(
-          /(\s+return packages\n)/,
-          `      ${packageLine}\n$1`,
+            'List<ReactPackage> packages = new PackageList(this).getPackages();',
+            `List<ReactPackage> packages = new PackageList(this).getPackages();\n      packages.add(new ${PACKAGE_CLASS}());`
         );
       }
     }
