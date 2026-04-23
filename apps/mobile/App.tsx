@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, LogBox } from 'react-native';
+import { View, Text, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { DefaultTheme as NavigationDefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -9,9 +9,6 @@ import { MD3LightTheme, PaperProvider, adaptNavigationTheme } from 'react-native
 import RootStackNavigator from './src/presentation/navigation/RootStackNavigator';
 import { useAuthStore } from './src/presentation/providers/auth_store';
 import { appColors } from './src/presentation/theme/appTheme';
-
-// Ignore specific warnings that might be noisy in production
-LogBox.ignoreLogs(['new URL()', 'URL.searchParams']);
 
 const { LightTheme } = adaptNavigationTheme({
   reactNavigationLight: NavigationDefaultTheme,
@@ -30,26 +27,45 @@ const theme = {
   },
 };
 
+// Global Error Boundary (Functional-ish)
+function AppErrorFallback({ error }: { error: string }) {
+  return (
+    <View style={styles.errorContainer}>
+      <Text style={styles.errorTitle}>Ocorreu um erro inesperado</Text>
+      <Text style={styles.errorMsg}>{error}</Text>
+      <Text style={styles.errorSub}>Por favor, reinicie o aplicativo.</Text>
+    </View>
+  );
+}
+
 export default function App() {
   const { initialize, error: authError } = useAuthStore();
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // Initialize auth store but catch any errors to prevent crash
-    initialize().catch((e: any) => {
-      console.error('[App] Init failed:', e);
-      setRuntimeError(e?.message || 'Erro de inicializacao');
-    });
+    async function prepare() {
+      try {
+        await initialize();
+        setIsReady(true);
+      } catch (e: any) {
+        console.error('[App] Init failed:', e);
+        setInitError(e?.message || 'Falha na inicializacao nativa');
+      }
+    }
+    void prepare();
   }, [initialize]);
 
-  const error = runtimeError || authError;
+  const activeError = initError || authError;
 
-  if (error && (error.includes('env vars ausentes') || runtimeError)) {
+  if (activeError) {
+    return <AppErrorFallback error={activeError} />;
+  }
+
+  if (!isReady) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#FAF8F5' }}>
-        <Text style={{ color: '#A8544A', fontWeight: 'bold', fontSize: 20, marginBottom: 12 }}>Ops! Algo deu errado</Text>
-        <Text style={{ textAlign: 'center', color: '#3F3833', lineHeight: 20 }}>{error}</Text>
-        <Text style={{ marginTop: 24, fontSize: 13, color: '#81756D' }}>Tente fechar e abrir o app novamente.</Text>
+      <View style={styles.loadingContainer}>
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -79,3 +95,35 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+    backgroundColor: '#FAF8F5',
+  },
+  errorTitle: {
+    color: '#A8544A',
+    fontWeight: 'bold',
+    fontSize: 20,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  errorMsg: {
+    color: '#3F3833',
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  errorSub: {
+    fontSize: 13,
+    color: '#81756D',
+    fontStyle: 'italic',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#FAF8F5',
+  },
+});
