@@ -32,6 +32,7 @@ import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
 import { AiBackgroundService } from './services/ai-background.service';
+import { SuggestionMemoryService } from './services/suggestion-memory.service';
 import {
   buildUnifiedSuggestContext,
   getSuggestFallback,
@@ -76,6 +77,13 @@ const defaultAllowed = ['localhost', '127.0.0.1', 'localhost:5051', 'localhost:5
 const defaultPrisma = new PrismaClient();
 const DEFAULT_TIMELINE_RECURRING = { enabled: false, frequency: 'daily', days: [], everyNDays: 1 };
 
+type TimelineRecurringShape = {
+  enabled?: boolean;
+  frequency?: unknown;
+  days?: unknown;
+  everyNDays?: unknown;
+};
+
 type AppDependencies = {
   prisma?: PrismaClient;
   aiService?: Pick<typeof AIService, 'summarizeJournalSession' | 'streamJournalReply' | 'generateOnboardingProfile'>;
@@ -117,6 +125,44 @@ function formatDateOnly(value: Date | string | null | undefined): string | null 
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString().slice(0, 10);
+}
+
+type TimelineDeleteScope = 'this' | 'future' | 'this-and-future' | 'all';
+
+function normalizeTimelineDeleteScope(value: unknown): TimelineDeleteScope {
+  return value === 'future' || value === 'this-and-future' || value === 'all' ? value : 'this';
+}
+
+function normalizeRecurringForSeries(value: unknown) {
+  if (!value || typeof value !== 'object') {
+    return DEFAULT_TIMELINE_RECURRING;
+  }
+
+  const candidate = value as TimelineRecurringShape;
+  const frequency = candidate.frequency === 'weekly' || candidate.frequency === 'custom' ? candidate.frequency : 'daily';
+  const days = Array.isArray(candidate.days)
+    ? candidate.days.filter((day): day is number => Number.isInteger(day) && day >= 0 && day <= 6).sort((a, b) => a - b)
+    : [];
+  const everyNDays = Number.isInteger(candidate.everyNDays) && Number(candidate.everyNDays) > 0
+    ? Number(candidate.everyNDays)
+    : 1;
+
+  return {
+    enabled: Boolean(candidate.enabled),
+    frequency,
+    days,
+    everyNDays,
+  };
+}
+
+function sameRecurringSeries(left: unknown, right: unknown) {
+  return JSON.stringify(normalizeRecurringForSeries(left)) === JSON.stringify(normalizeRecurringForSeries(right));
+}
+
+function formatUtcTime(value: Date): string {
+  const h = value.getUTCHours().toString().padStart(2, '0');
+  const m = value.getUTCMinutes().toString().padStart(2, '0');
+  return `${h}:${m}`;
 }
 
 function writeSseEvent(res: Response, event: string, data: unknown) {
@@ -376,16 +422,32 @@ function uniqueByKey(values: string[]): string[] {
 }
 
 function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record<string, unknown>): unknown {
+  const recentSuggestionItems = Array.isArray(context.recentSuggestionItems)
+    ? context.recentSuggestionItems.filter((item): item is { key: string; theme: string; text: string; sourceSurface: string; createdAt: string } =>
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as any).key === 'string' &&
+        typeof (item as any).theme === 'string' &&
+        typeof (item as any).text === 'string',
+      )
+    : [];
+
   if (type === 'home-messages' && suggestion && typeof suggestion === 'object') {
     const payload = suggestion as Record<string, unknown>;
-    const autocuidado = Array.isArray(payload.autocuidado)
+    const rawAutocuidado = Array.isArray(payload.autocuidado)
       ? uniqueByKey(
           payload.autocuidado
             .filter((item): item is string => typeof item === 'string')
             .map((item) => item.trim())
             .filter(Boolean),
-        ).slice(0, 3)
+        )
       : [];
+    const novelAutocuidado = rawAutocuidado
+      .filter((item) => !recentSuggestionItems.some((recent) => SuggestionMemoryService.isSimilar(item, recent)));
+    const autocuidado = (novelAutocuidado.length > 0
+      ? novelAutocuidado
+      : rawAutocuidado.slice(0, 1).map((item) => `Retomar sugestão anterior: ${item}`))
+      .slice(0, 3);
 
     return {
       ...payload,
@@ -400,19 +462,29 @@ function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record
     const blocked = new Set(avoidRaw.map((item) => normalizeSuggestionKey(item)));
     const seen = new Set<string>();
 
-    const filtered = suggestion
+    const validItems = suggestion
       .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-      .filter((item) => typeof item.title === 'string' && typeof item.category === 'string')
+      .filter((item) => typeof item.title === 'string' && typeof item.category === 'string');
+    const filtered = validItems
       .filter((item) => {
         const title = String(item.title).trim();
         const key = normalizeSuggestionKey(title);
         if (!key || blocked.has(key) || seen.has(key)) return false;
+        if (recentSuggestionItems.some((recent) => SuggestionMemoryService.isSimilar(title, recent))) return false;
         seen.add(key);
         return true;
       })
       .slice(0, 3);
 
-    return filtered;
+    if (filtered.length > 0 || validItems.length === 0) {
+      return filtered;
+    }
+
+    const first = validItems[0];
+    return [{
+      ...first,
+      title: `Retomar sugestão anterior: ${String(first.title).trim()}`,
+    }];
   }
 
   if (type === 'agenda-blocks') {
@@ -436,10 +508,26 @@ function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record
         )
       : [];
 
+    const sourceBlocks = Array.isArray(suggestion)
+      ? suggestion.map((item) => {
+          if (!item || typeof item !== 'object') return item;
+          const block = item as Record<string, unknown>;
+          if (!Array.isArray(block.tarefas_sugeridas)) return item;
+
+          return {
+            ...block,
+            tarefas_sugeridas: block.tarefas_sugeridas.filter((task) =>
+              typeof task === 'string' &&
+              !recentSuggestionItems.some((recent) => SuggestionMemoryService.isSimilar(task, recent)),
+            ),
+          };
+        })
+      : suggestion;
+
     return PlannerService.scheduleAgendaSuggestions({
       targetDate,
       busyWindows: [...existingBusyWindows, ...externalBusyWindows],
-      blocks: suggestion,
+      blocks: sourceBlocks,
     });
   }
 
@@ -580,6 +668,16 @@ async function finalizeJournalSession(args: {
     },
   });
 
+  void SuggestionMemoryService.append(
+    args.prisma,
+    args.userId,
+    'journal',
+    [
+      ...(summary.suggestions || []),
+      ...suggestedTasks.map((task) => task.title),
+    ],
+  ).catch(() => {});
+
   if (summary.summary.trim().length > 0) {
     void args.memoryService?.store({
       userId: args.userId,
@@ -672,6 +770,13 @@ async function persistAuraJournalSummary(args: {
       },
     }).catch(() => {});
   }
+
+  void SuggestionMemoryService.append(
+    args.prisma,
+    args.userId,
+    'journal',
+    summary.suggestions || [],
+  ).catch(() => {});
 
   return {
     sessionId: finalized.id,
@@ -1143,10 +1248,12 @@ export function createApp(dependencies: AppDependencies = {}) {
     });
 
     // 2. Chamar IA para Avaliar Estado (com contexto completo do dia)
-    const [checkinRuntimeContext, checkinPlannerContext] = await Promise.all([
+    const [checkinRuntimeContext, checkinPlannerContext, recentSuggestionItems] = await Promise.all([
       resolveAiRuntimeContext(prisma, data.userId, {}),
       buildTodayPlannerContext(prisma, data.userId),
+      SuggestionMemoryService.getRecent(prisma, data.userId),
     ]);
+    const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -1160,6 +1267,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       userName: checkinRuntimeContext.userName,
       profileSummary: checkinRuntimeContext.userProfileSummary,
       moodCycleContext: checkinRuntimeContext.moodCycleContext,
+      recentSuggestionMemory,
       emotions: (data as any).emotions,
       factors: data.factors,
       plannerContext: checkinPlannerContext,
@@ -1215,6 +1323,8 @@ export function createApp(dependencies: AppDependencies = {}) {
         },
       }).catch(() => {}); // fire-and-forget
     }
+
+    SuggestionMemoryService.append(prisma, data.userId, 'checkin', aiState.recommendations).catch(() => {});
 
     // 5. Agendar jobs de background para manter IA atualizada
     AiBackgroundService.scheduleJob(data.userId, 'rag-indexing', '1h').catch(() => {});
@@ -1474,11 +1584,13 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const data = JournalMessageStreamSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
       const existingMessages = await journalService.getSessionMessages(prisma, data.sessionId);
-      const [routineCtx, runtimeContext, journalPlannerContext] = await Promise.all([
+      const [routineCtx, runtimeContext, journalPlannerContext, recentSuggestionItems] = await Promise.all([
         journalService.buildRoutineContext(prisma, data.userId),
         resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
         buildTodayPlannerContext(prisma, data.userId),
+        SuggestionMemoryService.getRecent(prisma, data.userId),
       ]);
+      const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
       const context = { ...routineCtx, moodCycleContext: runtimeContext.moodCycleContext };
       const userOrderIndex = journalService.nextOrderIndex(existingMessages);
 
@@ -1526,6 +1638,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           userProfileSummary: runtimeContext.userProfileSummary,
           longTermMemory: runtimeContext.longTermMemory,
           recentSessionHistory: routineCtx.recentSessionHistory,
+          recentSuggestionMemory,
           ragContext: journalRagContext,
           plannerContext: journalPlannerContext,
         },
@@ -1614,7 +1727,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.post('/api/aura/command/stream', async (req: Request, res: Response) => {
     try {
       const data = AuraCommandMessageStreamSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
-      const runtimeContext = await resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext });
+      const [runtimeContext, recentSuggestionItems] = await Promise.all([
+        resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
+        SuggestionMemoryService.getRecent(prisma, data.userId),
+      ]);
+      const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
 
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -1638,6 +1755,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         userName: runtimeContext.userName,
         profileSummary: runtimeContext.userProfileSummary,
         moodCycleContext: runtimeContext.moodCycleContext,
+        recentSuggestionMemory,
         ragContext: commandRagContext,
         plannerContext,
       });
@@ -2314,8 +2432,12 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       // Shared Brain: todas as superfícies de IA buscam memória vetorial com intenção específica
       const ragQuery = getRagIntent(type, context);
-      const ragMemories = await memoryService.retrieve(userId, ragQuery, 3).catch(() => []);
+      const [ragMemories, recentSuggestionItems] = await Promise.all([
+        memoryService.retrieve(userId, ragQuery, 3).catch(() => []),
+        SuggestionMemoryService.getRecent(prisma, userId),
+      ]);
       const ragContext = memoryService.formatForPrompt(ragMemories);
+      const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
       context = buildUnifiedSuggestContext({
         type,
         context,
@@ -2326,6 +2448,8 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext,
         latestCheckinSignals,
       });
+      context.recentSuggestionMemory = recentSuggestionMemory;
+      context.recentSuggestionItems = recentSuggestionItems;
 
       let prompt = '';
       if (type === 'task-notes') {
@@ -2426,7 +2550,7 @@ JSON APENAS:
 
 ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}${dtWeekday}${dtLocalDate}${emotionCtx}${negCtx}${posCtx}
 ${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${dtPendingCtx}${dtAvoidCtx}
-${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : ''}${ragContext}
+${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : ''}${ragContext}${recentSuggestionMemory}
 
 REGRAS INVIOLÁVEIS:
 0. FONTE DA VERDADE DE HOJE = listas acima de "Metas ativas" e "Compromissos pendentes HOJE". Se a memória sugerir algo fora dessas listas, IGNORE.
@@ -2698,7 +2822,7 @@ ${previousAgendaLabels.length ? `Blocos recentes para NÃO reciclar: ${previousA
 ${previousAgendaTasks.length ? `Tarefas recentes para NÃO repetir: ${previousAgendaTasks.join(' | ')}.` : ''}
 ${previousAutocuidado.length ? `Micro-ações recentes da home: ${previousAutocuidado.join(' | ')}.` : ''}
 ${context.requestVariant ? `Tentativa atual de geração: ${context.requestVariant}. Se for maior que 1, trate como "refazer" e entregue uma alternativa materialmente diferente.` : ''}
-${ragContext}
+${ragContext}${recentSuggestionMemory}
 
 Monte complementos, não uma rotina inteira:
 - Crie 1-4 blocos opcionais, somente se acrescentarem algo útil ao que já existe
@@ -2749,7 +2873,7 @@ ${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
 ${context.moodCycleContext ? `\nContexto vivo recente:\n${context.moodCycleContext}` : ''}
 ${crPreviousSuggestion ? `\nSugestão anterior para NÃO repetir: ${crPreviousSuggestion}` : ''}
-${nota}${ragContext}
+${nota}${ragContext}${recentSuggestionMemory}
 
 Responda como Airia, com leitura específica e útil para este momento.
 
@@ -2886,9 +3010,16 @@ INSTRUÇÕES:
           userName,
           profileSummary: userProfileSummary,
           moodCycleContext,
+          recentSuggestionMemory,
           currentMoodLabel: String(context.moodLabel || ''),
           timeOfDay,
         });
+        SuggestionMemoryService.append(
+          prisma,
+          userId,
+          'habit-recommendation',
+          SuggestionMemoryService.extractTextsFromSuggestion(type, suggestions),
+        ).catch(() => {});
         return res.json({ suggestion: suggestions });
       } else {
         return res.status(400).json({ error: 'Unknown suggestion type' });
@@ -2907,6 +3038,7 @@ INSTRUÇÕES:
               profileSummary: userProfileSummary,
               moodCycleContext,
               longTermMemory,
+              recentSuggestionMemory,
               domain: getSuggestPromptDomain(type),
             }),
           },
@@ -2925,6 +3057,12 @@ INSTRUÇÕES:
       const rawSuggestion = choice?.message?.content?.trim() || '';
       const normalizedSuggestion = plainTextTypes.has(type) ? rawSuggestion : normalizeAiSuggestion(type, rawSuggestion);
       const suggestion = sanitizeAiSuggestion(type, normalizedSuggestion, context);
+      SuggestionMemoryService.append(
+        prisma,
+        userId,
+        type,
+        SuggestionMemoryService.extractTextsFromSuggestion(type, suggestion),
+      ).catch(() => {});
       return res.json({ suggestion });
     } catch (error: any) {
       console.error('[ai/suggest] Error:', error);
@@ -3438,12 +3576,54 @@ JSON APENAS: {"profileSummary":"..."}`,
     const { id } = req.params;
 
     try {
+      const scope = normalizeTimelineDeleteScope(req.query.scope);
       const block = await prisma.timelineBlock.findUnique({ where: { id } });
       if (!block || block.userId !== userId) {
         return res.status(404).json({ error: 'Block not found' });
       }
-      await prisma.timelineBlock.delete({ where: { id } });
-      return res.status(204).send();
+
+      const recurring = normalizeRecurringForSeries(block.recurring);
+      if (!recurring.enabled || scope === 'this') {
+        await prisma.timelineBlock.delete({ where: { id } });
+        return res.status(204).send();
+      }
+
+      const startTime = formatUtcTime(block.startAt);
+      const endTime = formatUtcTime(block.endAt);
+      const dateBoundary = block.localDate;
+      const candidates = await prisma.timelineBlock.findMany({
+        where: {
+          userId,
+          title: block.title,
+          category: block.category,
+          ...(scope === 'future'
+            ? { localDate: { gt: dateBoundary } }
+            : scope === 'this-and-future'
+              ? { localDate: { gte: dateBoundary } }
+              : {}),
+        },
+        select: {
+          id: true,
+          startAt: true,
+          endAt: true,
+          recurring: true,
+        },
+      });
+      const ids = candidates
+        .filter((candidate) => formatUtcTime(candidate.startAt) === startTime)
+        .filter((candidate) => formatUtcTime(candidate.endAt) === endTime)
+        .filter((candidate) => sameRecurringSeries(candidate.recurring, block.recurring))
+        .map((candidate) => candidate.id);
+
+      if (ids.length === 0) {
+        return res.json({ deletedCount: 0 });
+      }
+
+      const { count } = await prisma.timelineBlock.deleteMany({
+        where: { userId, id: { in: ids } },
+      });
+
+      return res.json({ deletedCount: count });
     } catch (error: any) {
       console.error('[timeline/delete] Error:', error);
       return res.status(500).json({ error: 'Failed to delete timeline block' });

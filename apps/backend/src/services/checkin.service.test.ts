@@ -47,6 +47,7 @@ async function run() {
       userName: 'Ana',
       profileSummary: 'Fica melhor quando reduz a carga no começo do dia.',
       moodCycleContext: 'Humor em queda leve, energia baixa.',
+      recentSuggestionMemory: 'MEMORIA RECENTE DE SUGESTOES DA AURA:\n- [home/somatico] Respirar por 1 minuto antes de responder',
     },
     fakeClient as any,
   );
@@ -61,6 +62,9 @@ async function run() {
   assert.match(capturedMessages[1]?.content || '', /SINAL PRIORITÁRIO/i);
   assert.match(capturedMessages[1]?.content || '', /Acordei mais arrastada hoje\./i);
   assert.match(capturedMessages[1]?.content || '', /não trate energia baixa como piora emocional/i);
+  assert.match(capturedMessages[1]?.content || '', /Respirar por 1 minuto antes de responder/i);
+  assert.match(capturedMessages[0]?.content || '', /Somática é ferramenta auxiliar/i);
+  assert.match(capturedMessages[1]?.content || '', /fato vs interpretação/i);
 }
 
 run()

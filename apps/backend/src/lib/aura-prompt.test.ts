@@ -20,16 +20,26 @@ async function run() {
   assert.match(onboardingPrompt, /bipolaridade/i);
   assert.match(onboardingPrompt, /TCC pratica/i);
   assert.match(onboardingPrompt, /terapia de exposição gradual/i);
+  assert.match(onboardingPrompt, /NUCLEO FUNCIONAL COMPARTILHADO/i);
+  assert.match(onboardingPrompt, /menor ação útil possível/i);
+  assert.match(onboardingPrompt, /Somática é ferramenta auxiliar/i);
   assert.match(onboardingPrompt, /estilo Jarvis/i);
   assert.match(onboardingPrompt, /Não espere palavras de ordem literais o tempo todo/i);
+  assert.doesNotMatch(onboardingPrompt, /Aliança Divergente/i);
+  assert.doesNotMatch(onboardingPrompt, /Elton/i);
 
   const checkinPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
     domain: 'checkin',
+    recentSuggestionMemory: 'MEMORIA RECENTE DE SUGESTOES DA AURA:\n- [checkin/execucao] Abrir o planner por 5 minutos',
   });
 
   assert.match(checkinPrompt, /COORDENADA BIO-PSÍQUICA/i);
   assert.match(checkinPrompt, /ritmo hoje/i);
+  assert.match(checkinPrompt, /utilidade funcional/i);
+  assert.match(checkinPrompt, /custo oculto/i);
+  assert.match(checkinPrompt, /Abrir o planner por 5 minutos/i);
+  assert.match(checkinPrompt, /retomando a sugestão anterior/i);
   assert.doesNotMatch(checkinPrompt, /Usuárias típicas têm TDAH/i);
 
   const journalLivePrompt = buildAuraSystemPrompt({
@@ -40,9 +50,10 @@ async function run() {
   assert.match(journalLivePrompt, /DIÁRIO \(PRESENÇA REFLEXIVA\)/i);
   assert.match(journalLivePrompt, /acompanhe o fluxo/i);
   assert.match(journalLivePrompt, /PROIBIDO sugerir metas/i);
-  assert.match(journalLivePrompt, /no máximo uma pergunta por mensagem/i);
+  assert.match(journalLivePrompt, /máximo 1 pergunta/i);
   assert.match(journalLivePrompt, /colete em micro-passos/i);
-  assert.match(journalLivePrompt, /nunca faça múltiplas perguntas/i);
+  assert.match(journalLivePrompt, /PROIBIDO empilhar perguntas/i);
+  assert.match(journalLivePrompt, /SOMÁTICA COMO SUPORTE/i);
   assert.doesNotMatch(journalLivePrompt, /gere 0 a 3 tarefas/i);
 
   const journalFinalizePrompt = buildAuraSystemPrompt({

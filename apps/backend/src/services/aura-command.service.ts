@@ -193,6 +193,7 @@ export class AuraCommandService {
       userName?: string | null;
       profileSummary?: string | null;
       moodCycleContext?: string | null;
+      recentSuggestionMemory?: string | null;
       ragContext?: string | null;
       plannerContext?: string | null;
     },
@@ -210,6 +211,7 @@ PEDIDO ATUAL:
 
 ${historyBlock ? `HISTÓRICO RECENTE:\n${historyBlock}\n` : 'HISTÓRICO RECENTE: sem contexto anterior relevante.\n'}
 ${input.ragContext ? `MEMÓRIAS RELEVANTES:\n${input.ragContext}\n` : ''}
+${input.recentSuggestionMemory ? `${input.recentSuggestionMemory}\n` : ''}
 ${input.plannerContext ? `${input.plannerContext}\n` : ''}
 INTENTS PERMITIDOS:
 - planner_task
@@ -262,6 +264,7 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
             userName: input.userName,
             profileSummary: input.profileSummary,
             moodCycleContext: input.moodCycleContext,
+            recentSuggestionMemory: input.recentSuggestionMemory,
             domain: 'aura-command',
           }),
         },

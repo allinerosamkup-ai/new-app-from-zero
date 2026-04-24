@@ -23,6 +23,7 @@ vite.config.previewbridge.js
 # Worktrees (isolated workspaces)
 .worktrees/
 worktrees/
+.tmp/
 tmp/
 scratch/
 **/*.cjs

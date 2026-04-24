@@ -2,7 +2,7 @@
   "expo": {
     "name": "Airia",
     "slug": "airia",
-    "version": "1.0.9",
+    "version": "1.0.12",
     "scheme": "airia",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,6 +16,8 @@
       "**/*"
     ],
     "plugins": [
+      "./plugins/withAiriaAndroidWorkspace",
+      "./plugins/withAiriaTodayWidget"
     ],
     "ios": {
       "supportsTablet": true,
@@ -23,7 +25,7 @@
     },
     "android": {
       "package": "pro.airia.app",
-      "versionCode": 10,
+      "versionCode": 13,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FAF8F5"

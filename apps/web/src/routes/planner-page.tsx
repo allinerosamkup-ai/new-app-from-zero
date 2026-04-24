@@ -35,8 +35,9 @@ import {
   type NoteMode,
   type RecurringConfig,
 } from "../utils/task-metadata";
-import { getLocalNoonDate } from "../utils/day-context";
+import { getLocalDateKey, getLocalNoonDate, normalizeDateKey } from "../utils/day-context";
 import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
+import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -211,6 +212,35 @@ type PlannerTask = {
   color?: string | null;
   gcalEventId?: string | null;
 };
+
+type RecurringDeleteScope = "this" | "future" | "this-and-future" | "all";
+
+const RECURRING_DELETE_OPTIONS: Array<{
+  scope: RecurringDeleteScope;
+  title: string;
+  description: string;
+}> = [
+  {
+    scope: "this",
+    title: "Só este dia",
+    description: "Remove apenas este compromisso desta data.",
+  },
+  {
+    scope: "future",
+    title: "Só os futuros",
+    description: "Mantém este compromisso e remove as próximas ocorrências.",
+  },
+  {
+    scope: "this-and-future",
+    title: "Este e futuros",
+    description: "Remove este compromisso e tudo que vem depois.",
+  },
+  {
+    scope: "all",
+    title: "Todos",
+    description: "Remove a série recorrente inteira.",
+  },
+];
 
 const EMPTY_FORM: FormState = {
   date: "",
@@ -459,6 +489,10 @@ function buildFormStateFromTask(task: PlannerTask): FormState {
     color: (useApiMetadata ? task.color : meta.color) || "var(--accent-peach)",
     alerts: [],
   };
+}
+
+function isRecurringPlannerTask(task: PlannerTask): boolean {
+  return Boolean(normalizeRecurring(task.recurring)?.enabled);
 }
 
 const NoteSection = React.memo(function NoteSection({
@@ -1644,6 +1678,8 @@ export function PlannerPage() {
   const [newForm, setNewForm] = useState<FormState>({ ...EMPTY_FORM });
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
+  const [recurringDeleteTask, setRecurringDeleteTask] = useState<PlannerTask | null>(null);
+  const [recurringDeleteLoading, setRecurringDeleteLoading] = useState(false);
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
   const [now, setNow] = useState(() => new Date());
   const openedTaskFromLocationRef = useRef<string | null>(null);
@@ -1757,6 +1793,18 @@ export function PlannerPage() {
       return slot;
     });
   }, [visibleAgendaSlots, gapSuggestions]);
+  const latestTodayCheckin = useMemo(() => {
+    const todayKey = getLocalDateKey();
+    const todayEntries = [...(state.checkinHistory || [])]
+      .filter((entry) => normalizeDateKey(entry.date) === todayKey)
+      .sort((a, b) => {
+        const aStamp = a.recordedAt ? new Date(a.recordedAt).getTime() : 0;
+        const bStamp = b.recordedAt ? new Date(b.recordedAt).getTime() : 0;
+        return aStamp - bStamp;
+      });
+
+    return todayEntries[todayEntries.length - 1] ?? null;
+  }, [state.checkinHistory]);
 
   const plannerSummary = plannerLoading
     ? "Montando a visualização da sua agenda."
@@ -1869,6 +1917,29 @@ export function PlannerPage() {
       ignore = true;
     };
   }, [selectedDateKey]);
+
+  useEffect(() => {
+    if (plannerLoading) return;
+    if (selectedDateKey !== getLocalDateKey()) return;
+
+    postNativeWidgetSync(
+      createNativeTodayWidgetPayload({
+        stateLabel: latestTodayCheckin?.stateLabel,
+        stateType: latestTodayCheckin?.stateLabelType ?? latestTodayCheckin?.emotion,
+        moodScore: latestTodayCheckin?.humor,
+        energyScore: latestTodayCheckin?.energia,
+        updatedAt: latestTodayCheckin?.recordedAt ?? new Date().toISOString(),
+        planner: plannerTasks
+          .filter((task) => !task.done)
+          .sort((a, b) => a.time.localeCompare(b.time))
+          .slice(0, 3)
+          .map((task) => ({
+            time: task.time,
+            title: task.title,
+          })),
+      }),
+    );
+  }, [latestTodayCheckin, plannerLoading, plannerTasks, selectedDateKey]);
 
   useEffect(() => {
     const taskId = (location.state as { openTaskId?: string | number } | null)?.openTaskId;
@@ -2146,7 +2217,7 @@ export function PlannerPage() {
     }
   }
 
-  async function handleDeleteTaskDirect(task: PlannerTask) {
+  async function deleteTimelineTask(task: PlannerTask, scope: RecurringDeleteScope = "this") {
     try {
       if (task.source === "gcal") {
         await api.delete(getGoogleCalendarEventEndpoint(task));
@@ -2155,12 +2226,33 @@ export function PlannerPage() {
         return;
       }
 
-      await api.delete(`/timeline/${task.id}`);
+      const scopeQuery = scope === "this" ? "" : `?scope=${encodeURIComponent(scope)}`;
+      await api.delete(`/timeline/${task.id}${scopeQuery}`);
       await reloadPlannerTasks();
       await refreshData();
-      showSuccess("Bloco excluído.");
+      showSuccess(scope === "this" ? "Bloco excluído." : "Recorrência atualizada.");
     } catch (error: any) {
       showError(error.message);
+    }
+  }
+
+  async function handleDeleteTaskDirect(task: PlannerTask) {
+    if (task.source !== "gcal" && isRecurringPlannerTask(task)) {
+      setRecurringDeleteTask(task);
+      return;
+    }
+
+    await deleteTimelineTask(task);
+  }
+
+  async function confirmRecurringDelete(scope: RecurringDeleteScope) {
+    if (!recurringDeleteTask || recurringDeleteLoading) return;
+    setRecurringDeleteLoading(true);
+    try {
+      await deleteTimelineTask(recurringDeleteTask, scope);
+      setRecurringDeleteTask(null);
+    } finally {
+      setRecurringDeleteLoading(false);
     }
   }
 
@@ -2526,6 +2618,91 @@ export function PlannerPage() {
       </button>
 
 
+      {recurringDeleteTask ? (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.38)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 110, padding: "16px 16px env(safe-area-inset-bottom)" }}>
+          <div style={{
+            background: "#fff",
+            width: "100%",
+            borderRadius: "28px 28px 20px 20px",
+            padding: "20px",
+            boxShadow: "0 -12px 40px rgba(0,0,0,0.18)",
+            border: "1px solid rgba(255,255,255,0.82)",
+          }}>
+            <div style={{ width: 42, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 18px" }} />
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+              <div style={{
+                width: 36,
+                height: 36,
+                borderRadius: 12,
+                background: "rgba(244,168,150,.14)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}>
+                <Trash2 size={17} color="var(--accent-peach)" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-1)", margin: "0 0 4px" }}>
+                  Excluir recorrência?
+                </h3>
+                <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: 0 }}>
+                  “{recurringDeleteTask.title}” é recorrente. Escolha o alcance da exclusão.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {RECURRING_DELETE_OPTIONS.map((option) => (
+                <button
+                  key={option.scope}
+                  type="button"
+                  disabled={recurringDeleteLoading}
+                  onClick={() => confirmRecurringDelete(option.scope)}
+                  style={{
+                    width: "100%",
+                    border: "1px solid var(--warm-border)",
+                    background: option.scope === "all" ? "rgba(244,168,150,.10)" : "rgba(253,250,247,.84)",
+                    borderRadius: 16,
+                    padding: "12px 14px",
+                    textAlign: "left",
+                    cursor: recurringDeleteLoading ? "default" : "pointer",
+                    opacity: recurringDeleteLoading ? 0.62 : 1,
+                  }}
+                >
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: option.scope === "all" ? "var(--accent-peach-ink)" : "var(--text-1)" }}>
+                    {option.title}
+                  </span>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--text-3)", marginTop: 2, lineHeight: 1.4 }}>
+                    {option.description}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              disabled={recurringDeleteLoading}
+              onClick={() => setRecurringDeleteTask(null)}
+              style={{
+                width: "100%",
+                marginTop: 12,
+                border: "none",
+                background: "transparent",
+                color: "var(--text-3)",
+                fontSize: 13,
+                fontWeight: 800,
+                padding: "10px",
+                cursor: recurringDeleteLoading ? "default" : "pointer",
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+
       {showNewForm ? (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" }}>
           <div style={{ 
@@ -2570,4 +2747,3 @@ export function PlannerPage() {
     </div>
   );
 }
-

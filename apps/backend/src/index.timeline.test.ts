@@ -12,9 +12,11 @@ async function run() {
   const prisma = {
     $queryRaw: async () => [],
     $executeRaw: async () => ({}),
-    $transaction: async (operations: Promise<unknown>[]) => Promise.all(operations),
+    $transaction: async (operations: Promise<unknown>[] | ((tx: any) => Promise<unknown>)) =>
+      typeof operations === 'function' ? operations(prisma) : Promise.all(operations),
     timelineBlock: {
       findMany: async () => existingBlocks,
+      deleteMany: async () => ({ count: 0 }),
       create: async ({ data }: any) => {
         const created = {
           id: `11111111-1111-4111-8111-${String(createdBlocks.length + 1).padStart(12, '0')}`,

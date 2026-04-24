@@ -195,6 +195,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             humor: toScore(c.moodScore),
             energia: toScore(c.energyScore),
             emotion: c.stateLabelType || 'calm',
+            stateLabel: typeof c.stateLabel === 'string' ? c.stateLabel : null,
+            stateLabelType: typeof c.stateLabelType === 'string' ? c.stateLabelType : null,
             emotions: Array.isArray(c.emotions)
               ? c.emotions
               : (Array.isArray(c.aiState?.emotions) ? c.aiState.emotions : undefined),

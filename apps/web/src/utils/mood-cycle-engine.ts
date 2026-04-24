@@ -503,19 +503,19 @@ export function getStabilityLabel(score: number): string {
 
 // ── Previsão EWMA — próximos 7 dias ───────────────────────────
 // Usa Double Exponential Smoothing (Holt's method) para projetar
-// o humor dos próximos 7 dias com decaimento de tendência.
-export function forecastMood7d(history: CheckinEntry[]): number[] {
+// os próximos 7 dias com decaimento de tendência.
+function forecastMetric7d(history: CheckinEntry[], getValue: (entry: CheckinEntry) => number): number[] {
   const sorted = aggregateCheckinsByDay(history);
   if (sorted.length < 5) return [];
 
-  const humors = sorted.map(e => e.humor);
+  const values = sorted.map(getValue);
   const alpha = 0.3, beta = 0.1;
-  let level = humors[0];
-  let trend = humors.length > 1 ? humors[1] - humors[0] : 0;
+  let level = values[0];
+  let trend = values.length > 1 ? values[1] - values[0] : 0;
 
-  for (let i = 1; i < humors.length; i++) {
+  for (let i = 1; i < values.length; i++) {
     const prevLevel = level;
-    level = alpha * humors[i] + (1 - alpha) * (level + trend);
+    level = alpha * values[i] + (1 - alpha) * (level + trend);
     trend = beta * (level - prevLevel) + (1 - beta) * trend;
   }
 
@@ -527,6 +527,14 @@ export function forecastMood7d(history: CheckinEntry[]): number[] {
     forecast.push(Math.max(1, Math.min(10, l)));
   }
   return forecast;
+}
+
+export function forecastMood7d(history: CheckinEntry[]): number[] {
+  return forecastMetric7d(history, (entry) => entry.humor);
+}
+
+export function forecastEnergy7d(history: CheckinEntry[]): number[] {
+  return forecastMetric7d(history, (entry) => entry.energia);
 }
 
 // ── Score de consistência semanal (0-100) ──────────────────────

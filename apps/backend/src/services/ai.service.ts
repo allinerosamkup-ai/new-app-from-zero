@@ -44,6 +44,7 @@ export type JournalPromptContext = {
   topThemes: string[];
   topPlannerCategories: string[];
   moodCycleContext?: string | null;
+  recentSuggestionMemory?: string | null;
   ragContext?: string;
   plannerContext?: string | null;
   checkinToday?: {
@@ -131,6 +132,7 @@ export class AIService {
             moodCycleContext: input.context.moodCycleContext,
             longTermMemory: input.context.longTermMemory,
             recentSessionHistory: input.context.recentSessionHistory,
+            recentSuggestionMemory: input.context.recentSuggestionMemory,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',
@@ -278,6 +280,7 @@ export class AIService {
     userName: string;
     profileSummary?: string | null;
     moodCycleContext?: string | null;
+    recentSuggestionMemory?: string | null;
     currentMoodLabel?: string;
     timeOfDay: string;
   }): Promise<Array<{ title: string; category: string; reason: string; icon: string }>> {
@@ -287,12 +290,15 @@ export class AIService {
       CONTEXTO:
       - Estado percebido: ${input.currentMoodLabel || 'não informado'}
       - Ciclo/Histórico: ${input.moodCycleContext || 'iniciando agora'}
+      ${input.recentSuggestionMemory || ''}
       
       REGRAS:
       1. Use micro-passos (5-15 min).
-      2. Foque em regulação emocional ou proteção de energia conforme a fase.
+      2. Foque em regulação emocional, ativação mínima, exposição gradual ou proteção de energia conforme a fase.
       3. Categorias: saúde, produtividade, mindfulness, social, lazer.
-      4. Retorne APENAS um array JSON.
+      4. Não repita nem parafraseie sugestões recentes; se retomar uma ideia for inevitável, marque como retomada e mude a execução concreta.
+      5. Somática só entra se houver sinal corporal ou necessidade real de aterramento; não use como padrão.
+      6. Retorne APENAS um array JSON.
 
       FORMATO:
       [{"title": "string", "category": "string", "reason": "1 frase curta", "icon": "emoji"}]
@@ -307,6 +313,7 @@ export class AIService {
             userName: input.userName,
             profileSummary: input.profileSummary,
             moodCycleContext: input.moodCycleContext,
+            recentSuggestionMemory: input.recentSuggestionMemory,
             domain: 'planning',
           }),
         },

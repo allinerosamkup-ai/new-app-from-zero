@@ -11,6 +11,7 @@ import { useToast } from "../components/Toast";
 import type { MoodOption } from "../features/aura/types";
 import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
+import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
 import { RefreshCcw, X } from "lucide-react";
 import "../styles/aura.css";
@@ -93,6 +94,44 @@ const CAT_COLOR: Record<string, string> = {
   rotina: "var(--accent-peach)",
   social: "var(--social-color)",
 };
+
+function parseTimeToMinutes(time: string): number | null {
+  if (!/^\d{2}:\d{2}$/.test(time)) return null;
+  const [hours, minutes] = time.split(":").map(Number);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function addMinutes(time: string, minutesToAdd: number): string {
+  const total = (parseTimeToMinutes(time) ?? 0) + minutesToAdd;
+  const normalized = ((total % 1440) + 1440) % 1440;
+  const hours = String(Math.floor(normalized / 60)).padStart(2, "0");
+  const minutes = String(normalized % 60).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function resolveSuggestedTaskTime(
+  rawTime: unknown,
+  existingTasks: Array<{ time: string; endTime?: string | null }>,
+  referenceDate = new Date(),
+): string {
+  const fallback = findSmartPlannerSlot(existingTasks, referenceDate).time;
+  if (typeof rawTime !== "string") return fallback;
+
+  const trimmed = rawTime.trim();
+  const minutes = parseTimeToMinutes(trimmed);
+  if (minutes === null) return fallback;
+
+  const currentMinutes = referenceDate.getHours() * 60 + referenceDate.getMinutes();
+  const dayEndMinutes = 18 * 60;
+
+  if (minutes <= currentMinutes || minutes < 6 * 60 || minutes > dayEndMinutes) {
+    return fallback;
+  }
+
+  return trimmed;
+}
 
 export function CheckinResultPage() {
   const navigate = useNavigate();
@@ -233,6 +272,8 @@ export function CheckinResultPage() {
     if (!Array.isArray(payload)) return [];
     const seen = new Set<string>();
     const normalized: AiTask[] = [];
+    const virtualTasks = [...(state.tasks || [])];
+    const now = new Date();
     for (const raw of payload) {
       if (!raw || typeof raw !== "object") continue;
       const item = raw as { title?: unknown; category?: unknown; time?: unknown };
@@ -242,8 +283,9 @@ export function CheckinResultPage() {
       if (seen.has(key)) continue;
       seen.add(key);
       const category = typeof item.category === "string" ? item.category.trim().toLowerCase() : "rotina";
-      const time = typeof item.time === "string" && /^\d{2}:\d{2}$/.test(item.time) ? item.time : "09:00";
+      const time = resolveSuggestedTaskTime(item.time, virtualTasks, now);
       normalized.push({ title, category, time, discarded: false });
+      virtualTasks.push({ time, endTime: addMinutes(time, 30) });
       if (normalized.length >= 3) break;
     }
     return normalized;
@@ -417,6 +459,12 @@ export function CheckinResultPage() {
     navigate(path, { replace: true });
   }
 
+  function openSuggestedGoal(text: string) {
+    const routeState = buildGoalSuggestionRouteState(text, state.goals || []);
+    if (!routeState) return;
+    navigate("/goals", { state: routeState });
+  }
+
   return (
     <div className="result-shell" style={{ background: v.bg }}>
       <div className="screen-content result-screen">
@@ -480,12 +528,27 @@ export function CheckinResultPage() {
               </p>
               {checkinAI.recommendations && checkinAI.recommendations.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {checkinAI.recommendations.map((rec, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 7, padding: "7px 10px", borderRadius: 8, background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)", border: `1px solid ${v.accent}25` }}>
+                  {checkinAI.recommendations.map((rec, i) => {
+                    const routeState = buildGoalSuggestionRouteState(rec, state.goals || []);
+                    return (
+                    <div
+                      key={i}
+                      onClick={() => routeState && navigate("/goals", { state: routeState })}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 7,
+                        padding: "7px 10px",
+                        borderRadius: 8,
+                        background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)",
+                        border: `1px solid ${v.accent}25`,
+                        cursor: routeState ? "pointer" : "default",
+                      }}
+                    >
                       <span style={{ fontSize: 11, color: v.accent, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>→</span>
                       <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{rec}</p>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
             </>
@@ -494,7 +557,19 @@ export function CheckinResultPage() {
               <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.65, fontStyle: "italic", marginBottom: 10 }}>
                 {auraMsg.message}
               </p>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", borderRadius: 9, background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)", border: `1px solid ${v.accent}30` }}>
+              <div
+                onClick={() => openSuggestedGoal(auraMsg.suggestion)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 10px",
+                  borderRadius: 9,
+                  background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)",
+                  border: `1px solid ${v.accent}30`,
+                  cursor: buildGoalSuggestionRouteState(auraMsg.suggestion, state.goals || []) ? "pointer" : "default",
+                }}
+              >
                 <span style={{ fontSize: 16, flexShrink: 0 }}>{auraMsg.suggestionEmoji}</span>
                 <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{auraMsg.suggestion}</p>
               </div>

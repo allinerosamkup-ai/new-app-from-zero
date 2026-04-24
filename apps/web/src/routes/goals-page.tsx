@@ -12,6 +12,7 @@ import {
   Link, X, Zap, Inbox, Edit2, RefreshCw,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
+import { normalizeSuggestionText } from "../utils/goal-suggestion-routing";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -104,7 +105,19 @@ function TaskBox({ done, onClick, isNext = false }: { done: boolean; onClick: ()
 
 // ── GoalCard v8 ───────────────────────────────────────────────
 function GoalCard({
-  goal, colorIndex, onToggleSubtask, onBreakDown, onAddSubtask, onRemove, loadingBreakdown, onJournalReflect, onUpdateTitle, onConvertToTask
+  goal,
+  colorIndex,
+  onToggleSubtask,
+  onBreakDown,
+  onAddSubtask,
+  onRemove,
+  loadingBreakdown,
+  onJournalReflect,
+  onUpdateTitle,
+  onConvertToTask,
+  initiallyOpen = true,
+  highlightedSubtaskId,
+  highlightedText,
 }: {
   goal: { id: number | string; title: string; completedPct: number; subtasks: Array<{ id: number | string; title: string; done: boolean }> };
   colorIndex: number;
@@ -116,23 +129,33 @@ function GoalCard({
   onJournalReflect: () => void;
   onUpdateTitle: (newTitle: string) => void;
   onConvertToTask: (goal: any) => void;
+  initiallyOpen?: boolean;
+  highlightedSubtaskId?: number | string;
+  highlightedText?: string;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(initiallyOpen);
   const [addingTask, setAddingTask] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(goal.title);
   const [newTask, setNewTask] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const color = GOAL_COLORS[colorIndex % GOAL_COLORS.length];
   const pct = goal.completedPct;
   const done = pct >= 100;
   const doneSubs = goal.subtasks.filter(s => s.done).length;
   // GTD: first uncompleted subtask = Next Action
   const nextActionIdx = goal.subtasks.findIndex(s => !s.done);
+  const normalizedHighlightText = highlightedText ? normalizeSuggestionText(highlightedText) : "";
 
   useEffect(() => { if (addingTask) inputRef.current?.focus(); }, [addingTask]);
   useEffect(() => { if (isEditingTitle) editInputRef.current?.focus(); }, [isEditingTitle]);
+  useEffect(() => {
+    if (!initiallyOpen) return;
+    setOpen(true);
+    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [initiallyOpen]);
 
   const handleTitleSubmit = () => {
     if (editedTitle.trim() && editedTitle !== goal.title) {
@@ -142,7 +165,7 @@ function GoalCard({
   };
 
   return (
-    <div style={{
+    <div ref={cardRef} style={{
       backdropFilter: "blur(20px)",
       WebkitBackdropFilter: "blur(20px)",
       background: "rgba(255,255,255,0.62)",
@@ -285,6 +308,9 @@ function GoalCard({
           {/* Subtask rows */}
           {goal.subtasks.map((s, idx) => {
             const isNext = idx === nextActionIdx;
+            const isHighlighted = highlightedSubtaskId != null
+              ? s.id === highlightedSubtaskId
+              : normalizedHighlightText.length > 0 && normalizeSuggestionText(s.title) === normalizedHighlightText;
             return (
               <div key={s.id}>
                 {/* GTD: Next Action badge */}
@@ -307,10 +333,19 @@ function GoalCard({
                     display: "flex", alignItems: "center", gap: 8,
                     padding: isNext && !done ? "7px 10px" : "5px 0",
                     borderRadius: isNext && !done ? 10 : 0,
-                    background: isNext && !done ? "rgba(215,137,127,0.06)" : "transparent",
-                    border: isNext && !done ? "1px solid rgba(215,137,127,0.20)" : "none",
+                    background: isHighlighted
+                      ? "rgba(99,152,169,0.12)"
+                      : isNext && !done
+                        ? "rgba(215,137,127,0.06)"
+                        : "transparent",
+                    border: isHighlighted
+                      ? "1px solid rgba(99,152,169,0.35)"
+                      : isNext && !done
+                        ? "1px solid rgba(215,137,127,0.20)"
+                        : "none",
                     cursor: "pointer", marginBottom: 4,
                     transition: "background 0.15s",
+                    boxShadow: isHighlighted ? "0 0 0 1px rgba(99,152,169,0.08)" : "none",
                   }}
                 >
                   <TaskBox done={s.done} isNext={isNext && !done} onClick={() => onToggleSubtask(s.id)} />
@@ -445,15 +480,20 @@ export function GoalsPage() {
   const recognitionRef = useRef<any>(null);
   const capturingRef = useRef(false);
   const [activeTab, setActiveTab] = useState<"capturar" | "metas" | "acoes">("capturar");
+  const navState = (location.state as {
+    activeTab?: "capturar" | "metas" | "acoes";
+    openGoalId?: string | number;
+    openSubtaskId?: string | number;
+    highlightText?: string;
+  } | null) ?? null;
 
   useEffect(() => {
-    const navState = location.state as any;
     if (navState?.activeTab) setActiveTab(navState.activeTab);
     if (navState?.openGoalId) {
       setActiveTab("metas");
       setMetasOpen(true);
     }
-  }, [location.state]);
+  }, [navState]);
 
   useEffect(() => {
     localStorage.setItem("gtd-inbox-v1", JSON.stringify(gtdItems));
@@ -952,6 +992,9 @@ export function GoalsPage() {
                 onJournalReflect={() => navigate("/journal")}
                 onUpdateTitle={newTitle => handleUpdateGoalTitle(goal.id, newTitle)}
                 onConvertToTask={handleConvertToTask}
+                initiallyOpen={navState?.openGoalId ? navState.openGoalId === goal.id : undefined}
+                highlightedSubtaskId={navState?.openGoalId === goal.id ? navState.openSubtaskId : undefined}
+                highlightedText={navState?.openGoalId === goal.id ? navState.highlightText : undefined}
               />
             ))
           )
@@ -1176,4 +1219,3 @@ export function GoalsPage() {
     </div>
   );
 }
-

@@ -49,6 +49,8 @@ export type CheckinEntry = {
   humor: number;
   energia: number;
   emotion: string;
+  stateLabel?: string | null;
+  stateLabelType?: string | null;
   emotions?: string[];
   recordedAt?: string;
   checkinSlot?: 'morning' | 'midday' | 'evening' | string;

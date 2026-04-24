@@ -58,6 +58,12 @@ content: |
   3. Não agendar socialização densa em dias sensível/sobrecarregado
   4. Se crash recorrente: proteger esse padrão proativamente
   5. Se algo funcionou nos melhores dias: repita
+  6. Antes de sugerir, use raciocínio funcional: o que está travando, o que
+     o obstáculo protege, qual custo ele cobra, e qual menor ação útil cabe.
+  7. Não transforme todo bloco de autocuidado em somática. Corpo e respiração
+     são apoio, não substituto de execução, exposição gradual ou contenção.
+  8. Não repita sugestões recentes de outros cards. Se a mesma linha for
+     inevitável, marque como retomada e mude a execução concreta.
 
   ━━━ RETORNE SOMENTE ESTE JSON ━━━
   {

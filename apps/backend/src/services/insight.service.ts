@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@app/database';
 import { buildAuraSystemPrompt, getFirstName, humanizeScore } from '../lib/aura-prompt';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { SuggestionMemoryService } from './suggestion-memory.service';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -150,6 +151,8 @@ export class InsightService {
         ].filter(Boolean).join(' ')
       : null;
     const userName = getFirstName(profile?.fullName) ?? 'você';
+    const recentSuggestionItems = await SuggestionMemoryService.getRecent(prisma, userId);
+    const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
 
     // 4. Chamada OpenAI para Análise de Padrões
     const habitLines = rawData.habits.map(h => `- ${h.title}: ${h.completions} conclusões`).join('\n');
@@ -172,6 +175,7 @@ export class InsightService {
       
       CORRELAÇÕES IDENTIFICADAS:
       ${correlationLines || 'Ainda sem correlações significativas.'}
+      ${recentSuggestionMemory}
 
       REGRAS:
       1. Identifique 2-3 padrões (patterns) reais baseados nos dados (ex: queda de energia após dias produtivos, ou humor melhorando com certo hábito).
@@ -179,6 +183,7 @@ export class InsightService {
       3. Escreva uma análise narrativa (aiAnalysis) empática de 3-5 frases.
       4. Gere uma pergunta reflexiva semanal (weeklyQuestion) — aberta, gentil, que convide a pessoa a olhar para si. Ex: "O que te surpreendeu positivamente esta semana?"
       5. Liste até 3 conquistas ou momentos positivos desta semana (highlights) — frases curtas, celebratórias, baseadas nos dados reais. Ex: "Completou 4 hábitos em um único dia", "Manteve sequência de 5 dias de meditação".
+      6. Não recicle sugestões recentes. Se a mesma linha de ação for inevitável, escreva como retomada explícita e mude a execução concreta.
 
       Retorne APENAS um JSON puro no formato esperado.
     `;
@@ -192,6 +197,7 @@ export class InsightService {
             userName,
             profileSummary: onboarding?.aiProfileSummary ?? null,
             moodCycleContext,
+            recentSuggestionMemory,
             domain: 'insight',
           }),
         },
@@ -202,6 +208,12 @@ export class InsightService {
     });
 
     const aiResult = WeeklyInsightSchema.parse(JSON.parse(response.choices[0].message.content || '{}'));
+    void SuggestionMemoryService.append(
+      prisma,
+      userId,
+      'weekly-insight',
+      aiResult.recommendations.map((recommendation) => recommendation.text),
+    ).catch(() => {});
 
     // 5. Salvar/Atualizar no Cache
     const savedInsight = await prisma.weeklyInsight.upsert({

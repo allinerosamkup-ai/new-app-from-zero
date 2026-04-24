@@ -26,6 +26,72 @@ export const CheckinStateSchema = z.object({
 
 export type CheckinState = z.infer<typeof CheckinStateSchema>;
 
+function extractClockFromCheckinSlot(checkinSlot?: string): string | null {
+  const match = checkinSlot?.match(/-(\d{2})(\d{2})/);
+  if (!match) return null;
+  return `${match[1]}:${match[2]}`;
+}
+
+function timeToMinutes(time: string): number | null {
+  const match = time.match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(totalMinutes: number): string {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+  const hours = String(Math.floor(normalized / 60)).padStart(2, '0');
+  const minutes = String(normalized % 60).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function resolveNextRecommendationTime(currentLocalTime: string): string {
+  const currentMinutes = timeToMinutes(currentLocalTime);
+  if (currentMinutes === null) return '09:00';
+
+  const roundedNext = Math.ceil((currentMinutes + 1) / 30) * 30;
+  if (roundedNext <= 18 * 60) {
+    return minutesToTime(roundedNext);
+  }
+
+  return '09:00';
+}
+
+function sanitizeRecommendationTimes(recommendations: string[], currentLocalTime: string | null): string[] {
+  if (!currentLocalTime) {
+    return recommendations;
+  }
+
+  const currentMinutes = timeToMinutes(currentLocalTime);
+  if (currentMinutes === null) {
+    return recommendations;
+  }
+
+  const nextAllowedTime = resolveNextRecommendationTime(currentLocalTime);
+  const maxAllowedMinutes = Math.min(currentMinutes + 120, 18 * 60);
+
+  return recommendations.map((recommendation) =>
+    recommendation.replace(/\b(\d{1,2})[:h](\d{2})\b/g, (_match, rawHours, rawMinutes) => {
+      const hours = String(rawHours).padStart(2, '0');
+      const parsedMinutes = timeToMinutes(`${hours}:${rawMinutes}`);
+      if (
+        parsedMinutes !== null &&
+        parsedMinutes > currentMinutes &&
+        parsedMinutes >= 6 * 60 &&
+        parsedMinutes <= maxAllowedMinutes
+      ) {
+        return `${hours}:${rawMinutes}`;
+      }
+
+      return nextAllowedTime;
+    }),
+  );
+}
+
 export class CheckinService {
   private static readonly MODEL = getOpenAiModel();
 
@@ -42,11 +108,13 @@ export class CheckinService {
     userName?: string;
     profileSummary?: string | null;
     moodCycleContext?: string | null;
+    recentSuggestionMemory?: string | null;
     emotions?: string[];
     factors?: string[];
     plannerContext?: string | null;
   }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState> {
     const checkinMoment = data.checkinSlot?.split('-')[0] || 'não informado';
+    const currentLocalTime = extractClockFromCheckinSlot(data.checkinSlot);
 
     const FACTOR_LABELS: Record<string, string> = {
       good_sleep: 'Sono bom', exercise: 'Exercício', healthy_meal: 'Alimentação saudável',
@@ -96,17 +164,23 @@ DADOS:
 ${noteLine}${contextLines ? `\n${contextLines}` : ''}
 
 ${data.plannerContext ? `${data.plannerContext}\n` : ''}
+${data.recentSuggestionMemory ? `${data.recentSuggestionMemory}\n` : ''}
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
 - Se houver agenda hoje, leve em conta o peso e tipo de compromissos ao calibrar as recomendações e suggestedIntensity.
 - stateLabel: nome curto, humano e sóbrio do estado; evite rótulos dramáticos.
+- Antes de sugerir, separe internamente fato vs interpretação, movimento em curso, obstáculo, utilidade do obstáculo, custo oculto e menor ação útil.
 - Se houver nota escrita, ela é o sinal de maior contexto: use a nota para reinterpretar humor, energia e sugestões antes de concluir qualquer padrão.
 - Se a nota explicar uma causa física ou situacional concreta, como doença, dor, gripe, febre, menstruação, noite ruim ou crise externa, não trate energia baixa como piora emocional; diferencie capacidade baixa de humor ruim.
 - analysis: 1-2 frases que leiam o momento sem repetir os números; se há nota, emoções ou fatores específicos, mencione a nuance concreta.
 - recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si, sem clichês; se há nota escrita, pelo menos 1 ação deve responder diretamente ao que ela revelou.
+- Se uma recomendação recente já cobriu a mesma ideia, escolha uma alternativa real. Se a repetição for a melhor opção, escreva como retomada explícita da sugestão anterior e acrescente um ajuste concreto.
+- Se citar horário explícito, ele deve ser posterior a ${currentLocalTime ?? 'agora'} e caber nas próximas 2 horas; nunca use madrugada ou horário já passado.
+- Se não houver um horário óbvio e válido, prefira escrever a ação sem relógio.
 - suggestedIntensity: 'L' (energia baixa/sensível), 'M' (equilibrada), 'P' (energia alta/focada).
 - rationale: explicação interna curta e técnica, sem linguagem clínica pesada.
 - Evite frases genéricas como "vá com calma", "um passo de cada vez" ou "você consegue" sem contexto.
+- Evite transformar tudo em somática. Respiração, corpo e água só entram se fizerem sentido com um sinal concreto; priorize ativação, exposição gradual, reorganização prática ou contenção conforme o estado.
 - Se sono, corpo e energia estiverem baixos juntos, puxe para proteção e redução de carga.
 - Se clareza estiver alta com energia boa, puxe para foco e estrutura.
 
@@ -123,6 +197,7 @@ JSON APENAS:
             userName: data.userName,
             profileSummary: data.profileSummary,
             moodCycleContext: data.moodCycleContext,
+            recentSuggestionMemory: data.recentSuggestionMemory,
             domain: 'checkin',
           }),
         },
@@ -135,6 +210,10 @@ JSON APENAS:
     const content = response.choices[0].message.content;
     if (!content) throw new Error('Falha ao gerar estado da IA');
 
-    return CheckinStateSchema.parse(JSON.parse(content));
+    const parsed = CheckinStateSchema.parse(JSON.parse(content));
+    return {
+      ...parsed,
+      recommendations: sanitizeRecommendationTimes(parsed.recommendations, currentLocalTime),
+    };
   }
 }

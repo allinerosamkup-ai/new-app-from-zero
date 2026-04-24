@@ -34,6 +34,81 @@ function normalizeWidgetTitle(title: string): string {
   return `${cleanTitle.slice(0, 49)}...`;
 }
 
+function normalizeWidgetTime(time: string): string {
+  const cleanTime = time.trim();
+  return /^\d{2}:\d{2}$/.test(cleanTime) ? cleanTime : '--';
+}
+
+function normalizeWidgetStateLabel(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim().slice(0, 48);
+  }
+
+  return 'Sem check-in';
+}
+
+function normalizeWidgetStateType(value: unknown): string {
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim().slice(0, 32);
+  }
+
+  return 'unknown';
+}
+
+function normalizeWidgetScore(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+
+  const rounded = Math.round(value);
+  return Math.min(10, Math.max(1, rounded));
+}
+
+function normalizeWidgetUpdatedAt(value: unknown): string {
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  return new Date().toISOString();
+}
+
+export function sanitizeTodayWidgetPayload(payload: unknown): TodayWidgetPayload | null {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const source = payload as {
+    stateLabel?: unknown;
+    stateType?: unknown;
+    moodScore?: unknown;
+    energyScore?: unknown;
+    updatedAt?: unknown;
+    planner?: unknown;
+  };
+
+  const planner = Array.isArray(source.planner)
+    ? source.planner
+        .filter((item): item is { time?: unknown; title?: unknown } => !!item && typeof item === 'object')
+        .map((item) => ({
+          time: normalizeWidgetTime(typeof item.time === 'string' ? item.time : '--'),
+          title: normalizeWidgetTitle(typeof item.title === 'string' ? item.title : 'Bloco sem titulo'),
+        }))
+        .slice(0, 3)
+    : [];
+
+  return {
+    stateLabel: normalizeWidgetStateLabel(source.stateLabel),
+    stateType: normalizeWidgetStateType(source.stateType),
+    moodScore: normalizeWidgetScore(source.moodScore),
+    energyScore: normalizeWidgetScore(source.energyScore),
+    updatedAt: normalizeWidgetUpdatedAt(source.updatedAt),
+    planner,
+  };
+}
+
 export function buildTodayWidgetPayload(input: {
   todayCheckin: WidgetCheckin | null;
   blocks: TimelineBlock[];
@@ -58,11 +133,13 @@ export function buildTodayWidgetPayload(input: {
 }
 
 export async function publishTodayWidgetData(payload: TodayWidgetPayload): Promise<void> {
-  const serialized = JSON.stringify(payload);
+  const safePayload = sanitizeTodayWidgetPayload(payload);
+  if (!safePayload) return;
+
+  const serialized = JSON.stringify(safePayload);
   await AsyncStorage.setItem(WIDGET_STORAGE_KEY, serialized);
 
   if (Platform.OS === 'android' && nativeWidgetModule?.updateTodayWidget) {
     await nativeWidgetModule.updateTodayWidget(serialized);
   }
 }
-

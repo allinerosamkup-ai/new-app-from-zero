@@ -47,6 +47,7 @@ async function run() {
           stateLabel: 'Dia sensível',
         },
         moodCycleContext: 'Humor em queda suave, energia 2/5.',
+        recentSuggestionMemory: 'MEMORIA RECENTE DE SUGESTOES DA AURA:\n- [journal/comunicacao] Mandar mensagem pedindo ajuste de prazo',
       },
       history: [
         { role: 'user', content: 'Estou preocupada com minha energia.' },
@@ -67,7 +68,9 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /PERSONALIDADE E ALMA/i);
   assert.match(capturedMessages[0]?.content || '', /CICLO DE HUMOR ATUAL/i);
   assert.match(capturedMessages[0]?.content || '', /Humor em queda suave/i);
-  assert.match(capturedMessages[0]?.content || '', /No máximo uma pergunta por resposta/i);
+  assert.match(capturedMessages[0]?.content || '', /Mandar mensagem pedindo ajuste de prazo/i);
+  assert.match(capturedMessages[0]?.content || '', /NUCLEO FUNCIONAL COMPARTILHADO/i);
+  assert.match(capturedMessages[0]?.content || '', /máximo 1 pergunta/i);
   assert.match(capturedMessages[0]?.content || '', /colete em micro-passos/i);
   assert.equal(capturedStreamModel, 'gpt-5.4-nano');
   assert.equal(capturedMessages[1]?.role, 'user');

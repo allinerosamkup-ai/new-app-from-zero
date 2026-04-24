@@ -80,7 +80,7 @@ export function LoginPage() {
 
   const handleGoogleLogin = async () => {
     // If running in native shell, delegate to native Google Auth
-    if ((window as any).__AIRIA_NATIVE_SHELL__) {
+    if ((window as any).__AIRIA_NATIVE_SHELL__ && (window as any).__AIRIA_NATIVE_GOOGLE_AUTH__) {
       (window as any).ReactNativeWebView?.postMessage(JSON.stringify({ type: 'auth.googleSignIn' }));
       return;
     }

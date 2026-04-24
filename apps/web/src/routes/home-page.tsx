@@ -12,9 +12,11 @@ import { trackEvent } from "../lib/track";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
-import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, computeStreak, forecastMood7d, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, computeStreak, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
+import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
+import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
 import {
   type AgendaBlock,
   type HomeAiMsg,
@@ -36,6 +38,7 @@ import {
   Timer,
   TrendingUp,
   Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { OnboardingTour } from "../components/OnboardingTour";
@@ -65,6 +68,15 @@ type ChartPoint = {
   label: string;
   isHighlight?: boolean;
 };
+
+type HomeChartMode = "week" | "monthly" | "day" | "forecast";
+
+const HOME_CHART_TABS: Array<{ id: HomeChartMode; label: string }> = [
+  { id: "week", label: "Semana" },
+  { id: "monthly", label: "Mensal" },
+  { id: "day", label: "Hoje" },
+  { id: "forecast", label: "7 dias" },
+];
 
 function normalizeHomeAiMessage(payload: unknown): HomeAiMsg | null {
   if (!payload || typeof payload !== "object") return null;
@@ -314,8 +326,7 @@ export function HomePage() {
   const [addingActionTitle, setAddingActionTitle] = useState<string | null>(null);
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
   const [doneTaskIds, setDoneTaskIds] = useState<Set<string | number>>(new Set());
-  const [checkinChartMode, setCheckinChartMode] = useState<"week" | "day">("week");
-  const [forecastTab, setForecastTab] = useState<"forecast" | "monthly">("forecast");
+  const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
 
   // Relógio e Contexto de Tempo (necessários para IDs e filtros)
@@ -378,6 +389,7 @@ export function HomePage() {
   const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
   const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
+  const energyForecast = useMemo(() => forecastEnergy7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const monthlyHistory = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 30);
@@ -461,10 +473,25 @@ export function HomePage() {
     return path;
   }
 
-  const activeChartData = checkinChartMode === "week" ? weeklyCheckinData : todayCheckinData;
+  const activeChartData = homeChartMode === "day" ? todayCheckinData : weeklyCheckinData;
   const hasActiveChartData = activeChartData.some(
     (point) => point.humorY !== null || point.energiaY !== null,
   );
+  const homeChartSubtitle = (() => {
+    if (homeChartMode === "monthly") return "Histórico — últimos 30 dias";
+    if (homeChartMode === "forecast") return "Previsão — próximos 7 dias";
+    if (homeChartMode === "day") {
+      return todayCheckinData.length > 0
+        ? `${todayCheckinData.length} check-in${todayCheckinData.length > 1 ? "s" : ""} hoje`
+        : "Hoje ainda não há check-ins registrados";
+    }
+    return "Média diária dos últimos 7 dias";
+  })();
+  const advanceHomeChartMode = () => {
+    const currentIndex = HOME_CHART_TABS.findIndex((tab) => tab.id === homeChartMode);
+    const nextIndex = (currentIndex + 1) % HOME_CHART_TABS.length;
+    setHomeChartMode(HOME_CHART_TABS[nextIndex].id);
+  };
 
   useEffect(() => {
     const t = setInterval(() => setClockTime(new Date()), 60_000);
@@ -495,6 +522,13 @@ export function HomePage() {
     }, null);
     return latest?.key ?? null;
   }, [state.checkinHistory]);
+  const latestTodayCheckin = useMemo(() => {
+    const todayEntries = [...(state.checkinHistory || [])]
+      .filter((entry) => normalizeDateKey(entry.date) === dayContext.localDate)
+      .sort((a, b) => getCheckinMoment(a) - getCheckinMoment(b));
+
+    return todayEntries[todayEntries.length - 1] ?? null;
+  }, [dayContext.localDate, state.checkinHistory]);
   const homeAiRequestKey = useMemo(
     () =>
       buildHomeAiRequestKey({
@@ -518,6 +552,28 @@ export function HomePage() {
       state.tasks.length,
     ],
   );
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    postNativeWidgetSync(
+      createNativeTodayWidgetPayload({
+        stateLabel: latestTodayCheckin?.stateLabel,
+        stateType: latestTodayCheckin?.stateLabelType ?? latestTodayCheckin?.emotion,
+        moodScore: latestTodayCheckin?.humor,
+        energyScore: latestTodayCheckin?.energia,
+        updatedAt: latestTodayCheckin?.recordedAt ?? new Date().toISOString(),
+        planner: (state.tasks || [])
+          .filter((task) => !task.done)
+          .sort((a, b) => a.time.localeCompare(b.time))
+          .slice(0, 3)
+          .map((task) => ({
+            time: task.time,
+            title: task.title,
+          })),
+      }),
+    );
+  }, [hydrated, latestTodayCheckin, state.tasks]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -961,42 +1017,49 @@ export function HomePage() {
 
         {/* ── Gráfico de check-ins ── */}
         <div className="mini-chart-area">
-          <div className="chart-header" style={{ alignItems: "flex-start" }}>
+          <div className="chart-header" style={{ alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
               <TrendingUp size={13} color="var(--horizon)" />
               <div>
-                <span className="chart-title">Humor e energia</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span className="chart-title">Humor e energia</span>
+                  {homeChartMode === "forecast" && (
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color: "var(--text-3)",
+                      background: "rgba(255,255,255,.72)",
+                      border: "1px solid var(--warm-border)",
+                      borderRadius: 999,
+                      padding: "2px 7px",
+                      lineHeight: 1.2,
+                    }}>
+                      Previsão
+                    </span>
+                  )}
+                </div>
                 <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--text-3)" }}>
-                  {checkinChartMode === "week"
-                    ? "Média diária dos últimos 7 dias"
-                    : todayCheckinData.length > 0
-                      ? `${todayCheckinData.length} check-in${todayCheckinData.length > 1 ? "s" : ""} hoje`
-                      : "Hoje ainda não há check-ins registrados"}
+                  {homeChartSubtitle}
                 </p>
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", marginLeft: "auto" }}>
               <div style={{ display: "flex", padding: 3, borderRadius: 999, background: "rgba(255,255,255,.82)", border: "1px solid var(--warm-border)" }}>
-                {[
-                  { id: "week", label: "Semana", disabled: false },
-                  { id: "day", label: "Hoje", disabled: false },
-                ].map((option) => {
-                  const active = checkinChartMode === option.id;
+                {HOME_CHART_TABS.map((option) => {
+                  const active = homeChartMode === option.id;
                   return (
                     <button
                       key={option.id}
-                      onClick={() => !option.disabled && setCheckinChartMode(option.id as "week" | "day")}
-                      disabled={option.disabled}
+                      onClick={() => setHomeChartMode(option.id)}
                       style={{
                         border: "none",
                         background: active ? "var(--accent-peach)" : "transparent",
                         color: active ? "#fff" : "var(--text-2)",
-                        opacity: option.disabled ? 0.45 : 1,
                         borderRadius: 999,
-                        padding: "5px 10px",
+                        padding: "5px 8px",
                         fontSize: 10,
                         fontWeight: 700,
-                        cursor: option.disabled ? "default" : "pointer",
+                        cursor: "pointer",
                       }}
                     >
                       {option.label}
@@ -1004,6 +1067,26 @@ export function HomePage() {
                   );
                 })}
               </div>
+              <button
+                type="button"
+                onClick={advanceHomeChartMode}
+                aria-label="Próximo gráfico"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  border: "1px solid var(--warm-border)",
+                  background: "rgba(255,255,255,.72)",
+                  color: "var(--text-3)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                <ChevronRight size={14} />
+              </button>
               <div className="chart-legend">
                 <div className="legend-item">
                   <span
@@ -1033,102 +1116,321 @@ export function HomePage() {
             </div>
           </div>
 
-          {!hasActiveChartData ? (
-            <div style={{
-              height: 72, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
-              color: "var(--text-3)", fontSize: "0.82rem",
-            }}>
-              <span style={{ fontSize: 20 }}>{checkinChartMode === "day" ? "🌅" : "📊"}</span>
-              <span style={{ fontStyle: "italic" }}>
-                {checkinChartMode === "day"
-                  ? "Nenhum check-in hoje ainda — faça o de hoje!"
-                  : "Faça seu primeiro check-in para ver o gráfico"}
-              </span>
-            </div>
-          ) : (
-            <>
-              <svg width="100%" viewBox="0 0 280 72" style={{ overflow: "visible" }}>
-                <defs>
-                  <linearGradient id="moodLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="var(--horizon)" />
-                    <stop offset="50%" stopColor="var(--sweet-mint)" />
-                    <stop offset="100%" stopColor="var(--atomic-tangerine)" />
-                  </linearGradient>
-                  <linearGradient id="moodFillGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--horizon)" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="var(--horizon)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+          {(homeChartMode === "week" || homeChartMode === "day") && (
+            !hasActiveChartData ? (
+              <div style={{
+                height: 72, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+                color: "var(--text-3)", fontSize: "0.82rem",
+              }}>
+                <span style={{ fontSize: 20 }}>{homeChartMode === "day" ? "🌅" : "📊"}</span>
+                <span style={{ fontStyle: "italic" }}>
+                  {homeChartMode === "day"
+                    ? "Nenhum check-in hoje ainda — faça o de hoje!"
+                    : "Faça seu primeiro check-in para ver o gráfico"}
+                </span>
+              </div>
+            ) : (
+              <>
+                <svg width="100%" viewBox="0 0 280 72" style={{ overflow: "visible" }}>
+                  <defs>
+                    <linearGradient id="moodLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="var(--horizon)" />
+                      <stop offset="50%" stopColor="var(--sweet-mint)" />
+                      <stop offset="100%" stopColor="var(--atomic-tangerine)" />
+                    </linearGradient>
+                    <linearGradient id="moodFillGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--horizon)" stopOpacity={0.18} />
+                      <stop offset="100%" stopColor="var(--horizon)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
 
-                {[12, 29, 46, 63].map(y => (
-                  <line key={y} x1="16" y1={y} x2="264" y2={y} stroke="rgba(0,0,0,.04)" strokeWidth="1" strokeDasharray="3,3" />
-                ))}
+                  {[12, 29, 46, 63].map(y => (
+                    <line key={y} x1="16" y1={y} x2="264" y2={y} stroke="rgba(0,0,0,.04)" strokeWidth="1" strokeDasharray="3,3" />
+                  ))}
 
-                {buildSparkPath(activeChartData, (point) => point.energiaY) && (
-                  <path
-                    d={buildSparkPath(activeChartData, (point) => point.energiaY)}
-                    fill="none"
-                    stroke="var(--olive)"
-                    strokeWidth="1.5"
-                    strokeDasharray="4,3"
-                    opacity={0.5}
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {buildSparkPath(activeChartData, (point) => point.humorY) && (
-                  <>
+                  {buildSparkPath(activeChartData, (point) => point.energiaY) && (
                     <path
-                      d={buildSparkPath(activeChartData, (point) => point.humorY)}
+                      d={buildSparkPath(activeChartData, (point) => point.energiaY)}
                       fill="none"
-                      stroke="url(#moodLineGradient)"
-                      strokeWidth="2.5"
+                      stroke="var(--olive)"
+                      strokeWidth="1.5"
+                      strokeDasharray="4,3"
+                      opacity={0.5}
                       strokeLinecap="round"
                     />
-                    {(() => {
-                      const linePath = buildSparkPath(activeChartData, (point) => point.humorY);
-                      const validPts = activeChartData.filter((point) => point.humorY !== null);
-                      if (validPts.length < 2) return null;
-                      const first = validPts[0];
-                      const last = validPts[validPts.length - 1];
-                      return (
-                        <path
-                          d={`${linePath} L ${last.x} 72 L ${first.x} 72 Z`}
-                          fill="url(#moodFillGradient)"
-                          opacity={0.35}
-                        />
-                      );
-                    })()}
-                  </>
-                )}
+                  )}
 
-                {activeChartData.map((point, index) => {
-                  if (point.humorY === null) return null;
-                  return point.isHighlight ? (
-                    <g key={index}>
-                      <circle cx={point.x} cy={point.humorY} r="4.5" fill="var(--atomic-tangerine)" stroke="white" strokeWidth="2" />
-                      <circle cx={point.x} cy={point.humorY} r="9" fill="none" stroke="var(--atomic-tangerine)" strokeWidth="1.5" opacity={0.35}>
-                        <animate attributeName="r" values="9;14;9" dur="2.5s" repeatCount="indefinite" />
-                        <animate attributeName="opacity" values=".4;0;.4" dur="2.5s" repeatCount="indefinite" />
-                      </circle>
-                    </g>
-                  ) : (
-                    <circle key={index} cx={point.x} cy={point.humorY} r="3.5" fill="var(--horizon)" stroke="white" strokeWidth="1.5" opacity={0.75} />
-                  );
-                })}
-              </svg>
+                  {buildSparkPath(activeChartData, (point) => point.humorY) && (
+                    <>
+                      <path
+                        d={buildSparkPath(activeChartData, (point) => point.humorY)}
+                        fill="none"
+                        stroke="url(#moodLineGradient)"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      />
+                      {(() => {
+                        const linePath = buildSparkPath(activeChartData, (point) => point.humorY);
+                        const validPts = activeChartData.filter((point) => point.humorY !== null);
+                        if (validPts.length < 2) return null;
+                        const first = validPts[0];
+                        const last = validPts[validPts.length - 1];
+                        return (
+                          <path
+                            d={`${linePath} L ${last.x} 72 L ${first.x} 72 Z`}
+                            fill="url(#moodFillGradient)"
+                            opacity={0.35}
+                          />
+                        );
+                      })()}
+                    </>
+                  )}
 
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 8, paddingInline: 6 }}>
-                {activeChartData.map((point, index) => (
-                  <div key={`${point.label}-${index}`} style={{ flex: 1, textAlign: "center" }}>
-                    <span style={{ fontSize: 10, fontWeight: point.isHighlight ? 700 : 500, color: point.isHighlight ? "var(--text-1)" : "var(--text-3)" }}>
-                      {point.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </>
+                  {activeChartData.map((point, index) => {
+                    if (point.humorY === null) return null;
+                    return point.isHighlight ? (
+                      <g key={index}>
+                        <circle cx={point.x} cy={point.humorY} r="4.5" fill="var(--atomic-tangerine)" stroke="white" strokeWidth="2" />
+                        <circle cx={point.x} cy={point.humorY} r="9" fill="none" stroke="var(--atomic-tangerine)" strokeWidth="1.5" opacity={0.35}>
+                          <animate attributeName="r" values="9;14;9" dur="2.5s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values=".4;0;.4" dur="2.5s" repeatCount="indefinite" />
+                        </circle>
+                      </g>
+                    ) : (
+                      <circle key={index} cx={point.x} cy={point.humorY} r="3.5" fill="var(--horizon)" stroke="white" strokeWidth="1.5" opacity={0.75} />
+                    );
+                  })}
+                </svg>
+
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 8, paddingInline: 6 }}>
+                  {activeChartData.map((point, index) => (
+                    <div key={`${point.label}-${index}`} style={{ flex: 1, textAlign: "center" }}>
+                      <span style={{ fontSize: 10, fontWeight: point.isHighlight ? 700 : 500, color: point.isHighlight ? "var(--text-1)" : "var(--text-3)" }}>
+                        {point.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )
           )}
+
+          {homeChartMode === "monthly" && (() => {
+            if (monthlyHistory.length === 0) {
+              return (
+                <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
+                  <span style={{ fontSize: 20 }}>📊</span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}>Sem dados nos últimos 30 dias ainda.</span>
+                </div>
+              );
+            }
+
+            const DAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+            const MW = 300, MH = 130, MPX = 22, MPY = 14, MBOT = 28;
+            const mh = MH - MPY - MBOT;
+            const n = monthlyHistory.length;
+            const mxToX = (i: number) => MPX + (n > 1 ? (i / (n - 1)) : 0.5) * (MW - MPX * 2);
+            const mVals = monthlyHistory.map(e => e.humor);
+            const eVals = monthlyHistory.map(e => e.energia);
+            const combinedVals = [...mVals, ...eVals];
+            const mRawMin = Math.min(...combinedVals), mRawMax = Math.max(...combinedVals);
+            const moodRawMin = Math.min(...mVals), moodRawMax = Math.max(...mVals);
+            const mPad = Math.max(0.6, (mRawMax - mRawMin) * 0.25);
+            const mMin = Math.max(1, mRawMin - mPad), mMax = Math.min(10, mRawMax + mPad);
+            const mRange = mMax - mMin || 1;
+            const mToY = (v: number) => MPY + mh - ((v - mMin) / mRange) * mh;
+
+            const mLine = monthlyHistory.reduce((acc, e, i) => {
+              const x = mxToX(i), y = mToY(e.humor);
+              if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
+              const px = mxToX(i - 1), py = mToY(monthlyHistory[i - 1].humor);
+              const cp = (x - px) * 0.45;
+              return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
+            }, '');
+            const mEnergyLine = monthlyHistory.reduce((acc, e, i) => {
+              const x = mxToX(i), y = mToY(e.energia);
+              if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
+              const px = mxToX(i - 1), py = mToY(monthlyHistory[i - 1].energia);
+              const cp = (x - px) * 0.45;
+              return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
+            }, '');
+            const mArea = mLine
+              + ` L${mxToX(n - 1).toFixed(1)} ${(MPY + mh).toFixed(1)} L${mxToX(0).toFixed(1)} ${(MPY + mh).toFixed(1)} Z`;
+
+            const maxIdx = mVals.indexOf(moodRawMax);
+            const minIdx = mVals.indexOf(moodRawMin);
+            const lastIdx = n - 1;
+            const keyIdxs = new Set([maxIdx, minIdx, lastIdx]);
+            const tickStep = Math.max(1, Math.floor(n / 5));
+            const tickIdxs = Array.from({ length: n }, (_, i) => i).filter(i => i % tickStep === 0 || i === lastIdx);
+
+            return (
+              <>
+                <svg width="100%" viewBox={`0 0 ${MW} ${MH}`} style={{ overflow: "visible", display: "block" }}>
+                  {[0.2, 0.5, 0.8].map(pct => {
+                    const v = mMin + pct * mRange;
+                    return <line key={pct} x1={MPX} x2={MW - MPX} y1={mToY(v)} y2={mToY(v)}
+                      stroke="rgba(0,0,0,.055)" strokeWidth={0.7} strokeDasharray="3,3" />;
+                  })}
+                  <path d={mArea} fill="rgba(150,199,179,.09)" />
+                  <path d={mEnergyLine} fill="none" stroke="var(--olive)" strokeWidth="1.5" strokeDasharray="4,3" opacity={0.5} strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={mLine} fill="none" stroke="var(--accent-sage)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+
+                  {monthlyHistory.map((e, i) => {
+                    const x = mxToX(i), y = mToY(e.humor);
+                    const isKey = keyIdxs.has(i);
+                    const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
+                    const dotColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                    return (
+                      <circle key={i} cx={x} cy={y} r={isKey ? 0 : 2.5}
+                        fill={dotColor} stroke="white" strokeWidth={isKey ? 0 : 1} opacity={0.8} />
+                    );
+                  })}
+
+                  {monthlyHistory.map((e, i) => {
+                    if (!keyIdxs.has(i)) return null;
+                    const x = mxToX(i), y = mToY(e.humor);
+                    const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
+                    const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
+                    const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                    return (
+                      <g key={`key-${i}`}>
+                        <text x={x} y={y + 6} textAnchor="middle" fontSize={15} style={{ userSelect: "none" }}>{emoji}</text>
+                        <text x={x} y={y + 20} textAnchor="middle" fontSize={8.5} fill={scoreColor}
+                          fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{e.humor.toFixed(1)}</text>
+                      </g>
+                    );
+                  })}
+
+                  {tickIdxs.map(i => {
+                    const x = mxToX(i);
+                    const dt = new Date(monthlyHistory[i].date + "T12:00:00");
+                    return (
+                      <g key={`tick-${i}`}>
+                        <text x={x} y={MH - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
+                          fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{dt.getDate()}</text>
+                        <text x={x} y={MH - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
+                          fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{DAY_NAMES[dt.getDay()]}</text>
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                  {[
+                    { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
+                    { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
+                    { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
+                  ].map(l => (
+                    <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
+                      {l.emoji} {l.label}
+                    </span>
+                  ))}
+                </div>
+                <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
+                  {n} check-in{n !== 1 ? "s" : ""} registrado{n !== 1 ? "s" : ""} nos últimos 30 dias.
+                </p>
+              </>
+            );
+          })()}
+
+          {homeChartMode === "forecast" && (() => {
+            if (moodForecast.length !== 7 || energyForecast.length !== 7) {
+              return (
+                <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
+                  <span style={{ fontSize: 20 }}>📈</span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic", textAlign: "center" }}>
+                    Faça mais check-ins para liberar a previsão de 7 dias.
+                  </span>
+                </div>
+              );
+            }
+
+            const DAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+            const today = new Date();
+            const W = 300, H = 130, PX = 22, PY = 14;
+            const BOTTOM_RESERVE = 36;
+            const h = H - PY - BOTTOM_RESERVE;
+            const combinedVals = [...moodForecast, ...energyForecast];
+            const rawMin = Math.min(...combinedVals);
+            const rawMax = Math.max(...combinedVals);
+            const padding = Math.max(0.6, (rawMax - rawMin) * 0.3);
+            const scaleMin = Math.max(1, rawMin - padding);
+            const scaleMax = Math.min(10, rawMax + padding);
+            const range = scaleMax - scaleMin || 1;
+            const toX = (i: number) => PX + (i / 6) * (W - PX * 2);
+            const toY = (v: number) => PY + h - ((v - scaleMin) / range) * h;
+
+            const areaPath = moodForecast.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ')
+              + ` L${toX(6).toFixed(1)} ${(PY + h).toFixed(1)} L${toX(0).toFixed(1)} ${(PY + h).toFixed(1)} Z`;
+            const linePath = moodForecast.reduce((acc, v, i) => {
+              const x = toX(i), y = toY(v);
+              if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
+              const px = toX(i - 1), py = toY(moodForecast[i - 1]);
+              const cp = (x - px) * 0.45;
+              return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
+            }, '');
+            const energyLinePath = energyForecast.reduce((acc, v, i) => {
+              const x = toX(i), y = toY(v);
+              if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
+              const px = toX(i - 1), py = toY(energyForecast[i - 1]);
+              const cp = (x - px) * 0.45;
+              return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
+            }, '');
+
+            return (
+              <>
+                <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible", display: "block" }}>
+                  {[0.2, 0.5, 0.8].map(pct => {
+                    const v = scaleMin + pct * range;
+                    return <line key={pct} x1={PX} x2={W - PX} y1={toY(v)} y2={toY(v)}
+                      stroke="rgba(0,0,0,.055)" strokeWidth={0.7} strokeDasharray="3,3" />;
+                  })}
+                  <path d={areaPath} fill="rgba(99,152,169,.08)" />
+                  <path d={energyLinePath} fill="none" stroke="var(--olive)" strokeWidth="1.5" strokeDasharray="4,3" opacity={0.5} strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={linePath} fill="none" stroke="rgba(99,152,169,.45)" strokeWidth={2} strokeDasharray="6,3" strokeLinecap="round" strokeLinejoin="round" />
+                  {moodForecast.map((val, i) => {
+                    const x = toX(i), y = toY(val);
+                    const d = new Date(today); d.setDate(today.getDate() + i + 1);
+                    const dayName = DAY_NAMES[d.getDay()];
+                    const isGood = val >= 7, isWarn = val < 4.5;
+                    const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
+                    const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                    const midY = PY + h / 2;
+                    const labelsAbove = y > midY;
+                    const emojiY = labelsAbove ? y - 18 : y + 6;
+                    const scoreY = labelsAbove ? y - 5 : y + 20;
+                    return (
+                      <g key={i}>
+                        <circle cx={x} cy={y} r={3} fill={scoreColor} opacity={0.8} />
+                        <text x={x} y={emojiY} textAnchor="middle" fontSize={13} style={{ userSelect: "none" }}>{emoji}</text>
+                        <text x={x} y={scoreY} textAnchor="middle" fontSize={8.5} fill={scoreColor}
+                          fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{val.toFixed(1)}</text>
+                        <text x={x} y={H - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
+                          fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{d.getDate()}</text>
+                        <text x={x} y={H - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
+                          fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{dayName}</text>
+                      </g>
+                    );
+                  })}
+                </svg>
+                <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                  {[
+                    { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
+                    { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
+                    { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
+                  ].map(l => (
+                    <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
+                      {l.emoji} {l.label}
+                    </span>
+                  ))}
+                </div>
+                <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
+                  Baseado no seu padrão de humor e energia. Quanto mais check-ins, mais preciso.
+                </p>
+              </>
+            );
+          })()}
 
           <div className="aura-divider" style={{ marginTop: "14px" }} />
           <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
@@ -1606,240 +1908,6 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* ── Previsão de Humor — próximos 7 dias ── */}
-        {moodForecast.length === 7 && (() => {
-          const DAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-          const today = new Date();
-
-          // ── Escala automática: amplifica diferenças sutis ──
-          const W = 300, H = 130, PX = 22, PY = 14;
-          // Área do gráfico: reserva 36px no fundo p/ dia do mês + nome do dia + score
-          const BOTTOM_RESERVE = 36;
-          const h = H - PY - BOTTOM_RESERVE;
-          const rawMin = Math.min(...moodForecast);
-          const rawMax = Math.max(...moodForecast);
-          const padding = Math.max(0.6, (rawMax - rawMin) * 0.3); // mínimo 0.6 de margem
-          const scaleMin = Math.max(1,  rawMin - padding);
-          const scaleMax = Math.min(10, rawMax + padding);
-          const range = scaleMax - scaleMin || 1;
-          const toX = (i: number) => PX + (i / 6) * (W - PX * 2);
-          const toY = (v: number) => PY + h - ((v - scaleMin) / range) * h;
-
-          const areaPath = moodForecast.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)} ${toY(v).toFixed(1)}`).join(' ')
-            + ` L${toX(6).toFixed(1)} ${(PY + h).toFixed(1)} L${toX(0).toFixed(1)} ${(PY + h).toFixed(1)} Z`;
-          // Curva suave (bezier cúbico)
-          const linePath = moodForecast.reduce((acc, v, i) => {
-            const x = toX(i), y = toY(v);
-            if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
-            const px = toX(i - 1), py = toY(moodForecast[i - 1]);
-            const cp = (x - px) * 0.45;
-            return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
-          }, '');
-
-          return (
-            <div style={{
-              borderRadius: 18, border: "1.5px solid var(--warm-border)",
-              background: "rgba(255,255,255,.70)", backdropFilter: "blur(16px)",
-              padding: "16px", marginBottom: "calc(var(--a) * 1.2)",
-            }}>
-              {/* Cabeçalho + Abas */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-                <div>
-                  <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 3px" }}>
-                    {forecastTab === "forecast" ? "Como seu humor pode evoluir" : "Seu humor este mês"}
-                  </p>
-                  <p style={{ fontSize: 15, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>
-                    {forecastTab === "forecast" ? "Previsão — próximos 7 dias" : "Histórico — últimos 30 dias"}
-                  </p>
-                </div>
-                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                  {(["forecast", "monthly"] as const).map(tab => (
-                    <button key={tab} onClick={() => setForecastTab(tab)} style={{
-                      padding: "4px 10px", borderRadius: 999, fontSize: 10, fontWeight: 700,
-                      fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer",
-                      border: forecastTab === tab ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
-                      background: forecastTab === tab ? "var(--accent-peach)" : "rgba(255,255,255,.62)",
-                      color: forecastTab === tab ? "#fff" : "var(--text-3)",
-                      transition: "all 150ms",
-                    }}>
-                      {tab === "forecast" ? "7 dias" : "Mensal"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── ABA: PREVISÃO 7 DIAS ── */}
-              {forecastTab === "forecast" && (
-                <>
-                  <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible", display: "block" }}>
-                    {[0.2, 0.5, 0.8].map(pct => {
-                      const v = scaleMin + pct * range;
-                      return <line key={pct} x1={PX} x2={W - PX} y1={toY(v)} y2={toY(v)}
-                        stroke="rgba(0,0,0,.055)" strokeWidth={0.7} strokeDasharray="3,3" />;
-                    })}
-                    <path d={areaPath} fill="rgba(99,152,169,.08)" />
-                    <path d={linePath} fill="none" stroke="rgba(99,152,169,.45)" strokeWidth={2} strokeDasharray="6,3" strokeLinecap="round" strokeLinejoin="round" />
-                    {moodForecast.map((val, i) => {
-                      const x = toX(i), y = toY(val);
-                      const d = new Date(today); d.setDate(today.getDate() + i + 1);
-                      const dayName = DAY_NAMES[d.getDay()];
-                      const isGood = val >= 7, isWarn = val < 4.5;
-                      const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
-                      const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
-                      // Labels acima do ponto quando está na metade inferior do gráfico (evita colidir com datas)
-                      const midY = PY + h / 2;
-                      const labelsAbove = y > midY;
-                      const emojiY = labelsAbove ? y - 18 : y + 6;
-                      const scoreY = labelsAbove ? y - 5 : y + 20;
-                      return (
-                        <g key={i}>
-                          <circle cx={x} cy={y} r={3} fill={scoreColor} opacity={0.8} />
-                          <text x={x} y={emojiY} textAnchor="middle" fontSize={13} style={{ userSelect: "none" }}>{emoji}</text>
-                          <text x={x} y={scoreY} textAnchor="middle" fontSize={8.5} fill={scoreColor}
-                            fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{val.toFixed(1)}</text>
-                          <text x={x} y={H - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
-                            fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{d.getDate()}</text>
-                          <text x={x} y={H - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
-                            fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{dayName}</text>
-                        </g>
-                      );
-                    })}
-                  </svg>
-                  <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                    {[
-                      { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
-                      { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
-                      { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
-                    ].map(l => (
-                      <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
-                        {l.emoji} {l.label}
-                      </span>
-                    ))}
-                  </div>
-                  <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
-                    Baseado no seu padrão de humor. Quanto mais check-ins, mais preciso.
-                  </p>
-                </>
-              )}
-
-              {/* ── ABA: MENSAL ── */}
-              {forecastTab === "monthly" && (() => {
-                if (monthlyHistory.length === 0) {
-                  return (
-                    <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
-                      <span style={{ fontSize: 20 }}>📊</span>
-                      <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}>Sem dados nos últimos 30 dias ainda.</span>
-                    </div>
-                  );
-                }
-
-                const MW = 300, MH = 130, MPX = 22, MPY = 14, MBOT = 28;
-                const mh = MH - MPY - MBOT;
-                const n = monthlyHistory.length;
-                const mxToX = (i: number) => MPX + (n > 1 ? (i / (n - 1)) : 0.5) * (MW - MPX * 2);
-                const mVals = monthlyHistory.map(e => e.humor);
-                const mRawMin = Math.min(...mVals), mRawMax = Math.max(...mVals);
-                const mPad = Math.max(0.6, (mRawMax - mRawMin) * 0.25);
-                const mMin = Math.max(1, mRawMin - mPad), mMax = Math.min(10, mRawMax + mPad);
-                const mRange = mMax - mMin || 1;
-                const mToY = (v: number) => MPY + mh - ((v - mMin) / mRange) * mh;
-
-                // Curva bezier
-                const mLine = monthlyHistory.reduce((acc, e, i) => {
-                  const x = mxToX(i), y = mToY(e.humor);
-                  if (i === 0) return `M${x.toFixed(1)} ${y.toFixed(1)}`;
-                  const px = mxToX(i - 1), py = mToY(monthlyHistory[i - 1].humor);
-                  const cp = (x - px) * 0.45;
-                  return `${acc} C${(px + cp).toFixed(1)} ${py.toFixed(1)} ${(x - cp).toFixed(1)} ${y.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`;
-                }, '');
-                const mArea = mLine
-                  + ` L${mxToX(n - 1).toFixed(1)} ${(MPY + mh).toFixed(1)} L${mxToX(0).toFixed(1)} ${(MPY + mh).toFixed(1)} Z`;
-
-                // Pontos-chave: máximo, mínimo, hoje (último)
-                const maxIdx = mVals.indexOf(mRawMax);
-                const minIdx = mVals.indexOf(mRawMin);
-                const lastIdx = n - 1;
-                const keyIdxs = new Set([maxIdx, minIdx, lastIdx]);
-
-                // Ticks de data: a cada ~7 pontos
-                const tickStep = Math.max(1, Math.floor(n / 5));
-                const tickIdxs = Array.from({ length: n }, (_, i) => i).filter(i => i % tickStep === 0 || i === lastIdx);
-
-                return (
-                  <>
-                    <svg width="100%" viewBox={`0 0 ${MW} ${MH}`} style={{ overflow: "visible", display: "block" }}>
-                      {[0.2, 0.5, 0.8].map(pct => {
-                        const v = mMin + pct * mRange;
-                        return <line key={pct} x1={MPX} x2={MW - MPX} y1={mToY(v)} y2={mToY(v)}
-                          stroke="rgba(0,0,0,.055)" strokeWidth={0.7} strokeDasharray="3,3" />;
-                      })}
-                      <path d={mArea} fill="rgba(150,199,179,.09)" />
-                      <path d={mLine} fill="none" stroke="var(--accent-sage)" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-
-                      {/* Todos os pontos — pequeno círculo */}
-                      {monthlyHistory.map((e, i) => {
-                        const x = mxToX(i), y = mToY(e.humor);
-                        const isKey = keyIdxs.has(i);
-                        const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
-                        const dotColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
-                        return (
-                          <circle key={i} cx={x} cy={y} r={isKey ? 0 : 2.5}
-                            fill={dotColor} stroke="white" strokeWidth={isKey ? 0 : 1} opacity={0.8} />
-                        );
-                      })}
-
-                      {/* Pontos-chave: emoji + score */}
-                      {monthlyHistory.map((e, i) => {
-                        if (!keyIdxs.has(i)) return null;
-                        const x = mxToX(i), y = mToY(e.humor);
-                        const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
-                        const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
-                        const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
-                        return (
-                          <g key={`key-${i}`}>
-                            <text x={x} y={y + 6} textAnchor="middle" fontSize={15} style={{ userSelect: "none" }}>{emoji}</text>
-                            <text x={x} y={y + 20} textAnchor="middle" fontSize={8.5} fill={scoreColor}
-                              fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{e.humor.toFixed(1)}</text>
-                          </g>
-                        );
-                      })}
-
-                      {/* Ticks de data na base */}
-                      {tickIdxs.map(i => {
-                        const x = mxToX(i);
-                        const dt = new Date(monthlyHistory[i].date + "T12:00:00");
-                        return (
-                          <g key={`tick-${i}`}>
-                            <text x={x} y={MH - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
-                              fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{dt.getDate()}</text>
-                            <text x={x} y={MH - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
-                              fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{DAY_NAMES[dt.getDay()]}</text>
-                          </g>
-                        );
-                      })}
-                    </svg>
-
-                    <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                      {[
-                        { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
-                        { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
-                        { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
-                      ].map(l => (
-                        <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
-                          {l.emoji} {l.label}
-                        </span>
-                      ))}
-                    </div>
-                    <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
-                      {n} check-in{n !== 1 ? "s" : ""} registrado{n !== 1 ? "s" : ""} nos últimos 30 dias.
-                    </p>
-                  </>
-                );
-              })()}
-            </div>
-          );
-        })()}
-
         {/* ── Acesso Rápido ── */}
         <p className="aura-section-kicker">Acesso rapido</p>
         <div className="shortcut-grid">
@@ -2058,6 +2126,7 @@ export function HomePage() {
                           </p>
                           {visibleActions.map((action) => {
                             const isAdding = addingActionTitle === action.title;
+                            const routeState = buildGoalSuggestionRouteState(`${action.title} ${action.why}`, state.goals || []);
                             return (
                               <div key={action.title} style={{
                                 display: "flex", alignItems: "center", gap: 6,
@@ -2065,13 +2134,17 @@ export function HomePage() {
                                 background: "var(--warm-bg)",
                                 border: `1px solid ${cfg.color}30`,
                               }}>
-                                <div style={{ flex: 1 }}>
+                                <div
+                                  style={{ flex: 1, cursor: routeState ? "pointer" : "default" }}
+                                  onClick={() => routeState && navigate("/goals", { state: routeState })}
+                                >
                                   <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
                                   <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
                                 </div>
                                 {/* Botão + adicionar ao planner */}
                                 <button
-                                  onClick={async () => {
+                                  onClick={async (event) => {
+                                    event.stopPropagation();
                                     if (isAdding) return;
                                     setAddingActionTitle(action.title);
                                     try {
@@ -2120,7 +2193,10 @@ export function HomePage() {
                                 </button>
                                 {/* Botão marcar como feito */}
                                 <button
-                                  onClick={() => setAddedActionTitles(prev => new Set([...prev, action.title]))}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setAddedActionTitles(prev => new Set([...prev, action.title]));
+                                  }}
                                   title="Marcar como cumprido"
                                   style={{
                                     width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
@@ -2136,7 +2212,8 @@ export function HomePage() {
                                 </button>
                                 {/* Botão próxima sugestão */}
                                 <button
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    event.stopPropagation();
                                     const remaining = ins!.actions.filter(
                                       a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && a.title !== action.title
                                     );
