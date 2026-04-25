@@ -49,11 +49,20 @@ async function run() {
 
   assert.match(journalLivePrompt, /DIÁRIO \(PRESENÇA REFLEXIVA\)/i);
   assert.match(journalLivePrompt, /acompanhe o fluxo/i);
-  assert.match(journalLivePrompt, /PROIBIDO sugerir metas/i);
+  assert.match(journalLivePrompt, /HIERARQUIA INTERNA OBRIGATÓRIA/i);
+  assert.match(journalLivePrompt, /BASE DOCUMENTADA, NÃO IMPROVISO/i);
+  assert.match(journalLivePrompt, /UTILIDADE DO PROBLEMA/i);
+  assert.match(journalLivePrompt, /EFEITO INDIRETO A FAVOR/i);
+  assert.match(journalLivePrompt, /TRÍADE INTERNA DE DECISÃO/i);
+  assert.match(journalLivePrompt, /SINAIS ANTES DA QUEDA/i);
+  assert.match(journalLivePrompt, /evidência concreta/i);
+  assert.match(journalLivePrompt, /uma proposta por vez/i);
+  assert.match(journalLivePrompt, /isso faz sentido para você/i);
   assert.match(journalLivePrompt, /máximo 1 pergunta/i);
   assert.match(journalLivePrompt, /colete em micro-passos/i);
   assert.match(journalLivePrompt, /PROIBIDO empilhar perguntas/i);
   assert.match(journalLivePrompt, /SOMÁTICA COMO SUPORTE/i);
+  assert.doesNotMatch(journalLivePrompt, /PROIBIDO sugerir metas/i);
   assert.doesNotMatch(journalLivePrompt, /gere 0 a 3 tarefas/i);
 
   const journalFinalizePrompt = buildAuraSystemPrompt({
@@ -64,7 +73,11 @@ async function run() {
   assert.match(journalFinalizePrompt, /SÍNTESE DA SESSÃO/i);
   assert.match(journalFinalizePrompt, /espelho calmo/i);
   assert.match(journalFinalizePrompt, /Não faça perguntas no fechamento/i);
-  assert.match(journalFinalizePrompt, /guarde apenas o sentimento/i);
+  assert.match(journalFinalizePrompt, /conversados e validados/i);
+  assert.match(journalFinalizePrompt, /Se a pessoa rejeitou/i);
+  assert.match(journalFinalizePrompt, /utilidade de curto prazo/i);
+  assert.match(journalFinalizePrompt, /Só inclua essa leitura quando a conversa trouxe evidência real/i);
+  assert.match(journalFinalizePrompt, /Não use rótulos internos/i);
   assert.doesNotMatch(journalFinalizePrompt, /acompanhe o fluxo/i);
 
   const auraCommandPrompt = buildAuraSystemPrompt({

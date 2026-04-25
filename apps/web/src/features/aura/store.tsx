@@ -88,6 +88,7 @@ type AuraStoreContextValue = {
   prepareJournalFromMood: () => void;
   addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<{ stateLabel: string | null; analysis: string | null; recommendations: string[]; suggestedIntensity: string | null } | null>;
   addGoal: (title: string) => Promise<void>;
+  addGoalWithSubGoals: (title: string, subgoals: string[]) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
   setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
   toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<void>;
@@ -180,7 +181,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           api.get('/habits').catch(e => { console.error(e); return null; }),
           (async () => {
             try {
-              const r = await supabase.from('profiles').select('cycle_start, cycle_length, luteal_length, onboarding_done').eq('id', session.user.id).maybeSingle();
+              const r = await supabase.from('profiles').select('cycle_start, cycle_length, luteal_length, onboarding_done, created_at').eq('id', session.user.id).maybeSingle();
               return r.data;
             } catch (e) { console.error(e); return null; }
           })(),
@@ -212,12 +213,13 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : null;
         const preferences = (preferencesRaw && typeof preferencesRaw === 'object') ? preferencesRaw : null;
         const habits = Array.isArray(habitsRaw) ? habitsRaw : null;
-        const profile = (profileRaw && typeof profileRaw === 'object') ? profileRaw as { cycle_start: string | null; cycle_length: number | null; luteal_length: number | null; onboarding_done: boolean | null } : null;
+        const profile = (profileRaw && typeof profileRaw === 'object') ? profileRaw as { cycle_start: string | null; cycle_length: number | null; luteal_length: number | null; onboarding_done: boolean | null; created_at?: string | null } : null;
 
         setState(current => ({
           ...current,
           name: (preferences as any)?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
           email: session.user.email ?? current.email,
+          accountCreatedAt: profile?.created_at ?? session.user.created_at ?? current.accountCreatedAt ?? null,
           checkinHistory: mappedCheckins && mappedCheckins.length > 0
             ? mappedCheckins
             : current.checkinHistory,
@@ -572,6 +574,23 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           title,
           category: 'geral',
           subgoals: []
+        });
+        await refreshData();
+      },
+      addGoalWithSubGoals: async (title, subgoals) => {
+        const normalizedSubgoals = subgoals
+          .map((item, index) => ({
+            id: `ai-${Date.now()}-${index}`,
+            title: item.trim(),
+            done: false,
+            aiGenerated: true,
+          }))
+          .filter((item) => item.title.length > 0);
+
+        await api.post('/objectives', {
+          title,
+          category: 'geral',
+          subgoals: normalizedSubgoals,
         });
         await refreshData();
       },

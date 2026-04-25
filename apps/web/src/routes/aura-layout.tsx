@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 // Aura Layout v2 — bottom nav + Phase Transition Alert + Follow-up Card
 import { Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -37,7 +37,7 @@ const NAV_ITEMS = [
   {
     label: "Airia",
     route: "/aura",
-    icon: <AuraIcon size={20} />,
+    icon: <AuraIcon size={46} />,
   },
   {
     label: "Diário",
@@ -81,12 +81,28 @@ const PHASE_ALERT_CONFIG: Record<string, { color: string; bg: string; border: st
   mixed: { color: "var(--accent-peach)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "⚡" },
 };
 
+const ONBOARDING_PROMPT_WINDOW_DAYS = 7;
+const ONBOARDING_PROMPT_MAX_SHOWS = 2;
+
+function getOnboardingPromptKey(userId: string | null) {
+  return userId ? `aura.onboardingPrompt.${userId}` : null;
+}
+
+function isWithinOnboardingPromptWindow(accountCreatedAt?: string | null) {
+  if (!accountCreatedAt) return false;
+  const createdAtMs = new Date(accountCreatedAt).getTime();
+  if (!Number.isFinite(createdAtMs)) return false;
+  return Date.now() - createdAtMs <= ONBOARDING_PROMPT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+}
+
 export function AuraLayout() {
   const { hydrated, refreshData, state, dismissPhaseTransitionAlert, resolveFollowUp } = useAuraStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
   const [hasSession, setHasSession] = useState(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [showOnboardingPrompt, setShowOnboardingPrompt] = useState(false);
 
   useHabitReminders(state.habits ?? [], state.tasks ?? [], state.notificationPreferences, {
     morning: state.morningCheckinTime,
@@ -96,6 +112,7 @@ export function AuraLayout() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setHasSession(!!session);
+      setSessionUserId(session?.user?.id ?? null);
       setAuthChecked(true);
       if (session) refreshData();
     });
@@ -103,13 +120,62 @@ export function AuraLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         setHasSession(true);
+        setSessionUserId(session.user.id);
       } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
         setHasSession(false);
+        setSessionUserId(null);
       }
     });
 
     return () => subscription.unsubscribe();
   }, [refreshData, navigate]);
+
+  const onboardingPromptEligible = useMemo(
+    () => !state.onboardingDone && isWithinOnboardingPromptWindow(state.accountCreatedAt),
+    [state.accountCreatedAt, state.onboardingDone],
+  );
+
+  useEffect(() => {
+    if (!hydrated || !hasSession || !onboardingPromptEligible || location.pathname.startsWith('/onboarding')) {
+      setShowOnboardingPrompt(false);
+      return;
+    }
+
+    const key = getOnboardingPromptKey(sessionUserId);
+    if (!key) return;
+    const sessionKey = `${key}.shownThisSession`;
+    if (sessionStorage.getItem(sessionKey) === "true") {
+      return;
+    }
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || "{}") as { count?: number; dismissed?: boolean };
+      if (stored.dismissed || (stored.count ?? 0) >= ONBOARDING_PROMPT_MAX_SHOWS) {
+        setShowOnboardingPrompt(false);
+        return;
+      }
+
+      localStorage.setItem(key, JSON.stringify({ ...stored, count: (stored.count ?? 0) + 1, lastShownAt: new Date().toISOString() }));
+      sessionStorage.setItem(sessionKey, "true");
+      setShowOnboardingPrompt(true);
+    } catch {
+      sessionStorage.setItem(sessionKey, "true");
+      setShowOnboardingPrompt(true);
+    }
+  }, [hasSession, hydrated, location.pathname, onboardingPromptEligible, sessionUserId]);
+
+  function dismissOnboardingPrompt(permanent = false) {
+    const key = getOnboardingPromptKey(sessionUserId);
+    if (key && permanent) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(key) || "{}");
+        localStorage.setItem(key, JSON.stringify({ ...stored, dismissed: true }));
+      } catch {
+        localStorage.setItem(key, JSON.stringify({ dismissed: true, count: ONBOARDING_PROMPT_MAX_SHOWS }));
+      }
+    }
+    setShowOnboardingPrompt(false);
+  }
 
   if (!authChecked) {
     return (
@@ -131,14 +197,64 @@ export function AuraLayout() {
     );
   }
 
-  if (!state.onboardingDone && !location.pathname.startsWith('/onboarding')) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
   return (
     <div className="aura-layout-root min-h-screen overflow-x-hidden" style={{ color: 'var(--on-surface)' }}>
       {/* Daemon IA proativa — invisível, roda após hydration */}
       <AutonomousAIEngine />
+
+      {showOnboardingPrompt && (
+        <div style={{
+          position: "fixed",
+          top: "calc(10px + env(safe-area-inset-top))",
+          left: 0,
+          right: 0,
+          zIndex: 520,
+          width: "min(calc(100% - 24px), 424px)",
+          marginLeft: "auto",
+          marginRight: "auto",
+          background: "rgba(255,255,255,.96)",
+          border: "1px solid rgba(215,137,127,.25)",
+          borderRadius: 18,
+          boxShadow: "0 18px 32px rgba(17,24,39,.10)",
+          backdropFilter: "blur(16px)",
+          padding: "12px 14px",
+        }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <AuraIcon size={22} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 12, fontWeight: 800, color: "var(--text-1)", margin: "0 0 3px" }}>
+                Quer calibrar sua Airia?
+              </p>
+              <p style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.45, margin: 0 }}>
+                O onboarding ajuda a ajustar humor, energia e sugestões. Dá para usar o app sem fazer isso agora.
+              </p>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button
+                  onClick={() => {
+                    dismissOnboardingPrompt(true);
+                    navigate("/onboarding");
+                  }}
+                  style={{ flex: 1, height: 32, border: "none", borderRadius: 10, background: "var(--accent-peach)", color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer" }}
+                >
+                  Fazer agora
+                </button>
+                <button
+                  onClick={() => dismissOnboardingPrompt(false)}
+                  style={{ flex: 1, height: 32, border: "1px solid var(--warm-border-2)", borderRadius: 10, background: "transparent", color: "var(--text-2)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Depois
+                </button>
+                <button
+                  onClick={() => dismissOnboardingPrompt(true)}
+                  style={{ height: 32, border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Não mostrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── #2: Phase Transition Alert — banner fixo topo ── */}
       {state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed && (() => {

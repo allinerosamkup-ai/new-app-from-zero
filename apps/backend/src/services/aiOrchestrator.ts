@@ -122,7 +122,7 @@ export function resolveSuggestGenerationConfig(type: string, plainText: boolean)
       ? 6000
       : type === 'home-messages'
         ? 4000
-        : type === 'gtd-clarify'
+        : type === 'gtd-clarify' || type === 'goal-capture-dialogue'
           ? 4000
           : type === 'goal-route'
             ? 4000

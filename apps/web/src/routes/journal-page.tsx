@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
@@ -95,12 +96,15 @@ function formatSessionDate(localDate: string, startedAt: string): string {
 export function JournalPage() {
   const { state } = useAuraStore();
   const { showError, showSuccess } = useToast();
+  const location = useLocation();
+  const routeState = location.state as { initialDraft?: string; contextLabel?: string } | null;
+  const initialDraft = typeof routeState?.initialDraft === "string" ? routeState.initialDraft : "";
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
 
   const [view, setView] = useState<"overview" | "chat">("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialDraft);
   const [isTyping, setIsTyping] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [sessions, setSessions] = useState<JournalSessionCard[]>([]);
@@ -173,7 +177,12 @@ export function JournalPage() {
       if (Array.isArray(response.messages) && response.messages.length > 0) {
         setMessages(response.messages);
       } else {
-        setMessages([{ role: "assistant", content: INITIAL_ASSISTANT_MESSAGE }]);
+        setMessages([{
+          role: "assistant",
+          content: initialDraft
+            ? "Trouxe o contexto do check-in para o diário. Ajuste o texto se quiser e me envie para eu te ajudar a organizar isso."
+            : INITIAL_ASSISTANT_MESSAGE,
+        }]);
       }
 
       void loadSessions();

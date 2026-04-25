@@ -25,6 +25,24 @@ export function LoginPage() {
   const [showConfirmEmail, setShowConfirmEmail] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (active && session) navigate("/home", { replace: true });
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active || !session || event === "SIGNED_OUT") return;
+      navigate("/home", { replace: true });
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     if (!rememberMe || state.email) return;
     const rememberedEmail = window.localStorage.getItem(REMEMBERED_EMAIL_KEY);

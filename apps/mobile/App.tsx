@@ -13,7 +13,7 @@ import { publishTodayWidgetData, sanitizeTodayWidgetPayload } from './src/widget
 WebBrowser.maybeCompleteAuthSession();
 
 const WEB_APP_URL = (process.env.EXPO_PUBLIC_WEB_APP_URL || 'https://airia.pro').replace(/\/+$/, '');
-const START_URL = `${WEB_APP_URL}/splash?airia_native=1`;
+const START_URL = `${WEB_APP_URL}/home?airia_native=1`;
 const MOBILE_USER_AGENT =
   'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 AiriaNative/1.0';
 
@@ -53,7 +53,7 @@ export default function App() {
       setSessionReady(true);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMountedRef.current) return;
       setWebSession(session);
 
@@ -63,7 +63,9 @@ export default function App() {
       const sessionStr = session ? JSON.stringify(JSON.stringify(session)) : 'null';
       const script = session
         ? `localStorage.setItem("${storageKey}", ${sessionStr}); window.dispatchEvent(new StorageEvent("storage", { key: "${storageKey}", newValue: ${sessionStr} })); true;`
-        : `localStorage.removeItem("${storageKey}"); window.dispatchEvent(new StorageEvent("storage", { key: "${storageKey}", newValue: null })); true;`;
+        : event === 'SIGNED_OUT'
+          ? `localStorage.removeItem("${storageKey}"); window.dispatchEvent(new StorageEvent("storage", { key: "${storageKey}", newValue: null })); true;`
+          : 'true;';
       webViewRef.current.injectJavaScript(script);
     });
 

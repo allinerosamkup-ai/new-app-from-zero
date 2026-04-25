@@ -60,9 +60,6 @@ export function buildInjectedSessionScript(session: Session | null) {
         if (session) {
           localStorage.setItem(storageKey, session);
           window.dispatchEvent(new StorageEvent('storage', { key: storageKey, newValue: session }));
-        } else {
-          localStorage.removeItem(storageKey);
-          window.dispatchEvent(new StorageEvent('storage', { key: storageKey, newValue: null }));
         }
       } catch (error) {
         console.error('AIRIA_NATIVE_INJECT_FAILED', error);

@@ -150,6 +150,37 @@ describe("home page helpers", () => {
     assert.equal(preview.habit?.title, "Beber água");
   });
 
+  it("orders habits and commitments chronologically in the home agenda", () => {
+    const preview = buildHomeAgendaPreview({
+      tasks: [
+        { id: "noon", title: "Almoço", time: "12:00", done: false },
+        { id: "ten", title: "Ligação", time: "10:00", done: false },
+        { id: "eleven", title: "Banco", time: "11:00", done: false },
+      ],
+      habits: [{ id: "habit", title: "Limpar areia das gatas", icon: "✨", completions: [], reminderTime: "09:00" }],
+    });
+
+    assert.deepEqual(
+      preview.items.map((item) => item.title),
+      ["Limpar areia das gatas", "Ligação", "Banco", "Almoço"],
+    );
+  });
+
+  it("removes overdue commitments from the home preview but keeps overdue habits pending", () => {
+    const preview = buildHomeAgendaPreview({
+      referenceDate: new Date("2026-04-25T10:30:00"),
+      tasks: [
+        { id: "past", title: "Reunião antiga", time: "09:00", done: false },
+        { id: "future", title: "Consulta", time: "11:00", done: false },
+      ],
+      habits: [{ id: "habit", title: "Medicação", icon: "💊", completions: [], reminderTime: "08:00" }],
+    });
+
+    assert.deepEqual(preview.tasks.map((task) => task.title), ["Consulta"]);
+    assert.equal(preview.habit?.title, "Medicação");
+    assert.deepEqual(preview.items.map((item) => item.title), ["Medicação", "Consulta"]);
+  });
+
   it("resolves agenda suggestions to tomorrow from 18h onward", () => {
     assert.equal(resolveHomeAgendaSuggestionDate("2026-04-12", 17), "2026-04-12");
     assert.equal(resolveHomeAgendaSuggestionDate("2026-04-12", 18), "2026-04-13");

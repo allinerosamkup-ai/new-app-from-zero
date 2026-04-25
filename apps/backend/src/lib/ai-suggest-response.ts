@@ -7,6 +7,7 @@ const JSON_OBJECT_TYPES = new Set([
   'stability-analysis',
   'home-messages',
   'checkin-response',
+  'goal-capture-dialogue',
   'gtd-clarify',
   'goal-route',
   'goal-subtasks',

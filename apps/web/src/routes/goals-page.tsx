@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import { normalizeSuggestionText } from "../utils/goal-suggestion-routing";
+import { buildGoalPriorityActions, type GoalPriorityAction } from "../utils/goal-priority-actions";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -41,10 +42,22 @@ type GTDItem = {
   archived?: boolean;
 };
 
-type RouteResult = {
-  tipo: "meta" | "proxima_acao" | "inbox";
-  titulo: string;
-  meta_sugerida: string | null;
+type CaptureDialogueResult = {
+  status: "needs_clarification" | "ready";
+  question?: string | null;
+  summary?: string | null;
+  kind: "goal" | "next_action" | "inbox" | "reference" | "someday";
+  title?: string | null;
+  firstActions?: string[];
+  linkedGoalTitle?: string | null;
+};
+
+type CaptureSession = {
+  initial: string;
+  summary: string;
+  question: string | null;
+  turns: number;
+  pending: CaptureDialogueResult | null;
 };
 
 // ── XP storage (background) ───────────────────────────────────
@@ -455,7 +468,7 @@ function GoalCard({
 // ── Main Page ─────────────────────────────────────────────────
 
 export function GoalsPage() {
-  const { state, addGoal, addSubGoals, toggleSubGoal, removeGoal, updateGoal, addTask, addHabit } = useAuraStore();
+  const { state, addGoal, addGoalWithSubGoals, addSubGoals, toggleSubGoal, removeGoal, updateGoal, addTask, addHabit } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -470,6 +483,7 @@ export function GoalsPage() {
   const [captureInput, setCaptureInput] = useState("");
   const [captureLoading, setCaptureLoading] = useState(false);
   const [captureReply, setCaptureReply] = useState<string | null>(null);
+  const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const captureInputRef = useRef<HTMLInputElement>(null);
   const [metasOpen, setMetasOpen] = useState(true);
@@ -479,7 +493,7 @@ export function GoalsPage() {
   const [linkingItem, setLinkingItem] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const capturingRef = useRef(false);
-  const [activeTab, setActiveTab] = useState<"capturar" | "metas" | "acoes">("capturar");
+  const [activeTab, setActiveTab] = useState<"metas" | "acoes">("metas");
   const navState = (location.state as {
     activeTab?: "capturar" | "metas" | "acoes";
     openGoalId?: string | number;
@@ -488,7 +502,7 @@ export function GoalsPage() {
   } | null) ?? null;
 
   useEffect(() => {
-    if (navState?.activeTab) setActiveTab(navState.activeTab);
+    if (navState?.activeTab && navState.activeTab !== "capturar") setActiveTab(navState.activeTab);
     if (navState?.openGoalId) {
       setActiveTab("metas");
       setMetasOpen(true);
@@ -504,6 +518,11 @@ export function GoalsPage() {
   const standaloneActions = gtdItems.filter(i =>
     !i.archived && !i.sentToGoal && i.clarified &&
     i.tipo === "proxima_acao" && !i.linkedGoalId
+  );
+
+  const priorityActions = useMemo(
+    () => buildGoalPriorityActions(goals, { gtdItems }),
+    [goals, gtdItems]
   );
 
   const inbox = gtdItems.filter(i =>
@@ -567,55 +586,49 @@ export function GoalsPage() {
   async function handleCapture() {
     const text = captureInput.trim();
     if (!text || capturingRef.current) return;
-    const now = Date.now();
-    const recentDupe = gtdItems.some(i =>
-      i.text.toLowerCase() === text.toLowerCase() &&
-      !i.archived &&
-      now - new Date(i.capturedAt).getTime() < 10000
-    );
-    if (recentDupe) { setCaptureInput(""); return; }
     capturingRef.current = true;
     setCaptureInput("");
     setCaptureLoading(true);
     try {
+      const initial = captureSession?.initial ?? text;
       const res: any = await api.post("/ai/suggest", {
-        type: "goal-route",
-        context: { capture: text, goals: goals.map(g => g.title) },
+        type: "goal-capture-dialogue",
+        context: {
+          capture: initial,
+          answer: captureSession ? text : "",
+          previousSummary: captureSession?.summary ?? "",
+          goals: goals.map(g => g.title),
+        },
       });
-      const parsed = parseAiSuggestion<RouteResult>(res.suggestion);
+      const parsed = parseAiSuggestion<CaptureDialogueResult>(res.suggestion);
+      const safeSummary = parsed.summary?.trim() || captureSession?.summary || initial;
+      const turns = (captureSession?.turns ?? 0) + 1;
 
-      if (parsed?.tipo === "meta") {
-        await addGoal(parsed.titulo || text);
-        awardXP(20);
-        setMetasOpen(true);
-        sessionStorage.setItem("aura-auto-break-goal", parsed.titulo || text);
-        setCaptureReply(`Meta criada — já vou pensar nos próximos passos para "${parsed.titulo || text}".`);
-      } else if (parsed?.tipo === "proxima_acao") {
-        const goalMatch = goals.find(g => g.title === parsed.meta_sugerida);
-        if (goalMatch) {
-          await addSubGoals(goalMatch.id, [parsed.titulo || text]);
-          awardXP(10);
-          setCaptureReply(`Adicionei como próxima ação em "${goalMatch.title}".`);
-        } else {
-          const item: GTDItem = {
-            id: `gtd-${Date.now()}`, text,
-            capturedAt: new Date().toISOString(),
-            clarified: true, tipo: "proxima_acao",
-            titulo: parsed.titulo || text, meta_sugerida: parsed.meta_sugerida,
-          };
-          setGtdItems(prev => [item, ...prev]);
-          setActionsOpen(true);
-          awardXP(5);
-          setCaptureReply(`Próxima ação registrada. Quando quiser, vincule a uma meta.`);
-        }
-      } else {
-        const itemId = `gtd-${Date.now()}`;
-        const item: GTDItem = { id: itemId, text, capturedAt: new Date().toISOString() };
-        setGtdItems(prev => [item, ...prev]);
-        setInboxOpen(true);
-        setCaptureReply(`Guardei na caixa de entrada. Vou clarificar isso em seguida.`);
-        setTimeout(() => clarifyItem(itemId), 100);
+      if (parsed.status === "needs_clarification" && parsed.question && turns < 3) {
+        setCaptureSession({
+          initial,
+          summary: safeSummary,
+          question: parsed.question,
+          turns,
+          pending: null,
+        });
+        setCaptureReply(null);
+        return;
       }
+
+      setCaptureSession({
+        initial,
+        summary: safeSummary,
+        question: null,
+        turns,
+        pending: {
+          ...parsed,
+          status: "ready",
+          title: parsed.title?.trim() || safeSummary,
+          firstActions: Array.isArray(parsed.firstActions) ? parsed.firstActions.filter(Boolean) : [],
+        },
+      });
+      setCaptureReply(null);
     } catch (err) {
       const itemId = `gtd-${Date.now()}`;
       setGtdItems(prev => [{ id: itemId, text, capturedAt: new Date().toISOString() }, ...prev]);
@@ -630,10 +643,79 @@ export function GoalsPage() {
       setCaptureLoading(false);
       capturingRef.current = false;
       setTimeout(() => {
-        setCaptureReply(null);
         captureInputRef.current?.focus();
-      }, 2800);
+      }, 80);
     }
+  }
+
+  async function confirmCaptureResult() {
+    const pending = captureSession?.pending;
+    if (!pending) return;
+    const title = pending.title?.trim() || captureSession.summary;
+    const firstActions = Array.isArray(pending.firstActions)
+      ? pending.firstActions.map((item) => item.trim()).filter(Boolean)
+      : [];
+
+    try {
+      if (pending.kind === "goal") {
+        await addGoalWithSubGoals(title, firstActions);
+        awardXP(20);
+        setMetasOpen(true);
+        setActiveTab("metas");
+        setCaptureReply(`Meta criada com próximas ações: "${title}".`);
+      } else if (pending.kind === "next_action") {
+        const goalMatch = pending.linkedGoalTitle
+          ? goals.find(g => normalizeSuggestionText(g.title) === normalizeSuggestionText(pending.linkedGoalTitle || ""))
+          : null;
+        if (goalMatch) {
+          await addSubGoals(goalMatch.id, [title]);
+          setCaptureReply(`Adicionei como próxima ação em "${goalMatch.title}".`);
+        } else {
+          setGtdItems(prev => [{
+            id: `gtd-${Date.now()}`,
+            text: captureSession.initial,
+            capturedAt: new Date().toISOString(),
+            clarified: true,
+            tipo: "proxima_acao",
+            titulo: title,
+            meta_sugerida: pending.linkedGoalTitle ?? null,
+          }, ...prev]);
+          setActionsOpen(true);
+          setActiveTab("acoes");
+          setCaptureReply("Próxima ação registrada.");
+        }
+        awardXP(10);
+      } else if (pending.kind === "reference" || pending.kind === "someday") {
+        setGtdItems(prev => [{
+          id: `gtd-${Date.now()}`,
+          text: captureSession.initial,
+          capturedAt: new Date().toISOString(),
+          clarified: true,
+          tipo: pending.kind === "reference" ? "referencia" : "algum_dia",
+          titulo: title,
+          razao: captureSession.summary,
+        }, ...prev]);
+        setCaptureReply(pending.kind === "reference" ? "Guardei como referência." : "Guardei em algum dia.");
+      } else {
+        setGtdItems(prev => [{
+          id: `gtd-${Date.now()}`,
+          text: title,
+          capturedAt: new Date().toISOString(),
+        }, ...prev]);
+        setInboxOpen(true);
+        setCaptureReply("Guardei na caixa de entrada.");
+      }
+      setCaptureSession(null);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Não foi possível salvar essa captura.");
+    }
+  }
+
+  function resetCaptureConversation() {
+    setCaptureSession(null);
+    setCaptureReply(null);
+    setCaptureInput("");
+    setTimeout(() => captureInputRef.current?.focus(), 50);
   }
 
   // Auto-breakdown
@@ -687,6 +769,32 @@ export function GoalsPage() {
       if (nowDone) awardXP(10, true);
       return { ...i, done: nowDone };
     }));
+  }
+
+  async function completePriorityAction(action: GoalPriorityAction) {
+    if (action.source === "goal" && action.goalId != null && action.subId != null) {
+      await toggleSubGoal(action.goalId, action.subId);
+      awardXP(15, true);
+      return;
+    }
+
+    if (action.source === "capture" && action.gtdId) {
+      toggleStandaloneAction(action.gtdId);
+    }
+  }
+
+  async function linkToGoal(itemId: string, goalId: string | number) {
+    const item = gtdItems.find(i => i.id === itemId);
+    if (!item) return;
+
+    try {
+      await addSubGoals(goalId, [item.titulo || item.text]);
+      setGtdItems(prev => prev.map(i => i.id === itemId ? { ...i, sentToGoal: true, linkedGoalId: goalId } : i));
+      setLinkingItem(null);
+      showSuccess("Ação vinculada à meta.");
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Erro ao vincular ação.");
+    }
   }
 
   async function handleUpdateGoalTitle(goalId: string | number, newTitle: string) {
@@ -779,9 +887,8 @@ export function GoalsPage() {
           background: "rgba(0,0,0,0.04)", borderRadius: 14, padding: 4,
         }}>
           {([
-            { key: "capturar" as const, label: "Capturar", count: inbox.length },
             { key: "metas" as const, label: "Metas", count: goals.length },
-            { key: "acoes" as const, label: "Ações", count: standaloneActions.filter(i => !i.done).length },
+            { key: "acoes" as const, label: "Ações", count: priorityActions.filter(i => i.source === "goal" || i.source === "capture").length },
           ] as const).map(tab => {
             const isActive = activeTab === tab.key;
             return (
@@ -810,7 +917,6 @@ export function GoalsPage() {
         </div>
 
         {/* ── Captura conversacional GTD ── */}
-        {activeTab === "capturar" && (
         <div style={{ marginBottom: 24 }}>
 
           {/* Bubble da Airia — pergunta ou confirmação */}
@@ -833,7 +939,21 @@ export function GoalsPage() {
                   </span>
                 : captureReply
                   ? <span>{captureReply}</span>
-                  : <span>O que está na sua mente agora?<br />
+                  : captureSession?.pending
+                    ? <span>
+                        Revise antes de salvar: <strong>{captureSession.pending.title || captureSession.summary}</strong>
+                        <br />
+                        <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+                          {captureSession.pending.kind === "goal" ? "Isso parece uma meta com próximas ações." :
+                            captureSession.pending.kind === "next_action" ? "Isso parece uma próxima ação." :
+                            captureSession.pending.kind === "reference" ? "Isso parece uma referência." :
+                            captureSession.pending.kind === "someday" ? "Isso parece algo para algum dia." :
+                            "Isso ainda fica melhor na caixa de entrada."}
+                        </span>
+                      </span>
+                    : captureSession?.question
+                      ? <span>{captureSession.question}</span>
+                      : <span>O que está na sua mente agora?<br />
                       <span style={{ fontSize: 11, color: "var(--text-3)" }}>
                         Uma ideia, meta, tarefa ou qualquer coisa que precise sair da cabeça.
                       </span>
@@ -842,8 +962,26 @@ export function GoalsPage() {
             </div>
           </div>
 
+          {captureSession?.pending?.firstActions && captureSession.pending.firstActions.length > 0 && (
+            <div style={{ paddingLeft: 34, marginBottom: 10 }}>
+              <div style={{
+                background: "rgba(255,255,255,.70)",
+                border: "1px solid rgba(0,0,0,.07)",
+                borderRadius: 12,
+                padding: "9px 12px",
+              }}>
+                {captureSession.pending.firstActions.slice(0, 5).map((item, index) => (
+                  <div key={`${item}-${index}`} style={{ display: "flex", gap: 7, fontSize: 12, color: "var(--text-2)", lineHeight: 1.45, marginBottom: index < captureSession.pending!.firstActions!.length - 1 ? 5 : 0 }}>
+                    <span style={{ color: "var(--accent-peach)", fontWeight: 800 }}>{index + 1}.</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Resposta do usuário — input ou confirmação visual */}
-          {!captureReply && !captureLoading && (
+          {!captureReply && !captureLoading && !captureSession?.pending && (
             <div style={{ display: "flex", gap: 8, alignItems: "center", paddingLeft: 34 }}>
               <div style={{
                 flex: 1, display: "flex", alignItems: "center", gap: 6,
@@ -858,7 +996,7 @@ export function GoalsPage() {
                   value={captureInput}
                   onChange={e => setCaptureInput(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && !captureLoading && handleCapture()}
-                  placeholder="Escreva ou dite..."
+                  placeholder={captureSession?.question ? "Responda aqui..." : "Escreva ou dite..."}
                   style={{
                     flex: 1, background: "transparent", border: "none", outline: "none",
                     fontSize: 13, color: "var(--text-1)", padding: "11px 0",
@@ -917,10 +1055,37 @@ export function GoalsPage() {
           )}
 
           {/* Estado: confirmado — "continuar" */}
-          {captureReply && !captureLoading && (
+          {captureSession?.pending && !captureLoading && (
+            <div style={{ paddingLeft: 34, display: "flex", gap: 8 }}>
+              <button
+                onClick={confirmCaptureResult}
+                style={{
+                  background: "var(--accent-peach)", border: "none",
+                  borderRadius: "14px 14px 4px 14px", padding: "9px 14px",
+                  fontSize: 12, color: "#fff",
+                  cursor: "pointer", fontWeight: 700,
+                }}
+              >
+                Salvar
+              </button>
+              <button
+                onClick={resetCaptureConversation}
+                style={{
+                  background: "rgba(0,0,0,.04)", border: "1px solid rgba(0,0,0,.08)",
+                  borderRadius: "14px", padding: "9px 14px",
+                  fontSize: 12, color: "var(--text-2)",
+                  cursor: "pointer", fontWeight: 600,
+                }}
+              >
+                Descartar
+              </button>
+            </div>
+          )}
+
+          {captureReply && !captureLoading && !captureSession?.pending && (
             <div style={{ paddingLeft: 34 }}>
               <button
-                onClick={() => { setCaptureReply(null); setTimeout(() => captureInputRef.current?.focus(), 50); }}
+                onClick={resetCaptureConversation}
                 style={{
                   background: "rgba(244,168,150,.12)", border: "1px solid rgba(244,168,150,.25)",
                   borderRadius: "14px 14px 4px 14px", padding: "9px 14px",
@@ -933,7 +1098,6 @@ export function GoalsPage() {
             </div>
           )}
         </div>
-        )}
 
         {/* ── METAS ──────────────────────────────────────── */}
         {activeTab === "metas" && (<>
@@ -1001,8 +1165,8 @@ export function GoalsPage() {
         )}
         </>)}
 
-        {/* ── PRÓXIMAS AÇÕES standalone ───────────────────── */}
-        {activeTab === "acoes" && standaloneActions.length > 0 && (
+        {/* ── PRÓXIMAS AÇÕES ───────────────────── */}
+        {activeTab === "acoes" && (
           <>
             <div style={{ height: 8 }} />
             <button
@@ -1015,22 +1179,33 @@ export function GoalsPage() {
             >
               <Zap size={15} style={{ color: "var(--accent-sky)" }} />
               <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
-                Próximas Ações
+                Próximas ações
               </span>
               <span style={{
                 background: "var(--accent-sky)", color: "#fff",
                 borderRadius: 99, padding: "1px 8px",
                 fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
               }}>
-                {standaloneActions.filter(i => !i.done).length}
+                {priorityActions.length}
               </span>
               {actionsOpen
                 ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} />
                 : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
             </button>
 
-            {actionsOpen && standaloneActions.map(item => (
-              <div key={item.id}>
+            {actionsOpen && priorityActions.length === 0 && (
+              <div style={{
+                textAlign: "center", padding: "18px 0 8px",
+                color: "var(--text-3)", fontSize: "calc(var(--a) * 0.88)", fontStyle: "italic",
+              }}>
+                Nenhuma próxima ação pendente agora.
+              </div>
+            )}
+
+            {actionsOpen && priorityActions.map(action => {
+              const linkedItem = action.source === "capture" ? standaloneActions.find(item => item.id === action.gtdId) : null;
+              return (
+              <div key={action.id}>
                 <div style={{
                   backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
                   background: "rgba(255,255,255,0.55)",
@@ -1038,41 +1213,46 @@ export function GoalsPage() {
                   borderRadius: 14, padding: "10px 12px", marginBottom: 8,
                   display: "flex", alignItems: "flex-start", gap: 10,
                   boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-                  opacity: item.done ? 0.6 : 1,
                 }}>
-                  <TaskBox done={!!item.done} onClick={() => toggleStandaloneAction(item.id)} />
+                  <TaskBox done={false} onClick={() => void completePriorityAction(action)} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ marginBottom: 2 }}>
                       <span style={{
                         display: "inline-flex", alignItems: "center", gap: 3,
-                        background: "rgba(99,152,169,0.10)", border: "1px solid rgba(99,152,169,0.25)",
+                        background: action.source === "goal" ? "rgba(215,137,127,0.10)" : "rgba(99,152,169,0.10)",
+                        border: action.source === "goal" ? "1px solid rgba(215,137,127,0.25)" : "1px solid rgba(99,152,169,0.25)",
                         borderRadius: 999, padding: "1px 7px",
                         fontSize: 9, fontWeight: 800, letterSpacing: ".07em",
-                        color: "var(--accent-sky)", textTransform: "uppercase" as const,
-                      }}>⚡ Tarefa</span>
+                        color: action.source === "goal" ? "var(--accent-peach)" : "var(--accent-sky)",
+                        textTransform: "uppercase" as const,
+                      }}>{action.source === "goal" ? "🎯 Meta" : "⚡ Tarefa"}</span>
                     </div>
                     <div style={{
                       fontSize: "calc(var(--a) * 0.9)", fontWeight: 500,
-                      color: item.done ? "var(--text-3)" : "var(--text-1)",
-                      textDecoration: item.done ? "line-through" : "none",
+                      color: "var(--text-1)",
                     }}>
-                      {item.titulo || item.text}
+                      {action.text}
                     </div>
-                    {item.razao && (
+                    {action.source === "goal" && action.goalTitle && (
                       <div style={{ fontSize: "calc(var(--a) * 0.78)", color: "var(--text-3)", marginTop: 2 }}>
-                        {item.razao}
+                        {action.goalTitle}
+                      </div>
+                    )}
+                    {linkedItem?.razao && (
+                      <div style={{ fontSize: "calc(var(--a) * 0.78)", color: "var(--text-3)", marginTop: 2 }}>
+                        {linkedItem.razao}
                       </div>
                     )}
                   </div>
                   <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                    {!item.done && goals.length > 0 && (
+                    {action.source === "capture" && linkedItem && goals.length > 0 && (
                       <button
-                        onClick={() => setLinkingItem(linkingItem === item.id ? null : item.id)}
+                        onClick={() => setLinkingItem(linkingItem === linkedItem.id ? null : linkedItem.id)}
                         style={{
-                          background: linkingItem === item.id ? "var(--accent-sky)" : "rgba(99,152,169,0.10)",
+                          background: linkingItem === linkedItem.id ? "var(--accent-sky)" : "rgba(99,152,169,0.10)",
                           border: "1px solid rgba(99,152,169,0.30)",
                           borderRadius: 8, cursor: "pointer",
-                          color: linkingItem === item.id ? "#fff" : "var(--accent-sky)",
+                          color: linkingItem === linkedItem.id ? "#fff" : "var(--accent-sky)",
                           padding: "3px 7px", fontSize: "calc(var(--a) * 0.78)",
                           display: "flex", alignItems: "center", gap: 3, fontWeight: 600,
                         }}
@@ -1081,15 +1261,21 @@ export function GoalsPage() {
                       </button>
                     )}
                     <button
-                      onClick={() => setGtdItems(prev => prev.map(i => i.id === item.id ? { ...i, archived: true } : i))}
+                      onClick={() => {
+                        if (action.source === "goal") {
+                          navigate("/goals", { state: { openGoalId: action.goalId, openSubtaskId: action.subId } });
+                        } else if (action.gtdId) {
+                          setGtdItems(prev => prev.map(i => i.id === action.gtdId ? { ...i, archived: true } : i));
+                        }
+                      }}
                       style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 2 }}
                     >
-                      <X size={13} />
+                      {action.source === "goal" ? <Link size={13} /> : <X size={13} />}
                     </button>
                   </div>
                 </div>
 
-                {linkingItem === item.id && (
+                {linkedItem && linkingItem === linkedItem.id && (
                   <div style={{
                     backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
                     background: "rgba(255,255,255,0.78)",
@@ -1102,7 +1288,7 @@ export function GoalsPage() {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {goals.map(g => (
-                        <button key={g.id} onClick={() => linkToGoal(item.id, g.id)}
+                        <button key={g.id} onClick={() => linkToGoal(linkedItem.id, g.id)}
                           style={{
                             background: "rgba(255,255,255,0.7)", border: "1px solid rgba(0,0,0,0.08)",
                             borderRadius: 10, padding: "7px 10px", cursor: "pointer",
@@ -1120,12 +1306,12 @@ export function GoalsPage() {
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </>
         )}
 
         {/* ── INBOX ─────────────────────────────────────── */}
-        {activeTab === "capturar" && inbox.length > 0 && (
+        {inbox.length > 0 && (
           <>
             <div style={{ height: 8 }} />
             <button

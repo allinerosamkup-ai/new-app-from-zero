@@ -11,7 +11,6 @@ import { useToast } from "../components/Toast";
 import type { MoodOption } from "../features/aura/types";
 import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
-import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
 import { RefreshCcw, X } from "lucide-react";
 import "../styles/aura.css";
@@ -84,6 +83,19 @@ const variants: Record<MoodOption, ResultVariant> = {
 };
 
 type AuraMsg = { message: string; suggestionEmoji: string; suggestion: string };
+
+type StoredGtdInboxItem = {
+  id: string;
+  text: string;
+  titulo: string;
+  tipo: "proxima_acao";
+  clarified: boolean;
+  done: boolean;
+  archived: boolean;
+  sentToGoal: boolean;
+  createdAt: string;
+  source: string;
+};
 type AiTask = { title: string; category: string; time: string; discarded: boolean };
 type AiPhase = "idle" | "loading" | "preview" | "done";
 
@@ -450,19 +462,66 @@ export function CheckinResultPage() {
   const acceptedCount = tasks.filter((t) => !t.discarded).length;
   const isMenuthe = v.accent === "var(--accent-sage)";
 
-  async function finalizeAndGo(path: "/planner" | "/home" | "/journal") {
+  async function finalizeAndGo(path: "/planner" | "/home" | "/journal", navState?: Record<string, unknown>) {
     try {
       await refreshData();
     } catch {
       // mantém navegação mesmo com erro de sync
     }
-    navigate(path, { replace: true });
+    navigate(path, { replace: true, state: navState });
   }
 
-  function openSuggestedGoal(text: string) {
-    const routeState = buildGoalSuggestionRouteState(text, state.goals || []);
-    if (!routeState) return;
-    navigate("/goals", { state: routeState });
+  function sendSuggestionToActions(text: string) {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    try {
+      const raw = JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
+      const list: StoredGtdInboxItem[] = Array.isArray(raw) ? raw : [];
+      const key = cleanText.toLowerCase().replace(/\s+/g, " ");
+      const alreadyExists = list.some((item) => {
+        const itemText = String(item.titulo || item.text || "").trim().toLowerCase().replace(/\s+/g, " ");
+        return itemText === key && !item.archived && !item.done;
+      });
+
+      if (!alreadyExists) {
+        const item: StoredGtdInboxItem = {
+          id: `checkin-${Date.now()}`,
+          text: cleanText,
+          titulo: cleanText,
+          tipo: "proxima_acao",
+          clarified: true,
+          done: false,
+          archived: false,
+          sentToGoal: false,
+          createdAt: new Date().toISOString(),
+          source: "checkin-result",
+        };
+        localStorage.setItem("gtd-inbox-v1", JSON.stringify([item, ...list]));
+        showSuccess("Sugestão enviada para Ações.");
+        return;
+      }
+
+      showSuccess("Essa sugestão já está em Ações.");
+    } catch {
+      showError("Não foi possível enviar para Ações agora.");
+    }
+  }
+
+  function buildCheckinJournalDraft() {
+    const recommendations = checkinAI?.recommendations?.filter(Boolean) ?? [];
+    const parts = [
+      "Quero registrar o que apareceu no check-in de agora.",
+      `Estado: ${checkinAI?.stateLabel || v.label}.`,
+      todayNote ? `Nota que eu escrevi no check-in: ${todayNote}` : null,
+      todayFactors.length ? `Fatores marcados: ${todayFactors.join(", ")}.` : null,
+      todayEmotions.length ? `Emoções marcadas: ${todayEmotions.join(", ")}.` : null,
+      checkinAI?.analysis ? `Leitura da Airia: ${checkinAI.analysis}` : auraMsg?.message ? `Leitura da Airia: ${auraMsg.message}` : null,
+      recommendations.length ? `Sugestões que apareceram: ${recommendations.map((item) => `- ${item}`).join("\n")}` : null,
+      auraMsg?.suggestion ? `Sugestão principal: ${auraMsg.suggestion}` : null,
+    ].filter(Boolean);
+
+    return parts.join("\n\n");
   }
 
   return (
@@ -528,12 +587,10 @@ export function CheckinResultPage() {
               </p>
               {checkinAI.recommendations && checkinAI.recommendations.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {checkinAI.recommendations.map((rec, i) => {
-                    const routeState = buildGoalSuggestionRouteState(rec, state.goals || []);
-                    return (
+                  {checkinAI.recommendations.map((rec, i) => (
                     <div
                       key={i}
-                      onClick={() => routeState && navigate("/goals", { state: routeState })}
+                      onClick={() => sendSuggestionToActions(rec)}
                       style={{
                         display: "flex",
                         alignItems: "flex-start",
@@ -542,13 +599,16 @@ export function CheckinResultPage() {
                         borderRadius: 8,
                         background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)",
                         border: `1px solid ${v.accent}25`,
-                        cursor: routeState ? "pointer" : "default",
+                        cursor: "pointer",
                       }}
                     >
                       <span style={{ fontSize: 11, color: v.accent, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>→</span>
-                      <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{rec}</p>
+                      <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5, flex: 1 }}>{rec}</p>
+                      <span style={{ fontSize: 9, color: v.accent, fontWeight: 800, textTransform: "uppercase", whiteSpace: "nowrap", marginTop: 1 }}>
+                        Ações
+                      </span>
                     </div>
-                  )})}
+                  ))}
                 </div>
               )}
             </>
@@ -558,7 +618,7 @@ export function CheckinResultPage() {
                 {auraMsg.message}
               </p>
               <div
-                onClick={() => openSuggestedGoal(auraMsg.suggestion)}
+                onClick={() => sendSuggestionToActions(auraMsg.suggestion)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -567,11 +627,14 @@ export function CheckinResultPage() {
                   borderRadius: 9,
                   background: isMenuthe ? "rgba(180,185,169,.08)" : "var(--accent-peach-a3)",
                   border: `1px solid ${v.accent}30`,
-                  cursor: buildGoalSuggestionRouteState(auraMsg.suggestion, state.goals || []) ? "pointer" : "default",
+                  cursor: "pointer",
                 }}
               >
                 <span style={{ fontSize: 16, flexShrink: 0 }}>{auraMsg.suggestionEmoji}</span>
-                <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{auraMsg.suggestion}</p>
+                <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5, flex: 1 }}>{auraMsg.suggestion}</p>
+                <span style={{ fontSize: 9, color: v.accent, fontWeight: 800, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                  Ações
+                </span>
               </div>
             </>
           ) : (
@@ -682,7 +745,8 @@ export function CheckinResultPage() {
                     {phase === "preview" && (
                       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                         {/* regenerar */}
-                        <AuraButtonV2
+                        <button
+                          type="button"
                           onClick={() => regenTask(idx)}
                           disabled={regenIdx === idx}
                           title="Gerar outra sugestão"
@@ -698,9 +762,10 @@ export function CheckinResultPage() {
                           ) : (
                             <RefreshCcw size={14} color="var(--text-3)" />
                           )}
-                        </AuraButtonV2>
+                        </button>
                         {/* aceitar / descartar */}
-                        <AuraButtonV2
+                        <button
+                          type="button"
                           onClick={() => toggleDiscard(idx)}
                           title={task.discarded ? "Incluir" : "Descartar"}
                           style={{
@@ -716,7 +781,7 @@ export function CheckinResultPage() {
                           ) : (
                             <X size={14} color="var(--accent-peach)" />
                           )}
-                        </AuraButtonV2>
+                        </button>
                       </div>
                     )}
                   </div>
@@ -767,7 +832,10 @@ export function CheckinResultPage() {
             className="btn btn-ghost btn-full"
             onClick={() => {
               prepareJournalFromMood();
-              void finalizeAndGo("/journal");
+              void finalizeAndGo("/journal", {
+                initialDraft: buildCheckinJournalDraft(),
+                contextLabel: "check-in",
+              });
             }}
           >
             Abrir meu diário

@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { supabase } from "../lib/supabase";
-import type { FollowUpPending } from "../features/aura/types";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
@@ -16,6 +15,7 @@ import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, comp
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
+import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
 import {
   type AgendaBlock,
@@ -27,7 +27,6 @@ import {
   extractAgendaRepeatContext,
   extractHomeRepeatContext,
   resolveHomeAgendaSuggestionDate,
-  shouldRefreshHomeSuggestionAfterAction,
 } from "./home-page.helpers";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
 import { 
@@ -56,9 +55,18 @@ type ImportantAlert = {
   key: string;
   title: string;
   description: string;
+  evidence: string;
   tone: "info" | "warning" | "critical";
   actionLabel?: string;
   actionPath?: string;
+};
+
+type HomeScheduleModalAction = {
+  title: string;
+  category: string;
+  date: string;
+  time: string;
+  isNextDay: boolean;
 };
 
 type ChartPoint = {
@@ -221,6 +229,12 @@ function formatCheckinMomentLabel(entry: { recordedAt?: string; checkinSlot?: st
   return "Agora";
 }
 
+function evidenceExcerpt(value: string, fallback = "Sem trecho suficiente para exibir."): string {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) return fallback;
+  return normalized.length > 150 ? `${normalized.slice(0, 147)}...` : normalized;
+}
+
 // ── Helpers de tempo ──────────────────────────────────────
 function getGreeting(h: number) {
   if (h >= 5 && h < 12) return "Bom dia";
@@ -304,7 +318,7 @@ function LiveClock() {
 }
 
 export function HomePage() {
-  const { state, addTask, addHabit, refreshData, toggleTask, removeTask, toggleHabit, archiveHabit, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
+  const { state, addTask, addHabit, refreshData, toggleTask, removeTask, toggleHabit, toggleSubGoal, archiveHabit, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
 
@@ -324,10 +338,12 @@ export function HomePage() {
   const { showError, showSuccess } = useToast();
   const [addedActionTitles, setAddedActionTitles] = useState<Set<string>>(new Set());
   const [addingActionTitle, setAddingActionTitle] = useState<string | null>(null);
+  const [scheduleModalAction, setScheduleModalAction] = useState<HomeScheduleModalAction | null>(null);
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
   const [doneTaskIds, setDoneTaskIds] = useState<Set<string | number>>(new Set());
   const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
+  const [expandedAgendaRows, setExpandedAgendaRows] = useState<Set<string>>(new Set());
 
   // Relógio e Contexto de Tempo (necessários para IDs e filtros)
   const [clockTime, setClockTime] = useState(() => new Date());
@@ -358,6 +374,7 @@ export function HomePage() {
   const [selectedAgendaTaskKeys, setSelectedAgendaTaskKeys] = useState<Set<string>>(new Set());
   const [savedAgendaTaskKeys, setSavedAgendaTaskKeys] = useState<Set<string>>(new Set());
   const [agendaSaving, setAgendaSaving] = useState(false);
+  const [goalActionTick, setGoalActionTick] = useState(0);
   const agendaRequestCountRef = useRef(0);
 
   const mood = moodMap[state.mood] ?? moodMap.equilibrada;
@@ -411,9 +428,22 @@ export function HomePage() {
     [state.tasks],
   );
   const homeAgendaPreview = useMemo(
-    () => buildHomeAgendaPreview({ tasks: state.tasks || [], habits }),
-    [habits, state.tasks],
+    () => buildHomeAgendaPreview({ tasks: state.tasks || [], habits, referenceDate: clockTime }),
+    [clockTime, habits, state.tasks],
   );
+  const homeGoalActions = useMemo(
+    () => buildGoalPriorityActions(state.goals || [], { limit: 3 }),
+    [state.goals, goalActionTick],
+  );
+  const isAgendaRowExpanded = (key: string) => expandedAgendaRows.has(key);
+  const toggleAgendaRowExpanded = (key: string) => {
+    setExpandedAgendaRows((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // ── Gráfico semanal — média diária dos últimos 7 dias ─────────────────────
   const weeklyCheckinData = useMemo<ChartPoint[]>(() => {
@@ -694,7 +724,13 @@ export function HomePage() {
           },
         });
       const parsed = parseAiSuggestion<AgendaBlock[]>(res.suggestion);
-      const normalizedBlocks = dedupeAgendaBlocks(Array.isArray(parsed) ? parsed : []);
+      const normalizedBlocks = dedupeAgendaBlocks(Array.isArray(parsed) ? parsed : [])
+        .filter((block) => {
+          const targetDate = block.local_date || targetAgendaDate;
+          if (targetDate !== dayContext.localDate) return true;
+          return timeToMinutes(block.horario_inicio) >= (dayContext.hour * 60 + clockTime.getMinutes());
+        })
+        .sort((a, b) => a.horario_inicio.localeCompare(b.horario_inicio));
       setAgendaBlocks(normalizedBlocks);
       setSelectedAgendaTaskKeys(buildAgendaSelection(normalizedBlocks));
       setSavedAgendaTaskKeys(new Set());
@@ -802,17 +838,11 @@ export function HomePage() {
     }
   }
 
-  async function refreshSuggestionQueueIfNeeded(item: { kind: "task" | "habit"; isAiSuggested?: boolean }) {
-    if (!shouldRefreshHomeSuggestionAfterAction(item)) return;
-    await fetchAgenda();
-  }
-
   async function handleHomeTaskDone(task: (typeof homeAgendaPreview.tasks)[number]) {
     // Feedback visual imediato (otimista)
     setDoneTaskIds(prev => new Set([...prev, task.id]));
     try {
       await toggleTask(task.id);
-      await refreshSuggestionQueueIfNeeded(task);
     } catch (error) {
       setDoneTaskIds(prev => { const s = new Set(prev); s.delete(task.id); return s; });
       showError(error instanceof Error ? error.message : "Nao foi possivel concluir o compromisso.");
@@ -822,7 +852,6 @@ export function HomePage() {
   async function handleHomeTaskDelete(task: (typeof homeAgendaPreview.tasks)[number]) {
     try {
       await removeTask(task.id);
-      await refreshSuggestionQueueIfNeeded(task);
     } catch (error) {
       showError(error instanceof Error ? error.message : "Nao foi possivel excluir o compromisso.");
     }
@@ -844,7 +873,70 @@ export function HomePage() {
     }
   }
 
+  async function handleHomeGoalActionDone(action: (typeof homeGoalActions)[number]) {
+    try {
+      if (action.source === "goal" && action.goalId != null && action.subId != null) {
+        await toggleSubGoal(action.goalId, action.subId);
+      } else if (action.source === "capture" && action.gtdId) {
+        markStoredGtdActionDone(action.gtdId);
+        setGoalActionTick((value) => value + 1);
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel concluir a acao.");
+    }
+  }
+
+  function openHomeScheduleModal(action: { title: string; category: string }) {
+    const slot = findSmartPlannerSlot(state.tasks || [], new Date());
+    setScheduleModalAction({
+      title: action.title,
+      category: action.category,
+      date: slot.date,
+      time: slot.time,
+      isNextDay: slot.isNextDay,
+    });
+  }
+
+  async function confirmHomeScheduleModal() {
+    if (!scheduleModalAction || addingActionTitle) return;
+    setAddingActionTitle(scheduleModalAction.title);
+    try {
+      const saved = await addTask(scheduleModalAction.title, scheduleModalAction.time, scheduleModalAction.category, {
+        forceSave: true,
+        date: scheduleModalAction.date,
+      });
+      if (!saved) throw new Error("A sugestao nao entrou no planner.");
+      trackEvent("tasks_added_to_planner", {
+        source: "home",
+        item_count: 1,
+        next_day: scheduleModalAction.isNextDay,
+      });
+      setAddedActionTitles((prev) => new Set([...prev, scheduleModalAction.title]));
+      if (scheduleModalAction.isNextDay) {
+        showSuccess(`Agendado para amanhã às ${scheduleModalAction.time}`);
+      }
+      const scheduledFor = new Date(`${scheduleModalAction.date}T${scheduleModalAction.time}:00`).toISOString();
+      setPendingFollowUp({
+        suggestionTitle: scheduleModalAction.title,
+        suggestionCategory: scheduleModalAction.category,
+        scheduledFor,
+        response: null,
+        followUpMessage: null,
+        source: "autonomous",
+      });
+      setScheduleModalAction(null);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao no planner.");
+    } finally {
+      setAddingActionTitle(null);
+    }
+  }
+
   const selectedAgendaCount = selectedAgendaTaskKeys.size;
+  const selectableAgendaCount = agendaBlocks.reduce((total, block) => {
+    if (block.tipo === "descanso" || block.tipo === "refeicao") return total;
+    return total + block.tarefas_sugeridas.length;
+  }, 0);
   const importantAlerts = useMemo(() => {
     const alerts: ImportantAlert[] = [];
     const nowMinutes = clockTime.getHours() * 60 + clockTime.getMinutes();
@@ -862,6 +954,10 @@ export function HomePage() {
           overdueTasks.length === 1
             ? `"${firstTask.title}" já passou do horário e ainda está pendente.`
             : `Existem ${overdueTasks.length} itens do planner fora do horário hoje. Vale reorganizar antes que virem peso acumulado.`,
+        evidence:
+          overdueTasks.length === 1
+            ? `Base: "${firstTask.title}" estava marcado para ${firstTask.time} e ainda não foi concluído.`
+            : `Base: ${overdueTasks.length} itens com horário vencido e status pendente no Planner de hoje.`,
         tone: overdueTasks.length >= 3 ? "critical" : "warning",
         actionLabel: "Abrir planner",
         actionPath: "/planner",
@@ -876,6 +972,10 @@ export function HomePage() {
           stagnantGoals.length === 1
             ? `"${stagnantGoals[0].title}" ainda não saiu do lugar, mesmo já tendo próximos passos definidos.`
             : "Há metas com próximos passos definidos, mas sem avanço real. Talvez seja hora de reduzir o escopo ou destravar a primeira ação.",
+        evidence:
+          stagnantGoals.length === 1
+            ? `Base: a meta "${stagnantGoals[0].title}" tem ${stagnantGoals[0].subtasks.length} próxima(s) ação(ões) e progresso 0%.`
+            : `Base: ${stagnantGoals.length} metas ativas têm próximas ações e progresso 0%.`,
         tone: "warning",
         actionLabel: "Ver metas",
         actionPath: "/goals",
@@ -898,6 +998,7 @@ export function HomePage() {
           : rapidDrop
             ? "A mudança nas últimas 48h pede proteção de energia e leitura mais cuidadosa do que está pesando agora."
             : "Seu ciclo entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
+        evidence: `Base: estabilidade ${cycleReport.stabilityScore}/100, tendência 7d ${cycleReport.trend7d.toFixed(1)} e sinal(is): ${cycleReport.warningFlags.join(", ") || "estabilidade baixa"}.`,
         tone: sustainedLow || cycleReport.stabilityScore <= 30 ? "critical" : "warning",
         actionLabel: "Abrir diário",
         actionPath: "/journal",
@@ -909,6 +1010,7 @@ export function HomePage() {
         key: "compulsion-signal",
         title: "A Airia percebeu sinal de impulso ou compulsão",
         description: "O padrão recente sugere comportamento mais automático do que o normal. Vale pausar estímulos e nomear isso no diário antes de agir.",
+        evidence: `Base: ${evidenceExcerpt(state.autonomousInsight?.pattern || state.autonomousInsight?.insight || "")}`,
         tone: "critical",
         actionLabel: "Registrar agora",
         actionPath: "/journal",
@@ -928,10 +1030,134 @@ export function HomePage() {
   const displayName = state.name
     ? state.name.split(/\s+/)[0].charAt(0).toUpperCase() + state.name.split(/\s+/)[0].slice(1).toLowerCase()
     : "você";
+  const quickAccessSection = (
+    <>
+      <p className="aura-section-kicker">Acesso rapido</p>
+      <div className="shortcut-grid">
+        <button className="shortcut-card" onClick={() => navigate("/journal")}>
+          <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.15)" }}>
+            <MessageSquareText size={18} color="var(--terracotta)" />
+          </div>
+          <span className="shortcut-label">Diário</span>
+          <span className="shortcut-sub">Falar com IA</span>
+        </button>
+        <button className="shortcut-card" onClick={() => navigate("/planner")}>
+          <div className="icon-badge" style={{ background: "rgba(var(--horizon-rgb), 0.15)" }}>
+            <LayoutDashboard size={18} color="var(--horizon)" />
+          </div>
+          <span className="shortcut-label">Planner</span>
+          <span className="shortcut-sub">Organizar</span>
+        </button>
+        <button className="shortcut-card" onClick={() => navigate("/insights")}>
+          <div className="icon-badge" style={{ background: "rgba(var(--atomic-tangerine-rgb), 0.15)" }}>
+            <Activity size={18} color="var(--atomic-tangerine)" />
+          </div>
+          <span className="shortcut-label">Padrões</span>
+          <span className="shortcut-sub">Harmonia</span>
+        </button>
+        <button className="shortcut-card" onClick={() => navigate("/goals")}>
+          <div className="icon-badge" style={{ background: "rgba(var(--sweet-mint-rgb), 0.15)" }}>
+            <Target size={18} color="var(--sweet-mint)" />
+          </div>
+          <span className="shortcut-label">Objetivos</span>
+          <span className="shortcut-sub">Suas metas</span>
+        </button>
+        <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
+          <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.1)" }}>
+            <Timer size={18} color="var(--terracotta)" />
+          </div>
+          <span className="shortcut-label">Pomodoro</span>
+          <span className="shortcut-sub">Foco</span>
+        </button>
+        <button className="shortcut-card" onClick={() => navigate("/habits")}>
+          <div className="icon-badge" style={{ background: "rgba(150,199,179,.18)" }}>
+            <Sparkles size={18} color="var(--accent-sage)" />
+          </div>
+          <span className="shortcut-label">Hábitos</span>
+          <span className="shortcut-sub">Rituais</span>
+        </button>
+      </div>
+    </>
+  );
 
   return (
     <>
     <OnboardingTour />
+    {scheduleModalAction && (
+      <div style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 900,
+        background: "rgba(17,24,39,.24)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 18,
+        backdropFilter: "blur(6px)",
+      }}>
+        <div style={{
+          width: "min(100%, 360px)",
+          borderRadius: 22,
+          background: "rgba(255,253,249,.98)",
+          border: "1px solid var(--warm-border)",
+          boxShadow: "0 24px 60px rgba(17,24,39,.18)",
+          padding: 16,
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+            <div>
+              <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)" }}>
+                Agendar sugestão
+              </p>
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.35 }}>
+                Marcar para {scheduleModalAction.date === dayContext.localDate ? "hoje" : "esta data"} às {scheduleModalAction.time}?
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setScheduleModalAction(null)}
+              style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
+              aria-label="Fechar modal"
+            >
+              ×
+            </button>
+          </div>
+          <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+            {scheduleModalAction.title}
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 112px", gap: 8, marginBottom: 14 }}>
+            <input
+              type="date"
+              value={scheduleModalAction.date}
+              onChange={(event) => setScheduleModalAction((current) => current ? { ...current, date: event.target.value, isNextDay: event.target.value !== dayContext.localDate } : current)}
+              style={{ height: 40, borderRadius: 12, padding: "0 10px", fontSize: 12, fontWeight: 700 }}
+            />
+            <input
+              type="time"
+              value={scheduleModalAction.time}
+              onChange={(event) => setScheduleModalAction((current) => current ? { ...current, time: event.target.value } : current)}
+              style={{ height: 40, borderRadius: 12, padding: "0 10px", fontSize: 12, fontWeight: 700 }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setScheduleModalAction(null)}
+              style={{ flex: 1, height: 40, borderRadius: 12, border: "1px solid var(--warm-border-2)", background: "transparent", color: "var(--text-2)", fontSize: 12, fontWeight: 800, cursor: "pointer" }}
+            >
+              Não
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmHomeScheduleModal()}
+              disabled={addingActionTitle === scheduleModalAction.title}
+              style={{ flex: 1, height: 40, borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontSize: 12, fontWeight: 900, cursor: addingActionTitle === scheduleModalAction.title ? "default" : "pointer", opacity: addingActionTitle === scheduleModalAction.title ? 0.7 : 1 }}
+            >
+              {addingActionTitle === scheduleModalAction.title ? "Salvando..." : "Sim"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative", WebkitOverflowScrolling: "touch" }}>
       {/* Watermark híbrida — logo da Airia quase transparente */}
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", pointerEvents: "none", zIndex: 0 }}>
@@ -1486,8 +1712,10 @@ export function HomePage() {
               borderRadius: 14,
               border: "1.5px solid var(--warm-border)",
               overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
             }}>
-              {homeAgendaPreview.tasks.length === 0 && !homeAgendaPreview.habit ? (
+              {homeAgendaPreview.tasks.length === 0 && !homeAgendaPreview.habit && homeGoalActions.length === 0 ? (
                 <div style={{ padding: "14px 13px" }}>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
                     Sem compromissos agora
@@ -1500,6 +1728,8 @@ export function HomePage() {
                 <>
                   {homeAgendaPreview.tasks.map((task, index) => {
                     const isTaskDone = doneTaskIds.has(task.id);
+                    const rowKey = `task:${task.id}`;
+                    const isExpanded = isAgendaRowExpanded(rowKey);
                     return (
                     <div
                       key={task.id}
@@ -1524,6 +1754,7 @@ export function HomePage() {
                         textAlign: "left",
                         opacity: isTaskDone ? 0.6 : 1,
                         transition: "opacity 0.2s",
+                        order: timeToMinutes(task.time),
                       }}
                     >
                       <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
@@ -1532,14 +1763,46 @@ export function HomePage() {
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: isTaskDone ? "var(--accent-sage)" : "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28, transition: "background 0.2s" }} />
                       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 12, fontWeight: 700, color: isTaskDone ? "var(--text-3)" : "var(--text-1)", margin: 0, textDecoration: isTaskDone ? "line-through" : "none", transition: "all 0.2s" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: isTaskDone ? "var(--text-3)" : "var(--text-1)",
+                            margin: 0,
+                            textDecoration: isTaskDone ? "line-through" : "none",
+                            transition: "all 0.2s",
+                            whiteSpace: isExpanded ? "normal" : "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}>
                             {task.title}
                           </p>
-                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                            {isTaskDone ? "Concluído" : (task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa")}
-                          </p>
+                          {isExpanded && (
+                            <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
+                              {isTaskDone ? "Concluído" : (task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa")}
+                            </p>
+                          )}
                         </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleAgendaRowExpanded(rowKey);
+                          }}
+                          title={isExpanded ? "Recolher" : "Expandir"}
+                          aria-label={isExpanded ? "Recolher compromisso" : "Expandir compromisso"}
+                          style={{
+                            width: 20, height: 20, borderRadius: "50%",
+                            border: "1.5px solid rgba(244,168,150,.45)",
+                            background: "rgba(244,168,150,.12)",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                            color: "var(--accent-peach)",
+                          }}
+                        >
+                          <ChevronRight size={12} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
+                        </button>
                         <button
                           type="button"
                           onClick={(event) => {
@@ -1585,7 +1848,10 @@ export function HomePage() {
                       </div>
                     </div>
                   );})}
-                  {homeAgendaPreview.habit && (
+                  {homeAgendaPreview.habit && (() => {
+                    const rowKey = `habit:${homeAgendaPreview.habit.id}`;
+                    const isExpanded = isAgendaRowExpanded(rowKey);
+                    return (
                     <div
                       role="button"
                       tabIndex={0}
@@ -1605,6 +1871,7 @@ export function HomePage() {
                         background: "rgba(180,185,169,.08)",
                         cursor: "pointer",
                         textAlign: "left",
+                        order: timeToMinutes(homeAgendaPreview.habit.reminderTime ?? "23:59"),
                       }}
                     >
                       <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
@@ -1615,14 +1882,44 @@ export function HomePage() {
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: "var(--accent-sage)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
                       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "var(--text-1)",
+                            margin: 0,
+                            whiteSpace: isExpanded ? "normal" : "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}>
                             {homeAgendaPreview.habit.icon ? `${homeAgendaPreview.habit.icon} ` : ""}{homeAgendaPreview.habit.title}
                           </p>
-                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                            Ritual pendente de hoje
-                          </p>
+                          {isExpanded && (
+                            <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
+                              Ritual pendente de hoje
+                            </p>
+                          )}
                         </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleAgendaRowExpanded(rowKey);
+                          }}
+                          title={isExpanded ? "Recolher" : "Expandir"}
+                          aria-label={isExpanded ? "Recolher hábito" : "Expandir hábito"}
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1px solid var(--warm-border-2)",
+                            background: "rgba(255,255,255,.62)",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                            color: "var(--text-3)",
+                          }}
+                        >
+                          <ChevronRight size={11} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
+                        </button>
                         <button
                           type="button"
                           onClick={(event) => {
@@ -1666,7 +1963,105 @@ export function HomePage() {
                         </button>
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
+                  {homeGoalActions.map((action, index) => {
+                    const rowKey = `action:${action.id}`;
+                    const isExpanded = isAgendaRowExpanded(rowKey);
+                    return (
+                    <div
+                      key={action.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate("/goals", action.source === "goal" ? { state: { openGoalId: action.goalId, openSubtaskId: action.subId } } : { state: { activeTab: "acoes" } })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate("/goals", action.source === "goal" ? { state: { openGoalId: action.goalId, openSubtaskId: action.subId } } : { state: { activeTab: "acoes" } });
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        gap: 10,
+                        padding: "10px 13px",
+                        border: "none",
+                        borderTop: index === 0 ? "1px solid var(--warm-border)" : "none",
+                        borderBottom: index < homeGoalActions.length - 1 ? "1px solid var(--warm-border)" : "none",
+                        background: "rgba(244,168,150,.06)",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        order: 2000 + index,
+                      }}
+                    >
+                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>ação</p>
+                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>meta</p>
+                      </div>
+                      <div style={{ width: 3, borderRadius: 999, background: "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "var(--text-1)",
+                            margin: 0,
+                            whiteSpace: isExpanded ? "normal" : "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}>
+                            {action.text}
+                          </p>
+                          {isExpanded && (
+                            <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
+                              {action.source === "goal" && action.goalTitle ? `Próxima ação · ${action.goalTitle}` : "Próxima ação capturada"}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleAgendaRowExpanded(rowKey);
+                          }}
+                          title={isExpanded ? "Recolher" : "Expandir"}
+                          aria-label={isExpanded ? "Recolher ação" : "Expandir ação"}
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1px solid var(--warm-border-2)",
+                            background: "rgba(255,255,255,.62)",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                            color: "var(--text-3)",
+                          }}
+                        >
+                          <ChevronRight size={11} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleHomeGoalActionDone(action);
+                          }}
+                          title="Marcar ação como feita"
+                          style={{
+                            width: 18, height: 18, borderRadius: "50%",
+                            border: "1.5px solid var(--accent-sage)",
+                            background: "transparent",
+                            cursor: "pointer",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    );
+                  })}
                 </>
               )}
             </div>
@@ -1716,32 +2111,47 @@ export function HomePage() {
                         )}
                       </div>
                       {block.tarefas_sugeridas.length > 0 && !isSkip && (
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 3 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 5 }}>
                           {block.tarefas_sugeridas.map((t, ti) => (
                             <button
                               key={ti}
                               type="button"
                               onClick={() => agendaPhase === "preview" && toggleAgendaTaskSelection(idx, ti)}
                               style={{
-                                fontSize: 10,
+                                width: "100%",
+                                fontSize: 11,
                                 color: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor : "var(--text-2)",
                                 background: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? `${cfg.cor}18` : cfg.bg,
                                 border: `1px solid ${selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor + "70" : cfg.cor + "30"}`,
-                                borderRadius: 6,
-                                padding: "2px 7px",
+                                borderRadius: 9,
+                                padding: "6px 8px",
                                 cursor: agendaPhase === "preview" ? "pointer" : "default",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: 4,
+                                textAlign: "left",
                                 opacity: agendaPhase === "approved" && !savedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? 0.45 : 1,
                               }}
                             >
                               {agendaPhase === "preview" && (
-                                <span style={{ fontSize: 9 }}>
-                                  {selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? "✓" : "○"}
+                                <span style={{
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: 5,
+                                  border: `1.5px solid ${cfg.cor}`,
+                                  background: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor : "transparent",
+                                  color: "#fff",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                  fontSize: 10,
+                                  fontWeight: 900,
+                                }}>
+                                  {selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? "✓" : ""}
                                 </span>
                               )}
-                              {t}
+                              <span style={{ flex: 1 }}>{t}</span>
                             </button>
                           ))}
                         </div>
@@ -1756,11 +2166,31 @@ export function HomePage() {
 
               {/* Approve button */}
               {agendaPhase === "preview" && (
-                <div style={{ padding: "10px 13px", display: "flex", gap: 8 }}>
+                <div style={{ padding: "10px 13px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ flex: "1 1 100%" }}
+                    onClick={() => {
+                      if (selectedAgendaCount >= selectableAgendaCount) {
+                        setSelectedAgendaTaskKeys(new Set());
+                      } else {
+                        setSelectedAgendaTaskKeys(buildAgendaSelection(agendaBlocks));
+                      }
+                    }}
+                    disabled={agendaSaving || selectableAgendaCount === 0}
+                  >
+                    {selectedAgendaCount >= selectableAgendaCount ? "Limpar seleção" : "Marcar todas"}
+                  </button>
                   <button
                     className="btn btn-ghost"
                     style={{ flex: 1 }}
                     onClick={() => { setAgendaPhase("idle"); setAgendaBlocks([]); setSelectedAgendaTaskKeys(new Set()); setSavedAgendaTaskKeys(new Set()); }}
+                  >Cancelar</button>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ flex: 1 }}
+                    onClick={fetchAgenda}
+                    disabled={agendaSaving}
                   >Refazer</button>
                   <AuraButtonV2 variant="primary" size="sm" style={{ flex: 2 }} onClick={approveAgenda} disabled={selectedAgendaCount === 0 || agendaSaving}>
                     {agendaSaving ? "Enviando..." : `Adicionar ${selectedAgendaCount > 0 ? selectedAgendaCount : ""} ao Planner`}
@@ -1770,6 +2200,8 @@ export function HomePage() {
             </div>
           )}
         </div>
+
+        {quickAccessSection}
 
         {/* ── CARD: Ciclo de Humor (identidade central do app) ── */}
         <div className="home-cycle-card" style={{ border: `1.5px solid ${phaseColor}30` }}>
@@ -1906,53 +2338,6 @@ export function HomePage() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* ── Acesso Rápido ── */}
-        <p className="aura-section-kicker">Acesso rapido</p>
-        <div className="shortcut-grid">
-          <button className="shortcut-card" onClick={() => navigate("/journal")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.15)" }}>
-              <MessageSquareText size={18} color="var(--terracotta)" />
-            </div>
-            <span className="shortcut-label">Diário</span>
-            <span className="shortcut-sub">Falar com IA</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/planner")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--horizon-rgb), 0.15)" }}>
-              <LayoutDashboard size={18} color="var(--horizon)" />
-            </div>
-            <span className="shortcut-label">Planner</span>
-            <span className="shortcut-sub">Organizar</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/insights")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--atomic-tangerine-rgb), 0.15)" }}>
-              <Activity size={18} color="var(--atomic-tangerine)" />
-            </div>
-            <span className="shortcut-label">Padrões</span>
-            <span className="shortcut-sub">Harmonia</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/goals")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--sweet-mint-rgb), 0.15)" }}>
-              <Target size={18} color="var(--sweet-mint)" />
-            </div>
-            <span className="shortcut-label">Objetivos</span>
-            <span className="shortcut-sub">Suas metas</span>
-          </button>
-          <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
-            <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.1)" }}>
-              <Timer size={18} color="var(--terracotta)" />
-            </div>
-            <span className="shortcut-label">Pomodoro</span>
-            <span className="shortcut-sub">Foco</span>
-          </button>
-          <button className="shortcut-card" onClick={() => setShowHabitIdeasModal(true)}>
-            <div className="icon-badge" style={{ background: "rgba(150,199,179,.18)" }}>
-              <Sparkles size={18} color="var(--accent-sage)" />
-            </div>
-            <span className="shortcut-label">Hábitos</span>
-            <span className="shortcut-sub">Rituais</span>
-          </button>
         </div>
 
         {/* ── Nudge proativo da Airia ──────────────────────────── */}
@@ -2143,38 +2528,10 @@ export function HomePage() {
                                 </div>
                                 {/* Botão + adicionar ao planner */}
                                 <button
-                                  onClick={async (event) => {
+                                  onClick={(event) => {
                                     event.stopPropagation();
                                     if (isAdding) return;
-                                    setAddingActionTitle(action.title);
-                                    try {
-                                      const slot = findSmartPlannerSlot(state.tasks || [], new Date());
-                                      const saved = await addTask(action.title, slot.time, action.category, { forceSave: true, date: slot.date });
-                                      if (!saved) throw new Error("A sugestao nao entrou no planner.");
-                                      trackEvent("tasks_added_to_planner", {
-                                        source: "home",
-                                        item_count: 1,
-                                        next_day: slot.isNextDay,
-                                      });
-                                      setAddedActionTitles(prev => new Set([...prev, action.title]));
-                                      if (slot.isNextDay) {
-                                        showSuccess(`Agendado para amanhã às ${slot.time}`);
-                                      }
-                                      const scheduledFor = new Date(`${slot.date}T${slot.time}:00`).toISOString();
-                                      const followUp: FollowUpPending = {
-                                        suggestionTitle: action.title,
-                                        suggestionCategory: action.category,
-                                        scheduledFor,
-                                        response: null,
-                                        followUpMessage: null,
-                                        source: "autonomous",
-                                      };
-                                      setPendingFollowUp(followUp);
-                                    } catch (error) {
-                                      showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao no planner.");
-                                    } finally {
-                                      setAddingActionTitle(null);
-                                    }
+                                    openHomeScheduleModal(action);
                                   }}
                                   disabled={isAdding}
                                   style={{
@@ -2425,6 +2782,9 @@ export function HomePage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 12, fontWeight: 700, color: cfg.accent, margin: "0 0 4px" }}>{alert.title}</p>
                       <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{alert.description}</p>
+                      <p style={{ fontSize: 10.5, color: "var(--text-3)", margin: "5px 0 0", lineHeight: 1.45, fontWeight: 650 }}>
+                        {alert.evidence}
+                      </p>
                       {alert.actionPath && alert.actionLabel && (
                         <button
                           onClick={() => navigate(alert.actionPath!)}

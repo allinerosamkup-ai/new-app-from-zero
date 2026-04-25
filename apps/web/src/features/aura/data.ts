@@ -109,6 +109,7 @@ export const initialAuraState: AuraState = {
   checkinHistory: [],
   habits: [],
   onboardingDone: false,
+  accountCreatedAt: null,
 };
 
 export function labelMood(mood: MoodOption) {

@@ -44,6 +44,8 @@ export type HomeAgendaHabitItem = {
   reminderTime?: string | null;
 };
 
+export type HomeAgendaItem = HomeAgendaTaskItem | HomeAgendaHabitItem;
+
 function normalizeWhitespace(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -71,6 +73,12 @@ function uniqueStrings(values: string[]): string[] {
 
 function safeTimeValue(time: string | undefined): string {
   return typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : "23:59";
+}
+
+function timeToMinutesValue(time: string | undefined): number {
+  const safe = safeTimeValue(time);
+  const [hour, minute] = safe.split(":").map(Number);
+  return hour * 60 + minute;
 }
 
 function habitCompletionCount(habit: { completions?: Array<{ completionCount?: number | null } | unknown> }): number {
@@ -115,9 +123,15 @@ export function buildHomeAiRequestKey(input: HomeAiRequestKeyInput): string {
 export function buildHomeAgendaPreview(input: {
   tasks: Array<{ id: string | number; title: string; time: string; done: boolean; category?: string; isAiSuggested?: boolean }>;
   habits: Array<{ id: string; title: string; icon?: string; targetCount?: number | null; completions?: Array<{ completionCount?: number | null } | unknown>; reminderEnabled?: boolean; reminderTime?: string | null }>;
-}): { tasks: HomeAgendaTaskItem[]; habit: HomeAgendaHabitItem | null } {
+  referenceDate?: Date;
+}): { tasks: HomeAgendaTaskItem[]; habit: HomeAgendaHabitItem | null; items: HomeAgendaItem[] } {
+  const nowMinutes = input.referenceDate
+    ? input.referenceDate.getHours() * 60 + input.referenceDate.getMinutes()
+    : null;
+
   const tasks = input.tasks
     .filter((task) => !task.done && normalizeWhitespace(task.title).length > 0)
+    .filter((task) => nowMinutes === null || timeToMinutesValue(task.time) >= nowMinutes)
     .sort((a, b) => safeTimeValue(a.time).localeCompare(safeTimeValue(b.time)))
     .slice(0, 3)
     .map((task) => ({
@@ -143,7 +157,13 @@ export function buildHomeAgendaPreview(input: {
       reminderTime: habit.reminderTime,
     }))[0] ?? null;
 
-  return { tasks, habit };
+  const items = [...tasks, ...(habit ? [habit] : [])].sort((a, b) => {
+    const aTime = a.kind === "task" ? a.time : a.reminderTime ?? undefined;
+    const bTime = b.kind === "task" ? b.time : b.reminderTime ?? undefined;
+    return safeTimeValue(aTime).localeCompare(safeTimeValue(bTime));
+  });
+
+  return { tasks, habit, items };
 }
 
 export function shouldRefreshHomeSuggestionAfterAction(item: { kind: "task" | "habit"; isAiSuggested?: boolean }): boolean {

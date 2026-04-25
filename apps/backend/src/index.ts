@@ -324,6 +324,7 @@ async function generateJournalSuggestedTasks(args: {
   systemPrompt: string;
   userName: string;
   moodCycleContext?: string | null;
+  acceptedSuggestions?: string[];
   recentMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
   currentHour?: number;
 }): Promise<SuggestedTask[]> {
@@ -333,6 +334,13 @@ async function generateJournalSuggestedTasks(args: {
     .slice(-8)
     .map((message) => `${message.role === 'user' ? args.userName : 'Aura'}: ${message.content}`)
     .join('\n');
+  const acceptedSuggestions = (args.acceptedSuggestions ?? [])
+    .map((suggestion) => suggestion.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const acceptedSuggestionsBlock = acceptedSuggestions.length > 0
+    ? `\nSUGESTÕES CONVERSADAS E VALIDADAS PELA PESSOA:\n${acceptedSuggestions.map((suggestion, index) => `${index + 1}. ${suggestion}`).join('\n')}\n`
+    : '\nSUGESTÕES CONVERSADAS E VALIDADAS PELA PESSOA: nenhuma clara.\n';
 
   const completion = await openai.chat.completions.create({
     model: getOpenAiModel(),
@@ -344,14 +352,20 @@ async function generateJournalSuggestedTasks(args: {
 
 CONVERSA:
 ${transcript}
+${acceptedSuggestionsBlock}
 
 REGRAS:
-- Só sugira tarefas se houver próximo passo útil e gentil.
-- Priorize autocuidado, organização leve ou trabalho prático conforme o estado atual.
+- Se houver SUGESTÕES CONVERSADAS E VALIDADAS, transforme essas ideias primeiro em tarefas concretas. Elas têm prioridade sobre qualquer nova sugestão.
+- Só crie uma nova tarefa se ainda faltar completar até 3 itens e a conversa trouxer base real para isso.
+- Se não houver sugestão validada nem próximo passo útil e gentil, retorne [].
+- Use a hierarquia interna: leitura funcional profunda primeiro, TCC prática depois, exposição gradual, propósito e somática por último. Nunca cite esses nomes.
+- Priorize ação concreta, organização leve, trabalho prático, exposição mínima ou contenção conforme o estado atual.
 - Se não fizer sentido sugerir nada, retorne [].
 - Use categorias: trabalho | saude | rotina | social.
 - Se o usuário mencionou planos concretos (ex: "vou encontrar fulano", "tenho reunião", "preciso ligar para X"), inclua como tarefa com categoria adequada (social/trabalho) e horário se mencionado.
-- Misture sugestões terapêuticas com compromissos práticos mencionados na conversa.${args.currentHour !== undefined ? `
+- Não transforme sugestão rejeitada ou apenas cogitada pela Aura em tarefa.
+- Evite somática genérica. Corpo/respiração só entram se a conversa mostrou sinal corporal relevante ou necessidade real de aterramento.
+- Misture sugestões conversadas com compromissos práticos mencionados na conversa.${args.currentHour !== undefined ? `
 - A hora atual do usuário é ${args.currentHour}h. NUNCA sugira horários anteriores à hora atual. Se o horário natural de uma tarefa já passou, omita o campo time.` : ''}
 - Retorne APENAS JSON no formato:
 {"tasks":[{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]}`,
@@ -645,6 +659,7 @@ async function finalizeJournalSession(args: {
       userName: args.userName,
       moodCycleContext: args.moodCycleContext,
       currentHour: args.currentHour,
+      acceptedSuggestions: summary.suggestions || [],
       recentMessages: args.messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')
         .map((message) => ({
@@ -804,7 +819,7 @@ function getSuggestPromptDomain(type: string): AuraPromptDomain {
     return 'goal-execution';
   }
 
-  if (type === 'goal-subtasks' || type === 'goal-route' || type === 'gtd-clarify' || type === 'ai-goals') {
+  if (type === 'goal-subtasks' || type === 'goal-route' || type === 'goal-capture-dialogue' || type === 'gtd-clarify' || type === 'ai-goals') {
     return 'goal-execution';
   }
 
@@ -838,6 +853,8 @@ function getRagIntent(type: string, context: any): string {
       return `comprometimento, resistência e padrões de adesão a sugestões`;
     case 'goal-subtasks':
       return `micro-ações anteriores e como a pessoa prefere executar tarefas`;
+    case 'goal-capture-dialogue':
+      return `metas existentes, decisões pendentes e formas anteriores de transformar ideias em próximas ações`;
     case 'journal-tasks':
       return `temas emocionais recorrentes e o que a pessoa valoriza no diário`;
     case 'task-content':
@@ -2576,21 +2593,28 @@ Retorne SOMENTE array JSON: [{"title":"título específico e real","category":"t
           : `Sugira horários realistas entre ${Math.max(nowHour + 1, 8).toString().padStart(2, '0')}:00 e 20:00. NUNCA use horários após 20:00, meia-noite ou madrugada.`;
         prompt = `Com base nesta conversa de diário:\n\n${context.messages}
 
-Gere 2-3 tarefas para apoiar o que foi dito, com tom gentil e ZERO abstração.
+Gere 0-3 tarefas para apoiar o que foi dito, com tom gentil e ZERO abstração.
 
 ${timeWindow}
 
 REGRAS INVIOLÁVEIS:
-1. Cada tarefa deve ter: VERBO DE AÇÃO + OBJETO CONCRETO + CONTEXTO + DURAÇÃO.
-2. O título precisa ser executável imediatamente e mensurável hoje.
-3. Use duração curta e explícita no título (5, 10, 15, 20 ou 30 min).
-4. Pelo menos 1 tarefa deve atacar diretamente o principal ponto emocional/prático da conversa.
-5. Evite duplicação entre tarefas.
+1. Primeiro identifique sugestões que foram conversadas e validadas pela pessoa: concordância, escolha, pedido de aprofundamento, "faz sentido", "quero", "vamos" ou sinal claro de interesse.
+2. Transforme essas sugestões aceitas nas primeiras tarefas. Não priorize ideias que só a IA lançou e a pessoa não validou.
+3. Se a pessoa rejeitou, desviou ou mostrou incômodo com uma sugestão, NÃO transforme isso em tarefa.
+4. Só crie tarefa nova se faltarem itens e a conversa trouxer base concreta.
+5. Cada tarefa deve ter: VERBO DE AÇÃO + OBJETO CONCRETO + CONTEXTO + DURAÇÃO.
+6. O título precisa ser executável imediatamente e mensurável hoje.
+7. Use duração curta e explícita no título (5, 10, 15, 20 ou 30 min).
+8. Use internamente esta ordem: leitura funcional profunda primeiro, TCC prática depois, exposição gradual, propósito e somática por último. Nunca cite esses nomes.
+9. Evite duplicação entre tarefas.
+10. Qualquer leitura de problema útil, sinal antes de queda, movimento interrompido ou efeito indireto precisa estar baseada em evidência concreta da conversa. Não invente padrão para justificar tarefa.
+11. Ao escolher tarefas, cruze internamente: o que a pessoa precisa para não piorar, o que a situação permite hoje e o que ela prefere preservar. A tarefa deve caber nesse ponto, com execução pequena.
 
 PROIBIDO:
 - "descansar", "se cuidar", "tomar água", "organizar a vida", "pensar sobre", "refletir"
 - qualquer frase genérica sem objeto real
 - tarefas vagas sem duração
+- somática genérica quando a conversa pede ação prática, exposição mínima, contenção ou organização
 
 EXEMPLOS DE FORMATO BOM:
 - "Escrever por 10 min no bloco de notas 3 gatilhos que te esgotaram hoje"
@@ -2891,6 +2915,49 @@ REGRAS:
 - Use o nome de forma natural, no máximo uma vez.
 
 JSON APENAS: {"message":"2-3 frases acolhedoras e específicas sobre este momento","suggestionEmoji":"emoji","suggestion":"micro-ação concreta para as próximas 2 horas"}`;
+      } else if (type === 'goal-capture-dialogue') {
+        const capture = String(context.capture || '').trim();
+        const previousSummary = typeof context.previousSummary === 'string' ? context.previousSummary.trim() : '';
+        const answer = typeof context.answer === 'string' ? context.answer.trim() : '';
+        const goals = (context.goals as string[] | undefined) || [];
+        const goalsCtx = goals.length ? `\n\nMetas atuais de ${userName}:\n${goals.map((g, i) => `${i + 1}. "${g}"`).join('\n')}` : '\n\nSem metas atuais cadastradas.';
+        const conversationCtx = [
+          previousSummary ? `Resumo da conversa ate agora: ${previousSummary}` : null,
+          answer ? `Resposta nova de ${userName}: "${answer}"` : null,
+        ].filter(Boolean).join('\n');
+
+        prompt = `Use GTD como raciocinio interno para clarificar uma captura de ${userName}, sem citar o metodo na resposta visivel.
+
+Captura inicial: "${capture}"
+${conversationCtx ? `\n${conversationCtx}` : ''}${goalsCtx}
+
+Objetivo: decidir se isso e uma meta/projeto, uma proxima acao, algo para inbox, referencia ou algum dia. Nao crie nada ainda; apenas conduza a clarificacao.
+
+Se ainda estiver vago, retorne "needs_clarification" com UMA pergunta curta que ajude a sair da abstracao. No maximo 3 perguntas ao longo da conversa.
+Se ja estiver claro, retorne "ready" com o tipo, titulo limpo e primeiras acoes quando for meta.
+
+Regras:
+- "goal": exige 2+ acoes para concluir ou representa um resultado/projeto.
+- "next_action": uma acao fisica unica, clara e executavel agora.
+- "inbox": ainda esta emocional/vago demais mesmo apos a pergunta atual.
+- "reference": informacao util sem acao.
+- "someday": desejo/possibilidade sem compromisso agora.
+- Para "goal", gere 3-5 primeiras acoes fisicas, pequenas, em ordem, com a primeira facil em ate 2 minutos.
+- Para "next_action", o titulo deve comecar com verbo fisico.
+- Se a proxima acao apoiar uma meta existente, use o titulo exato em "linkedGoalTitle"; senao null.
+- Nao use "planejar", "organizar melhor", "pensar", "refletir" como acao.
+- Perguntas precisam ser praticas: resultado desejado, prazo, contexto, primeira prova fisica ou bloqueio.
+
+JSON APENAS:
+{
+  "status": "needs_clarification" | "ready",
+  "question": "pergunta curta se precisar clarificar, senao null",
+  "summary": "resumo operacional em uma frase",
+  "kind": "goal" | "next_action" | "inbox" | "reference" | "someday",
+  "title": "titulo limpo e acionavel",
+  "firstActions": ["acao 1", "acao 2", "acao 3"],
+  "linkedGoalTitle": "titulo exato de meta existente ou null"
+}`;
       } else if (type === 'gtd-clarify') {
         const item = context.item || '';
         const goals = (context.goals as string[] | undefined) || [];

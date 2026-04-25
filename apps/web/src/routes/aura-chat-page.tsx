@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
@@ -117,17 +117,22 @@ function buildObjectiveInput(payload: Record<string, unknown>, fallbackTitle: st
 
 export function AuraChatPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { state, refreshData } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
+  const routeState = location.state as { initialPrompt?: string; contextLabel?: string } | null;
+  const initialPrompt = typeof routeState?.initialPrompt === "string" ? routeState.initialPrompt : "";
+  const contextLabel = typeof routeState?.contextLabel === "string" ? routeState.contextLabel : "";
 
   const [messages, setMessages] = useState<Message[]>([{
     role: "assistant",
-    content:
-      "Tudo pronto por aqui. Se quiser organizar o dia ou apenas descarregar o que está na mente, estou te ouvindo.",
+    content: initialPrompt
+      ? `Trouxe o contexto${contextLabel ? ` de ${contextLabel}` : ""}. Me diga se você quer priorizar, quebrar em passos, trocar por uma alternativa ou entender se isso cabe hoje.`
+      : "Tudo pronto por aqui. Se quiser organizar o dia ou apenas descarregar o que está na mente, estou te ouvindo.",
   }]);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
   const [actionCard, setActionCard] = useState<ActionCard | null>(null);
   const [pendingTaskConfirmation, setPendingTaskConfirmation] = useState<PendingTaskConfirmation | null>(null);

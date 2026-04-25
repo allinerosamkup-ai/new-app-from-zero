@@ -1,7 +1,7 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2 } from "lucide-react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraToggle } from "../components/editorial/AuraToggle";
@@ -36,6 +36,7 @@ import {
   type RecurringConfig,
 } from "../utils/task-metadata";
 import { getLocalDateKey, getLocalNoonDate, normalizeDateKey } from "../utils/day-context";
+import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
 import "../styles/aura.css";
@@ -434,6 +435,49 @@ function normalizeEnergyLevel(val: any): 1 | 2 | 3 | 4 | 5 {
   if (val === "alta" || val === "P") return 4;
   if (val === "leve" || val === "L") return 2;
   return 3;
+}
+
+function buildPlannerTaskChatPrompt(task: {
+  title: string;
+  time?: string | null;
+  endTime?: string | null;
+  category?: string | null;
+  aiReasoning?: string | null;
+  note?: string | null;
+}) {
+  const parts = [
+    `Tarefa: ${task.title}`,
+    task.time ? `Horário: ${task.time}${task.endTime ? `-${task.endTime}` : ""}` : null,
+    task.category ? `Categoria: ${task.category}` : null,
+    task.aiReasoning ? `Motivo/sugestão original: ${task.aiReasoning}` : null,
+    task.note ? `Nota: ${task.note}` : null,
+  ].filter(Boolean);
+
+  return [
+    "Me ajuda a entender esta tarefa e decidir a prioridade real dela.",
+    "Quero que você diga se ela é prioridade alta, média ou baixa, por quê, se cabe hoje, qual é o menor próximo passo e qual alternativa existe se eu não conseguir fazer agora.",
+    parts.join("\n"),
+  ].join("\n\n");
+}
+
+function buildFocusActionChatPrompt(item: {
+  text: string;
+  source: string;
+  goalTitle?: string | null;
+  razao?: string | null;
+}) {
+  const parts = [
+    `Ação: ${item.text}`,
+    item.goalTitle ? `Meta relacionada: ${item.goalTitle}` : null,
+    item.source ? `Origem: ${item.source === "goal" ? "meta" : "captura solta"}` : null,
+    item.razao ? `Contexto: ${item.razao}` : null,
+  ].filter(Boolean);
+
+  return [
+    "Me ajuda a entender esta próxima ação e decidir a prioridade real dela.",
+    "Quero que você diga se ela vem antes ou depois das outras, qual é o menor primeiro passo, e me dê uma alternativa se ela estiver grande demais.",
+    parts.join("\n"),
+  ].join("\n\n");
 }
 
 function hasApiMetadata(task: PlannerTask): boolean {
@@ -1472,7 +1516,7 @@ function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
   );
 }
 
-function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete }: any) {
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -1652,6 +1696,27 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                 AIRIA
               </div>
             )}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onChat(slot.task);
+              }}
+              style={{
+                border: "1px solid rgba(99,152,169,.28)",
+                background: "rgba(99,152,169,.10)",
+                color: "var(--accent-sky)",
+                borderRadius: 999,
+                padding: "3px 8px",
+                fontSize: 9,
+                fontWeight: 850,
+                letterSpacing: ".04em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+              }}
+            >
+              Conversar
+            </button>
           </div>
         </div>
       </div>
@@ -1663,6 +1728,7 @@ export function PlannerPage() {
   const { refreshData, state, toggleSubGoal } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
   const plannerOpenedRef = useRef(false);
 
   // ── Modo Proteção de Fase Baixa (7.2) ──────────────────────
@@ -1674,6 +1740,7 @@ export function PlannerPage() {
   const [offsetDias, setOffsetDias] = useState(0);
   const [plannerTasks, setPlannerTasks] = useState<PlannerTask[]>([]);
   const [plannerLoading, setPlannerLoading] = useState(false);
+  const [focusActionTick, setFocusActionTick] = useState(0);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newForm, setNewForm] = useState<FormState>({ ...EMPTY_FORM });
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -1817,36 +1884,11 @@ export function PlannerPage() {
       ? "Agenda livre"
       : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""}`;
 
-  // ── Foco do dia — GTD tasks + first uncompleted goal subtask ──
-  const [gtdFocusItems, setGtdFocusItems] = useState<Array<{
-    id: string; text: string; type: "tarefa" | "meta"; goalTitle?: string; goalId?: number | string;
-  }>>(() => {
-    try {
-      const raw: any[] = JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
-      return raw
-        .filter(i => !i.archived && !i.sentToGoal && !i.done && i.clarified && i.tipo === "proxima_acao" && !i.linkedGoalId)
-        .map(i => ({ id: i.id, text: i.titulo || i.text, type: "tarefa" as const }));
-    } catch { return []; }
-  });
-
-  const goalFocusItems = useMemo(() => {
-    return state.goals
-      .map(g => {
-        const nextSub = g.subtasks.find(s => !s.done);
-        if (!nextSub) return null;
-        return { id: `goal-${g.id}-${nextSub.id}`, text: nextSub.title, type: "meta" as const, goalTitle: g.title, goalId: g.id, subId: nextSub.id };
-      })
-      .filter(Boolean) as Array<{ id: string; text: string; type: "meta"; goalTitle: string; goalId: number | string; subId: number | string }>;
-  }, [state.goals]);
-
-  function toggleGtdFocusItem(itemId: string) {
-    try {
-      const raw: any[] = JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
-      const updated = raw.map(i => i.id === itemId ? { ...i, done: true } : i);
-      localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
-    } catch {}
-    setGtdFocusItems(prev => prev.filter(i => i.id !== itemId));
-  }
+  // ── Foco do dia — primeiras ações de metas + capturas soltas ──
+  const focusItems = useMemo(
+    () => buildGoalPriorityActions(state.goals, { limit: 3 }),
+    [state.goals, focusActionTick],
+  );
 
   const [animatingFocusItems, setAnimatingFocusItems] = useState<string[]>([]);
   const [expandedFocusItems, setExpandedFocusItems] = useState<string[]>([]);
@@ -1860,7 +1902,8 @@ export function PlannerPage() {
     setAnimatingFocusItems(prev => [...prev, item.id]);
     setTimeout(() => {
       if (type === "tarefa") {
-        toggleGtdFocusItem(item.id);
+        if (item.gtdId) markStoredGtdActionDone(item.gtdId);
+        setFocusActionTick((value) => value + 1);
       } else {
         toggleSubGoal(item.goalId, item.subId);
       }
@@ -2245,6 +2288,28 @@ export function PlannerPage() {
     await deleteTimelineTask(task);
   }
 
+  function openTaskChat(task: PlannerTask) {
+    navigate("/aura", {
+      state: {
+        contextLabel: "uma tarefa do Planner",
+        initialPrompt: buildPlannerTaskChatPrompt(task),
+      },
+    });
+  }
+
+  function openFocusActionChat(item: { text: string; source: string; goalTitle?: string | null }) {
+    navigate("/aura", {
+      state: {
+        contextLabel: "uma próxima ação",
+        initialPrompt: buildFocusActionChatPrompt({
+          text: item.text,
+          source: item.source,
+          goalTitle: item.goalTitle,
+        }),
+      },
+    });
+  }
+
   async function confirmRecurringDelete(scope: RecurringDeleteScope) {
     if (!recurringDeleteTask || recurringDeleteLoading) return;
     setRecurringDeleteLoading(true);
@@ -2380,6 +2445,27 @@ export function PlannerPage() {
                     <img src="https://www.google.com/favicon.ico" width={10} height={10} alt="GCal" /> Google Agenda
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openTaskChat(task);
+                  }}
+                  style={{
+                    alignSelf: "flex-start",
+                    marginTop: 4,
+                    border: "1px solid rgba(99,152,169,.25)",
+                    background: "rgba(99,152,169,.10)",
+                    color: "var(--accent-sky)",
+                    borderRadius: 999,
+                    padding: "2px 7px",
+                    fontSize: 9,
+                    fontWeight: 850,
+                    cursor: "pointer",
+                  }}
+                >
+                  Conversar
+                </button>
               </div>
             ))}
           </div>
@@ -2387,7 +2473,7 @@ export function PlannerPage() {
       )}
 
       {/* ── Foco do dia — GTD tasks + next goal actions ── */}
-      {(gtdFocusItems.length > 0 || goalFocusItems.length > 0) && (
+      {focusItems.length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, paddingLeft: 4 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.5" strokeLinecap="round">
@@ -2400,16 +2486,17 @@ export function PlannerPage() {
               background: "var(--accent-peach-a3)", color: "var(--accent-peach-ink)",
               borderRadius: 999, padding: "0 8px", fontSize: 10, fontWeight: 800,
               border: "1.5px solid var(--accent-peach-a5)",
-            }}>{gtdFocusItems.length + goalFocusItems.length}</span>
+            }}>{focusItems.length}</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {gtdFocusItems.map(item => {
+            {focusItems.map(item => {
               const isAnimating = animatingFocusItems.includes(item.id);
               const isExpanded = expandedFocusItems.includes(item.id);
+              const isGoalAction = item.source === "goal";
               return (
                 <div key={item.id} className="glass-card" style={{
                   display: "flex", flexDirection: "column",
-                  borderLeft: "4px solid var(--accent-sky)",
+                  borderLeft: `4px solid ${isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)"}`,
                   borderRadius: 16, padding: "10px 14px",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
                   opacity: isAnimating ? 0.5 : 1,
@@ -2418,84 +2505,60 @@ export function PlannerPage() {
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => toggleExpandFocus(item.id)}>
                     <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", color: "var(--accent-peach)", textTransform: "uppercase", flex: 1 }}>
-                      ⚡ Captura
+                      {isGoalAction && item.goalTitle ? `🎯 ${item.goalTitle}` : "⚡ Captura"}
                     </div>
                     <ChevronRight size={10} style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--accent-peach)' }} />
                   </div>
                   
-                  {isExpanded && (
-                    <div style={{ marginTop: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
-                      <button
-                        onClick={() => handleCompleteFocusItem(item, "tarefa")}
-                        style={{
-                          width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                          background: isAnimating ? "var(--accent-sky)" : "transparent",
-                          border: "2px solid var(--accent-sky)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          transition: "all 0.2s ease",
-                          marginTop: 2
-                        }}
-                      >
-                        {isAnimating && <CheckCircle2 size={14} color="#fff" />}
-                      </button>
-                      <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { activeTab: "acoes" } })}>
-                        <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
-                          {item.text}
-                        </div>
-                        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
-                          Toque para abrir em Metas →
-                        </div>
+                  <div style={{ marginTop: 10, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <button
+                      onClick={() => handleCompleteFocusItem(item, isGoalAction ? "meta" : "tarefa")}
+                      style={{
+                        width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                        background: isAnimating ? (isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)") : "transparent",
+                        border: `2px solid ${isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)"}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "all 0.2s ease",
+                        marginTop: 2
+                      }}
+                    >
+                      {isAnimating && <CheckCircle2 size={14} color="#fff" />}
+                    </button>
+                    <div
+                      style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                      onClick={() => navigate("/goals", isGoalAction ? { state: { openGoalId: item.goalId, openSubtaskId: item.subId } } : { state: { activeTab: "acoes" } })}
+                    >
+                      <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
+                        {item.text}
+                      </div>
+                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
+                        {isGoalAction && item.goalTitle ? `Meta: ${item.goalTitle}` : "Captura solta"}
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-            {goalFocusItems.map(item => {
-              const isAnimating = animatingFocusItems.includes(item.id);
-              const isExpanded = expandedFocusItems.includes(item.id);
-              return (
-                <div key={item.id} className="glass-card" style={{
-                  display: "flex", flexDirection: "column",
-                  borderLeft: "4px solid var(--accent-peach)",
-                  borderRadius: 16, padding: "10px 14px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
-                  opacity: isAnimating ? 0.5 : 1,
-                  transform: isAnimating ? "scale(0.98)" : "scale(1)",
-                  transition: "all 0.3s ease"
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => toggleExpandFocus(item.id)}>
-                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", color: "var(--accent-peach)", textTransform: "uppercase", flex: 1 }}>
-                      🎯 {item.goalTitle}
-                    </div>
-                    <ChevronRight size={10} style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--accent-peach)' }} />
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openFocusActionChat(item);
+                      }}
+                      style={{
+                        alignSelf: "flex-start",
+                        border: "1px solid rgba(99,152,169,.25)",
+                        background: "rgba(99,152,169,.10)",
+                        color: "var(--accent-sky)",
+                        borderRadius: 999,
+                        padding: "3px 8px",
+                        fontSize: 9,
+                        fontWeight: 850,
+                        letterSpacing: ".04em",
+                        textTransform: "uppercase",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                      }}
+                    >
+                      Conversar
+                    </button>
                   </div>
-
-                  {isExpanded && (
-                    <div style={{ marginTop: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
-                      <button
-                        onClick={() => handleCompleteFocusItem(item, "meta")}
-                        style={{
-                          width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                          background: isAnimating ? "var(--accent-peach)" : "transparent",
-                          border: "2px solid var(--accent-peach)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          transition: "all 0.2s ease",
-                          marginTop: 2
-                        }}
-                      >
-                        {isAnimating && <CheckCircle2 size={14} color="#fff" />}
-                      </button>
-                      <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={() => navigate("/goals", { state: { openGoalId: item.goalId } })}>
-                        <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
-                          {item.text}
-                        </div>
-                        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
-                          Toque para abrir em Metas →
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -2537,6 +2600,7 @@ export function PlannerPage() {
                    onClick={() => openEditForm(slot.task)}
                    onComplete={handleCompleteTaskDirect}
                    onDelete={handleDeleteTaskDirect}
+                   onChat={openTaskChat}
                 />
               </div>
             );
