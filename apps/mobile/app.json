@@ -2,7 +2,7 @@
   "expo": {
     "name": "Airia",
     "slug": "airia",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "scheme": "airia",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "pro.airia.app",
-      "versionCode": 13,
+      "versionCode": 14,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FAF8F5"
