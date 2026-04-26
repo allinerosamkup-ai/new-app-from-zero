@@ -19,6 +19,10 @@ export type StoredGtdAction = {
   id: string;
   text: string;
   titulo?: string;
+  razao?: string;
+  source?: string;
+  capturedAt?: string;
+  meta_sugerida?: string;
   tipo?: string;
   done?: boolean;
   archived?: boolean;
@@ -40,6 +44,31 @@ export function markStoredGtdActionDone(itemId: string) {
   const raw = readStoredGtdActions();
   const updated = raw.map((item) => item.id === itemId ? { ...item, done: true } : item);
   localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
+}
+
+export function appendStoredGtdAction(input: {
+  text: string;
+  titulo?: string;
+  razao?: string;
+  source?: string;
+}): StoredGtdAction {
+  const title = (input.titulo || input.text).trim();
+  const item: StoredGtdAction = {
+    id: `gtd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    text: title,
+    titulo: title,
+    razao: input.razao,
+    source: input.source,
+    capturedAt: new Date().toISOString(),
+    clarified: true,
+    tipo: "proxima_acao",
+    done: false,
+    archived: false,
+  };
+  const updated = [item, ...readStoredGtdActions()];
+  localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
+  window.dispatchEvent(new CustomEvent("gtd-inbox-updated", { detail: item }));
+  return item;
 }
 
 export function buildGoalPriorityActions(

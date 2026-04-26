@@ -2293,6 +2293,7 @@ export function PlannerPage() {
       state: {
         contextLabel: "uma tarefa do Planner",
         initialPrompt: buildPlannerTaskChatPrompt(task),
+        mode: "conversation",
       },
     });
   }
@@ -2301,6 +2302,7 @@ export function PlannerPage() {
     navigate("/aura", {
       state: {
         contextLabel: "uma próxima ação",
+        mode: "conversation",
         initialPrompt: buildFocusActionChatPrompt({
           text: item.text,
           source: item.source,
@@ -2497,68 +2499,91 @@ export function PlannerPage() {
                 <div key={item.id} className="glass-card" style={{
                   display: "flex", flexDirection: "column",
                   borderLeft: `4px solid ${isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)"}`,
-                  borderRadius: 16, padding: "10px 14px",
+                  borderRadius: 16,
+                  padding: isExpanded ? "10px 14px" : "10px 14px 11px",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
                   opacity: isAnimating ? 0.5 : 1,
                   transform: isAnimating ? "scale(0.98)" : "scale(1)",
-                  transition: "all 0.3s ease"
+                  transition: "all 0.3s ease",
+                  position: "relative",
+                  paddingBottom: isExpanded ? 42 : 11,
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => toggleExpandFocus(item.id)}>
-                    <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", color: "var(--accent-peach)", textTransform: "uppercase", flex: 1 }}>
+                    <div style={{
+                      fontSize: 9,
+                      fontWeight: 800,
+                      letterSpacing: ".1em",
+                      color: "var(--accent-peach)",
+                      textTransform: "uppercase",
+                      flex: 1,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}>
                       {isGoalAction && item.goalTitle ? `🎯 ${item.goalTitle}` : "⚡ Captura"}
                     </div>
                     <ChevronRight size={10} style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--accent-peach)' }} />
                   </div>
                   
-                  <div style={{ marginTop: 10, display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <button
-                      onClick={() => handleCompleteFocusItem(item, isGoalAction ? "meta" : "tarefa")}
-                      style={{
-                        width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-                        background: isAnimating ? (isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)") : "transparent",
-                        border: `2px solid ${isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)"}`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        transition: "all 0.2s ease",
-                        marginTop: 2
-                      }}
-                    >
-                      {isAnimating && <CheckCircle2 size={14} color="#fff" />}
-                    </button>
-                    <div
-                      style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
-                      onClick={() => navigate("/goals", isGoalAction ? { state: { openGoalId: item.goalId, openSubtaskId: item.subId } } : { state: { activeTab: "acoes" } })}
-                    >
-                      <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4 }}>
-                        {item.text}
+                  {isExpanded && (
+                    <>
+                      <div style={{ marginTop: 10, display: "flex", alignItems: "flex-start", gap: 12, paddingRight: 78 }}>
+                        <button
+                          onClick={() => handleCompleteFocusItem(item, isGoalAction ? "meta" : "tarefa")}
+                          style={{
+                            width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
+                            background: isAnimating ? (isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)") : "transparent",
+                            border: `2px solid ${isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)"}`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            transition: "all 0.2s ease",
+                            marginTop: 2
+                          }}
+                        >
+                          {isAnimating && <CheckCircle2 size={14} color="#fff" />}
+                        </button>
+                        <div
+                          style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                          onClick={() => navigate("/goals", isGoalAction ? { state: { openGoalId: item.goalId, openSubtaskId: item.subId } } : { state: { activeTab: "acoes" } })}
+                        >
+                          <div style={{
+                            fontSize: 14,
+                            color: "var(--text-1)",
+                            fontWeight: 600,
+                            lineHeight: 1.4,
+                          }}>
+                            {item.text}
+                          </div>
+                        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
+                          {isGoalAction && item.goalTitle ? `Meta: ${item.goalTitle}` : "Captura solta"}
+                        </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
-                        {isGoalAction && item.goalTitle ? `Meta: ${item.goalTitle}` : "Captura solta"}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openFocusActionChat(item);
-                      }}
-                      style={{
-                        alignSelf: "flex-start",
-                        border: "1px solid rgba(99,152,169,.25)",
-                        background: "rgba(99,152,169,.10)",
-                        color: "var(--accent-sky)",
-                        borderRadius: 999,
-                        padding: "3px 8px",
-                        fontSize: 9,
-                        fontWeight: 850,
-                        letterSpacing: ".04em",
-                        textTransform: "uppercase",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                      }}
-                    >
-                      Conversar
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openFocusActionChat(item);
+                        }}
+                        style={{
+                          position: "absolute",
+                          right: 12,
+                          bottom: 10,
+                          border: "1px solid rgba(99,152,169,.25)",
+                          background: "rgba(99,152,169,.10)",
+                          color: "var(--accent-sky)",
+                          borderRadius: 999,
+                          padding: "3px 8px",
+                          fontSize: 9,
+                          fontWeight: 850,
+                          letterSpacing: ".04em",
+                          textTransform: "uppercase",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Conversar
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })}

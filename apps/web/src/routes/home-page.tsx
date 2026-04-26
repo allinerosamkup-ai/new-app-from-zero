@@ -11,6 +11,7 @@ import { trackEvent } from "../lib/track";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
+import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, computeStreak, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
@@ -303,6 +304,7 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
 
 function LiveClock() {
   const [now, setNow] = useState(() => new Date());
+  const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 1000);
@@ -989,10 +991,10 @@ export function HomePage() {
       alerts.push({
         key: "mood-risk",
         title: sustainedLow
-          ? "Seu humor está caindo há vários dias"
+          ? `Você entrou na fase ${cycleReport.phaseLabel} há ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "dias" : "dia"}`
           : rapidDrop
-            ? "Houve uma queda brusca no humor"
-            : "Sua estabilidade ficou baixa",
+            ? `Queda brusca detectada — fase ${cycleReport.phaseLabel}`
+            : `Estabilidade baixa — você está em ${cycleReport.phaseLabel}`,
         description: sustainedLow
           ? "O padrão recente sugere risco de aprofundamento do rebaixamento. Vale registrar isso no diário e diminuir a carga de hoje."
           : rapidDrop
@@ -2214,6 +2216,26 @@ export function HomePage() {
                 <span className="home-cycle-kicker">
                   CICLO DE HUMOR
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setPhaseLegendOpen(true)}
+                  aria-label="Ver as 8 fases do ciclo de humor"
+                  style={{
+                    border: "none",
+                    background: "rgba(215,137,127,0.14)",
+                    color: "#A8544A",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-sans, sans-serif)",
+                  }}
+                >
+                  ver as 8 fases →
+                </button>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {/* Score de estabilidade */}
@@ -2841,6 +2863,11 @@ export function HomePage() {
           }}
         />
       )}
+      <PhaseLegendSheet
+        open={phaseLegendOpen}
+        onClose={() => setPhaseLegendOpen(false)}
+        currentPhase={cycleReport.phase}
+      />
     </div>
     </>
   );

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { computeMoodCycle, computeStreak } from '../utils/mood-cycle-engine';
+import { PhaseLegendSheet } from '../components/PhaseLegendSheet';
 import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { trackEvent } from "../lib/track";
@@ -161,6 +162,7 @@ export function CheckinResultPage() {
   const v = variants[state.mood] ?? variants.equilibrada;
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
   const dayContext = useMemo(() => getClientDayContext(), []);
+  const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
 
   // Airia auto-response ao check-in
   const [auraMsg, setAuraMsg] = useState<AuraMsg | null>(null);
@@ -545,6 +547,44 @@ export function CheckinResultPage() {
           <p className="result-header-copy">{v.description}</p>
         </div>
 
+        {/* Ponte com as 8 fases do ciclo de humor */}
+        {cycleReport.phase !== "insufficient_data" && (
+          <button
+            type="button"
+            onClick={() => setPhaseLegendOpen(true)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              width: "100%",
+              padding: "12px 14px",
+              marginBottom: 16,
+              borderRadius: 14,
+              background: "rgba(255,255,255,0.55)",
+              border: "1px solid rgba(74, 59, 55, 0.08)",
+              cursor: "pointer",
+              textAlign: "left",
+              fontFamily: "var(--font-sans, sans-serif)",
+            }}
+          >
+            <span style={{ fontSize: 22 }} aria-hidden>{cycleReport.phaseEmoji}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#A8544A" }}>
+                Sua fase do ciclo
+              </p>
+              <p style={{ margin: "2px 0 0", fontSize: 14, fontWeight: 600, color: "#2A2A2A" }}>
+                {cycleReport.phaseLabel}
+                <span style={{ fontWeight: 400, color: "#6B5E5A" }}>
+                  {" · "}{cycleReport.daysInPhase}º dia
+                </span>
+              </p>
+            </div>
+            <span style={{ fontSize: 11, color: "#A8544A", fontWeight: 700, whiteSpace: "nowrap" }}>
+              ver as 8 →
+            </span>
+          </button>
+        )}
+
         {/* Card Airia diz — resposta personalizada ao check-in */}
         <div className="aura-card" style={{ marginBottom: 16, borderLeft: `3px solid ${v.accent}`, background: "rgba(255,253,250,.9)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
@@ -861,6 +901,11 @@ export function CheckinResultPage() {
         </div>
 
       </div>
+      <PhaseLegendSheet
+        open={phaseLegendOpen}
+        onClose={() => setPhaseLegendOpen(false)}
+        currentPhase={cycleReport.phase}
+      />
     </div>
   );
 }

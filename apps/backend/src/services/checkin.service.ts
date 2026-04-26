@@ -108,6 +108,8 @@ export class CheckinService {
     userName?: string;
     profileSummary?: string | null;
     moodCycleContext?: string | null;
+    contextualMemory?: string | null;
+    activeGoalsContext?: string | null;
     recentSuggestionMemory?: string | null;
     emotions?: string[];
     factors?: string[];
@@ -164,10 +166,14 @@ DADOS:
 ${noteLine}${contextLines ? `\n${contextLines}` : ''}
 
 ${data.plannerContext ? `${data.plannerContext}\n` : ''}
+${data.activeGoalsContext ? `METAS ATIVAS:\n${data.activeGoalsContext}\n` : ''}
+${data.contextualMemory ? `MEMÓRIAS RELEVANTES:\n${data.contextualMemory}\n` : ''}
 ${data.recentSuggestionMemory ? `${data.recentSuggestionMemory}\n` : ''}
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
 - Se houver agenda hoje, leve em conta o peso e tipo de compromissos ao calibrar as recomendações e suggestedIntensity.
+- Se houver memória, metas ou padrões anteriores no contexto, use-os para reconhecer repetição e decisões pendentes; se não houver evidência, não finja memória.
+- Sempre cruze padrões, decisões e ciclos de humor: o que se repete, qual decisão está em jogo e que manobra o estado atual permite.
 - stateLabel: nome curto, humano e sóbrio do estado; evite rótulos dramáticos.
 - Antes de sugerir, separe internamente fato vs interpretação, movimento em curso, obstáculo, utilidade do obstáculo, custo oculto e menor ação útil.
 - Se houver nota escrita, ela é o sinal de maior contexto: use a nota para reinterpretar humor, energia e sugestões antes de concluir qualquer padrão.
@@ -197,6 +203,9 @@ JSON APENAS:
             userName: data.userName,
             profileSummary: data.profileSummary,
             moodCycleContext: data.moodCycleContext,
+            contextualMemory: data.contextualMemory,
+            activeGoalsContext: data.activeGoalsContext,
+            plannerContext: data.plannerContext,
             recentSuggestionMemory: data.recentSuggestionMemory,
             domain: 'checkin',
           }),

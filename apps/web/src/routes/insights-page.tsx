@@ -5,7 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { useToast } from "../components/Toast";
-import { computeMoodCycle, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
+import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -158,7 +159,9 @@ export function InsightsPage() {
   }, [allHistory, periodDays]);
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
+  const phaseHistory = useMemo(() => computePhaseHistory(allHistory, 30), [allHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
+  const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
   // Map history to chart data (last 7 entries, pad with zeros)
@@ -532,6 +535,142 @@ export function InsightsPage() {
                       </span>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── HISTÓRICO DE FASES (timeline 30 dias) ── */}
+        {phaseHistory.length > 0 && (
+          <div
+            style={{
+              marginBottom: 24,
+              padding: "18px 18px 20px",
+              borderRadius: 20,
+              background: "#FFFFFF",
+              border: "1px solid rgba(74, 59, 55, 0.07)",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    color: "#A8544A",
+                  }}
+                >
+                  Histórico de fases
+                </p>
+                <h3
+                  style={{
+                    margin: "4px 0 0",
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "#2A2A2A",
+                    fontFamily: "var(--font-serif, 'Fraunces', serif)",
+                  }}
+                >
+                  Por onde você passou
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhaseLegendOpen(true)}
+                style={{
+                  border: "none",
+                  background: "rgba(215,137,127,0.14)",
+                  color: "#A8544A",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  padding: "5px 10px",
+                  borderRadius: 999,
+                  cursor: "pointer",
+                  fontFamily: "var(--font-sans, sans-serif)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                ver as 8 fases
+              </button>
+            </div>
+
+            <p style={{ fontSize: 12.5, color: "#6B5E5A", margin: "0 0 14px", lineHeight: 1.45 }}>
+              As fases que você atravessou nos últimos 30 dias. Cada bloco representa um período consecutivo na mesma fase.
+            </p>
+
+            {/* Timeline barra */}
+            <div
+              style={{
+                display: "flex",
+                width: "100%",
+                height: 36,
+                borderRadius: 12,
+                overflow: "hidden",
+                border: "1px solid rgba(74, 59, 55, 0.06)",
+              }}
+            >
+              {phaseHistory.map((seg, idx) => {
+                const cfg = PHASE_CONFIG[seg.phase];
+                const totalDays = phaseHistory.reduce((sum, s) => sum + s.daysCount, 0);
+                const widthPct = (seg.daysCount / totalDays) * 100;
+                return (
+                  <div
+                    key={`${seg.phase}-${idx}`}
+                    title={`${cfg.label} — ${seg.daysCount} dia${seg.daysCount !== 1 ? "s" : ""}`}
+                    style={{
+                      width: `${widthPct}%`,
+                      background: cfg.color,
+                      opacity: 0.85,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 14,
+                    }}
+                  >
+                    {widthPct > 8 && <span aria-hidden>{cfg.emoji}</span>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Legenda compacta */}
+            <div
+              style={{
+                marginTop: 12,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
+              {phaseHistory.map((seg, idx) => {
+                const cfg = PHASE_CONFIG[seg.phase];
+                return (
+                  <span
+                    key={`leg-${seg.phase}-${idx}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "5px 10px",
+                      borderRadius: 999,
+                      background: "rgba(74, 59, 55, 0.04)",
+                      border: "1px solid rgba(74, 59, 55, 0.08)",
+                      fontSize: 11.5,
+                      color: "#4A3B37",
+                      fontFamily: "var(--font-sans, sans-serif)",
+                    }}
+                  >
+                    <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
+                    <span style={{ fontWeight: 600 }}>{cfg.label}</span>
+                    <span style={{ color: "#8B7B77" }}>· {seg.daysCount}d</span>
+                  </span>
                 );
               })}
             </div>
@@ -1237,6 +1376,11 @@ export function InsightsPage() {
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       </div>
+      <PhaseLegendSheet
+        open={phaseLegendOpen}
+        onClose={() => setPhaseLegendOpen(false)}
+        currentPhase={cycleReport.phase}
+      />
     </div>
   );
 }

@@ -48,6 +48,9 @@ async function run() {
         },
         moodCycleContext: 'Humor em queda suave, energia 2/5.',
         recentSuggestionMemory: 'MEMORIA RECENTE DE SUGESTOES DA AURA:\n- [journal/comunicacao] Mandar mensagem pedindo ajuste de prazo',
+        activeGoalsContext: 'Meta: Preparar apresentação | próxima ação pendente: abrir roteiro',
+        ragContext: 'MEMÓRIAS RELEVANTES:\n[Diário] Energia cai quando acumula reuniões sem intervalo.',
+        plannerContext: 'AGENDA DE HOJE:\n· Preparar apresentação — 14:00–15:00 — trabalho',
       },
       history: [
         { role: 'user', content: 'Estou preocupada com minha energia.' },
@@ -70,10 +73,16 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /Humor em queda suave/i);
   assert.match(capturedMessages[0]?.content || '', /Mandar mensagem pedindo ajuste de prazo/i);
   assert.match(capturedMessages[0]?.content || '', /NUCLEO FUNCIONAL COMPARTILHADO/i);
+  assert.match(capturedMessages[0]?.content || '', /padrões, decisões e ciclos de humor/i);
+  assert.match(capturedMessages[0]?.content || '', /Meta: Preparar apresentação/i);
+  assert.match(capturedMessages[0]?.content || '', /Energia cai quando acumula reuniões/i);
+  assert.match(capturedMessages[0]?.content || '', /Preparar apresentação — 14:00/i);
   assert.match(capturedMessages[0]?.content || '', /máximo 1 pergunta/i);
   assert.match(capturedMessages[0]?.content || '', /colete em micro-passos/i);
   assert.match(capturedMessages[0]?.content || '', /BASE DOCUMENTADA, NÃO IMPROVISO/i);
   assert.match(capturedMessages[0]?.content || '', /utilidade possível do problema/i);
+  assert.match(capturedMessages[0]?.content || '', /RESPOSTA EXCELENTE/i);
+  assert.match(capturedMessages[0]?.content || '', /MEMÓRIA ANTES DE PADRÃO/i);
   assert.match(capturedMessages[0]?.content || '', /SINAIS ANTES DA QUEDA/i);
   assert.match(capturedMessages[0]?.content || '', /evidência concreta/i);
   assert.equal(capturedStreamModel, 'gpt-5.4-nano');
@@ -118,6 +127,8 @@ async function run() {
   assert.equal(capturedSummaryMessages[0]?.role, 'system');
   assert.match(capturedSummaryMessages[0]?.content || '', /RETRATO DO DIA/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /contemplativa e humana/i);
+  assert.match(capturedSummaryMessages[1]?.content || '', /padrão que apareceu, decisão concreta em jogo/i);
+  assert.match(capturedSummaryMessages[1]?.content || '', /evento real vs história criada/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /utilidade do problema/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não invente profundidade/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não faça perguntas no fechamento/i);

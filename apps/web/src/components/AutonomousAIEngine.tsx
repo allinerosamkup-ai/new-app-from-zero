@@ -12,24 +12,16 @@ import { useEffect, useRef } from "react";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { tryParseAiSuggestion } from "../lib/ai";
-import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
+import { aggregateCheckinsByDay, computeMoodCycle, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import type { AutonomousInsight, CheckinEntry, FollowUpPending, PhaseTransitionAlert, ProactiveNudge } from "../features/aura/types";
 
 const MIN_CHECKINS = 3;
 const RERUN_HOURS = 4;
 const PROFILE_UPDATE_DAYS = 7;
 
-const PHASE_LABELS: Record<string, string> = {
-  elevated: "Fase Elevada",
-  flowing: "Fluindo",
-  stable: "Estável",
-  falling: "Descendo",
-  low: "Fase Baixa",
-  depleted: "Esgotamento",
-  recovering: "Recuperando",
-  mixed: "Instável",
-  insufficient_data: "Sem dados",
-};
+// Fonte única de verdade para labels: PHASE_CONFIG do engine.
+const phaseLabel = (phase: string): string =>
+  PHASE_CONFIG[phase as MoodPhase]?.label ?? phase;
 
 function transitionSeverity(
   _from: string,
@@ -103,7 +95,7 @@ export function AutonomousAIEngine() {
         void runPhaseTransitionAlert(
           prevPhase,
           currentPhase,
-          PHASE_LABELS[currentPhase] ?? currentPhase,
+          phaseLabel(currentPhase),
           cycleReport.aiContext,
           setPhaseTransitionAlert
         ).finally(() => {
@@ -352,7 +344,7 @@ async function runPhaseTransitionAlert(
       context: {
         fromPhase,
         toPhase,
-        fromLabel: PHASE_LABELS[fromPhase] ?? fromPhase,
+        fromLabel: phaseLabel(fromPhase),
         toLabel,
         moodCycleContext,
       },

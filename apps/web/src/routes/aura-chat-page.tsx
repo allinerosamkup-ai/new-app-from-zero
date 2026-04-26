@@ -55,6 +55,12 @@ type PendingTaskConfirmation = {
   blocks: TimelineBlock[];
 };
 
+type AuraRouteState = {
+  initialPrompt?: string;
+  contextLabel?: string;
+  mode?: "conversation" | "executor";
+};
+
 const QUICK_ACTIONS = [
   { label: "Organizar meu dia", prompt: "Organize meu dia de hoje no planner." },
   { label: "Criar checklist", prompt: "Crie um checklist para preparar minha semana." },
@@ -115,21 +121,41 @@ function buildObjectiveInput(payload: Record<string, unknown>, fallbackTitle: st
   };
 }
 
+function buildInitialAssistantMessage(initialPrompt: string, contextLabel: string, mode: "conversation" | "executor") {
+  if (!initialPrompt) {
+    return "Tudo pronto por aqui. Se quiser organizar o dia ou apenas descarregar o que está na mente, estou te ouvindo.";
+  }
+
+  if (mode !== "conversation") {
+    return "Me diga o que você quer que eu faça e eu organizo direto.";
+  }
+
+  const label = contextLabel.toLowerCase();
+  if (label.includes("próxima ação") || label.includes("proxima acao")) {
+    return "Essa ação já veio com contexto. O que você quer decidir primeiro: prioridade real, menor passo ou alternativa mais leve?";
+  }
+
+  if (label.includes("planner") || label.includes("agenda") || label.includes("tarefa")) {
+    return "Essa tarefa já veio com contexto. Qual decisão você quer destravar agora: prioridade, primeiro passo ou ajuste?";
+  }
+
+  return "O contexto já está aqui. Qual parte você quer destravar primeiro?";
+}
+
 export function AuraChatPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, refreshData } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
-  const routeState = location.state as { initialPrompt?: string; contextLabel?: string } | null;
+  const routeState = location.state as AuraRouteState | null;
   const initialPrompt = typeof routeState?.initialPrompt === "string" ? routeState.initialPrompt : "";
   const contextLabel = typeof routeState?.contextLabel === "string" ? routeState.contextLabel : "";
+  const routeMode = routeState?.mode === "conversation" ? "conversation" : "executor";
 
   const [messages, setMessages] = useState<Message[]>([{
     role: "assistant",
-    content: initialPrompt
-      ? `Trouxe o contexto${contextLabel ? ` de ${contextLabel}` : ""}. Me diga se você quer priorizar, quebrar em passos, trocar por uma alternativa ou entender se isso cabe hoje.`
-      : "Tudo pronto por aqui. Se quiser organizar o dia ou apenas descarregar o que está na mente, estou te ouvindo.",
+    content: buildInitialAssistantMessage(initialPrompt, contextLabel, routeMode),
   }]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState(initialPrompt);
@@ -298,6 +324,7 @@ export function AuraChatPage() {
           message: trimmed,
           history,
           moodCycleContext: cycleReport.aiContext,
+          mode: routeMode,
         }),
       });
 

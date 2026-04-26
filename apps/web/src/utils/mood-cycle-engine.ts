@@ -70,14 +70,16 @@ export type MoodCycleReport = {
 
 // ── Config de fase ─────────────────────────────────────────
 
-const PHASE_CONFIG: Record<MoodPhase, {
+export type PhaseConfigEntry = {
   label: string;
   emoji: string;
   description: string;
   tip: string;
   color: string;
   energyForecast: EnergyForecast;
-}> = {
+};
+
+export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
   elevated: {
     label: "Fase Elevada",
     emoji: "🚀",
@@ -575,6 +577,60 @@ export function computeConsistencyScore(
   const journalScore = journalSessions >= 3 ? 20 : journalSessions >= 1 ? 10 : 0;
 
   return Math.min(100, checkinScore + habitScore + journalScore);
+}
+
+// ── Histórico de fases (timeline) ─────────────────────────
+// Roda computeMoodCycle em janelas deslizantes para reconstituir as fases
+// que o usuário atravessou nos últimos `windowDays` dias.
+// Retorna segmentos consecutivos da mesma fase (ex: [stable 5d][falling 2d][depleted 3d]).
+export type PhaseHistorySegment = {
+  phase: MoodPhase;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  daysCount: number;
+};
+
+export function computePhaseHistory(
+  history: CheckinEntry[],
+  windowDays = 30,
+): PhaseHistorySegment[] {
+  const aggregated = aggregateCheckinsByDay(history);
+  if (aggregated.length === 0) return [];
+
+  // Limitar à janela desejada
+  const sliced = aggregated.slice(-windowDays);
+  if (sliced.length < 3) return [];
+
+  // Para cada dia, computa fase usando todos os dados ATÉ aquele dia
+  const dailyPhases: Array<{ date: string; phase: MoodPhase }> = [];
+  for (let i = 2; i < sliced.length; i++) {
+    const upTo = sliced.slice(0, i + 1);
+    const report = computeMoodCycle(upTo);
+    dailyPhases.push({ date: sliced[i].date, phase: report.phase });
+  }
+
+  if (dailyPhases.length === 0) return [];
+
+  // Agrupar dias consecutivos da mesma fase
+  const segments: PhaseHistorySegment[] = [];
+  let current: PhaseHistorySegment = {
+    phase: dailyPhases[0].phase,
+    startDate: dailyPhases[0].date,
+    endDate: dailyPhases[0].date,
+    daysCount: 1,
+  };
+  for (let i = 1; i < dailyPhases.length; i++) {
+    const day = dailyPhases[i];
+    if (day.phase === current.phase) {
+      current.endDate = day.date;
+      current.daysCount += 1;
+    } else {
+      segments.push(current);
+      current = { phase: day.phase, startDate: day.date, endDate: day.date, daysCount: 1 };
+    }
+  }
+  segments.push(current);
+  return segments;
 }
 
 // ── Streak — dias consecutivos com check-in ─────────────────

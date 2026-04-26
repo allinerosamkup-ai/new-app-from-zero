@@ -37,7 +37,7 @@ const NAV_ITEMS = [
   {
     label: "Airia",
     route: "/aura",
-    icon: <AuraIcon size={46} />,
+    icon: <AuraIcon size={64} />,
   },
   {
     label: "Diário",

@@ -71,6 +71,7 @@ export function buildUnifiedSuggestContext(args: {
   moodCycleContext: string | null;
   userProfileSummary: string | null;
   longTermMemory: string | null;
+  activeGoalsContext?: string | null;
   ragContext: string;
   latestCheckinSignals?: LatestCheckinSignals | null;
 }) {
@@ -108,6 +109,7 @@ export function buildUnifiedSuggestContext(args: {
     moodCycleContext: args.context.moodCycleContext ?? args.moodCycleContext,
     userProfileSummary: args.context.userProfileSummary ?? args.userProfileSummary,
     longTermMemory: args.context.longTermMemory ?? args.longTermMemory,
+    activeGoalsContext: args.context.activeGoalsContext ?? args.activeGoalsContext,
     ragContext: args.ragContext,
   };
 }

@@ -8,6 +8,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
 import "./styles/globals.css";
 import "./styles/aura.css";
+import "./i18n";
 
 // Register Service Worker for PWA
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {

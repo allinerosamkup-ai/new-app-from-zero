@@ -1,6 +1,8 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import { setLanguage, getCurrentLanguage, type SupportedLanguage } from "../i18n";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { NotificationPreferences } from "../features/aura/types";
 import { useAuraStore } from "../features/aura/store";
@@ -275,6 +277,8 @@ function Toggle({ on, onToggle }: ToggleProps) {
 }
 
 export function PreferencesPage() {
+  const { t } = useTranslation();
+  const [currentLang, setCurrentLang] = useState<SupportedLanguage>(getCurrentLanguage());
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
@@ -400,6 +404,75 @@ export function PreferencesPage() {
           <AuraButtonV2 className="aura-btn-pill" onClick={handleSaveProfile}>
             Salvar
           </AuraButtonV2>
+        </div>
+
+        {/* ── Idioma / Language ── */}
+        <div
+          className="aura-card"
+          style={{
+            marginBottom: "calc(var(--a) * 1.2)",
+            padding: "16px 18px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              color: "var(--text-3)",
+              margin: "0 0 4px",
+            }}
+          >
+            {t("config.language.label")} · Language
+          </p>
+          <p
+            style={{
+              fontSize: 13,
+              color: "var(--text-2)",
+              margin: "0 0 12px",
+              lineHeight: 1.45,
+            }}
+          >
+            {t("config.language.description")}
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            {(["pt", "en"] as const).map((lng) => {
+              const isActive = currentLang === lng;
+              return (
+                <button
+                  key={lng}
+                  type="button"
+                  onClick={() => {
+                    setLanguage(lng);
+                    setCurrentLang(lng);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    borderRadius: 14,
+                    border: isActive
+                      ? "1.5px solid rgba(215,137,127,0.55)"
+                      : "1px solid rgba(74,59,55,0.1)",
+                    background: isActive ? "rgba(215,137,127,0.10)" : "#FFFFFF",
+                    color: isActive ? "#A8544A" : "var(--text-2)",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "var(--font-sans, sans-serif)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                  aria-pressed={isActive}
+                >
+                  <span aria-hidden style={{ fontSize: 18 }}>{lng === "pt" ? "🇧🇷" : "🇺🇸"}</span>
+                  {t(`config.language.${lng}`)}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Perfil section */}

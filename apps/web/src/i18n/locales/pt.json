@@ -1,0 +1,101 @@
+{
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "next": "Próximo",
+    "back": "Voltar",
+    "continue": "Continuar",
+    "close": "Fechar",
+    "loading": "Carregando...",
+    "tryAgain": "Tentar de novo",
+    "yes": "Sim",
+    "no": "Não",
+    "got_it": "Entendi"
+  },
+  "nav": {
+    "home": "Home",
+    "planner": "Planner",
+    "metas": "Metas",
+    "config": "Config",
+    "checkin": "Check-in",
+    "insights": "Padrões",
+    "journal": "Diário",
+    "aura": "Aura"
+  },
+  "phases": {
+    "kicker": "Ciclagem de humor",
+    "title": "As 8 fases do seu ciclo",
+    "subtitle": "Seu humor não é linear — ele cicla. O Airia detecta automaticamente em qual fase você está hoje e adapta o app a isso.",
+    "youAreHere": "Você está aqui",
+    "tipPrefix": "💡",
+    "viewAll": "ver as 8 fases →",
+    "viewAllShort": "ver as 8",
+    "yourPhaseKicker": "Sua fase do ciclo",
+    "dayInPhase": "{{count}}º dia",
+    "daysInPhase_one": "{{count}} dia nesta fase",
+    "daysInPhase_other": "{{count}} dias nesta fase",
+    "elevated": {
+      "label": "Fase Elevada",
+      "description": "Humor e energia acima do seu basal habitual. Ótimo para projetos que exigem criatividade e iniciativa.",
+      "tip": "Aproveite a energia, mas mantenha o ritmo sustentável. Evite decisões impulsivas."
+    },
+    "flowing": {
+      "label": "Fluindo",
+      "description": "Você está no seu melhor ritmo. Clareza mental, motivação e energia alinhadas.",
+      "tip": "Pico de produtividade. Priorize suas tarefas mais importantes agora."
+    },
+    "stable": {
+      "label": "Estável",
+      "description": "Estado basal equilibrado — eutimia. Ritmo constante e previsível.",
+      "tip": "Bom momento para construir hábitos e avançar consistentemente."
+    },
+    "falling": {
+      "label": "Descendo",
+      "description": "Tendência de queda detectada. Seu humor está abaixo do padrão recente.",
+      "tip": "Reduza o ritmo. Priorize sono, alimentação e autocuidado agora."
+    },
+    "low": {
+      "label": "Fase Baixa",
+      "description": "Você está numa fase de menor energia e humor. É um padrão natural do ciclo.",
+      "tip": "Este é o momento de restaurar — não de produzir. Gentileza consigo mesma é a prioridade."
+    },
+    "depleted": {
+      "label": "Esgotamento",
+      "description": "Energia e humor muito baixos. Seu sistema precisa de recuperação ativa.",
+      "tip": "Cancele o que puder. Descanso não é fraqueza — é necessidade biológica agora."
+    },
+    "recovering": {
+      "label": "Recuperando",
+      "description": "Você está saindo de uma fase baixa. Energia retornando gradualmente.",
+      "tip": "Retome devagar. Comemore cada pequeno avanço — você está no caminho certo."
+    },
+    "mixed": {
+      "label": "Instável",
+      "description": "Alta variabilidade detectada. Altos e baixos frequentes sem padrão claro.",
+      "tip": "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam o ciclo."
+    },
+    "insufficient_data": {
+      "label": "Sem dados suficientes",
+      "description": "Faça check-ins por pelo menos 3 dias para começar a rastrear seu ciclo.",
+      "tip": "Quanto mais consistente o check-in, mais precisa a análise do seu ciclo."
+    }
+  },
+  "insights": {
+    "kicker": "Ciclagem",
+    "title": "Padrões e Harmonia",
+    "phaseHistory": {
+      "kicker": "Histórico de fases",
+      "title": "Por onde você passou",
+      "description": "As fases que você atravessou nos últimos 30 dias. Cada bloco representa um período consecutivo na mesma fase."
+    }
+  },
+  "config": {
+    "title": "Configurações",
+    "language": {
+      "label": "Idioma",
+      "description": "Escolha o idioma do aplicativo.",
+      "pt": "Português",
+      "en": "English"
+    }
+  }
+}

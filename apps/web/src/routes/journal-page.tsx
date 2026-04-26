@@ -9,6 +9,7 @@ import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
 import { buildJournalPlannerSlot } from "./journal-page.helpers";
 import "../styles/aura.css";
+import { appendStoredGtdAction } from "../utils/goal-priority-actions";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
 type Message = {
@@ -83,6 +84,44 @@ function buildCommitmentSuggestions(summary: JournalSummary | null, temporalLabe
   return summary.suggestions.slice(0, 3).map((suggestion) => `${temporalLabel}: ${suggestion}`);
 }
 
+const ACTION_SAVE_VERB_RE = /\b(salva|salvar|grave|grava|guardar|guarda|registra|registrar|adiciona|adicionar|coloca|colocar|manda|mandar|joga|jogar|inclui|incluir)\b/i;
+const ACTION_SAVE_TARGET_RE = /\b(ações|acoes|ação|acao|próxima ação|proxima acao|próximas ações|proximas acoes)\b/i;
+
+function sanitizeExplicitActionText(text: string): string {
+  return text
+    .replace(/["“”]/g, "")
+    .replace(/\b(por favor|pra mim|para mim|nas minhas|nas|em|para|pra|minhas|minha)\b/gi, " ")
+    .replace(ACTION_SAVE_VERB_RE, " ")
+    .replace(ACTION_SAVE_TARGET_RE, " ")
+    .replace(/\b(isso aqui|isso|essa sugestão|essa sugestao|esta sugestão|esta sugestao|essa ação|essa acao|esta ação|esta acao)\b/gi, " ")
+    .replace(/[.:;,\-–—]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function pickActionFromAssistant(messages: Message[]): string | null {
+  const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant" && message.content.trim());
+  if (!lastAssistant) return null;
+
+  const candidate = lastAssistant.content
+    .split(/\n+/)
+    .map((line) => line.replace(/^\s*(?:[-*•→]|\d+[.)])\s*/, "").trim())
+    .find((line) => line.length >= 12 && !line.endsWith("?"));
+
+  return candidate ? candidate.slice(0, 180) : null;
+}
+
+function extractExplicitActionSave(text: string, messages: Message[]): string | null {
+  if (!ACTION_SAVE_VERB_RE.test(text) || !ACTION_SAVE_TARGET_RE.test(text)) return null;
+
+  const quoted = text.match(/["“”']([^"“”']{4,180})["“”']/);
+  if (quoted?.[1]?.trim()) return quoted[1].trim();
+
+  const cleaned = sanitizeExplicitActionText(text);
+  if (cleaned.length >= 8 && cleaned.split(/\s+/).length >= 2) return cleaned.slice(0, 180);
+
+  return pickActionFromAssistant(messages);
+}
 
 function formatSessionDate(localDate: string, startedAt: string): string {
   const date = localDate ? new Date(`${localDate}T12:00:00`) : new Date(startedAt);
@@ -205,11 +244,22 @@ export function JournalPage() {
     if (!text || !sessionId || isTyping || isFinalizing) return;
 
     const userMessage: Message = { role: "user", content: text };
+    const explicitAction = extractExplicitActionSave(text, messages);
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
 
     try {
+      if (explicitAction) {
+        appendStoredGtdAction({
+          text: explicitAction,
+          titulo: explicitAction,
+          razao: "Pedido explícito feito dentro do diário.",
+          source: "journal",
+        });
+        showSuccess("Salvei em Ações.");
+      }
+
       const { data: { session: authSession } } = await supabase.auth.getSession();
 
       const response = await fetch(`${API_URL}/journal/message/stream`, {

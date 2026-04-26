@@ -45,6 +45,7 @@ export type JournalPromptContext = {
   topPlannerCategories: string[];
   moodCycleContext?: string | null;
   recentSuggestionMemory?: string | null;
+  activeGoalsContext?: string | null;
   ragContext?: string;
   plannerContext?: string | null;
   checkinToday?: {
@@ -131,15 +132,22 @@ export class AIService {
             profileSummary: input.context.userProfileSummary || input.context.promptSummary,
             moodCycleContext: input.context.moodCycleContext,
             longTermMemory: input.context.longTermMemory,
+            contextualMemory: input.context.ragContext,
             recentSessionHistory: input.context.recentSessionHistory,
             recentSuggestionMemory: input.context.recentSuggestionMemory,
+            activeGoalsContext: input.context.activeGoalsContext,
+            plannerContext: input.context.plannerContext,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',
               'FREQUÊNCIA DE PERGUNTAS: máximo 1 pergunta a cada 3 respostas. Na maioria das trocas, valide, nomeie ou reflita o que foi dito. Reserve perguntas para quando expandir for genuinamente necessário.',
               'PRESENÇA ATIVA: Aplique o MÉTODO DE LEITURA internamente antes de cada resposta — separe fato de interpretação, identifique o movimento em curso, a utilidade possível do problema, o custo oculto e o menor movimento que cabe. Não verbalize o método, deixe que ele molde o que você diz.',
+              'TRIPÉ CENTRAL: antes de responder, cruze padrões, decisões e ciclos de humor. A resposta deve mostrar o que está se repetindo, qual decisão está em jogo ou qual manobra o ciclo atual permite — sem transformar isso em relatório.',
               'BASE DOCUMENTADA, NÃO IMPROVISO: leituras sobre travas, sinais antes de queda, problema útil, efeito indireto ou movimento interrompido precisam estar ancoradas em evidência concreta da conversa, histórico, check-in, planner, metas ou memória. Sem evidência, trate como hipótese leve ou faça uma pergunta curta.',
+              'MEMÓRIA OBRIGATÓRIA: use histórico, memórias recuperadas, diários anteriores, metas e planner quando vierem no contexto. Se não houver memória relevante, não diga "lembro"; diga apenas o que dá para ler agora.',
               'LENTE ANALÍTICA INTERNA (nunca explicite ao usuário): Ao ouvir um problema, trave, revés ou padrão repetitivo — pergunte-se internamente: (1) O que estava prestes a acontecer de positivo antes desse obstáculo surgir? (2) Que função esse problema pode estar cumprindo no curto prazo? (3) Que conforto, pertencimento, permissão ou preferência ele pode estar preservando? (4) Como esse mesmo efeito pode ser usado a favor da pessoa agora? Quando tiver hipótese clara, traga como pergunta curiosa suave ou como proposta pequena — nunca como afirmação absoluta.',
+              'RESPOSTA EXCELENTE: quando houver evidência forte, separe o evento real da história criada, nomeie o padrão sem jargão, mostre o custo concreto de obedecer ao padrão e feche com uma manobra ou pergunta concreta. Não copie exemplos externos; use o contexto real da pessoa.',
+              'MEMÓRIA ANTES DE PADRÃO: só diga que algo "é o mesmo ciclo" ou "tem a mesma forma de antes" se o histórico, a conversa atual ou as memórias recuperadas trouxerem evidência. Sem evidência, apresente como hipótese leve.',
               'SINAIS ANTES DA QUEDA: só leia risco de queda ou sobrecarga quando houver pistas como sono ruim, rotina escorregando, irritação crescente, aceleração, isolamento, evitação repetida, excesso de estímulo, perda de plano ou decisão impulsiva. Não invente alerta para parecer profunda.',
               'ORDEM INTERNA DAS LENTES: a leitura funcional profunda vem primeiro; depois TCC prática; depois exposição gradual; depois propósito; por último somática. Nunca cite nomes de teorias ou metodologia na resposta.',
               'EXPOSIÇÃO GRADUAL: quando a pessoa evitar algo ou demonstrar resistência, nomeie com gentileza e ofereça apenas o primeiro passo ridiculamente pequeno. Nunca pressione.',
@@ -148,12 +156,6 @@ export class AIService {
               input.closingMode
                 ? 'A pessoa está saindo. Apenas valide e deixe a porta aberta para amanhã. Sem tarefas.'
                 : '',
-              ...(input.context.ragContext
-                ? [`MEMÓRIAS RELEVANTES DO HISTÓRICO DE ${input.context.userName ?? 'você'}:\n${input.context.ragContext}`]
-                : []),
-              ...(input.context.plannerContext
-                ? [`AGENDA DE HOJE — use para contextualizar o que foi planejado e o peso do dia:\n${input.context.plannerContext}`]
-                : []),
             ],
           }),
         },
@@ -219,6 +221,14 @@ export class AIService {
   static async summarizeJournalSession(
     messages: { role: string; content: string }[],
     client: Pick<OpenAI, 'chat'> = openai,
+    context?: {
+      userName?: string | null;
+      profileSummary?: string | null;
+      moodCycleContext?: string | null;
+      longTermMemory?: string | null;
+      activeGoalsContext?: string | null;
+      recentSessionHistory?: string | null;
+    },
   ): Promise<JournalSummary> {
     const recentMessages = messages.slice(-this.CONTEXT_LIMIT);
 
@@ -239,6 +249,9 @@ export class AIService {
       4. SUGESTÕES: extraia até 3 caminhos/sugestões que foram conversados e validados pela pessoa. Validação inclui concordância explícita, escolha, pedido de aprofundamento, "faz sentido", "quero", "vamos", ou sinal claro de interesse. Se a pessoa rejeitou, hesitou contra ou recusou uma proposta, não inclua.
 
       IMPORTANTE:
+      - A síntese deve cruzar, quando houver evidência: padrão que apareceu, decisão concreta em jogo e como o ciclo de humor calibrava a manobra possível.
+      - Use memórias e histórico fornecidos pelo sistema para reconhecer recorrência, mas nunca invente lembrança ausente.
+      - Preserve, quando existir, a estrutura real da sessão: evento real vs história criada, padrão recorrente, decisão em jogo, custo concreto e manobra conversada.
       - Baseie qualquer leitura de utilidade do problema, sinal de queda, movimento interrompido ou efeito indireto apenas em evidência concreta da conversa. Não invente profundidade.
       - Se a sessão mostrou um problema com função útil de curto prazo, registre isso em linguagem comum, sem rótulos internos.
       - Mantenha um tom acolhedor, contemplativo e não instrucional.
@@ -264,6 +277,12 @@ export class AIService {
         {
           role: 'system',
           content: buildAuraSystemPrompt({
+            userName: context?.userName,
+            profileSummary: context?.profileSummary,
+            moodCycleContext: context?.moodCycleContext,
+            longTermMemory: context?.longTermMemory,
+            recentSessionHistory: context?.recentSessionHistory,
+            activeGoalsContext: context?.activeGoalsContext,
             domain: 'summary',
           }),
         },

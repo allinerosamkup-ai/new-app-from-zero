@@ -234,7 +234,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     ? context.moodCycleContext.trim()
     : null;
 
-  const [profile, onboarding, latestCheckin, routineContext] = await Promise.all([
+  const [profile, onboarding, latestCheckin, routineContext, activeObjectives] = await Promise.all([
     prisma.profile.findUnique({
       where: { id: userId },
       select: { fullName: true },
@@ -263,6 +263,14 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
       },
     }).catch(() => null),
     JournalService.buildRoutineContext(prisma, userId).catch(() => null),
+    prisma.objective?.findMany
+      ? prisma.objective.findMany({
+          where: { userId, archived: false },
+          orderBy: { updatedAt: 'desc' },
+          take: 8,
+          select: { title: true, category: true, progress: true, subgoals: true, aiInsight: true },
+        }).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   const derivedUserName = getFirstName(profile?.fullName);
@@ -287,6 +295,24 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     : null;
 
   const aiStatePayload = latestCheckin?.aiState as Record<string, unknown> | null | undefined;
+  const activeGoalsContext = activeObjectives.length > 0
+    ? activeObjectives.map((goal: any) => {
+        const subgoals = Array.isArray(goal.subgoals) ? goal.subgoals : [];
+        const firstPending = subgoals.find((item: any) => item && typeof item === 'object' && !item.done && !item.completed);
+        const pendingTitle = typeof firstPending?.title === 'string'
+          ? firstPending.title
+          : typeof firstPending?.text === 'string'
+            ? firstPending.text
+            : null;
+        return [
+          `Meta: ${sanitizePromptContent(goal.title)}`,
+          goal.category ? `categoria ${goal.category}` : null,
+          Number.isFinite(goal.progress) ? `progresso ${goal.progress}%` : null,
+          pendingTitle ? `próxima ação pendente: ${sanitizePromptContent(pendingTitle)}` : null,
+          goal.aiInsight ? `leitura anterior: ${sanitizePromptContent(goal.aiInsight)}` : null,
+        ].filter(Boolean).join(' | ');
+      }).join('\n')
+    : null;
   const latestCheckinSignals = latestCheckin
     ? {
         emotions: Array.isArray(aiStatePayload?.emotions)
@@ -308,6 +334,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     moodCycleContext: sharedMoodCycleContext || null,
     userProfileSummary: sanitizePromptContent(onboarding?.aiProfileSummary ?? null),
     longTermMemory,
+    activeGoalsContext,
     latestCheckinSignals,
   };
 }
@@ -642,9 +669,18 @@ async function finalizeJournalSession(args: {
   profileSummary?: string | null;
   moodCycleContext?: string | null;
   longTermMemory?: string | null;
+  activeGoalsContext?: string | null;
+  recentSessionHistory?: string | null;
   currentHour?: number;
 }) {
-  const summary = await args.aiService.summarizeJournalSession(args.messages);
+  const summary = await args.aiService.summarizeJournalSession(args.messages, undefined as any, {
+    userName: args.userName,
+    profileSummary: args.profileSummary,
+    moodCycleContext: args.moodCycleContext,
+    longTermMemory: args.longTermMemory,
+    activeGoalsContext: args.activeGoalsContext,
+    recentSessionHistory: args.recentSessionHistory,
+  });
 
   let suggestedTasks: SuggestedTask[] = [];
   try {
@@ -654,6 +690,8 @@ async function finalizeJournalSession(args: {
         profileSummary: args.profileSummary,
         moodCycleContext: args.moodCycleContext,
         longTermMemory: args.longTermMemory,
+        activeGoalsContext: args.activeGoalsContext,
+        recentSessionHistory: args.recentSessionHistory,
         domain: 'journal-finalize',
       }),
       userName: args.userName,
@@ -1265,12 +1303,20 @@ export function createApp(dependencies: AppDependencies = {}) {
     });
 
     // 2. Chamar IA para Avaliar Estado (com contexto completo do dia)
-    const [checkinRuntimeContext, checkinPlannerContext, recentSuggestionItems] = await Promise.all([
+    const checkinRagQuery = [
+      data.note,
+      data.emotions?.join(' '),
+      data.factors?.join(' '),
+      `humor ${data.moodScore} energia ${data.energyScore}`,
+    ].filter(Boolean).join(' ');
+    const [checkinRuntimeContext, checkinPlannerContext, recentSuggestionItems, checkinMemories] = await Promise.all([
       resolveAiRuntimeContext(prisma, data.userId, {}),
       buildTodayPlannerContext(prisma, data.userId),
       SuggestionMemoryService.getRecent(prisma, data.userId),
+      memoryService.retrieve(data.userId, checkinRagQuery || 'check-in de hoje e padrões anteriores', 3).catch(() => []),
     ]);
     const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
+    const checkinRagContext = memoryService.formatForPrompt(checkinMemories);
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -1284,6 +1330,8 @@ export function createApp(dependencies: AppDependencies = {}) {
       userName: checkinRuntimeContext.userName,
       profileSummary: checkinRuntimeContext.userProfileSummary,
       moodCycleContext: checkinRuntimeContext.moodCycleContext,
+      contextualMemory: checkinRagContext,
+      activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
       recentSuggestionMemory,
       emotions: (data as any).emotions,
       factors: data.factors,
@@ -1654,6 +1702,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           userName: runtimeContext.userName,
           userProfileSummary: runtimeContext.userProfileSummary,
           longTermMemory: runtimeContext.longTermMemory,
+          activeGoalsContext: runtimeContext.activeGoalsContext,
           recentSessionHistory: routineCtx.recentSessionHistory,
           recentSuggestionMemory,
           ragContext: journalRagContext,
@@ -1773,8 +1822,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         profileSummary: runtimeContext.userProfileSummary,
         moodCycleContext: runtimeContext.moodCycleContext,
         recentSuggestionMemory,
+        activeGoalsContext: runtimeContext.activeGoalsContext,
         ragContext: commandRagContext,
         plannerContext,
+        interactionMode: data.mode,
       });
 
       const responsePayload = { ...commandResponse.payload };
@@ -1944,7 +1995,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       return res.status(404).json({ error: 'No messages found for this session' });
     }
 
-    const runtimeContext = await resolveAiRuntimeContext(prisma, userId, {});
+    const [runtimeContext, routineContext] = await Promise.all([
+      resolveAiRuntimeContext(prisma, userId, {}),
+      journalService.buildRoutineContext(prisma, userId).catch(() => null),
+    ]);
     const finalization = await finalizeJournalSession({
       prisma,
       aiService,
@@ -1957,6 +2011,8 @@ export function createApp(dependencies: AppDependencies = {}) {
       profileSummary: runtimeContext.userProfileSummary,
       moodCycleContext: runtimeContext.moodCycleContext,
       longTermMemory: runtimeContext.longTermMemory,
+      activeGoalsContext: runtimeContext.activeGoalsContext,
+      recentSessionHistory: routineContext?.recentSessionHistory,
       currentHour: typeof req.body.currentHour === 'number' ? req.body.currentHour : undefined,
     });
 
@@ -2444,7 +2500,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const userId = (req as AuthRequest).userId;
       const plainTextTypes = new Set(['task-notes', 'task-title', 'monthly-report']);
-      const { userName, moodCycleContext, userProfileSummary, longTermMemory, latestCheckinSignals } =
+      const { userName, moodCycleContext, userProfileSummary, longTermMemory, activeGoalsContext, latestCheckinSignals } =
         await resolveAiRuntimeContext(prisma, userId, context);
 
       // Shared Brain: todas as superfícies de IA buscam memória vetorial com intenção específica
@@ -2462,6 +2518,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         moodCycleContext,
         userProfileSummary,
         longTermMemory,
+        activeGoalsContext,
         ragContext,
         latestCheckinSignals,
       });
@@ -3105,6 +3162,8 @@ INSTRUÇÕES:
               profileSummary: userProfileSummary,
               moodCycleContext,
               longTermMemory,
+              contextualMemory: ragContext,
+              activeGoalsContext,
               recentSuggestionMemory,
               domain: getSuggestPromptDomain(type),
             }),

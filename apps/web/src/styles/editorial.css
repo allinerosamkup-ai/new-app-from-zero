@@ -317,18 +317,21 @@ body {
   background: transparent;
   border: none;
   color: inherit;
-  width: 58px;
-  height: 58px;
+  width: 74px;
+  height: 74px;
   border-radius: 18px;
   box-shadow: none;
-  margin-top: -14px;
+  margin-top: -24px;
+  margin-bottom: -8px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: transform 300ms, filter 300ms;
 }
 .nav-item-center svg {
-  filter: drop-shadow(0 10px 14px rgba(17, 24, 39, 0.08));
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 12px 16px rgba(17, 24, 39, 0.10));
 }
 .nav-item-center:hover {
   background: transparent;

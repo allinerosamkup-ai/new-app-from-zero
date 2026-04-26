@@ -4,6 +4,7 @@ import { PrismaClient } from '@app/database';
 import { buildAuraSystemPrompt, getFirstName, humanizeScore } from '../lib/aura-prompt';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 import { SuggestionMemoryService } from './suggestion-memory.service';
+import { MemoryService } from './memory.service';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -74,7 +75,7 @@ export class InsightService {
     });
 
     // 2. Buscar Dados Brutos da Semana
-    const [checkins, journalSessions, timeline, habits, profile, onboarding] = await Promise.all([
+    const [checkins, journalSessions, timeline, habits, profile, onboarding, objectives] = await Promise.all([
       prisma.dailyCheckin.findMany({
         where: { userId, localDate: { gte: weekStart, lt: weekEnd } },
         orderBy: { localDate: 'asc' }
@@ -101,8 +102,14 @@ export class InsightService {
       }),
       prisma.onboardingResponse.findUnique({
         where: { userId },
-        select: { aiProfileSummary: true },
+        select: { aiProfileSummary: true, aiProfilePayload: true },
       }),
+      prisma.objective.findMany({
+        where: { userId, archived: false },
+        orderBy: { updatedAt: 'desc' },
+        take: 8,
+        select: { title: true, category: true, progress: true, subgoals: true, aiInsight: true },
+      }).catch(() => []),
     ]);
 
     // Calcular correlações para hábitos ativos
@@ -151,8 +158,32 @@ export class InsightService {
         ].filter(Boolean).join(' ')
       : null;
     const userName = getFirstName(profile?.fullName) ?? 'você';
-    const recentSuggestionItems = await SuggestionMemoryService.getRecent(prisma, userId);
+    const memoryService = new MemoryService(prisma);
+    const aiPayload = onboarding?.aiProfilePayload as Record<string, unknown> | null | undefined;
+    const longTermMemory = typeof aiPayload?.longTermMemory === 'string' ? aiPayload.longTermMemory : null;
+    const activeGoalsContext = objectives.length > 0
+      ? objectives.map((goal: any) => {
+          const subgoals = Array.isArray(goal.subgoals) ? goal.subgoals : [];
+          const firstPending = subgoals.find((item: any) => item && typeof item === 'object' && !item.done && !item.completed);
+          const pendingTitle = typeof firstPending?.title === 'string'
+            ? firstPending.title
+            : typeof firstPending?.text === 'string'
+              ? firstPending.text
+              : null;
+          return [
+            `Meta: ${goal.title}`,
+            goal.category ? `categoria ${goal.category}` : null,
+            Number.isFinite(goal.progress) ? `progresso ${goal.progress}%` : null,
+            pendingTitle ? `próxima ação pendente: ${pendingTitle}` : null,
+          ].filter(Boolean).join(' | ');
+        }).join('\n')
+      : null;
+    const [recentSuggestionItems, ragMemories] = await Promise.all([
+      SuggestionMemoryService.getRecent(prisma, userId),
+      memoryService.retrieve(userId, 'padrões semanais decisões recorrentes ciclos de humor metas e diário', 4).catch(() => []),
+    ]);
     const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
+    const ragContext = memoryService.formatForPrompt(ragMemories);
 
     // 4. Chamada OpenAI para Análise de Padrões
     const habitLines = rawData.habits.map(h => `- ${h.title}: ${h.completions} conclusões`).join('\n');
@@ -169,18 +200,20 @@ export class InsightService {
       - Check-ins: ${summary.checkinCount} realizados.
       - Diário: ${summary.journalSessions} sessões concluídas. Temas recorrentes: ${journalSessions.flatMap(s => s.themes).join(', ')}.
       - Planner: ${summary.tasksCompleted}/${summary.tasksTotal} tarefas concluídas.
+      - Metas ativas: ${objectives.map((goal: any) => goal.title).join(', ') || 'nenhuma meta ativa registrada'}.
       
       HÁBITOS:
       ${habitLines || 'Nenhum hábito registrado.'}
       
       CORRELAÇÕES IDENTIFICADAS:
       ${correlationLines || 'Ainda sem correlações significativas.'}
+      ${ragContext}
       ${recentSuggestionMemory}
 
       REGRAS:
-      1. Identifique 2-3 padrões (patterns) reais baseados nos dados (ex: queda de energia após dias produtivos, ou humor melhorando com certo hábito).
-      2. Dê 2-3 recomendações práticas (recommendations) para a próxima semana.
-      3. Escreva uma análise narrativa (aiAnalysis) empática de 3-5 frases.
+      1. Identifique 2-3 padrões (patterns) reais baseados nos dados: padrões, decisões recorrentes e ciclos de humor.
+      2. Dê 2-3 recomendações práticas (recommendations) para a próxima semana, cada uma ligada a uma decisão concreta.
+      3. Escreva uma análise narrativa (aiAnalysis) empática de 3-5 frases, sem motivação genérica.
       4. Gere uma pergunta reflexiva semanal (weeklyQuestion) — aberta, gentil, que convide a pessoa a olhar para si. Ex: "O que te surpreendeu positivamente esta semana?"
       5. Liste até 3 conquistas ou momentos positivos desta semana (highlights) — frases curtas, celebratórias, baseadas nos dados reais. Ex: "Completou 4 hábitos em um único dia", "Manteve sequência de 5 dias de meditação".
       6. Não recicle sugestões recentes. Se a mesma linha de ação for inevitável, escreva como retomada explícita e mude a execução concreta.
@@ -197,6 +230,9 @@ export class InsightService {
             userName,
             profileSummary: onboarding?.aiProfileSummary ?? null,
             moodCycleContext,
+            longTermMemory,
+            contextualMemory: ragContext,
+            activeGoalsContext,
             recentSuggestionMemory,
             domain: 'insight',
           }),

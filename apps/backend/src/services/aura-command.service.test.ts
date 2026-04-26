@@ -130,6 +130,7 @@ async function run() {
   const reflectiveResult = await AuraCommandService.interpretCommand({
     message: 'Preciso desabafar porque hoje estou péssima',
     userName: 'Ana',
+    interactionMode: 'conversation',
   }, fakeClient as any);
 
   assert.equal(reflectiveResult.intent, 'reflective_handoff');
@@ -157,6 +158,10 @@ async function run() {
   assert.match(userPrompt, /ask_clarification/i);
   assert.match(userPrompt, /needsConfirmation/i);
   assert.match(userPrompt, /recorrent/i);
+  assert.match(userPrompt, /MODO DA INTERAÇÃO/i);
+  assert.match(userPrompt, /EXECUTOR/i);
+  assert.match(userPrompt, /CONVERSA/i);
+  assert.match(userPrompt, /Proibido usar o modelo analítico/i);
   assert.match(userPrompt, /nunca diga que j[aá] salvou|n[aã]o diga que j[aá] salvou/i);
   assert.ok(capturedModels.every((model) => model === 'gpt-5.4-nano'));
 }

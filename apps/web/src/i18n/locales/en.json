@@ -1,0 +1,101 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "next": "Next",
+    "back": "Back",
+    "continue": "Continue",
+    "close": "Close",
+    "loading": "Loading...",
+    "tryAgain": "Try again",
+    "yes": "Yes",
+    "no": "No",
+    "got_it": "Got it"
+  },
+  "nav": {
+    "home": "Home",
+    "planner": "Planner",
+    "metas": "Goals",
+    "config": "Settings",
+    "checkin": "Check-in",
+    "insights": "Patterns",
+    "journal": "Journal",
+    "aura": "Aura"
+  },
+  "phases": {
+    "kicker": "Mood cycling",
+    "title": "The 8 phases of your cycle",
+    "subtitle": "Your mood isn't linear — it cycles. Airia automatically detects which phase you're in today and adapts the app to it.",
+    "youAreHere": "You are here",
+    "tipPrefix": "💡",
+    "viewAll": "see all 8 phases →",
+    "viewAllShort": "see all 8",
+    "yourPhaseKicker": "Your cycle phase",
+    "dayInPhase": "day {{count}}",
+    "daysInPhase_one": "{{count}} day in this phase",
+    "daysInPhase_other": "{{count}} days in this phase",
+    "elevated": {
+      "label": "Elevated",
+      "description": "Mood and energy above your usual baseline. Great for projects that require creativity and initiative.",
+      "tip": "Enjoy the energy, but keep a sustainable pace. Avoid impulsive decisions."
+    },
+    "flowing": {
+      "label": "Flowing",
+      "description": "You're in your best rhythm. Mental clarity, motivation, and energy aligned.",
+      "tip": "Peak productivity. Prioritize your most important tasks now."
+    },
+    "stable": {
+      "label": "Stable",
+      "description": "Balanced baseline state — euthymia. Consistent and predictable rhythm.",
+      "tip": "Good time to build habits and make steady progress."
+    },
+    "falling": {
+      "label": "Falling",
+      "description": "Downward trend detected. Your mood is below your recent baseline.",
+      "tip": "Slow down. Prioritize sleep, nutrition, and self-care now."
+    },
+    "low": {
+      "label": "Low",
+      "description": "You're in a phase of lower mood and energy. It's a natural pattern of the cycle.",
+      "tip": "This is a time to restore — not to produce. Self-kindness is the priority."
+    },
+    "depleted": {
+      "label": "Depleted",
+      "description": "Very low mood and energy. Your system needs active recovery.",
+      "tip": "Cancel what you can. Rest isn't weakness — it's a biological need right now."
+    },
+    "recovering": {
+      "label": "Recovering",
+      "description": "You're coming out of a low phase. Energy is gradually returning.",
+      "tip": "Ease back in. Celebrate every small step — you're on the right track."
+    },
+    "mixed": {
+      "label": "Mixed",
+      "description": "High variability detected. Frequent highs and lows with no clear pattern.",
+      "tip": "Watch for impulsive decisions. Focus on routine and sleep — they stabilize the cycle."
+    },
+    "insufficient_data": {
+      "label": "Not enough data",
+      "description": "Check in for at least 3 days to start tracking your cycle.",
+      "tip": "The more consistent your check-ins, the more accurate your cycle analysis."
+    }
+  },
+  "insights": {
+    "kicker": "Cycling",
+    "title": "Patterns and Harmony",
+    "phaseHistory": {
+      "kicker": "Phase history",
+      "title": "Where you've been",
+      "description": "The phases you went through in the last 30 days. Each block represents a consecutive period in the same phase."
+    }
+  },
+  "config": {
+    "title": "Settings",
+    "language": {
+      "label": "Language",
+      "description": "Choose the app language.",
+      "pt": "Português",
+      "en": "English"
+    }
+  }
+}

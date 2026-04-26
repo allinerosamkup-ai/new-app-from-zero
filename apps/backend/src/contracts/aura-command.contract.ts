@@ -54,6 +54,7 @@ export const AuraCommandMessageStreamSchema = z.object({
   message: z.string().trim().min(1).max(LONG_TEXT_LIMIT),
   history: z.array(AuraCommandHistoryMessageSchema).max(20).optional().default([]),
   moodCycleContext: z.string().optional().nullable(),
+  mode: z.enum(['conversation', 'executor']).optional().default('executor'),
 });
 
 export type AuraCommandHistoryMessage = z.infer<typeof AuraCommandHistoryMessageSchema>;

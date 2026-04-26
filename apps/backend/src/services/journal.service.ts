@@ -39,6 +39,7 @@ export type RoutineContext = {
   checkinToday?: CheckinSnapshot | null;
   topThemes: string[];
   topPlannerCategories: string[];
+  activeGoals: string[];
   recentSummaries: string[];
   recentSessionHistory: string;
 };
@@ -70,6 +71,7 @@ function buildPromptSummary(input: {
   checkinToday?: CheckinSnapshot | null;
   topThemes: string[];
   topPlannerCategories: string[];
+  activeGoals?: string[];
   recentSummaries: string[];
 }): string {
   const parts: string[] = [];
@@ -100,6 +102,10 @@ function buildPromptSummary(input: {
 
   if (input.topPlannerCategories.length > 0) {
     parts.push(`No seu planner, o foco tem sido em ${input.topPlannerCategories.join(', ')}.`);
+  }
+
+  if (input.activeGoals?.length) {
+    parts.push(`Metas ativas que podem estar puxando decisões: ${input.activeGoals.join(', ')}.`);
   }
 
   if (parts.length === 0) {
@@ -156,7 +162,7 @@ export class JournalService {
     const recentWindowStart = new Date(today);
     recentWindowStart.setUTCDate(recentWindowStart.getUTCDate() - 7);
 
-    const [onboarding, preferences, checkinToday, recentSessions, recentBlocks, pastSessionsHistory] = await Promise.all([
+    const [onboarding, preferences, checkinToday, recentSessions, recentBlocks, pastSessionsHistory, activeObjectives] = await Promise.all([
       prisma.onboardingResponse.findUnique({
         where: { userId },
       }),
@@ -190,6 +196,14 @@ export class JournalService {
         take: 4,
         select: { summary: true, themes: true, finalizedAt: true },
       }),
+      prisma.objective?.findMany
+        ? prisma.objective.findMany({
+            where: { userId, archived: false },
+            orderBy: { updatedAt: 'desc' },
+            take: 5,
+            select: { title: true },
+          }).catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const derivedRoutineSummary = [
@@ -213,6 +227,10 @@ export class JournalService {
     const topPlannerCategories = countTopValues(
       recentBlocks.map((block: { category?: string | null }) => block.category ?? ''),
     );
+    const activeGoals = (activeObjectives as Array<{ title?: string | null }>)
+      .map((goal) => goal.title?.trim() ?? '')
+      .filter(Boolean)
+      .slice(0, 5);
 
     const recentSessionHistory = pastSessionsHistory.length > 0
       ? pastSessionsHistory
@@ -240,6 +258,7 @@ export class JournalService {
       } : null,
       topThemes,
       topPlannerCategories,
+      activeGoals,
       recentSummaries,
       recentSessionHistory,
     };

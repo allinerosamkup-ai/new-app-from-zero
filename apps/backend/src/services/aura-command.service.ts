@@ -194,11 +194,14 @@ export class AuraCommandService {
       profileSummary?: string | null;
       moodCycleContext?: string | null;
       recentSuggestionMemory?: string | null;
+      activeGoalsContext?: string | null;
       ragContext?: string | null;
       plannerContext?: string | null;
+      interactionMode?: 'conversation' | 'executor';
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<AuraCommandResponse> {
+    const interactionMode = input.interactionMode === 'conversation' ? 'conversation' : 'executor';
     const historyBlock = (input.history ?? [])
       .slice(-8)
       .map((message) => `${message.role === 'user' ? 'Usuário' : 'Aura'}: ${message.content}`)
@@ -213,6 +216,11 @@ ${historyBlock ? `HISTÓRICO RECENTE:\n${historyBlock}\n` : 'HISTÓRICO RECENTE:
 ${input.ragContext ? `MEMÓRIAS RELEVANTES:\n${input.ragContext}\n` : ''}
 ${input.recentSuggestionMemory ? `${input.recentSuggestionMemory}\n` : ''}
 ${input.plannerContext ? `${input.plannerContext}\n` : ''}
+MODO DA INTERAÇÃO:
+${interactionMode === 'conversation'
+  ? 'CONVERSA: a pessoa veio de um botão CONVERSAR ou quer entender/priorizar/destravar uma ação. Pode responder de forma analítica curta, usando fato vs história, padrão, decisão, custo e manobra quando houver evidência. Se o pedido atual virar comando operacional claro, execute como modo executor.'
+  : 'EXECUTOR: a pessoa quer que algo seja feito. Seja curta, direta e operacional. Não use análise profunda, não faça leitura emocional longa e não transforme comando em diário.'}
+
 INTENTS PERMITIDOS:
 - planner_task
 - checklist
@@ -235,6 +243,9 @@ ACTIONS PERMITIDAS:
 
 REGRAS GERAIS:
 - Se o pedido já estiver claro e executável, escolha a ação direta.
+- Em MODO EXECUTOR, assistantMessage deve ser objetivo: ação preparada/feita, confirmação para revisar ou uma única pergunta indispensável. Proibido usar o modelo analítico de "padrão, custo, história" em comandos como marcar, excluir, concluir, reagendar, montar agenda, criar tarefa, criar meta ou checklist.
+- Em MODO CONVERSA, só use leitura profunda quando o pedido for entender, priorizar, destravar, refletir ou conversar sobre a ação. Se a pessoa pedir "marque", "adicione", "exclua", "remarque" ou equivalente, volte ao modo executor imediatamente.
+- Em MODO CONVERSA, quando não houver ação operacional a executar, prefira intent "clarify" com action "ask_clarification" e um assistantMessage útil, analítico e curto. Use "reflective_handoff" apenas quando a pessoa pedir diário/desabafo ou quando fizer sentido registrar a conversa.
 - ANTI-RESUMO (CRÍTICO): Se a pessoa enviou uma lista, um checklist ou um texto com vários pontos (ex: "comprar pão, leite e ovos"), NUNCA resuma tudo em um único título de tarefa. Use create_checklist ou create_goal para quebrar em sub-itens reais.
 - Se for compromisso/agendamento com data ou horário (ex: "amanhã", "quarta", "às 14h"), use create_task e marque "needsConfirmation": true.
 - Se for uma sequência de tarefas para o dia (ex: "organize meu dia", "planeje minha manhã"), use create_agenda.
@@ -264,8 +275,19 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
             userName: input.userName,
             profileSummary: input.profileSummary,
             moodCycleContext: input.moodCycleContext,
+            contextualMemory: input.ragContext,
             recentSuggestionMemory: input.recentSuggestionMemory,
-            domain: 'aura-command',
+            activeGoalsContext: input.activeGoalsContext,
+            plannerContext: input.plannerContext,
+            domain: interactionMode === 'conversation' ? 'journal-live' : 'aura-command',
+            extraInstructions: interactionMode === 'conversation'
+              ? [
+                  'Este turno veio do Chat Aura em modo conversa. Use profundidade apenas se a pessoa estiver tentando entender, priorizar ou destravar uma ação.',
+                  'Se a frase atual pedir execução operacional, abandone a análise e responda como executor: curto, direto e acionável.',
+                ]
+              : [
+                  'Este turno é modo executor. Execute, peça confirmação ou pergunte só o dado indispensável. Não use resposta analítica longa.',
+                ],
           }),
         },
         {

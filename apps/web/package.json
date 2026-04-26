@@ -14,9 +14,12 @@
     "@supabase/supabase-js": "^2.99.2",
     "@types/node": "^20.19.37",
     "clsx": "^2.1.1",
+    "i18next": "^26.0.8",
+    "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.395.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.4",
     "react-router-dom": "^7.13.1",
     "tailwind-merge": "^3.5.0",
     "zod": "^3.25.76"

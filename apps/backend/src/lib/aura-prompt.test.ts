@@ -21,6 +21,13 @@ async function run() {
   assert.match(onboardingPrompt, /TCC pratica/i);
   assert.match(onboardingPrompt, /terapia de exposição gradual/i);
   assert.match(onboardingPrompt, /NUCLEO FUNCIONAL COMPARTILHADO/i);
+  assert.match(onboardingPrompt, /EIXOS CENTRAIS/i);
+  assert.match(onboardingPrompt, /PADRÕES/i);
+  assert.match(onboardingPrompt, /DECISÕES/i);
+  assert.match(onboardingPrompt, /CICLOS DE HUMOR/i);
+  assert.match(onboardingPrompt, /MODELO INTERNO DE RESPOSTA ANALÍTICA/i);
+  assert.match(onboardingPrompt, /evento real da história criada/i);
+  assert.match(onboardingPrompt, /Não use este modelo para comandos operacionais/i);
   assert.match(onboardingPrompt, /menor ação útil possível/i);
   assert.match(onboardingPrompt, /Somática é ferramenta auxiliar/i);
   assert.match(onboardingPrompt, /estilo Jarvis/i);
@@ -50,6 +57,12 @@ async function run() {
   assert.match(journalLivePrompt, /DIÁRIO \(PRESENÇA REFLEXIVA\)/i);
   assert.match(journalLivePrompt, /acompanhe o fluxo/i);
   assert.match(journalLivePrompt, /HIERARQUIA INTERNA OBRIGATÓRIA/i);
+  assert.match(journalLivePrompt, /EIXOS DO DIÁRIO/i);
+  assert.match(journalLivePrompt, /FORMATO ADAPTATIVO/i);
+  assert.match(journalLivePrompt, /EVENTO REAL vs INTERPRETAÇÃO/i);
+  assert.match(journalLivePrompt, /PADRÃO RECORRENTE/i);
+  assert.match(journalLivePrompt, /DECISÃO EM JOGO/i);
+  assert.match(journalLivePrompt, /MANOBRA CALIBRADA AO CICLO/i);
   assert.match(journalLivePrompt, /BASE DOCUMENTADA, NÃO IMPROVISO/i);
   assert.match(journalLivePrompt, /UTILIDADE DO PROBLEMA/i);
   assert.match(journalLivePrompt, /EFEITO INDIRETO A FAVOR/i);
@@ -62,6 +75,7 @@ async function run() {
   assert.match(journalLivePrompt, /colete em micro-passos/i);
   assert.match(journalLivePrompt, /PROIBIDO empilhar perguntas/i);
   assert.match(journalLivePrompt, /SOMÁTICA COMO SUPORTE/i);
+  assert.match(journalLivePrompt, /função de curto prazo e o custo concreto/i);
   assert.doesNotMatch(journalLivePrompt, /PROIBIDO sugerir metas/i);
   assert.doesNotMatch(journalLivePrompt, /gere 0 a 3 tarefas/i);
 
@@ -73,6 +87,7 @@ async function run() {
   assert.match(journalFinalizePrompt, /SÍNTESE DA SESSÃO/i);
   assert.match(journalFinalizePrompt, /espelho calmo/i);
   assert.match(journalFinalizePrompt, /Não faça perguntas no fechamento/i);
+  assert.match(journalFinalizePrompt, /padrão que apareceu, decisão que ficou em jogo/i);
   assert.match(journalFinalizePrompt, /conversados e validados/i);
   assert.match(journalFinalizePrompt, /Se a pessoa rejeitou/i);
   assert.match(journalFinalizePrompt, /utilidade de curto prazo/i);
@@ -88,6 +103,8 @@ async function run() {
   assert.match(auraCommandPrompt, /HUB OPERACIONAL/i);
   assert.match(auraCommandPrompt, /executiva de elite/i);
   assert.match(auraCommandPrompt, /reservei 15 min/i);
+  assert.match(auraCommandPrompt, /MODO EXECUTOR/i);
+  assert.match(auraCommandPrompt, /Comando operacional não é convite para interpretação/i);
   assert.doesNotMatch(auraCommandPrompt, /diário reflexivo/i);
 
   const homePrompt = buildAuraSystemPrompt({
@@ -107,6 +124,7 @@ async function run() {
   assert.match(goalExecutionPrompt, /ENGENHARIA DE METAS/i);
   assert.match(goalExecutionPrompt, /passo "atômico"/i);
   assert.match(goalExecutionPrompt, /ridiculamente fácil/i);
+  assert.match(goalExecutionPrompt, /próxima decisão/i);
 
   const longitudinalPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
