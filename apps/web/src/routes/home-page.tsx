@@ -1,5 +1,6 @@
 // Home Page v4 — babá digital IA + mensagens personalizadas + agenda por blocos
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
@@ -12,12 +13,13 @@ import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
-import { aggregateCheckinsByDay, computeConsistencyScore, computeMoodCycle, computeStreak, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel } from "../utils/mood-cycle-engine";
+import { aggregateCheckinsByDay, computeConsistencyScore, computeDailyPhaseMap, computeMoodCycle, computeStreak, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
 import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
+import { dismissProactiveNudgeForToday } from "../utils/proactive-nudge-dismissal";
 import {
   type AgendaBlock,
   type HomeAiMsg,
@@ -75,6 +77,7 @@ type ChartPoint = {
   humorY: number | null;
   energiaY: number | null;
   label: string;
+  phase?: MoodPhase;
   isHighlight?: boolean;
 };
 
@@ -205,6 +208,22 @@ function valueToChartY(value: number | undefined) {
   return Y_BOTTOM - ((numeric - 1) / 9) * Y_RANGE;
 }
 
+function getMoodFaceEmoji(value: number): string {
+  if (value >= 7) return "😊";
+  if (value < 4.5) return "😔";
+  return "😐";
+}
+
+function parseDateKey(dateKey: string): Date {
+  return new Date(`${dateKey}T12:00:00`);
+}
+
+function shiftDateKey(dateKey: string, days: number): string {
+  const date = parseDateKey(dateKey);
+  date.setDate(date.getDate() + days);
+  return getLocalDateKey(date);
+}
+
 function getCheckinMoment(entry: { recordedAt?: string; checkinSlot?: string }) {
   if (entry.recordedAt) {
     const stamp = new Date(entry.recordedAt).getTime();
@@ -237,10 +256,10 @@ function evidenceExcerpt(value: string, fallback = "Sem trecho suficiente para e
 }
 
 // ── Helpers de tempo ──────────────────────────────────────
-function getGreeting(h: number) {
-  if (h >= 5 && h < 12) return "Bom dia";
-  if (h >= 12 && h < 18) return "Boa tarde";
-  return "Boa noite";
+function getGreetingKey(h: number): "home.greetingMorning" | "home.greetingAfternoon" | "home.greetingNight" {
+  if (h >= 5 && h < 12) return "home.greetingMorning";
+  if (h >= 12 && h < 18) return "home.greetingAfternoon";
+  return "home.greetingNight";
 }
 
 function getGreetingEmoji(h: number) {
@@ -304,7 +323,6 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
 
 function LiveClock() {
   const [now, setNow] = useState(() => new Date());
-  const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(new Date()), 1000);
@@ -320,7 +338,9 @@ function LiveClock() {
 }
 
 export function HomePage() {
+  const { t } = useTranslation();
   const { state, addTask, addHabit, refreshData, toggleTask, removeTask, toggleHabit, toggleSubGoal, archiveHabit, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
+  const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
 
@@ -409,14 +429,31 @@ export function HomePage() {
   const phaseColor = getPhaseColor(cycleReport.phase);
   const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const energyForecast = useMemo(() => forecastEnergy7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
-  const monthlyHistory = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    const cutoffIso = getLocalDateKey(cutoff);
-    return [...aggregatedCheckinHistory]
-      .filter(h => h.date >= cutoffIso)
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [aggregatedCheckinHistory]);
+  const dailyPhaseMap = useMemo(() => computeDailyPhaseMap(aggregatedCheckinHistory, 400), [aggregatedCheckinHistory]);
+  const todayDateKey = useMemo(() => getLocalDateKey(clockTime), [
+    clockTime.getFullYear(),
+    clockTime.getMonth(),
+    clockTime.getDate(),
+  ]);
+  const monthlyWindow = useMemo(() => {
+    const endDate = todayDateKey;
+    const startDate = shiftDateKey(endDate, -29);
+    return { startDate, endDate };
+  }, [todayDateKey]);
+  const monthlyWindowDailyHistory = useMemo(
+    () => [...aggregatedCheckinHistory]
+      .filter((entry) => entry.date >= monthlyWindow.startDate && entry.date <= monthlyWindow.endDate)
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    [aggregatedCheckinHistory, monthlyWindow.endDate, monthlyWindow.startDate],
+  );
+  const monthlyHistory = monthlyWindowDailyHistory;
+  const monthlyPointPhaseMap = useMemo(() => {
+    const out: Record<string, MoodPhase> = {};
+    monthlyHistory.forEach((entry) => {
+      out[entry.date] = dailyPhaseMap[entry.date] ?? phaseFromMoodValue(entry.humor);
+    });
+    return out;
+  }, [dailyPhaseMap, monthlyHistory]);
   const consistencyScore = useMemo(
     () => computeConsistencyScore(aggregatedCheckinHistory, state.habits ?? [], 0),
     [aggregatedCheckinHistory, state.habits],
@@ -465,10 +502,11 @@ export function HomePage() {
         humorY: valueToChartY(entry.humor),
         energiaY: valueToChartY(entry.energia),
         label: DIAS_SEMANA[d.getDay()].slice(0, 3),
+        phase: dailyPhaseMap[dateStr] ?? phaseFromMoodValue(entry.humor),
         isHighlight: i === 6,
       };
     });
-  }, [aggregatedCheckinHistory]);
+  }, [aggregatedCheckinHistory, dailyPhaseMap]);
 
   const todayCheckinData = useMemo<ChartPoint[]>(() => {
     const todayEntries = [...(state.checkinHistory || [])]
@@ -486,9 +524,10 @@ export function HomePage() {
       humorY: valueToChartY(entry.humor),
       energiaY: valueToChartY(entry.energia),
       label: formatCheckinMomentLabel(entry),
+      phase: cycleReport.phase !== "insufficient_data" ? cycleReport.phase : phaseFromMoodValue(entry.humor),
       isHighlight: index === todayEntries.length - 1,
     }));
-  }, [dayContext.localDate, state.checkinHistory]);
+  }, [cycleReport.phase, dayContext.localDate, state.checkinHistory]);
 
   function buildSparkPath(points: ChartPoint[], getter: (p: ChartPoint) => number | null): string {
     const valid = points
@@ -517,7 +556,7 @@ export function HomePage() {
         ? `${todayCheckinData.length} check-in${todayCheckinData.length > 1 ? "s" : ""} hoje`
         : "Hoje ainda não há check-ins registrados";
     }
-    return "Média diária dos últimos 7 dias";
+    return t("home.moodEnergyAvg");
   })();
   const advanceHomeChartMode = () => {
     const currentIndex = HOME_CHART_TABS.findIndex((tab) => tab.id === homeChartMode);
@@ -1037,35 +1076,35 @@ export function HomePage() {
       <p className="aura-section-kicker">Acesso rapido</p>
       <div className="shortcut-grid">
         <button className="shortcut-card" onClick={() => navigate("/journal")}>
-          <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.15)" }}>
+          <div className="icon-badge shortcut-icon shortcut-icon-journal">
             <MessageSquareText size={18} color="var(--terracotta)" />
           </div>
           <span className="shortcut-label">Diário</span>
           <span className="shortcut-sub">Falar com IA</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/planner")}>
-          <div className="icon-badge" style={{ background: "rgba(var(--horizon-rgb), 0.15)" }}>
+          <div className="icon-badge shortcut-icon shortcut-icon-planner">
             <LayoutDashboard size={18} color="var(--horizon)" />
           </div>
           <span className="shortcut-label">Planner</span>
           <span className="shortcut-sub">Organizar</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/insights")}>
-          <div className="icon-badge" style={{ background: "rgba(var(--atomic-tangerine-rgb), 0.15)" }}>
+          <div className="icon-badge shortcut-icon shortcut-icon-insights">
             <Activity size={18} color="var(--atomic-tangerine)" />
           </div>
           <span className="shortcut-label">Padrões</span>
           <span className="shortcut-sub">Harmonia</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/goals")}>
-          <div className="icon-badge" style={{ background: "rgba(var(--sweet-mint-rgb), 0.15)" }}>
+          <div className="icon-badge shortcut-icon shortcut-icon-goals">
             <Target size={18} color="var(--sweet-mint)" />
           </div>
           <span className="shortcut-label">Objetivos</span>
           <span className="shortcut-sub">Suas metas</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
-          <div className="icon-badge" style={{ background: "rgba(var(--terracotta-rgb), 0.1)" }}>
+          <div className="icon-badge shortcut-icon shortcut-icon-pomodoro">
             <Timer size={18} color="var(--terracotta)" />
           </div>
           <span className="shortcut-label">Pomodoro</span>
@@ -1181,7 +1220,7 @@ export function HomePage() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div>
               <p className="home-header-eyebrow">
-                {getGreetingEmoji(clockTime.getHours())} {getGreeting(clockTime.getHours())},
+                {getGreetingEmoji(clockTime.getHours())} {t(getGreetingKey(clockTime.getHours()))},
               </p>
               <h1 style={{ marginBottom: 4 }}>{displayName}</h1>
               <p style={{ fontSize: "11px", color: "var(--text-2)", margin: 0 }}>
@@ -1436,6 +1475,11 @@ export function HomePage() {
                       <span style={{ fontSize: 10, fontWeight: point.isHighlight ? 700 : 500, color: point.isHighlight ? "var(--text-1)" : "var(--text-3)" }}>
                         {point.label}
                       </span>
+                      {point.phase && (
+                        <span style={{ display: "block", marginTop: 1, fontSize: 10, lineHeight: 1 }}>
+                          {PHASE_CONFIG[point.phase].emoji}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1454,7 +1498,7 @@ export function HomePage() {
             }
 
             const DAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-            const MW = 300, MH = 130, MPX = 22, MPY = 14, MBOT = 28;
+            const MW = 300, MH = 140, MPX = 22, MPY = 14, MBOT = 38;
             const mh = MH - MPY - MBOT;
             const n = monthlyHistory.length;
             const mxToX = (i: number) => MPX + (n > 1 ? (i / (n - 1)) : 0.5) * (MW - MPX * 2);
@@ -1507,20 +1551,20 @@ export function HomePage() {
                   {monthlyHistory.map((e, i) => {
                     const x = mxToX(i), y = mToY(e.humor);
                     const isKey = keyIdxs.has(i);
-                    const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
-                    const dotColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                    const phase: MoodPhase = monthlyPointPhaseMap[e.date] ?? phaseFromMoodValue(e.humor);
+                    const dotColor = PHASE_CONFIG[phase].color;
                     return (
                       <circle key={i} cx={x} cy={y} r={isKey ? 0 : 2.5}
-                        fill={dotColor} stroke="white" strokeWidth={isKey ? 0 : 1} opacity={0.8} />
+                        fill={dotColor} stroke="white" strokeWidth={isKey ? 0 : 1} opacity={0.85} />
                     );
                   })}
 
                   {monthlyHistory.map((e, i) => {
                     if (!keyIdxs.has(i)) return null;
                     const x = mxToX(i), y = mToY(e.humor);
-                    const isGood = e.humor >= 7, isWarn = e.humor < 4.5;
-                    const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
-                    const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                    const phase: MoodPhase = monthlyPointPhaseMap[e.date] ?? phaseFromMoodValue(e.humor);
+                    const emoji = getMoodFaceEmoji(e.humor);
+                    const scoreColor = PHASE_CONFIG[phase].color;
                     return (
                       <g key={`key-${i}`}>
                         <text x={x} y={y + 6} textAnchor="middle" fontSize={15} style={{ userSelect: "none" }}>{emoji}</text>
@@ -1533,30 +1577,67 @@ export function HomePage() {
                   {tickIdxs.map(i => {
                     const x = mxToX(i);
                     const dt = new Date(monthlyHistory[i].date + "T12:00:00");
+                    const phase = monthlyPointPhaseMap[monthlyHistory[i].date] ?? phaseFromMoodValue(monthlyHistory[i].humor);
+                    const primaryLabel = String(dt.getDate());
+                    const secondaryLabel = DAY_NAMES[dt.getDay()];
                     return (
                       <g key={`tick-${i}`}>
-                        <text x={x} y={MH - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
-                          fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{dt.getDate()}</text>
-                        <text x={x} y={MH - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
-                          fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{DAY_NAMES[dt.getDay()]}</text>
+                        <text x={x} y={MH - 23} textAnchor="middle" fontSize={8.5} fill="var(--text-2)"
+                          fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{primaryLabel}</text>
+                        <text x={x} y={MH - 13} textAnchor="middle" fontSize={7} fill="var(--text-3)"
+                          fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{secondaryLabel}</text>
+                        <text x={x} y={MH - 1} textAnchor="middle" fontSize={10} style={{ userSelect: "none" }}>{PHASE_CONFIG[phase].emoji}</text>
                       </g>
                     );
                   })}
                 </svg>
 
-                <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                  {[
-                    { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
-                    { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
-                    { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
-                  ].map(l => (
-                    <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
-                      {l.emoji} {l.label}
-                    </span>
-                  ))}
-                </div>
+                {(() => {
+                  // Conta fases visíveis no período mensal
+                  const phaseCounts = new Map<MoodPhase, number>();
+                  monthlyHistory.forEach(e => {
+                    const ph = monthlyPointPhaseMap[e.date] ?? phaseFromMoodValue(e.humor);
+                    phaseCounts.set(ph, (phaseCounts.get(ph) ?? 0) + 1);
+                  });
+                  const topPhases = Array.from(phaseCounts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 6)
+                    .map(([p]) => p);
+                  return (
+                    <div style={{
+                      display: "flex",
+                      gap: 4,
+                      marginTop: 9,
+                      justifyContent: "center",
+                      flexWrap: "wrap",
+                      padding: "5px 6px",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,.62)",
+                      border: "1px solid rgba(74,59,55,.06)",
+                    }}>
+                      {topPhases.map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPhaseLegendOpen(true)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            fontSize: 9.5, color: PHASE_CONFIG[p].color, fontWeight: 800,
+                            background: "transparent",
+                            border: "none",
+                            padding: "2px 4px", borderRadius: 999,
+                            cursor: "pointer",
+                            fontFamily: "var(--font-sans, sans-serif)",
+                          }}
+                        >
+                          {PHASE_CONFIG[p].emoji} {t(`phases.${p}.label`, PHASE_CONFIG[p].label)}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
-                  {n} check-in{n !== 1 ? "s" : ""} registrado{n !== 1 ? "s" : ""} nos últimos 30 dias.
+                  {monthlyWindowDailyHistory.length} check-in{monthlyWindowDailyHistory.length !== 1 ? "s" : ""} · carinhas por humor, fase abaixo da data
                 </p>
               </>
             );
@@ -1576,8 +1657,8 @@ export function HomePage() {
 
             const DAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
             const today = new Date();
-            const W = 300, H = 130, PX = 22, PY = 14;
-            const BOTTOM_RESERVE = 36;
+            const W = 300, H = 140, PX = 22, PY = 14;
+            const BOTTOM_RESERVE = 44;
             const h = H - PY - BOTTOM_RESERVE;
             const combinedVals = [...moodForecast, ...energyForecast];
             const rawMin = Math.min(...combinedVals);
@@ -1621,9 +1702,9 @@ export function HomePage() {
                     const x = toX(i), y = toY(val);
                     const d = new Date(today); d.setDate(today.getDate() + i + 1);
                     const dayName = DAY_NAMES[d.getDay()];
-                    const isGood = val >= 7, isWarn = val < 4.5;
-                    const emoji = isGood ? "😊" : isWarn ? "😔" : "😐";
-                    const scoreColor = isGood ? "var(--accent-sage)" : isWarn ? "var(--accent-peach)" : "var(--accent-sky)";
+                    const phase = phaseFromMoodValue(val);
+                    const emoji = getMoodFaceEmoji(val);
+                    const scoreColor = PHASE_CONFIG[phase].color;
                     const midY = PY + h / 2;
                     const labelsAbove = y > midY;
                     const emojiY = labelsAbove ? y - 18 : y + 6;
@@ -1634,25 +1715,58 @@ export function HomePage() {
                         <text x={x} y={emojiY} textAnchor="middle" fontSize={13} style={{ userSelect: "none" }}>{emoji}</text>
                         <text x={x} y={scoreY} textAnchor="middle" fontSize={8.5} fill={scoreColor}
                           fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{val.toFixed(1)}</text>
-                        <text x={x} y={H - 12} textAnchor="middle" fontSize={9} fill="var(--text-2)"
+                        <text x={x} y={H - 23} textAnchor="middle" fontSize={8.5} fill="var(--text-2)"
                           fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{d.getDate()}</text>
-                        <text x={x} y={H - 2} textAnchor="middle" fontSize={7.5} fill="var(--text-3)"
+                        <text x={x} y={H - 13} textAnchor="middle" fontSize={7} fill="var(--text-3)"
                           fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{dayName}</text>
+                        <text x={x} y={H - 1} textAnchor="middle" fontSize={10} style={{ userSelect: "none" }}>{PHASE_CONFIG[phase].emoji}</text>
                       </g>
                     );
                   })}
                 </svg>
-                <div style={{ display: "flex", gap: 14, marginTop: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                  {[
-                    { emoji: "😊", label: "Bom", color: "var(--accent-sage)" },
-                    { emoji: "😐", label: "Estável", color: "var(--accent-sky)" },
-                    { emoji: "😔", label: "Atenção", color: "var(--accent-peach)" },
-                  ].map(l => (
-                    <span key={l.label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: l.color, fontWeight: 700 }}>
-                      {l.emoji} {l.label}
-                    </span>
-                  ))}
-                </div>
+                {(() => {
+                  const phaseCounts = new Map<MoodPhase, number>();
+                  moodForecast.forEach(v => {
+                    const ph = phaseFromMoodValue(v);
+                    phaseCounts.set(ph, (phaseCounts.get(ph) ?? 0) + 1);
+                  });
+                  const topPhases = Array.from(phaseCounts.entries())
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 4)
+                    .map(([p]) => p);
+                  return (
+                    <div style={{
+                      display: "flex",
+                      gap: 4,
+                      marginTop: 10,
+                      justifyContent: "center",
+                      flexWrap: "wrap",
+                      padding: "5px 6px",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,.62)",
+                      border: "1px solid rgba(74,59,55,.06)",
+                    }}>
+                      {topPhases.map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPhaseLegendOpen(true)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            fontSize: 9.5, color: PHASE_CONFIG[p].color, fontWeight: 800,
+                            background: "transparent",
+                            border: "none",
+                            padding: "2px 4px", borderRadius: 999,
+                            cursor: "pointer",
+                            fontFamily: "var(--font-sans, sans-serif)",
+                          }}
+                        >
+                          {PHASE_CONFIG[p].emoji} {t(`phases.${p}.label`, PHASE_CONFIG[p].label)}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
                   Baseado no seu padrão de humor e energia. Quanto mais check-ins, mais preciso.
                 </p>
@@ -1691,7 +1805,7 @@ export function HomePage() {
                 <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
                 <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
               </svg>
-              <span className="section-title" style={{ fontSize: "14px" }}>Agenda do dia</span>
+              <span className="section-title" style={{ fontSize: "14px" }}>{t("home.agendaTitle")}</span>
             </div>
             {agendaPhase === "approved" && (
               <span style={{ fontSize: "11px", color: "var(--accent-sage)", fontWeight: 600 }}>✓ No Planner</span>
@@ -1703,7 +1817,7 @@ export function HomePage() {
             )}
             {agendaPhase === "idle" && (
               <AuraButtonV2 variant="primary" size="sm" onClick={fetchAgenda} useAuraIcon>
-                Montar com IA
+                {t("home.agendaWithAi")}
               </AuraButtonV2>
             )}
           </div>
@@ -2216,26 +2330,6 @@ export function HomePage() {
                 <span className="home-cycle-kicker">
                   CICLO DE HUMOR
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setPhaseLegendOpen(true)}
-                  aria-label="Ver as 8 fases do ciclo de humor"
-                  style={{
-                    border: "none",
-                    background: "rgba(215,137,127,0.14)",
-                    color: "#A8544A",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    padding: "3px 8px",
-                    borderRadius: 999,
-                    cursor: "pointer",
-                    fontFamily: "var(--font-sans, sans-serif)",
-                  }}
-                >
-                  ver as 8 fases →
-                </button>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {/* Score de estabilidade */}
@@ -2307,7 +2401,7 @@ export function HomePage() {
               }}>
                 <div>
                   <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 1px" }}>
-                    Consistência semanal
+                    {t("home.consistencyWeek")}
                   </p>
                   <div style={{ height: 4, width: 80, borderRadius: 999, background: "rgba(0,0,0,.08)", overflow: "hidden" }}>
                     <div style={{
@@ -2398,6 +2492,7 @@ export function HomePage() {
                         if (nudge.type === "weekly_review") {
                           localStorage.setItem("aura_last_weekly_review", new Date().toISOString());
                         }
+                        dismissProactiveNudgeForToday(nudge);
                         setProactiveNudge(null);
                         navigate(nudge.action!.path);
                       }}
@@ -2408,7 +2503,10 @@ export function HomePage() {
                   )}
                 </div>
                 <button
-                  onClick={() => setProactiveNudge(null)}
+                  onClick={() => {
+                    dismissProactiveNudgeForToday(nudge);
+                    setProactiveNudge(null);
+                  }}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 2, flexShrink: 0 }}
                 >
                   ✕
@@ -2453,7 +2551,7 @@ export function HomePage() {
                     <p className="home-ai-card-subtitle" style={{ color: cfg.color }}>
                       {hasInsight ? (
                         <>
-                          Estabilidade {score}% · {cfg.label}
+                          Estabilidade {score}% · {cycleReport.phase !== "insufficient_data" ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel) : cfg.label}
                           {isUrgent && <span style={{ color: cfg.color, fontWeight: 800 }}> · Precisa de cuidado agora</span>}
                         </>
                       ) : (
@@ -2475,16 +2573,31 @@ export function HomePage() {
                         <span style={{ fontSize: 12 }}>{mood.emoji}</span>
                         {mood.label}
                       </span>
-                      <span
-                        className="aura-chip"
-                        style={{
-                          background: "rgba(255,255,255,.72)",
-                          border: `1px solid ${cfg.color}44`,
-                          color: cfg.color,
-                        }}
-                      >
-                        {mood.chipLabel}
-                      </span>
+                      {cycleReport.phase !== "insufficient_data" && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPhaseLegendOpen(true);
+                          }}
+                          aria-label={t("phases.viewAll", "ver as 8 fases")}
+                          className="aura-chip"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            background: `${phaseColor}1F`,
+                            border: `1.5px solid ${phaseColor}66`,
+                            color: phaseColor,
+                            cursor: "pointer",
+                            fontWeight: 800,
+                          }}
+                        >
+                          <span style={{ fontSize: 12 }}>{cycleReport.phaseEmoji}</span>
+                          {t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)}
+                          <span style={{ opacity: 0.7, fontWeight: 600 }}>· {cycleReport.daysInPhase}º dia</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2694,7 +2807,7 @@ export function HomePage() {
           <div className="home-panel-header">
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <p className="home-panel-title" style={{ color: "var(--earth-11)" }}>
-                  Cuidados para agora
+                  {t("home.caresTitle")}
                 </p>
               {autocuidadoFinal && !homeAiLoading && (
                 <span style={{ fontSize: 9, background: "rgba(161,140,120,.15)", color: "var(--earth-11)", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
@@ -2781,7 +2894,7 @@ export function HomePage() {
             <div className="home-panel-header">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <p className="home-panel-title" style={{ color: "var(--earth-11)" }}>
-                  Alertas Importantes
+                  {t("home.alertsTitle")}
                 </p>
               </div>
             </div>

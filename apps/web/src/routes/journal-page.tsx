@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -133,6 +134,7 @@ function formatSessionDate(localDate: string, startedAt: string): string {
 }
 
 export function JournalPage() {
+  const { t } = useTranslation();
   const { state } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
@@ -740,7 +742,7 @@ export function JournalPage() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Buscar por tema, emoção ou conteúdo..."
+                    placeholder={t("journal.searchPlaceholder", "Buscar por tema, emoção ou conteúdo...")}
                     style={{
                       width: "100%",
                       padding: "10px 12px 10px 34px",
@@ -1016,13 +1018,14 @@ export function JournalPage() {
                 style={{
                   alignSelf: "flex-end",
                   maxWidth: "88%",
-                  background: "var(--primary)",
+                  background: "linear-gradient(135deg, var(--accent-peach-a3), rgba(244,190,168,.18))",
+                  border: "1px solid rgba(244,190,168,.34)",
                   color: "var(--text-1)",
                   borderRadius: "20px 20px 4px 20px",
                   padding: "14px 16px",
                   fontSize: "14px",
                   lineHeight: "1.55",
-                  boxShadow: "var(--shadow-primary)",
+                  boxShadow: "0 10px 20px rgba(244,190,168,.10)",
                 }}
               >
                 {message.content}
@@ -1064,7 +1067,7 @@ export function JournalPage() {
           >
             <textarea
               className="journal-input"
-              placeholder="O que você está pensando?"
+              placeholder={t("journal.placeholder", "O que você está pensando?")}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               disabled={isTyping || isFinalizing}

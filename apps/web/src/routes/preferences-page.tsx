@@ -1,11 +1,13 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { setLanguage, getCurrentLanguage, type SupportedLanguage } from "../i18n";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { NotificationPreferences } from "../features/aura/types";
 import { useAuraStore } from "../features/aura/store";
+import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
+import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import "../styles/aura.css";
@@ -296,7 +298,13 @@ export function PreferencesPage() {
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(true);
+  const [aboutAppOpen, setAboutAppOpen] = useState(false);
+  const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const gcalConnectedTrackedRef = useRef(false);
+  const cycleReport = useMemo(
+    () => computeMoodCycle(state.checkinHistory || []),
+    [state.checkinHistory],
+  );
 
   useEffect(() => {
     const gcalStatus = searchParams.get("gcal");
@@ -358,15 +366,31 @@ export function PreferencesPage() {
   }
 
   const notificationPrefs = state.notificationPreferences;
+  const isDarkTheme = state.theme === "dark" || state.theme === "Tema escuro";
+  const aboutAppSections = [
+    ["ai", "✦", t("config.aboutApp.aiTitle"), t("config.aboutApp.aiDescription")],
+    ["purpose", "🧭", t("config.aboutApp.purposeTitle"), t("config.aboutApp.purposeDescription")],
+    ["phase", "🌙", t("config.aboutApp.phaseTitle"), t("config.aboutApp.phaseDescription")],
+    ["chart", "📈", t("config.aboutApp.chartTitle"), t("config.aboutApp.chartDescription")],
+    ["forecast", "🔮", t("config.aboutApp.forecastTitle"), t("config.aboutApp.forecastDescription")],
+    ["autonomy", "🧭", t("config.aboutApp.autonomyTitle"), t("config.aboutApp.autonomyDescription")],
+    ["alerts", "⚠️", t("config.aboutApp.alertsTitle"), t("config.aboutApp.alertsDescription")],
+    ["patterns", "📊", t("config.aboutApp.patternsTitle"), t("config.aboutApp.patternsDescription")],
+    ["patternsCards", "🕸️", t("config.aboutApp.patternCardsTitle"), t("config.aboutApp.patternCardsDescription")],
+    ["harmony", "⚖️", t("config.aboutApp.harmonyTitle"), t("config.aboutApp.harmonyDescription")],
+    ["weekly", "↔️", t("config.aboutApp.weeklyCompareTitle"), t("config.aboutApp.weeklyCompareDescription")],
+    ["checkin", "😊", t("config.aboutApp.checkinTitle"), t("config.aboutApp.checkinDescription")],
+    ["context", "🎯", t("config.aboutApp.contextTitle"), t("config.aboutApp.contextDescription")],
+  ] as const;
 
   return (
     <div className="aura-page-shell">
       <div className="screen-content">
         {/* Header */}
         <div className="aura-page-header">
-          <p className="aura-page-kicker">Ajustes</p>
-          <h2 className="aura-page-title">Configurações</h2>
-          <p className="aura-page-subtitle">Notificações, conta e preferências do seu ritmo em um único padrão visual.</p>
+          <p className="aura-page-kicker">{t("config.kicker")}</p>
+          <h2 className="aura-page-title">{t("config.title")}</h2>
+          <p className="aura-page-subtitle">{t("config.subtitle")}</p>
         </div>
 
         {/* Profile card */}
@@ -397,12 +421,12 @@ export function PreferencesPage() {
           </div>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
-              {displayName || "Usuário"}
+              {displayName || t("config.user")}
             </p>
             <p style={{ fontSize: "11px", color: "var(--text-3)", margin: "2px 0 0" }}>{state.email}</p>
           </div>
           <AuraButtonV2 className="aura-btn-pill" onClick={handleSaveProfile}>
-            Salvar
+            {t("common.save")}
           </AuraButtonV2>
         </div>
 
@@ -411,53 +435,56 @@ export function PreferencesPage() {
           className="aura-card"
           style={{
             marginBottom: "calc(var(--a) * 1.2)",
-            padding: "16px 18px",
+            padding: "12px 14px",
           }}
         >
-          <p
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--text-3)",
-              margin: "0 0 4px",
-            }}
-          >
-            {t("config.language.label")} · Language
-          </p>
-          <p
-            style={{
-              fontSize: 13,
-              color: "var(--text-2)",
-              margin: "0 0 12px",
-              lineHeight: 1.45,
-            }}
-          >
-            {t("config.language.description")}
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "var(--text-3)",
+                  margin: "0 0 2px",
+                }}
+              >
+                {t("config.language.label")}
+              </p>
+              <p
+                style={{
+                  fontSize: 11.5,
+                  color: "var(--text-3)",
+                  margin: 0,
+                  lineHeight: 1.35,
+                }}
+              >
+                {t("config.language.description")}
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             {(["pt", "en"] as const).map((lng) => {
               const isActive = currentLang === lng;
               return (
                 <button
                   key={lng}
                   type="button"
-                  onClick={() => {
-                    setLanguage(lng);
+                  onClick={async () => {
+                    await setLanguage(lng);
                     setCurrentLang(lng);
                   }}
                   style={{
-                    flex: 1,
-                    padding: "10px 14px",
-                    borderRadius: 14,
+                    minWidth: 46,
+                    padding: "7px 10px",
+                    borderRadius: 12,
                     border: isActive
                       ? "1.5px solid rgba(215,137,127,0.55)"
                       : "1px solid rgba(74,59,55,0.1)",
                     background: isActive ? "rgba(215,137,127,0.10)" : "#FFFFFF",
                     color: isActive ? "#A8544A" : "var(--text-2)",
-                    fontSize: 14,
-                    fontWeight: 700,
+                    fontSize: 12,
+                    fontWeight: 800,
                     cursor: "pointer",
                     fontFamily: "var(--font-sans, sans-serif)",
                     display: "flex",
@@ -467,19 +494,142 @@ export function PreferencesPage() {
                   }}
                   aria-pressed={isActive}
                 >
-                  <span aria-hidden style={{ fontSize: 18 }}>{lng === "pt" ? "🇧🇷" : "🇺🇸"}</span>
-                  {t(`config.language.${lng}`)}
+                  <span aria-hidden style={{ fontSize: 11, letterSpacing: ".04em" }}>{lng === "pt" ? "BR" : "US"}</span>
                 </button>
               );
             })}
+            </div>
           </div>
+        </div>
+
+        {/* ── Saiba sobre o app ── */}
+        <div
+          className="aura-card"
+          style={{
+            marginBottom: "calc(var(--a) * 1.2)",
+            padding: aboutAppOpen ? "16px 18px" : "14px 16px",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setAboutAppOpen((open) => !open)}
+            aria-expanded={aboutAppOpen}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              textAlign: "left",
+              fontFamily: "var(--font-sans, sans-serif)",
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                  color: "var(--text-3)",
+                  margin: "0 0 4px",
+                }}
+              >
+                {t("config.aboutApp.label")}
+              </p>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--text-2)",
+                  margin: 0,
+                  lineHeight: 1.45,
+                }}
+              >
+                {t("config.aboutApp.description")}
+              </p>
+            </div>
+            <span
+              aria-hidden
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 999,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "var(--accent-peach)",
+                background: "rgba(215,137,127,.10)",
+                transform: aboutAppOpen ? "rotate(90deg)" : "rotate(0deg)",
+                transition: "transform .18s ease",
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+            >
+              ›
+            </span>
+          </button>
+
+          {aboutAppOpen && (
+            <>
+              <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+                {aboutAppSections.map(([key, icon, title, description]) => (
+                  <div
+                    key={key}
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      padding: "10px 11px",
+                      borderRadius: 14,
+                      background: "rgba(255,255,255,.72)",
+                      border: "1px solid rgba(74,59,55,.08)",
+                    }}
+                  >
+                    <span style={{ fontSize: 16, width: 22, flexShrink: 0 }}>{icon}</span>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "var(--text-1)" }}>
+                        {title}
+                      </p>
+                      <p style={{ margin: "2px 0 0", fontSize: 11.5, lineHeight: 1.45, color: "var(--text-3)" }}>
+                        {description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhaseLegendOpen(true)}
+                style={{
+                  marginTop: 12,
+                  width: "100%",
+                  border: "1.5px solid rgba(215,137,127,0.35)",
+                  background: "rgba(215,137,127,0.10)",
+                  color: "#A8544A",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  padding: "10px 12px",
+                  borderRadius: 14,
+                  cursor: "pointer",
+                  fontFamily: "var(--font-sans, sans-serif)",
+                }}
+              >
+                {t("config.aboutApp.openPhases")}
+              </button>
+            </>
+          )}
         </div>
 
         {/* Perfil section */}
         <div className="config-section">
-          <p className="config-section-title">Perfil</p>
+          <p className="config-section-title">{t("config.profile")}</p>
           <div className="aura-input-wrap" style={{ marginBottom: "8px" }}>
-            <label className="aura-input-label">Nome</label>
+            <label className="aura-input-label">{t("config.name")}</label>
             <div className="aura-input aura-inline-field">
               <input
                 type="text"
@@ -705,23 +855,57 @@ export function PreferencesPage() {
         </div>
 
         {/* Aparência section */}
-
-        {/* Aparência section */}
         <div className="config-section">
           <p className="config-section-title">Aparência</p>
-          <div className="config-row" onClick={toggleTheme} style={{ cursor: "pointer" }}>
-            <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(180,185,169,.12)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-                </svg>
+          <div className="config-row" style={{ alignItems: "stretch" }}>
+            <div className="config-row-label" style={{ alignItems: "center" }}>
+              <div className="icon-bg" style={{ background: isDarkTheme ? "rgba(190,230,243,.14)" : "rgba(180,185,169,.12)" }}>
+                {isDarkTheme ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky-ink)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12.8A8.2 8.2 0 1 1 11.2 3 6.4 6.4 0 0 0 21 12.8Z" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage-ink)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="5" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                  </svg>
+                )}
               </div>
               <div>
                 <p className="config-row-text">Tema do app</p>
-                <p className="config-row-sub">{state.theme === "dark" ? "Escuro" : "Claro"}</p>
+                <p className="config-row-sub">{isDarkTheme ? "Escuro ativo" : "Claro ativo"}</p>
               </div>
             </div>
-            <Toggle on={state.theme === "dark"} onToggle={toggleTheme} />
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+              {[
+                { id: "light", label: "Claro" },
+                { id: "dark", label: "Escuro" },
+              ].map((option) => {
+                const active = option.id === (isDarkTheme ? "dark" : "light");
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => {
+                      if (!active) toggleTheme();
+                    }}
+                    aria-pressed={active}
+                    style={{
+                      border: active ? "1.5px solid rgba(215,137,127,.55)" : "1px solid var(--warm-border)",
+                      background: active ? "rgba(244,190,168,.16)" : "rgba(255,255,255,.58)",
+                      color: active ? "var(--accent-peach-ink)" : "var(--text-3)",
+                      borderRadius: 999,
+                      padding: "7px 10px",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: active ? "default" : "pointer",
+                      fontFamily: "var(--font-sans, sans-serif)",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -767,7 +951,11 @@ export function PreferencesPage() {
           🔄 Refazer onboarding
         </AuraButtonV2>
       </div>
+      <PhaseLegendSheet
+        open={phaseLegendOpen}
+        onClose={() => setPhaseLegendOpen(false)}
+        currentPhase={cycleReport.phase === "insufficient_data" ? undefined : cycleReport.phase}
+      />
     </div>
   );
 }
-

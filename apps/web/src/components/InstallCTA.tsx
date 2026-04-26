@@ -29,7 +29,7 @@ function isIosSafari(): boolean {
   return /iphone|ipad|ipod/i.test(ua) && !/crios|fxios|opios|chrome/i.test(ua) && /safari/i.test(ua);
 }
 
-export function InstallCTA() {
+export function InstallCTA({ variant = "card" }: { variant?: "card" | "compact" }) {
   const [platform, setPlatform] = useState<Platform>("desktop");
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -82,6 +82,7 @@ export function InstallCTA() {
   return (
     <>
       <InstallCard
+        variant={variant}
         eyebrow="Instalação rápida"
         title={title}
         description={description}
@@ -225,6 +226,7 @@ const stepNumStyle: CSSProperties = {
 };
 
 function InstallCard({
+  variant = "card",
   eyebrow,
   title,
   description,
@@ -234,6 +236,7 @@ function InstallCard({
   secondaryLabel,
   onSecondary,
 }: {
+  variant?: "card" | "compact";
   eyebrow: string;
   title: string;
   description: string;
@@ -243,6 +246,28 @@ function InstallCard({
   secondaryLabel?: string;
   onSecondary?: () => void;
 }) {
+  if (variant === "compact") {
+    return (
+      <section style={compactCardStyle}>
+        <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={compactEyebrowStyle}>{eyebrow}</span>
+          <strong style={compactTitleStyle}>{title}</strong>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <button type="button" onClick={onPrimary} style={compactButtonStyle}>
+            {primaryIcon}
+            <span>{primaryLabel.replace(" aplicativo", "")}</span>
+          </button>
+          {secondaryLabel && onSecondary ? (
+            <button type="button" onClick={onSecondary} style={compactSecondaryButtonStyle}>
+              Navegador
+            </button>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section style={cardStyle}>
       <span style={eyebrowStyle}>{eyebrow}</span>
@@ -331,4 +356,63 @@ const secondaryButtonStyle: CSSProperties = {
   cursor: "pointer",
   color: "#6B5B57",
   background: "rgba(255,255,255,.76)",
+};
+
+const compactCardStyle: CSSProperties = {
+  border: "1px solid rgba(184,109,76,.12)",
+  borderRadius: 999,
+  padding: "8px 8px 8px 14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  boxShadow: "0 12px 24px rgba(107,91,87,.055)",
+  background: "rgba(255,255,255,.72)",
+  backdropFilter: "blur(14px)",
+  maxWidth: 520,
+};
+
+const compactEyebrowStyle: CSSProperties = {
+  fontSize: 9,
+  lineHeight: 1,
+  fontWeight: 900,
+  letterSpacing: ".14em",
+  textTransform: "uppercase",
+  color: "#A45D3D",
+};
+
+const compactTitleStyle: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1.1,
+  color: "#5C4A45",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const compactButtonStyle: CSSProperties = {
+  border: "none",
+  borderRadius: 999,
+  padding: "9px 12px",
+  fontSize: 12,
+  fontWeight: 900,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  justifyContent: "center",
+  background: "#F4A896",
+  color: "#5C3526",
+  boxShadow: "0 12px 22px rgba(244,168,150,.18)",
+};
+
+const compactSecondaryButtonStyle: CSSProperties = {
+  border: "1px solid rgba(17,24,39,.08)",
+  borderRadius: 999,
+  padding: "8px 10px",
+  fontSize: 11,
+  fontWeight: 800,
+  cursor: "pointer",
+  color: "#6B5B57",
+  background: "rgba(255,255,255,.62)",
 };

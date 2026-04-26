@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
+import i18n from "../i18n";
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
@@ -61,11 +63,11 @@ type AuraRouteState = {
   mode?: "conversation" | "executor";
 };
 
-const QUICK_ACTIONS = [
-  { label: "Organizar meu dia", prompt: "Organize meu dia de hoje no planner." },
-  { label: "Criar checklist", prompt: "Crie um checklist para preparar minha semana." },
-  { label: "Transformar em meta", prompt: "Quero transformar voltar a treinar em uma meta com próximos passos." },
-  { label: "Abrir conversa reflexiva", prompt: "Quero conversar sobre o que estou sentindo hoje." },
+const QUICK_ACTIONS: Array<{ labelKey: string; fallback: string; prompt: string }> = [
+  { labelKey: "aura.suggestions.organizeDay", fallback: "Organizar meu dia", prompt: "Organize meu dia de hoje no planner." },
+  { labelKey: "aura.suggestions.createChecklist", fallback: "Criar checklist", prompt: "Crie um checklist para preparar minha semana." },
+  { labelKey: "aura.suggestions.transformGoal", fallback: "Transformar em meta", prompt: "Quero transformar voltar a treinar em uma meta com próximos passos." },
+  { labelKey: "aura.suggestions.reflective", fallback: "Abrir conversa reflexiva", prompt: "Quero conversar sobre o que estou sentindo hoje." },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -123,26 +125,27 @@ function buildObjectiveInput(payload: Record<string, unknown>, fallbackTitle: st
 
 function buildInitialAssistantMessage(initialPrompt: string, contextLabel: string, mode: "conversation" | "executor") {
   if (!initialPrompt) {
-    return "Tudo pronto por aqui. Se quiser organizar o dia ou apenas descarregar o que está na mente, estou te ouvindo.";
+    return i18n.t("aura.initialIdle", "Me diga o que precisa sair da cabeça e virar próximo passo.");
   }
 
   if (mode !== "conversation") {
-    return "Me diga o que você quer que eu faça e eu organizo direto.";
+    return i18n.t("aura.initialExecutor", "Me diga a ação e eu executo direto.");
   }
 
   const label = contextLabel.toLowerCase();
   if (label.includes("próxima ação") || label.includes("proxima acao")) {
-    return "Essa ação já veio com contexto. O que você quer decidir primeiro: prioridade real, menor passo ou alternativa mais leve?";
+    return i18n.t("aura.initialNextAction", "Essa ação já veio com contexto. O que você quer decidir primeiro: prioridade real, menor passo ou alternativa mais leve?");
   }
 
   if (label.includes("planner") || label.includes("agenda") || label.includes("tarefa")) {
-    return "Essa tarefa já veio com contexto. Qual decisão você quer destravar agora: prioridade, primeiro passo ou ajuste?";
+    return i18n.t("aura.initialPlanner", "Essa tarefa já veio com contexto. Qual decisão você quer destravar agora: prioridade, primeiro passo ou ajuste?");
   }
 
-  return "O contexto já está aqui. Qual parte você quer destravar primeiro?";
+  return i18n.t("aura.initialContext", "O contexto já está aqui. Qual parte você quer destravar primeiro?");
 }
 
 export function AuraChatPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { state, refreshData } = useAuraStore();
@@ -488,7 +491,7 @@ export function AuraChatPage() {
                 margin: "0 0 4px",
               }}
             >
-              Comando central
+              {t("aura.kicker", "Comando central")}
             </p>
             <p
               style={{
@@ -503,7 +506,7 @@ export function AuraChatPage() {
             </p>
           </div>
           <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>
-            {sessionId ? "pronta" : "iniciando"}
+            {sessionId ? t("aura.ready") : t("aura.starting")}
           </p>
         </div>
       </div>
@@ -511,7 +514,7 @@ export function AuraChatPage() {
       <div style={{ padding: "10px 16px", display: "flex", gap: 6, overflowX: "auto" }}>
         {QUICK_ACTIONS.map((action) => (
           <AuraButtonV2
-            key={action.label}
+            key={action.labelKey}
             onClick={() => send(action.prompt)}
             disabled={isTyping || !sessionId}
             variant="glass"
@@ -522,7 +525,7 @@ export function AuraChatPage() {
               color: "var(--accent-peach-ink)",
             }}
           >
-            {action.label}
+            {t(action.labelKey, action.fallback)}
           </AuraButtonV2>
         ))}
       </div>
@@ -783,7 +786,7 @@ export function AuraChatPage() {
                 send(input);
               }
             }}
-            placeholder="O que vamos organizar agora?"
+            placeholder={t("aura.placeholder")}
             rows={3}
             style={{
               flex: 1,

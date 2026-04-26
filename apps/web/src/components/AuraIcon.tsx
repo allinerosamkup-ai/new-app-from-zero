@@ -4,8 +4,53 @@ import React from "react";
  * AuraIcon — Símbolo oficial da Airia.
  * < 18px → versão micro: 3 círculos compactos (legível em botões pequenos).
  * ≥ 18px → versão completa: 4 círculos pastel + centro champagne.
+ * variant="hybrid" → círculos + anéis de ripple (mesma DNA do logo de fundo, mas interativo).
  */
-export function AuraIcon({ size = 16, className, style }: { size?: number; className?: string; style?: React.CSSProperties }) {
+export function AuraIcon({
+  size = 16,
+  className,
+  style,
+  variant = "default",
+}: {
+  size?: number;
+  className?: string;
+  style?: React.CSSProperties;
+  variant?: "default" | "hybrid";
+}) {
+  if (variant === "hybrid" && size >= 18) {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 200 200"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+        style={style}
+      >
+        {/* Anéis ripple (ordem: externo → interno) */}
+        {([0.95, 0.78, 0.60, 0.42] as number[]).map((s, i) => (
+          <circle
+            key={`ring-${i}`}
+            cx="100"
+            cy="100"
+            r={90 * s}
+            fill="none"
+            stroke="#F4A896"
+            strokeWidth="0.9"
+            strokeOpacity={0.18 + i * 0.16}
+          />
+        ))}
+        {/* Cluster de círculos do logo */}
+        <circle cx="90" cy="80" r="42" fill="#F4A896" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
+        <circle cx="130" cy="85" r="32" fill="#B8D9C8" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
+        <circle cx="75" cy="118" r="28" fill="#8FB8C4" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
+        <circle cx="122" cy="122" r="30" fill="#F0C4D4" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
+        <circle cx="100" cy="100" r="16" fill="#FDE8E3" fillOpacity="0.98" stroke="white" strokeWidth="3" />
+      </svg>
+    );
+  }
+
   if (size < 18) {
     // Versão micro: 3 círculos sobrepostos, mais compactos e reconhecíveis
     return (

@@ -48,9 +48,9 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(28, 22, 20, 0.45)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
+        background: "rgba(24, 26, 31, 0.34)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
         zIndex: 10000,
         display: "flex",
         alignItems: "flex-end",
@@ -63,12 +63,13 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%",
-          maxWidth: 560,
-          maxHeight: "90vh",
-          background: "#FAF6F2",
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-          boxShadow: "0 -20px 60px rgba(0,0,0,0.18)",
+          maxWidth: 480,
+          maxHeight: "86vh",
+          background: "var(--warm-bg)",
+          border: "1px solid var(--warm-border)",
+          borderTopLeftRadius: 26,
+          borderTopRightRadius: 26,
+          boxShadow: "0 -18px 48px rgba(17,24,39,0.18)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -82,20 +83,20 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
               width: 44,
               height: 5,
               borderRadius: 999,
-              background: "rgba(74, 59, 55, 0.18)",
+              background: "var(--warm-border-2)",
             }}
           />
         </div>
 
         {/* Header */}
-        <div style={{ padding: "8px 24px 16px" }}>
+        <div style={{ padding: "8px 20px 14px" }}>
           <div
             style={{
               fontSize: 12,
-              fontWeight: 600,
+              fontWeight: 800,
               letterSpacing: "0.14em",
               textTransform: "uppercase",
-              color: "#A8544A",
+              color: "var(--accent-peach-ink)",
               marginBottom: 6,
               fontFamily: "var(--font-sans, sans-serif)",
             }}
@@ -105,10 +106,10 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
           <h2
             style={{
               margin: 0,
-              fontSize: 26,
+              fontSize: 24,
               lineHeight: 1.18,
               fontWeight: 700,
-              color: "#2A2A2A",
+              color: "var(--text-1)",
               fontFamily: "var(--font-serif, 'Fraunces', serif)",
             }}
           >
@@ -119,7 +120,7 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
               margin: "8px 0 0",
               fontSize: 14,
               lineHeight: 1.5,
-              color: "#6B5E5A",
+              color: "var(--text-2)",
               fontFamily: "var(--font-sans, sans-serif)",
             }}
           >
@@ -132,7 +133,7 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
           style={{
             flex: 1,
             overflowY: "auto",
-            padding: "0 16px 16px",
+            padding: "0 16px 14px",
             display: "flex",
             flexDirection: "column",
             gap: 10,
@@ -150,30 +151,30 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
                 style={{
                   display: "flex",
                   gap: 14,
-                  padding: 16,
+                  padding: 14,
                   borderRadius: 18,
-                  background: isCurrent ? "rgba(215, 137, 127, 0.10)" : "#FFFFFF",
+                  background: isCurrent ? "rgba(244,190,168,.14)" : "var(--warm-surface)",
                   border: isCurrent
-                    ? "1.5px solid rgba(215, 137, 127, 0.55)"
-                    : "1px solid rgba(74, 59, 55, 0.08)",
+                    ? "1.5px solid rgba(244,190,168,.46)"
+                    : "1px solid var(--warm-border)",
                   boxShadow: isCurrent
-                    ? "0 6px 20px rgba(215, 137, 127, 0.15)"
-                    : "0 2px 8px rgba(0,0,0,0.03)",
+                    ? "0 10px 24px rgba(244,190,168,.13)"
+                    : "var(--shadow-3d)",
                   transition: "all 200ms ease",
                 }}
               >
                 <div
                   style={{
-                    width: 44,
-                    height: 44,
-                    minWidth: 44,
-                    borderRadius: 14,
+                    width: 42,
+                    height: 42,
+                    minWidth: 42,
+                    borderRadius: 16,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 22,
-                    background: cfg.color,
-                    opacity: 0.9,
+                    background: `color-mix(in srgb, ${cfg.color} 22%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${cfg.color} 48%, transparent)`,
                   }}
                   aria-hidden
                 >
@@ -190,9 +191,9 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
                   >
                     <span
                       style={{
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: 700,
-                        color: "#2A2A2A",
+                        color: "var(--text-1)",
                         fontFamily: "var(--font-serif, 'Fraunces', serif)",
                       }}
                     >
@@ -205,8 +206,8 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
                           fontWeight: 700,
                           letterSpacing: "0.12em",
                           textTransform: "uppercase",
-                          color: "#A8544A",
-                          background: "rgba(215, 137, 127, 0.18)",
+                          color: "var(--accent-peach-ink)",
+                          background: "rgba(244,190,168,.18)",
                           padding: "3px 8px",
                           borderRadius: 999,
                           fontFamily: "var(--font-sans, sans-serif)",
@@ -221,7 +222,7 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
                       margin: 0,
                       fontSize: 13,
                       lineHeight: 1.5,
-                      color: "#6B5E5A",
+                      color: "var(--text-2)",
                       fontFamily: "var(--font-sans, sans-serif)",
                     }}
                   >
@@ -232,7 +233,7 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
                       margin: "8px 0 0",
                       fontSize: 12.5,
                       lineHeight: 1.45,
-                      color: "#8B7B77",
+                      color: "var(--text-3)",
                       fontStyle: "italic",
                       fontFamily: "var(--font-sans, sans-serif)",
                     }}
@@ -249,8 +250,8 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
         <div
           style={{
             padding: "12px 20px calc(env(safe-area-inset-bottom, 0px) + 18px)",
-            borderTop: "1px solid rgba(74, 59, 55, 0.06)",
-            background: "#FAF6F2",
+            borderTop: "1px solid var(--warm-border)",
+            background: "var(--warm-bg)",
           }}
         >
           <button
@@ -259,9 +260,9 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
             style={{
               width: "100%",
               padding: "14px 20px",
-              borderRadius: 18,
-              background: "#2A2A2A",
-              color: "#FAF6F2",
+              borderRadius: 16,
+              background: "var(--accent-peach)",
+              color: "#7B493B",
               fontSize: 14,
               fontWeight: 600,
               border: "none",

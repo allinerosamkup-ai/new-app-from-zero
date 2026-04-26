@@ -1395,9 +1395,10 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
   const formattedDate = `${yyyy}-${mm}-${dd}`;
 
   return (
-    <div style={{ marginBottom: "24px" }}>
+    <div className="planner-week-header" style={{ marginBottom: "24px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <button 
+           className="planner-week-nav"
            style={{ border: 'none', background: 'var(--surface-variant)', borderRadius: "50%", width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
            onClick={() => setOffsetDias((c: number) => c - 7)}
         >
@@ -1412,6 +1413,7 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
           <button
             type="button"
             onClick={() => headerDateRef.current?.showPicker?.() ?? headerDateRef.current?.click()}
+            className="planner-week-nav"
             style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: "50%", background: "var(--surface-variant)", border: "none", cursor: "pointer" }}
           >
             <Calendar size={14} color="var(--text-2)" />
@@ -1426,6 +1428,7 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
         </div>
 
         <button 
+           className="planner-week-nav"
            style={{ border: 'none', background: 'var(--surface-variant)', borderRadius: "50%", width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
            onClick={() => setOffsetDias((c: number) => c + 7)}
         >
@@ -1440,6 +1443,7 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
           return (
             <div 
               key={d.toISOString()} 
+              className={`planner-day-pill${isSelected ? " is-selected" : ""}${isToday ? " is-today" : ""}`}
               onClick={() => {
                 const timeDiff = d.getTime() - todayAnchor.getTime();
                 setOffsetDias(Math.round(timeDiff / (1000 * 3600 * 24)));
@@ -1454,11 +1458,11 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
                 boxShadow: isSelected ? '0 8px 16px rgba(244,190,168,0.25)' : 'none'
               }}
             >
-              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-3)', letterSpacing: "0.05em" }}>
+              <span className="planner-day-label" style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-3)', letterSpacing: "0.05em" }}>
                 {DIAS_CURTOS[d.getDay()]}
               </span>
-              <span style={{ fontSize: 15, fontWeight: 800 }}>{d.getDate()}</span>
-              {isToday && <div style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? '#fff' : 'var(--accent-peach)', marginTop: 2 }} />}
+              <span className="planner-day-number" style={{ fontSize: 15, fontWeight: 800 }}>{d.getDate()}</span>
+              {isToday && <div className="planner-day-dot" style={{ width: 4, height: 4, borderRadius: '50%', background: isSelected ? '#fff' : 'var(--accent-peach)', marginTop: 2 }} />}
             </div>
           )
         })}
@@ -2324,7 +2328,7 @@ export function PlannerPage() {
   }
 
   return (
-    <div className="bg-white min-h-screen" style={{ flex: 1, padding: "20px", overflowX: 'hidden', background: '#FDF9F5' }}>
+    <div className="bg-white min-h-screen" style={{ flex: 1, padding: "20px", overflowX: 'hidden', background: 'var(--planner-page-bg, #FDF9F5)' }}>
       
       {/* ── Banner: Modo Proteção de Fase Baixa ── */}
       {isLowPhase && (
@@ -2391,18 +2395,18 @@ export function PlannerPage() {
       <div style={{ marginTop: 24, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
           <div>
-            <span style={{ ...LABEL_STYLE, color: "#A45D3D", fontSize: 11, marginBottom: 4 }}>AGENDA</span>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: "#4A3B37", margin: 0, letterSpacing: "-0.02em" }}>Timeline do dia</h1>
+            <span style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", fontSize: 11, marginBottom: 4 }}>AGENDA</span>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-1)", margin: 0, letterSpacing: "-0.02em" }}>Timeline do dia</h1>
           </div>
           <span style={{
             padding: "6px 14px", borderRadius: 99, background: "rgba(244,168,150,0.12)",
-            color: "#A45D3D", fontSize: 11, fontWeight: 800, letterSpacing: "0.05em",
+            color: "var(--accent-peach-ink)", fontSize: 11, fontWeight: 800, letterSpacing: "0.05em",
             border: "1px solid rgba(244,168,150,0.2)"
           }}>
             {plannerBadgeLabel}
           </span>
         </div>
-        <p style={{ fontSize: 14, color: "#7C6D68", lineHeight: 1.6, maxWidth: "85%", margin: 0 }}>
+        <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.6, maxWidth: "85%", margin: 0 }}>
           {plannerSummary}
         </p>
       </div>
@@ -2614,11 +2618,11 @@ export function PlannerPage() {
                   marginBottom: 16, minHeight: 80, display: "flex", alignItems: "center"
                 }}
               >
-                <span className="timeline-time" style={{ 
+              <span className="timeline-time" style={{ 
                   position: "absolute", left: 10, width: 44, textAlign: "center",
-                  fontWeight: 800, fontSize: 13, color: "#4A3B37", zIndex: 1
+                  fontWeight: 800, fontSize: 13, color: "var(--planner-time-color, #4A3B37)", zIndex: 1
                 }}>{slot.time}</span>
-                <div className="timeline-line" style={{ left: 62, width: 2, background: "rgba(184,109,76,0.08)" }} />
+                <div className="timeline-line" style={{ left: 62, width: 2, background: "var(--planner-timeline-line, rgba(184,109,76,0.08))" }} />
                 <SwipeableTaskCard
                    slot={slot}
                    categoryOption={categoryOption}
@@ -2640,9 +2644,9 @@ export function PlannerPage() {
             >
               <span className="timeline-time" style={{ 
                 position: "absolute", left: 10, width: 44, textAlign: "center",
-                fontWeight: 800, fontSize: 13, color: "#4A3B37", zIndex: 1, opacity: slot.title ? 1 : 0.4
+                fontWeight: 800, fontSize: 13, color: "var(--planner-time-color, #4A3B37)", zIndex: 1, opacity: slot.title ? 1 : 0.72
               }}>{slot.time}</span>
-              <div className="timeline-line" style={{ left: 62, width: 2, background: "rgba(184,109,76,0.08)", opacity: slot.title ? 1 : 0.4 }} />
+              <div className="timeline-line" style={{ left: 62, width: 2, background: "var(--planner-timeline-line, rgba(184,109,76,0.08))", opacity: slot.title ? 1 : 0.58 }} />
               <button
                 type="button"
                 className="timeline-block-card interactive-card glass-card"
@@ -2652,7 +2656,7 @@ export function PlannerPage() {
                   padding: slot.title ? "18px 20px" : "12px 14px",
                   borderRadius: 24,
                   background: slot.title ? "rgba(255, 255, 255, 0.75)" : "transparent",
-                  border: slot.title ? "1.5px dashed rgba(244, 168, 150, 0.4)" : "1px dashed rgba(184, 109, 76, 0.1)",
+                  border: slot.title ? "1.5px dashed rgba(244, 168, 150, 0.4)" : "1px dashed var(--planner-empty-slot-border, rgba(184, 109, 76, 0.1))",
                   borderLeft: slot.title ? "5px solid rgba(244, 168, 150, 0.3)" : "none",
                   display: 'flex',
                   flexDirection: 'column',
@@ -2672,7 +2676,7 @@ export function PlannerPage() {
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 18, color: 'rgba(184,109,76,0.3)', paddingLeft: 8 }}>+</div>
+                  <div className="planner-empty-plus" style={{ fontSize: 18, color: 'var(--planner-empty-plus, rgba(184,109,76,0.3))', paddingLeft: 8 }}>+</div>
                 )}
               </button>
             </div>

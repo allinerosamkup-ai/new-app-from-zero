@@ -5,38 +5,55 @@ export function usePushNotifications(userId: string | null) {
   const subscribedRef = useRef(false);
 
   useEffect(() => {
-    if (!userId || subscribedRef.current) return;
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    if (Notification.permission !== 'granted') return;
+    if (!userId) return;
 
-    subscribedRef.current = true;
+    const subscribe = async () => {
+      if (subscribedRef.current) return;
+      const ok = await registerPushSubscription(userId);
+      if (ok) subscribedRef.current = true;
+    };
 
-    (async () => {
-      try {
-        const { publicKey } = await api.get('/push/vapid-public-key');
-        if (!publicKey) return;
+    void subscribe();
+    window.addEventListener('airia-notification-permission-granted', subscribe);
+    window.addEventListener('focus', subscribe);
 
-        const reg = await navigator.serviceWorker.ready;
-        let sub = await reg.pushManager.getSubscription();
-
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as ArrayBuffer,
-          });
-        }
-
-        const json = sub.toJSON();
-        await api.post('/push/subscribe', {
-          endpoint: json.endpoint,
-          keys: json.keys,
-          userAgent: navigator.userAgent,
-        });
-      } catch (e) {
-        console.warn('[push] subscribe failed:', e);
-      }
-    })();
+    return () => {
+      window.removeEventListener('airia-notification-permission-granted', subscribe);
+      window.removeEventListener('focus', subscribe);
+    };
   }, [userId]);
+}
+
+export async function registerPushSubscription(userId: string | null): Promise<boolean> {
+  if (!userId) return false;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return false;
+  if (Notification.permission !== 'granted') return false;
+
+  try {
+    const { publicKey } = await api.get('/push/vapid-public-key');
+    if (!publicKey) return false;
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as unknown as ArrayBuffer,
+      });
+    }
+
+    const json = sub.toJSON();
+    await api.post('/push/subscribe', {
+      endpoint: json.endpoint,
+      keys: json.keys,
+      userAgent: navigator.userAgent,
+    });
+    return true;
+  } catch (e) {
+    console.warn('[push] subscribe failed:', e);
+    return false;
+  }
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {

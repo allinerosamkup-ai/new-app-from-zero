@@ -41,12 +41,12 @@ void i18n
   });
 
 export function setLanguage(lang: SupportedLanguage) {
-  void i18n.changeLanguage(lang);
   try {
     localStorage.setItem(STORAGE_KEY, lang);
   } catch {
     /* ignore */
   }
+  return i18n.changeLanguage(lang);
 }
 
 export function getCurrentLanguage(): SupportedLanguage {

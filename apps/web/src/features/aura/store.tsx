@@ -153,11 +153,34 @@ type AuraStoreContextValue = {
 
 const AuraStoreContext = createContext<AuraStoreContextValue | null>(null);
 
+function getInitialTheme() {
+  try {
+    const stored = localStorage.getItem("airia_theme");
+    if (stored === "dark" || stored === "light") return stored;
+  } catch {
+    /* ignore */
+  }
+  return initialAuraState.theme;
+}
+
 export function AuraStoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuraState>(initialAuraState);
+  const [state, setState] = useState<AuraState>(() => ({
+    ...initialAuraState,
+    theme: getInitialTheme(),
+  }));
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const refreshInFlightRef = useRef<Promise<void> | null>(null);
+
+  useEffect(() => {
+    const isDark = state.theme === "dark" || state.theme === "Tema escuro";
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    try {
+      localStorage.setItem("airia_theme", isDark ? "dark" : "light");
+    } catch {
+      /* ignore */
+    }
+  }, [state.theme]);
 
   const refreshData = useCallback(async () => {
     if (refreshInFlightRef.current) {
@@ -279,7 +302,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
               persistentReminderIntervalMinutes: h.persistentReminderIntervalMinutes ?? null,
             }))
             : current.habits,
-          theme: (preferences as any)?.aiTone === 'warm' ? 'Tema suave' : current.theme,
+          theme: current.theme,
           cycleStart: profile?.cycle_start ? profile.cycle_start.slice(0, 10) : current.cycleStart,
           cycleLength: profile?.cycle_length ?? current.cycleLength,
           lutealLength: profile?.luteal_length ?? current.lutealLength,
@@ -439,7 +462,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       toggleTheme: () =>
         setState((current) => ({
           ...current,
-          theme: current.theme === "Tema claro" ? "Tema suave" : "Tema claro",
+          theme: current.theme === "dark" || current.theme === "Tema escuro" ? "light" : "dark",
         })),
       nextOnboardingStep: () =>
         setState((current) => ({

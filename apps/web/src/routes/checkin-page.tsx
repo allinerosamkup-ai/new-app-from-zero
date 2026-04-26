@@ -1,5 +1,6 @@
 // Checkin Page v5 — wizard multi-step (4 telas)
 import { useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { MoodOption } from "../features/aura/types";
@@ -233,15 +234,16 @@ function DetailCard({ emoji, title, summary, active, onClick }: {
 }
 
 // ─── Wizard step configs ──────────────────────────────────────────────────────
-const STEPS = [
-  { label: "Humor & Energia", hint: "Como seu corpo se sente agora?" },
-  { label: "Emoção",          hint: "Que emoção domina o momento?" },
-  { label: "Influências",     hint: "O que contribuiu pro seu estado?" },
-  { label: "Detalhes",        hint: "Opcional — mas muito útil pra Airia." },
+const STEPS: Array<{ labelKey: string; hintKey: string; label: string; hint: string }> = [
+  { labelKey: "checkin.humorEnergyTitle",  hintKey: "checkin.humorEnergySubtitle",  label: "Humor & Energia", hint: "Como seu corpo se sente agora?" },
+  { labelKey: "checkin.step2Title",        hintKey: "checkin.step2Subtitle",        label: "Emoção",          hint: "Que emoção domina o momento?" },
+  { labelKey: "checkin.step3Title",        hintKey: "checkin.step3Subtitle",        label: "Influências",     hint: "O que contribuiu pro seu estado?" },
+  { labelKey: "checkin.step4Title",        hintKey: "checkin.step4Subtitle",        label: "Detalhes",        hint: "Opcional — mas muito útil pra Airia." },
 ];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export function CheckinPage() {
+  const { t } = useTranslation();
   const { setMood, addCheckin } = useAuraStore();
   const navigate = useNavigate();
 
@@ -419,13 +421,13 @@ export function CheckinPage() {
         {/* ── Step heading ───────────────────────────────────────────── */}
         <div style={{ marginBottom: 24 }}>
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 4px" }}>
-            Passo {wizardStep} de {STEPS.length}
+            {t("checkin.stepOf", { current: wizardStep, total: STEPS.length })}
           </p>
           <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
-            {STEPS[wizardStep - 1].label}
+            {t(STEPS[wizardStep - 1].labelKey, STEPS[wizardStep - 1].label)}
           </h2>
           <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>
-            {STEPS[wizardStep - 1].hint}
+            {t(STEPS[wizardStep - 1].hintKey, STEPS[wizardStep - 1].hint)}
           </p>
         </div>
 
@@ -856,7 +858,7 @@ export function CheckinPage() {
               style={{ flex: 1, height: 50, fontSize: 15, fontWeight: 800, borderRadius: 14 }}
             >
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                Próximo
+                {t("common.next")}
               </span>
             </AuraButtonV2>
           ) : (

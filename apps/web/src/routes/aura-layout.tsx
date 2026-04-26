@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 // Aura Layout v2 — bottom nav + Phase Transition Alert + Follow-up Card
 import { Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
 import { ErrorBoundary } from "../components/ErrorBoundary";
@@ -13,6 +14,7 @@ import "../styles/editorial.css";
 
 const NAV_ITEMS = [
   {
+    labelKey: "nav.home",
     label: "Início",
     route: "/home",
     icon: (
@@ -23,6 +25,7 @@ const NAV_ITEMS = [
     ),
   },
   {
+    labelKey: "nav.planner",
     label: "Planner",
     route: "/planner",
     icon: (
@@ -35,11 +38,13 @@ const NAV_ITEMS = [
     ),
   },
   {
+    labelKey: "nav.aura",
     label: "Airia",
     route: "/aura",
-    icon: <AuraIcon size={64} />,
+    icon: <AuraIcon size={88} variant="hybrid" />,
   },
   {
+    labelKey: "nav.journal",
     label: "Diário",
     route: "/journal",
     icon: (
@@ -53,6 +58,7 @@ const NAV_ITEMS = [
     ),
   },
   {
+    labelKey: "nav.config",
     label: "Config",
     route: "/preferences",
     icon: (
@@ -96,6 +102,7 @@ function isWithinOnboardingPromptWindow(accountCreatedAt?: string | null) {
 }
 
 export function AuraLayout() {
+  const { t } = useTranslation();
   const { hydrated, refreshData, state, dismissPhaseTransitionAlert, resolveFollowUp } = useAuraStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -274,7 +281,7 @@ export function AuraLayout() {
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: cfg.color, textTransform: "uppercase", letterSpacing: ".1em" }}>
-                    Mudança de fase
+                    {t("alerts.phaseTransition", "Mudança de fase")}
                   </span>
                   <span style={{ fontSize: 10, color: "var(--text-3)" }}>
                     {alert.fromLabel} → {alert.toLabel}
@@ -315,7 +322,7 @@ export function AuraLayout() {
               <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
               <div style={{ flex: 1 }}>
                 <p style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-peach)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 3px" }}>
-                  Airia pergunta
+                  {t("alerts.auraAsks", "Airia pergunta")}
                 </p>
                 <p style={{ fontSize: 12, color: "var(--text-1)", margin: 0, lineHeight: 1.5, fontStyle: "italic" }}>
                   "{followUp.followUpMessage}"
@@ -330,13 +337,13 @@ export function AuraLayout() {
                 onClick={() => resolveFollowUp("done")}
                 style={{ flex: 1, height: 34, borderRadius: 9, border: "none", background: "var(--accent-peach)", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
               >
-                Sim, fiz! 🎉
+                {t("alerts.doneButton")}
               </button>
               <button
                 onClick={() => resolveFollowUp("skip")}
                 style={{ flex: 1, height: 34, borderRadius: 9, border: "1.5px solid var(--warm-border-2)", background: "transparent", color: "var(--text-2)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
               >
-                Não dessa vez
+                {t("alerts.skipButton")}
               </button>
             </div>
           </div>
@@ -357,7 +364,7 @@ export function AuraLayout() {
         {/* Link de conformidade Google/Privacy */}
         <div style={{ padding: "40px 0 20px", textAlign: "center", opacity: 0.4 }}>
             <a href="https://airia.pro/privacy" target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "var(--text-3)", textDecoration: "none", fontWeight: 600, letterSpacing: "0.05em" }}>
-                POLÍTICA DE PRIVACIDADE
+                {t("privacy")}
             </a>
         </div>
       </div>
@@ -394,7 +401,7 @@ export function AuraLayout() {
                  className={`flex flex-col items-center justify-center cursor-pointer transition-all duration-300 active:scale-90 hover:scale-110 p-2 nav-item${isActive ? ' active' : ''}`}
                  onClick={() => navigate(item.route)}>
               <span className="mb-0.5">{item.icon}</span>
-              <span className="text-[9px] font-bold tracking-wider uppercase">{item.label === 'Início' ? 'Home' : item.label}</span>
+              <span className="text-[9px] font-bold tracking-wider uppercase">{t(item.labelKey)}</span>
             </div>
           );
         })}

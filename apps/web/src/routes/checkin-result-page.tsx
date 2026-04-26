@@ -3,8 +3,9 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
-import { computeMoodCycle, computeStreak } from '../utils/mood-cycle-engine';
+import { computeMoodCycle, computeStreak, getPhaseColor, PHASE_CONFIG } from '../utils/mood-cycle-engine';
 import { PhaseLegendSheet } from '../components/PhaseLegendSheet';
+import { useTranslation } from 'react-i18next';
 import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { trackEvent } from "../lib/track";
@@ -147,6 +148,7 @@ function resolveSuggestedTaskTime(
 }
 
 export function CheckinResultPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   console.log('[DEBUG] location.state in checkin-result-page:', location.state);
@@ -547,42 +549,84 @@ export function CheckinResultPage() {
           <p className="result-header-copy">{v.description}</p>
         </div>
 
-        {/* Ponte com as 8 fases do ciclo de humor */}
-        {cycleReport.phase !== "insufficient_data" && (
-          <button
-            type="button"
-            onClick={() => setPhaseLegendOpen(true)}
+        {/* HERO — Fase do ciclo de humor */}
+        {cycleReport.phase !== "insufficient_data" ? (() => {
+          const phaseColor = getPhaseColor(cycleReport.phase);
+          const phaseLabel = t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel);
+          const phaseDescription = t(`phases.${cycleReport.phase}.description`, cycleReport.phaseDescription);
+          const phaseTip = t(`phases.${cycleReport.phase}.tip`, cycleReport.phaseTip);
+          return (
+            <div
+              style={{
+                marginBottom: 18,
+                padding: "20px 18px 18px",
+                borderRadius: 22,
+                background: `${phaseColor}15`,
+                border: `1.5px solid ${phaseColor}55`,
+                boxShadow: `0 6px 20px ${phaseColor}20`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 10 }}>
+                <span style={{ fontSize: 44, lineHeight: 1 }} aria-hidden>{cycleReport.phaseEmoji}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: phaseColor }}>
+                    {t("phases.yourPhaseKicker", "Sua fase do ciclo")}
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: 26, fontWeight: 700, color: "#2A2A2A", fontFamily: "var(--font-serif, 'Fraunces', serif)", lineHeight: 1.1 }}>
+                    {phaseLabel}
+                  </p>
+                  <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 600, color: "#6B5E5A" }}>
+                    {cycleReport.daysInPhase === 1 ? "1º dia nesta fase" : `${cycleReport.daysInPhase} dias nesta fase`}
+                  </p>
+                </div>
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.5, color: "#3a2f2c" }}>
+                {phaseDescription}
+              </p>
+              <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.5, color: phaseColor, fontStyle: "italic", fontWeight: 600 }}>
+                💡 {phaseTip}
+              </p>
+              <button
+                type="button"
+                onClick={() => setPhaseLegendOpen(true)}
+                style={{
+                  marginTop: 14,
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: 12,
+                  background: `${phaseColor}25`,
+                  border: `1px solid ${phaseColor}55`,
+                  color: phaseColor,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  fontFamily: "var(--font-sans, sans-serif)",
+                }}
+              >
+                {t("phases.viewAll", "ver as 8 fases")}
+              </button>
+            </div>
+          );
+        })() : (
+          <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              width: "100%",
-              padding: "12px 14px",
-              marginBottom: 16,
-              borderRadius: 14,
+              marginBottom: 18,
+              padding: "16px 16px",
+              borderRadius: 18,
               background: "rgba(255,255,255,0.55)",
-              border: "1px solid rgba(74, 59, 55, 0.08)",
-              cursor: "pointer",
-              textAlign: "left",
+              border: "1px dashed rgba(74,59,55,0.18)",
               fontFamily: "var(--font-sans, sans-serif)",
             }}
           >
-            <span style={{ fontSize: 22 }} aria-hidden>{cycleReport.phaseEmoji}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#A8544A" }}>
-                Sua fase do ciclo
-              </p>
-              <p style={{ margin: "2px 0 0", fontSize: 14, fontWeight: 600, color: "#2A2A2A" }}>
-                {cycleReport.phaseLabel}
-                <span style={{ fontWeight: 400, color: "#6B5E5A" }}>
-                  {" · "}{cycleReport.daysInPhase}º dia
-                </span>
-              </p>
-            </div>
-            <span style={{ fontSize: 11, color: "#A8544A", fontWeight: 700, whiteSpace: "nowrap" }}>
-              ver as 8 →
-            </span>
-          </button>
+            <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)" }}>
+              {t("phases.yourPhaseKicker", "Sua fase do ciclo")}
+            </p>
+            <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--text-2)" }}>
+              {t("phases.unlockHint", "Continue fazendo check-ins por alguns dias para destravar a leitura da sua fase.")}
+            </p>
+          </div>
         )}
 
         {/* Card Airia diz — resposta personalizada ao check-in */}

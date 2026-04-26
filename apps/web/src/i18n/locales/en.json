@@ -10,7 +10,14 @@
     "tryAgain": "Try again",
     "yes": "Yes",
     "no": "No",
-    "got_it": "Got it"
+    "got_it": "Got it",
+    "seeAll": "See all",
+    "edit": "Edit",
+    "delete": "Delete",
+    "add": "Add",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow"
   },
   "nav": {
     "home": "Home",
@@ -20,7 +27,8 @@
     "checkin": "Check-in",
     "insights": "Patterns",
     "journal": "Journal",
-    "aura": "Aura"
+    "aura": "Aura",
+    "start": "Home"
   },
   "phases": {
     "kicker": "Mood cycling",
@@ -35,7 +43,7 @@
     "daysInPhase_one": "{{count}} day in this phase",
     "daysInPhase_other": "{{count}} days in this phase",
     "elevated": {
-      "label": "Elevated",
+      "label": "High Flight",
       "description": "Mood and energy above your usual baseline. Great for projects that require creativity and initiative.",
       "tip": "Enjoy the energy, but keep a sustainable pace. Avoid impulsive decisions."
     },
@@ -50,27 +58,27 @@
       "tip": "Good time to build habits and make steady progress."
     },
     "falling": {
-      "label": "Falling",
+      "label": "Slowing Down",
       "description": "Downward trend detected. Your mood is below your recent baseline.",
       "tip": "Slow down. Prioritize sleep, nutrition, and self-care now."
     },
     "low": {
-      "label": "Low",
+      "label": "Retreat",
       "description": "You're in a phase of lower mood and energy. It's a natural pattern of the cycle.",
       "tip": "This is a time to restore — not to produce. Self-kindness is the priority."
     },
     "depleted": {
-      "label": "Depleted",
+      "label": "Pause",
       "description": "Very low mood and energy. Your system needs active recovery.",
       "tip": "Cancel what you can. Rest isn't weakness — it's a biological need right now."
     },
     "recovering": {
-      "label": "Recovering",
+      "label": "Recovery",
       "description": "You're coming out of a low phase. Energy is gradually returning.",
       "tip": "Ease back in. Celebrate every small step — you're on the right track."
     },
     "mixed": {
-      "label": "Mixed",
+      "label": "Turbulence",
       "description": "High variability detected. Frequent highs and lows with no clear pattern.",
       "tip": "Watch for impulsive decisions. Focus on routine and sleep — they stabilize the cycle."
     },
@@ -80,22 +88,145 @@
       "tip": "The more consistent your check-ins, the more accurate your cycle analysis."
     }
   },
+  "home": {
+    "greetingNight": "Good evening",
+    "greetingMorning": "Good morning",
+    "greetingAfternoon": "Good afternoon",
+    "checkin": "Check-in",
+    "agendaTitle": "Today's agenda",
+    "agendaWithAi": "Build with AI",
+    "nextOnAgenda": "Next on agenda",
+    "noPendingTasks": "No pending tasks for today.",
+    "alertsTitle": "Important Alerts",
+    "caresTitle": "Care for now",
+    "caresSubtitle": "Gentle suggestions for this moment:",
+    "auraSays": "Aura says",
+    "consistencyWeek": "Weekly consistency",
+    "moodEnergyKicker": "Mood and Energy",
+    "moodEnergyAvg": "Daily average — last 7 days",
+    "todayTab": "Today",
+    "weekTab": "Week",
+    "openJournal": "Open journal"
+  },
+  "checkin": {
+    "stepOf": "Step {{current}} of {{total}}",
+    "humorEnergyTitle": "Mood & Energy",
+    "humorEnergySubtitle": "How does your body feel now?",
+    "step2Title": "Emotion",
+    "step2Subtitle": "Which emotion dominates this moment?",
+    "step3Title": "Influences",
+    "step3Subtitle": "What contributed to your state?",
+    "step4Title": "Details",
+    "step4Subtitle": "Optional — but very helpful for Aura.",
+    "humorLabel": "Mood",
+    "energyLabel": "Energy",
+    "registered": "CHECK-IN REGISTERED",
+    "yourPhase": "Your cycle phase",
+    "goHome": "Go to home"
+  },
+  "planner": {
+    "title": "Planner",
+    "energyHigh": "high",
+    "energyMedium": "medium",
+    "energyLight": "light",
+    "addTask": "Add task"
+  },
+  "journal": {
+    "title": "Journal",
+    "placeholder": "What shall we organize now?",
+    "auraReady": "ready"
+  },
+  "aura": {
+    "title": "Aura",
+    "ready": "ready",
+    "starting": "starting",
+    "kicker": "Command center",
+    "placeholder": "What shall we organize now?",
+    "initialIdle": "Tell me what needs to leave your head and become a next step.",
+    "initialExecutor": "Tell me the action and I will execute it directly.",
+    "initialNextAction": "This action already has context. What should we decide first: real priority, smallest step, or lighter alternative?",
+    "initialPlanner": "This task already has context. What decision should we unlock now: priority, first step, or adjustment?",
+    "initialContext": "The context is here. Which part should we unlock first?",
+    "suggestions": {
+      "organizeDay": "Organize my day",
+      "createChecklist": "Create checklist",
+      "transformGoal": "Turn into a goal",
+      "reflective": "Open reflective conversation"
+    }
+  },
+  "goals": {
+    "title": "Goals",
+    "stuckGoal": "A goal is stalled",
+    "viewGoals": "View goals →"
+  },
   "insights": {
     "kicker": "Cycling",
     "title": "Patterns and Harmony",
+    "csvExport": "↓ CSV",
+    "weekVsLastWeek": "This week vs last week",
+    "checkins": "Check-ins",
     "phaseHistory": {
       "kicker": "Phase history",
       "title": "Where you've been",
       "description": "The phases you went through in the last 30 days. Each block represents a consecutive period in the same phase."
-    }
+    },
+    "harmonyKicker": "Integrated reading",
+    "harmonyTitle": "Period harmony",
+    "harmonySubtitle": "The same window above feeds the radar below, so both blocks tell the same story."
   },
+  "alerts": {
+    "phaseTransition": "Phase change",
+    "auraAsks": "Aura asks",
+    "doneButton": "Yes, I did! 🎉",
+    "skipButton": "Not this time",
+    "moodFalling": "Your mood has been dropping for several days",
+    "rapidDrop": "There was a sharp drop in mood",
+    "lowStability": "Your stability is low"
+  },
+  "privacy": "PRIVACY POLICY",
   "config": {
+    "kicker": "Settings",
     "title": "Settings",
+    "subtitle": "Notifications, account, and preferences for your rhythm — all in one consistent layout.",
+    "user": "User",
+    "profile": "Profile",
+    "name": "Name",
     "language": {
       "label": "Language",
       "description": "Choose the app language.",
       "pt": "Português",
       "en": "English"
+    },
+    "aboutApp": {
+      "label": "About the app",
+      "description": "How Airia's AI works, what it calculates, and why it suggests each next step.",
+      "openPhases": "View the 8-phase guide",
+      "aiTitle": "How Airia was developed",
+      "aiDescription": "Airia combines generative AI with a proprietary mood-cycle engine. It does not answer from scratch: it cross-checks check-ins, journal, planner, goals, habits, history, and recent memories to understand the real context of the day.",
+      "purposeTitle": "Airia's role",
+      "purposeDescription": "Its role is to be an emotional and operational copilot for non-linear minds. It separates fact from interpretation, recognizes patterns, points to pending decisions, and turns the current state into one possible next step.",
+      "phaseTitle": "8 cycle phases",
+      "phaseDescription": "Your phase comes from recent mood and energy averages, multi-day trend, variation/stability, sleep, and time in phase. With little data, the reading stays conservative.",
+      "chartTitle": "Mood and energy charts",
+      "chartDescription": "Week and Today use real check-ins. Monthly uses the last 30 days. The solid line is mood, the dashed line is energy. Face emojis show mood intensity and the emojis below dates show the phase calculated for that point.",
+      "forecastTitle": "7-day forecast",
+      "forecastDescription": "The forecast projects mood and energy from recent history, smoothing spikes so one isolated day does not become a trend. It changes as new check-ins come in.",
+      "autonomyTitle": "Analysis and autonomy",
+      "autonomyDescription": "The score starts at 100 and loses points for high variation, abrupt trend, low days, sparse check-ins, and critical signals. The current phase calibrates whether the suggestion should advance, contain, simplify, or recover.",
+      "alertsTitle": "Important alerts",
+      "alertsDescription": "Alerts only appear with evidence: overdue commitment, stalled goal, rapid drop, low stability, many low days, impulse mentioned to the AI, or sleep with strong impact.",
+      "patternsTitle": "Patterns and cycles",
+      "patternsDescription": "Patterns come from repetition in history: best/worst days, mood distribution, check-in streak, phase transitions, and the relationship between sleep, energy, social load, and mood.",
+      "patternCardsTitle": "Patterns page cards",
+      "patternCardsDescription": "The 7, 30, 90-day, half-year and yearly filters slice the history. Best day and difficult day come from average mood by weekday. Distribution separates high, stable and low records. Streak counts consecutive check-in days without a break.",
+      "harmonyTitle": "Harmony radar",
+      "harmonyDescription": "The radar compares six dimensions on the same scale: mood, energy, goals, social, body and sleep. Each axis uses the selected period average; goals use active-goal progress. Overall balance is the average of axes with data.",
+      "weeklyCompareTitle": "This week vs. last week",
+      "weeklyCompareDescription": "The comparison calculates current-week and previous-week averages for mood, energy and number of check-ins. The arrow shows rise, drop or stability against the previous period.",
+      "checkinTitle": "Check-in",
+      "checkinDescription": "Each check-in records mood, energy, sleep, body, social load, emotion, and a free note. Recent check-ins weigh more in the daily reading.",
+      "contextTitle": "Agenda, goals, and actions",
+      "contextDescription": "Planner, goals, habits, journal, and recent suggestions enter the context. Aura uses this to avoid repetition and suggest steps that fit the current state."
     }
   }
 }

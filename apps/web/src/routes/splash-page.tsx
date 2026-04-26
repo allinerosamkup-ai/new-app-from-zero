@@ -48,78 +48,78 @@ const AIRIA_SERIF = "'Playfair Display', Georgia, serif";
 
 const audienceCards: InfoCard[] = [
   {
-    title: "A Airia te ouve e entende que o seu ritmo não é uma linha reta",
+    title: "A Airia cruza o que você sente com o que já vinha acontecendo",
     description:
-      "Para quem só percebe o esgotamento quando ele já chegou. A Airia monitora seu humor, energia e sinais sutis, ajudando você a reconhecer as fases de queda ou aceleração antes que elas se tornem conflitos ou burnout.",
+      "Para quem percebe tarde demais que entrou em queda, aceleração ou exaustão. A Airia lê humor, energia, sono, agenda, diário e histórico para devolver uma leitura mais fiel do seu momento.",
   },
   {
-    title: "Um espaço onde o seu ritmo é respeitado, não corrigido",
+    title: "Um espaço onde fato, história e decisão ficam separados",
     description:
-      "Diferente dos trackers de produtividade que te cobram metas lineares, aqui nós focamos na aterrissagem. Entenda seus padrões sem julgamento: aceite os dias de silêncio e aproveite com intenção os picos de energia.",
+      "Em vez de responder com frases genéricas, a Airia ajuda a entender o que aconteceu, qual interpretação tomou conta e qual decisão concreta está sendo evitada, protegida ou adiada.",
   },
   {
-    title: "Bio-previsibilidade para proteger suas relações e seu trabalho",
+    title: "Bio-previsibilidade para ajustar o dia antes do atrito",
     description:
-      "Quando você sabe que sua sensibilidade está alta, você escolhe melhor suas batalhas. A Airia te dá o mapa para saber quando recuar para se proteger e quando avançar com clareza e segurança.",
+      "Quando o app percebe que sua energia está mudando, o planner, os alertas e as sugestões mudam junto. Não é cobrança de rotina: é leitura de ritmo para escolher melhor o próximo movimento.",
   },
   {
-    title: "Dados reais para um acompanhamento clínico profundo",
+    title: "Histórico organizado para conversar melhor sobre você",
     description:
-      "Transforme sensações vagas em um panorama clínico de bio-sincronia. Leve para seu psiquiatra ou terapeuta um histórico detalhado de ciclos, estabilidade e gatilhos que uma consulta mensal sozinha não consegue capturar.",
+      "Sensações vagas viram registros de ciclo, estabilidade, quedas, pré-quedas, decisões e padrões recorrentes. Se você faz terapia ou acompanhamento médico, chega com contexto em vez de memória solta.",
   },
 ];
 
 const flowSteps: StepCard[] = [
   {
     eyebrow: "01",
-    title: "Aterrissagem diária",
+    title: "Check-in de 30 segundos",
     description:
-      "Através de check-ins táteis e rápidos, você registra como está se sentindo agora. Sem pressão por metas, apenas uma leitura honesta do seu estado interno.",
+      "Você registra humor, energia, sono e sinais do corpo sem transformar isso em obrigação. É o dado mínimo para o app começar a entender seu dia real.",
   },
   {
     eyebrow: "02",
-    title: "A Airia reconhece o padrão",
+    title: "O app calcula fase, tendência e estabilidade",
     description:
-      "Cruzamos seus registros com inteligência de dados (EWMA) para identificar tendências. Você começa a ver o 'mapa' do seu humor se formando ao longo das semanas.",
+      "O Mood Cycle Engine cruza médias recentes, variação, sono e tendência de 7 dias para estimar em qual das 8 fases do ciclo você está agora.",
   },
   {
     eyebrow: "03",
-    title: "Sincronia, não rotina",
+    title: "A Airia transforma leitura em movimento",
     description:
-      "Com o padrão em mãos, você ajusta o seu dia. Menos culpa por não render no vale, mais intenção para realizar no pico. A vida flui conforme o seu ritmo natural.",
+      "Com contexto e memória, a Airia separa fato de interpretação, reconhece padrões e propõe uma manobra pequena: avançar, reduzir estímulo, reorganizar ou se expor gradualmente.",
   },
 ];
 
 const features: FeatureCard[] = [
   {
     icon: Waves,
-    title: "Bio-Sincronia em tempo real",
+    title: "Ciclagem de humor em 8 fases",
     description:
-      "Entenda instantaneamente se o seu ciclo está em fase estável, sensível, acelerada ou pedindo proteção imediata.",
+      "O app mostra se você está em voo alto, fluxo, estabilidade, desaceleração, recolhimento, pausa, retomada ou turbulência.",
   },
   {
     icon: CalendarRange,
-    title: "O Planner que te ouve",
+    title: "Planner que respeita energia real",
     description:
-      "Sua agenda deixa de ser uma lista fria e passa a respeitar o seu limite real de energia do dia.",
+      "Agenda, hábitos, ações e metas aparecem calibrados pelo seu ciclo atual, sem transformar tudo em evento com horário.",
   },
   {
     icon: BrainCircuit,
-    title: "Insights de Acolhimento",
+    title: "Airia com memória de padrões",
     description:
-      "A Airia identifica padrões que você não vê: a relação entre seu sono, seus gatilhos e a estabilidade do seu humor.",
+      "A IA usa diário, check-ins, planner, metas e sugestões recentes para reconhecer repetição, custo oculto e decisão pendente.",
   },
   {
     icon: HeartHandshake,
-    title: "Sua 'Babá Digital'",
+    title: "Diário que conversa e vira plano",
     description:
-      "Uma presença que te ajuda a reorganizar o dia, descansar sem culpa ou focar quando a janela está aberta.",
+      "O diário não só acolhe: ele ajuda a testar ideias, validar sugestões e transformar o que fez sentido em ações para o planner.",
   },
   {
     icon: ClipboardList,
-    title: "Relatório Clínico de Precisão",
+    title: "Histórico para ver o ciclo completo",
     description:
-      "Leve dados concretos para seu médico ou terapeuta. Mostre a realidade do seu ciclo entre as consultas.",
+      "Gráficos semanais, mensais e previsões mostram humor e energia juntos, com fases e alertas baseados em dados do próprio uso.",
   },
 ];
 
@@ -145,16 +145,16 @@ const screenshots: ScreenshotCard[] = [
     src: "/screenshots/insights-page.png",
   },
   {
-    title: "Airia: Sua Babá Digital",
-    description: "Uma conversa pelo diário que ajuda a organizar o dia, acolher o esgotamento e transformar contexto em ação prática.",
+    title: "Airia: padrões, decisões e ciclos",
+    description: "Uma conversa que lê contexto, reconhece padrões e transforma clareza emocional em ação prática.",
     src: "/screenshots/aura-page.png",
   },
 ];
 
 const heroHighlights = [
-  "Perceba mais cedo quando o dia pede proteção",
-  "Reconheça padrões antes que eles virem conflito",
-  "Use os dias bons com mais intenção e menos excesso",
+  "Perceba queda, aceleração e exaustão antes que virem apagão",
+  "Entenda o padrão por trás do problema, não só o sentimento do momento",
+  "Receba uma próxima ação possível para o ciclo em que você está",
 ];
 
 const sectionTitleStyle = {
@@ -514,7 +514,6 @@ export function SplashPage() {
               >
                   Um lugar seguro para sua mente aterrissar.
               </h1>
-              <InstallCTA />
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
                 <p
                   style={{
@@ -537,6 +536,7 @@ export function SplashPage() {
                   Check-in de 30 segundos · A Airia cuida do resto · Grátis pra começar.
                 </p>
               </div>
+              <InstallCTA variant="compact" />
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -926,7 +926,7 @@ export function SplashPage() {
                 Bio-Sincronia: O mapa do seu ritmo interno.
               </p>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, color: BRAND.textSoft }}>
-                A Airia usa algoritmo real (EWMA + análise de tendência de 7 dias) para detectar sua fase de humor atual — elevada, estável, caindo, baixa ou em recuperação. Esse dado alimenta o planner, a IA, os insights e pode ser compartilhado com quem te acompanha clinicamente.
+                A Airia combina algoritmo de ciclo de humor, memória contextual e leitura funcional. O app calcula fase, tendência e estabilidade; a IA usa esse contexto para separar fato de interpretação, reconhecer padrões e propor uma manobra possível para o momento.
               </p>
             </div>
           </div>
@@ -1090,8 +1090,8 @@ export function SplashPage() {
               O fim da montanha-russa emocional para quem faz acontecer.
             </h2>
             <p style={{ margin: 0, fontSize: 16, lineHeight: 1.8, color: BRAND.textSoft, maxWidth: 620 }}>
-              A Airia te ajuda a reconhecer padrão, ajustar o dia e viver com menos culpa, menos conflito e mais
-              clareza sobre si.
+              A Airia te ajuda a reconhecer padrão, ajustar o dia e decidir o próximo movimento com menos culpa, menos
+              repetição e mais clareza sobre si.
             </p>
           </div>
 
@@ -1111,7 +1111,7 @@ export function SplashPage() {
                 boxShadow: "0 22px 34px rgba(243,176,140,.24)",
               }}
             >
-              Iniciar minha bio-sincronia
+              Começar minha leitura de ritmo
             </button>
             <button
               type="button"

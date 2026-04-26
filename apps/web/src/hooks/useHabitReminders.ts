@@ -160,5 +160,9 @@ export async function requestNotificationPermission(): Promise<boolean> {
   if (Notification.permission === 'granted') return true;
   if (Notification.permission === 'denied') return false;
   const result = await Notification.requestPermission();
-  return result === 'granted';
+  if (result === 'granted') {
+    window.dispatchEvent(new Event('airia-notification-permission-granted'));
+    return true;
+  }
+  return false;
 }

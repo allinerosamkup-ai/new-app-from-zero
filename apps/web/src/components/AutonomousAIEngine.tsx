@@ -13,6 +13,7 @@ import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { tryParseAiSuggestion } from "../lib/ai";
 import { aggregateCheckinsByDay, computeMoodCycle, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
+import { isProactiveNudgeDismissedToday } from "../utils/proactive-nudge-dismissal";
 import type { AutonomousInsight, CheckinEntry, FollowUpPending, PhaseTransitionAlert, ProactiveNudge } from "../features/aura/types";
 
 const MIN_CHECKINS = 3;
@@ -210,7 +211,7 @@ export function AutonomousAIEngine() {
     if (daysSince >= 2) {
       const days = Math.floor(daysSince);
       if (shouldThrottleSameNudge("checkin_missing")) return;
-      setProactiveNudge({
+      const nudge: ProactiveNudge = {
         type: "checkin_missing",
         title: days >= 3 ? "Aura com saudade 💛" : "Check-in em falta",
         message: days >= 3
@@ -219,7 +220,9 @@ export function AutonomousAIEngine() {
         action: { label: "Fazer check-in agora", path: "/checkin" },
         priority: days >= 3 ? "high" : "medium",
         generatedAt: new Date().toISOString(),
-      });
+      };
+      if (isProactiveNudgeDismissedToday(nudge)) return;
+      setProactiveNudge(nudge);
       return;
     }
 
@@ -234,14 +237,16 @@ export function AutonomousAIEngine() {
         : 0;
       if (unclarified.length >= 3 && oldestAge >= 1) {
         if (shouldThrottleSameNudge("inbox_overdue")) return;
-        setProactiveNudge({
+        const nudge: ProactiveNudge = {
           type: "inbox_overdue",
           title: `${unclarified.length} itens esperando clarificação`,
           message: "Seu inbox GTD está cheio. Clarificar agora libera espaço mental.",
           action: { label: "Ir para Metas & GTD", path: "/goals" },
           priority: unclarified.length >= 5 ? "high" : "medium",
           generatedAt: new Date().toISOString(),
-        });
+        };
+        if (isProactiveNudgeDismissedToday(nudge)) return;
+        setProactiveNudge(nudge);
         return;
       }
     } catch {}
@@ -250,14 +255,16 @@ export function AutonomousAIEngine() {
     const stagnantGoal = goals.find(g => g.completedPct === 0 && g.subtasks.length > 0);
     if (stagnantGoal) {
       if (shouldThrottleSameNudge("goal_stagnant")) return;
-      setProactiveNudge({
+      const nudge: ProactiveNudge = {
         type: "goal_stagnant",
         title: "Meta esperando por você",
         message: `"${stagnantGoal.title}" ainda não começou. Qual é o primeiro passo de hoje?`,
         action: { label: "Ver metas", path: "/goals" },
         priority: "medium",
         generatedAt: new Date().toISOString(),
-      });
+      };
+      if (isProactiveNudgeDismissedToday(nudge)) return;
+      setProactiveNudge(nudge);
       return;
     }
 
@@ -272,14 +279,16 @@ export function AutonomousAIEngine() {
         : Infinity;
       if (daysSinceReview >= 5) {
         if (shouldThrottleSameNudge("weekly_review")) return;
-        setProactiveNudge({
+        const nudge: ProactiveNudge = {
           type: "weekly_review",
           title: "Revisão semanal 📋",
           message: "Fim de semana é hora de revisar seus projetos e definir a próxima ação de cada meta.",
           action: { label: "Revisar metas", path: "/goals" },
           priority: "low",
           generatedAt: new Date().toISOString(),
-        });
+        };
+        if (isProactiveNudgeDismissedToday(nudge)) return;
+        setProactiveNudge(nudge);
         return;
       }
     }

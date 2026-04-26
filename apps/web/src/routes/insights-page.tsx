@@ -1,6 +1,7 @@
 // Insights Page v4 — Analytics profundo + Line chart + Correlações + Export + Relatório mensal
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -126,6 +127,7 @@ function MoodLineChart({ data }: { data: Array<{ date: string; humor: number; en
 }
 
 export function InsightsPage() {
+  const { t } = useTranslation();
   const { state, addTask, refreshData } = useAuraStore();
 
   // Refresh on mount and on page focus (catches returning from check-in)
@@ -143,14 +145,14 @@ export function InsightsPage() {
   const [weeklyQuestion, setWeeklyQuestion] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '180d' | '365d'>('7d');
   const [monthlyReport, setMonthlyReport] = useState<string | null>(null);
   const [monthlyReportPhase, setMonthlyReportPhase] = useState<'idle' | 'loading' | 'done'>('idle');
   const goals = state.goals || [];
 
   // Derive data from checkinHistory (fallback to empty if missing)
   const allHistory = state.checkinHistory || [];
-  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : period === '180d' ? 180 : 365;
   const history = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - periodDays);
@@ -321,8 +323,25 @@ export function InsightsPage() {
       setHighlights(res.insights.highlights ?? []);
       setInsightPhase("done");
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel analisar os padroes.");
-      setInsightPhase("idle");
+      console.warn("[insights] weekly AI failed, using local fallback.", error);
+      const localAction = cycleReport.phase === "depleted" || cycleReport.phase === "low"
+        ? "Escolha uma tarefa leve e proteja o sono hoje."
+        : cycleReport.phase === "elevated" || cycleReport.phase === "mixed"
+          ? "Reduza estímulos e escolha uma decisão antes de abrir outra frente."
+          : "Escolha uma ação concreta que mantenha o ritmo sem esticar o dia.";
+      setAiInsight({
+        insight: `Pelo histórico de ${periodDays} dias, sua leitura atual combina ${cycleReport.phaseLabel.toLowerCase()}, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
+        action: localAction,
+        category: "rotina",
+        actionTitle: localAction.slice(0, 40),
+      });
+      setWeeklyQuestion("Qual pequeno ajuste de hoje impediria que esse padrão se repetisse amanhã?");
+      setHighlights([
+        `${history.length} registros no período selecionado`,
+        `Humor médio ${avgHumor} · energia média ${avgEnergia}`,
+        `Fase atual: ${cycleReport.phaseLabel}`,
+      ]);
+      setInsightPhase("done");
     }
   }
 
@@ -393,11 +412,11 @@ export function InsightsPage() {
         {/* ── Header ── */}
         <div className="aura-page-header insights-header">
           <p className="aura-page-kicker">Sua Ciclagem</p>
-          <h1 className="aura-page-title insights-title">Padrões e Harmonia</h1>
+          <h1 className="aura-page-title insights-title">{t("insights.title")}</h1>
           {/* Seletor de período + Export */}
           <div style={{ display: "flex", gap: "6px", marginTop: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            {(['7d', '30d', '90d'] as const).map(p => {
-              const label = p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias';
+            {(['7d', '30d', '90d', '180d', '365d'] as const).map(p => {
+              const label = p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : p === '180d' ? 'Semestral' : 'Anual';
               const active = period === p;
               return (
                 <button
@@ -511,7 +530,7 @@ export function InsightsPage() {
             padding: "14px", marginBottom: "calc(var(--a))",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
-              📅 Esta semana vs semana passada
+              📅 {t("insights.weekVsLastWeek")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {([
@@ -544,13 +563,11 @@ export function InsightsPage() {
         {/* ── HISTÓRICO DE FASES (timeline 30 dias) ── */}
         {phaseHistory.length > 0 && (
           <div
+            className="aura-card"
             style={{
               marginBottom: 24,
-              padding: "18px 18px 20px",
-              borderRadius: 20,
-              background: "#FFFFFF",
-              border: "1px solid rgba(74, 59, 55, 0.07)",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.04)",
+              padding: "18px",
+              borderRadius: 24,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
@@ -562,21 +579,21 @@ export function InsightsPage() {
                     fontWeight: 700,
                     letterSpacing: "0.14em",
                     textTransform: "uppercase",
-                    color: "#A8544A",
+                    color: "var(--accent-peach-ink)",
                   }}
                 >
-                  Histórico de fases
+                  {t("insights.phaseHistory.kicker")}
                 </p>
                 <h3
                   style={{
                     margin: "4px 0 0",
                     fontSize: 20,
                     fontWeight: 700,
-                    color: "#2A2A2A",
+                    color: "var(--text-1)",
                     fontFamily: "var(--font-serif, 'Fraunces', serif)",
                   }}
                 >
-                  Por onde você passou
+                  {t("insights.phaseHistory.title")}
                 </h3>
               </div>
               <button
@@ -584,8 +601,8 @@ export function InsightsPage() {
                 onClick={() => setPhaseLegendOpen(true)}
                 style={{
                   border: "none",
-                  background: "rgba(215,137,127,0.14)",
-                  color: "#A8544A",
+                  background: "var(--accent-peach-a3)",
+                  color: "var(--accent-peach-ink)",
                   fontSize: 10,
                   fontWeight: 700,
                   letterSpacing: "0.06em",
@@ -601,8 +618,8 @@ export function InsightsPage() {
               </button>
             </div>
 
-            <p style={{ fontSize: 12.5, color: "#6B5E5A", margin: "0 0 14px", lineHeight: 1.45 }}>
-              As fases que você atravessou nos últimos 30 dias. Cada bloco representa um período consecutivo na mesma fase.
+            <p style={{ fontSize: 12.5, color: "var(--text-2)", margin: "0 0 14px", lineHeight: 1.45 }}>
+              {t("insights.phaseHistory.description")}
             </p>
 
             {/* Timeline barra */}
@@ -613,7 +630,7 @@ export function InsightsPage() {
                 height: 36,
                 borderRadius: 12,
                 overflow: "hidden",
-                border: "1px solid rgba(74, 59, 55, 0.06)",
+                border: "1px solid var(--warm-border)",
               }}
             >
               {phaseHistory.map((seg, idx) => {
@@ -660,16 +677,16 @@ export function InsightsPage() {
                       gap: 5,
                       padding: "5px 10px",
                       borderRadius: 999,
-                      background: "rgba(74, 59, 55, 0.04)",
-                      border: "1px solid rgba(74, 59, 55, 0.08)",
+                      background: "var(--warm-surface)",
+                      border: "1px solid var(--warm-border)",
                       fontSize: 11.5,
-                      color: "#4A3B37",
+                      color: "var(--text-1)",
                       fontFamily: "var(--font-sans, sans-serif)",
                     }}
                   >
                     <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
                     <span style={{ fontWeight: 600 }}>{cfg.label}</span>
-                    <span style={{ color: "#8B7B77" }}>· {seg.daysCount}d</span>
+                    <span style={{ color: "var(--text-3)" }}>· {seg.daysCount}d</span>
                   </span>
                 );
               })}
@@ -678,9 +695,9 @@ export function InsightsPage() {
         )}
 
         <div className="aura-page-header" style={{ marginBottom: 12 }}>
-          <p className="aura-page-kicker">Leitura integrada</p>
-          <h2 className="aura-page-title" style={{ fontSize: "24px", marginBottom: 4 }}>Harmonia do período</h2>
-          <p className="aura-page-subtitle">O mesmo recorte acima alimenta o radar abaixo, então os dois blocos contam a mesma história.</p>
+          <p className="aura-page-kicker">{t("insights.harmonyKicker")}</p>
+          <h2 className="aura-page-title" style={{ fontSize: "24px", marginBottom: 4 }}>{t("insights.harmonyTitle")}</h2>
+          <p className="aura-page-subtitle">{t("insights.harmonySubtitle")}</p>
         </div>
 
         <div className="harmony-radar-shell">
@@ -691,17 +708,19 @@ export function InsightsPage() {
                   key={radius}
                   points={polygonPoints(radius)}
                   fill="none"
-                  stroke="rgba(0,0,0,.06)"
+                  stroke="var(--harmony-radar-grid)"
                   strokeWidth={1}
+                  className="harmony-radar-grid"
                 />
               ))}
 
               <polygon
                 points={polygonPoints(45)}
-                fill="rgba(0,0,0,.02)"
-                stroke="rgba(152,160,174,0.15)"
+                fill="var(--harmony-radar-base-fill)"
+                stroke="var(--harmony-radar-base)"
                 strokeWidth={1}
                 strokeDasharray="4,2"
+                className="harmony-radar-base"
               />
 
               {harmonyAngles.map((angle, index) => {
@@ -713,8 +732,9 @@ export function InsightsPage() {
                     y1={120}
                     x2={point.x}
                     y2={point.y}
-                    stroke="rgba(0,0,0,.06)"
+                    stroke="var(--harmony-radar-grid)"
                     strokeWidth={1}
+                    className="harmony-radar-axis"
                   />
                 );
               })}
@@ -748,7 +768,7 @@ export function InsightsPage() {
                     cy={point.y}
                     r={5}
                     fill={dimension.cor}
-                    stroke="white"
+                    stroke="var(--harmony-radar-dot-stroke)"
                     strokeWidth={2}
                     className="harmony-dot"
                   />

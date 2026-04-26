@@ -81,7 +81,7 @@ export type PhaseConfigEntry = {
 
 export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
   elevated: {
-    label: "Fase Elevada",
+    label: "Voo Alto",
     emoji: "🚀",
     description: "Humor e energia acima do seu basal habitual. Ótimo para projetos que exigem criatividade e iniciativa.",
     tip: "Aproveite a energia, mas mantenha o ritmo sustentável. Evite decisões impulsivas.",
@@ -105,7 +105,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "moderate",
   },
   falling: {
-    label: "Descendo",
+    label: "Desacelerando",
     emoji: "📉",
     description: "Tendência de queda detectada. Seu humor está abaixo do padrão recente.",
     tip: "Reduza o ritmo. Priorize sono, alimentação e autocuidado agora.",
@@ -113,7 +113,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "moderate",
   },
   low: {
-    label: "Fase Baixa",
+    label: "Recolhimento",
     emoji: "🌙",
     description: "Você está numa fase de menor energia e humor. É um padrão natural do ciclo.",
     tip: "Este é o momento de restaurar — não de produzir. Gentileza consigo mesma é a prioridade.",
@@ -121,7 +121,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "low",
   },
   depleted: {
-    label: "Esgotamento",
+    label: "Pausa",
     emoji: "😴",
     description: "Energia e humor muito baixos. Seu sistema precisa de recuperação ativa.",
     tip: "Cancele o que puder. Descanso não é fraqueza — é necessidade biológica agora.",
@@ -129,7 +129,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "rest",
   },
   recovering: {
-    label: "Recuperando",
+    label: "Retomada",
     emoji: "🌱",
     description: "Você está saindo de uma fase baixa. Energia retornando gradualmente.",
     tip: "Retome devagar. Comemore cada pequeno avanço — você está no caminho certo.",
@@ -137,7 +137,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "low",
   },
   mixed: {
-    label: "Instável",
+    label: "Turbulência",
     emoji: "⚡",
     description: "Alta variabilidade detectada. Altos e baixos frequentes sem padrão claro.",
     tip: "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam o ciclo.",
@@ -631,6 +631,82 @@ export function computePhaseHistory(
   }
   segments.push(current);
   return segments;
+}
+
+// ── Mapa diário de fases ─────────────────────────────────
+// Para cada dia do histórico, devolve a fase computada por sliding window.
+// Útil para colorir pontos de gráficos (mensal/forecast) com a fase real do dia.
+export function computeDailyPhaseMap(
+  history: CheckinEntry[],
+  windowDays = 30,
+): Record<string, MoodPhase> {
+  const aggregated = aggregateCheckinsByDay(history);
+  if (aggregated.length === 0) return {};
+
+  const sliced = aggregated.slice(-windowDays);
+  if (sliced.length < 3) return {};
+
+  const out: Record<string, MoodPhase> = {};
+  for (let i = 2; i < sliced.length; i++) {
+    const upTo = sliced.slice(0, i + 1);
+    const report = computeMoodCycle(upTo);
+    out[sliced[i].date] = report.phase;
+  }
+  return out;
+}
+
+// ── Fase a partir de um valor de humor único (sem janela) ──
+// Usado para colorir pontos do FORECAST onde só temos a previsão pontual.
+// Aplica thresholds simplificados (não considera volatility/trend).
+export function phaseFromMoodValue(humor: number): MoodPhase {
+  if (humor >= 8.4) return "elevated";
+  if (humor >= 7.2) return "flowing";
+  if (humor < 3.0) return "depleted";
+  if (humor < 5.0) return "low";
+  if (humor >= 5.6) return "stable";
+  return "falling";
+}
+
+// ── Agregar histórico por granularidade (day/week/month) ──
+// Usado pelo chart drill-down (mensal/trimestral/semestral/anual).
+export function aggregateByGranularity(
+  history: CheckinEntry[],
+  granularity: "day" | "week" | "month",
+): CheckinEntry[] {
+  const daily = aggregateCheckinsByDay(history);
+  if (granularity === "day" || daily.length === 0) return daily;
+
+  // Helper: chave de bucket
+  const bucketKey = (dateIso: string): string => {
+    const d = new Date(dateIso + "T12:00:00");
+    if (granularity === "month") {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    }
+    // week: ancorar em domingo
+    const day = d.getDay();
+    const sunday = new Date(d);
+    sunday.setDate(d.getDate() - day);
+    return sunday.toISOString().slice(0, 10);
+  };
+
+  const buckets = new Map<string, CheckinEntry[]>();
+  for (const entry of daily) {
+    const key = bucketKey(entry.date);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(entry);
+  }
+
+  return Array.from(buckets.entries())
+    .map(([date, entries]) => ({
+      date,
+      humor: Number(mean(entries.map(e => e.humor)).toFixed(2)),
+      energia: Number(mean(entries.map(e => e.energia)).toFixed(2)),
+      emotion: entries[entries.length - 1]?.emotion ?? "calm",
+      sono: averageDefined(entries.map(e => e.sono)),
+      fisico: averageDefined(entries.map(e => e.fisico)),
+      social: averageDefined(entries.map(e => e.social)),
+    } satisfies CheckinEntry))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 // ── Streak — dias consecutivos com check-in ─────────────────

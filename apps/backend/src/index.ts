@@ -3951,14 +3951,24 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
   }
 }
 
+function getSaoPauloHHMM(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
 if (require.main === module) {
   // Push notification cron — runs every minute
   cron.schedule('* * * * *', async () => {
     try {
       const now = new Date();
-      const hh = String(now.getUTCHours()).padStart(2, '0');
-      const mm = String(now.getUTCMinutes()).padStart(2, '0');
-      const currentTimeStr = `${hh}:${mm}`;
+      const currentTimeStr = getSaoPauloHHMM(now);
 
       // 1. Habit reminders
       const habitsNow = await defaultPrisma.habit.findMany({
@@ -4004,6 +4014,20 @@ if (require.main === module) {
             url: '/checkin',
             tag: 'checkin-reminder',
           });
+        }
+        if (notifPrefs.journal) {
+          const journalTimes = [
+            notifPrefs.journalMorningTime || '10:00',
+            notifPrefs.journalEveningTime || '21:00',
+          ];
+          if (journalTimes.includes(currentTimeStr)) {
+            await sendPushToUser(pref.userId, {
+              title: 'Diário da Airia',
+              body: 'Dois minutos para registrar o que mudou por dentro.',
+              url: '/journal',
+              tag: `journal-reminder-${currentTimeStr}`,
+            });
+          }
         }
       }
     } catch (e) {
