@@ -5,10 +5,12 @@ import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react
 import type { Session } from '@supabase/supabase-js';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import * as Updates from 'expo-updates';
 
 import { supabase } from './src/lib/supabase';
 import { buildInjectedSessionScript, getSupabaseWebStorageKey } from './src/lib/web-app';
 import { publishTodayWidgetData, sanitizeTodayWidgetPayload } from './src/widgets/todayWidgetData';
+import { useNotifications, usePushNotifications } from './src/hooks/useNotifications';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -23,6 +25,21 @@ type NativeShellEvent =
   | { type: 'external.open'; url: string }
   | { type: 'widget.sync'; payload: unknown };
 
+async function checkForOtaUpdate() {
+  // Em dev (__DEV__) ou ambiente Expo Go, expo-updates não funciona — pula silenciosamente
+  if (__DEV__) return;
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (update.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      // Reload imediato pra aplicar — ao próximo abrir, está com a versão nova
+      await Updates.reloadAsync();
+    }
+  } catch (error) {
+    console.warn('[updates] check failed:', error);
+  }
+}
+
 export default function App() {
   const webViewRef = useRef<WebView>(null);
   const canGoBackRef = useRef(false);
@@ -32,6 +49,16 @@ export default function App() {
   const [hasLoadError, setHasLoadError] = useState(false);
 
   const injectedSessionScript = useMemo(() => buildInjectedSessionScript(webSession), [webSession]);
+
+  // Notificações locais (check-in 20h, hábitos 8h, insight semanal segunda 10h)
+  useNotifications();
+  // Push Expo nativo — registra token no backend assim que houver userId
+  usePushNotifications(webSession?.user?.id ?? null);
+
+  // OTA auto-update — checa ao abrir e baixa silenciosamente, reinicia pra aplicar
+  useEffect(() => {
+    void checkForOtaUpdate();
+  }, []);
 
   const syncSession = useCallback(async () => {
     const { data, error } = await supabase.auth.getSession();
