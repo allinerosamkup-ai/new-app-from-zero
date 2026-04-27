@@ -2,7 +2,6 @@ import { ArrowRight, BrainCircuit, CalendarRange, ClipboardList, HeartHandshake,
 import type { CSSProperties, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { InstallCTA } from "../components/InstallCTA";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -50,7 +49,7 @@ const audienceCards: InfoCard[] = [
   {
     title: "A Airia cruza o que você sente com o que já vinha acontecendo",
     description:
-      "Para quem percebe tarde demais que entrou em queda, aceleração ou exaustão. A Airia lê humor, energia, sono, agenda, diário e histórico para devolver uma leitura mais fiel do seu momento.",
+      "Para quem percebe tarde demais que entrou em queda, aceleração ou exaustão. A Airia lê humor, energia, sono, agenda, diário e histórico para construir baseline pessoal, EWMA e leitura mais fiel do seu momento.",
   },
   {
     title: "Um espaço onde fato, história e decisão ficam separados",
@@ -78,9 +77,9 @@ const flowSteps: StepCard[] = [
   },
   {
     eyebrow: "02",
-    title: "O app calcula fase, tendência e estabilidade",
+    title: "O app calcula padrão, tendência e estabilidade",
     description:
-      "O Mood Cycle Engine cruza médias recentes, variação, sono e tendência de 7 dias para estimar em qual das 8 fases do ciclo você está agora.",
+      "O Mood Cycle Engine cruza EWMA individual, baseline pessoal, variação, sono e tendência de 7 dias para estimar sua faixa atual sem depender de média genérica.",
   },
   {
     eyebrow: "03",
@@ -119,7 +118,7 @@ const features: FeatureCard[] = [
     icon: ClipboardList,
     title: "Histórico para ver o ciclo completo",
     description:
-      "Gráficos semanais, mensais e previsões mostram humor e energia juntos, com fases e alertas baseados em dados do próprio uso.",
+      "Gráficos semanais, mensais e previsões mostram humor e energia juntos, com faixas, baseline pessoal e alertas baseados em dados do próprio uso.",
   },
 ];
 
@@ -425,34 +424,16 @@ export function SplashPage() {
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
+            justifyContent: "center",
             gap: 16,
             flexWrap: "wrap",
+            width: "100%",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <AiriaConstellationLogo size={62} hybrid />
             <AiriaWordmark compact />
           </div>
-
-          <button
-            type="button"
-            onClick={() => navigate("/login")}
-            style={{
-              border: "1px solid rgba(17,24,39,.08)",
-              background: "rgba(255,255,255,.78)",
-              color: BRAND.textWarm,
-              borderRadius: 999,
-              padding: "12px 18px",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              backdropFilter: "blur(14px)",
-              boxShadow: "0 14px 28px rgba(17,24,39,.06)",
-            }}
-          >
-            Já tenho conta
-          </button>
         </header>
 
         <section
@@ -536,10 +517,9 @@ export function SplashPage() {
                   Check-in de 30 segundos · A Airia cuida do resto · Grátis pra começar.
                 </p>
               </div>
-              <InstallCTA variant="compact" />
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20, alignItems: "center" }}>
               <button
                 type="button"
                 onClick={() => navigate("/login?tab=criar")}
@@ -547,36 +527,36 @@ export function SplashPage() {
                   border: "none",
                   background: BRAND.nectarine,
                   color: "#6A3C28",
-                  borderRadius: 18,
-                  padding: "16px 22px",
-                  fontSize: 14,
+                  borderRadius: 22,
+                  padding: "20px 40px",
+                  fontSize: 18,
                   fontWeight: 800,
                   cursor: "pointer",
-                  boxShadow: "0 20px 34px rgba(243,176,140,.24)",
+                  boxShadow: "0 24px 48px rgba(243,176,140,.32)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 8,
+                  gap: 10,
                   width: "100%",
+                  maxWidth: 400,
                 }}
               >
                 Começar grátis
-                <ArrowRight size={16} />
+                <ArrowRight size={20} />
               </button>
+              
               <button
                 type="button"
                 onClick={() => navigate("/login")}
                 style={{
-                  border: "1px solid rgba(17,24,39,.08)",
-                  background: "rgba(255,255,255,.82)",
-                  color: BRAND.textWarm,
-                  borderRadius: 18,
-                  padding: "14px 22px",
+                  border: "none",
+                  background: "none",
+                  color: BRAND.textSoft,
                   fontSize: 14,
-                  fontWeight: 700,
+                  fontWeight: 600,
                   cursor: "pointer",
-                  backdropFilter: "blur(14px)",
-                  width: "100%",
+                  textDecoration: "underline",
+                  opacity: 0.8,
                 }}
               >
                 Já tenho conta
@@ -1095,7 +1075,7 @@ export function SplashPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "flex-start" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, alignItems: "center", width: "100%" }}>
             <button
               type="button"
               onClick={() => navigate("/login?tab=criar")}
@@ -1103,12 +1083,14 @@ export function SplashPage() {
                 border: "none",
                 background: BRAND.nectarine,
                 color: "#6A3C28",
-                borderRadius: 18,
-                padding: "16px 22px",
-                fontSize: 14,
+                borderRadius: 22,
+                padding: "20px 40px",
+                fontSize: 18,
                 fontWeight: 800,
                 cursor: "pointer",
-                boxShadow: "0 22px 34px rgba(243,176,140,.24)",
+                boxShadow: "0 22px 44px rgba(243,176,140,.28)",
+                width: "100%",
+                maxWidth: 400,
               }}
             >
               Começar minha leitura de ritmo
@@ -1117,14 +1099,14 @@ export function SplashPage() {
               type="button"
               onClick={() => navigate("/login")}
               style={{
-                border: "1px solid rgba(17,24,39,.08)",
-                background: "rgba(255,255,255,.86)",
-                color: BRAND.textWarm,
-                borderRadius: 18,
-                padding: "16px 22px",
+                border: "none",
+                background: "none",
+                color: BRAND.textSoft,
                 fontSize: 14,
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: "pointer",
+                textDecoration: "underline",
+                opacity: 0.8,
               }}
             >
               Entrar na conta
