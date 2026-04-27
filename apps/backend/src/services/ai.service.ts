@@ -53,6 +53,10 @@ export type JournalPromptContext = {
     energyScore: number;
     stateLabel?: string | null;
   } | null;
+  /** Hora local do usuário (0-23). Frontend deve enviar pra calibrar sugestões. */
+  currentHour?: number;
+  /** Minuto local do usuário (0-59). Frontend deve enviar pra calibrar sugestões. */
+  currentMinute?: number;
 };
 
 export type OnboardingProfileInput = {
@@ -137,6 +141,8 @@ export class AIService {
             recentSuggestionMemory: input.context.recentSuggestionMemory,
             activeGoalsContext: input.context.activeGoalsContext,
             plannerContext: input.context.plannerContext,
+            currentHour: input.context.currentHour,
+            currentMinute: input.context.currentMinute,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',
@@ -228,6 +234,8 @@ export class AIService {
       longTermMemory?: string | null;
       activeGoalsContext?: string | null;
       recentSessionHistory?: string | null;
+      currentHour?: number;
+      currentMinute?: number;
     },
   ): Promise<JournalSummary> {
     const recentMessages = messages.slice(-this.CONTEXT_LIMIT);
@@ -283,6 +291,8 @@ export class AIService {
             longTermMemory: context?.longTermMemory,
             recentSessionHistory: context?.recentSessionHistory,
             activeGoalsContext: context?.activeGoalsContext,
+            currentHour: context?.currentHour,
+            currentMinute: context?.currentMinute,
             domain: 'summary',
           }),
         },
@@ -309,6 +319,8 @@ export class AIService {
     recentSuggestionMemory?: string | null;
     currentMoodLabel?: string;
     timeOfDay: string;
+    currentHour?: number;
+    currentMinute?: number;
   }): Promise<Array<{ title: string; category: string; reason: string; icon: string }>> {
     const prompt = `
       Com base no estado atual de ${input.userName}, sugira 3 hábitos ou micro-ações para este momento do dia (${input.timeOfDay}).
@@ -340,6 +352,8 @@ export class AIService {
             profileSummary: input.profileSummary,
             moodCycleContext: input.moodCycleContext,
             recentSuggestionMemory: input.recentSuggestionMemory,
+            currentHour: input.currentHour,
+            currentMinute: input.currentMinute,
             domain: 'planning',
           }),
         },

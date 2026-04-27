@@ -114,6 +114,8 @@ export class CheckinService {
     emotions?: string[];
     factors?: string[];
     plannerContext?: string | null;
+    currentHour?: number;
+    currentMinute?: number;
   }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState> {
     const checkinMoment = data.checkinSlot?.split('-')[0] || 'não informado';
     const currentLocalTime = extractClockFromCheckinSlot(data.checkinSlot);
@@ -207,6 +209,8 @@ JSON APENAS:
             activeGoalsContext: data.activeGoalsContext,
             plannerContext: data.plannerContext,
             recentSuggestionMemory: data.recentSuggestionMemory,
+            currentHour: data.currentHour,
+            currentMinute: data.currentMinute,
             domain: 'checkin',
           }),
         },

@@ -6,7 +6,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import i18n from "../i18n";
-import { api } from "../lib/api";
+import { api, getClientTimeContext } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
@@ -328,6 +328,7 @@ export function AuraChatPage() {
           history,
           moodCycleContext: cycleReport.aiContext,
           mode: routeMode,
+          ...getClientTimeContext(),
         }),
       });
 

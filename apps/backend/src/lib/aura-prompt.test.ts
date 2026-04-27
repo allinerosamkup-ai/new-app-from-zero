@@ -134,6 +134,70 @@ async function run() {
   assert.match(longitudinalPrompt, /MEMÓRIA E PADRÕES/i);
   assert.match(longitudinalPrompt, /cruze dados/i);
   assert.match(longitudinalPrompt, /semana passada/i);
+
+  // ── CALIBRAÇÃO UNIVERSAL: o novo SUGGESTION_CALIBRATION_CORE deve aparecer em todo prompt ──
+  const allPrompts = [
+    onboardingPrompt,
+    checkinPrompt,
+    journalLivePrompt,
+    journalFinalizePrompt,
+    auraCommandPrompt,
+    homePrompt,
+    goalExecutionPrompt,
+    longitudinalPrompt,
+  ];
+  for (const p of allPrompts) {
+    assert.match(p, /CALIBRAÇÃO DE RESPOSTA E SUGESTÃO/i);
+    assert.match(p, /NUNCA GENERALIZE O QUE É ESPECÍFICO/i);
+    assert.match(p, /PERGUNTA FINAL NÃO OFERECE OPÇÕES/i);
+    assert.match(p, /ESPELHO ANTES DA ANÁLISE/i);
+    assert.match(p, /CELEBRE COMPORTAMENTO, NUNCA PESSOA/i);
+    assert.match(p, /PROFUNDIDADE ANTES DE SOLUÇÃO/i);
+    assert.match(p, /SABER ENCERRAR SEM PERGUNTA/i);
+    assert.match(p, /FALADO, NÃO REDIGIDO/i);
+    assert.match(p, /SUGESTÃO ANCORADA NO CONTEXTO REAL/i);
+    assert.match(p, /PERGUNTE ANTES DE INVENTAR GENÉRICO/i);
+    assert.match(p, /HORÁRIO É PISTA INTERNA, NÃO MENCIONE NA FALA/i);
+    assert.match(p, /AGENDA ADAPTATIVA/i);
+    assert.match(p, /NUNCA SUGIRA AÇÃO PARA HORÁRIO QUE JÁ PASSOU/i);
+    assert.match(p, /HORÁRIO ATUAL/i);
+    assert.match(p, /USO INTERNO — NÃO MENCIONE NA FALA/i);
+    assert.match(p, /Nunca proponha ação para horário que já passou/i);
+    assert.match(p, /Minutos importam/i);
+  }
+
+  // ── Horário formatado e momento do dia derivado ──
+  const morningPrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'home',
+    currentHour: 8,
+    currentMinute: 30,
+  });
+  assert.match(morningPrompt, /08:30 \(manhã\)/);
+
+  const eveningPrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'home',
+    currentHour: 22,
+    currentMinute: 5,
+  });
+  assert.match(eveningPrompt, /22:05 \(noite\)/);
+
+  const afternoonPrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'home',
+    currentHour: 14,
+    currentMinute: 0,
+  });
+  assert.match(afternoonPrompt, /14:00 \(tarde\)/);
+
+  const dawnPrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'home',
+    currentHour: 3,
+    currentMinute: 15,
+  });
+  assert.match(dawnPrompt, /03:15 \(madrugada\)/);
 }
 
 run()

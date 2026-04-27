@@ -354,6 +354,7 @@ async function generateJournalSuggestedTasks(args: {
   acceptedSuggestions?: string[];
   recentMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
   currentHour?: number;
+  currentMinute?: number;
 }): Promise<SuggestedTask[]> {
   const OpenAI = (await import('openai')).default;
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -392,8 +393,10 @@ REGRAS:
 - Se o usuário mencionou planos concretos (ex: "vou encontrar fulano", "tenho reunião", "preciso ligar para X"), inclua como tarefa com categoria adequada (social/trabalho) e horário se mencionado.
 - Não transforme sugestão rejeitada ou apenas cogitada pela Aura em tarefa.
 - Evite somática genérica. Corpo/respiração só entram se a conversa mostrou sinal corporal relevante ou necessidade real de aterramento.
-- Misture sugestões conversadas com compromissos práticos mencionados na conversa.${args.currentHour !== undefined ? `
-- A hora atual do usuário é ${args.currentHour}h. NUNCA sugira horários anteriores à hora atual. Se o horário natural de uma tarefa já passou, omita o campo time.` : ''}
+- Misture sugestões conversadas com compromissos práticos mencionados na conversa.
+- ANTI-GENÉRICO: tarefas tipo "faça uma tarefa pequena", "anote uma pendência", "escolha um próximo passo mínimo", "feche o dia organizando a agenda", "respire fundo" não têm valor — qualquer app de produtividade já faz isso. Omita.
+- Se a conversa não trouxe contexto suficiente para uma sugestão concreta e específica, retorne [] (lista vazia). Não invente. É melhor perguntar à pessoa depois do que entregar genérico agora.${args.currentHour !== undefined ? `
+- HORÁRIO ATUAL DO USUÁRIO (USO INTERNO — não cite no título da tarefa): ${String(args.currentHour).padStart(2, '0')}:${String(args.currentMinute ?? 0).padStart(2, '0')}. Use só para escolher e calibrar. Quando preencher o campo time, ele DEVE ser posterior ao horário atual, caber em janela livre do planner e respeitar a fase de humor. Se o horário natural da tarefa já passou, omita o campo time ou descarte a tarefa.` : ''}
 - Retorne APENAS JSON no formato:
 {"tasks":[{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]}`,
       },
@@ -672,6 +675,7 @@ async function finalizeJournalSession(args: {
   activeGoalsContext?: string | null;
   recentSessionHistory?: string | null;
   currentHour?: number;
+  currentMinute?: number;
 }) {
   const summary = await args.aiService.summarizeJournalSession(args.messages, undefined as any, {
     userName: args.userName,
@@ -693,10 +697,13 @@ async function finalizeJournalSession(args: {
         activeGoalsContext: args.activeGoalsContext,
         recentSessionHistory: args.recentSessionHistory,
         domain: 'journal-finalize',
+        currentHour: args.currentHour,
+        currentMinute: args.currentMinute,
       }),
       userName: args.userName,
       moodCycleContext: args.moodCycleContext,
       currentHour: args.currentHour,
+      currentMinute: args.currentMinute,
       acceptedSuggestions: summary.suggestions || [],
       recentMessages: args.messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -1336,6 +1343,8 @@ export function createApp(dependencies: AppDependencies = {}) {
       emotions: (data as any).emotions,
       factors: data.factors,
       plannerContext: checkinPlannerContext,
+      currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
+      currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
     });
 
     // DEBUG: Log the aiState response from CheckinService
@@ -1707,6 +1716,8 @@ export function createApp(dependencies: AppDependencies = {}) {
           recentSuggestionMemory,
           ragContext: journalRagContext,
           plannerContext: journalPlannerContext,
+          currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
+          currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
@@ -1826,6 +1837,8 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
         plannerContext,
         interactionMode: data.mode,
+        currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
+        currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
       });
 
       const responsePayload = { ...commandResponse.payload };
@@ -2014,6 +2027,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       activeGoalsContext: runtimeContext.activeGoalsContext,
       recentSessionHistory: routineContext?.recentSessionHistory,
       currentHour: typeof req.body.currentHour === 'number' ? req.body.currentHour : undefined,
+      currentMinute: typeof req.body.currentMinute === 'number' ? req.body.currentMinute : undefined,
     });
 
     // Agendar RAG indexing para absorver o que foi escrito no diário
@@ -3137,6 +3151,8 @@ INSTRUÇÕES:
           recentSuggestionMemory,
           currentMoodLabel: String(context.moodLabel || ''),
           timeOfDay,
+          currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
+          currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
         });
         SuggestionMemoryService.append(
           prisma,
@@ -3166,6 +3182,8 @@ INSTRUÇÕES:
               activeGoalsContext,
               recentSuggestionMemory,
               domain: getSuggestPromptDomain(type),
+              currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
+              currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
             }),
           },
           { role: 'user' as const, content: prompt },

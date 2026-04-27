@@ -198,6 +198,8 @@ export class AuraCommandService {
       ragContext?: string | null;
       plannerContext?: string | null;
       interactionMode?: 'conversation' | 'executor';
+      currentHour?: number;
+      currentMinute?: number;
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<AuraCommandResponse> {
@@ -279,6 +281,8 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
             recentSuggestionMemory: input.recentSuggestionMemory,
             activeGoalsContext: input.activeGoalsContext,
             plannerContext: input.plannerContext,
+            currentHour: input.currentHour,
+            currentMinute: input.currentMinute,
             domain: interactionMode === 'conversation' ? 'journal-live' : 'aura-command',
             extraInstructions: interactionMode === 'conversation'
               ? [
