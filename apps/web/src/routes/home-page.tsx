@@ -1030,16 +1030,16 @@ export function HomePage() {
       alerts.push({
         key: "mood-risk",
         title: sustainedLow
-          ? `Você entrou na fase ${cycleReport.phaseLabel} há ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "dias" : "dia"}`
+          ? `Seu padrão pessoal entrou em ${cycleReport.phaseLabel.toLowerCase()} há ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "dias" : "dia"}`
           : rapidDrop
-            ? `Queda brusca detectada — fase ${cycleReport.phaseLabel}`
-            : `Estabilidade baixa — você está em ${cycleReport.phaseLabel}`,
+            ? `Desvio brusco do seu padrão pessoal — faixa ${cycleReport.phaseLabel}`
+            : `Estabilidade baixa — faixa pessoal ${cycleReport.phaseLabel}`,
         description: sustainedLow
-          ? "O padrão recente sugere risco de aprofundamento do rebaixamento. Vale registrar isso no diário e diminuir a carga de hoje."
+          ? "O EWMA individual ficou abaixo do baseline pessoal por vários registros. Vale registrar isso no diário e diminuir a carga de hoje."
           : rapidDrop
-            ? "A mudança nas últimas 48h pede proteção de energia e leitura mais cuidadosa do que está pesando agora."
-            : "Seu ciclo entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
-        evidence: `Base: estabilidade ${cycleReport.stabilityScore}/100, tendência 7d ${cycleReport.trend7d.toFixed(1)} e sinal(is): ${cycleReport.warningFlags.join(", ") || "estabilidade baixa"}.`,
+            ? "A mudança nas últimas 48h saiu da sua linha de base. Proteja energia e leia com mais cuidado o que está pesando agora."
+            : "Seu padrão entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
+        evidence: `Base: baseline pessoal ${cycleReport.baselineComposite.toFixed(1)}/10, EWMA atual ${cycleReport.currentComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}/100 e sinal(is): ${cycleReport.warningFlags.join(", ") || "estabilidade baixa"}.`,
         tone: sustainedLow || cycleReport.stabilityScore <= 30 ? "critical" : "warning",
         actionLabel: "Abrir diário",
         actionPath: "/journal",

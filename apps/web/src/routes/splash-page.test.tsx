@@ -11,10 +11,11 @@ describe("SplashPage", () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain("Você não é difícil. Você cicla.");
+    expect(html).toContain("EWMA individual");
+    expect(html).toContain("baseline pessoal");
     expect(html).toContain("Como funciona");
     expect(html).toContain("Veja o app em ação");
-    expect(html).toContain("Quero entender meu ciclo");
-    expect(html).toContain("Gratuito durante o preview");
+    expect(html).toContain("Começar minha leitura de ritmo");
+    expect(html).toContain("Acesso Beta: Gratuito hoje");
   });
 });

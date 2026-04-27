@@ -330,7 +330,7 @@ export function InsightsPage() {
           ? "Reduza estímulos e escolha uma decisão antes de abrir outra frente."
           : "Escolha uma ação concreta que mantenha o ritmo sem esticar o dia.";
       setAiInsight({
-        insight: `Pelo histórico de ${periodDays} dias, sua leitura atual combina ${cycleReport.phaseLabel.toLowerCase()}, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
+        insight: `Pelo histórico de ${periodDays} dias, sua leitura atual combina faixa ${cycleReport.phaseLabel.toLowerCase()}, baseline pessoal de ${cycleReport.baselineComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
         action: localAction,
         category: "rotina",
         actionTitle: localAction.slice(0, 40),
@@ -339,7 +339,7 @@ export function InsightsPage() {
       setHighlights([
         `${history.length} registros no período selecionado`,
         `Humor médio ${avgHumor} · energia média ${avgEnergia}`,
-        `Fase atual: ${cycleReport.phaseLabel}`,
+        `Faixa pessoal: ${cycleReport.phaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
       ]);
       setInsightPhase("done");
     }

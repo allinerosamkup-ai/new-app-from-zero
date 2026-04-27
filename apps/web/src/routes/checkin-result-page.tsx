@@ -586,6 +586,9 @@ export function CheckinResultPage() {
               <p style={{ margin: "10px 0 0", fontSize: 13, lineHeight: 1.5, color: phaseColor, fontStyle: "italic", fontWeight: 600 }}>
                 💡 {phaseTip}
               </p>
+              <p style={{ margin: "8px 0 0", fontSize: 11.5, lineHeight: 1.45, color: "#6B5E5A", fontWeight: 600 }}>
+                Base pessoal: {cycleReport.personalTrendLabel} · baseline {cycleReport.baselineComposite.toFixed(1)}/10 · EWMA {cycleReport.currentComposite.toFixed(1)}/10
+              </p>
               <button
                 type="button"
                 onClick={() => setPhaseLegendOpen(true)}

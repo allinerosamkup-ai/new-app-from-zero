@@ -33,6 +33,14 @@ export type MoodPhase =
   | "mixed"             // Alta variabilidade — estado instável
   | "insufficient_data"; // Menos de 3 checkins
 
+export type TrendBand =
+  | "fluindo"
+  | "em_alta"
+  | "estavel"
+  | "oscilando"
+  | "em_queda"
+  | "atencao";
+
 export type EnergyForecast = "high" | "moderate" | "low" | "rest";
 
 export type WarningFlag =
@@ -42,6 +50,30 @@ export type WarningFlag =
   | "sustained_elevated"    // 5+ dias acima de 4.2 — alerta hipomaníaco
   | "sleep_impact_high"     // Correlação sono-humor > 0.6
   | "low_checkin_frequency"; // Menos de 4 checkins nos últimos 7 dias
+
+export type PersonalTrendProfile = {
+  baselineMood: number;
+  baselineEnergy: number;
+  baselineComposite: number;
+  currentMoodEwma: number;
+  currentEnergyEwma: number;
+  currentComposite: number;
+  previousMoodEwma: number;
+  previousEnergyEwma: number;
+  previousComposite: number;
+  deltaMood: number;
+  deltaEnergy: number;
+  deltaComposite: number;
+  volatility14d: number;
+  sustainedDeviationDays: number;
+  positiveDeviationDays: number;
+  negativeDeviationDays: number;
+  criticalDeviationDays: number;
+  trendBand: TrendBand;
+  trendBandLabel: string;
+  trendBandDescription: string;
+  trendBandTip: string;
+};
 
 export type MoodCycleReport = {
   phase: MoodPhase;
@@ -64,6 +96,20 @@ export type MoodCycleReport = {
     estimatedLengthDays: number | null;
     currentDayInCycle: number | null;
   };
+  personalTrend: PersonalTrendProfile;
+  baselineMood: number;
+  baselineEnergy: number;
+  baselineComposite: number;
+  currentMoodEwma: number;
+  currentEnergyEwma: number;
+  currentComposite: number;
+  personalTrendLabel: string;
+  personalTrendDescription: string;
+  personalTrendTip: string;
+  personalTrendBand: TrendBand;
+  baselineDeltaMood: number;
+  baselineDeltaEnergy: number;
+  baselineDeltaComposite: number;
   // Para o prompt da IA
   aiContext: string;
 };
@@ -81,66 +127,66 @@ export type PhaseConfigEntry = {
 
 export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
   elevated: {
-    label: "Voo Alto",
+    label: "Em alta",
     emoji: "🚀",
-    description: "Humor e energia acima do seu basal habitual. Ótimo para projetos que exigem criatividade e iniciativa.",
-    tip: "Aproveite a energia, mas mantenha o ritmo sustentável. Evite decisões impulsivas.",
+    description: "Humor e energia acima do seu padrão pessoal recente. A leitura indica aceleração sem perder o fio da estabilidade.",
+    tip: "Aproveite o pico sem exagerar na carga. O ganho agora é usar a energia com intenção.",
     color: "var(--accent-sky)",
     energyForecast: "high",
   },
   flowing: {
     label: "Fluindo",
     emoji: "✨",
-    description: "Você está no seu melhor ritmo. Clareza mental, motivação e energia alinhadas.",
-    tip: "Pico de produtividade. Priorize suas tarefas mais importantes agora.",
+    description: "Você está acima do seu padrão e com ritmo estável. Clareza, motivação e energia caminham juntas.",
+    tip: "Ótimo momento para priorizar o que realmente move a semana.",
     color: "var(--accent-sage)",
     energyForecast: "high",
   },
   stable: {
     label: "Estável",
     emoji: "💚",
-    description: "Estado basal equilibrado — eutimia. Ritmo constante e previsível.",
-    tip: "Bom momento para construir hábitos e avançar consistentemente.",
+    description: "Você está dentro do seu padrão pessoal. O app entende esse intervalo como seu chão normal.",
+    tip: "Bom momento para rotina, previsibilidade e avanço consistente.",
     color: "var(--accent-sage)",
     energyForecast: "moderate",
   },
   falling: {
-    label: "Desacelerando",
+    label: "Em queda",
     emoji: "📉",
-    description: "Tendência de queda detectada. Seu humor está abaixo do padrão recente.",
-    tip: "Reduza o ritmo. Priorize sono, alimentação e autocuidado agora.",
+    description: "A tendência caiu abaixo do seu padrão pessoal recente. A leitura aponta perda de tração.",
+    tip: "Reduza atrito e proteja energia antes que a queda aprofunde.",
     color: "var(--accent-peach)",
     energyForecast: "moderate",
   },
   low: {
-    label: "Recolhimento",
+    label: "Atenção",
     emoji: "🌙",
-    description: "Você está numa fase de menor energia e humor. É um padrão natural do ciclo.",
-    tip: "Este é o momento de restaurar — não de produzir. Gentileza consigo mesma é a prioridade.",
+    description: "Seu padrão pessoal entrou numa faixa abaixo do normal. Aqui a leitura pede cuidado, não cobrança.",
+    tip: "Priorize o básico e corte o excesso. Pequenos passos contam mais do que empurrar força.",
     color: "var(--accent-peach-strong)",
     energyForecast: "low",
   },
   depleted: {
-    label: "Pausa",
+    label: "Atenção",
     emoji: "😴",
-    description: "Energia e humor muito baixos. Seu sistema precisa de recuperação ativa.",
-    tip: "Cancele o que puder. Descanso não é fraqueza — é necessidade biológica agora.",
+    description: "Humor e energia estão bem abaixo do seu padrão pessoal. O sinal é de recuperação, não de cobrança.",
+    tip: "Cancele o que puder e trate descanso como parte do plano.",
     color: "var(--accent-peach-ink)",
     energyForecast: "rest",
   },
   recovering: {
-    label: "Retomada",
+    label: "Retomando",
     emoji: "🌱",
-    description: "Você está saindo de uma fase baixa. Energia retornando gradualmente.",
-    tip: "Retome devagar. Comemore cada pequeno avanço — você está no caminho certo.",
+    description: "Você está saindo de uma faixa baixa. O padrão já começa a voltar para perto do seu normal.",
+    tip: "Retome devagar e consolide cada melhora antes de subir a carga.",
     color: "var(--accent-sage)",
     energyForecast: "low",
   },
   mixed: {
-    label: "Turbulência",
+    label: "Oscilando",
     emoji: "⚡",
-    description: "Alta variabilidade detectada. Altos e baixos frequentes sem padrão claro.",
-    tip: "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam o ciclo.",
+    description: "A leitura variou mais do que o normal. O padrão ainda existe, mas está menos estável agora.",
+    tip: "Volte para rotina simples e reduza decisões desnecessárias por enquanto.",
     color: "var(--accent-peach)",
     energyForecast: "moderate",
   },
@@ -173,6 +219,162 @@ function stdDev(values: number[]): number {
   const avg = mean(values);
   const variance = values.reduce((acc, v) => acc + Math.pow(v - avg, 2), 0) / values.length;
   return Math.sqrt(variance);
+}
+
+function weightedComposite(mood: number, energy: number): number {
+  return Number((mood * 0.6 + energy * 0.4).toFixed(2));
+}
+
+function countSignChanges(values: number[], baseline: number): number {
+  const signs = values
+    .map((value) => Math.sign(value - baseline))
+    .filter((value) => value !== 0);
+
+  let changes = 0;
+  for (let i = 1; i < signs.length; i++) {
+    if (signs[i] !== signs[i - 1]) changes++;
+  }
+  return changes;
+}
+
+function getBaselineWindow(sorted: CheckinEntry[]): CheckinEntry[] {
+  if (sorted.length <= 4) return sorted;
+  const holdout = Math.min(3, sorted.length - 1);
+  return sorted.slice(0, sorted.length - holdout);
+}
+
+function computePersonalTrendProfile(sorted: CheckinEntry[]): PersonalTrendProfile {
+  const baselineWindow = getBaselineWindow(sorted);
+  const baselineMoodValues = baselineWindow.map((entry) => entry.humor);
+  const baselineEnergyValues = baselineWindow.map((entry) => entry.energia);
+
+  const recentWindow = sorted.slice(-7);
+  const previousWindow = sorted.slice(-14, -7);
+  const compositeRecent = recentWindow.map((entry) => weightedComposite(entry.humor, entry.energia));
+  const compositePrevious = previousWindow.length > 0
+    ? previousWindow.map((entry) => weightedComposite(entry.humor, entry.energia))
+    : sorted.slice(0, Math.max(1, sorted.length - recentWindow.length)).map((entry) => weightedComposite(entry.humor, entry.energia));
+  const composite14d = sorted.slice(-14).map((entry) => weightedComposite(entry.humor, entry.energia));
+
+  const baselineMood = baselineMoodValues.length >= 2 ? ewma(baselineMoodValues, 0.12) : mean(sorted.map((entry) => entry.humor));
+  const baselineEnergy = baselineEnergyValues.length >= 2 ? ewma(baselineEnergyValues, 0.12) : mean(sorted.map((entry) => entry.energia));
+  const baselineComposite = weightedComposite(baselineMood, baselineEnergy);
+
+  const currentMoodEwma = ewma(recentWindow.map((entry) => entry.humor), 0.32);
+  const currentEnergyEwma = ewma(recentWindow.map((entry) => entry.energia), 0.32);
+  const currentComposite = weightedComposite(currentMoodEwma, currentEnergyEwma);
+
+  const previousMoodEwma = previousWindow.length > 0 ? ewma(previousWindow.map((entry) => entry.humor), 0.32) : currentMoodEwma;
+  const previousEnergyEwma = previousWindow.length > 0 ? ewma(previousWindow.map((entry) => entry.energia), 0.32) : currentEnergyEwma;
+  const previousComposite = weightedComposite(previousMoodEwma, previousEnergyEwma);
+
+  const deltaMood = Number((currentMoodEwma - baselineMood).toFixed(2));
+  const deltaEnergy = Number((currentEnergyEwma - baselineEnergy).toFixed(2));
+  const deltaComposite = Number((currentComposite - baselineComposite).toFixed(2));
+  const volatility14d = stdDev(composite14d);
+  const sustainedDeviationDays = compositeRecent.filter((value) => Math.abs(value - baselineComposite) >= 0.75).length;
+  const positiveDeviationDays = compositeRecent.filter((value) => value - baselineComposite >= 0.75).length;
+  const negativeDeviationDays = compositeRecent.filter((value) => baselineComposite - value >= 0.75).length;
+  const criticalDeviationDays = compositeRecent.filter((value) => baselineComposite - value >= 1.4).length;
+  const signChanges = countSignChanges(compositeRecent, baselineComposite);
+
+  let trendBand: TrendBand = "estavel";
+  if (criticalDeviationDays >= 3 || (negativeDeviationDays >= 4 && deltaComposite <= -1.0)) {
+    trendBand = "atencao";
+  } else if (volatility14d >= 1.8 || signChanges >= 2) {
+    trendBand = "oscilando";
+  } else if (deltaComposite >= 1.25 && positiveDeviationDays >= 3) {
+    trendBand = "fluindo";
+  } else if (deltaComposite >= 0.65) {
+    trendBand = "em_alta";
+  } else if (deltaComposite <= -1.0) {
+    trendBand = "em_queda";
+  }
+
+  const trendBandLabelMap: Record<TrendBand, { label: string; description: string; tip: string }> = {
+    fluindo: {
+      label: "Fluindo",
+      description: "Seu padrão pessoal está acima do normal com estabilidade. A leitura aponta um momento de tração boa.",
+      tip: "Aproveite para avançar nas tarefas que pedem foco e presença.",
+    },
+    em_alta: {
+      label: "Em alta",
+      description: "Seu padrão pessoal está acima da linha de base. Ainda é um bom momento, só sem forçar demais.",
+      tip: "Use esse extra de energia para destravar o que estava parado.",
+    },
+    estavel: {
+      label: "Estável",
+      description: "Seu padrão está dentro da sua faixa normal. Aqui o sinal é consistência, não urgência.",
+      tip: "Bom momento para seguir rotina e consolidar o que já está andando.",
+    },
+    oscilando: {
+      label: "Oscilando",
+      description: "A leitura oscilou mais do que o seu normal recente. O padrão existe, mas está menos firme agora.",
+      tip: "Volte para um plano simples e deixe o dia menos barulhento.",
+    },
+    em_queda: {
+      label: "Em queda",
+      description: "Seu padrão pessoal caiu abaixo da base recente. Há desvio, mas ainda não necessariamente colapso.",
+      tip: "Corte atrito e proteja energia antes de pedir mais de você.",
+    },
+    atencao: {
+      label: "Atenção",
+      description: "O padrão ficou bem abaixo do seu normal recente. Aqui o app está sinalizando risco de sobrecarga.",
+      tip: "Pare de empurrar. Priorize descanso, clareza e o básico do dia.",
+    },
+  };
+
+  const bandMeta = trendBandLabelMap[trendBand];
+
+  return {
+    baselineMood,
+    baselineEnergy,
+    baselineComposite,
+    currentMoodEwma,
+    currentEnergyEwma,
+    currentComposite,
+    previousMoodEwma,
+    previousEnergyEwma,
+    previousComposite,
+    deltaMood,
+    deltaEnergy,
+    deltaComposite,
+    volatility14d,
+    sustainedDeviationDays,
+    positiveDeviationDays,
+    negativeDeviationDays,
+    criticalDeviationDays,
+    trendBand,
+    trendBandLabel: bandMeta.label,
+    trendBandDescription: bandMeta.description,
+    trendBandTip: bandMeta.tip,
+  };
+}
+
+function mapTrendBandToPhase(
+  trendBand: TrendBand,
+  trendProfile: PersonalTrendProfile,
+  previousPhase: MoodPhase | null,
+): MoodPhase {
+  if (previousPhase && (previousPhase === "low" || previousPhase === "depleted") && trendProfile.deltaComposite >= -0.2 && trendProfile.trendBand !== "atencao") {
+    return "recovering";
+  }
+
+  switch (trendBand) {
+    case "fluindo":
+      return "flowing";
+    case "em_alta":
+      return "elevated";
+    case "oscilando":
+      return "mixed";
+    case "em_queda":
+      return trendProfile.deltaComposite <= -1.35 || trendProfile.criticalDeviationDays >= 2 ? "low" : "falling";
+    case "atencao":
+      return trendProfile.deltaComposite <= -1.8 || trendProfile.criticalDeviationDays >= 3 ? "depleted" : "low";
+    case "estavel":
+    default:
+      return "stable";
+  }
 }
 
 /**
@@ -262,6 +464,29 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // Dados insuficientes
   if (sorted.length < 3) {
     const cfg = PHASE_CONFIG.insufficient_data;
+    const emptyTrend: PersonalTrendProfile = {
+      baselineMood: 0,
+      baselineEnergy: 0,
+      baselineComposite: 0,
+      currentMoodEwma: 0,
+      currentEnergyEwma: 0,
+      currentComposite: 0,
+      previousMoodEwma: 0,
+      previousEnergyEwma: 0,
+      previousComposite: 0,
+      deltaMood: 0,
+      deltaEnergy: 0,
+      deltaComposite: 0,
+      volatility14d: 0,
+      sustainedDeviationDays: 0,
+      positiveDeviationDays: 0,
+      negativeDeviationDays: 0,
+      criticalDeviationDays: 0,
+      trendBand: "estavel",
+      trendBandLabel: "Estável",
+      trendBandDescription: "Ainda não há dados suficientes para personalizar a leitura.",
+      trendBandTip: "Faça alguns check-ins para o app aprender seu padrão pessoal.",
+    };
     return {
       phase: "insufficient_data",
       phaseLabel: cfg.label,
@@ -279,6 +504,20 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
       energyForecastLabel: ENERGY_LABELS[cfg.energyForecast],
       warningFlags: [],
       cycleEstimate: { hasEnoughData: false, estimatedLengthDays: null, currentDayInCycle: null },
+      personalTrend: emptyTrend,
+      baselineMood: 0,
+      baselineEnergy: 0,
+      baselineComposite: 0,
+      currentMoodEwma: 0,
+      currentEnergyEwma: 0,
+      currentComposite: 0,
+      personalTrendLabel: emptyTrend.trendBandLabel,
+      personalTrendDescription: emptyTrend.trendBandDescription,
+      personalTrendTip: emptyTrend.trendBandTip,
+      personalTrendBand: emptyTrend.trendBand,
+      baselineDeltaMood: 0,
+      baselineDeltaEnergy: 0,
+      baselineDeltaComposite: 0,
       aiContext: "Poucos dados para análise — usuária está começando a rastrear o ciclo.",
     };
   }
@@ -287,22 +526,27 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   const last7 = sorted.slice(-7);
   const prev7 = sorted.slice(-14, -7);
   const last14 = sorted.slice(-14);
-  const last5 = sorted.slice(-5);
-  const last3 = sorted.slice(-3);
 
   const humors7 = last7.map(e => e.humor);
-  const humors14 = last14.map(e => e.humor);
-  const humors7prev = prev7.map(e => e.humor);
   const energies7 = last7.map(e => e.energia);
+  const composite14 = last14.map((entry) => weightedComposite(entry.humor, entry.energia));
 
   const avgMood7d = mean(humors7);
-  const avgMoodPrev7 = humors7prev.length > 0 ? mean(humors7prev) : avgMood7d;
   const avgEnergy7d = mean(energies7);
-  const trend7d = avgMood7d - avgMoodPrev7;
-  const volatility14d = stdDev(humors14);
-  const ewmaRecent = ewma(last7.map(e => e.humor));
-  const recent3avg = mean(last3.map(e => e.humor));
-  const recent5avg = mean(last5.map(e => e.humor));
+  const avgComposite7d = mean(last7.map((entry) => weightedComposite(entry.humor, entry.energia)));
+  const avgCompositePrev7 = prev7.length > 0 ? mean(prev7.map((entry) => weightedComposite(entry.humor, entry.energia))) : avgComposite7d;
+  const trend7d = avgComposite7d - avgCompositePrev7;
+  const trendProfile = computePersonalTrendProfile(sorted);
+  const volatility14d = trendProfile.volatility14d;
+  const currentComposite = trendProfile.currentComposite;
+  const currentMoodEwma = trendProfile.currentMoodEwma;
+  const currentEnergyEwma = trendProfile.currentEnergyEwma;
+  const baselineComposite = trendProfile.baselineComposite;
+  const baselineMood = trendProfile.baselineMood;
+  const baselineEnergy = trendProfile.baselineEnergy;
+  const baselineDeltaMood = trendProfile.deltaMood;
+  const baselineDeltaEnergy = trendProfile.deltaEnergy;
+  const baselineDeltaComposite = trendProfile.deltaComposite;
 
   // Sono
   const sleepValues = last7.map(e => e.sono).filter(s => s !== undefined) as number[];
@@ -315,53 +559,43 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // Verificar fase anterior (para detectar "recovering")
   if (sorted.length >= 10) {
     const before = sorted.slice(-14, -7);
-    const beforeAvg = mean(before.map(e => e.humor));
-    if (beforeAvg < 4.0) previousPhase = "depleted";
-    else if (beforeAvg < 5.0) previousPhase = "low";
+    const beforeAvg = mean(before.map((entry) => weightedComposite(entry.humor, entry.energia)));
+    if (beforeAvg < baselineComposite - 1.8) previousPhase = "depleted";
+    else if (beforeAvg < baselineComposite - 1.0) previousPhase = "low";
   }
 
-  if (recent3avg >= 8.4 && volatility14d < 2.0) {
-    phase = "elevated";
-  } else if (recent3avg < 3.0 || recent5avg < 3.0) {
-    phase = "depleted";
-  } else if (recent3avg < 5.0 || recent5avg < 5.0) {
-    phase = "low";
-  } else if (
+  phase = mapTrendBandToPhase(trendProfile.trendBand, trendProfile, previousPhase);
+  if (
     (previousPhase === "low" || previousPhase === "depleted") &&
-    trend7d > 0.6 &&
-    avgMood7d >= 5.0
+    baselineDeltaComposite > -0.35 &&
+    trend7d > 0.2
   ) {
     phase = "recovering";
-  } else if (volatility14d > 2.4 && humors14.length >= 7) {
-    phase = "mixed";
-  } else if (trend7d < -0.8 && avgMood7d > 5.0) {
-    phase = "falling";
-  } else if (ewmaRecent >= 7.2) {
+  }
+  if (phase === "stable" && trendProfile.deltaComposite >= 0.95) {
     phase = "flowing";
-  } else if (avgMood7d >= 5.6 && volatility14d <= 1.8) {
-    phase = "stable";
-  } else if (trend7d < -0.4) {
+  }
+  if (phase === "stable" && trendProfile.deltaComposite <= -0.65) {
     phase = "falling";
-  } else {
-    phase = "stable";
   }
 
   // ── Dias na fase atual ──────────────────────────────────
   let daysInPhase = 1;
   const phaseThresholds: Record<MoodPhase, (h: number) => boolean> = {
-    elevated: h => h >= 8.0,
-    flowing: h => h >= 7.0,
-    stable: h => h >= 5.6 && h < 7.2,
-    falling: _h => true, // baseado em tendência, não em valor absoluto
-    low: h => h < 5.0,
-    depleted: h => h < 3.0,
-    recovering: h => h >= 5.0,
+    elevated: h => h >= baselineComposite + 0.95,
+    flowing: h => h >= baselineComposite + 1.2,
+    stable: h => h >= baselineComposite - 0.45 && h <= baselineComposite + 0.65,
+    falling: h => h <= baselineComposite - 0.45,
+    low: h => h <= baselineComposite - 1.0,
+    depleted: h => h <= baselineComposite - 1.65,
+    recovering: h => h >= baselineComposite - 0.35,
     mixed: _h => true,
     insufficient_data: _h => true,
   };
   const phaseCheck = phaseThresholds[phase];
   for (let i = sorted.length - 2; i >= 0; i--) {
-    if (phaseCheck(sorted[i].humor)) {
+    const dayComposite = weightedComposite(sorted[i].humor, sorted[i].energia);
+    if (phaseCheck(dayComposite)) {
       daysInPhase++;
     } else {
       break;
@@ -373,11 +607,11 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   let stabilityScore = 100;
   stabilityScore -= Math.min(30, volatility14d * 9);       // variabilidade
   stabilityScore -= Math.min(20, Math.abs(trend7d) * 5);  // mudança brusca
-  const lowDays = humors14.filter(h => h <= 5.0).length;
-  const criticalDays = humors14.filter(h => h <= 3.0).length;
+  const lowDays = composite14.filter((value) => value <= baselineComposite - 0.75).length;
+  const criticalDays = composite14.filter((value) => value <= baselineComposite - 1.35).length;
   stabilityScore -= Math.min(25, lowDays * 5);              // dias baixos
   stabilityScore -= Math.min(35, criticalDays * 10);        // dias críticos
-  const highDays = humors14.filter(h => h >= 9.0).length;
+  const highDays = composite14.filter((value) => value >= baselineComposite + 1.0).length;
   stabilityScore -= Math.min(10, highDays * 3);             // dias muito altos
   if (sorted.length < 7) stabilityScore -= 15;              // poucos dados
   stabilityScore = Math.max(0, Math.min(100, Math.round(stabilityScore)));
@@ -385,7 +619,7 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // ── Warning flags ──────────────────────────────────────
   const warningFlags: WarningFlag[] = [];
 
-  if (volatility14d > 2.4) warningFlags.push("high_volatility");
+  if (volatility14d > 1.8) warningFlags.push("high_volatility");
 
   // sustained_low: só dispara se o humor ainda está baixo AGORA.
   // Se a tendência é positiva ou a fase é de recuperação, não alarmar por dias antigos.
@@ -401,9 +635,9 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // Queda rápida: últimos 2 dias vs 2 dias anteriores
   // Só dispara se a queda é recente E o humor não está subindo agora
   if (sorted.length >= 4 && !isTrendingUpNow) {
-    const last2avg = mean(sorted.slice(-2).map(e => e.humor));
-    const prev2avg = mean(sorted.slice(-4, -2).map(e => e.humor));
-    if (prev2avg - last2avg > 3.0) warningFlags.push("rapid_drop");
+    const last2avg = mean(sorted.slice(-2).map((entry) => weightedComposite(entry.humor, entry.energia)));
+    const prev2avg = mean(sorted.slice(-4, -2).map((entry) => weightedComposite(entry.humor, entry.energia)));
+    if (prev2avg - last2avg > 1.25) warningFlags.push("rapid_drop");
   }
 
   // Correlação sono-humor
@@ -453,10 +687,12 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // ── Contexto para IA ───────────────────────────────────
   const cfg = PHASE_CONFIG[phase];
   const aiContext = [
-    `FASE DO CICLO DE HUMOR: ${cfg.label} (${phase}) — ${daysInPhase} dia(s) nesta fase.`,
-    `Média de humor 7 dias: ${avgMood7d.toFixed(1)}/10 | Energia: ${avgEnergy7d.toFixed(1)}/10.`,
+    `Padrão pessoal: ${cfg.label} (${phase}) — ${daysInPhase} dia(s) nesta faixa.`,
+    `Baseline pessoal: humor ${baselineMood.toFixed(1)}/10 | energia ${baselineEnergy.toFixed(1)}/10 | combinado ${baselineComposite.toFixed(1)}/10.`,
+    `Leitura atual: humor ${currentMoodEwma.toFixed(1)}/10 | energia ${currentEnergyEwma.toFixed(1)}/10 | combinado ${currentComposite.toFixed(1)}/10.`,
+    `Desvio do baseline: Δhumor ${baselineDeltaMood > 0 ? "+" : ""}${baselineDeltaMood.toFixed(2)} | Δenergia ${baselineDeltaEnergy > 0 ? "+" : ""}${baselineDeltaEnergy.toFixed(2)} | Δcombinado ${baselineDeltaComposite > 0 ? "+" : ""}${baselineDeltaComposite.toFixed(2)}.`,
     `Tendência: ${trend7d > 0.2 ? "subindo" : trend7d < -0.2 ? "caindo" : "estável"} (Δ${trend7d > 0 ? "+" : ""}${trend7d.toFixed(2)}).`,
-    `Estabilidade: ${stabilityScore}/100 | Volatilidade: ${volatility14d.toFixed(2)}.`,
+    `Estabilidade: ${stabilityScore}/100 | Volatilidade: ${volatility14d.toFixed(2)} | faixa pessoal: ${trendProfile.trendBandLabel}.`,
     avgSleep7d ? `Sono médio: ${avgSleep7d.toFixed(1)}/10.` : "",
     warningFlags.length > 0 ? `Alertas: ${warningFlags.join(", ")}.` : "",
     `Previsão de energia hoje: ${ENERGY_LABELS[cfg.energyForecast]}.`,
@@ -483,6 +719,20 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
       estimatedLengthDays,
       currentDayInCycle,
     },
+    personalTrend: trendProfile,
+    baselineMood,
+    baselineEnergy,
+    baselineComposite,
+    currentMoodEwma,
+    currentEnergyEwma,
+    currentComposite,
+    personalTrendLabel: trendProfile.trendBandLabel,
+    personalTrendDescription: trendProfile.trendBandDescription,
+    personalTrendTip: trendProfile.trendBandTip,
+    personalTrendBand: trendProfile.trendBand,
+    baselineDeltaMood,
+    baselineDeltaEnergy,
+    baselineDeltaComposite,
     aiContext,
   };
 }
