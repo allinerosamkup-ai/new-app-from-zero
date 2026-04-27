@@ -1,4 +1,4 @@
-export const DEFAULT_OPENAI_MODEL = 'gpt-5.4-nano';
+export const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 export const DEFAULT_OPENAI_MAX_COMPLETION_TOKENS = 3000;
 
 export function getOpenAiModel(): string {
