@@ -100,7 +100,7 @@ async function run() {
         messages.length === 0 ? 0 : Math.max(...messages.map((message) => message.orderIndex)) + 1,
     } as any,
     generateJournalSuggestedTasks: async () => ([
-      { title: 'Separar uma tarefa pequena', category: 'rotina', time: '09:00' },
+      { title: 'Separar uma tarefa pequena', category: 'rotina', time: '09:00', dayOffset: 0 },
     ]),
   });
 
