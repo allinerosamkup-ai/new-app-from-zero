@@ -164,6 +164,21 @@ async function run() {
     assert.match(p, /USO INTERNO — NÃO MENCIONE NA FALA/i);
     assert.match(p, /Nunca proponha ação para horário que já passou/i);
     assert.match(p, /Minutos importam/i);
+    // Anti-genérico operacional + insight↔task
+    assert.match(p, /TESTE GENÉRICO OBRIGATÓRIO/i);
+    assert.match(p, /LISTA NEGRA — TAREFAS PROIBIDAS/i);
+    assert.match(p, /rotação de ombros/i);
+    assert.match(p, /INSIGHT E TAREFA COMPARTILHAM ORIGEM/i);
+    assert.match(p, /CADA ENTRADA É ÚNICA/i);
+    // ALIANCA_DIVERGENTE_CORE — universal, vocabulário interno
+    assert.match(p, /NÚCLEO DE RACIOCÍNIO E TOM/i);
+    assert.match(p, /TOM = AMIGA PRÓXIMA/i);
+    assert.match(p, /O QUE TÁ PASSANDO vs O QUE TÁ TENTANDO/i);
+    assert.match(p, /APOIO ≠ AJUDA/i);
+    assert.match(p, /PDA — PERCEPÇÃO → DECISÃO → AÇÃO/i);
+    assert.match(p, /3 EIXOS DE CALIBRAÇÃO/i);
+    assert.match(p, /POSTURA MEMORÁVEL/i);
+    assert.match(p, /ESTRUTURA DE RESPOSTA ANALÍTICA EXEMPLAR/i);
   }
 
   // ── Horário formatado e momento do dia derivado ──

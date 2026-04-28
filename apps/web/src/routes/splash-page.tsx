@@ -150,6 +150,39 @@ const screenshots: ScreenshotCard[] = [
   },
 ];
 
+const testimonials = [
+  {
+    name: "Mariana G.",
+    role: "Designer (TDAH)",
+    content: "A Airia é o primeiro app que não me faz sentir culpado por mudar o plano quando minha energia cai. O planner adaptativo é o que eu sempre precisei.",
+  },
+  {
+    name: "Ricardo S.",
+    role: "Empreendedor",
+    content: "Perceber o sinal de exaustão 3 dias antes de acontecer mudou meu jogo. Menos 'apagões', mais clareza sobre meus limites.",
+  },
+  {
+    name: "Julia W.",
+    role: "Escritora",
+    content: "Não é só um tracker genérico, é uma conversa que faz sentido. A IA realmente entende meus padrões e me ajuda a decidir o próximo passo.",
+  },
+];
+
+const faqs = [
+  {
+    question: "Meus dados de humor estão seguros?",
+    answer: "Sim. Seus registros são privados e usados apenas pela IA para te dar contexto. Não vendemos dados nem usamos para treinar modelos públicos.",
+  },
+  {
+    question: "O que é Bio-sincronia?",
+    answer: "É a técnica de ajustar suas tarefas e expectativas à sua biologia real (energia, sono, ciclo de humor) em vez de seguir uma agenda rígida.",
+  },
+  {
+    question: "Por que o app está grátis?",
+    answer: "Estamos em fase Beta Privada. Queremos construir a base do produto com usuários reais antes de definir o modelo de assinatura futuro.",
+  },
+];
+
 const heroHighlights = [
   "Perceba queda, aceleração e exaustão antes que virem apagão",
   "Entenda o padrão por trás do problema, não só o sentimento do momento",
@@ -493,7 +526,7 @@ export function SplashPage() {
                   maxWidth: "100%",
                 }}
               >
-                  Um lugar seguro para sua mente aterrissar.
+                  Sincronize seu dia com sua energia real, não com o relógio.
               </h1>
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
                 <p
@@ -504,7 +537,7 @@ export function SplashPage() {
                     color: BRAND.textSoft,
                   }}
                 >
-                  Um diário que responde com a sabedoria de quem entende que seu ritmo não é uma linha reta.
+                  O tracker de humor e planner adaptativo que entende seu ritmo e prevê quedas de energia antes que você possa desabar.
                 </p>
                 <p
                   style={{
@@ -514,7 +547,7 @@ export function SplashPage() {
                     color: "var(--text-3)",
                   }}
                 >
-                  Check-in de 30 segundos · A Airia cuida do resto · Grátis pra começar.
+                  Gratuito durante o Beta • 100% Privado • Sem cartão de crédito.
                 </p>
               </div>
             </div>
@@ -842,6 +875,48 @@ export function SplashPage() {
           </div>
         </SplashSection>
 
+        <SplashSection
+          kicker="O que dizem"
+          title="Quem já está usando para entender seus ciclos."
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 18,
+            }}
+          >
+            {testimonials.map((t) => (
+              <article
+                key={t.name}
+                style={{
+                  padding: 24,
+                  borderRadius: 28,
+                  background: "rgba(255,255,255,.86)",
+                  border: "1px solid rgba(17,24,39,.06)",
+                  boxShadow: "0 18px 44px rgba(107,91,87,.06)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 14,
+                }}
+              >
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Sparkles key={s} size={14} color="#F4A896" />
+                  ))}
+                </div>
+                <p style={{ margin: 0, fontSize: 16, fontStyle: "italic", lineHeight: 1.6, color: BRAND.textWarm }}>
+                  "{t.content}"
+                </p>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: BRAND.textWarm }}>{t.name}</span>
+                  <span style={{ fontSize: 12, color: BRAND.textSoft }}>{t.role}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </SplashSection>
+
         <section
           style={{
             padding: "clamp(28px, 4vw, 44px)",
@@ -864,10 +939,10 @@ export function SplashPage() {
               color: "var(--text-3)",
             }}
           >
-            O que é a Airia
+            Diferenciais
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {["App de saúde mental", "Terapeuta digital", "Planner de produtividade", "Tracker genérico"].map((label) => (
+            {["Tracker genérico", "Agenda rígida", "Métricas vazias"].map((label) => (
               <div
                 key={label}
                 style={{
@@ -896,17 +971,17 @@ export function SplashPage() {
               gap: 14,
               padding: "18px 24px",
               borderRadius: 20,
-              background: "rgba(244,168,150,.12)",
-              border: "1px solid rgba(244,168,150,.28)",
+              background: "rgba(184,217,200,.12)",
+              border: "1px solid rgba(184,217,200,.28)",
             }}
           >
-            <Sparkles size={20} color="#B86D4C" style={{ flexShrink: 0, marginTop: 2 }} />
+            <Sparkles size={20} color="#5A7A64" style={{ flexShrink: 0, marginTop: 2 }} />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <p style={{ margin: 0, fontSize: "clamp(17px, 2.2vw, 22px)", fontWeight: 700, color: BRAND.textWarm, lineHeight: 1.3 }}>
-                Bio-Sincronia: O mapa do seu ritmo interno.
+                Bio-Sincronia: Onde o plano encontra o corpo.
               </p>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, color: BRAND.textSoft }}>
-                A Airia combina algoritmo de ciclo de humor, memória contextual e leitura funcional. O app calcula fase, tendência e estabilidade; a IA usa esse contexto para separar fato de interpretação, reconhecer padrões e propor uma manobra possível para o momento.
+                Enquanto outros apps te cobram rotinas que você não consegue cumprir, a Airia recalcula sua carga cognitiva baseada no seu humor e energia real. Menos atrito, mais sustentabilidade.
               </p>
             </div>
           </div>
@@ -1009,6 +1084,38 @@ export function SplashPage() {
                 </article>
               );
             })}
+          </div>
+        </SplashSection>
+
+        <SplashSection
+          kicker="Dúvidas frequentes"
+          title="Tudo o que você precisa saber para começar."
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 18,
+            }}
+          >
+            {faqs.map((f) => (
+              <article
+                key={f.question}
+                style={{
+                  padding: 24,
+                  borderRadius: 28,
+                  background: "rgba(255,255,255,.82)",
+                  border: "1px solid rgba(17,24,39,.06)",
+                  boxShadow: "0 18px 44px rgba(107,91,87,.05)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: BRAND.textWarm }}>{f.question}</h3>
+                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: BRAND.textSoft }}>{f.answer}</p>
+              </article>
+            ))}
           </div>
         </SplashSection>
 

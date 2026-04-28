@@ -343,9 +343,41 @@ const SuggestedTaskSchema = z.object({
   title: z.string().min(1),
   category: z.enum(['trabalho', 'saude', 'rotina', 'social']),
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional(),
+  /**
+   * Quando a tarefa for pra hoje (default 0), o filtro temporal descarta `time`
+   * se já passou. Quando for pra amanhã (1), aceita qualquer hora.
+   */
+  dayOffset: z.union([z.literal(0), z.literal(1)]).optional().default(0),
 });
 
 type SuggestedTask = z.infer<typeof SuggestedTaskSchema>;
+
+/**
+ * Descarta horários no passado em tarefas com dayOffset=0.
+ * Tarefas com dayOffset=1 (amanhã) preservam o horário.
+ * Tarefas com title vazio são removidas.
+ */
+function filterPastTimes(
+  tasks: SuggestedTask[],
+  currentHour: number,
+  currentMinute: number,
+): SuggestedTask[] {
+  const nowMinutes = currentHour * 60 + currentMinute;
+  return tasks
+    .map((t) => {
+      if (!t.time) return t;
+      if (t.dayOffset === 1) return t; // amanhã: aceita qualquer hora
+      const m = t.time.match(/^(\d{2}):(\d{2})$/);
+      if (!m) return { ...t, time: undefined };
+      const taskMinutes = Number(m[1]) * 60 + Number(m[2]);
+      if (taskMinutes < nowMinutes) {
+        // Horário já passou: descarta time, mantém tarefa pra "quando der"
+        return { ...t, time: undefined };
+      }
+      return t;
+    })
+    .filter((t) => t.title && t.title.trim().length > 0);
+}
 
 async function generateJournalSuggestedTasks(args: {
   systemPrompt: string;
