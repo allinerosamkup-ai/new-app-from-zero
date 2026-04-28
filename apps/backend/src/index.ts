@@ -429,8 +429,12 @@ REGRAS:
 - ANTI-GENÉRICO: tarefas tipo "faça uma tarefa pequena", "anote uma pendência", "escolha um próximo passo mínimo", "feche o dia organizando a agenda", "respire fundo" não têm valor — qualquer app de produtividade já faz isso. Omita.
 - Se a conversa não trouxe contexto suficiente para uma sugestão concreta e específica, retorne [] (lista vazia). Não invente. É melhor perguntar à pessoa depois do que entregar genérico agora.${args.currentHour !== undefined ? `
 - HORÁRIO ATUAL DO USUÁRIO (USO INTERNO — não cite no título da tarefa): ${String(args.currentHour).padStart(2, '0')}:${String(args.currentMinute ?? 0).padStart(2, '0')}. Use só para escolher e calibrar. Quando preencher o campo time, ele DEVE ser posterior ao horário atual, caber em janela livre do planner e respeitar a fase de humor. Se o horário natural da tarefa já passou, omita o campo time ou descarte a tarefa.` : ''}
+- TESTE GENÉRICO OBRIGATÓRIO antes de incluir cada tarefa: "se eu trocasse o nome desta pessoa e o horário, esta tarefa ainda faria sentido pra outro usuário qualquer?". Se SIM, descarta. Se NÃO, mantém.
+- Tarefa DEVE mencionar algo concreto que apareceu na conversa (audiência, Matteo, apartamento, prompt, anúncio, conta, cliente, filho — o que ela trouxe). Tarefas tipo "rotação de ombros", "anote pendência", "respire fundo", "feche o dia", "registre alívio sim/não", "beba água" são PROIBIDAS — qualquer variação delas sai.
+- INSIGHT E TAREFA MESMA FAMÍLIA: se o resumo/síntese é sobre X (ex: prompt, audiência, anúncio), tarefas TÊM que ser sobre X também. Não misture insight de trabalho com tarefa de corpo.
+- Campo dayOffset: 0 = hoje (default; time deve ser >= horário atual), 1 = amanhã (use SOMENTE quando o contexto deixar explícito, ex: "audiência amanhã às 14h").
 - Retorne APENAS JSON no formato:
-{"tasks":[{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM"}]}`,
+{"tasks":[{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM","dayOffset":0}]}`,
       },
     ],
     temperature: 0.4,
@@ -445,7 +449,22 @@ REGRAS:
     return [];
   }
 
-  return rawTasks.map((task) => SuggestedTaskSchema.parse(task)).slice(0, 3);
+  const parsed = rawTasks
+    .map((task) => {
+      try {
+        return SuggestedTaskSchema.parse(task);
+      } catch {
+        return null;
+      }
+    })
+    .filter((t): t is SuggestedTask => t !== null)
+    .slice(0, 3);
+
+  // Filtro temporal: descarta horários no passado (dayOffset=0)
+  if (typeof args.currentHour === 'number') {
+    return filterPastTimes(parsed, args.currentHour, args.currentMinute ?? 0);
+  }
+  return parsed;
 }
 
 function startOfUtcDay(date: Date): Date {

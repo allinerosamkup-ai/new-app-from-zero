@@ -156,11 +156,52 @@ export function AuraChatPage() {
   const contextLabel = typeof routeState?.contextLabel === "string" ? routeState.contextLabel : "";
   const routeMode = routeState?.mode === "conversation" ? "conversation" : "executor";
 
-  const [messages, setMessages] = useState<Message[]>([{
-    role: "assistant",
-    content: buildInitialAssistantMessage(initialPrompt, contextLabel, routeMode),
-  }]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  // Persistência: sessão da Aura central sobrevive a navegações dentro do app
+  const STORAGE_KEY_MESSAGES = "airia-aura-central-messages";
+  const STORAGE_KEY_SESSION = "airia-aura-central-session";
+
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (initialPrompt) {
+      // Novo prompt vindo de outra rota — começa fresca
+      return [{
+        role: "assistant",
+        content: buildInitialAssistantMessage(initialPrompt, contextLabel, routeMode),
+      }];
+    }
+    try {
+      const cached = sessionStorage.getItem(STORAGE_KEY_MESSAGES);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed as Message[];
+      }
+    } catch { /* ignore */ }
+    return [{
+      role: "assistant",
+      content: buildInitialAssistantMessage(initialPrompt, contextLabel, routeMode),
+    }];
+  });
+
+  const [sessionId, setSessionId] = useState<string | null>(() => {
+    if (initialPrompt) return null;
+    try {
+      return sessionStorage.getItem(STORAGE_KEY_SESSION);
+    } catch {
+      return null;
+    }
+  });
+
+  // Persistir messages e sessionId em sessionStorage sempre que mudarem
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messages));
+    } catch { /* ignore quota errors */ }
+  }, [messages]);
+
+  useEffect(() => {
+    try {
+      if (sessionId) sessionStorage.setItem(STORAGE_KEY_SESSION, sessionId);
+    } catch { /* ignore */ }
+  }, [sessionId]);
   const [input, setInput] = useState(initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
   const [actionCard, setActionCard] = useState<ActionCard | null>(null);
@@ -172,6 +213,9 @@ export function AuraChatPage() {
   const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
+    // Se já tem sessão persistida, reusa — não cria nova
+    if (sessionId) return;
+
     let isMounted = true;
 
     api.post("/aura/command/start", { moodCycleContext: cycleReport.aiContext })
@@ -187,6 +231,7 @@ export function AuraChatPage() {
     return () => {
       isMounted = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
