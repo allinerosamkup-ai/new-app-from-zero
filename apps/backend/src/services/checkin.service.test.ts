@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import { getOpenAiModel } from '../lib/openai-config';
 import { CheckinService } from './checkin.service';
 
 async function run() {
@@ -56,7 +57,7 @@ async function run() {
   assert.equal(capturedMessages[0]?.role, 'system');
   assert.match(capturedMessages[0]?.content || '', /COORDENADA BIO-PSÍQUICA/i);
   assert.match(capturedMessages[0]?.content || '', /ritmo hoje/i);
-  assert.equal(capturedModel, 'gpt-5.4-nano');
+  assert.equal(capturedModel, getOpenAiModel());
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Analise os dados de check-in/i);
   assert.match(capturedMessages[1]?.content || '', /SINAL PRIORITÁRIO/i);

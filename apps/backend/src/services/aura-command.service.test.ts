@@ -160,9 +160,12 @@ async function run() {
   assert.match(userPrompt, /needsConfirmation/i);
   assert.match(userPrompt, /recorrent/i);
   assert.match(userPrompt, /MODO DA INTERAÇÃO/i);
-  assert.match(userPrompt, /EXECUTOR/i);
-  assert.match(userPrompt, /CONVERSA/i);
+  assert.match(userPrompt, /EXECUTOR PURO/i);
+  assert.match(userPrompt, /CONVERSA ESTRATÉGICA/i);
+  assert.match(userPrompt, /CONVERSAR SOBRE META\/PLANNER/i);
   assert.match(userPrompt, /EXPLICAR a tarefa\/meta\/ação/i);
+  assert.match(userPrompt, /linguagem Airia/i);
+  assert.match(userPrompt, /formulário de decisão/i);
   assert.match(userPrompt, /n[aã]o entendi/i);
   assert.match(userPrompt, /travamento de clareza/i);
   assert.match(userPrompt, /Proibido usar o modelo analítico/i);

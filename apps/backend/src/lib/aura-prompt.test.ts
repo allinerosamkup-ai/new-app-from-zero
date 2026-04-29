@@ -28,6 +28,9 @@ async function run() {
   assert.match(onboardingPrompt, /MODELO INTERNO DE RESPOSTA ANALÍTICA/i);
   assert.match(onboardingPrompt, /evento real da história criada/i);
   assert.match(onboardingPrompt, /Não use este modelo para comandos operacionais/i);
+  assert.match(onboardingPrompt, /PADRÃO AIRIA DE RESPOSTA/i);
+  assert.match(onboardingPrompt, /resposta boa não é suporte genérico/i);
+  assert.match(onboardingPrompt, /FATO VS HISTÓRIA É INTERNO/i);
   assert.match(onboardingPrompt, /menor ação útil possível/i);
   assert.match(onboardingPrompt, /Somática é ferramenta auxiliar/i);
   assert.match(onboardingPrompt, /estilo Jarvis/i);
@@ -63,6 +66,9 @@ async function run() {
   assert.match(journalLivePrompt, /PADRÃO RECORRENTE/i);
   assert.match(journalLivePrompt, /DECISÃO EM JOGO/i);
   assert.match(journalLivePrompt, /MANOBRA CALIBRADA AO CICLO/i);
+  assert.match(journalLivePrompt, /ABRIR DIRETO/i);
+  assert.match(journalLivePrompt, /SCRIPT PRONTO/i);
+  assert.match(journalLivePrompt, /TERMOS DO MÉTODO FICAM INTERNOS/i);
   assert.match(journalLivePrompt, /BASE DOCUMENTADA, NÃO IMPROVISO/i);
   assert.match(journalLivePrompt, /UTILIDADE DO PROBLEMA/i);
   assert.match(journalLivePrompt, /EFEITO INDIRETO A FAVOR/i);
@@ -105,6 +111,7 @@ async function run() {
   assert.match(auraCommandPrompt, /reservei 15 min/i);
   assert.match(auraCommandPrompt, /MODO EXECUTOR/i);
   assert.match(auraCommandPrompt, /Comando operacional não é convite para interpretação/i);
+  assert.match(auraCommandPrompt, /MANOBRA ESPECÍFICA/i);
   assert.doesNotMatch(auraCommandPrompt, /diário reflexivo/i);
 
   const homePrompt = buildAuraSystemPrompt({
@@ -179,6 +186,9 @@ async function run() {
     assert.match(p, /3 EIXOS DE CALIBRAÇÃO/i);
     assert.match(p, /POSTURA MEMORÁVEL/i);
     assert.match(p, /ESTRUTURA DE RESPOSTA ANALÍTICA EXEMPLAR/i);
+    assert.match(p, /PADRÃO AIRIA DE RESPOSTA/i);
+    assert.match(p, /CUSTO CONCRETO/i);
+    assert.match(p, /TERMOS DO MÉTODO FICAM INTERNOS/i);
   }
 
   // ── Horário formatado e momento do dia derivado ──

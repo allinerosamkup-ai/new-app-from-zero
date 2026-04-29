@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import { getOpenAiModel } from '../lib/openai-config';
 import { AIService } from './ai.service';
 
 async function run() {
@@ -82,10 +83,13 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /BASE DOCUMENTADA, NÃO IMPROVISO/i);
   assert.match(capturedMessages[0]?.content || '', /utilidade possível do problema/i);
   assert.match(capturedMessages[0]?.content || '', /RESPOSTA EXCELENTE/i);
+  assert.match(capturedMessages[0]?.content || '', /PADRÃO AIRIA DE RESPOSTA/i);
+  assert.match(capturedMessages[0]?.content || '', /MANOBRA ESPECÍFICA/i);
+  assert.match(capturedMessages[0]?.content || '', /SCRIPT PRONTO/i);
   assert.match(capturedMessages[0]?.content || '', /MEMÓRIA ANTES DE PADRÃO/i);
   assert.match(capturedMessages[0]?.content || '', /SINAIS ANTES DA QUEDA/i);
   assert.match(capturedMessages[0]?.content || '', /evidência concreta/i);
-  assert.equal(capturedStreamModel, 'gpt-5.4-nano');
+  assert.equal(capturedStreamModel, getOpenAiModel());
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Estou preocupada com minha energia/i);
 
@@ -133,7 +137,7 @@ async function run() {
   assert.match(capturedSummaryMessages[1]?.content || '', /Não invente profundidade/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não faça perguntas no fechamento/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não escreva como relatório/i);
-  assert.equal(capturedSummaryModel, 'gpt-5.4-nano');
+  assert.equal(capturedSummaryModel, getOpenAiModel());
 }
 
 run()

@@ -208,6 +208,12 @@ export class AuraCommandService {
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<AuraCommandResponse> {
     const interactionMode = input.interactionMode === 'conversation' ? 'conversation' : 'executor';
+    const isPlannerConversation = interactionMode === 'conversation' && (
+      /bot[aã]o\s+CONVERSAR/i.test(input.message) ||
+      /tarefa\/meta/i.test(input.message) ||
+      /pr[oó]xima a[cç][aã]o da meta/i.test(input.message) ||
+      /entender melhor esta/i.test(input.message)
+    );
     const historyBlock = (input.history ?? [])
       .slice(-8)
       .map((message) => `${message.role === 'user' ? 'Usuário' : 'Aura'}: ${message.content}`)
@@ -224,8 +230,10 @@ ${input.recentSuggestionMemory ? `${input.recentSuggestionMemory}\n` : ''}
 ${input.plannerContext ? `${input.plannerContext}\n` : ''}
 MODO DA INTERAÇÃO:
 ${interactionMode === 'conversation'
-  ? 'CONVERSA: a pessoa veio de um botão CONVERSAR para entender uma tarefa/meta/ação. Responda de forma natural, explicando o que significa, como fazer, sugestões e ideias simples. Se o pedido atual virar comando operacional claro, execute como modo executor.'
-  : 'EXECUTOR: a pessoa quer que algo seja feito. Seja curta, direta e operacional. Não use análise profunda, não faça leitura emocional longa e não transforme comando em diário.'}
+  ? isPlannerConversation
+    ? 'CONVERSAR SOBRE META/PLANNER: a pessoa veio do botão CONVERSAR para entender uma tarefa, meta ou próxima ação. Explique em linguagem natural o sentido da ação, por que ela ajuda, como fazer na prática e dê ideias simples. Não faça triagem, não peça categoria e não devolva pergunta antes de explicar.'
+    : 'CONVERSA ESTRATÉGICA: a pessoa quer pensar, destravar, entender um padrão ou conversar com a Aura. Use o padrão Airia: presença firme, leitura específica, custo concreto e manobra pequena quando houver material suficiente. Se o pedido atual virar comando operacional claro, execute como modo executor.'
+  : 'EXECUTOR PURO: a pessoa quer que algo seja feito. Seja curta, direta e operacional. Não use análise profunda, não faça leitura emocional longa e não transforme comando em diário.'}
 
 INTENTS PERMITIDOS:
 - planner_task
@@ -249,11 +257,12 @@ ACTIONS PERMITIDAS:
 
 REGRAS GERAIS:
 - Se o pedido já estiver claro e executável, escolha a ação direta.
-- Em MODO EXECUTOR, assistantMessage deve ser objetivo: ação preparada/feita, confirmação para revisar ou uma única pergunta indispensável. Proibido usar o modelo analítico de "padrão, custo, história" em comandos como marcar, excluir, concluir, reagendar, montar agenda, criar tarefa, criar meta ou checklist.
-- Em MODO CONVERSA vindo do botão CONVERSAR, o objetivo principal é EXPLICAR a tarefa/meta/ação para a pessoa: o que quer dizer, como fazer na prática, ideias, exemplos e sugestões simples. Não transforme isso em triagem.
-- Em MODO CONVERSA, quando a pessoa disser "não entendi", "está confuso", "não ficou claro" ou equivalente, NÃO diga que é "travamento de clareza", NÃO peça para ela escolher uma categoria e NÃO devolva a responsabilidade. Reformule em linguagem mais simples, com exemplo concreto e próximo passo pequeno.
-- Em MODO CONVERSA, evite perguntas como primeira resposta. Só faça pergunta no fim, e apenas se for indispensável. Antes disso, entregue uma explicação útil com o contexto disponível.
-- Em MODO CONVERSA, se não houver ação operacional a executar, use intent "clarify" com action "ask_clarification", mas o assistantMessage deve soar natural e explicativo, não como formulário de decisão.
+- Em MODO EXECUTOR PURO, assistantMessage deve ser objetivo: ação preparada/feita, confirmação para revisar ou uma única pergunta indispensável. Proibido usar o modelo analítico de "padrão, custo, história" em comandos como marcar, excluir, concluir, reagendar, montar agenda, criar tarefa, criar meta ou checklist.
+- Em CONVERSAR SOBRE META/PLANNER, o objetivo principal é EXPLICAR a tarefa/meta/ação para a pessoa: o que quer dizer, como fazer na prática, ideias, exemplos e sugestões simples. Não transforme isso em triagem.
+- Em CONVERSA ESTRATÉGICA, use a linguagem Airia: próxima, firme, específica, com leitura de padrão apenas quando houver evidência, custo concreto e manobra pequena quando houver ação possível.
+- Em qualquer MODO CONVERSA, quando a pessoa disser "não entendi", "está confuso", "não ficou claro" ou equivalente, NÃO diga que é "travamento de clareza", NÃO peça para ela escolher uma categoria e NÃO devolva a responsabilidade. Reformule em linguagem mais simples, com exemplo concreto e próximo passo pequeno.
+- Em qualquer MODO CONVERSA, evite perguntas como primeira resposta. Só faça pergunta no fim, e apenas se for indispensável. Antes disso, entregue uma explicação útil com o contexto disponível.
+- Em qualquer MODO CONVERSA, se não houver ação operacional a executar, use intent "clarify" com action "ask_clarification", mas o assistantMessage deve soar natural, estratégico e explicativo — nunca como formulário de decisão.
 - HANDOFF_TO_JOURNAL É RESTRITO: SOMENTE use "handoff_to_journal" quando a pessoa pedir EXPLICITAMENTE "salva no diário", "vira diário", "registra no diário", "abre o diário com isso" — palavras claras de intenção. Em qualquer outro caso (mesmo que a conversa seja reflexiva, profunda ou pareça material de diário), NÃO faça handoff. A Aura central NÃO É o diário; ela apoia, executa e conversa, mas não converte conversa em diário sem permissão. Se você acha que faria sentido salvar, PERGUNTE em assistantMessage ("Quer que eu salve essa conversa no diário?") com action "ask_clarification" — não execute o handoff.
 - ANTI-RESUMO (CRÍTICO): Se a pessoa enviou uma lista, um checklist ou um texto com vários pontos (ex: "comprar pão, leite e ovos"), NUNCA resuma tudo em um único título de tarefa. Use create_checklist ou create_goal para quebrar em sub-itens reais.
 - Se for compromisso/agendamento com data ou horário (ex: "amanhã", "quarta", "às 14h"), use create_task e marque "needsConfirmation": true.
@@ -262,7 +271,7 @@ REGRAS GERAIS:
 - Para pedidos recorrentes, NUNCA invente dias/horários ausentes. Se faltar detalhe suficiente para transformar em datas reais, use ask_clarification.
 - Se for tarefa simples ou meta clara (ex: "lembrar de beber água"), "needsConfirmation" deve ser false.
 - Se houver vários passos implícitos ou uma lista explícita, prefira create_checklist ou create_goal, mantendo TODOS os itens originais.
-- assistantMessage deve ser curta. Se "needsConfirmation" for true, diga que a proposta está pronta para revisão e NUNCA diga que já salvou no planner.
+- No MODO EXECUTOR PURO, assistantMessage deve ser curta. Se "needsConfirmation" for true, diga que a proposta está pronta para revisão e NUNCA diga que já salvou no planner. Em MODO CONVERSA, não force resposta curta se isso prejudicar clareza, explicação ou manobra concreta.
 - payload para create_task DEVE conter: { "title": string, "date": "YYYY-MM-DD", "startTime": "HH:MM", "category": string, "note": string | null }.
 - payload para create_checklist DEVE conter: { "title": string, "items": string[], "category": string }.
 - CHECKLIST QUEBRA SEMÂNTICA (CRÍTICO quando a pessoa cola um checklist e pede "Airia quebrar"):
@@ -307,11 +316,17 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
             taskMomentum7d: input.taskMomentum7d,
             domain: interactionMode === 'conversation' ? 'journal-live' : 'aura-command',
             extraInstructions: interactionMode === 'conversation'
-              ? [
-                  'Este turno veio do Chat Aura em modo conversa. Se veio do botão CONVERSAR do planner, explique a tarefa/meta/ação em linguagem natural: o que significa, como fazer, sugestões e ideias simples.',
-                  'Se a pessoa disser que não entendeu, reformule de modo mais simples e concreto. Não diga "travamento de clareza" e não peça para ela escolher entre categorias.',
-                  'Se a frase atual pedir execução operacional, abandone a análise e responda como executor: curto, direto e acionável.',
-                ]
+              ? isPlannerConversation
+                ? [
+                    'Este turno veio do botão CONVERSAR do planner. Explique a tarefa/meta/ação em linguagem natural: o que significa, por que ajuda, como fazer e ideias simples para começar.',
+                    'Não classifique prioridade, não peça categoria, não faça triagem e não devolva pergunta antes de explicar.',
+                    'Se a pessoa disser que não entendeu, reformule de modo mais simples e concreto. Não diga "travamento de clareza".',
+                  ]
+                : [
+                    'Este turno veio do Chat Aura em modo conversa estratégica. Use o padrão Airia: abrir direto, espelhar o nó real, separar fato de história quando útil, mostrar custo concreto e propor uma manobra pequena se houver evidência.',
+                    'Não use visivelmente nomes de método como Marca Passo, Ponto Cego, Efeito Paralelo ou Fato vs História por padrão; eles são raciocínio interno.',
+                    'Se a frase atual pedir execução operacional, abandone a análise e responda como executor: curto, direto e acionável.',
+                  ]
               : [
                   'Este turno é modo executor. Execute, peça confirmação ou pergunte só o dado indispensável. Não use resposta analítica longa.',
                 ],
