@@ -548,38 +548,32 @@ html.airia-installed-shell,
 html.airia-installed-shell body,
 html.airia-installed-shell #root {
   width: 100%;
-  height: 100%;
-  min-height: 100%;
+  min-height: 100dvh;
   overflow-x: hidden;
   background: var(--warm-bg);
 }
 
 html.airia-native-shell body,
 html.airia-installed-shell body {
-  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
 }
 
 html.airia-native-shell .app-viewport,
 html.airia-installed-shell .app-viewport {
   width: 100%;
   max-width: 480px;
-  height: 100dvh;
   min-height: 100dvh;
   margin: 0 auto;
   box-shadow: none;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 html.airia-native-shell .page-transition,
 html.airia-installed-shell .page-transition {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
   overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-x: none;
-  overscroll-behavior-y: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
 }
