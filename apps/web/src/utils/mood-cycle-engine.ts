@@ -127,7 +127,7 @@ export type PhaseConfigEntry = {
 
 export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
   elevated: {
-    label: "Em alta",
+    label: "Voo Alto",
     emoji: "🚀",
     description: "Humor e energia acima do seu padrão pessoal recente. A leitura indica aceleração sem perder o fio da estabilidade.",
     tip: "Aproveite o pico sem exagerar na carga. O ganho agora é usar a energia com intenção.",
@@ -151,7 +151,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "moderate",
   },
   falling: {
-    label: "Em queda",
+    label: "Desacelerando",
     emoji: "📉",
     description: "A tendência caiu abaixo do seu padrão pessoal recente. A leitura aponta perda de tração.",
     tip: "Reduza atrito e proteja energia antes que a queda aprofunde.",
@@ -159,7 +159,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "moderate",
   },
   low: {
-    label: "Atenção",
+    label: "Recolhimento",
     emoji: "🌙",
     description: "Seu padrão pessoal entrou numa faixa abaixo do normal. Aqui a leitura pede cuidado, não cobrança.",
     tip: "Priorize o básico e corte o excesso. Pequenos passos contam mais do que empurrar força.",
@@ -167,7 +167,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "low",
   },
   depleted: {
-    label: "Atenção",
+    label: "Pausa",
     emoji: "😴",
     description: "Humor e energia estão bem abaixo do seu padrão pessoal. O sinal é de recuperação, não de cobrança.",
     tip: "Cancele o que puder e trate descanso como parte do plano.",
@@ -175,7 +175,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "rest",
   },
   recovering: {
-    label: "Retomando",
+    label: "Retomada",
     emoji: "🌱",
     description: "Você está saindo de uma faixa baixa. O padrão já começa a voltar para perto do seu normal.",
     tip: "Retome devagar e consolide cada melhora antes de subir a carga.",
@@ -183,7 +183,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "low",
   },
   mixed: {
-    label: "Oscilando",
+    label: "Turbulência",
     emoji: "⚡",
     description: "A leitura variou mais do que o normal. O padrão ainda existe, mas está menos estável agora.",
     tip: "Volte para rotina simples e reduza decisões desnecessárias por enquanto.",
@@ -298,7 +298,7 @@ function computePersonalTrendProfile(sorted: CheckinEntry[]): PersonalTrendProfi
       tip: "Aproveite para avançar nas tarefas que pedem foco e presença.",
     },
     em_alta: {
-      label: "Em alta",
+      label: "Voo Alto",
       description: "Seu padrão pessoal está acima da linha de base. Ainda é um bom momento, só sem forçar demais.",
       tip: "Use esse extra de energia para destravar o que estava parado.",
     },
@@ -308,17 +308,17 @@ function computePersonalTrendProfile(sorted: CheckinEntry[]): PersonalTrendProfi
       tip: "Bom momento para seguir rotina e consolidar o que já está andando.",
     },
     oscilando: {
-      label: "Oscilando",
+      label: "Turbulência",
       description: "A leitura oscilou mais do que o seu normal recente. O padrão existe, mas está menos firme agora.",
       tip: "Volte para um plano simples e deixe o dia menos barulhento.",
     },
     em_queda: {
-      label: "Em queda",
+      label: "Desacelerando",
       description: "Seu padrão pessoal caiu abaixo da base recente. Há desvio, mas ainda não necessariamente colapso.",
       tip: "Corte atrito e proteja energia antes de pedir mais de você.",
     },
     atencao: {
-      label: "Atenção",
+      label: "Recolhimento",
       description: "O padrão ficou bem abaixo do seu normal recente. Aqui o app está sinalizando risco de sobrecarga.",
       tip: "Pare de empurrar. Priorize descanso, clareza e o básico do dia.",
     },
@@ -746,11 +746,11 @@ export function getPhaseColor(phase: MoodPhase): string {
 // ── Texto do score de estabilidade ────────────────────────
 
 export function getStabilityLabel(score: number): string {
-  if (score >= 80) return "Muito estável";
-  if (score >= 60) return "Estável";
-  if (score >= 40) return "Moderado";
-  if (score >= 20) return "Instável";
-  return "Muito instável";
+  if (score >= 80) return "muito alta";
+  if (score >= 60) return "moderada";
+  if (score >= 40) return "baixa";
+  if (score >= 20) return "muito baixa";
+  return "crítica";
 }
 
 // ── Previsão EWMA — próximos 7 dias ───────────────────────────

@@ -42,11 +42,11 @@ describe("mood cycle engine", () => {
 
     assert.notEqual(highBaselineReport.phaseLabel, lowBaselineReport.phaseLabel);
     assert.ok(
-      ["Em queda", "Atenção"].includes(highBaselineReport.phaseLabel),
+      ["Desacelerando", "Recolhimento", "Pausa"].includes(highBaselineReport.phaseLabel),
       `expected a lower band for the high-baseline history, got ${highBaselineReport.phaseLabel}`,
     );
     assert.ok(
-      ["Fluindo", "Em alta"].includes(lowBaselineReport.phaseLabel),
+      ["Fluindo", "Voo Alto"].includes(lowBaselineReport.phaseLabel),
       `expected a higher band for the low-baseline history, got ${lowBaselineReport.phaseLabel}`,
     );
   });
@@ -64,7 +64,7 @@ describe("mood cycle engine", () => {
 
     assert.ok(report.warningFlags.includes("sustained_low"));
     assert.ok(report.baselineComposite > report.currentComposite);
-    assert.ok(["Em queda", "Atenção"].includes(report.personalTrendLabel));
+    assert.ok(["Desacelerando", "Recolhimento"].includes(report.personalTrendLabel));
   });
 
   it("exposes the personalized baseline and EWMA values", () => {

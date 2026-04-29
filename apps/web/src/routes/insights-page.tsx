@@ -54,6 +54,17 @@ function toLocalNoon(dateKey: string): Date {
   return new Date(`${normalizeDateKey(dateKey)}T12:00:00`);
 }
 
+const phaseHistoryDateFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+});
+
+function formatPhaseHistoryRange(startDate: string, endDate: string) {
+  const start = phaseHistoryDateFormatter.format(toLocalNoon(startDate));
+  const end = phaseHistoryDateFormatter.format(toLocalNoon(endDate));
+  return start === end ? start : `${start}-${end}`;
+}
+
 function polygonPoints(r: number): string {
   return harmonyAngles
     .map((angle) => {
@@ -163,6 +174,9 @@ export function InsightsPage() {
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
   const phaseHistory = useMemo(() => computePhaseHistory(allHistory, 30), [allHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
+  const currentPhaseLabel = cycleReport.phase !== "insufficient_data"
+    ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)
+    : cycleReport.phaseLabel;
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -330,7 +344,7 @@ export function InsightsPage() {
           ? "Reduza estímulos e escolha uma decisão antes de abrir outra frente."
           : "Escolha uma ação concreta que mantenha o ritmo sem esticar o dia.";
       setAiInsight({
-        insight: `Pelo histórico de ${periodDays} dias, sua leitura atual combina faixa ${cycleReport.phaseLabel.toLowerCase()}, baseline pessoal de ${cycleReport.baselineComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
+        insight: `Pelo histórico de ${periodDays} dias, sua leitura atual combina fase ${currentPhaseLabel.toLowerCase()}, baseline pessoal de ${cycleReport.baselineComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
         action: localAction,
         category: "rotina",
         actionTitle: localAction.slice(0, 40),
@@ -339,7 +353,7 @@ export function InsightsPage() {
       setHighlights([
         `${history.length} registros no período selecionado`,
         `Humor médio ${avgHumor} · energia média ${avgEnergia}`,
-        `Faixa pessoal: ${cycleReport.phaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
+        `Fase atual: ${currentPhaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
       ]);
       setInsightPhase("done");
     }
@@ -391,7 +405,7 @@ export function InsightsPage() {
           avgHumor: avgHumor7d,
           avgEnergy: avgEnergy7d,
           phase: cycleReport.phase,
-          phaseLabel: cycleReport.phaseLabel,
+          phaseLabel: currentPhaseLabel,
           stabilityScore: cycleReport.stabilityScore,
           warningFlags: cycleReport.warningFlags,
           moodCycleContext: cycleReport.aiContext,
@@ -566,8 +580,8 @@ export function InsightsPage() {
             className="aura-card"
             style={{
               marginBottom: 24,
-              padding: "18px",
-              borderRadius: 24,
+              padding: "16px",
+              borderRadius: 18,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
@@ -637,10 +651,11 @@ export function InsightsPage() {
                 const cfg = PHASE_CONFIG[seg.phase];
                 const totalDays = phaseHistory.reduce((sum, s) => sum + s.daysCount, 0);
                 const widthPct = (seg.daysCount / totalDays) * 100;
+                const dateRange = formatPhaseHistoryRange(seg.startDate, seg.endDate);
                 return (
                   <div
                     key={`${seg.phase}-${idx}`}
-                    title={`${cfg.label} — ${seg.daysCount} dia${seg.daysCount !== 1 ? "s" : ""}`}
+                    title={`${cfg.label} - ${dateRange} - ${seg.daysCount} dia${seg.daysCount !== 1 ? "s" : ""}`}
                     style={{
                       width: `${widthPct}%`,
                       background: cfg.color,
@@ -668,6 +683,7 @@ export function InsightsPage() {
             >
               {phaseHistory.map((seg, idx) => {
                 const cfg = PHASE_CONFIG[seg.phase];
+                const dateRange = formatPhaseHistoryRange(seg.startDate, seg.endDate);
                 return (
                   <span
                     key={`leg-${seg.phase}-${idx}`}
@@ -686,6 +702,7 @@ export function InsightsPage() {
                   >
                     <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
                     <span style={{ fontWeight: 600 }}>{cfg.label}</span>
+                    <span style={{ color: "var(--text-3)" }}>· {dateRange}</span>
                     <span style={{ color: "var(--text-3)" }}>· {seg.daysCount}d</span>
                   </span>
                 );
@@ -928,7 +945,7 @@ export function InsightsPage() {
                     CICLO DE HUMOR
                   </p>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
-                    {cycleReport.phaseLabel}
+                    {currentPhaseLabel}
                     <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-3)", marginLeft: 6 }}>
                       {cycleReport.daysInPhase} dia{cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase
                     </span>
@@ -941,7 +958,7 @@ export function InsightsPage() {
                   {cycleReport.stabilityScore}
                   <span style={{ fontSize: 11, fontWeight: 400 }}>/100</span>
                 </p>
-                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{getStabilityLabel(cycleReport.stabilityScore)}</p>
+                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>Estabilidade {getStabilityLabel(cycleReport.stabilityScore)}</p>
               </div>
             </div>
 

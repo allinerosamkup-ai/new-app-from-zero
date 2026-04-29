@@ -279,6 +279,10 @@ function getFormattedDate(d: Date) {
   return `${DIAS_SEMANA[d.getDay()]}, ${d.getDate()} de ${MESES_NOME[d.getMonth()]}`;
 }
 
+function formatStabilityStatus(score: number) {
+  return `Estabilidade ${getStabilityLabel(score)} · ${score}/100`;
+}
+
 
 const moodMap: Record<string, { emoji: string; label: string; description: string; tip: string; chipLabel: string }> = {
   equilibrada: {
@@ -286,7 +290,7 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
     label: "Em Equilíbrio",
     description: "Ritmo tranquilo e constante. Boa base para tarefas do dia.",
     tip: "Comece com tarefas leves e vá aumentando o ritmo gradualmente.",
-    chipLabel: "Estável",
+    chipLabel: "Em equilíbrio",
   },
   focada: {
     emoji: "✨",
@@ -431,6 +435,9 @@ export function HomePage() {
   }, [cycleReport.aiContext, menstrualReport?.aiContext]);
   const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
+  const currentPhaseLabel = cycleReport.phase !== "insufficient_data"
+    ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)
+    : cycleReport.phaseLabel;
   const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const energyForecast = useMemo(() => forecastEnergy7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
 
@@ -1075,10 +1082,10 @@ export function HomePage() {
       alerts.push({
         key: "mood-risk",
         title: sustainedLow
-          ? `Seu padrão pessoal entrou em ${cycleReport.phaseLabel.toLowerCase()} há ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "dias" : "dia"}`
+          ? `Seu padrão pessoal entrou em ${currentPhaseLabel.toLowerCase()} há ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "dias" : "dia"}`
           : rapidDrop
-            ? `Desvio brusco do seu padrão pessoal — faixa ${cycleReport.phaseLabel}`
-            : `Estabilidade baixa — faixa pessoal ${cycleReport.phaseLabel}`,
+            ? `Desvio brusco do seu padrão pessoal — fase ${currentPhaseLabel}`
+            : `Estabilidade baixa — fase ${currentPhaseLabel}`,
         description: sustainedLow
           ? "O EWMA individual ficou abaixo do baseline pessoal por vários registros. Vale registrar isso no diário e diminuir a carga de hoje."
           : rapidDrop
@@ -1106,7 +1113,11 @@ export function HomePage() {
     return alerts.slice(0, 4);
   }, [
     clockTime,
+    currentPhaseLabel,
+    cycleReport.daysInPhase,
+    cycleReport.phase,
     cycleReport.stabilityScore,
+    cycleReport.trend7d,
     cycleReport.warningFlags,
     state.autonomousInsight?.insight,
     state.autonomousInsight?.pattern,
@@ -1945,6 +1956,7 @@ export function HomePage() {
                           )}
                         </div>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -1965,6 +1977,7 @@ export function HomePage() {
                           <ChevronRight size={12} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
                         </button>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -1986,6 +1999,7 @@ export function HomePage() {
                           </svg>
                         </button>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -2062,6 +2076,7 @@ export function HomePage() {
                           )}
                         </div>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -2082,6 +2097,7 @@ export function HomePage() {
                           <ChevronRight size={11} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
                         </button>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -2102,6 +2118,7 @@ export function HomePage() {
                           </svg>
                         </button>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -2180,6 +2197,7 @@ export function HomePage() {
                           )}
                         </div>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -2200,6 +2218,7 @@ export function HomePage() {
                           <ChevronRight size={11} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
                         </button>
                         <button
+                          className="home-touch-button"
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -2379,7 +2398,7 @@ export function HomePage() {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {/* Score de estabilidade */}
                 <span className="home-cycle-score" style={{ background: `${phaseColor}18`, color: phaseColor }}>
-                  {getStabilityLabel(cycleReport.stabilityScore)} · {cycleReport.stabilityScore}/100
+                  {formatStabilityStatus(cycleReport.stabilityScore)}
                 </span>
               </div>
             </div>
@@ -2390,7 +2409,7 @@ export function HomePage() {
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <p className="home-cycle-title" style={{ margin: 0 }}>
-                    {cycleReport.phaseLabel}
+                    {currentPhaseLabel}
                   </p>
                   {streak >= 2 && (
                     <span style={{
@@ -2596,7 +2615,7 @@ export function HomePage() {
                     <p className="home-ai-card-subtitle" style={{ color: cfg.color }}>
                       {hasInsight ? (
                         <>
-                          Estabilidade {score}% · {cycleReport.phase !== "insufficient_data" ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel) : cfg.label}
+                          {formatStabilityStatus(score)} · Fase {cycleReport.phase !== "insufficient_data" ? currentPhaseLabel : cfg.label}
                           {isUrgent && <span style={{ color: cfg.color, fontWeight: 800 }}> · Precisa de cuidado agora</span>}
                         </>
                       ) : (
@@ -2616,7 +2635,7 @@ export function HomePage() {
                         }}
                       >
                         <span style={{ fontSize: 12 }}>{mood.emoji}</span>
-                        {mood.label}
+                        Estado: {mood.label}
                       </span>
                       {cycleReport.phase !== "insufficient_data" && (
                         <button
@@ -2639,7 +2658,7 @@ export function HomePage() {
                           }}
                         >
                           <span style={{ fontSize: 12 }}>{cycleReport.phaseEmoji}</span>
-                          {t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)}
+                          {currentPhaseLabel}
                           <span style={{ opacity: 0.7, fontWeight: 600 }}>· {cycleReport.daysInPhase}º dia</span>
                         </button>
                       )}
@@ -2708,6 +2727,7 @@ export function HomePage() {
                                 </div>
                                 {/* Botão + adicionar ao planner */}
                                 <button
+                                  className="home-touch-button"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     if (isAdding) return;
@@ -2730,6 +2750,7 @@ export function HomePage() {
                                 </button>
                                 {/* Botão marcar como feito */}
                                 <button
+                                  className="home-touch-button"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     recordHomeAutonomyFeedback(action.title, "done");
@@ -2750,6 +2771,7 @@ export function HomePage() {
                                 </button>
                                 {/* Botão próxima sugestão */}
                                 <button
+                                  className="home-touch-button"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     recordHomeAutonomyFeedback(action.title, "dismissed");
@@ -2884,6 +2906,8 @@ export function HomePage() {
                     }}>
                       <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, flex: 1 }}>{item}</p>
                       <button
+                        className="home-touch-button"
+                        type="button"
                         onClick={() => setCompletedAutocuidadoIdx(prev => new Set([...prev, i]))}
                         title="Marcar como cumprido"
                         style={{
@@ -2899,6 +2923,8 @@ export function HomePage() {
                         </svg>
                       </button>
                       <button
+                        className="home-touch-button"
+                        type="button"
                         onClick={() => {
                           const remaining = autocuidadoFinal.filter(
                             (_, j) => !completedAutocuidadoIdx.has(j) && !skippedAutocuidadoIdx.has(j) && j !== i
@@ -2986,6 +3012,8 @@ export function HomePage() {
                       )}
                     </div>
                     <button
+                      className="home-touch-button"
+                      type="button"
                       onClick={() => {
                         setDismissedAlerts(prev => new Set([...prev, alert.key]));
                       }}
