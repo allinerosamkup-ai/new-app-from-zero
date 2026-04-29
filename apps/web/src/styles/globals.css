@@ -61,6 +61,32 @@ body,
   overflow-x: hidden;
   display: flex;
   justify-content: center;
+  /* iOS: trava bounce horizontal + back-swipe lateral que faz a tela "sambar" */
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+  /* iOS: habilita rolagem com momentum sem segurar gestos laterais */
+  -webkit-overflow-scrolling: touch;
+  /* iOS: limita gestos a vertical, mata o pan-x que causa volta-pra-trás */
+  touch-action: pan-y;
+}
+
+/* iOS Safari: remove o delay de 300ms em tap em elementos interativos */
+button,
+a,
+input,
+textarea,
+select,
+[role="button"],
+[onclick] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS: previne zoom automático em focus de inputs (acontece se font-size < 16px) */
+input,
+textarea,
+select {
+  font-size: max(16px, 1rem);
 }
 
 /* ──── PWA Mobile Frame — força layout mobile-column em qualquer viewport ──── */
@@ -75,6 +101,9 @@ body,
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  /* iOS: trava o pan-x dentro do app frame também */
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 a {
