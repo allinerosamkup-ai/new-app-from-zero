@@ -240,6 +240,76 @@ async function buildTodayPlannerContext(prisma: PrismaClient, userId: string): P
   return `AGENDA DE HOJE (${todayStr}):\n${lines.join('\n')}`;
 }
 
+async function buildTodayCompletionContext(prisma: PrismaClient, userId: string): Promise<{
+  text: string | null;
+  titles: string[];
+}> {
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const dayStart = new Date(`${todayStr}T00:00:00.000Z`);
+  const dayEnd = new Date(`${todayStr}T23:59:59.999Z`);
+  const lines: string[] = [];
+  const titles: string[] = [];
+
+  const [completedBlocks, completedHabits, objectives] = await Promise.all([
+    prisma.timelineBlock.findMany({
+      where: { userId, localDate: { gte: dayStart, lte: dayEnd }, status: 'completed' },
+      orderBy: { startAt: 'asc' },
+      select: { title: true, startAt: true, category: true },
+    }).catch(() => []),
+    prisma.habit.findMany({
+      where: {
+        userId,
+        archived: false,
+        completions: { some: { date: { gte: dayStart, lte: dayEnd } } },
+      },
+      select: { title: true, category: true },
+    }).catch(() => []),
+    prisma.objective.findMany({
+      where: { userId, archived: false },
+      select: { title: true, progress: true, subgoals: true },
+    }).catch(() => []),
+  ]);
+
+  if (completedBlocks.length) {
+    const blockTitles = completedBlocks.map((task) => task.title).filter(Boolean);
+    titles.push(...blockTitles);
+    lines.push(`Agenda concluída hoje: ${completedBlocks.map((task) => `"${task.title}" (${fmtUtcTime(task.startAt)}, ${task.category})`).join(' | ')}`);
+  }
+
+  if (completedHabits.length) {
+    const habitTitles = completedHabits.map((habit) => habit.title).filter(Boolean);
+    titles.push(...habitTitles);
+    lines.push(`Hábitos feitos hoje: ${completedHabits.map((habit) => `"${habit.title}" (${habit.category})`).join(' | ')}`);
+  }
+
+  const completedGoalTitles: string[] = [];
+  const completedSubgoalTitles: string[] = [];
+  for (const objective of objectives) {
+    if (objective.progress >= 100) completedGoalTitles.push(objective.title);
+    const subgoals = Array.isArray(objective.subgoals) ? objective.subgoals : [];
+    for (const subgoal of subgoals) {
+      if (!subgoal || typeof subgoal !== 'object') continue;
+      const item = subgoal as Record<string, unknown>;
+      const title = typeof item.title === 'string' ? item.title.trim() : '';
+      if (title && (item.done === true || item.completed === true)) completedSubgoalTitles.push(title);
+    }
+  }
+
+  if (completedGoalTitles.length) {
+    titles.push(...completedGoalTitles);
+    lines.push(`Metas concluídas: ${completedGoalTitles.map((title) => `"${title}"`).join(' | ')}`);
+  }
+  if (completedSubgoalTitles.length) {
+    titles.push(...completedSubgoalTitles);
+    lines.push(`Subtarefas de metas concluídas: ${completedSubgoalTitles.map((title) => `"${title}"`).join(' | ')}`);
+  }
+
+  return {
+    text: lines.length ? lines.join('\n') : null,
+    titles: uniqueByKey(titles),
+  };
+}
+
 async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, context: Record<string, unknown>) {
   const explicitUserName = typeof context.userName === 'string' && context.userName.trim() ? context.userName.trim() : null;
   const explicitMoodCycle = typeof context.moodCycleContext === 'string' && context.moodCycleContext.trim()
@@ -543,6 +613,53 @@ function uniqueByKey(values: string[]): string[] {
   return out;
 }
 
+const DAY_TASK_GENERIC_PATTERNS = [
+  /\brespir(ar|e|acao|ação)\b/,
+  /\bbeb(er|a)\s+(agua|água)\b/,
+  /\bva\s+com\s+calma\b/,
+  /\bvá\s+com\s+calma\b/,
+  /\borganizar\s+(o\s+)?dia\b/,
+  /\bplanejar\s+(o\s+)?dia\b/,
+  /\bproximo\s+passo\b/,
+  /\bpróximo\s+passo\b/,
+  /\btarefa\s+pequena\b/,
+  /\bkit(s)?\s+do\s+treino\b/,
+];
+
+const DAY_TASK_STOPWORDS = new Set([
+  'a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'e', 'em',
+  'para', 'pra', 'por', 'com', 'sem', 'que', 'se', 'sua', 'seu', 'suas', 'seus',
+  'voce', 'você', 'hoje', 'agora', 'fazer', 'abrir', 'ver', 'revisar', 'criar',
+  'marcar', 'organizar', 'definir', 'separar', 'colocar', 'pegar', 'min', 'minutos',
+]);
+
+function tokenOverlapForSuggestion(a: string, b: string): number {
+  const left = normalizeSuggestionKey(a).split(' ').filter((token) => token.length >= 3 && !DAY_TASK_STOPWORDS.has(token));
+  const right = normalizeSuggestionKey(b).split(' ').filter((token) => token.length >= 3 && !DAY_TASK_STOPWORDS.has(token));
+  if (left.length === 0 || right.length === 0) return 0;
+  const rightSet = new Set(right);
+  const common = left.filter((token) => rightSet.has(token)).length;
+  return common / Math.min(left.length, right.length);
+}
+
+function isSimilarSuggestionText(a: string, b: string): boolean {
+  const left = normalizeSuggestionKey(a);
+  const right = normalizeSuggestionKey(b);
+  if (!left || !right) return false;
+  if (left === right || left.includes(right) || right.includes(left)) return true;
+  return tokenOverlapForSuggestion(left, right) >= 0.58;
+}
+
+function isGenericDayTaskTitle(title: string, blockedTitles: string[]): boolean {
+  const normalized = normalizeSuggestionKey(title);
+  if (!normalized) return true;
+  if (DAY_TASK_GENERIC_PATTERNS.some((pattern) => pattern.test(normalized))) return true;
+  if (/\btrein(o|ar|amento)\b/.test(normalized)) {
+    return blockedTitles.some((blocked) => /\btrein(o|ar|amento)\b/.test(normalizeSuggestionKey(blocked)));
+  }
+  return false;
+}
+
 function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record<string, unknown>): unknown {
   const recentSuggestionItems = Array.isArray(context.recentSuggestionItems)
     ? context.recentSuggestionItems.filter((item): item is { key: string; theme: string; text: string; sourceSurface: string; createdAt: string } =>
@@ -596,21 +713,15 @@ function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record
         const title = String(item.title).trim();
         const key = normalizeSuggestionKey(title);
         if (!key || blocked.has(key) || seen.has(key)) return false;
+        if (isGenericDayTaskTitle(title, avoidRaw)) return false;
+        if (avoidRaw.some((blockedTitle) => isSimilarSuggestionText(title, blockedTitle))) return false;
         if (recentSuggestionItems.some((recent) => SuggestionMemoryService.isSimilar(title, recent))) return false;
         seen.add(key);
         return true;
       })
       .slice(0, 3);
 
-    if (filtered.length > 0 || validItems.length === 0) {
-      return filtered;
-    }
-
-    const first = validItems[0];
-    return [{
-      ...first,
-      title: `Retomar sugestão anterior: ${String(first.title).trim()}`,
-    }];
+    return filtered;
   }
 
   if (type === 'agenda-blocks') {
@@ -1398,9 +1509,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       data.factors?.join(' '),
       `humor ${data.moodScore} energia ${data.energyScore}`,
     ].filter(Boolean).join(' ');
-    const [checkinRuntimeContext, checkinPlannerContext, recentSuggestionItems, checkinMemories] = await Promise.all([
+    const [checkinRuntimeContext, checkinPlannerContext, checkinCompletionContext, recentSuggestionItems, checkinMemories] = await Promise.all([
       resolveAiRuntimeContext(prisma, data.userId, {}),
       buildTodayPlannerContext(prisma, data.userId),
+      buildTodayCompletionContext(prisma, data.userId),
       SuggestionMemoryService.getRecent(prisma, data.userId),
       memoryService.retrieve(data.userId, checkinRagQuery || 'check-in de hoje e padrões anteriores', 3).catch(() => []),
     ]);
@@ -1422,6 +1534,8 @@ export function createApp(dependencies: AppDependencies = {}) {
       contextualMemory: checkinRagContext,
       activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
       recentSuggestionMemory,
+      completionContext: checkinCompletionContext.text,
+      avoidRecommendationTitles: checkinCompletionContext.titles,
       emotions: (data as any).emotions,
       factors: data.factors,
       plannerContext: checkinPlannerContext,
@@ -2673,7 +2787,20 @@ JSON APENAS:
         const dtAvoidCtx = dtAvoidTaskTitles.length
           ? `\nNÃO REPETIR títulos já usados/ativos: ${dtAvoidTaskTitles.join(' | ')}`
           : '';
+        const dtCompletedTaskTitles = (context.completedTaskTitles as string[] | undefined) || [];
+        const dtCompletedHabitTitles = (context.completedHabitTitles as string[] | undefined) || [];
+        const dtCompletedGoalTitles = (context.completedGoalTitles as string[] | undefined) || [];
+        const dtCompletedSubgoalTitles = (context.completedSubgoalTitles as string[] | undefined) || [];
+        const dtCompletedCtx = [
+          dtCompletedTaskTitles.length ? `Agenda já concluída hoje: ${dtCompletedTaskTitles.join(' | ')}` : '',
+          dtCompletedHabitTitles.length ? `Hábitos já feitos hoje: ${dtCompletedHabitTitles.join(' | ')}` : '',
+          dtCompletedGoalTitles.length ? `Metas já concluídas: ${dtCompletedGoalTitles.join(' | ')}` : '',
+          dtCompletedSubgoalTitles.length ? `Subtarefas de metas já feitas: ${dtCompletedSubgoalTitles.join(' | ')}` : '',
+        ].filter(Boolean).join('\n');
         const dtHour = context.hour ?? new Date().getHours();
+        const dtMinute = typeof context.minute === 'number' ? context.minute : 0;
+        const earliestHour = Math.max(Number(dtHour), 8);
+        const currentClock = `${String(dtHour).padStart(2, '0')}:${String(dtMinute).padStart(2, '0')}`;
         const dtPeriodo = context.partOfDay || (dtHour < 12 ? 'manhã' : dtHour < 18 ? 'tarde' : 'noite');
         const dtWeekday = context.weekday ? ` | Dia: ${context.weekday}` : '';
         const dtLocalDate = context.localDate ? ` (${context.localDate})` : '';
@@ -2721,11 +2848,12 @@ JSON APENAS:
         prompt = `Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ${userName}.
 
 ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}${dtWeekday}${dtLocalDate}${emotionCtx}${negCtx}${posCtx}
-${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${dtPendingCtx}${dtAvoidCtx}
+${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${dtPendingCtx}${dtCompletedCtx ? `\nJÁ FEITO HOJE — use como evidência, NÃO como sugestão:\n${dtCompletedCtx}` : ''}${dtAvoidCtx}
 ${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : ''}${ragContext}${recentSuggestionMemory}
 
 REGRAS INVIOLÁVEIS:
 0. FONTE DA VERDADE DE HOJE = listas acima de "Metas ativas" e "Compromissos pendentes HOJE". Se a memória sugerir algo fora dessas listas, IGNORE.
+0.1. NUNCA transforme item já concluído hoje em tarefa nova. Se treino/hábito já foi feito, não sugira treino, kit de treino, roupa de treino nem preparação de treino.
 1. Use o histórico e as metas acima — as tarefas devem ser relevantes ao que ${userName} realmente faz, não inventadas
 2. Se há metas, pelo menos 1 tarefa deve avançar uma meta específica (cite a meta no título)
 2.1 Se NÃO há metas ativas, não cite nenhuma meta específica.
@@ -2738,7 +2866,7 @@ REGRAS INVIOLÁVEIS:
 
 PROIBIDO ABSOLUTAMENTE: "Descanse", "Beba água", quadro de visão, mapa de visão, planejar semana, organizar arquivos, qualquer genérico sem contexto real da pessoa.
 
-HORÁRIOS OBRIGATÓRIOS: use apenas entre 08:00 e 20:00. NUNCA sugira horários após 20:00, meia-noite ou madrugada.
+HORÁRIOS OBRIGATÓRIOS: agora são ${currentClock}. Use apenas horários futuros entre ${String(earliestHour).padStart(2, '0')}:00 e 20:00. NUNCA sugira horário já passado, meia-noite ou madrugada.
 
 Retorne SOMENTE array JSON: [{"title":"título específico e real","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
       } else if (type === 'journal-tasks') {

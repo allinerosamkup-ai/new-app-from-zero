@@ -42,7 +42,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     label: "Em Equilíbrio",
     description: "Ritmo tranquilo e constante. Boa base para tarefas do dia.",
     tip: "Comece com tarefas leves e vá aumentando o ritmo gradualmente.",
-    chipLabel: "Estável",
+    chipLabel: "Em equilíbrio",
     bg: "linear-gradient(180deg, #E6F2EC 0%, #EDF6F2 50%, #FAF6F2 100%)",
     accent: "var(--accent-sage)",
   },
@@ -98,7 +98,7 @@ type StoredGtdInboxItem = {
   createdAt: string;
   source: string;
 };
-type AiTask = { title: string; category: string; time: string; discarded: boolean };
+type AiTask = { title: string; category: string; time: string; date?: string; isNextDay?: boolean; discarded: boolean };
 type AiPhase = "idle" | "loading" | "preview" | "done";
 
 const CAT_COLOR: Record<string, string> = {
@@ -147,6 +147,88 @@ function resolveSuggestedTaskTime(
   return trimmed;
 }
 
+function resolveSuggestedTaskSchedule(
+  rawTime: unknown,
+  existingTasks: Array<{ time: string; endTime?: string | null }>,
+  referenceDate = new Date(),
+): { time: string; date?: string; isNextDay?: boolean } {
+  const fallback = findSmartPlannerSlot(existingTasks, referenceDate);
+  const resolvedTime = resolveSuggestedTaskTime(rawTime, existingTasks, referenceDate);
+
+  if (resolvedTime === fallback.time) {
+    return fallback;
+  }
+
+  return { time: resolvedTime, date: undefined, isNextDay: false };
+}
+
+function normalizeTextKey(value: unknown): string {
+  return typeof value === "string"
+    ? value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+    : "";
+}
+
+const CHECKIN_STOPWORDS = new Set([
+  "a", "o", "as", "os", "um", "uma", "de", "do", "da", "dos", "das", "e", "em",
+  "para", "pra", "por", "com", "sem", "que", "se", "sua", "seu", "suas", "seus",
+  "voce", "você", "hoje", "agora", "fazer", "abrir", "ver", "revisar", "criar",
+  "marcar", "organizar", "definir", "separar", "colocar", "pegar", "min", "minutos",
+]);
+
+function tokenOverlap(a: unknown, b: unknown): number {
+  const left = normalizeTextKey(a).split(" ").filter((token) => token.length >= 3 && !CHECKIN_STOPWORDS.has(token));
+  const right = normalizeTextKey(b).split(" ").filter((token) => token.length >= 3 && !CHECKIN_STOPWORDS.has(token));
+  if (left.length === 0 || right.length === 0) return 0;
+  const rightSet = new Set(right);
+  const common = left.filter((token) => rightSet.has(token)).length;
+  return common / Math.min(left.length, right.length);
+}
+
+function isSimilarText(a: unknown, b: unknown): boolean {
+  const left = normalizeTextKey(a);
+  const right = normalizeTextKey(b);
+  if (!left || !right) return false;
+  if (left === right || left.includes(right) || right.includes(left)) return true;
+  return tokenOverlap(left, right) >= 0.58;
+}
+
+function normalizeDateKey(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.slice(0, 10);
+}
+
+function isGenericCheckinSuggestion(value: string, blockedTitles: string[]): boolean {
+  const text = normalizeTextKey(value);
+  if (!text) return true;
+  if (/\b(respirar|respire|respiracao|respiração|beba agua|beba água|va com calma|vá com calma|organizar o dia|planejar o dia)\b/.test(text)) {
+    return true;
+  }
+  if (/\btrein(o|ar|amento)\b|\bkit(s)? do treino\b/.test(text)) {
+    return blockedTitles.some((title) => /\btrein(o|ar|amento)\b/.test(normalizeTextKey(title)));
+  }
+  return false;
+}
+
+function filterSuggestionsAgainstCompleted(items: string[], blockedTitles: string[]): string[] {
+  const seen = new Set<string>();
+  return items
+    .map((item) => item.trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .filter((item) => {
+      const key = normalizeTextKey(item);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      if (isGenericCheckinSuggestion(item, blockedTitles)) return false;
+      return !blockedTitles.some((title) => isSimilarText(item, title));
+    });
+}
+
 export function CheckinResultPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -186,6 +268,32 @@ export function CheckinResultPage() {
     () => (state.tasks || []).filter((task) => !task.done).slice(0, 8).map((task) => task.title),
     [state.tasks],
   );
+  const completedTaskTitles = useMemo(
+    () => (state.tasks || []).filter((task) => task.done).map((task) => task.title).filter(Boolean),
+    [state.tasks],
+  );
+  const completedHabitTitles = useMemo(
+    () => (state.habits || [])
+      .filter((habit) => (habit.completions || []).some((completion) => normalizeDateKey(completion.date) === dayContext.localDate))
+      .map((habit) => habit.title)
+      .filter(Boolean),
+    [dayContext.localDate, state.habits],
+  );
+  const completedGoalTitles = useMemo(
+    () => (state.goals || [])
+      .filter((goal) => goal.completedPct >= 100)
+      .map((goal) => goal.title)
+      .filter(Boolean),
+    [state.goals],
+  );
+  const completedSubgoalTitles = useMemo(
+    () => (state.goals || [])
+      .flatMap((goal) => goal.subtasks || [])
+      .filter((subtask) => subtask.done)
+      .map((subtask) => subtask.title)
+      .filter(Boolean),
+    [state.goals],
+  );
   // Fatores e emoções do check-in mais recente — alimentam a IA com contexto real
   const todayFactors = useMemo(() => (state.checkinHistory || [])[0]?.factors ?? [], [state.checkinHistory]);
   const todayEmotions = useMemo(() => (state.checkinHistory || [])[0]?.emotions ?? [], [state.checkinHistory]);
@@ -200,8 +308,18 @@ export function CheckinResultPage() {
       .split("|")
       .map((item) => item.trim())
       .filter(Boolean);
-    return Array.from(new Set([...existingPlanner, ...lastAiTasks]));
-  }, [state.tasks]);
+    return Array.from(new Set([
+      ...existingPlanner,
+      ...completedHabitTitles,
+      ...completedGoalTitles,
+      ...completedSubgoalTitles,
+      ...lastAiTasks,
+    ]));
+  }, [completedGoalTitles, completedHabitTitles, completedSubgoalTitles, state.tasks]);
+  const visibleCheckinRecommendations = useMemo(
+    () => filterSuggestionsAgainstCompleted(checkinAI?.recommendations ?? [], blockedTaskTitles),
+    [blockedTaskTitles, checkinAI?.recommendations],
+  );
 
   useEffect(() => {
     if (auraMsgRan.current) return;
@@ -227,6 +345,7 @@ export function CheckinResultPage() {
         nota: todayNote || state.journal,
         streak,
         hour: dayContext.hour,
+        minute: dayContext.minute,
         partOfDay: dayContext.partOfDay,
         weekday: dayContext.weekday,
         localDate: dayContext.localDate,
@@ -298,10 +417,12 @@ export function CheckinResultPage() {
       const key = title.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
+      if (isGenericCheckinSuggestion(title, blockedTaskTitles)) continue;
+      if (blockedTaskTitles.some((blockedTitle) => isSimilarText(title, blockedTitle))) continue;
       const category = typeof item.category === "string" ? item.category.trim().toLowerCase() : "rotina";
-      const time = resolveSuggestedTaskTime(item.time, virtualTasks, now);
-      normalized.push({ title, category, time, discarded: false });
-      virtualTasks.push({ time, endTime: addMinutes(time, 30) });
+      const schedule = resolveSuggestedTaskSchedule(item.time, virtualTasks, now);
+      normalized.push({ title, category, time: schedule.time, date: schedule.date, isNextDay: schedule.isNextDay, discarded: false });
+      virtualTasks.push({ time: schedule.time, endTime: addMinutes(schedule.time, 30) });
       if (normalized.length >= 3) break;
     }
     return normalized;
@@ -321,12 +442,17 @@ export function CheckinResultPage() {
           pendingTasks: pendingTaskTitles,
           nota: state.journal,
           hour: dayContext.hour,
+          minute: dayContext.minute,
           partOfDay: dayContext.partOfDay,
           weekday: dayContext.weekday,
           localDate: dayContext.localDate,
           factors: todayFactors,
           emotions: todayEmotions,
           avoidTaskTitles: blockedTaskTitles,
+          completedTaskTitles,
+          completedHabitTitles,
+          completedGoalTitles,
+          completedSubgoalTitles,
         },
       });
       const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
@@ -365,12 +491,17 @@ export function CheckinResultPage() {
           pendingTasks: pendingTaskTitles,
           nota: state.journal,
           hour: dayContext.hour,
+          minute: dayContext.minute,
           partOfDay: dayContext.partOfDay,
           weekday: dayContext.weekday,
           localDate: dayContext.localDate,
           factors: todayFactors,
           emotions: todayEmotions,
           avoidTaskTitles: blockedTaskTitles,
+          completedTaskTitles,
+          completedHabitTitles,
+          completedGoalTitles,
+          completedSubgoalTitles,
         },
       });
       const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
@@ -413,8 +544,10 @@ export function CheckinResultPage() {
 
         // Usa o horário sugerido pela IA se for futuro; caso contrário, acha slot livre
         const useAiTime = taskTimeMins > nowMins;
-        const slot = useAiTime
-          ? { time: task.time, date: undefined, isNextDay: false }
+        const slot = task.isNextDay
+          ? { time: task.time, date: task.date, isNextDay: true }
+          : useAiTime
+          ? { time: task.time, date: task.date, isNextDay: false }
           : findSmartPlannerSlot(currentTasks, now);
 
         const saved = await addTask(task.title, slot.time, task.category, {
@@ -572,7 +705,7 @@ export function CheckinResultPage() {
                   <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: phaseColor }}>
                     {t("phases.yourPhaseKicker", "Sua fase do ciclo")}
                   </p>
-                  <p style={{ margin: "2px 0 0", fontSize: 26, fontWeight: 700, color: "#2A2A2A", fontFamily: "var(--font-serif, 'Fraunces', serif)", lineHeight: 1.1 }}>
+                  <p style={{ margin: "2px 0 0", fontSize: 26, fontWeight: 800, color: "#2A2A2A", fontFamily: "var(--font-sans, sans-serif)", lineHeight: 1.1, letterSpacing: 0 }}>
                     {phaseLabel}
                   </p>
                   <p style={{ margin: "3px 0 0", fontSize: 12, fontWeight: 600, color: "#6B5E5A" }}>
@@ -669,12 +802,12 @@ export function CheckinResultPage() {
             </>
           ) : checkinAI?.analysis ? (
             <>
-              <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.65, fontStyle: "italic", marginBottom: checkinAI.recommendations?.length ? 10 : 0 }}>
+              <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.65, fontStyle: "italic", marginBottom: visibleCheckinRecommendations.length ? 10 : 0 }}>
                 {checkinAI.analysis}
               </p>
-              {checkinAI.recommendations && checkinAI.recommendations.length > 0 && (
+              {visibleCheckinRecommendations.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {checkinAI.recommendations.map((rec, i) => (
+                  {visibleCheckinRecommendations.map((rec, i) => (
                     <div
                       key={i}
                       onClick={() => sendSuggestionToActions(rec)}
@@ -824,7 +957,7 @@ export function CheckinResultPage() {
                         {task.title}
                       </p>
                       <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
-                        {task.time} · {task.category}
+                        {task.isNextDay ? `amanhã ${task.time}` : task.time} · {task.category}
                       </p>
                     </div>
 

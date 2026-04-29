@@ -26,6 +26,25 @@ export const CheckinStateSchema = z.object({
 
 export type CheckinState = z.infer<typeof CheckinStateSchema>;
 
+const GENERIC_RECOMMENDATION_PATTERNS = [
+  /\brespir(ar|e|acao|ação)\b/,
+  /\bbeb(er|a)\s+(agua|água)\b/,
+  /\bva\s+com\s+calma\b/,
+  /\bvá\s+com\s+calma\b/,
+  /\bum\s+passo\s+de\s+cada\s+vez\b/,
+  /\borganizar\s+(o\s+)?dia\b/,
+  /\bplanejar\s+(o\s+)?dia\b/,
+  /\btrein(o|ar)\b/,
+  /\bkit(s)?\s+do\s+treino\b/,
+];
+
+const SIMILARITY_STOPWORDS = new Set([
+  'a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'e', 'em',
+  'para', 'pra', 'por', 'com', 'sem', 'que', 'se', 'sua', 'seu', 'suas', 'seus',
+  'voce', 'você', 'hoje', 'agora', 'fazer', 'abrir', 'ver', 'revisar', 'criar',
+  'marcar', 'organizar', 'definir', 'separar', 'colocar', 'pegar', 'min', 'minutos',
+]);
+
 function extractClockFromCheckinSlot(checkinSlot?: string): string | null {
   const match = checkinSlot?.match(/-(\d{2})(\d{2})/);
   if (!match) return null;
@@ -61,6 +80,59 @@ function resolveNextRecommendationTime(currentLocalTime: string): string {
   return '09:00';
 }
 
+function normalizeRecommendationText(value: unknown): string {
+  return typeof value === 'string'
+    ? value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    : '';
+}
+
+function tokenSet(value: unknown): Set<string> {
+  return new Set(
+    normalizeRecommendationText(value)
+      .split(' ')
+      .filter((token) => token.length >= 3 && !SIMILARITY_STOPWORDS.has(token)),
+  );
+}
+
+function tokenOverlap(a: unknown, b: unknown): number {
+  const left = tokenSet(a);
+  const right = tokenSet(b);
+  if (left.size === 0 || right.size === 0) return 0;
+
+  let common = 0;
+  for (const token of left) {
+    if (right.has(token)) common += 1;
+  }
+  return common / Math.min(left.size, right.size);
+}
+
+function isSimilarRecommendation(a: unknown, b: unknown): boolean {
+  const left = normalizeRecommendationText(a);
+  const right = normalizeRecommendationText(b);
+  if (!left || !right) return false;
+  if (left === right || left.includes(right) || right.includes(left)) return true;
+  return tokenOverlap(left, right) >= 0.58;
+}
+
+function isGenericRecommendation(recommendation: string, blockedTitles: string[]): boolean {
+  const normalized = normalizeRecommendationText(recommendation);
+  if (!normalized) return true;
+
+  return GENERIC_RECOMMENDATION_PATTERNS.some((pattern) => {
+    if (!pattern.test(normalized)) return false;
+    if (/\btrein(o|ar)\b|\bkit(s)?\s+do\s+treino\b/.test(pattern.source)) {
+      return blockedTitles.some((title) => /\btrein(o|ar|amento)\b/.test(normalizeRecommendationText(title)));
+    }
+    return true;
+  });
+}
+
 function sanitizeRecommendationTimes(recommendations: string[], currentLocalTime: string | null): string[] {
   if (!currentLocalTime) {
     return recommendations;
@@ -73,9 +145,10 @@ function sanitizeRecommendationTimes(recommendations: string[], currentLocalTime
 
   const nextAllowedTime = resolveNextRecommendationTime(currentLocalTime);
   const maxAllowedMinutes = Math.min(currentMinutes + 120, 18 * 60);
+  const isAfterTodayWindow = currentMinutes >= 18 * 60;
 
   return recommendations.map((recommendation) =>
-    recommendation.replace(/\b(\d{1,2})[:h](\d{2})\b/g, (_match, rawHours, rawMinutes) => {
+    recommendation.replace(/\b(?:[aà]s\s+)?(\d{1,2})[:h](\d{2})\b/gi, (_match, rawHours, rawMinutes) => {
       const hours = String(rawHours).padStart(2, '0');
       const parsedMinutes = timeToMinutes(`${hours}:${rawMinutes}`);
       if (
@@ -87,9 +160,31 @@ function sanitizeRecommendationTimes(recommendations: string[], currentLocalTime
         return `${hours}:${rawMinutes}`;
       }
 
-      return nextAllowedTime;
-    }),
+      return isAfterTodayWindow ? `amanhã às ${nextAllowedTime}` : nextAllowedTime;
+    }).replace(/[aà]s\s+amanh[ãa]\s+[aà]s/gi, 'amanhã às'),
   );
+}
+
+function sanitizeRecommendations(
+  recommendations: string[],
+  currentLocalTime: string | null,
+  blockedTitles: string[] = [],
+): string[] {
+  const timed = sanitizeRecommendationTimes(recommendations, currentLocalTime);
+  const seen = new Set<string>();
+
+  return timed
+    .map((item) => item.trim().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .filter((item) => {
+      const key = normalizeRecommendationText(item);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      if (isGenericRecommendation(item, blockedTitles)) return false;
+      if (blockedTitles.some((title) => isSimilarRecommendation(item, title))) return false;
+      return true;
+    })
+    .slice(0, 3);
 }
 
 export class CheckinService {
@@ -111,6 +206,8 @@ export class CheckinService {
     contextualMemory?: string | null;
     activeGoalsContext?: string | null;
     recentSuggestionMemory?: string | null;
+    completionContext?: string | null;
+    avoidRecommendationTitles?: string[] | null;
     emotions?: string[];
     factors?: string[];
     plannerContext?: string | null;
@@ -175,6 +272,7 @@ ${data.plannerContext ? `${data.plannerContext}\n` : ''}
 ${data.activeGoalsContext ? `METAS ATIVAS:\n${data.activeGoalsContext}\n` : ''}
 ${data.contextualMemory ? `MEMÓRIAS RELEVANTES:\n${data.contextualMemory}\n` : ''}
 ${data.recentSuggestionMemory ? `${data.recentSuggestionMemory}\n` : ''}
+${data.completionContext ? `JÁ FEITO / NÃO SUGERIR DE NOVO:\n${data.completionContext}\n` : ''}
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
 - Se houver agenda hoje, leve em conta o peso e tipo de compromissos ao calibrar as recomendações e suggestedIntensity.
@@ -187,6 +285,7 @@ DIRETRIZES:
 - analysis: 1-2 frases que leiam o momento sem repetir os números; se há nota, emoções ou fatores específicos, mencione a nuance concreta.
 - recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si, sem clichês; se há nota escrita, pelo menos 1 ação deve responder diretamente ao que ela revelou.
 - Se uma recomendação recente já cobriu a mesma ideia, escolha uma alternativa real. Se a repetição for a melhor opção, escreva como retomada explícita da sugestão anterior e acrescente um ajuste concreto.
+- Não sugira treino, kit de treino, hábito, tarefa, meta ou subtarefa que já aparece como concluída hoje. Use concluídos como evidência de movimento, não como próxima ação.
 - Se citar horário explícito, ele deve ser posterior a ${currentLocalTime ?? 'agora'} e caber nas próximas 2 horas; nunca use madrugada ou horário já passado.
 - Se não houver um horário óbvio e válido, prefira escrever a ação sem relógio.
 - suggestedIntensity: 'L' (energia baixa/sensível), 'M' (equilibrada), 'P' (energia alta/focada).
@@ -234,7 +333,11 @@ JSON APENAS:
     const parsed = CheckinStateSchema.parse(JSON.parse(content));
     return {
       ...parsed,
-      recommendations: sanitizeRecommendationTimes(parsed.recommendations, currentLocalTime),
+      recommendations: sanitizeRecommendations(
+        parsed.recommendations,
+        currentLocalTime,
+        data.avoidRecommendationTitles ?? [],
+      ),
     };
   }
 }

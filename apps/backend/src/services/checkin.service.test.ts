@@ -66,6 +66,57 @@ async function run() {
   assert.match(capturedMessages[1]?.content || '', /Respirar por 1 minuto antes de responder/i);
   assert.match(capturedMessages[0]?.content || '', /Somática é ferramenta auxiliar/i);
   assert.match(capturedMessages[1]?.content || '', /fato vs interpretação/i);
+
+  const completedFakeClient = {
+    chat: {
+      completions: {
+        create: async ({ messages }: any) => {
+          capturedMessages = messages;
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    stateLabel: 'Dia sensível',
+                    stateLabelType: 'sensível',
+                    analysis: 'A energia caiu, mas o treino já conta como movimento feito.',
+                    recommendations: [
+                      'Preparar o kit do treino às 09:00.',
+                      'Responder uma pendência real da agenda às 17:00.',
+                    ],
+                    suggestedIntensity: 'L',
+                    rationale: 'Evitar repetição de hábito concluído.',
+                  }),
+                },
+              },
+            ],
+          };
+        },
+      },
+    },
+  };
+
+  const completedResult = await CheckinService.evaluateDayState(
+    {
+      checkinSlot: 'evening-2006',
+      moodScore: 3,
+      energyScore: 2,
+      clarityScore: 4,
+      irritabilityScore: 2,
+      physicalScore: 3,
+      socialScore: 3,
+      sleepScore: 4,
+      userName: 'Ana',
+      completionContext: 'Hábitos feitos hoje: "Treino"',
+      avoidRecommendationTitles: ['Treino'],
+    },
+    completedFakeClient as any,
+  );
+
+  assert.deepEqual(completedResult.recommendations, ['Responder uma pendência real da agenda amanhã às 09:00.']);
+  assert.match(capturedMessages[1]?.content || '', /JÁ FEITO \/ NÃO SUGERIR DE NOVO/i);
+  assert.match(capturedMessages[1]?.content || '', /Hábitos feitos hoje: "Treino"/i);
+  assert.match(capturedMessages[1]?.content || '', /não sugira treino/i);
 }
 
 run()
