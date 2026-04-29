@@ -14,6 +14,11 @@ import { api } from "../lib/api";
 import { tryParseAiSuggestion } from "../lib/ai";
 import { aggregateCheckinsByDay, computeMoodCycle, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import { isProactiveNudgeDismissedToday } from "../utils/proactive-nudge-dismissal";
+import { getLocalDateKey } from "../utils/day-context";
+import {
+  extractBlockedHomeAutonomyTitles,
+  readHomeAutonomyFeedback,
+} from "../routes/home-page.helpers";
 import type { AutonomousInsight, CheckinEntry, FollowUpPending, PhaseTransitionAlert, ProactiveNudge } from "../features/aura/types";
 
 const MIN_CHECKINS = 3;
@@ -23,6 +28,53 @@ const PROFILE_UPDATE_DAYS = 7;
 // Fonte única de verdade para labels: PHASE_CONFIG do engine.
 const phaseLabel = (phase: string): string =>
   PHASE_CONFIG[phase as MoodPhase]?.label ?? phase;
+
+function habitCompletionCount(habit: { completions?: Array<{ completionCount?: number | null } | unknown> }): number {
+  const completion = habit.completions?.[0];
+  if (!completion) return 0;
+  if (completion !== null && typeof completion === "object" && "completionCount" in completion) {
+    const count = Number((completion as { completionCount?: number | null }).completionCount ?? 1);
+    return Number.isFinite(count) ? Math.max(1, Math.round(count)) : 1;
+  }
+  return 1;
+}
+
+function habitTargetCount(habit: { targetCount?: number | null }): number {
+  const count = Number(habit.targetCount ?? 1);
+  return Number.isFinite(count) ? Math.max(1, Math.round(count)) : 1;
+}
+
+function buildHomeAutonomyRuntimeContext(state: ReturnType<typeof useAuraStore>["state"]) {
+  const today = getLocalDateKey();
+  const feedback = readHomeAutonomyFeedback().map((item) => ({
+    title: item.title,
+    status: item.status,
+    createdAt: item.createdAt,
+  }));
+
+  return {
+    completedTaskTitles: (state.tasks || [])
+      .filter((task) => task.done)
+      .map((task) => task.title)
+      .filter(Boolean),
+    completedHabitTitles: (state.habits || [])
+      .filter((habit) => habitCompletionCount(habit) >= habitTargetCount(habit))
+      .map((habit) => habit.title)
+      .filter(Boolean),
+    completedGoalTitles: (state.goals || [])
+      .filter((goal) => goal.completedPct >= 100)
+      .map((goal) => goal.title)
+      .filter(Boolean),
+    completedSubgoalTitles: (state.goals || [])
+      .flatMap((goal) => goal.subtasks || [])
+      .filter((subgoal) => subgoal.done)
+      .map((subgoal) => subgoal.title)
+      .filter(Boolean),
+    blockedActionTitles: extractBlockedHomeAutonomyTitles(feedback),
+    homeAutonomyFeedback: feedback,
+    localDate: today,
+  };
+}
 
 function transitionSeverity(
   _from: string,
@@ -126,7 +178,8 @@ export function AutonomousAIEngine() {
       cycleReport.aiContext,
       state.goals?.filter((goal) => goal.completedPct < 100).map((goal) => goal.title) ?? [],
       state.tasks?.filter((task) => !task.done).slice(0, 5).map((task) => task.title) ?? [],
-      setAutonomousInsight
+      setAutonomousInsight,
+      buildHomeAutonomyRuntimeContext(state)
     ).finally(() => {
       stabilityInFlightRef.current = false;
     });
@@ -134,6 +187,7 @@ export function AutonomousAIEngine() {
     state.checkinHistory,
     state.goals,
     state.tasks,
+    state.habits,
     state.autonomousInsight?.generatedAt,
     state.phaseTransitionAlert,
     state.notificationPreferences.aiSuggestions,
@@ -307,7 +361,8 @@ async function runStabilityAnalysis(
   moodCycleContext: string,
   goals: string[],
   pendingTasks: string[],
-  setInsight: (i: AutonomousInsight | null) => void
+  setInsight: (i: AutonomousInsight | null) => void,
+  homeAutonomyContext: Record<string, unknown>
 ) {
   try {
     const res = await api.post("/ai/suggest", {
@@ -317,6 +372,7 @@ async function runStabilityAnalysis(
         moodCycleContext,
         goals,
         pendingTasks,
+        ...homeAutonomyContext,
       },
     });
 

@@ -16,6 +16,22 @@ export type HomeAiMsg = {
   proactive: { emoji: string; title: string; desc: string; actionPath: string | null };
 };
 
+export type HomeAutonomyFeedbackStatus = "done" | "dismissed" | "deleted" | "scheduled";
+
+export type HomeAutonomyFeedbackItem = {
+  key: string;
+  title: string;
+  status: HomeAutonomyFeedbackStatus;
+  createdAt: string;
+  expiresAt: string;
+};
+
+type HomeAutonomyStorage = Pick<Storage, "getItem" | "setItem">;
+
+export const HOME_AUTONOMY_FEEDBACK_KEY = "airia.homeAutonomy.actionFeedback.v1";
+const HOME_AUTONOMY_FEEDBACK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const HOME_AUTONOMY_FEEDBACK_LIMIT = 40;
+
 type HomeAiRequestKeyInput = {
   localDate: string;
   partOfDay: string;
@@ -48,6 +64,16 @@ export type HomeAgendaItem = HomeAgendaTaskItem | HomeAgendaHabitItem;
 
 function normalizeWhitespace(value: string): string {
   return value.trim().replace(/\s+/g, " ");
+}
+
+export function normalizeHomeAutonomyActionKey(value: string): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function comparableKey(value: string): string {
@@ -117,6 +143,122 @@ export function buildHomeAiRequestKey(input: HomeAiRequestKeyInput): string {
     pendingTaskTitles: [...uniqueStrings(input.pendingTaskTitles)].sort((a, b) => a.localeCompare(b, "pt-BR")),
     latestCheckinKey: input.latestCheckinKey ?? "",
     refreshBucket: input.refreshBucket,
+  });
+}
+
+function resolveHomeAutonomyStorage(storage?: HomeAutonomyStorage | null): HomeAutonomyStorage | null {
+  if (storage) return storage;
+  if (typeof window === "undefined") return null;
+  return window.localStorage ?? null;
+}
+
+function isHomeAutonomyFeedbackItem(value: unknown): value is HomeAutonomyFeedbackItem {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<HomeAutonomyFeedbackItem>;
+  return (
+    typeof item.key === "string" &&
+    typeof item.title === "string" &&
+    (item.status === "done" || item.status === "dismissed" || item.status === "deleted" || item.status === "scheduled") &&
+    typeof item.createdAt === "string" &&
+    typeof item.expiresAt === "string"
+  );
+}
+
+export function readHomeAutonomyFeedback(
+  storage?: HomeAutonomyStorage | null,
+  referenceDate: Date = new Date(),
+): HomeAutonomyFeedbackItem[] {
+  const targetStorage = resolveHomeAutonomyStorage(storage);
+  if (!targetStorage) return [];
+
+  try {
+    const raw = targetStorage.getItem(HOME_AUTONOMY_FEEDBACK_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    const now = referenceDate.getTime();
+    return Array.isArray(parsed)
+      ? parsed
+          .filter(isHomeAutonomyFeedbackItem)
+          .filter((item) => {
+            const expiresAt = new Date(item.expiresAt).getTime();
+            return Number.isFinite(expiresAt) && expiresAt > now;
+          })
+          .slice(0, HOME_AUTONOMY_FEEDBACK_LIMIT)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function rememberHomeAutonomyActionFeedback(
+  title: string,
+  status: HomeAutonomyFeedbackStatus,
+  options: { storage?: HomeAutonomyStorage | null; referenceDate?: Date } = {},
+): HomeAutonomyFeedbackItem[] {
+  const targetStorage = resolveHomeAutonomyStorage(options.storage);
+  if (!targetStorage) return [];
+
+  const normalizedTitle = normalizeWhitespace(title);
+  const key = normalizeHomeAutonomyActionKey(normalizedTitle);
+  if (!key) return readHomeAutonomyFeedback(targetStorage, options.referenceDate ?? new Date());
+
+  const now = options.referenceDate ?? new Date();
+  const createdAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + HOME_AUTONOMY_FEEDBACK_TTL_MS).toISOString();
+  const existing = readHomeAutonomyFeedback(targetStorage, now).filter((item) => item.key !== key);
+  const next = [
+    { key, title: normalizedTitle, status, createdAt, expiresAt },
+    ...existing,
+  ].slice(0, HOME_AUTONOMY_FEEDBACK_LIMIT);
+
+  try {
+    targetStorage.setItem(HOME_AUTONOMY_FEEDBACK_KEY, JSON.stringify(next));
+  } catch {
+    return existing;
+  }
+
+  return next;
+}
+
+export function extractBlockedHomeAutonomyTitles(feedback: HomeAutonomyFeedbackItem[]): string[] {
+  return uniqueStrings(feedback.map((item) => item.title));
+}
+
+function homeAutonomyTokenSet(value: string): Set<string> {
+  const stopwords = new Set([
+    "a", "o", "as", "os", "um", "uma", "de", "do", "da", "dos", "das", "e", "em",
+    "para", "pra", "por", "com", "sem", "que", "se", "sua", "seu", "suas", "seus",
+    "voce", "você", "hoje", "agora", "fazer", "abrir", "ver", "revisar", "criar",
+    "marcar", "organizar", "definir", "separar", "colocar", "pegar",
+  ]);
+
+  return new Set(
+    normalizeHomeAutonomyActionKey(value)
+      .split(" ")
+      .filter((token) => token.length >= 3 && !stopwords.has(token)),
+  );
+}
+
+function homeAutonomyTokenOverlap(a: string, b: string): number {
+  const left = homeAutonomyTokenSet(a);
+  const right = homeAutonomyTokenSet(b);
+  if (left.size === 0 || right.size === 0) return 0;
+
+  let common = 0;
+  for (const token of left) {
+    if (right.has(token)) common += 1;
+  }
+  return common / Math.min(left.size, right.size);
+}
+
+export function isHomeAutonomyTitleBlocked(title: string, blockedTitles: string[]): boolean {
+  const key = normalizeHomeAutonomyActionKey(title);
+  if (!key) return true;
+
+  return blockedTitles.some((blockedTitle) => {
+    const blockedKey = normalizeHomeAutonomyActionKey(blockedTitle);
+    if (!blockedKey) return false;
+    if (key === blockedKey || key.includes(blockedKey) || blockedKey.includes(key)) return true;
+    return homeAutonomyTokenOverlap(key, blockedKey) >= 0.58;
   });
 }
 

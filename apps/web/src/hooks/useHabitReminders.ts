@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Habit, NotificationPreferences, Task } from '../features/aura/types';
-import { getHabitCompletionCount, getHabitTargetCount, isHabitCompleteForDate } from '../features/aura/habit-helpers';
+import { getHabitCompletionCount, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from '../features/aura/habit-helpers';
 import {
   DEFAULT_EVENING_CHECKIN_TIME,
   DEFAULT_MORNING_CHECKIN_TIME,
@@ -17,6 +17,12 @@ function timeToMinutes(time: string | null | undefined): number | null {
 function shouldFirePersistentReminder(nowMinutes: number, startMinutes: number, intervalMinutes: number): boolean {
   if (nowMinutes < startMinutes) return false;
   return (nowMinutes - startMinutes) % intervalMinutes === 0;
+}
+
+function shouldNotifyPlannerTask(task: Task): boolean {
+  if (!task.time || task.done) return false;
+  if (!task.isAiSuggested) return true;
+  return Boolean(task.persistentReminderEnabled || task.alarmEnabled || task.vibrateEnabled);
 }
 
 export function useHabitReminders(
@@ -38,7 +44,7 @@ export function useHabitReminders(
       ? habits.filter((h) => h.reminderEnabled && h.reminderTime)
       : [];
     const tasksWithReminders = preferences.planner
-      ? tasks.filter((task) => task.time)
+      ? tasks.filter(shouldNotifyPlannerTask)
       : [];
     const hasFixedReminders = preferences.checkin || preferences.journal;
     if (habitsWithReminders.length === 0 && tasksWithReminders.length === 0 && !hasFixedReminders) return;
@@ -47,6 +53,7 @@ export function useHabitReminders(
       if (Notification.permission !== 'granted') return;
       const now = new Date();
       const todayKey = getLocalDateKey(now);
+      const weekday = now.getDay();
       const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -79,6 +86,7 @@ export function useHabitReminders(
 
       habitsWithReminders
         .forEach((h) => {
+          if (!isHabitDueOnWeekday(h, weekday)) return;
           const startMinutes = timeToMinutes(h.reminderTime);
           if (startMinutes === null) return;
           const completed = isHabitCompleteForDate(h, todayKey);
@@ -97,12 +105,13 @@ export function useHabitReminders(
             body: target > 1 ? `Faltam ${Math.max(0, target - count)} de ${target} hoje.` : 'Hora do seu hábito!',
             icon: '/favicon.ico',
             tag: `habit-${h.id}`,
-          });
+            renotify: true,
+            timestamp: Date.now(),
+          } as any);
         });
 
       tasksWithReminders
         .forEach((task) => {
-          if (task.done) return;
           const startMinutes = timeToMinutes(task.time);
           if (startMinutes === null) return;
           const interval = task.persistentReminderIntervalMinutes ?? 60;
@@ -118,6 +127,8 @@ export function useHabitReminders(
             body: 'Ainda está pendente. Marque como feito quando concluir.',
             icon: '/favicon.ico',
             tag: `task-${task.id}`,
+            renotify: true,
+            timestamp: Date.now(),
             // vibration pattern if enabled
             ...(task.vibrateEnabled && { vibrate: [200, 100, 200] })
           } as any);

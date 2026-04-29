@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
 import {
+  HOME_AUTONOMY_FEEDBACK_KEY,
   buildQuarterHourRefreshBucket,
   buildHomeAiRequestKey,
   buildHomeAgendaPreview,
   dedupeAgendaBlocks,
   extractAgendaRepeatContext,
+  extractBlockedHomeAutonomyTitles,
   extractHomeRepeatContext,
+  isHomeAutonomyTitleBlocked,
+  readHomeAutonomyFeedback,
+  rememberHomeAutonomyActionFeedback,
   resolveHomeAgendaSuggestionDate,
   shouldRefreshHomeSuggestionAfterAction,
 } from "./home-page.helpers.ts";
@@ -189,5 +194,52 @@ describe("home page helpers", () => {
   it("does not regenerate AI suggestions after regular task or habit actions", () => {
     assert.equal(shouldRefreshHomeSuggestionAfterAction({ kind: "task", isAiSuggested: false }), false);
     assert.equal(shouldRefreshHomeSuggestionAfterAction({ kind: "habit" }), false);
+  });
+
+  it("persists home autonomy feedback and exposes blocked titles", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    };
+    const now = new Date("2026-04-29T12:00:00.000Z");
+
+    const first = rememberHomeAutonomyActionFeedback("Ligar para a proprietária", "done", { storage, referenceDate: now });
+    assert.equal(first.length, 1);
+    assert.equal(first[0]?.status, "done");
+    assert.equal(values.has(HOME_AUTONOMY_FEEDBACK_KEY), true);
+
+    const second = rememberHomeAutonomyActionFeedback("  ligar para a proprietária  ", "dismissed", { storage, referenceDate: now });
+    assert.equal(second.length, 1);
+    assert.equal(second[0]?.status, "dismissed");
+    assert.deepEqual(extractBlockedHomeAutonomyTitles(second), ["ligar para a proprietária"]);
+  });
+
+  it("drops expired home autonomy feedback", () => {
+    const storage = {
+      getItem: () => JSON.stringify([
+        {
+          key: "matteo",
+          title: "Mandar mensagem para Matteo",
+          status: "deleted",
+          createdAt: "2026-04-20T12:00:00.000Z",
+          expiresAt: "2026-04-21T12:00:00.000Z",
+        },
+      ]),
+      setItem: () => undefined,
+    };
+
+    assert.deepEqual(readHomeAutonomyFeedback(storage, new Date("2026-04-29T12:00:00.000Z")), []);
+  });
+
+  it("blocks home autonomy titles that are similar to completed feedback", () => {
+    assert.equal(
+      isHomeAutonomyTitleBlocked("Mandar mensagem para Matteo", ["Enviar mensagem ao Matteo"]),
+      true,
+    );
+    assert.equal(
+      isHomeAutonomyTitleBlocked("Abrir anúncio do apartamento", ["Enviar mensagem ao Matteo"]),
+      false,
+    );
   });
 });

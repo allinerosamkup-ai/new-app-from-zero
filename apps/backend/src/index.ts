@@ -53,6 +53,12 @@ import {
 } from './services/adaptive-scheduling.service';
 import { normalizeAiSuggestion, usesJsonObjectResponse } from './lib/ai-suggest-response';
 import { extractJsonValue } from './lib/extract-json';
+import { sanitizeStabilityAnalysisSuggestion } from './lib/home-autonomy-sanitizer';
+import {
+  allowsHabitNotifications,
+  getSaoPauloDateContext,
+  shouldSendHabitReminderToday,
+} from './lib/notification-filters';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from './lib/openai-config';
 import { ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
 import {
@@ -569,6 +575,10 @@ function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record
       ...payload,
       autocuidado,
     };
+  }
+
+  if (type === 'stability-analysis') {
+    return sanitizeStabilityAnalysisSuggestion(suggestion, context);
   }
 
   if (type === 'day-tasks' && Array.isArray(suggestion)) {
@@ -2814,6 +2824,21 @@ Retorne SOMENTE JSON: {"insight":"2 frases personalizadas e úteis sobre o padr�
         const history = (context.history || []) as Array<{date:string;humor:number;energia:number;sono?:number;fisico?:number;social?:number}>;
         const goals = (context.goals as string[] | undefined) || [];
         const pendingTasks = (context.pendingTasks as string[] | undefined) || [];
+        const completedTaskTitles = (context.completedTaskTitles as string[] | undefined) || [];
+        const completedHabitTitles = (context.completedHabitTitles as string[] | undefined) || [];
+        const completedGoalTitles = (context.completedGoalTitles as string[] | undefined) || [];
+        const completedSubgoalTitles = (context.completedSubgoalTitles as string[] | undefined) || [];
+        const blockedActionTitles = (context.blockedActionTitles as string[] | undefined) || [];
+        const homeAutonomyFeedback = Array.isArray(context.homeAutonomyFeedback)
+          ? (context.homeAutonomyFeedback as unknown[])
+              .filter((item): item is { title?: unknown; status?: unknown } => !!item && typeof item === 'object')
+              .map((item) => {
+                const title = typeof item.title === 'string' ? item.title.trim() : '';
+                const status = typeof item.status === 'string' ? item.status.trim() : 'blocked';
+                return title ? `${title} (${status})` : '';
+              })
+              .filter(Boolean)
+          : [];
         const historyLines = history.map((h: any) =>
           `- ${h.date}: ${humanizeScore(h.humor, 'mood')}, energia ${humanizeScore(h.energia, 'energy')}${h.sono != null ? `, sono ${humanizeScore(h.sono, 'sleep')}` : ''}${h.fisico != null ? `, físico ${humanizeScore(h.fisico, 'generic')}` : ''}${h.social != null ? `, social ${humanizeScore(h.social, 'generic')}` : ''}`
         ).join('\n');
@@ -2828,6 +2853,12 @@ CONTEXTO VIVO DO USUÁRIO:
 ${context.moodCycleContext || 'Sem contexto adicional.'}
 ${goals.length ? `\nMetas ativas: ${goals.join(' | ')}` : ''}
 ${pendingTasks.length ? `\nCompromissos pendentes: ${pendingTasks.join(' | ')}` : ''}
+${completedTaskTitles.length ? `\nAgenda já concluída: ${completedTaskTitles.join(' | ')}` : ''}
+${completedHabitTitles.length ? `\nHábitos já feitos hoje: ${completedHabitTitles.join(' | ')}` : ''}
+${completedGoalTitles.length ? `\nMetas já concluídas: ${completedGoalTitles.join(' | ')}` : ''}
+${completedSubgoalTitles.length ? `\nSubtarefas de metas já feitas: ${completedSubgoalTitles.join(' | ')}` : ''}
+${blockedActionTitles.length ? `\nNão sugerir novamente: ${blockedActionTitles.join(' | ')}` : ''}
+${homeAutonomyFeedback.length ? `\nFeedback recente do card Análise e Autonomia: ${homeAutonomyFeedback.join(' | ')}` : ''}
 
 Variância de humor: ${variance.toFixed(2)} (>1.5 = alta labilidade afetiva).
 
@@ -2843,9 +2874,14 @@ REGRAS:
 - Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
 - As sugestões devem nascer dos sinais reais do histórico, não de conselhos genéricos.
 - Se houver metas, pendências ou temas recorrentes no contexto vivo, use isso para deixar as ações concretas e pessoais.
+- Não sugira o que já aparece como concluído em agenda, hábitos, metas ou subtarefas.
+- Não transforme coisa concluída em próxima ação. Use concluídos apenas como evidência no "pattern" ou "insight".
+- Não ressuscite ação que a pessoa marcou como feita, pulou, excluiu ou agendou pelo card.
 - Misture quando fizer sentido: micro-ação regulatória, tarefa prática curta e compromisso simples/agendável.
 - As sugestões devem reduzir atrito, estabilizar rotina, proteger energia ou conter impulsividade.
 - Prefira intervenções concretas de regulação: proteger sono, reduzir carga social, fracionar tarefa, cortar estímulo, ancorar rotina, criar pausa antes de agir no automático.
+- Só use corpo/respiração/água/alongamento se houver evidência explícita e atual de corpo, sede, tensão física ou sono. Do contrário, prefira ação ligada à vida real trazida no contexto.
+- Se a única sugestão possível for genérica, retorne "actions": [].
 - Se houver sinal de queda sustentada, impulsividade, compulsão, isolamento ou sobrecarga, nomeie isso no "pattern" ou no "insight" sem dramatizar.
 - Cada "why" deve explicar qual risco ou padrão a ação está tentando conter.
 - Evite linguagem clínica pesada, mas mantenha raciocínio técnico por trás.
@@ -4060,14 +4096,37 @@ if (require.main === module) {
     try {
       const now = new Date();
       const currentTimeStr = getSaoPauloHHMM(now);
+      const saoPauloToday = getSaoPauloDateContext(now);
 
       // 1. Habit reminders — adaptive pause em fase baixa/instável
       const habitsNow = await defaultPrisma.habit.findMany({
-        where: { reminderEnabled: true, reminderTime: currentTimeStr },
+        where: {
+          archived: false,
+          reminderEnabled: true,
+          reminderTime: currentTimeStr,
+        },
+        include: {
+          completions: {
+            where: { date: saoPauloToday.dbDate },
+            select: { completionCount: true },
+          },
+        },
       });
+      const habitPrefsByUser = habitsNow.length > 0
+        ? new Map(
+            (await defaultPrisma.userPreference.findMany({
+              where: {
+                userId: { in: [...new Set(habitsNow.map((habit) => habit.userId))] },
+              },
+              select: { userId: true, notificationsOn: true, notificationPreferences: true },
+            })).map((pref) => [pref.userId, pref]),
+          )
+        : new Map<string, { notificationsOn: boolean; notificationPreferences: any }>();
       // Cache de adaptive context por usuário pra não recomputar a cada hábito
       const adaptiveCacheByUser = new Map<string, { pauseHabits: boolean; pauseReason: string | null }>();
       for (const habit of habitsNow) {
+        if (!allowsHabitNotifications(habitPrefsByUser.get(habit.userId))) continue;
+        if (!shouldSendHabitReminderToday(habit, saoPauloToday.weekday, saoPauloToday.dayOfMonth)) continue;
         try {
           let cached = adaptiveCacheByUser.get(habit.userId);
           if (!cached) {
@@ -4105,9 +4164,32 @@ if (require.main === module) {
       windowStart.setUTCSeconds(0, 0);
       const windowEnd = new Date(windowStart.getTime() + 60000);
       const tasksNow = await defaultPrisma.timelineBlock.findMany({
-        where: { startAt: { gte: windowStart, lt: windowEnd }, status: 'planned' },
+        where: {
+          startAt: { gte: windowStart, lt: windowEnd },
+          status: 'planned',
+          OR: [
+            { isAiSuggested: false },
+            { persistentReminderEnabled: true },
+            { alarmEnabled: true },
+            { vibrateEnabled: true },
+            { recurringNotificationEnabled: true },
+          ],
+        },
       });
+      const plannerPrefsByUser = tasksNow.length > 0
+        ? new Map(
+            (await defaultPrisma.userPreference.findMany({
+              where: {
+                userId: { in: [...new Set(tasksNow.map((task) => task.userId))] },
+                notificationsOn: true,
+              },
+              select: { userId: true, notificationPreferences: true },
+            })).map((pref) => [pref.userId, pref.notificationPreferences as any]),
+          )
+        : new Map<string, any>();
       for (const task of tasksNow) {
+        const notifPrefs = plannerPrefsByUser.get(task.userId);
+        if (!notifPrefs || notifPrefs.planner === false) continue;
         await sendPushToUser(task.userId, {
           title: `📅 ${task.title}`,
           body: `Começa agora — ${currentTimeStr}`,

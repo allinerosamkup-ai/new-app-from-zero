@@ -16,16 +16,25 @@ self.addEventListener('push', (event) => {
   try { payload = event.data.json(); } catch { payload = { title: 'Airia', body: event.data.text() }; }
 
   const title = payload.title || 'Airia';
+  const tag = payload.tag || 'airia-push';
   const options: NotificationOptions = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
-    tag: payload.tag || 'airia-push',
+    tag,
     data: { url: payload.url || '/' },
     requireInteraction: false,
+    renotify: true,
+    timestamp: Date.now(),
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    self.registration.getNotifications({ tag })
+      .then((notifications) => {
+        notifications.forEach((notification) => notification.close());
+        return self.registration.showNotification(title, options);
+      }),
+  );
 });
 
 // Handle notification click

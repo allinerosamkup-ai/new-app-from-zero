@@ -28,7 +28,11 @@ import {
   buildQuarterHourRefreshBucket,
   dedupeAgendaBlocks,
   extractAgendaRepeatContext,
+  extractBlockedHomeAutonomyTitles,
   extractHomeRepeatContext,
+  isHomeAutonomyTitleBlocked,
+  readHomeAutonomyFeedback,
+  rememberHomeAutonomyActionFeedback,
   resolveHomeAgendaSuggestionDate,
 } from "./home-page.helpers";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
@@ -588,8 +592,30 @@ export function HomePage() {
   const [completedAutocuidadoIdx, setCompletedAutocuidadoIdx] = useState<Set<number>>(new Set());
   const [skippedAutocuidadoIdx, setSkippedAutocuidadoIdx] = useState<Set<number>>(new Set());
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
+  const [homeAutonomyFeedbackTick, setHomeAutonomyFeedbackTick] = useState(0);
   const previousHomeAiMsgRef = useRef<HomeAiMsg | null>(null);
   const lastHomeAiRequestKeyRef = useRef<string | null>(null);
+  const homeAutonomyBlockedTitles = useMemo(() => {
+    const feedback = readHomeAutonomyFeedback();
+    return [
+      ...extractBlockedHomeAutonomyTitles(feedback),
+      ...(state.tasks || []).filter((task) => task.done).map((task) => task.title),
+      ...(state.habits || []).filter((habit) => (habit.completions || []).length > 0).map((habit) => habit.title),
+      ...(state.goals || []).filter((goal) => goal.completedPct >= 100).map((goal) => goal.title),
+      ...(state.goals || []).flatMap((goal) => goal.subtasks || []).filter((subgoal) => subgoal.done).map((subgoal) => subgoal.title),
+    ].filter(Boolean);
+  }, [homeAutonomyFeedbackTick, state.goals, state.habits, state.tasks]);
+  const isHomeAutonomyActionBlocked = useCallback(
+    (title: string) => isHomeAutonomyTitleBlocked(title, homeAutonomyBlockedTitles),
+    [homeAutonomyBlockedTitles],
+  );
+  const recordHomeAutonomyFeedback = useCallback(
+    (title: string, status: "done" | "dismissed" | "deleted" | "scheduled") => {
+      rememberHomeAutonomyActionFeedback(title, status);
+      setHomeAutonomyFeedbackTick((value) => value + 1);
+    },
+    [],
+  );
   const latestCheckinKey = useMemo(() => {
     const history = state.checkinHistory || [];
     if (history.length === 0) return null;
@@ -895,6 +921,7 @@ export function HomePage() {
   async function handleHomeTaskDone(task: (typeof homeAgendaPreview.tasks)[number]) {
     // Feedback visual imediato (otimista)
     setDoneTaskIds(prev => new Set([...prev, task.id]));
+    recordHomeAutonomyFeedback(task.title, "done");
     try {
       await toggleTask(task.id);
     } catch (error) {
@@ -904,6 +931,7 @@ export function HomePage() {
   }
 
   async function handleHomeTaskDelete(task: (typeof homeAgendaPreview.tasks)[number]) {
+    recordHomeAutonomyFeedback(task.title, "deleted");
     try {
       await removeTask(task.id);
     } catch (error) {
@@ -912,6 +940,7 @@ export function HomePage() {
   }
 
   async function handleHomeHabitDone(habit: NonNullable<typeof homeAgendaPreview.habit>) {
+    recordHomeAutonomyFeedback(habit.title, "done");
     try {
       await toggleHabit(habit.id);
     } catch (error) {
@@ -920,6 +949,7 @@ export function HomePage() {
   }
 
   async function handleHomeHabitDelete(habit: NonNullable<typeof homeAgendaPreview.habit>) {
+    recordHomeAutonomyFeedback(habit.title, "deleted");
     try {
       await archiveHabit(habit.id);
     } catch (error) {
@@ -928,6 +958,7 @@ export function HomePage() {
   }
 
   async function handleHomeGoalActionDone(action: (typeof homeGoalActions)[number]) {
+    recordHomeAutonomyFeedback(action.title, "done");
     try {
       if (action.source === "goal" && action.goalId != null && action.subId != null) {
         await toggleSubGoal(action.goalId, action.subId);
@@ -966,6 +997,7 @@ export function HomePage() {
         next_day: scheduleModalAction.isNextDay,
       });
       setAddedActionTitles((prev) => new Set([...prev, scheduleModalAction.title]));
+      recordHomeAutonomyFeedback(scheduleModalAction.title, "scheduled");
       if (scheduleModalAction.isNextDay) {
         showSuccess(`Agendado para amanhã às ${scheduleModalAction.time}`);
       }
@@ -2649,7 +2681,7 @@ export function HomePage() {
 
                     {ins!.actions.length > 0 && (() => {
                       const visibleActions = ins!.actions.filter(
-                        a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title)
+                        a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && !isHomeAutonomyActionBlocked(a.title)
                       );
                       if (visibleActions.length === 0) return null;
                       return (
@@ -2700,6 +2732,7 @@ export function HomePage() {
                                 <button
                                   onClick={(event) => {
                                     event.stopPropagation();
+                                    recordHomeAutonomyFeedback(action.title, "done");
                                     setAddedActionTitles(prev => new Set([...prev, action.title]));
                                   }}
                                   title="Marcar como cumprido"
@@ -2719,8 +2752,9 @@ export function HomePage() {
                                 <button
                                   onClick={(event) => {
                                     event.stopPropagation();
+                                    recordHomeAutonomyFeedback(action.title, "dismissed");
                                     const remaining = ins!.actions.filter(
-                                      a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && a.title !== action.title
+                                      a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && !isHomeAutonomyActionBlocked(a.title) && a.title !== action.title
                                     );
                                     if (remaining.length === 0) {
                                       setSkippedActionTitles(new Set());
