@@ -14,6 +14,9 @@ import "./i18n";
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {
   registerSW({
     immediate: true,
+    onNeedRefresh() {
+      window.location.reload();
+    },
     onRegistered(r) {
       console.log("SW Registered:", r);
     },
