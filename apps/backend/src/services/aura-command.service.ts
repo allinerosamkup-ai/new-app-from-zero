@@ -200,6 +200,10 @@ export class AuraCommandService {
       interactionMode?: 'conversation' | 'executor';
       currentHour?: number;
       currentMinute?: number;
+      phase?: string | null;
+      warningFlags?: string[] | null;
+      forecast7dSummary?: string | null;
+      taskMomentum7d?: number | null;
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<AuraCommandResponse> {
@@ -259,6 +263,17 @@ REGRAS GERAIS:
 - assistantMessage deve ser curta. Se "needsConfirmation" for true, diga que a proposta está pronta para revisão e NUNCA diga que já salvou no planner.
 - payload para create_task DEVE conter: { "title": string, "date": "YYYY-MM-DD", "startTime": "HH:MM", "category": string, "note": string | null }.
 - payload para create_checklist DEVE conter: { "title": string, "items": string[], "category": string }.
+- CHECKLIST QUEBRA SEMÂNTICA (CRÍTICO quando a pessoa cola um checklist e pede "Airia quebrar"):
+  · NUNCA divida por contagem (não pegue N items e gere N sub-itens aleatórios).
+  · LEIA cada item com atenção. Itens que JÁ têm próximo passo claro ("comprar leite") viram tarefa direta.
+  · Itens vagos ou multi-passos ("organizar finanças") devem ser EXPANDIDOS em sub-passos concretos
+    OU virar uma pergunta ("o que dentro de finanças quer destravar primeiro?") em vez de tarefa.
+  · Agrupe por matéria semântica: tudo de trabalho junto, tudo de casa junto, tudo de saúde junto.
+  · Use o ESTADO ADAPTATIVO DO DIA (carga sugerida, max tarefas pesadas, buffer): se a pessoa
+    está em fase baixa e o checklist tem 12 itens, NÃO converta os 12 — pergunte qual o item
+    mais urgente e converta só esse + 1-2 leves.
+  · Cada sub-item DEVE mencionar algo concreto da vida da pessoa (nome de pessoa, lugar, projeto)
+    quando o contexto permitir — nada de "fazer pausa" ou "respirar fundo" como passo do checklist.
 
 REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
 - Quando o pedido mencionar mover, reagendar, adiar, cancelar ou excluir uma tarefa, consulte a lista "TAREFAS DE HOJE" fornecida acima.
@@ -284,6 +299,10 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
             plannerContext: input.plannerContext,
             currentHour: input.currentHour,
             currentMinute: input.currentMinute,
+            phase: input.phase,
+            warningFlags: input.warningFlags,
+            forecast7dSummary: input.forecast7dSummary,
+            taskMomentum7d: input.taskMomentum7d,
             domain: interactionMode === 'conversation' ? 'journal-live' : 'aura-command',
             extraInstructions: interactionMode === 'conversation'
               ? [

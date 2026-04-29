@@ -5,7 +5,7 @@ import { useLocation } from "react-router-dom";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
-import { api, getClientTimeContext } from "../lib/api";
+import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
 import { buildJournalPlannerSlot } from "./journal-page.helpers";
@@ -275,6 +275,7 @@ export function JournalPage() {
           message: text,
           moodCycleContext: cycleReport.aiContext,
           ...getClientTimeContext(),
+          ...getAdaptiveSnapshot(),
         }),
       });
 

@@ -57,6 +57,14 @@ export type JournalPromptContext = {
   currentHour?: number;
   /** Minuto local do usuário (0-59). Frontend deve enviar pra calibrar sugestões. */
   currentMinute?: number;
+  /** Fase atual de humor (ativa engine adaptativa no prompt). */
+  phase?: string | null;
+  /** Warning flags (sustained_low, rapid_drop, etc) — pre-queda. */
+  warningFlags?: string[] | null;
+  /** Resumo da previsão 7d. */
+  forecast7dSummary?: string | null;
+  /** Tarefas pesadas concluídas nos últimos 7 dias. */
+  taskMomentum7d?: number | null;
 };
 
 export type OnboardingProfileInput = {
@@ -143,6 +151,10 @@ export class AIService {
             plannerContext: input.context.plannerContext,
             currentHour: input.context.currentHour,
             currentMinute: input.context.currentMinute,
+            phase: input.context.phase,
+            warningFlags: input.context.warningFlags,
+            forecast7dSummary: input.context.forecast7dSummary,
+            taskMomentum7d: input.context.taskMomentum7d,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',

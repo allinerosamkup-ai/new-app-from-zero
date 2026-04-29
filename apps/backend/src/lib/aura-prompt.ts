@@ -1,3 +1,5 @@
+import { deriveAdaptiveContext, type MoodPhase, type WarningFlag } from '../services/adaptive-scheduling.service';
+
 export type AuraPromptDomain =
   | 'general'
   | 'planning'
@@ -25,6 +27,24 @@ type AuraPromptOptions = {
   plannerContext?: string | null;
   domain?: AuraPromptDomain;
   extraInstructions?: string[];
+  /**
+   * Fase atual de humor (do mood-cycle-engine). Se passada, ativa o bloco
+   * adaptativo no prompt (carga sugerida, buffer, pausa de hábitos, pre-queda).
+   */
+  phase?: string | null;
+  /**
+   * Warning flags do mood-cycle-engine (sustained_low, rapid_drop, etc).
+   */
+  warningFlags?: string[] | null;
+  /**
+   * Resumo da previsão 7d (texto curto pra Aura saber se amanhã é fase boa/ruim).
+   */
+  forecast7dSummary?: string | null;
+  /**
+   * Momentum de tarefas pesadas concluídas nos últimos 7 dias.
+   * Aura usa pra reconhecer movimento ("você fechou X tarefas pesadas esta semana").
+   */
+  taskMomentum7d?: number | null;
   /**
    * Horário local do usuário no momento da chamada (0-23). Frontend deve enviar.
    * Sem ele, cai pro horário do servidor — pode estar em UTC e errar a sugestão.
@@ -343,6 +363,22 @@ export function buildAuraSystemPrompt(options: AuraPromptOptions): string {
   const currentMinute = clampMinute(hasClientMinute ? (options.currentMinute as number) : new Date().getMinutes());
   const timeOfDay = deriveTimeOfDay(currentHour);
   const formattedTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+  // Adaptive context — se a fase foi passada, monta bloco de orçamento/buffer/pausa/pre-queda
+  const adaptiveContextBlock = options.phase
+    ? `\nESTADO ADAPTATIVO DO DIA (USO INTERNO — molde sugestões por aqui, NUNCA cite fase pelo nome técnico):\n${deriveAdaptiveContext({
+        phase: options.phase as MoodPhase,
+        warningFlags: (options.warningFlags || []) as WarningFlag[],
+      }).promptSummary}`
+    : '';
+
+  const forecastBlock = options.forecast7dSummary?.trim()
+    ? `\nPREVISÃO 7 DIAS (USO INTERNO — calibre planejamento pra amanhã): ${options.forecast7dSummary.trim()}`
+    : '';
+
+  const momentumBlock = typeof options.taskMomentum7d === 'number'
+    ? `\nMOMENTUM SEMANAL: ${options.taskMomentum7d} tarefa(s) pesada(s) fechada(s) nos últimos 7 dias.`
+    : '';
+
   const temporalContext = `\nHORÁRIO ATUAL DE ${safeUserName.toUpperCase()} (USO INTERNO — NÃO MENCIONE NA FALA): ${formattedTime} (${timeOfDay}).
 - Use SOMENTE para calibrar sugestões: escolher tarefa cabível, ajustar escopo à janela, evitar horário passado.
 - Não anuncie a hora na conversa ("são 14h", "já é noite", "ainda é manhã"). A pessoa tem relógio.
@@ -444,7 +480,7 @@ ${SUGGESTION_CALIBRATION_CORE.map((instruction) => `- ${instruction}`).join('\n'
 
 NÚCLEO DE RACIOCÍNIO E TOM (lente que molda toda fala — universal, sempre ativo, vocabulário interno):
 ${ALIANCA_DIVERGENTE_CORE.map((instruction) => `- ${instruction}`).join('\n')}
-${temporalContext}${memory}${contextualMemory}${recentHistory}${activeGoals}${planner}${suggestionMemory}${cycle}${profile}
+${adaptiveContextBlock}${forecastBlock}${momentumBlock}${temporalContext}${memory}${contextualMemory}${recentHistory}${activeGoals}${planner}${suggestionMemory}${cycle}${profile}
 
 MÉTODO DE LEITURA (ALMA DA AIRIA):
 Quando a pessoa relatar algo confuso, paralisante, contraditório ou difícil de nomear, use este método internamente antes de responder. Nunca o explique como uma lista — apenas deixe que ele molde o que você diz:

@@ -7,7 +7,7 @@ import { useAuraStore } from "../features/aura/store";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { supabase } from "../lib/supabase";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
-import { api } from "../lib/api";
+import { api, setAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -429,6 +429,19 @@ export function HomePage() {
   const phaseColor = getPhaseColor(cycleReport.phase);
   const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const energyForecast = useMemo(() => forecastEnergy7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
+
+  // Sync adaptive snapshot global — api.ts injeta em todo POST/PATCH/PUT pra Aura calibrar
+  useEffect(() => {
+    const forecastValues = Array.isArray(moodForecast) ? moodForecast.slice(0, 3) : [];
+    const forecastSummary = forecastValues.length > 0
+      ? `Mood próximos 3 dias: ${forecastValues.map((v) => (typeof v === "number" ? v.toFixed(1) : "-")).join(", ")}`
+      : null;
+    setAdaptiveSnapshot({
+      phase: cycleReport.phase,
+      warningFlags: cycleReport.warningFlags,
+      forecast7dSummary: forecastSummary,
+    });
+  }, [cycleReport.phase, cycleReport.warningFlags, moodForecast]);
   const dailyPhaseMap = useMemo(() => computeDailyPhaseMap(aggregatedCheckinHistory, 400), [aggregatedCheckinHistory]);
   const todayDateKey = useMemo(() => getLocalDateKey(clockTime), [
     clockTime.getFullYear(),

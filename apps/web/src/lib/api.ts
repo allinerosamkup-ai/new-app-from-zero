@@ -13,6 +13,28 @@ export function getClientTimeContext(): { currentHour: number; currentMinute: nu
   return { currentHour: now.getHours(), currentMinute: now.getMinutes() };
 }
 
+/**
+ * Snapshot adaptativo: fase atual + warningFlags + forecast 7d resumido + momentum semanal.
+ * Páginas que computam cycleReport (home, planner, insights) chamam setAdaptiveSnapshot()
+ * após compute. api.ts spreaduja no body de todo POST/PATCH/PUT pra Aura calibrar sugestões
+ * por carga, buffer, pausa de hábitos e pre-queda.
+ */
+type AdaptiveSnapshot = {
+  phase?: string | null;
+  warningFlags?: string[] | null;
+  forecast7dSummary?: string | null;
+  taskMomentum7d?: number | null;
+};
+let _adaptiveSnapshot: AdaptiveSnapshot = {};
+
+export function setAdaptiveSnapshot(snapshot: AdaptiveSnapshot) {
+  _adaptiveSnapshot = { ..._adaptiveSnapshot, ...snapshot };
+}
+
+export function getAdaptiveSnapshot(): AdaptiveSnapshot {
+  return _adaptiveSnapshot;
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return {};
@@ -54,7 +76,7 @@ export const api = {
     // Injeta horário do cliente em qualquer POST com body objeto.
     // Backend usa pra calibrar sugestões; rotas que não precisam ignoram silenciosamente.
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...(body as Record<string, unknown>) }
+      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...(body as Record<string, unknown>) }
       : body;
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
@@ -67,7 +89,7 @@ export const api = {
   async patch(endpoint: string, body: unknown) {
     const headers = await getAuthHeaders();
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...(body as Record<string, unknown>) }
+      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...(body as Record<string, unknown>) }
       : body;
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'PATCH',
@@ -80,7 +102,7 @@ export const api = {
   async put(endpoint: string, body: unknown) {
     const headers = await getAuthHeaders();
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...(body as Record<string, unknown>) }
+      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...(body as Record<string, unknown>) }
       : body;
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'PUT',

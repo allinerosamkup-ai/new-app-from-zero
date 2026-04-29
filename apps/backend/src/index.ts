@@ -45,6 +45,12 @@ import {
   sanitizePromptContent,
   type AuraPromptDomain,
 } from './lib/aura-prompt';
+import {
+  deriveAdaptiveContext as deriveAdaptiveContextFromPhase,
+  inferPhaseFromRecentCheckins,
+  type MoodPhase,
+  type WarningFlag,
+} from './services/adaptive-scheduling.service';
 import { normalizeAiSuggestion, usesJsonObjectResponse } from './lib/ai-suggest-response';
 import { extractJsonValue } from './lib/extract-json';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from './lib/openai-config';
@@ -357,6 +363,21 @@ type SuggestedTask = z.infer<typeof SuggestedTaskSchema>;
  * Tarefas com dayOffset=1 (amanhã) preservam o horário.
  * Tarefas com title vazio são removidas.
  */
+/**
+ * Extrai contexto adaptativo do req.body (phase, warningFlags, forecast, momentum, currentHour, currentMinute).
+ * Frontend envia esses campos via getClientTimeContext() + getAdaptiveSnapshot() em api.ts.
+ */
+function extractAdaptiveFromRequest(body: any) {
+  return {
+    currentHour: typeof body?.currentHour === 'number' ? body.currentHour : undefined,
+    currentMinute: typeof body?.currentMinute === 'number' ? body.currentMinute : undefined,
+    phase: typeof body?.phase === 'string' ? body.phase : null,
+    warningFlags: Array.isArray(body?.warningFlags) ? body.warningFlags : [],
+    forecast7dSummary: typeof body?.forecast7dSummary === 'string' ? body.forecast7dSummary : null,
+    taskMomentum7d: typeof body?.taskMomentum7d === 'number' ? body.taskMomentum7d : null,
+  };
+}
+
 function filterPastTimes(
   tasks: SuggestedTask[],
   currentHour: number,
@@ -1394,8 +1415,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       emotions: (data as any).emotions,
       factors: data.factors,
       plannerContext: checkinPlannerContext,
-      currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
-      currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
+      ...extractAdaptiveFromRequest(req.body),
     });
 
     // DEBUG: Log the aiState response from CheckinService
@@ -1769,6 +1789,10 @@ export function createApp(dependencies: AppDependencies = {}) {
           plannerContext: journalPlannerContext,
           currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
           currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
+          phase: typeof (req.body as any)?.phase === 'string' ? (req.body as any).phase : null,
+          warningFlags: Array.isArray((req.body as any)?.warningFlags) ? (req.body as any).warningFlags : [],
+          forecast7dSummary: typeof (req.body as any)?.forecast7dSummary === 'string' ? (req.body as any).forecast7dSummary : null,
+          taskMomentum7d: typeof (req.body as any)?.taskMomentum7d === 'number' ? (req.body as any).taskMomentum7d : null,
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
@@ -1888,8 +1912,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
         plannerContext,
         interactionMode: data.mode,
-        currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
-        currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
+        ...extractAdaptiveFromRequest(req.body),
       });
 
       const responsePayload = { ...commandResponse.payload };
@@ -3233,8 +3256,7 @@ INSTRUÇÕES:
               activeGoalsContext,
               recentSuggestionMemory,
               domain: getSuggestPromptDomain(type),
-              currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
-              currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
+              ...extractAdaptiveFromRequest(req.body),
             }),
           },
           { role: 'user' as const, content: prompt },
@@ -4039,11 +4061,37 @@ if (require.main === module) {
       const now = new Date();
       const currentTimeStr = getSaoPauloHHMM(now);
 
-      // 1. Habit reminders
+      // 1. Habit reminders — adaptive pause em fase baixa/instável
       const habitsNow = await defaultPrisma.habit.findMany({
         where: { reminderEnabled: true, reminderTime: currentTimeStr },
       });
+      // Cache de adaptive context por usuário pra não recomputar a cada hábito
+      const adaptiveCacheByUser = new Map<string, { pauseHabits: boolean; pauseReason: string | null }>();
       for (const habit of habitsNow) {
+        try {
+          let cached = adaptiveCacheByUser.get(habit.userId);
+          if (!cached) {
+            const recentCheckins = await defaultPrisma.dailyCheckin.findMany({
+              where: { userId: habit.userId },
+              orderBy: { localDate: 'desc' },
+              take: 7,
+              select: { moodScore: true, energyScore: true },
+            });
+            const { phase, warningFlags } = inferPhaseFromRecentCheckins(
+              recentCheckins.map((c) => ({ moodScore: c.moodScore, energyScore: c.energyScore })),
+            );
+            const ctx = deriveAdaptiveContextFromPhase({ phase, warningFlags });
+            cached = { pauseHabits: ctx.pauseHabits, pauseReason: ctx.pauseReason };
+            adaptiveCacheByUser.set(habit.userId, cached);
+          }
+          if (cached.pauseHabits) {
+            console.log(`[push-cron] habit paused for ${habit.userId} (${habit.id}): ${cached.pauseReason}`);
+            continue;
+          }
+        } catch (e) {
+          // Falha ao calcular adaptive — segue com lembrete normal pra não bloquear
+          console.warn('[push-cron] adaptive check failed:', e);
+        }
         await sendPushToUser(habit.userId, {
           title: `⏰ ${habit.title}`,
           body: 'Hora do seu hábito!',
@@ -4101,6 +4149,67 @@ if (require.main === module) {
       }
     } catch (e) {
       console.error('[push-cron] error:', e);
+    }
+  });
+
+  // Auto-reschedule cron — diário às 06:00 UTC (03:00 BRT) — migra tarefas atrasadas
+  // com critério: respeita pre-queda (não força demanda nova), preserva categoria.
+  cron.schedule('0 6 * * *', async () => {
+    try {
+      const now = new Date();
+      const overdueTasks = await defaultPrisma.timelineBlock.findMany({
+        where: { status: 'planned', startAt: { lt: now } },
+        take: 200,
+      });
+      if (overdueTasks.length === 0) return;
+
+      // Agrupar por usuário pra calcular adaptive 1x por usuário
+      const byUser = new Map<string, typeof overdueTasks>();
+      for (const t of overdueTasks) {
+        const arr = byUser.get(t.userId) || [];
+        arr.push(t);
+        byUser.set(t.userId, arr);
+      }
+
+      let migrated = 0;
+      let paused = 0;
+      for (const [userId, tasks] of byUser.entries()) {
+        const recent = await defaultPrisma.dailyCheckin.findMany({
+          where: { userId },
+          orderBy: { localDate: 'desc' },
+          take: 7,
+          select: { moodScore: true, energyScore: true },
+        });
+        const { phase, warningFlags } = inferPhaseFromRecentCheckins(
+          recent.map((c) => ({ moodScore: c.moodScore, energyScore: c.energyScore })),
+        );
+        const ctx = deriveAdaptiveContextFromPhase({ phase, warningFlags });
+
+        for (const task of tasks) {
+          if (ctx.preFallActive || ctx.pauseHabits) {
+            // Pausa: não migra, marca como pendente sem horário
+            await defaultPrisma.timelineBlock
+              .update({ where: { id: task.id }, data: { status: 'paused' } })
+              .catch(() => null);
+            paused++;
+          } else {
+            // Migra pra hoje no mesmo horário (preserva intenção, atualiza só a data)
+            const newStart = new Date(now);
+            newStart.setHours(task.startAt.getHours(), task.startAt.getMinutes(), 0, 0);
+            const duration = task.endAt.getTime() - task.startAt.getTime();
+            await defaultPrisma.timelineBlock
+              .update({
+                where: { id: task.id },
+                data: { startAt: newStart, endAt: new Date(newStart.getTime() + duration) },
+              })
+              .catch(() => null);
+            migrated++;
+          }
+        }
+      }
+      console.log(`[auto-reschedule] migrated=${migrated} paused=${paused}`);
+    } catch (e) {
+      console.error('[auto-reschedule] error:', e);
     }
   });
 
