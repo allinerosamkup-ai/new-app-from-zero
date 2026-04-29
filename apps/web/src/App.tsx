@@ -143,6 +143,62 @@ export default function App() {
     preloadNextRoutes(location.pathname);
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const doc = document.documentElement;
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+      window.__AIRIA_NATIVE_SHELL__ === true;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    if (isStandalone) {
+      doc.classList.add("airia-installed-shell");
+    }
+
+    if (!isIOS || !isStandalone) {
+      return () => {
+        doc.classList.remove("airia-installed-shell");
+      };
+    }
+
+    let startX = 0;
+    let startY = 0;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      startX = touch?.clientX ?? 0;
+      startY = touch?.clientY ?? 0;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const isEdgeGesture = startX < 28 || startX > window.innerWidth - 28;
+      const isHorizontal = Math.abs(deltaX) > 18 && Math.abs(deltaX) > Math.abs(deltaY) * 1.35;
+
+      if (isEdgeGesture && isHorizontal) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+
+    return () => {
+      doc.classList.remove("airia-installed-shell");
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, []);
+
   return (
     <Suspense fallback={<RouteLoader />}>
       <div className="app-viewport">

@@ -21,7 +21,7 @@ describe("planner page helpers", () => {
     title: "Consulta médica",
     time: "14:30",
     category: "pessoal",
-    energyLevel: "alta",
+    energyLevel: 4,
   };
 
   it("builds timeline block payloads", () => {
@@ -33,6 +33,7 @@ describe("planner page helpers", () => {
       endTime: "15:00",
       category: "pessoal",
       intensity: "P",
+      energyLevel: "alta",
       status: "planned",
     });
 
@@ -89,7 +90,7 @@ describe("planner page helpers", () => {
       {
         ...baseForm,
         title: "Respirar fundo",
-        energyLevel: "media",
+        energyLevel: 3,
       },
       { fallbackIntensity: "L" },
     );
@@ -177,10 +178,10 @@ describe("planner page helpers", () => {
   });
 
   it("only changes planner day on deliberate horizontal agenda swipes", () => {
-    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 130, deltaY: 20 }), true);
-    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: -140, deltaY: 40 }), true);
-    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 105, deltaY: 10 }), false);
-    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 150, deltaY: 120 }), false);
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 180, deltaY: 30 }), true);
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: -190, deltaY: 42 }), true);
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 150, deltaY: 10 }), false);
+    assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 180, deltaY: 92 }), false);
   });
 
   it("normalizes Google Calendar task labels for editing and syncing", () => {

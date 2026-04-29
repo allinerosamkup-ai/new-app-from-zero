@@ -391,12 +391,12 @@ export function resolveTaskCardSwipeAction(
 
 export function shouldNavigateAgendaBySwipe(
   gesture: SwipeGestureInput,
-  threshold = 120,
+  threshold = 168,
 ): boolean {
   const absX = Math.abs(gesture.deltaX);
   const absY = Math.abs(gesture.deltaY);
 
-  return absX >= threshold && absX >= absY * 1.5;
+  return absX >= threshold && absX >= absY * 2;
 }
 
 export function stripGoogleCalendarTaskId(taskId: string): string {
