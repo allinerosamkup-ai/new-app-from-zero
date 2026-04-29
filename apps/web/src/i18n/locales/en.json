@@ -144,8 +144,8 @@
     "placeholder": "What shall we organize now?",
     "initialIdle": "Tell me what needs to leave your head and become a next step.",
     "initialExecutor": "Tell me the action and I will execute it directly.",
-    "initialNextAction": "This action already has context. What should we decide first: real priority, smallest step, or lighter alternative?",
-    "initialPlanner": "This task already has context. What decision should we unlock now: priority, first step, or adjustment?",
+    "initialNextAction": "This action came from your goal. I can explain what it means and give you simple ideas to start.",
+    "initialPlanner": "This task already has context. I can explain what it means and how to do it simply.",
     "initialContext": "The context is here. Which part should we unlock first?",
     "suggestions": {
       "organizeDay": "Organize my day",

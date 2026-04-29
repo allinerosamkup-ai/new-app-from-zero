@@ -134,11 +134,11 @@ function buildInitialAssistantMessage(initialPrompt: string, contextLabel: strin
 
   const label = contextLabel.toLowerCase();
   if (label.includes("próxima ação") || label.includes("proxima acao")) {
-    return i18n.t("aura.initialNextAction", "Essa ação já veio com contexto. O que você quer decidir primeiro: prioridade real, menor passo ou alternativa mais leve?");
+    return i18n.t("aura.initialNextAction", "Essa ação veio da sua meta. Posso te explicar o que ela quer dizer e te dar ideias simples para começar.");
   }
 
   if (label.includes("planner") || label.includes("agenda") || label.includes("tarefa")) {
-    return i18n.t("aura.initialPlanner", "Essa tarefa já veio com contexto. Qual decisão você quer destravar agora: prioridade, primeiro passo ou ajuste?");
+    return i18n.t("aura.initialPlanner", "Essa tarefa já veio com contexto. Posso te explicar o que ela significa e como fazer de um jeito simples.");
   }
 
   return i18n.t("aura.initialContext", "O contexto já está aqui. Qual parte você quer destravar primeiro?");

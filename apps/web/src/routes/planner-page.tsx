@@ -454,8 +454,9 @@ function buildPlannerTaskChatPrompt(task: {
   ].filter(Boolean);
 
   return [
-    "Me ajuda a entender esta tarefa e decidir a prioridade real dela.",
-    "Quero que você diga se ela é prioridade alta, média ou baixa, por quê, se cabe hoje, qual é o menor próximo passo e qual alternativa existe se eu não conseguir fazer agora.",
+    "A pessoa tocou no botão CONVERSAR para entender melhor esta tarefa/meta.",
+    "Explique em linguagem simples e natural: o que isso quer dizer, por que pode ajudar, como fazer na prática e quais ideias/sugestões deixam mais fácil começar.",
+    "Não classifique prioridade, não execute nada, não peça para a pessoa escolher uma categoria e não devolva pergunta antes de explicar. Se faltar contexto, dê uma explicação útil com o que existe.",
     parts.join("\n"),
   ].join("\n\n");
 }
@@ -474,8 +475,9 @@ function buildFocusActionChatPrompt(item: {
   ].filter(Boolean);
 
   return [
-    "Me ajuda a entender esta próxima ação e decidir a prioridade real dela.",
-    "Quero que você diga se ela vem antes ou depois das outras, qual é o menor primeiro passo, e me dê uma alternativa se ela estiver grande demais.",
+    "A pessoa tocou no botão CONVERSAR para entender melhor esta próxima ação da meta.",
+    "Explique em linguagem simples e natural: o que isso quer dizer, por que pode ajudar, como fazer na prática e quais ideias/sugestões deixam mais fácil começar.",
+    "Não classifique prioridade, não execute nada, não peça para a pessoa escolher uma categoria e não devolva pergunta antes de explicar. Se faltar contexto, dê uma explicação útil com o que existe.",
     parts.join("\n"),
   ].join("\n\n");
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import { getOpenAiModel } from '../lib/openai-config';
 import { AuraCommandService, parseAuraCommandResponse } from './aura-command.service';
 
 async function run() {
@@ -161,9 +162,12 @@ async function run() {
   assert.match(userPrompt, /MODO DA INTERAÇÃO/i);
   assert.match(userPrompt, /EXECUTOR/i);
   assert.match(userPrompt, /CONVERSA/i);
+  assert.match(userPrompt, /EXPLICAR a tarefa\/meta\/ação/i);
+  assert.match(userPrompt, /n[aã]o entendi/i);
+  assert.match(userPrompt, /travamento de clareza/i);
   assert.match(userPrompt, /Proibido usar o modelo analítico/i);
   assert.match(userPrompt, /nunca diga que j[aá] salvou|n[aã]o diga que j[aá] salvou/i);
-  assert.ok(capturedModels.every((model) => model === 'gpt-5.4-nano'));
+  assert.ok(capturedModels.every((model) => model === getOpenAiModel()));
 }
 
 run()

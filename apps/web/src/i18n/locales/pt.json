@@ -144,8 +144,8 @@
     "placeholder": "O que vamos organizar agora?",
     "initialIdle": "Me diga o que precisa sair da cabeça e virar próximo passo.",
     "initialExecutor": "Me diga a ação e eu executo direto.",
-    "initialNextAction": "Essa ação já veio com contexto. O que você quer decidir primeiro: prioridade real, menor passo ou alternativa mais leve?",
-    "initialPlanner": "Essa tarefa já veio com contexto. Qual decisão você quer destravar agora: prioridade, primeiro passo ou ajuste?",
+    "initialNextAction": "Essa ação veio da sua meta. Posso te explicar o que ela quer dizer e te dar ideias simples para começar.",
+    "initialPlanner": "Essa tarefa já veio com contexto. Posso te explicar o que ela significa e como fazer de um jeito simples.",
     "initialContext": "O contexto já está aqui. Qual parte você quer destravar primeiro?",
     "suggestions": {
       "organizeDay": "Organizar meu dia",
