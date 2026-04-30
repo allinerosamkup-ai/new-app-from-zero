@@ -4,10 +4,26 @@ import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope;
 
+const AIRIA_SW_BUILD = '20260429-home-phase-label-refresh';
+
 self.skipWaiting();
 clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      return Promise.all(
+        clients.map((client) => {
+          const url = new URL(client.url);
+          url.searchParams.set('__airia_sw', AIRIA_SW_BUILD);
+          return client.navigate(url.toString()).catch(() => undefined);
+        }),
+      );
+    }),
+  );
+});
 
 // Handle push events
 self.addEventListener('push', (event) => {

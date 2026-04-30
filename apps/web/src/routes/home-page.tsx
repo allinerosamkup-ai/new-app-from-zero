@@ -2433,7 +2433,9 @@ export function HomePage() {
             </div>
 
             <p className="home-cycle-copy">
-              {cycleReport.phaseDescription}
+              {cycleReport.phase !== "insufficient_data"
+                ? t(`phases.${cycleReport.phase}.description`, cycleReport.phaseDescription)
+                : cycleReport.phaseDescription}
             </p>
 
             {/* Barra de métricas */}
