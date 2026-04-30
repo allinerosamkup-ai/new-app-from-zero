@@ -1,5 +1,6 @@
 import { PrismaClient } from '@app/database';
 import type { SuggestionMemoryItem } from './suggestion-memory.service';
+import { AiActionFeedbackService, type AiActionFeedbackItem } from './ai-action-feedback.service';
 
 type GroundingInput = {
   userId: string;
@@ -9,7 +10,7 @@ type GroundingInput = {
   ragContext?: string;
 };
 
-type GroundingLists = {
+export type GroundingLists = {
   pendingTaskTitles: string[];
   completedTaskTitles: string[];
   pendingHabitTitles: string[];
@@ -22,12 +23,28 @@ type GroundingLists = {
   todayAnchorTitles: string[];
 };
 
-type GroundedTask = {
-  title: string;
-  status: string;
+export type DailyContext = GroundingLists & {
+  date: string;
+  source: 'ContextGroundingService';
+  tasks: GroundedTask[];
+  habits: GroundedHabit[];
+  goals: GroundedGoal[];
+  actionFeedback: AiActionFeedbackItem[];
+  patternMemoryContext: string;
+  operationalRule: string;
 };
 
-type GroundedHabit = {
+export type GroundedTask = {
+  title: string;
+  status: string;
+  startAt?: Date;
+  endAt?: Date;
+  category?: string | null;
+  intensity?: string | null;
+  isAiSuggested?: boolean | null;
+};
+
+export type GroundedHabit = {
   title: string;
   frequency?: string | null;
   targetDays?: number[] | null;
@@ -35,7 +52,7 @@ type GroundedHabit = {
   completions: Array<{ completionCount?: number | null }>;
 };
 
-type GroundedGoal = {
+export type GroundedGoal = {
   title: string;
   progress: number;
   subgoals: unknown;
@@ -123,6 +140,12 @@ function feedbackTitles(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function actionableFeedbackTitles(items: AiActionFeedbackItem[]): string[] {
+  return items
+    .filter((item) => AiActionFeedbackService.blocksFutureSuggestion(item.status))
+    .map((item) => item.title);
+}
+
 function mergeContextList(existing: unknown, discovered: string[]): string[] {
   return unique([...stringList(existing), ...discovered]);
 }
@@ -148,17 +171,17 @@ function formatGroundingBlock(lists: GroundingLists, dateKey: string, ragContext
 export class ContextGroundingService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async buildForSuggest(input: GroundingInput): Promise<Record<string, unknown>> {
+  async buildDailyContext(input: GroundingInput): Promise<DailyContext> {
     const dateKey = normalizeDateKey(input.context.localDate) ?? new Date().toISOString().slice(0, 10);
     const { start, end } = dateRange(dateKey);
 
     const prismaAny = this.prisma as any;
 
-    const [rawTasks, rawHabits, rawGoals] = await Promise.all([
+    const [rawTasks, rawHabits, rawGoals, actionFeedback] = await Promise.all([
       prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
         where: { userId: input.userId, localDate: { gte: start, lte: end } },
         orderBy: { startAt: 'asc' },
-        select: { title: true, status: true },
+        select: { title: true, status: true, startAt: true, endAt: true, category: true, intensity: true, isAiSuggested: true },
       }).catch(() => []) : Promise.resolve([]),
       prismaAny.habit?.findMany ? prismaAny.habit.findMany({
         where: { userId: input.userId, archived: false },
@@ -180,6 +203,7 @@ export class ContextGroundingService {
         take: 12,
         select: { title: true, progress: true, subgoals: true },
       }).catch(() => []) : Promise.resolve([]),
+      AiActionFeedbackService.getRecent(prismaAny, input.userId).catch(() => []),
     ]);
 
     const tasks = rawTasks as GroundedTask[];
@@ -208,9 +232,12 @@ export class ContextGroundingService {
     const blockedActionTitles = unique([
       ...stringList(input.context.blockedActionTitles),
       ...feedbackTitles(input.context.homeAutonomyFeedback),
+      ...actionableFeedbackTitles(actionFeedback),
     ]);
 
-    const lists: GroundingLists = {
+    return {
+      source: 'ContextGroundingService',
+      date: dateKey,
       pendingTaskTitles,
       completedTaskTitles,
       pendingHabitTitles,
@@ -229,32 +256,39 @@ export class ContextGroundingService {
         ...pendingHabitTitles,
         ...activeGoalTitles,
       ]),
+      tasks,
+      habits,
+      goals,
+      actionFeedback,
+      patternMemoryContext: cleanText(input.ragContext),
+      operationalRule: 'Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual.',
     };
+  }
+
+  async buildForSuggest(input: GroundingInput): Promise<Record<string, unknown>> {
+    const lists = await this.buildDailyContext(input);
+    const dateKey = lists.date;
 
     const groundingContext = formatGroundingBlock(lists, dateKey, cleanText(input.ragContext));
-    const mergedGoals = mergeContextList(input.context.goals, activeGoalTitles);
+    const mergedGoals = mergeContextList(input.context.goals, lists.activeGoalTitles);
 
     return {
       ...input.context,
       localDate: dateKey,
       goals: mergedGoals,
-      pendingTasks: mergeContextList(input.context.pendingTasks, pendingTaskTitles),
-      pendingTaskTitles: mergeContextList(input.context.pendingTaskTitles, pendingTaskTitles),
-      completedTaskTitles: mergeContextList(input.context.completedTaskTitles, completedTaskTitles),
-      pendingHabitTitles: mergeContextList(input.context.pendingHabitTitles, pendingHabitTitles),
-      completedHabitTitles: mergeContextList(input.context.completedHabitTitles, completedHabitTitles),
-      completedGoalTitles: mergeContextList(input.context.completedGoalTitles, completedGoalTitles),
-      completedSubgoalTitles: mergeContextList(input.context.completedSubgoalTitles, completedSubgoalTitles),
-      blockedActionTitles: mergeContextList(input.context.blockedActionTitles, [...blockedActionTitles, ...recentSuggestionTitles]),
+      pendingTasks: mergeContextList(input.context.pendingTasks, lists.pendingTaskTitles),
+      pendingTaskTitles: mergeContextList(input.context.pendingTaskTitles, lists.pendingTaskTitles),
+      completedTaskTitles: mergeContextList(input.context.completedTaskTitles, lists.completedTaskTitles),
+      pendingHabitTitles: mergeContextList(input.context.pendingHabitTitles, lists.pendingHabitTitles),
+      completedHabitTitles: mergeContextList(input.context.completedHabitTitles, lists.completedHabitTitles),
+      completedGoalTitles: mergeContextList(input.context.completedGoalTitles, lists.completedGoalTitles),
+      completedSubgoalTitles: mergeContextList(input.context.completedSubgoalTitles, lists.completedSubgoalTitles),
+      blockedActionTitles: mergeContextList(input.context.blockedActionTitles, [...lists.blockedActionTitles, ...lists.recentSuggestionTitles]),
       todayAnchorTitles: mergeContextList(input.context.todayAnchorTitles, lists.todayAnchorTitles),
       groundingContext,
       grounding: {
-        source: 'ContextGroundingService',
         type: input.type,
-        date: dateKey,
         ...lists,
-        patternMemoryContext: cleanText(input.ragContext),
-        operationalRule: 'Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual.',
       },
     };
   }

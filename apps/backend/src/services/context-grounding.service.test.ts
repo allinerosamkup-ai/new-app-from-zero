@@ -37,6 +37,21 @@ async function run() {
         },
       ],
     },
+    onboardingResponse: {
+      findUnique: async () => ({
+        aiProfilePayload: {
+          aiActionFeedback: [
+            {
+              key: 'ligar para proprietaria',
+              title: 'Ligar para proprietária',
+              status: 'deleted',
+              surface: 'home',
+              createdAt: '2026-04-30T09:00:00.000Z',
+            },
+          ],
+        },
+      }),
+    },
   };
 
   const service = new ContextGroundingService(prisma as any);
@@ -70,6 +85,7 @@ async function run() {
   assert.doesNotMatch((context.todayAnchorTitles as string[]).join(' | '), /treino/i);
   assert.ok((context.blockedActionTitles as string[]).includes('Arrumar kit do treino'));
   assert.ok((context.blockedActionTitles as string[]).includes('Separar roupa de treino'));
+  assert.ok((context.blockedActionTitles as string[]).includes('Ligar para proprietária'));
 }
 
 run().then(() => {

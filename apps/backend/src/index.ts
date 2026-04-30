@@ -32,6 +32,8 @@ import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
 import { ContextGroundingService } from './services/context-grounding.service';
+import { AgendaAdaptationService } from './services/agenda-adaptation.service';
+import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
 import {
@@ -2732,6 +2734,104 @@ export function createApp(dependencies: AppDependencies = {}) {
     const userId = (req as AuthRequest).userId;
     await memoryService.deleteAll(userId);
     return res.json({ deleted: true });
+  });
+
+  const DayContextQuerySchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
+
+  app.get('/api/context/day', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const query = DayContextQuerySchema.parse(req.query);
+      const localDate = query.date ?? format(new Date(), 'yyyy-MM-dd');
+      const ragMemories = await memoryService.retrieve(userId, `padrões e preferências operacionais para ${localDate}`, 3).catch(() => []);
+      const dailyContext = await contextGroundingService.buildDailyContext({
+        userId,
+        type: 'day-context',
+        context: { localDate },
+        recentSuggestionItems: await SuggestionMemoryService.getRecent(prisma, userId).catch(() => []),
+        ragContext: memoryService.formatForPrompt(ragMemories),
+      });
+      return res.json(dailyContext);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[context/day] Error:', error);
+      return res.status(500).json({ error: 'Failed to build day context' });
+    }
+  });
+
+  const AiActionFeedbackSchema = z.object({
+    title: z.string().trim().min(1).max(160),
+    status: z.enum(['shown', 'accepted', 'done', 'dismissed', 'deleted', 'scheduled', 'rejected']),
+    surface: z.string().trim().min(1).max(40).optional(),
+    sourceType: z.string().trim().max(60).optional(),
+    localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
+
+  app.post('/api/ai/action-feedback', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = AiActionFeedbackSchema.parse(req.body);
+      const item = await AiActionFeedbackService.append(prisma, userId, data);
+      if (item) {
+        await prisma.eventLog?.create?.({
+          data: {
+            userId,
+            eventName: 'ai.action_feedback',
+            properties: {
+              title: item.title.slice(0, 120),
+              status: item.status,
+              surface: item.surface,
+              sourceType: item.sourceType,
+              localDate: item.localDate,
+            },
+            path: req.path,
+            userAgent: req.get('user-agent') ?? null,
+          },
+        }).catch(() => null);
+      }
+      return res.json({ stored: Boolean(item), item });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[ai/action-feedback] Error:', error);
+      return res.status(500).json({ error: 'Failed to store action feedback' });
+    }
+  });
+
+  const AgendaAdaptSchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    mode: z.enum(['preview', 'apply']).optional().default('preview'),
+    trigger: z.enum(['manual', 'checkin', 'cron', 'home', 'planner']).optional().default('manual'),
+    context: z.record(z.unknown()).optional().default({}),
+  });
+
+  app.post('/api/agenda/adapt', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = AgendaAdaptSchema.parse(req.body);
+      const localDate = data.date ?? format(new Date(), 'yyyy-MM-dd');
+      const recentSuggestionItems = await SuggestionMemoryService.getRecent(prisma, userId).catch(() => []);
+      const ragMemories = await memoryService.retrieve(userId, `adaptação de agenda e rotina real em ${localDate}`, 3).catch(() => []);
+      const dailyContext = await contextGroundingService.buildDailyContext({
+        userId,
+        type: 'agenda-adapt',
+        context: { ...data.context, localDate },
+        recentSuggestionItems,
+        ragContext: memoryService.formatForPrompt(ragMemories),
+      });
+      const result = AgendaAdaptationService.buildPreview({
+        dailyContext,
+        requestContext: data.context,
+        mode: data.mode,
+        trigger: data.trigger,
+      });
+      return res.json(result);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[agenda/adapt] Error:', error);
+      return res.status(500).json({ error: 'Failed to adapt agenda' });
+    }
   });
 
   /**

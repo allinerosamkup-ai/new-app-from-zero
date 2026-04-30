@@ -619,9 +619,16 @@ export function HomePage() {
   const recordHomeAutonomyFeedback = useCallback(
     (title: string, status: "done" | "dismissed" | "deleted" | "scheduled") => {
       rememberHomeAutonomyActionFeedback(title, status);
+      void api.post("/ai/action-feedback", {
+        title,
+        status,
+        surface: "home",
+        sourceType: "stability-analysis",
+        localDate: dayContext.localDate,
+      }).catch(() => undefined);
       setHomeAutonomyFeedbackTick((value) => value + 1);
     },
-    [],
+    [dayContext.localDate],
   );
   const latestCheckinKey = useMemo(() => {
     const history = state.checkinHistory || [];
