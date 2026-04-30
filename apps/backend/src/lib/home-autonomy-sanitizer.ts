@@ -20,6 +20,10 @@ const GENERIC_ACTION_PATTERNS = [
   /\bpr[oó]ximo passo\b/,
   /\bpasso m[ií]nimo\b/,
   /\btarefa pequena\b/,
+  /\bmicro[\s-]?bloco\b/,
+  /\bbloco fixo\b/,
+  /\bsepar(ar|e)\s+(a\s+)?roupa\b/,
+  /\bkit(s)?\s+(do\s+)?treino\b/,
   /\bescolh(a|er)\s+(uma\s+)?tarefa\b/,
   /\borganizar\s+(a\s+)?agenda\b/,
   /\bfechar\s+(o\s+)?dia\b/,
@@ -33,6 +37,8 @@ const STOPWORDS = new Set([
   'voce', 'você', 'hoje', 'agora', 'fazer', 'abrir', 'ver', 'revisar', 'criar',
   'marcar', 'organizar', 'definir', 'separar', 'colocar', 'pegar',
 ]);
+
+const TRAINING_PATTERN = /\b(treino|treinar|exerc[ií]cio|exercitar|academia|gin[aá]stica|malhar|muscula[cç][aã]o|pilates|corrida|caminhada|roupa de treino|kit do treino|kits do treino)\b/;
 
 export function normalizeHomeAutonomyText(value: unknown): string {
   return typeof value === 'string'
@@ -101,8 +107,12 @@ function isGenericAction(action: StabilityAction): boolean {
   return GENERIC_ACTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+function mentionsTraining(value: unknown): boolean {
+  return TRAINING_PATTERN.test(normalizeHomeAutonomyText(value));
+}
+
 function hasConcreteAnchor(action: StabilityAction, anchors: string[]): boolean {
-  if (anchors.length === 0) return true;
+  if (anchors.length === 0) return false;
 
   const actionText = `${action.title} ${action.why ?? ''}`;
   return anchors.some((anchor) => {
@@ -119,11 +129,10 @@ function contextAnchors(context: Record<string, unknown>): string[] {
   return [
     ...stringList(context.pendingTasks),
     ...stringList(context.pendingTaskTitles),
+    ...stringList(context.pendingHabitTitles),
+    ...stringList(context.todayAnchorTitles),
     ...stringList(context.goals),
     cleanText(context.activeGoalsContext),
-    cleanText(context.moodCycleContext),
-    cleanText(context.longTermMemory),
-    cleanText(context.ragContext),
     cleanText(latestCheckinSignals.note),
   ].filter(Boolean);
 }
@@ -153,6 +162,8 @@ export function sanitizeStabilityAnalysisSuggestion(
     : [];
   const blocked = blockedTitles(context);
   const anchors = contextAnchors(context);
+  const blockedTraining = blocked.some((title) => mentionsTraining(title));
+  const anchoredTraining = anchors.some((title) => mentionsTraining(title));
   const seen = new Set<string>();
 
   const actions = rawActions
@@ -172,6 +183,7 @@ export function sanitizeStabilityAnalysisSuggestion(
       seen.add(key);
       if (isGenericAction(action)) return false;
       if (blocked.some((title) => isSimilar(action.title, title))) return false;
+      if (mentionsTraining(`${action.title} ${action.why ?? ''}`) && (blockedTraining || !anchoredTraining)) return false;
       return hasConcreteAnchor(action, anchors);
     })
     .slice(0, 3);

@@ -2952,6 +2952,9 @@ Retorne SOMENTE JSON: {"insight":"2 frases personalizadas e úteis sobre o padr�
         const history = (context.history || []) as Array<{date:string;humor:number;energia:number;sono?:number;fisico?:number;social?:number}>;
         const goals = (context.goals as string[] | undefined) || [];
         const pendingTasks = (context.pendingTasks as string[] | undefined) || [];
+        const pendingTaskTitles = (context.pendingTaskTitles as string[] | undefined) || [];
+        const pendingHabitTitles = (context.pendingHabitTitles as string[] | undefined) || [];
+        const todayAnchorTitles = (context.todayAnchorTitles as string[] | undefined) || [];
         const completedTaskTitles = (context.completedTaskTitles as string[] | undefined) || [];
         const completedHabitTitles = (context.completedHabitTitles as string[] | undefined) || [];
         const completedGoalTitles = (context.completedGoalTitles as string[] | undefined) || [];
@@ -2981,6 +2984,9 @@ CONTEXTO VIVO DO USUÁRIO:
 ${context.moodCycleContext || 'Sem contexto adicional.'}
 ${goals.length ? `\nMetas ativas: ${goals.join(' | ')}` : ''}
 ${pendingTasks.length ? `\nCompromissos pendentes: ${pendingTasks.join(' | ')}` : ''}
+${pendingTaskTitles.length ? `\nTarefas pendentes hoje: ${pendingTaskTitles.join(' | ')}` : ''}
+${pendingHabitTitles.length ? `\nHábitos pendentes hoje: ${pendingHabitTitles.join(' | ')}` : ''}
+${todayAnchorTitles.length ? `\nÂncoras reais de hoje para ações: ${todayAnchorTitles.join(' | ')}` : ''}
 ${completedTaskTitles.length ? `\nAgenda já concluída: ${completedTaskTitles.join(' | ')}` : ''}
 ${completedHabitTitles.length ? `\nHábitos já feitos hoje: ${completedHabitTitles.join(' | ')}` : ''}
 ${completedGoalTitles.length ? `\nMetas já concluídas: ${completedGoalTitles.join(' | ')}` : ''}
@@ -3001,7 +3007,10 @@ REGRAS:
 - Não descreva só o óbvio; identifique implicação prática.
 - Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
 - As sugestões devem nascer dos sinais reais do histórico, não de conselhos genéricos.
-- Se houver metas, pendências ou temas recorrentes no contexto vivo, use isso para deixar as ações concretas e pessoais.
+- Use histórico, memória e ciclo para o "pattern" e o "insight"; para "actions", use apenas agenda pendente, hábitos pendentes hoje, metas ativas ou âncoras reais de hoje.
+- Se não houver âncora real de hoje para uma ação, retorne menos ações ou "actions": [].
+- Não use tema recorrente, memória antiga ou fase de humor para inventar tarefa que não existe hoje.
+- Só sugira treino, exercício, ginástica, academia, roupa de treino ou kit de treino se isso aparecer explicitamente em compromissos pendentes, tarefas pendentes hoje, hábitos pendentes hoje ou âncoras reais de hoje.
 - Não sugira o que já aparece como concluído em agenda, hábitos, metas ou subtarefas.
 - Não transforme coisa concluída em próxima ação. Use concluídos apenas como evidência no "pattern" ou "insight".
 - Não ressuscite ação que a pessoa marcou como feita, pulou, excluiu ou agendou pelo card.

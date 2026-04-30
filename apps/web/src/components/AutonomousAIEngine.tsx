@@ -14,7 +14,7 @@ import { api } from "../lib/api";
 import { tryParseAiSuggestion } from "../lib/ai";
 import { aggregateCheckinsByDay, computeMoodCycle, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import { isProactiveNudgeDismissedToday } from "../utils/proactive-nudge-dismissal";
-import { getLocalDateKey } from "../utils/day-context";
+import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import {
   extractBlockedHomeAutonomyTitles,
   readHomeAutonomyFeedback,
@@ -44,8 +44,49 @@ function habitTargetCount(habit: { targetCount?: number | null }): number {
   return Number.isFinite(count) ? Math.max(1, Math.round(count)) : 1;
 }
 
+function habitIsDueToday(habit: { frequency?: string | null; targetDays?: number[] | null }, referenceDate = new Date()): boolean {
+  const frequency = habit.frequency ?? "daily";
+  if (frequency === "daily") return true;
+  if (frequency === "weekly") {
+    const targetDays = Array.isArray(habit.targetDays) ? habit.targetDays : [];
+    return targetDays.length === 0 || targetDays.includes(referenceDate.getDay());
+  }
+  if (frequency === "monthly") return referenceDate.getDate() === 1;
+  return true;
+}
+
+function habitCompletedToday(habit: { completions?: Array<{ date?: string; completionCount?: number | null } | unknown>; targetCount?: number | null }, today: string): boolean {
+  const target = habitTargetCount(habit);
+  const count = (habit.completions || []).reduce((total, completion) => {
+    if (!completion || typeof completion !== "object") return total;
+    const item = completion as { date?: string; completionCount?: number | null };
+    if (normalizeDateKey(item.date) !== today) return total;
+    return total + habitCompletionCount({ completions: [item] });
+  }, 0);
+  return count >= target;
+}
+
 function buildHomeAutonomyRuntimeContext(state: ReturnType<typeof useAuraStore>["state"]) {
   const today = getLocalDateKey();
+  const now = new Date();
+  const pendingTodayTasks = (state.tasks || [])
+    .filter((task) => !task.done)
+    .map((task) => task.title)
+    .filter(Boolean);
+  const completedTodayTasks = (state.tasks || [])
+    .filter((task) => task.done)
+    .map((task) => task.title)
+    .filter(Boolean);
+  const dueHabitsToday = (state.habits || [])
+    .filter((habit) => habitIsDueToday(habit, now));
+  const completedTodayHabits = dueHabitsToday
+    .filter((habit) => habitCompletedToday(habit, today))
+    .map((habit) => habit.title)
+    .filter(Boolean);
+  const pendingTodayHabits = dueHabitsToday
+    .filter((habit) => !habitCompletedToday(habit, today))
+    .map((habit) => habit.title)
+    .filter(Boolean);
   const feedback = readHomeAutonomyFeedback().map((item) => ({
     title: item.title,
     status: item.status,
@@ -53,14 +94,10 @@ function buildHomeAutonomyRuntimeContext(state: ReturnType<typeof useAuraStore>[
   }));
 
   return {
-    completedTaskTitles: (state.tasks || [])
-      .filter((task) => task.done)
-      .map((task) => task.title)
-      .filter(Boolean),
-    completedHabitTitles: (state.habits || [])
-      .filter((habit) => habitCompletionCount(habit) >= habitTargetCount(habit))
-      .map((habit) => habit.title)
-      .filter(Boolean),
+    pendingTaskTitles: pendingTodayTasks,
+    pendingHabitTitles: pendingTodayHabits,
+    completedTaskTitles: completedTodayTasks,
+    completedHabitTitles: completedTodayHabits,
     completedGoalTitles: (state.goals || [])
       .filter((goal) => goal.completedPct >= 100)
       .map((goal) => goal.title)
@@ -72,6 +109,11 @@ function buildHomeAutonomyRuntimeContext(state: ReturnType<typeof useAuraStore>[
       .filter(Boolean),
     blockedActionTitles: extractBlockedHomeAutonomyTitles(feedback),
     homeAutonomyFeedback: feedback,
+    todayAnchorTitles: [
+      ...pendingTodayTasks,
+      ...pendingTodayHabits,
+      ...(state.goals || []).filter((goal) => goal.completedPct < 100).map((goal) => goal.title),
+    ].filter(Boolean),
     localDate: today,
   };
 }

@@ -55,7 +55,7 @@ function run() {
         ],
       },
       {
-        moodCycleContext: 'Apartamento, aluguel e mudança estão ocupando energia mental.',
+        todayAnchorTitles: ['Abrir anúncio do apartamento'],
         homeAutonomyFeedback: [
           { title: 'Mandar mensagem para o Matteo', status: 'dismissed', createdAt: '2026-04-29T12:00:00.000Z' },
         ],
@@ -83,6 +83,60 @@ function run() {
       actions: [
         { title: 'Ligar para a proprietária', category: 'rotina', why: 'Resolve o ajuste do aluguel.' },
       ],
+    },
+  );
+
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Separar roupa de treino', category: 'rotina', why: 'Evita atrito para treinar hoje.' },
+          { title: 'Transformar o treino em micro-bloco fixo', category: 'autocuidado', why: 'Mantém movimento.' },
+        ],
+      },
+      {
+        pendingTaskTitles: ['Responder cliente sobre horário de sexta'],
+        pendingHabitTitles: ['Diário'],
+        moodCycleContext: 'Energia alta pede movimento com rotina simples.',
+      },
+    ),
+    {
+      actions: [],
+    },
+  );
+
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Confirmar horário da ginástica', category: 'rotina', why: 'Existe treino pendente hoje.' },
+        ],
+      },
+      {
+        pendingHabitTitles: ['Ginástica'],
+      },
+    ),
+    {
+      actions: [
+        { title: 'Confirmar horário da ginástica', category: 'rotina', why: 'Existe treino pendente hoje.' },
+      ],
+    },
+  );
+
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Arrumar kit do treino', category: 'rotina', why: 'Evita perder o treino.' },
+        ],
+      },
+      {
+        pendingHabitTitles: ['Diário'],
+        completedHabitTitles: ['Treino'],
+      },
+    ),
+    {
+      actions: [],
     },
   );
 }
