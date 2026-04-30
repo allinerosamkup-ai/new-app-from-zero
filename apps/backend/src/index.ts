@@ -31,6 +31,7 @@ import {
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
+import { ContextGroundingService } from './services/context-grounding.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
 import {
@@ -1112,6 +1113,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const auraCommandService = dependencies.auraCommandService ?? AuraCommandService;
   const journalSuggestedTasksGenerator = dependencies.generateJournalSuggestedTasks ?? generateJournalSuggestedTasks;
   const memoryService = new MemoryService(prisma);
+  const contextGroundingService = new ContextGroundingService(prisma);
 
   const matchesAllowedHost = (origin: string, allowed: string) => {
     try {
@@ -1518,6 +1520,16 @@ export function createApp(dependencies: AppDependencies = {}) {
     ]);
     const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
     const checkinRagContext = memoryService.formatForPrompt(checkinMemories);
+    const checkinGroundingContext = await contextGroundingService.buildForSuggest({
+      userId: data.userId,
+      type: 'checkin',
+      context: { localDate: data.localDate },
+      recentSuggestionItems,
+      ragContext: checkinRagContext,
+    });
+    const checkinGroundingText = typeof checkinGroundingContext.groundingContext === 'string'
+      ? checkinGroundingContext.groundingContext
+      : '';
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -1530,15 +1542,22 @@ export function createApp(dependencies: AppDependencies = {}) {
       note: data.note,
       userName: checkinRuntimeContext.userName,
       profileSummary: checkinRuntimeContext.userProfileSummary,
-      moodCycleContext: checkinRuntimeContext.moodCycleContext,
+      moodCycleContext: [checkinRuntimeContext.moodCycleContext, checkinGroundingText].filter(Boolean).join('\n'),
       contextualMemory: checkinRagContext,
       activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
       recentSuggestionMemory,
       completionContext: checkinCompletionContext.text,
-      avoidRecommendationTitles: checkinCompletionContext.titles,
+      avoidRecommendationTitles: uniqueByKey([
+        ...checkinCompletionContext.titles,
+        ...((checkinGroundingContext.blockedActionTitles as string[] | undefined) ?? []),
+        ...((checkinGroundingContext.completedTaskTitles as string[] | undefined) ?? []),
+        ...((checkinGroundingContext.completedHabitTitles as string[] | undefined) ?? []),
+        ...((checkinGroundingContext.completedGoalTitles as string[] | undefined) ?? []),
+        ...((checkinGroundingContext.completedSubgoalTitles as string[] | undefined) ?? []),
+      ]),
       emotions: (data as any).emotions,
       factors: data.factors,
-      plannerContext: checkinPlannerContext,
+      plannerContext: [checkinPlannerContext, checkinGroundingText].filter(Boolean).join('\n'),
       ...extractAdaptiveFromRequest(req.body),
     });
 
@@ -1899,6 +1918,18 @@ export function createApp(dependencies: AppDependencies = {}) {
       // Shared Brain: busca memórias relevantes para enriquecer a presença no diário
       const journalMemories = await memoryService.retrieve(data.userId, data.message, 3).catch(() => []);
       const journalRagContext = memoryService.formatForPrompt(journalMemories);
+      const journalGroundingContext = await contextGroundingService.buildForSuggest({
+        userId: data.userId,
+        type: 'journal',
+        context: {
+          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+        },
+        recentSuggestionItems,
+        ragContext: journalRagContext,
+      });
+      const journalGroundingText = typeof journalGroundingContext.groundingContext === 'string'
+        ? journalGroundingContext.groundingContext
+        : '';
 
       const assistantContent = await aiService.streamJournalReply({
         context: {
@@ -1910,7 +1941,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           recentSessionHistory: routineCtx.recentSessionHistory,
           recentSuggestionMemory,
           ragContext: journalRagContext,
-          plannerContext: journalPlannerContext,
+          plannerContext: [journalPlannerContext, journalGroundingText].filter(Boolean).join('\n'),
           currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
           currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
           phase: typeof (req.body as any)?.phase === 'string' ? (req.body as any).phase : null,
@@ -2024,17 +2055,29 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       // Planner Brain: injeta agenda completa de hoje (planner interno + Google Calendar)
       const plannerContext = await buildTodayPlannerContext(prisma, data.userId);
+      const commandGroundingContext = await contextGroundingService.buildForSuggest({
+        userId: data.userId,
+        type: 'aura-command',
+        context: {
+          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+        },
+        recentSuggestionItems,
+        ragContext: commandRagContext,
+      });
+      const commandGroundingText = typeof commandGroundingContext.groundingContext === 'string'
+        ? commandGroundingContext.groundingContext
+        : '';
 
       const commandResponse = await auraCommandService.interpretCommand({
         message: data.message,
         history: data.history,
         userName: runtimeContext.userName,
         profileSummary: runtimeContext.userProfileSummary,
-        moodCycleContext: runtimeContext.moodCycleContext,
+        moodCycleContext: [runtimeContext.moodCycleContext, commandGroundingText].filter(Boolean).join('\n'),
         recentSuggestionMemory,
         activeGoalsContext: runtimeContext.activeGoalsContext,
         ragContext: commandRagContext,
-        plannerContext,
+        plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
         interactionMode: data.mode,
         ...extractAdaptiveFromRequest(req.body),
       });
@@ -2736,6 +2779,13 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
       context.recentSuggestionMemory = recentSuggestionMemory;
       context.recentSuggestionItems = recentSuggestionItems;
+      context = await contextGroundingService.buildForSuggest({
+        userId,
+        type,
+        context,
+        recentSuggestionItems,
+        ragContext,
+      });
 
       let prompt = '';
       if (type === 'task-notes') {
@@ -2849,7 +2899,7 @@ JSON APENAS:
 
 ESTADO HOJE: "${context.moodLabel}" (${context.mood}) | Período: ${dtPeriodo}${dtWeekday}${dtLocalDate}${emotionCtx}${negCtx}${posCtx}
 ${dtHistoryLines ? `HISTÓRICO RECENTE:\n${dtHistoryLines}` : ''}${dtGoalsCtx}${dtPendingCtx}${dtCompletedCtx ? `\nJÁ FEITO HOJE — use como evidência, NÃO como sugestão:\n${dtCompletedCtx}` : ''}${dtAvoidCtx}
-${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : ''}${ragContext}${recentSuggestionMemory}
+${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : ''}${context.groundingContext || ''}${ragContext}${recentSuggestionMemory}
 
 REGRAS INVIOLÁVEIS:
 0. FONTE DA VERDADE DE HOJE = listas acima de "Metas ativas" e "Compromissos pendentes HOJE". Se a memória sugerir algo fora dessas listas, IGNORE.
@@ -2993,6 +3043,7 @@ ${completedGoalTitles.length ? `\nMetas já concluídas: ${completedGoalTitles.j
 ${completedSubgoalTitles.length ? `\nSubtarefas de metas já feitas: ${completedSubgoalTitles.join(' | ')}` : ''}
 ${blockedActionTitles.length ? `\nNão sugerir novamente: ${blockedActionTitles.join(' | ')}` : ''}
 ${homeAutonomyFeedback.length ? `\nFeedback recente do card Análise e Autonomia: ${homeAutonomyFeedback.join(' | ')}` : ''}
+${context.groundingContext || ''}
 
 Variância de humor: ${variance.toFixed(2)} (>1.5 = alta labilidade afetiva).
 
@@ -3088,6 +3139,7 @@ ${factorsCtx}
 ${previousMotivacional ? `- Última mensagem recente para NÃO reciclar: ${previousMotivacional}` : ''}
 ${previousAutocuidado.length ? `- Micro-ações recentes para NÃO repetir: ${previousAutocuidado.join(' | ')}` : ''}
 ${context.moodCycleContext ? `- Contexto vivo recente: ${context.moodCycleContext}` : ''}
+${context.groundingContext || ''}
 ${ragContext}
 
 Gere uma presença de home que pareça real, não texto de chatbot.
@@ -3164,7 +3216,7 @@ ${previousAgendaLabels.length ? `Blocos recentes para NÃO reciclar: ${previousA
 ${previousAgendaTasks.length ? `Tarefas recentes para NÃO repetir: ${previousAgendaTasks.join(' | ')}.` : ''}
 ${previousAutocuidado.length ? `Micro-ações recentes da home: ${previousAutocuidado.join(' | ')}.` : ''}
 ${context.requestVariant ? `Tentativa atual de geração: ${context.requestVariant}. Se for maior que 1, trate como "refazer" e entregue uma alternativa materialmente diferente.` : ''}
-${ragContext}${recentSuggestionMemory}
+${context.groundingContext || ''}${ragContext}${recentSuggestionMemory}
 
 Monte complementos, não uma rotina inteira:
 - Crie 1-4 blocos opcionais, somente se acrescentarem algo útil ao que já existe
@@ -3215,7 +3267,7 @@ ${trend ? `Tendência: ${trend}.` : ''}${streakCtx}
 ${crHistoryLines ? `\nHistórico recente:\n${crHistoryLines}` : ''}
 ${context.moodCycleContext ? `\nContexto vivo recente:\n${context.moodCycleContext}` : ''}
 ${crPreviousSuggestion ? `\nSugestão anterior para NÃO repetir: ${crPreviousSuggestion}` : ''}
-${nota}${ragContext}${recentSuggestionMemory}
+${nota}${context.groundingContext || ''}${ragContext}${recentSuggestionMemory}
 
 Responda como Airia, com leitura específica e útil para este momento.
 
@@ -3230,6 +3282,8 @@ REGRAS:
 - NÃO use sermão, diagnóstico ou tom maternal demais.
 - "suggestion" deve ser uma micro-ação de 5-10 minutos que caiba nas próximas 2 horas.
 - A sugestão deve ser específica o bastante para a pessoa começar sem precisar planejar mais nada.
+- Memória passada pode explicar o padrão, mas a sugestão operacional precisa respeitar o grounding de hoje.
+- Não sugira tarefa/hábito já concluído hoje nem tarefa sem âncora real de agenda, hábito pendente ou meta ativa.
 - Use o nome de forma natural, no máximo uma vez.
 
 JSON APENAS: {"message":"2-3 frases acolhedoras e específicas sobre este momento","suggestionEmoji":"emoji","suggestion":"micro-ação concreta para as próximas 2 horas"}`;
