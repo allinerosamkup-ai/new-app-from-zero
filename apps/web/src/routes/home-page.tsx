@@ -1307,7 +1307,7 @@ export function HomePage() {
               </p>
             </div>
           </div>
-          {/* State chip + menstrual chip (modulador secundário) */}
+          {/* Phase chip + menstrual chip (modulador secundário) */}
           <div style={{ marginTop: "12px", display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -1316,8 +1316,8 @@ export function HomePage() {
               borderRadius: 999, padding: "5px 14px",
               boxShadow: "0 8px 14px rgba(17,24,39,.04)",
             }}>
-              <span style={{ fontSize: 13 }}>{mood.emoji}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)" }}>{mood.chipLabel}</span>
+              <span style={{ fontSize: 13 }}>{cycleReport.phaseEmoji}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)" }}>{currentPhaseLabel}</span>
             </div>
             {menstrualReport && (
               <div style={{
