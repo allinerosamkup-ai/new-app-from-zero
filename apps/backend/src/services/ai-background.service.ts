@@ -217,9 +217,9 @@ Retorne JSON:
 
     // 3. Indexar objetivos ativos (não precisam de janela de tempo — upsert é idempotente)
     const objectives = await prisma.objective.findMany({
-      where: { userId, archived: false },
+      where: { userId, archived: false, progress: { lt: 100 } },
       take: 10,
-      select: { id: true, title: true, description: true, category: true, aiInsight: true },
+      select: { id: true, title: true, description: true, category: true, aiInsight: true, progress: true, archived: true },
     }).catch(() => []);
 
     for (const obj of objectives) {
@@ -235,7 +235,7 @@ Retorne JSON:
           contentType: 'goal',
           contentId: obj.id,
           content,
-          metadata: { category: obj.category },
+          metadata: { category: obj.category, objectiveId: obj.id, progress: obj.progress, archived: obj.archived },
         }).catch(() => {});
       }
     }

@@ -21,6 +21,7 @@ interface MemoryInput {
 }
 
 interface RelevantMemory {
+  contentId?: string | null;
   contentType: string;
   content: string;
   metadata: Record<string, unknown>;

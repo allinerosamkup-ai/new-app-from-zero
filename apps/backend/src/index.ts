@@ -36,6 +36,7 @@ import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
+import { JournalUnderstandingService, type JournalSituationModel } from './services/journal-understanding.service';
 import {
   buildUnifiedSuggestContext,
   getSuggestFallback,
@@ -362,7 +363,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     JournalService.buildRoutineContext(prisma, userId).catch(() => null),
     prisma.objective?.findMany
       ? prisma.objective.findMany({
-          where: { userId, archived: false },
+          where: { userId, archived: false, progress: { lt: 100 } },
           orderBy: { updatedAt: 'desc' },
           take: 8,
           select: { title: true, category: true, progress: true, subgoals: true, aiInsight: true },
@@ -634,6 +635,8 @@ async function retrieveJournalMemoryContext(args: {
   memoryService: JournalMemoryServiceLike;
   userId: string;
   message: string;
+  situation: JournalSituationModel;
+  dailyContext?: Awaited<ReturnType<ContextGroundingService['buildDailyContext']>> | null;
   routineContext: {
     promptSummary?: string;
     recentSessionHistory?: string;
@@ -645,15 +648,12 @@ async function retrieveJournalMemoryContext(args: {
     longTermMemory?: string | null;
     activeGoalsContext?: string | null;
   };
-}): Promise<{ ragContext: string; retrievedCount: number; usedFallback: boolean }> {
+}): Promise<{ ragContext: string; retrievedCount: number; usedFallback: boolean; rejectedMemoryReasons: string[] }> {
   const querySeeds = uniqueByKey([
-    args.message,
-    `padrões recorrentes, pessoas, decisões e emoções ligados a: ${args.message}`,
+    ...args.situation.retrievalQueries,
+    `padrões recorrentes, pessoas, decisões e emoções ligados a: ${args.situation.topics.join(' ') || args.message}`,
     args.routineContext.topThemes?.length
       ? `diário temas recorrentes ${args.routineContext.topThemes.join(' ')} ${args.message}`
-      : '',
-    args.runtimeContext.activeGoalsContext
-      ? `metas e decisões ativas relacionadas ao diário ${args.runtimeContext.activeGoalsContext} ${args.message}`
       : '',
     args.routineContext.recentSessionHistory
       ? `continuidade do diário e padrões recentes ${args.routineContext.recentSessionHistory.slice(0, 900)}`
@@ -674,26 +674,51 @@ async function retrieveJournalMemoryContext(args: {
       return true;
     })
     .sort((a: any, b: any) => Number(b.similarity ?? 0) - Number(a.similarity ?? 0))
-    .slice(0, 8);
+    .slice(0, 14);
 
-  if (memories.length > 0) {
+  const memoryCritic = JournalUnderstandingService.filterMemories({
+    memories: memories as any,
+    situation: args.situation,
+    dailyContext: args.dailyContext ?? null,
+  });
+  const acceptedMemories = memoryCritic.accepted.slice(0, 8);
+  const rejectedMemoryReasons = memoryCritic.rejected.map((item) => item.reason);
+
+  if (acceptedMemories.length > 0) {
     return {
-      ragContext: args.memoryService.formatForPrompt(memories as any),
-      retrievedCount: memories.length,
+      ragContext: args.memoryService.formatForPrompt(acceptedMemories as any),
+      retrievedCount: acceptedMemories.length,
       usedFallback: false,
+      rejectedMemoryReasons,
     };
   }
+
+  const relatedActiveGoals = (args.dailyContext?.activeGoalTitles ?? []).filter((title) => JournalUnderstandingService.filterMemories({
+    memories: [{ contentType: 'goal', content: `Meta: ${title}`, similarity: 0.9 }],
+    situation: args.situation,
+    dailyContext: args.dailyContext ?? null,
+  }).accepted.length > 0);
+  const relatedCompletedGoals = (args.dailyContext?.completedGoalTitles ?? []).filter((title) => JournalUnderstandingService.filterMemories({
+    memories: [{ contentType: 'goal', content: `Meta: ${title}`, similarity: 0.9 }],
+    situation: args.situation,
+    dailyContext: args.dailyContext ?? null,
+  }).accepted.length > 0);
 
   const fallbackParts = [
     args.runtimeContext.longTermMemory ? `Memória longa do perfil:\n${args.runtimeContext.longTermMemory}` : '',
     args.routineContext.recentSessionHistory ? `Histórico recente de sessões:\n${args.routineContext.recentSessionHistory}` : '',
     args.routineContext.promptSummary ? `Resumo de rotina/check-ins:\n${args.routineContext.promptSummary}` : '',
-    args.runtimeContext.activeGoalsContext ? `Metas e decisões ativas:\n${args.runtimeContext.activeGoalsContext}` : '',
+    relatedActiveGoals.length
+      ? `Metas ativas relacionadas ao relato:\n${relatedActiveGoals.join(' | ')}`
+      : '',
+    relatedCompletedGoals.length
+      ? `Metas já concluídas relacionadas ao relato (usar só como evidência histórica, não como pendência):\n${relatedCompletedGoals.join(' | ')}`
+      : '',
   ].filter(Boolean);
 
   if (fallbackParts.length === 0) {
     console.warn('[journal/memory] RAG vazio e sem fallback reflexivo disponível.');
-    return { ragContext: '', retrievedCount: 0, usedFallback: true };
+    return { ragContext: '', retrievedCount: 0, usedFallback: true, rejectedMemoryReasons };
   }
 
   console.warn('[journal/memory] RAG vetorial vazio; usando fallback reflexivo de sessões/perfil.');
@@ -701,11 +726,13 @@ async function retrieveJournalMemoryContext(args: {
     ragContext: `\nMEMÓRIA REFLEXIVA DISPONÍVEL (fallback semântico):\n${fallbackParts.join('\n\n')}`,
     retrievedCount: 0,
     usedFallback: true,
+    rejectedMemoryReasons,
   };
 }
 
 function buildJournalReflectiveContext(args: {
   currentMessage: string;
+  situationText: string;
   ragContext: string;
   memoryUsedFallback: boolean;
   routineContext: {
@@ -743,6 +770,7 @@ function buildJournalReflectiveContext(args: {
   return [
     'Entrada atual é prioridade absoluta. Entenda cronologia, fato real e correções antes de usar memória.',
     `Mensagem atual: ${currentMessage}`,
+    args.situationText,
     'Tarefa interna: responder com análise, não paráfrase; cruzar memória/contexto quando houver conexão real.',
     args.ragContext
       ? `Memórias recuperadas/fallback:\n${args.ragContext}`
@@ -2059,11 +2087,34 @@ export function createApp(dependencies: AppDependencies = {}) {
         sessionId: data.sessionId,
       });
 
-      // Shared Brain: busca memórias relevantes para enriquecer a presença no diário
+      const journalDailyContext = await contextGroundingService.buildDailyContext({
+        userId: data.userId,
+        type: 'journal',
+        context: {
+          localDate: data.localDate,
+          currentHour: data.currentHour,
+          currentMinute: data.currentMinute,
+          phase: data.phase ?? null,
+        },
+        recentSuggestionItems,
+        ragContext: '',
+      });
+      const journalSituation = JournalUnderstandingService.buildSituation({
+        message: data.message,
+        localDate: data.localDate,
+        recentSessionHistory: routineCtx.recentSessionHistory,
+        latestCheckinNote: runtimeContext.latestCheckinSignals?.note ?? null,
+        activeGoalTitles: journalDailyContext.activeGoalTitles,
+        completedGoalTitles: journalDailyContext.completedGoalTitles,
+      });
+
+      // Shared Brain: entende a situação antes de buscar e filtrar memórias
       const journalMemory = await retrieveJournalMemoryContext({
         memoryService,
         userId: data.userId,
         message: data.message,
+        situation: journalSituation,
+        dailyContext: journalDailyContext,
         routineContext: routineCtx,
         runtimeContext,
       });
@@ -2093,6 +2144,10 @@ export function createApp(dependencies: AppDependencies = {}) {
           ragContext: journalRagContext,
           journalContext: buildJournalReflectiveContext({
             currentMessage: data.message,
+            situationText: JournalUnderstandingService.formatSituationForPrompt(
+              journalSituation,
+              journalMemory.rejectedMemoryReasons,
+            ),
             ragContext: journalRagContext,
             memoryUsedFallback: journalMemory.usedFallback,
             routineContext: routineCtx,
@@ -2735,7 +2790,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         contentType: 'goal',
         contentId: obj.id,
         content: `Meta: ${data.title}${data.description ? `. ${data.description}` : ''}`,
-        metadata: { category: data.category, objectiveId: obj.id },
+        metadata: { category: data.category, objectiveId: obj.id, progress: obj.progress, archived: obj.archived },
       }).catch(() => {});
       return res.status(201).json({ id: obj.id, title: obj.title, category: obj.category, progress: obj.progress, subgoals: obj.subgoals, createdAt: obj.createdAt.toISOString() });
     } catch (error: any) {
@@ -2769,6 +2824,19 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
       if (obj.count === 0) return res.status(404).json({ error: 'Objective not found' });
       const updated = await prisma.objective.findUnique({ where: { id } });
+      if (updated) {
+        await prisma.memoryEmbedding.updateMany({
+          where: { userId, contentType: 'goal', contentId: id },
+          data: {
+            metadata: {
+              category: updated.category,
+              objectiveId: updated.id,
+              progress: updated.progress,
+              archived: updated.archived,
+            },
+          },
+        }).catch(() => {});
+      }
       return res.json(updated);
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -2789,6 +2857,15 @@ export function createApp(dependencies: AppDependencies = {}) {
         where: { id, userId },
         data: { archived: true },
       });
+      await prisma.memoryEmbedding.updateMany({
+        where: { userId, contentType: 'goal', contentId: id },
+        data: {
+          metadata: {
+            objectiveId: id,
+            archived: true,
+          },
+        },
+      }).catch(() => {});
       return res.status(204).send();
     } catch (error: any) {
       console.error('[objectives/delete] Error:', error);

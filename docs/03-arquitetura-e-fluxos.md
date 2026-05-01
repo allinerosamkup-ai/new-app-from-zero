@@ -37,6 +37,8 @@ Esta é a recomendação oficial baseada nas discussões e na priorização por 
 - **Provedor LLM:** OpenAI GPT-4o / gpt-4o-mini (Melhor balanço de custo e raciocínio).
 - **Técnica de Prompting:** Zero-shot e Few-shot encapsulados no backend (Frontend não consome API da OpenAI direto por segurança).
 - **RAG:** `MemoryService` recupera memórias relevantes. Essas memórias explicam padrão, mas não autorizam tarefa sem âncora atual.
+- **Compreensão do Diário:** `JournalUnderstandingService` monta um modelo de situação antes da resposta: cronologia, fato, emoção, interpretação, decisão em jogo e temas reais.
+- **Crítico de relevância:** memórias recuperadas para o Diário passam por filtro de relação com a situação e status real de metas. Meta concluída/arquivada não entra como pendência viva.
 - **DailyContext:** `ContextGroundingService` centraliza contexto operacional antes de sugestões.
 - **Decision Brain:** `DecisionEngine` decide o que é compromisso real, sugestão opcional, insight, bloqueio e notificação permitida.
 - **Agenda Adaptativa:** `AdaptiveAgendaEngine` transforma decisões em preview (`keep`, `move`, `shrink`, `pause`, `suggest`, `convert`, `notify`, `block`) sem aplicar nada sozinho.
@@ -155,10 +157,12 @@ model TimelineBlock {
 
 1. **APP:** Usuária grava áudio ou manda texto: "Hoje estou exausta, mal dormi."
 2. **BACKEND:** Se for áudio, passa na API de Whisper/Transcribe. Se for texto, manda direto no `JournalService`.
-3. **AI LAYER:** AI responde baseada no Prompt Coach (Validar, questionar ação possível).
-4. **APP:** UI exibe o chat fluindo.
-5. **AI LAYER (Fim):** Quando a usuária clica em "Finalizar", a IA gera um JSON puro com `{"summary": "...", "emotions": ["cansada", "frustrada"]}`.
-6. **BACKEND:** Salva em `JournalSession`.
+3. **BACKEND:** `JournalUnderstandingService` cria o `SituationModel` antes de buscar memória: data, fato, emoção, interpretação, padrão possível e decisão em jogo.
+4. **BACKEND:** `MemoryService` busca RAG por consultas derivadas da situação. O crítico de relevância descarta meta concluída, arquivada, aleatória ou memória sem relação.
+5. **AI LAYER:** Ayan recebe a situação compreendida, memórias filtradas, check-in, histórico recente e contexto operacional apenas quando conectam ao relato.
+6. **APP:** UI exibe o chat fluindo.
+7. **AI LAYER (Fim):** Quando a usuária clica em "Finalizar", a IA gera um JSON puro com `{"summary": "...", "emotions": ["cansada", "frustrada"]}`.
+8. **BACKEND:** Salva em `JournalSession` e indexa memória útil.
 
 ### 5.3 Fluxo de Replanejamento do Planner
 

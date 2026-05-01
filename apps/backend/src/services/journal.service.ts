@@ -198,7 +198,7 @@ export class JournalService {
       }),
       prisma.objective?.findMany
         ? prisma.objective.findMany({
-            where: { userId, archived: false },
+            where: { userId, archived: false, progress: { lt: 100 } },
             orderBy: { updatedAt: 'desc' },
             take: 5,
             select: { title: true },
