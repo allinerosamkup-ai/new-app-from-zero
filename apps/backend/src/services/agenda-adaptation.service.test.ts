@@ -43,9 +43,10 @@ const baseContext: DailyContext = {
   assert.equal(result.date, '2026-04-30');
   assert.equal(result.trigger, 'checkin');
   assert.equal(result.changes[0]?.type, 'pause');
-  assert.match(result.changes[0]?.reason ?? '', /Turbulência/);
+  assert.match(result.changes[0]?.reason ?? '', /baixa capacidade/);
   assert.ok(result.blockedSuggestions.includes('Treino'));
   assert.ok(result.blockedSuggestions.includes('Separar roupa de treino'));
+  assert.equal(result.adaptiveAgenda.decisions[0]?.requiresConfirmation, true);
 }
 
 {
@@ -60,8 +61,11 @@ const baseContext: DailyContext = {
     requestContext: { phase: 'Estável' },
   });
 
-  assert.deepEqual(result.changes, []);
-  assert.match(result.summary, /não inventar tarefa/);
+  assert.equal(result.changes[0]?.type, 'suggest');
+  assert.equal(result.changes[0]?.kind, 'suggested_commitment');
+  assert.equal(result.changes[0]?.requiresConfirmation, true);
+  assert.equal(result.changes[0]?.notificationAllowed, false);
+  assert.match(result.summary, /sugestão opcional/);
 }
 
 console.log('agenda-adaptation.service tests passed');

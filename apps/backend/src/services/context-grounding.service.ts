@@ -1,6 +1,7 @@
 import { PrismaClient } from '@app/database';
 import type { SuggestionMemoryItem } from './suggestion-memory.service';
 import { AiActionFeedbackService, type AiActionFeedbackItem } from './ai-action-feedback.service';
+import { DecisionEngine, type DecisionSurface } from './decision-engine.service';
 
 type GroundingInput = {
   userId: string;
@@ -30,6 +31,7 @@ export type DailyContext = GroundingLists & {
   habits: GroundedHabit[];
   goals: GroundedGoal[];
   actionFeedback: AiActionFeedbackItem[];
+  postponedActions?: GroundedPostponement[];
   patternMemoryContext: string;
   operationalRule: string;
 };
@@ -56,6 +58,15 @@ export type GroundedGoal = {
   title: string;
   progress: number;
   subgoals: unknown;
+};
+
+export type GroundedPostponement = {
+  title: string;
+  originalDate?: string | null;
+  targetDate?: string | null;
+  reason?: string | null;
+  postponeCount?: number | null;
+  createdAt?: Date | string | null;
 };
 
 function cleanText(value: unknown): string {
@@ -146,11 +157,22 @@ function actionableFeedbackTitles(items: AiActionFeedbackItem[]): string[] {
     .map((item) => item.title);
 }
 
+function isPostponementLog(value: unknown): value is GroundedPostponement {
+  return !!value && typeof value === 'object' && typeof (value as GroundedPostponement).title === 'string';
+}
+
 function mergeContextList(existing: unknown, discovered: string[]): string[] {
   return unique([...stringList(existing), ...discovered]);
 }
 
-function formatGroundingBlock(lists: GroundingLists, dateKey: string, ragContext: string): string {
+function formatGroundingBlock(lists: GroundingLists & { postponedActions?: GroundedPostponement[] }, dateKey: string, ragContext: string): string {
+  const postponementLines = (lists.postponedActions ?? [])
+    .slice(0, 5)
+    .map((item) => {
+      const count = item.postponeCount ? ` (${item.postponeCount}x)` : '';
+      const dates = item.originalDate && item.targetDate ? ` ${item.originalDate}->${item.targetDate}` : '';
+      return `${item.title}${count}${dates}`;
+    });
   const lines = [
     `Data operacional: ${dateKey}.`,
     lists.pendingTaskTitles.length ? `Agenda pendente hoje: ${lists.pendingTaskTitles.join(' | ')}` : 'Agenda pendente hoje: nenhuma.',
@@ -161,11 +183,23 @@ function formatGroundingBlock(lists: GroundingLists, dateKey: string, ragContext
     lists.completedSubgoalTitles.length ? `Subtarefas já feitas: ${lists.completedSubgoalTitles.join(' | ')}` : '',
     lists.recentSuggestionTitles.length ? `Sugestões recentes para não reciclar: ${lists.recentSuggestionTitles.join(' | ')}` : '',
     lists.blockedActionTitles.length ? `Ações rejeitadas/concluídas pelo card: ${lists.blockedActionTitles.join(' | ')}` : '',
+    postponementLines.length ? `Adiamentos recentes para análise de padrão: ${postponementLines.join(' | ')}` : '',
     'Regra de grounding: memórias e histórico explicam padrão; ação nova só pode nascer de agenda pendente, hábito pendente ou meta ativa de hoje.',
+    'Regra de compromisso: sugestão opcional pode ser proposta, mas só compromisso real salvo/confirmado pode virar pendência ou notificação.',
     ragContext ? 'Memórias RAG entram como padrão/contexto, não como autorização para inventar tarefa operacional.' : '',
   ].filter(Boolean);
 
   return `\nGROUNDING OPERACIONAL DA AIRIA:\n${lines.join('\n')}`;
+}
+
+function surfaceFromType(type: string): DecisionSurface {
+  if (type === 'stability-analysis' || type === 'home-messages') return 'home';
+  if (type === 'checkin-response' || type === 'day-tasks') return 'checkin';
+  if (type === 'agenda-blocks' || type === 'agenda-adapt') return 'planner';
+  if (type === 'journal-tasks') return 'journal';
+  if (type === 'weekly-insight' || type === 'monthly-report') return 'insights';
+  if (type === 'aura-command') return 'aura-chat';
+  return 'agenda';
 }
 
 export class ContextGroundingService {
@@ -177,7 +211,7 @@ export class ContextGroundingService {
 
     const prismaAny = this.prisma as any;
 
-    const [rawTasks, rawHabits, rawGoals, actionFeedback] = await Promise.all([
+    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements] = await Promise.all([
       prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
         where: { userId: input.userId, localDate: { gte: start, lte: end } },
         orderBy: { startAt: 'asc' },
@@ -204,11 +238,30 @@ export class ContextGroundingService {
         select: { title: true, progress: true, subgoals: true },
       }).catch(() => []) : Promise.resolve([]),
       AiActionFeedbackService.getRecent(prismaAny, input.userId).catch(() => []),
+      prismaAny.eventLog?.findMany ? prismaAny.eventLog.findMany({
+        where: { userId: input.userId, eventName: 'timeline.block_postponed' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: { properties: true, createdAt: true },
+      }).then((rows: Array<{ properties: unknown; createdAt: Date }>) => rows
+        .map((row) => {
+          const properties = row.properties as Record<string, unknown>;
+          return {
+            title: cleanText(properties?.title),
+            originalDate: cleanText(properties?.originalDate) || null,
+            targetDate: cleanText(properties?.targetDate) || null,
+            reason: cleanText(properties?.reason) || null,
+            postponeCount: Number.isFinite(Number(properties?.postponeCount)) ? Number(properties?.postponeCount) : null,
+            createdAt: row.createdAt,
+          };
+        })
+        .filter(isPostponementLog)).catch(() => []) : Promise.resolve([]),
     ]);
 
     const tasks = rawTasks as GroundedTask[];
     const habits = rawHabits as GroundedHabit[];
     const goals = rawGoals as GroundedGoal[];
+    const postponedActions = rawPostponements as GroundedPostponement[];
 
     const pendingTaskTitles = unique(tasks.filter((task) => task.status !== 'completed').map((task) => task.title));
     const completedTaskTitles = unique(tasks.filter((task) => task.status === 'completed').map((task) => task.title));
@@ -260,6 +313,7 @@ export class ContextGroundingService {
       habits,
       goals,
       actionFeedback,
+      postponedActions,
       patternMemoryContext: cleanText(input.ragContext),
       operationalRule: 'Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual.',
     };
@@ -268,6 +322,11 @@ export class ContextGroundingService {
   async buildForSuggest(input: GroundingInput): Promise<Record<string, unknown>> {
     const lists = await this.buildDailyContext(input);
     const dateKey = lists.date;
+    const decisionBrain = DecisionEngine.evaluate({
+      dailyContext: lists,
+      surface: surfaceFromType(input.type),
+      requestContext: input.context,
+    });
 
     const groundingContext = formatGroundingBlock(lists, dateKey, cleanText(input.ragContext));
     const mergedGoals = mergeContextList(input.context.goals, lists.activeGoalTitles);
@@ -286,9 +345,13 @@ export class ContextGroundingService {
       blockedActionTitles: mergeContextList(input.context.blockedActionTitles, [...lists.blockedActionTitles, ...lists.recentSuggestionTitles]),
       todayAnchorTitles: mergeContextList(input.context.todayAnchorTitles, lists.todayAnchorTitles),
       groundingContext,
+      decisionBrain,
+      allowedActionTitles: decisionBrain.allowedActions.map((action) => action.title),
+      blockedDecisionTitles: decisionBrain.blockedActions.map((action) => action.title),
       grounding: {
         type: input.type,
         ...lists,
+        decisionBrain,
       },
     };
   }

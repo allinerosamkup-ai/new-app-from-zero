@@ -1,6 +1,6 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2, CalendarClock } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -295,6 +295,13 @@ function formatDateKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  return formatDateKey(date);
 }
 
 function createBaseDate() {
@@ -1522,7 +1529,7 @@ function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
   );
 }
 
-function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat }: any) {
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -1713,7 +1720,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                 background: "rgba(99,152,169,.10)",
                 color: "var(--accent-sky)",
                 borderRadius: 999,
-                padding: "3px 8px",
+                minHeight: 32,
+                padding: "6px 10px",
                 fontSize: 9,
                 fontWeight: 850,
                 letterSpacing: ".04em",
@@ -1723,6 +1731,34 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             >
               Conversar
             </button>
+            {!slot.task.done && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPostpone(slot.task);
+                }}
+                style={{
+                  border: "1px solid rgba(215,137,127,.30)",
+                  background: "rgba(215,137,127,.10)",
+                  color: "var(--accent-peach-ink)",
+                  borderRadius: 999,
+                  minHeight: 32,
+                  padding: "6px 10px",
+                  fontSize: 9,
+                  fontWeight: 850,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <CalendarClock size={11} />
+                Adiar
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2266,6 +2302,43 @@ export function PlannerPage() {
     }
   }
 
+  async function handlePostponeTaskDirect(task: PlannerTask) {
+    const targetDate = addDaysToDateKey(selectedDateKey, 1);
+
+    try {
+      if (task.source === "gcal") {
+        await api.patch(getGoogleCalendarEventEndpoint(task), {
+          date: targetDate,
+          title: stripGoogleCalendarTaskTitle(task.title),
+          startTime: task.time,
+          endTime: task.endTime,
+          status: "planned",
+          note: task.note ?? undefined,
+        });
+        await api.post("/ai/action-feedback", {
+          title: task.title,
+          status: "scheduled",
+          surface: "planner",
+          sourceType: "timeline-postpone-gcal",
+          localDate: selectedDateKey,
+        }).catch(() => null);
+        await reloadPlannerTasks();
+        showSuccess("Compromisso adiado para amanhã.");
+        return;
+      }
+
+      await api.post(`/timeline/${task.id}/postpone`, {
+        targetDate,
+        reason: "manual_planner_button",
+      });
+      await reloadPlannerTasks();
+      await refreshData();
+      showSuccess("Bloco adiado para amanhã.");
+    } catch (error: any) {
+      showError(error.message);
+    }
+  }
+
   async function deleteTimelineTask(task: PlannerTask, scope: RecurringDeleteScope = "this") {
     try {
       if (task.source === "gcal") {
@@ -2632,6 +2705,7 @@ export function PlannerPage() {
                    onComplete={handleCompleteTaskDirect}
                    onDelete={handleDeleteTaskDirect}
                    onChat={openTaskChat}
+                   onPostpone={handlePostponeTaskDirect}
                 />
               </div>
             );

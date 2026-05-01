@@ -1,0 +1,86 @@
+import { DecisionEngine, type DecisionCandidate, type DecisionResult, type DecisionSurface } from './decision-engine.service';
+import type { DailyContext } from './context-grounding.service';
+
+export type AgendaDecisionType = 'keep' | 'move' | 'shrink' | 'pause' | 'suggest' | 'convert' | 'notify' | 'block';
+
+export type AgendaAdaptationDecision = {
+  type: AgendaDecisionType;
+  title: string;
+  kind: DecisionCandidate['kind'];
+  source: DecisionCandidate['source'];
+  from?: string | null;
+  to?: string | null;
+  reason: string;
+  score: number;
+  confidence: number;
+  requiresConfirmation: boolean;
+  notificationAllowed: boolean;
+};
+
+export type AdaptiveAgendaPlan = {
+  date: string;
+  trigger: string;
+  surface: DecisionSurface;
+  summary: string;
+  decisions: AgendaAdaptationDecision[];
+  blocked: AgendaAdaptationDecision[];
+  decisionBrain: DecisionResult;
+  applied: false;
+};
+
+function toAgendaDecision(candidate: DecisionCandidate): AgendaAdaptationDecision {
+  const type: AgendaDecisionType = candidate.action === 'insight' ? 'block' : candidate.action;
+  return {
+    type,
+    title: candidate.title,
+    kind: candidate.kind,
+    source: candidate.source,
+    from: candidate.from ?? null,
+    to: candidate.to ?? null,
+    reason: candidate.reason,
+    score: candidate.score,
+    confidence: candidate.confidence,
+    requiresConfirmation: candidate.requiresConfirmation,
+    notificationAllowed: candidate.notificationAllowed,
+  };
+}
+
+export class AdaptiveAgendaEngine {
+  static plan(input: {
+    dailyContext: DailyContext;
+    trigger?: string;
+    surface?: DecisionSurface;
+    requestContext?: Record<string, unknown>;
+  }): AdaptiveAgendaPlan {
+    const surface = input.surface ?? 'agenda';
+    const decisionBrain = DecisionEngine.evaluate({
+      dailyContext: input.dailyContext,
+      surface,
+      requestContext: input.requestContext,
+    });
+
+    const decisions = decisionBrain.allowedActions
+      .filter((candidate) => candidate.kind !== 'insight_only')
+      .map(toAgendaDecision);
+    const blocked = decisionBrain.blockedActions.map(toAgendaDecision);
+
+    const optionalCount = decisions.filter((decision) => decision.kind === 'suggested_commitment').length;
+    const realCount = decisions.filter((decision) => decision.kind === 'real_commitment').length;
+    const summary = decisions.length > 0
+      ? optionalCount > 0 && realCount === 0
+        ? `Agenda adaptativa encontrou ${optionalCount} sugestão opcional, sem salvar nem notificar automaticamente.`
+        : `Agenda adaptativa encontrou ${decisions.length} decisão(ões) possíveis, sem aplicar nada automaticamente.`
+      : 'Agenda adaptativa não encontrou ajuste confiável; melhor não inventar compromisso.';
+
+    return {
+      date: input.dailyContext.date,
+      trigger: input.trigger ?? 'manual',
+      surface,
+      summary,
+      decisions,
+      blocked,
+      decisionBrain,
+      applied: false,
+    };
+  }
+}

@@ -92,6 +92,11 @@ const defaultAllowed = ['localhost', '127.0.0.1', 'localhost:5051', 'localhost:5
 const defaultPrisma = new PrismaClient();
 const DEFAULT_TIMELINE_RECURRING = { enabled: false, frequency: 'daily', days: [], everyNDays: 1 };
 
+const PostponeTimelineBlockSchema = z.object({
+  targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  reason: z.string().trim().max(240).optional(),
+});
+
 type TimelineRecurringShape = {
   enabled?: boolean;
   frequency?: unknown;
@@ -140,6 +145,12 @@ function formatDateOnly(value: Date | string | null | undefined): string | null 
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString().slice(0, 10);
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const base = parseLocalDateInput(dateKey);
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toISOString().slice(0, 10);
 }
 
 type TimelineDeleteScope = 'this' | 'future' | 'this-and-future' | 'all';
@@ -2753,7 +2764,17 @@ export function createApp(dependencies: AppDependencies = {}) {
         recentSuggestionItems: await SuggestionMemoryService.getRecent(prisma, userId).catch(() => []),
         ragContext: memoryService.formatForPrompt(ragMemories),
       });
-      return res.json(dailyContext);
+      const agendaPreview = AgendaAdaptationService.buildPreview({
+        dailyContext,
+        requestContext: {},
+        mode: 'preview',
+        trigger: 'manual',
+      });
+      return res.json({
+        ...dailyContext,
+        decisionBrain: agendaPreview.adaptiveAgenda.decisionBrain,
+        adaptiveAgenda: agendaPreview.adaptiveAgenda,
+      });
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
       console.error('[context/day] Error:', error);
@@ -4109,6 +4130,104 @@ JSON APENAS: {"profileSummary":"..."}`,
       data: { gcalAccessToken: null, gcalRefreshToken: null, gcalSelectedCalendars: [] } as any,
     }).catch(() => {});
     return res.json({ disconnected: true });
+  });
+
+  /**
+   * POST /api/timeline/:id/postpone
+   * Move um bloco real do Planner para o dia seguinte, mantendo horário e metadados.
+   * Registra o adiamento para análise de repetição e padrão.
+   */
+  app.post('/api/timeline/:id/postpone', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+
+    try {
+      const data = PostponeTimelineBlockSchema.parse(req.body ?? {});
+      const block = await prisma.timelineBlock.findUnique({ where: { id } });
+      if (!block || block.userId !== userId) {
+        return res.status(404).json({ error: 'Block not found' });
+      }
+
+      const originalDate = formatDateOnly(block.localDate);
+      if (!originalDate) {
+        return res.status(400).json({ error: 'Block has invalid localDate' });
+      }
+
+      const targetDate = data.targetDate ?? addDaysToDateKey(originalDate, 1);
+      const targetBaseDate = parseLocalDateInput(targetDate);
+      const startTime = formatUtcTime(block.startAt);
+      const endTime = formatUtcTime(block.endAt);
+      const startAt = PlannerService.parseTimeToDate(targetBaseDate, startTime);
+      const endAt = PlannerService.parseTimeToDate(targetBaseDate, endTime);
+
+      const postponeCount = await prisma.eventLog.count({
+        where: {
+          userId,
+          eventName: 'timeline.block_postponed',
+          properties: {
+            path: ['blockId'],
+            equals: block.id,
+          } as any,
+        },
+      }).catch(() => 0);
+
+      const updated = await prisma.timelineBlock.update({
+        where: { id: block.id },
+        data: {
+          localDate: targetBaseDate,
+          startAt,
+          endAt,
+          status: 'planned',
+        },
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          userId,
+          eventName: 'timeline.block_postponed',
+          properties: {
+            blockId: block.id,
+            title: block.title,
+            category: block.category,
+            intensity: block.intensity,
+            originalDate,
+            targetDate,
+            startTime,
+            endTime,
+            reason: data.reason || 'manual_planner_button',
+            postponeCount: postponeCount + 1,
+          },
+          path: req.path,
+          userAgent: req.get('user-agent') ?? null,
+        },
+      }).catch(() => null);
+
+      await AiActionFeedbackService.append(prisma, userId, {
+        title: block.title,
+        status: 'scheduled',
+        surface: 'planner',
+        sourceType: 'timeline-postpone',
+        localDate: originalDate,
+      }).catch(() => null);
+
+      try {
+        await GCalService.syncBlockToGcal(prisma, userId, updated, targetDate);
+      } catch (e) {}
+
+      return res.json({
+        postponed: true,
+        block: updated,
+        originalDate,
+        targetDate,
+        postponeCount: postponeCount + 1,
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[timeline/postpone] Error:', error);
+      return res.status(500).json({ error: 'Failed to postpone timeline block' });
+    }
   });
 
   /**

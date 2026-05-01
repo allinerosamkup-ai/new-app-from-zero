@@ -1,23 +1,26 @@
-# Mood Cycling App — Monorepo
+# Airia — Monorepo
 
 ## IDENTIDADE DO APP (CRÍTICO)
 **Não é:** planner genérico, tracker menstrual, chatbot terapêutico.
-**É:** Assistente pessoal de **ciclagem de humor**.
-- **Ciclo primário:** Ciclo de Humor (EWMA + desvio padrão + tendência de 7 dias).
-- **Ciclo secundário:** Ciclo Menstrual (modulador biológico).
-- **Público-alvo:** TDAH, ciclotimia, transtorno depressivo ou bipolar tipo II.
+**É:** assistente pessoal de ciclagem de humor, energia e agenda adaptativa.
+- **Ciclo primário:** ciclo de humor/energia (EWMA + desvio padrão + tendência de 7 dias).
+- **Ciclo secundário:** ciclo menstrual como modulador biológico, não como identidade principal.
+- **Público-alvo:** pessoas com TDAH, ciclotimia, transtorno depressivo, bipolar tipo II e variações hormonais/cíclicas.
+- **Princípio operacional:** contexto antigo explica padrão; contexto de hoje decide ação.
 
 ## Módulo Core — MoodCycleEngine
 Localizado em `apps/web/src/utils/mood-cycle-engine.ts`.
 Calcula algoritmicamente a fase atual:
-- `elevated`: Humor ≥4.2 por 3+ dias (risco hipomaníaco).
-- `flowing`: 3.6–4.2, tendência estável/alta.
-- `stable`: Eutimia — estado basal equilibrado.
-- `falling`: Tendência negativa detectada.
-- `low`: Humor ≤2.5 por 3+ dias.
-- `depleted`: Humor ≤1.8 por 2+ dias (esgotamento).
-- `recovering`: Subindo após fase baixa.
-- `mixed`: Alta variabilidade — estado instável.
+- `Voo Alto`
+- `Fluindo`
+- `Estável`
+- `Desacelerando`
+- `Recolhimento`
+- `Pausa`
+- `Retomada`
+- `Turbulência`
+
+Essas 8 fases são a nomenclatura visível oficial. Estados de check-in como “Dia Sensível”, “Em equilíbrio” ou “Cansada” podem existir, mas não substituem a fase do ciclo.
 
 ## Estrutura do Monorepo
 ```
@@ -40,10 +43,23 @@ packages/
 | IA | OpenAI GPT-4o-mini |
 
 ## IA Persona — Aura (v2.4)
-- Função: `buildAuraSystemPrompt(userName, profileSummary?, moodCycleContext?)` em `apps/backend/src/index.ts`.
-- Injetada em **todos** os calls OpenAI via `role: 'system'`.
-- `moodCycleContext`: String de 1 linha (`cycleReport.aiContext`) injetada para dar consciência de fase à IA.
-- Metodologia: Terapia de Exposição + TCC gentil + Psicologia somática + Autocompaixão.
+- Função: `buildAuraSystemPrompt(...)` em `apps/backend/src/lib/aura-prompt.ts`.
+- A identidade Aura é compartilhada; cada superfície tem política própria (`journal-live`, `journal-finalize`, `aura-command`, `checkin`, `planning`, `home`, `insight`, `summary`).
+- A linguagem deve ser natural, próxima, firme e específica. Evitar resposta de suporte, pergunta prematura e sugestão genérica.
+- Metodologia interna: Aliança Divergente, TCC prática, exposição gradual, leitura de padrão, manobra concreta e autonomia.
+
+## Contexto Diário e Agenda Adaptativa
+- Fonte central: `apps/backend/src/services/context-grounding.service.ts`.
+- `DailyContext` reúne agenda pendente/feita, hábitos pendentes/feitos, metas ativas/concluídas, subtarefas feitas, sugestões recentes, feedback de ações e memória RAG relevante.
+- Cérebro operacional: `apps/backend/src/services/decision-engine.service.ts`.
+- Agenda adaptativa: `apps/backend/src/services/adaptive-agenda-engine.service.ts`, exposta por `AgendaAdaptationService`.
+- Toda sugestão operacional precisa ter âncora em algo real de hoje: agenda pendente, hábito devido, meta ativa ou ação explicitamente aceita.
+- Memória RAG serve para explicar padrão, não para inventar tarefa.
+- Feedback de ações fica em `AiActionFeedbackService` e bloqueia repetição de ações feitas, excluídas, rejeitadas, puladas ou agendadas.
+- O Decision Brain separa `real_commitment`, `suggested_commitment`, `insight_only`, `blocked` e autorização de notificação.
+- Sugestão de compromisso pode existir com horário/bloco sugerido, mas só vira compromisso real depois de confirmação. Sugestão não confirmada não notifica.
+- Preview de adaptação da agenda fica em `AgendaAdaptationService`; ele não aplica mudança estrutural sozinho.
+- Adiamento de bloco no Planner registra `timeline.block_postponed`, conta recorrência por bloco e entra no grounding como `postponedActions`.
 
 ## Status do Design System — Aura Editorial Clean
 - Fundo base: branco/off-white, com uso de cor apenas como acento.
@@ -51,11 +67,13 @@ packages/
 - Acentos ativos: salmão rosado pastel, verde sálvia claro, azul suave, lilás leve, pêssego aberto.
 - Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups legados.
 
-## ✅ Atualizações Recentes (2026-04-03)
-- **Planner v4**: Badge de energia por tarefa (alta/média/leve) + aviso da Aura se energia baixa.
-- **AI Sync**: `moodCycleContext` adicionado a todos os calls IA (Home, Result, Journal, GTD).
-- **Backend**: Persistência de campos do ciclo menstrual (`is_flowing`, `flow_day`, etc) no schema `DailyCheckin`.
-- **Journal**: Chat SSE agora ciente da fase atual do ciclo de humor.
+## Atualizações Recentes
+- **2026-04-30:** Airia Decision Brain + AdaptiveAgendaEngine adicionados ao backend para classificar ações reais, sugestões opcionais, insights, bloqueios e permissão de notificação.
+- **2026-04-30:** Planner ganhou ação “Adiar” para mover bloco ao dia seguinte e registrar padrão de adiamento para análise.
+- **2026-04-30:** `DailyContext`, `/api/context/day`, `/api/agenda/adapt` e `/api/ai/action-feedback` publicados em produção no commit `7c44742`.
+- **2026-04-30:** Home registra feedback do card “Análise e Autonomia” no backend para impedir repetição entre sessões.
+- **2026-04-29:** fases visíveis alinhadas para as 8 fases oficiais.
+- **2026-04-29:** PWA Android destravado com scroll vertical natural e bloqueio lateral restrito ao necessário.
 
 ## Como rodar
 ```bash

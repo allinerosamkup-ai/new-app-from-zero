@@ -52,7 +52,9 @@ Validar com usuárias reais se:
 - Timeline vertical do dia com blocos coloridos por horário.
 - Tarefas simples (título, horário, duração).
 - Rotinas básicas (manhã/tarde/noite).
-- Replanejamento semiautomático orientado por “estado de hoje” (empurrar tarefas pesadas, sugerir foco leve, etc.).
+- Replanejamento semiautomático orientado por `DailyContext`: agenda real, hábitos, metas, check-ins, concluídos, rejeitados e memória de padrão.
+- Airia Decision Brain classifica cada saída como compromisso real, sugestão opcional, insight ou bloqueio.
+- IA não deve inventar tarefa sem âncora atual. Ela pode sugerir compromisso opcional ligado a meta/intenção atual, mas não pode salvar nem notificar sem confirmação.
 
 **Módulo Painel Semanal (v1 simples):**
 
@@ -87,7 +89,7 @@ Validar com usuárias reais se:
 1. Usuária instala e faz onboarding rápido (3–5 minutos).
 2. Faz primeiro check-in Estado de Hoje.
 3. App calcula um rótulo simples de estado (ex.: “hoje é dia de gentileza com você”, “você está em modo estável”, “dia mais sensível”).
-4. IA sugere estrutura de dia compatível (planner inicial).
+4. IA sugere estrutura de dia compatível a partir do contexto real do dia.
 5. Usuária ajusta timeline (arrasta blocos, adiciona tarefas).
 6. Opcionalmente, faz uma sessão de diário com IA.
 7. No final do dia, pode fazer um check-in de fechamento (opcional).
@@ -112,6 +114,7 @@ Validar com usuárias reais se:
 - Timeline vertical com horas à esquerda e blocos de tarefas/rotinas.
 - Criação rápida (título, início, duração) e Drag-and-drop.
 - IA sugere distribuição inicial do dia e replanejamento de tarefas pesadas baseando-se no Estado de Hoje.
+- Sugestões feitas, excluídas, rejeitadas ou agendadas não devem voltar como novas.
 
 ### 6.4 Módulo Painel Semanal
 
@@ -152,6 +155,9 @@ Validar com usuárias reais se:
 - RF-16 (P1) — Rotinas básicas (ex.: rotina de manhã com blocos padrão).
 - RF-17 (P0) — Estado de hoje influencia mensagens, tipo de dia e recomendações no topo da tela.
 - RF-18 (P1) — Replanejamento semiautomático de tarefas não concluídas.
+- RF-18.1 (P0) — Sugestões operacionais precisam estar ancoradas em tarefa pendente, hábito devido, meta ativa ou aceite explícito.
+- RF-18.2 (P0) — Ações concluídas/rejeitadas/excluídas/agendadas entram como bloqueio de repetição.
+- RF-18.3 (P1) — Planner mostra preview de adaptação antes de aplicar mudanças.
 
 **7.4 Painel Semanal**
 
@@ -180,6 +186,8 @@ Validar com usuárias reais se:
 
 - Armazenar últimos N dias de check-ins e últimas N sessões de diário.
 - Entender padrões simples (ex.: “dia X costuma ser pesado”).
+- Separar memória de padrão de memória operacional: histórico explica, mas só contexto de hoje vira ação.
+- Guardar feedback leve sobre sugestões da IA para reduzir repetição.
 
 ## 9. Estratégia de clonagem de código por módulo
 

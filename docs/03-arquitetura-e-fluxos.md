@@ -2,39 +2,44 @@
 
 ## 1. Visão Geral da Arquitetura
 
-O MVP será construído com uma arquitetura cliente-servidor distribuída, garantindo separação clara entre a interface de usuário (Mobile), o servidor core (Backend) e a inteligência artificial (AI Layer).
+O produto atual roda como PWA web em produção, com backend Express/Prisma e Supabase. A arquitetura separa frontend, backend, banco e camada de IA, mas a regra principal agora é que toda sugestão operacional passe por um contexto diário único.
 
 **Principais Princípios:**
 
 - **Modularidade:** Facilita manutenção e expansão por áreas de domínio (Usuário, Checkin, Planner, AI).
 - **Escalabilidade Inicial:** Preparado para crescer sem overengineering no MVP (ex: banco relacional simples antes de migrar para microserviços).
 - **Foco Offline-first (futuro):** A UI deve manter o estado mesmo sem internet profunda, com sincronização assíncrona com o backend (Cache local).
+- **Grounding operacional:** memória antiga explica padrão; contexto de hoje decide ação.
+- **Sem sugestão solta:** ações da IA precisam nascer de agenda pendente, hábito devido, meta ativa ou aceite explícito.
 
 ## 2. Stack Tecnológica
 
 Esta é a recomendação oficial baseada nas discussões e na priorização por velocidade e reuso de ecossistema Open Source.
 
-### 2.1 Mobile (Frontend)
+### 2.1 Frontend
 
-- **Framework:** React Native com Expo (Permite rápido acesso a bibliotecas e deploy).
+- **PWA principal:** React + Vite + TypeScript em `apps/web`.
+- **Mobile APK:** Expo/React Native em `apps/mobile`, pausado enquanto o PWA estabiliza.
 - **Linguagem:** TypeScript.
-- **Gerenciamento de Estado:** Zustand (para estado global leve) ou Redux Toolkit (se decidir clonar inteiramente projeto como `Structure-planner`).
-- **Navegação:** React Navigation v6.
-- **Estilização:** Tailwind CSS (via NativeWind) ou StyleSheet nativo focado em Glassmorphism e tons calmos.
+- **Gerenciamento de Estado:** Zustand em `apps/web/src/features/aura`.
+- **Estilização:** CSS Aura Editorial Clean, tokens em `apps/web/src/styles`.
 
 ### 2.2 Backend (API Core)
 
-- **Framework:** Node.js com Express.js ou Fastify (alta performance).
+- **Framework:** Node.js com Express.js.
 - **Linguagem:** TypeScript.
 - **Banco de Dados:** PostgreSQL (Relacional forte para amarrar Usuário > Checkins > Tarefas).
 - **ORM:** Prisma ORM (Tipagem segura e migrações ágeis).
-- **Autenticação:** JWT Genérico + Possibilidade de OAuth via Supabase ou Firebase Auth.
+- **Autenticação:** Supabase JWT.
 
 ### 2.3 Camada de Inteligência Artificial (AI Layer)
 
 - **Provedor LLM:** OpenAI GPT-4o / gpt-4o-mini (Melhor balanço de custo e raciocínio).
 - **Técnica de Prompting:** Zero-shot e Few-shot encapsulados no backend (Frontend não consome API da OpenAI direto por segurança).
-- **Futura camada RAG:** Preparar o modelo para ter índice de histórico vetorial caso o banco relacional seja muito lento na busca literal.
+- **RAG:** `MemoryService` recupera memórias relevantes. Essas memórias explicam padrão, mas não autorizam tarefa sem âncora atual.
+- **DailyContext:** `ContextGroundingService` centraliza contexto operacional antes de sugestões.
+- **Decision Brain:** `DecisionEngine` decide o que é compromisso real, sugestão opcional, insight, bloqueio e notificação permitida.
+- **Agenda Adaptativa:** `AdaptiveAgendaEngine` transforma decisões em preview (`keep`, `move`, `shrink`, `pause`, `suggest`, `convert`, `notify`, `block`) sem aplicar nada sozinho.
 
 ## 3. Modelo de Banco de Dados (Entidades Principais)
 
@@ -127,7 +132,13 @@ model TimelineBlock {
 - `GET /api/timeline/:date` (Puxa os blocos de um dia específico)
 - `POST /api/timeline` (Cria um bloco manualmente)
 - `PUT /api/timeline/:id` (Move horário ou completa)
-- `POST /api/ai/planner-suggestions` (A IA revisa o dia aberto e os checkins e devolve recomendação de replanejamento).
+- `POST /api/agenda/adapt` (Preview de adaptação baseado no contexto diário).
+
+**Contexto/IA:**
+
+- `GET /api/context/day?date=YYYY-MM-DD` (Fonte única do dia para IA e depuração).
+- `POST /api/ai/suggest` (Sugestões estruturadas com grounding).
+- `POST /api/ai/action-feedback` (Registra aceite, conclusão, rejeição, exclusão ou agendamento de sugestão).
 
 ## 5. Fluxos de Dados Principais
 
@@ -151,16 +162,20 @@ model TimelineBlock {
 
 ### 5.3 Fluxo de Replanejamento do Planner
 
-1. **APP:** Tem a grade de hoje cheia de tarefas. A usuária está no estado de "Dia Sensível".
-2. **APP:** Usuária clica em "Otimizar Dia com IA".
-3. **BACKEND:** Compila as Tarefas do dia (`TimelineBlock`) e o Estado de Hoje e envia para a IA.
-4. **AI LAYER:** Sugere um Array de modificações: `[ { "id": 1, "action": "MOVE_TO_TOMORROW" } ]`.
-5. **APP:** Exibe as sugestões. Se aceito, dispara os `PUT /api/timeline/:id`.
+1. **APP:** Usuária faz check-in, abre Home ou Planner.
+2. **BACKEND:** Monta `DailyContext` com agenda, hábitos, metas, concluídos, rejeitados, sugestões recentes e memórias relevantes.
+3. **BACKEND:** `DecisionEngine` classifica candidatos: `real_commitment`, `suggested_commitment`, `insight_only` ou `blocked`.
+4. **BACKEND:** `AdaptiveAgendaEngine` gera preview: manter, mover, reduzir, pausar, sugerir, converter, notificar ou bloquear.
+5. **APP:** Mostra a proposta com motivo. Nada deve ser movido, salvo ou notificado silenciosamente.
+6. **APP/BACKEND:** Ao aceitar, a ação vira mudança real no Planner e feedback para não repetir.
 
-## 6. Estratégia de Deploy Clássica e Repositório
+Regra crítica: agenda vazia pode receber sugestão opcional de compromisso; isso não é compromisso real até a usuária confirmar. Sugestão não confirmada não gera notificação.
+
+## 6. Estratégia de Deploy
 
 Para facilitar o handoff entre devs ou IAs autonomas:
 
-- **Repositório Monorepo (pnpm workspaces)** ou diretórios segregados (padrão atual do projeto com `/mobile` e `/backend`).
-- **Deploy Mobile:** Compilações via EAS Build (Expo Application Services).
-- **Deploy Backend e DB:** Vercel (se Serverless Fastify) ou Render/Railway (banco PostgreSQL e container Docker Node).
+- **Repositório:** monorepo npm workspaces.
+- **Deploy PWA/API:** VPS em `/opt/airia/app`, Docker Compose em `deploy/airia/compose.yml`, script `deploy/airia/deploy.sh`.
+- **Healthcheck:** `https://airia.pro/api/health`.
+- **Mobile:** Expo/EAS fica fora do fluxo principal até estabilização do PWA.
