@@ -27,9 +27,18 @@ const validSessionId = '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11';
     userId: validUserId,
     sessionId: validSessionId,
     message: 'Hoje eu acordei meio travada para começar o dia.',
+    localDate: '2026-05-01',
+    currentHour: 10,
+    currentMinute: 42,
+    phase: 'Turbulência',
+    warningFlags: ['rapid_drop'],
+    forecast7dSummary: 'Amanhã pede carga menor.',
+    taskMomentum7d: 2,
   });
 
   assert.equal(result.success, true);
+  assert.equal((result as any).data?.localDate, '2026-05-01');
+  assert.equal((result as any).data?.currentHour, 10);
 }
 
 {

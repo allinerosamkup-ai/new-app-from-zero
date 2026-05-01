@@ -62,6 +62,11 @@ async function run() {
   assert.match(journalLivePrompt, /HIERARQUIA INTERNA OBRIGATÓRIA/i);
   assert.match(journalLivePrompt, /EIXOS DO DIÁRIO/i);
   assert.match(journalLivePrompt, /FORMATO ADAPTATIVO/i);
+  assert.match(journalLivePrompt, /COMPREENSÃO ANTES DA RESPOSTA/i);
+  assert.match(journalLivePrompt, /CRONOLOGIA É SAGRADA/i);
+  assert.match(journalLivePrompt, /PROIBIDO PARÁFRASE VAZIA/i);
+  assert.match(journalLivePrompt, /PROIBIDO INFERÊNCIA POR PALAVRA-CHAVE/i);
+  assert.match(journalLivePrompt, /PROVA DE CONTEXTO/i);
   assert.match(journalLivePrompt, /EVENTO REAL vs INTERPRETAÇÃO/i);
   assert.match(journalLivePrompt, /PADRÃO RECORRENTE/i);
   assert.match(journalLivePrompt, /DECISÃO EM JOGO/i);
@@ -78,12 +83,14 @@ async function run() {
   assert.match(journalLivePrompt, /uma proposta por vez/i);
   assert.match(journalLivePrompt, /isso faz sentido para você/i);
   assert.match(journalLivePrompt, /máximo 1 pergunta/i);
+  assert.match(journalLivePrompt, /TAMANHO ADAPTATIVO/i);
   assert.match(journalLivePrompt, /colete em micro-passos/i);
   assert.match(journalLivePrompt, /PROIBIDO empilhar perguntas/i);
   assert.match(journalLivePrompt, /SOMÁTICA COMO SUPORTE/i);
   assert.match(journalLivePrompt, /função de curto prazo e o custo concreto/i);
   assert.doesNotMatch(journalLivePrompt, /PROIBIDO sugerir metas/i);
   assert.doesNotMatch(journalLivePrompt, /gere 0 a 3 tarefas/i);
+  assert.doesNotMatch(journalLivePrompt, /escolha só um formato/i);
 
   const journalFinalizePrompt = buildAuraSystemPrompt({
     userName: 'Ana',

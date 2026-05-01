@@ -39,6 +39,7 @@ export type JournalPromptContext = {
   userProfileSummary?: string | null;
   longTermMemory?: string | null;
   recentSessionHistory?: string | null;
+  journalContext?: string | null;
   routineSummary?: string;
   promptSummary: string;
   topThemes: string[];
@@ -145,6 +146,7 @@ export class AIService {
             moodCycleContext: input.context.moodCycleContext,
             longTermMemory: input.context.longTermMemory,
             contextualMemory: input.context.ragContext,
+            journalContext: input.context.journalContext,
             recentSessionHistory: input.context.recentSessionHistory,
             recentSuggestionMemory: input.context.recentSuggestionMemory,
             activeGoalsContext: input.context.activeGoalsContext,
@@ -158,6 +160,9 @@ export class AIService {
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',
+              'ENTRADA ATUAL MANDA: antes de usar planner, meta ou memória, entenda a mensagem atual. Preserve datas, sequência e correções da pessoa. Se ela disser "ontem", não transforme em hoje. Se ela disser que não foi adiado, não use a hipótese de adiamento.',
+              'NÃO ECOE: repetir a fala da pessoa com sinônimos não é análise. A resposta precisa cruzar contexto, memória ou padrão; se não houver memória útil, diga algo verdadeiro sobre o fato atual e faça uma pergunta específica.',
+              'PROVA DE CONTEXTO: se o CONTEXTO REFLEXIVO DO DIÁRIO trouxer memórias, check-ins, metas ou sessões recentes relevantes, use pelo menos um elemento concreto na leitura. Se nada conectar, não force continuidade.',
               'FREQUÊNCIA DE PERGUNTAS: máximo 1 pergunta a cada 3 respostas. Na maioria das trocas, valide, nomeie ou reflita o que foi dito. Reserve perguntas para quando expandir for genuinamente necessário.',
               'PRESENÇA ATIVA: Aplique o MÉTODO DE LEITURA internamente antes de cada resposta — separe fato de interpretação, identifique o movimento em curso, a utilidade possível do problema, o custo oculto e o menor movimento que cabe. Não verbalize o método, deixe que ele molde o que você diz.',
               'TRIPÉ CENTRAL: antes de responder, cruze padrões, decisões e ciclos de humor. A resposta deve mostrar o que está se repetindo, qual decisão está em jogo ou qual manobra o ciclo atual permite — sem transformar isso em relatório.',

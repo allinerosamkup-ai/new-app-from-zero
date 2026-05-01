@@ -108,6 +108,7 @@ type AppDependencies = {
   prisma?: PrismaClient;
   aiService?: Pick<typeof AIService, 'summarizeJournalSession' | 'streamJournalReply' | 'generateOnboardingProfile'>;
   journalService?: Pick<typeof JournalService, 'startOrResumeSession' | 'getSessionMessages' | 'buildRoutineContext' | 'nextOrderIndex'>;
+  memoryService?: Pick<MemoryService, 'store' | 'retrieve' | 'formatForPrompt' | 'deleteAll'>;
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
@@ -627,6 +628,136 @@ function uniqueByKey(values: string[]): string[] {
   return out;
 }
 
+type JournalMemoryServiceLike = Pick<MemoryService, 'retrieve' | 'formatForPrompt'>;
+
+async function retrieveJournalMemoryContext(args: {
+  memoryService: JournalMemoryServiceLike;
+  userId: string;
+  message: string;
+  routineContext: {
+    promptSummary?: string;
+    recentSessionHistory?: string;
+    topThemes?: string[];
+    activeGoals?: string[];
+  };
+  runtimeContext: {
+    moodCycleContext?: string | null;
+    longTermMemory?: string | null;
+    activeGoalsContext?: string | null;
+  };
+}): Promise<{ ragContext: string; retrievedCount: number; usedFallback: boolean }> {
+  const querySeeds = uniqueByKey([
+    args.message,
+    `padrões recorrentes, pessoas, decisões e emoções ligados a: ${args.message}`,
+    args.routineContext.topThemes?.length
+      ? `diário temas recorrentes ${args.routineContext.topThemes.join(' ')} ${args.message}`
+      : '',
+    args.runtimeContext.activeGoalsContext
+      ? `metas e decisões ativas relacionadas ao diário ${args.runtimeContext.activeGoalsContext} ${args.message}`
+      : '',
+    args.routineContext.recentSessionHistory
+      ? `continuidade do diário e padrões recentes ${args.routineContext.recentSessionHistory.slice(0, 900)}`
+      : '',
+  ].filter(Boolean));
+
+  const batches = await Promise.all(
+    querySeeds.slice(0, 5).map((query) => args.memoryService.retrieve(args.userId, query, 4).catch(() => [])),
+  );
+
+  const seen = new Set<string>();
+  const memories = batches
+    .flat()
+    .filter((memory: any) => {
+      const key = normalizeSuggestionKey(`${memory.contentType ?? ''}:${memory.content ?? ''}`);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a: any, b: any) => Number(b.similarity ?? 0) - Number(a.similarity ?? 0))
+    .slice(0, 8);
+
+  if (memories.length > 0) {
+    return {
+      ragContext: args.memoryService.formatForPrompt(memories as any),
+      retrievedCount: memories.length,
+      usedFallback: false,
+    };
+  }
+
+  const fallbackParts = [
+    args.runtimeContext.longTermMemory ? `Memória longa do perfil:\n${args.runtimeContext.longTermMemory}` : '',
+    args.routineContext.recentSessionHistory ? `Histórico recente de sessões:\n${args.routineContext.recentSessionHistory}` : '',
+    args.routineContext.promptSummary ? `Resumo de rotina/check-ins:\n${args.routineContext.promptSummary}` : '',
+    args.runtimeContext.activeGoalsContext ? `Metas e decisões ativas:\n${args.runtimeContext.activeGoalsContext}` : '',
+  ].filter(Boolean);
+
+  if (fallbackParts.length === 0) {
+    console.warn('[journal/memory] RAG vazio e sem fallback reflexivo disponível.');
+    return { ragContext: '', retrievedCount: 0, usedFallback: true };
+  }
+
+  console.warn('[journal/memory] RAG vetorial vazio; usando fallback reflexivo de sessões/perfil.');
+  return {
+    ragContext: `\nMEMÓRIA REFLEXIVA DISPONÍVEL (fallback semântico):\n${fallbackParts.join('\n\n')}`,
+    retrievedCount: 0,
+    usedFallback: true,
+  };
+}
+
+function buildJournalReflectiveContext(args: {
+  currentMessage: string;
+  ragContext: string;
+  memoryUsedFallback: boolean;
+  routineContext: {
+    promptSummary?: string;
+    recentSessionHistory?: string;
+    topThemes?: string[];
+    topPlannerCategories?: string[];
+    activeGoals?: string[];
+  };
+  runtimeContext: {
+    moodCycleContext?: string | null;
+    longTermMemory?: string | null;
+    activeGoalsContext?: string | null;
+    latestCheckinSignals?: {
+      note?: string;
+      emotions?: string[];
+      factors?: string[];
+      stateLabel?: string;
+    } | null;
+  };
+  plannerContext?: string | null;
+  groundingText?: string | null;
+}): string {
+  const currentMessage = sanitizePromptContent(args.currentMessage);
+  const latestCheckin = args.runtimeContext.latestCheckinSignals;
+  const checkinParts = latestCheckin
+    ? [
+        latestCheckin.stateLabel ? `estado: ${latestCheckin.stateLabel}` : null,
+        latestCheckin.note ? `nota: ${sanitizePromptContent(latestCheckin.note)}` : null,
+        latestCheckin.emotions?.length ? `emoções: ${latestCheckin.emotions.join(', ')}` : null,
+        latestCheckin.factors?.length ? `fatores: ${latestCheckin.factors.join(', ')}` : null,
+      ].filter(Boolean).join(' | ')
+    : '';
+
+  return [
+    'Entrada atual é prioridade absoluta. Entenda cronologia, fato real e correções antes de usar memória.',
+    `Mensagem atual: ${currentMessage}`,
+    'Tarefa interna: responder com análise, não paráfrase; cruzar memória/contexto quando houver conexão real.',
+    args.ragContext
+      ? `Memórias recuperadas/fallback:\n${args.ragContext}`
+      : 'Memórias recuperadas/fallback: nenhuma útil; seja honesta e trabalhe só com o fato atual.',
+    args.memoryUsedFallback ? 'Observação interna: RAG vetorial não trouxe fragmentos; use histórico/sumários como fallback, sem fingir lembrança específica.' : '',
+    args.routineContext.recentSessionHistory ? `Sessões recentes:\n${args.routineContext.recentSessionHistory}` : '',
+    args.runtimeContext.longTermMemory ? `Memória longa estruturada:\n${args.runtimeContext.longTermMemory}` : '',
+    args.routineContext.promptSummary ? `Resumo de rotina/check-in:\n${args.routineContext.promptSummary}` : '',
+    checkinParts ? `Check-in mais recente: ${checkinParts}` : '',
+    args.runtimeContext.activeGoalsContext ? `Metas ativas:\n${args.runtimeContext.activeGoalsContext}` : '',
+    args.plannerContext ? `Planner relevante (usar só se conectar ao relato):\n${args.plannerContext}` : '',
+    args.groundingText ? `Chão operacional (não transformar em assunto se não conectar):\n${args.groundingText}` : '',
+  ].filter(Boolean).join('\n\n');
+}
+
 const DAY_TASK_GENERIC_PATTERNS = [
   /\brespir(ar|e|acao|ação)\b/,
   /\bbeb(er|a)\s+(agua|água)\b/,
@@ -1125,7 +1256,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const journalService = dependencies.journalService ?? JournalService;
   const auraCommandService = dependencies.auraCommandService ?? AuraCommandService;
   const journalSuggestedTasksGenerator = dependencies.generateJournalSuggestedTasks ?? generateJournalSuggestedTasks;
-  const memoryService = new MemoryService(prisma);
+  const memoryService = dependencies.memoryService ?? new MemoryService(prisma);
   const contextGroundingService = new ContextGroundingService(prisma);
 
   const matchesAllowedHost = (origin: string, allowed: string) => {
@@ -1929,13 +2060,19 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
 
       // Shared Brain: busca memórias relevantes para enriquecer a presença no diário
-      const journalMemories = await memoryService.retrieve(data.userId, data.message, 3).catch(() => []);
-      const journalRagContext = memoryService.formatForPrompt(journalMemories);
+      const journalMemory = await retrieveJournalMemoryContext({
+        memoryService,
+        userId: data.userId,
+        message: data.message,
+        routineContext: routineCtx,
+        runtimeContext,
+      });
+      const journalRagContext = journalMemory.ragContext;
       const journalGroundingContext = await contextGroundingService.buildForSuggest({
         userId: data.userId,
         type: 'journal',
         context: {
-          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+          localDate: data.localDate,
         },
         recentSuggestionItems,
         ragContext: journalRagContext,
@@ -1954,13 +2091,22 @@ export function createApp(dependencies: AppDependencies = {}) {
           recentSessionHistory: routineCtx.recentSessionHistory,
           recentSuggestionMemory,
           ragContext: journalRagContext,
-          plannerContext: [journalPlannerContext, journalGroundingText].filter(Boolean).join('\n'),
-          currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
-          currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
-          phase: typeof (req.body as any)?.phase === 'string' ? (req.body as any).phase : null,
-          warningFlags: Array.isArray((req.body as any)?.warningFlags) ? (req.body as any).warningFlags : [],
-          forecast7dSummary: typeof (req.body as any)?.forecast7dSummary === 'string' ? (req.body as any).forecast7dSummary : null,
-          taskMomentum7d: typeof (req.body as any)?.taskMomentum7d === 'number' ? (req.body as any).taskMomentum7d : null,
+          journalContext: buildJournalReflectiveContext({
+            currentMessage: data.message,
+            ragContext: journalRagContext,
+            memoryUsedFallback: journalMemory.usedFallback,
+            routineContext: routineCtx,
+            runtimeContext,
+            plannerContext: journalPlannerContext,
+            groundingText: journalGroundingText,
+          }),
+          plannerContext: '',
+          currentHour: data.currentHour,
+          currentMinute: data.currentMinute,
+          phase: data.phase ?? null,
+          warningFlags: data.warningFlags ?? [],
+          forecast7dSummary: data.forecast7dSummary ?? null,
+          taskMomentum7d: data.taskMomentum7d ?? null,
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',

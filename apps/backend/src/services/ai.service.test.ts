@@ -42,6 +42,11 @@ async function run() {
         topPlannerCategories: ['trabalho'],
         userName: 'Ana',
         userProfileSummary: 'Prefere blocos mais leves quando acorda cansada.',
+        journalContext: [
+          'Mensagem atual: Ontem tive audiência e ainda estou irritada.',
+          'Memórias recuperadas/fallback: audiência anterior ativou medo de parecer despreparada.',
+          'Planner relevante (usar só se conectar ao relato): Preparar documento da audiência.',
+        ].join('\n'),
         checkinToday: {
           moodScore: 3,
           energyScore: 2,
@@ -77,7 +82,13 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /padrões, decisões e ciclos de humor/i);
   assert.match(capturedMessages[0]?.content || '', /Meta: Preparar apresentação/i);
   assert.match(capturedMessages[0]?.content || '', /Energia cai quando acumula reuniões/i);
-  assert.match(capturedMessages[0]?.content || '', /Preparar apresentação — 14:00/i);
+  assert.match(capturedMessages[0]?.content || '', /CONTEXTO REFLEXIVO DO DIÁRIO/i);
+  assert.match(capturedMessages[0]?.content || '', /Ontem tive audiência/i);
+  assert.match(capturedMessages[0]?.content || '', /Preparar documento da audiência/i);
+  assert.match(capturedMessages[0]?.content || '', /CRONOLOGIA É SAGRADA/i);
+  assert.match(capturedMessages[0]?.content || '', /PROIBIDO PARÁFRASE VAZIA/i);
+  assert.match(capturedMessages[0]?.content || '', /PROVA DE CONTEXTO/i);
+  assert.doesNotMatch(capturedMessages[0]?.content || '', /escolha só um formato/i);
   assert.match(capturedMessages[0]?.content || '', /máximo 1 pergunta/i);
   assert.match(capturedMessages[0]?.content || '', /colete em micro-passos/i);
   assert.match(capturedMessages[0]?.content || '', /BASE DOCUMENTADA, NÃO IMPROVISO/i);

@@ -196,7 +196,7 @@ function surfaceFromType(type: string): DecisionSurface {
   if (type === 'stability-analysis' || type === 'home-messages') return 'home';
   if (type === 'checkin-response' || type === 'day-tasks') return 'checkin';
   if (type === 'agenda-blocks' || type === 'agenda-adapt') return 'planner';
-  if (type === 'journal-tasks') return 'journal';
+  if (type === 'journal' || type === 'journal-tasks') return 'journal';
   if (type === 'weekly-insight' || type === 'monthly-report') return 'insights';
   if (type === 'aura-command') return 'aura-chat';
   return 'agenda';

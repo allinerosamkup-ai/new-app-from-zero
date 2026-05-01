@@ -14,6 +14,13 @@ export const JournalMessageStreamSchema = z.object({
   sessionId: z.string().uuid(),
   message: z.string().trim().min(1).max(LONG_TEXT_LIMIT),
   moodCycleContext: z.string().optional().nullable(),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  currentHour: z.number().int().min(0).max(23).optional(),
+  currentMinute: z.number().int().min(0).max(59).optional(),
+  phase: z.string().optional().nullable(),
+  warningFlags: z.array(z.string()).optional(),
+  forecast7dSummary: z.string().optional().nullable(),
+  taskMomentum7d: z.number().optional().nullable(),
 });
 
 // Para integrações externas (sem SSE): registra uma mensagem no diário.

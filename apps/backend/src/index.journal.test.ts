@@ -9,6 +9,9 @@ async function readResponseText(response: Response): Promise<string> {
 
 async function run() {
   const savedMessages: any[] = [];
+  const retrievedQueries: string[] = [];
+  let capturedJournalContext = '';
+  let capturedPlannerContext = '';
   const sessionId = '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11';
 
   const prisma = {
@@ -68,7 +71,9 @@ async function run() {
         themes: ['trabalho'],
         suggestions: ['Respire por alguns minutos.'],
       }),
-      streamJournalReply: async ({ onDelta }: any) => {
+      streamJournalReply: async ({ context, onDelta }: any) => {
+        capturedJournalContext = context.journalContext ?? '';
+        capturedPlannerContext = context.plannerContext ?? '';
         onDelta?.('Olá, ');
         onDelta?.('estou com você.');
         return 'Olá, estou com você.';
@@ -89,6 +94,8 @@ async function run() {
         promptSummary: 'Rotina percebida: Costuma render melhor no fim da manhã.',
         topThemes: ['trabalho'],
         topPlannerCategories: ['trabalho'],
+        activeGoals: ['Resolver audiência'],
+        recentSessionHistory: '[ontem] Audiência trouxe medo de não conseguir sustentar o ponto.',
         checkinToday: {
           moodScore: 3,
           energyScore: 2,
@@ -99,6 +106,15 @@ async function run() {
       nextOrderIndex: (messages: Array<{ orderIndex: number }>) =>
         messages.length === 0 ? 0 : Math.max(...messages.map((message) => message.orderIndex)) + 1,
     } as any,
+    memoryService: {
+      store: async () => {},
+      retrieve: async (_userId: string, query: string) => {
+        retrievedQueries.push(query);
+        return [];
+      },
+      formatForPrompt: (memories: any[]) => memories.map((memory) => memory.content).join('\n'),
+      deleteAll: async () => {},
+    },
     generateJournalSuggestedTasks: async () => ([
       { title: 'Separar uma tarefa pequena', category: 'rotina', time: '09:00', dayOffset: 0 },
     ]),
@@ -139,6 +155,10 @@ async function run() {
         userId: '550e8400-e29b-41d4-a716-446655440000',
         sessionId,
         message: 'Por hoje é isso, já terminei.',
+        localDate: '2026-03-13',
+        currentHour: 21,
+        currentMinute: 10,
+        phase: 'Pausa',
       }),
     });
 
@@ -154,6 +174,13 @@ async function run() {
     assert.equal(savedMessages[0].role, 'user');
     assert.equal(savedMessages[1].role, 'assistant');
     assert.equal(savedMessages[1].content, 'Olá, estou com você.');
+    assert.ok(retrievedQueries.length >= 2);
+    assert.match(retrievedQueries.join('\n'), /padrões recorrentes/i);
+    assert.match(capturedJournalContext, /Mensagem atual: Por hoje é isso/i);
+    assert.match(capturedJournalContext, /RAG vetorial não trouxe fragmentos/i);
+    assert.match(capturedJournalContext, /Audiência trouxe medo/i);
+    assert.match(capturedJournalContext, /Chão operacional/i);
+    assert.equal(capturedPlannerContext, '');
 
     const longStreamResponse = await fetch(`${baseUrl}/api/journal/message/stream`, {
       method: 'POST',

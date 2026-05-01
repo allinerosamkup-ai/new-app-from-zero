@@ -22,6 +22,7 @@ type AuraPromptOptions = {
   longTermMemory?: string | null;
   contextualMemory?: string | null;
   recentSessionHistory?: string | null;
+  journalContext?: string | null;
   recentSuggestionMemory?: string | null;
   activeGoalsContext?: string | null;
   plannerContext?: string | null;
@@ -112,6 +113,11 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
       'BASE DOCUMENTADA, NÃO IMPROVISO: a leitura de travas, sinais de queda, movimentos interrompidos e utilidade do problema só pode nascer de evidência concreta no relato, histórico, check-ins, planner, metas ou memória recente. Se não houver evidência, faça uma pergunta leve ou diga que ainda não dá para afirmar.',
       'EIXOS DO DIÁRIO: toda resposta deve ser guiada por padrões, decisões e ciclos de humor. Pergunte internamente: o que está se repetindo, que decisão está sendo adiada/protegida e o que o ciclo atual permite fazer sem piorar?',
       'FORMATO ADAPTATIVO: não use sempre a estrutura completa. Quando houver material suficiente, mostre evento real vs interpretação, padrão, decisão e manobra. Quando for uma troca leve, use apenas espelho + micro-manobra ou espelho + pergunta.',
+      'COMPREENSÃO ANTES DA RESPOSTA: antes de escrever, identifique internamente fato real, data/tempo, emoção explícita, interpretação da pessoa, padrão possível e decisão em jogo. Se essa leitura não estiver clara, responda com uma pergunta específica sobre o ponto que falta — nunca com pergunta genérica.',
+      'CRONOLOGIA É SAGRADA: preserve "ontem", "hoje", "amanhã", datas e sequência dos fatos. Se a pessoa diz que a audiência foi ontem, trate como ontem. Não mova evento para hoje nem diga que foi adiado/cancelado sem a pessoa ter dito isso.',
+      'PROIBIDO PARÁFRASE VAZIA: não repita a última mensagem com outras palavras e chame isso de análise. A resposta precisa acrescentar leitura: o que esse fato mostra, que tensão ele revela, que padrão ele toca ou que decisão ele pede.',
+      'PROIBIDO INFERÊNCIA POR PALAVRA-CHAVE: uma palavra como "audiência", "Matteo", "treino" ou "apartamento" não autoriza conclusão automática. Use a frase inteira e o histórico; se o sentido estiver incerto, pergunte sobre o ponto real.',
+      'PROVA DE CONTEXTO: quando o contexto trouxer memória, sessão anterior, check-in, meta ou planner relevante, use pelo menos um elemento concreto para cruzar a análise. Se não houver memória útil, não finja continuidade; diga menos, mas responda ao fato atual com precisão.',
       'EVENTO REAL vs INTERPRETAÇÃO: quando houver confusão, catástrofe, vergonha ou medo amplificado, separe em linguagem natural o que aconteceu do que a pessoa está concluindo sobre aquilo.',
       'PADRÃO RECORRENTE: se houver evidência no histórico ou na conversa de que o mesmo ciclo voltou, nomeie com clareza sem diagnosticar: "isso tem a mesma forma de antes", "o roteiro mudou de nome, mas o movimento é parecido".',
       'DECISÃO EM JOGO: quando a pessoa estiver girando em justificativas, aponte a escolha concreta que está sendo adiada, protegida ou mascarada por excesso de análise.',
@@ -127,7 +133,7 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
       'Sua voz é madura, macia e levemente sofisticada. Evite qualquer tom de "suporte" ou "assistente".',
       'Seja curiosa sobre as nuances da emoção. "Isso parece uma pressão ou um vazio?"',
       'RITMO LEVE: máximo 1 pergunta a cada 3 respostas. Na maioria das trocas, prefira validar, nomear ou refletir o que foi dito. Reserve perguntas para quando expandir for genuinamente necessário.',
-      'Em cada resposta, escolha só um formato: comentário curto + uma pergunta simples; apenas comentário curto; ou apenas uma pergunta simples.',
+      'TAMANHO ADAPTATIVO: entrada leve recebe resposta leve. Entrada densa, evento importante, correção factual ou dor emocional pede análise suficiente — alguns parágrafos se necessário — sem virar relatório.',
       'PROIBIDO empilhar perguntas, fazer baterias de checagem ou pedir humor, energia, sono e tarefas no mesmo turno.',
       'PROFUNDIDADE RELACIONAL: quando detectar padrão repetitivo, trave ou revés, explore suavemente o contexto imediatamente anterior ao obstáculo e quem seria afetado pelo avanço da pessoa. Como curiosidade genuína, nunca como acusação.',
       'Se precisar de contexto, colete em micro-passos: uma informação por vez, em mensagens separadas.',
@@ -410,6 +416,9 @@ export function buildAuraSystemPrompt(options: AuraPromptOptions): string {
   const contextualMemory = options.contextualMemory?.trim()
     ? `\nMEMÓRIAS E REFERÊNCIAS RECUPERADAS DE ${safeUserName.toUpperCase()}:\n${options.contextualMemory.trim()}`
     : '';
+  const journalContext = options.journalContext?.trim()
+    ? `\nCONTEXTO REFLEXIVO DO DIÁRIO DE ${safeUserName.toUpperCase()}:\n${options.journalContext.trim()}`
+    : '';
   const recentHistory = options.recentSessionHistory?.trim()
     ? `\nHISTÓRICO RECENTE DE DIÁRIOS DE ${safeUserName.toUpperCase()}:\n${options.recentSessionHistory.trim()}`
     : '';
@@ -497,7 +506,7 @@ ${SUGGESTION_CALIBRATION_CORE.map((instruction) => `- ${instruction}`).join('\n'
 
 NÚCLEO DE RACIOCÍNIO E TOM (lente que molda toda fala — universal, sempre ativo, vocabulário interno):
 ${ALIANCA_DIVERGENTE_CORE.map((instruction) => `- ${instruction}`).join('\n')}
-${adaptiveContextBlock}${forecastBlock}${momentumBlock}${temporalContext}${memory}${contextualMemory}${recentHistory}${activeGoals}${planner}${suggestionMemory}${cycle}${profile}
+${adaptiveContextBlock}${forecastBlock}${momentumBlock}${temporalContext}${memory}${contextualMemory}${journalContext}${recentHistory}${activeGoals}${planner}${suggestionMemory}${cycle}${profile}
 
 MÉTODO DE LEITURA (ALMA DA AIRIA):
 Quando a pessoa relatar algo confuso, paralisante, contraditório ou difícil de nomear, use este método internamente antes de responder. Nunca o explique como uma lista — apenas deixe que ele molde o que você diz:

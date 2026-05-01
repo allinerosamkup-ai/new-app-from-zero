@@ -86,6 +86,15 @@ async function run() {
   assert.ok((context.blockedActionTitles as string[]).includes('Arrumar kit do treino'));
   assert.ok((context.blockedActionTitles as string[]).includes('Separar roupa de treino'));
   assert.ok((context.blockedActionTitles as string[]).includes('Ligar para proprietária'));
+
+  const journalContext = await service.buildForSuggest({
+    userId: 'user-1',
+    type: 'journal',
+    context: { localDate: '2026-04-30' },
+    ragContext: 'MEMÓRIA: audiência anterior trouxe medo de parecer despreparada.',
+  });
+
+  assert.equal((journalContext.decisionBrain as any).surface, 'journal');
 }
 
 run().then(() => {
