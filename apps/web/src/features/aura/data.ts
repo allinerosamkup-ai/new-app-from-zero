@@ -60,7 +60,7 @@ export const moodContent: Record<
   sensivel: {
     title: "Dia de sensibilidade ampliada",
     description:
-      "Você está mais permeável hoje. Isso faz parte do seu ciclo — proteja sua energia com limites gentis.",
+      "Você está mais permeável hoje. Isso faz parte do seu ritmo — proteja sua energia com limites gentis.",
     tips: [
       "Evite reuniões ou conversas de alto impacto emocional hoje.",
       "Escreva no diário — exteriorizar ajuda a processar com mais leveza.",
@@ -70,9 +70,9 @@ export const moodContent: Record<
   sobrecarregada: {
     title: "Ponto de atenção emocional",
     description:
-      "Reconhecemos que hoje está sendo mais pesado. Sua ciclagem indica um ponto de atenção — cuide-se primeiro.",
+      "Reconhecemos que hoje está sendo mais pesado. Seu ritmo indica um ponto de atenção — cuide-se primeiro.",
     tips: [
-      "Cancele o que puder. Um dia de baixa produção não define seu ciclo.",
+      "Cancele o que puder. Um dia de baixa produção não define seu ritmo.",
       "Hidrate-se, coma algo nutritivo e permita-se ir mais devagar.",
     ],
     tone: "tone-care",

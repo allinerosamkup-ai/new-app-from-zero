@@ -54,7 +54,9 @@ async function run() {
   assert.equal(result.initialSuggestions.length, 3);
   assert.equal(capturedMessages[0]?.role, 'system');
   assert.match(capturedMessages[0]?.content || '', /Você é Airia/i);
-  assert.match(capturedMessages[0]?.content || '', /BOAS-VINDAS/i);
+  assert.match(capturedMessages[0]?.content || '', /ONBOARDING/i);
+  assert.match(capturedMessages[0]?.content || '', /LEITURA TOTAL/i);
+  assert.match(capturedMessages[0]?.content || '', /POLITICA DE SUGESTAO CONCRETA/i);
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /DADOS DO USUÁRIO/i);
 }

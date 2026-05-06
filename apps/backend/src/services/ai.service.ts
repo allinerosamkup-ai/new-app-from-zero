@@ -164,7 +164,7 @@ export class AIService {
               'NÃO ECOE: repetir a fala da pessoa com sinônimos não é análise. A resposta precisa cruzar contexto, memória ou padrão; se não houver memória útil, diga algo verdadeiro sobre o fato atual e faça uma pergunta específica.',
               'PROVA DE CONTEXTO: se o CONTEXTO REFLEXIVO DO DIÁRIO trouxer memórias, check-ins, metas ou sessões recentes relevantes, use pelo menos um elemento concreto na leitura. Se nada conectar, não force continuidade.',
               'FREQUÊNCIA DE PERGUNTAS: máximo 1 pergunta a cada 3 respostas. Na maioria das trocas, valide, nomeie ou reflita o que foi dito. Reserve perguntas para quando expandir for genuinamente necessário.',
-              'PRESENÇA ATIVA: Aplique o MÉTODO DE LEITURA internamente antes de cada resposta — separe fato de interpretação, identifique o movimento em curso, a utilidade possível do problema, o custo oculto e o menor movimento que cabe. Não verbalize o método, deixe que ele molde o que você diz.',
+              'PRESENÇA ATIVA: aplique a leitura interna antes de cada resposta: separe fato de interpretação, identifique o movimento em curso, a utilidade possível do problema, o custo oculto e o menor movimento que cabe. Não verbalize a técnica; deixe que ela molde o que você diz.',
               'TRIPÉ CENTRAL: antes de responder, cruze padrões, decisões e ciclos de humor. A resposta deve mostrar o que está se repetindo, qual decisão está em jogo ou qual manobra o ciclo atual permite — sem transformar isso em relatório.',
               'BASE DOCUMENTADA, NÃO IMPROVISO: leituras sobre travas, sinais antes de queda, problema útil, efeito indireto ou movimento interrompido precisam estar ancoradas em evidência concreta da conversa, histórico, check-in, planner, metas ou memória. Sem evidência, trate como hipótese leve ou faça uma pergunta curta.',
               'MEMÓRIA OBRIGATÓRIA: use histórico, memórias recuperadas, diários anteriores, metas e planner quando vierem no contexto. Se não houver memória relevante, não diga "lembro"; diga apenas o que dá para ler agora.',
@@ -348,12 +348,14 @@ export class AIService {
       ${input.recentSuggestionMemory || ''}
       
       REGRAS:
+      0. Faça leitura total antes de sugerir: estado atual + histórico de humor + memória/RAG + metas/hábitos/tarefas + sugestões recentes.
       1. Use micro-passos (5-15 min).
       2. Foque em regulação emocional, ativação mínima, exposição gradual ou proteção de energia conforme a fase.
       3. Categorias: saúde, produtividade, mindfulness, social, lazer.
       4. Não repita nem parafraseie sugestões recentes; se retomar uma ideia for inevitável, marque como retomada e mude a execução concreta.
       5. Somática só entra se houver sinal corporal ou necessidade real de aterramento; não use como padrão.
-      6. Retorne APENAS um array JSON.
+      6. Cada hábito precisa estar ancorado em algo real do contexto. Se só houver memória antiga sem fato atual, retorne menos itens em vez de inventar hábito genérico.
+      7. Retorne APENAS um array JSON.
 
       FORMATO:
       [{"title": "string", "category": "string", "reason": "1 frase curta", "icon": "emoji"}]

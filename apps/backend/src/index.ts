@@ -3247,6 +3247,7 @@ ${context.moodCycleContext ? `\nCONTEXTO VIVO:\n${context.moodCycleContext}` : '
 
 REGRAS INVIOLÁVEIS:
 0. FONTE DA VERDADE DE HOJE = listas acima de "Metas ativas" e "Compromissos pendentes HOJE". Se a memória sugerir algo fora dessas listas, IGNORE.
+0.0. LEITURA TOTAL: cruze relato/check-in atual, humor atual, histórico de humor, RAG/memória, planner, metas, hábitos e ações recentes antes de criar tarefas.
 0.1. NUNCA transforme item já concluído hoje em tarefa nova. Se treino/hábito já foi feito, não sugira treino, kit de treino, roupa de treino nem preparação de treino.
 1. Use o histórico e as metas acima — as tarefas devem ser relevantes ao que ${userName} realmente faz, não inventadas
 2. Se há metas, pelo menos 1 tarefa deve avançar uma meta específica (cite a meta no título)
@@ -3256,7 +3257,8 @@ REGRAS INVIOLÁVEIS:
 4. Fase elevada/focada → 1 tarefa de trabalho real de impacto + 1 autocuidado + 1 pessoal
 5. Cada tarefa = ação que ${userName} pode fazer hoje com o que já tem em casa
 6. Se for noite, priorize fechamento, autocuidado e preparação suave do próximo dia
-7. ESPECIFICIDADE OBRIGATÓRIA: cada título deve ter VERBO ATIVO + DETALHE CONCRETO + DURAÇÃO estimada${negRule}${posRule}
+7. ESPECIFICIDADE OBRIGATÓRIA: cada título deve ter VERBO ATIVO + DETALHE CONCRETO + DURAÇÃO estimada
+8. Se não houver âncora real suficiente para 3 tarefas, retorne menos tarefas. Não preencha vazio com genérico.${negRule}${posRule}
 
 PROIBIDO ABSOLUTAMENTE: "Descanse", "Beba água", quadro de visão, mapa de visão, planejar semana, organizar arquivos, qualquer genérico sem contexto real da pessoa.
 
@@ -3275,6 +3277,7 @@ Gere 0-3 tarefas para apoiar o que foi dito, com tom gentil e ZERO abstração.
 ${timeWindow}
 
 REGRAS INVIOLÁVEIS:
+0. LEITURA TOTAL: cruze conversa atual, humor atual, histórico de humor, RAG/memória, planner, metas, hábitos, sugestões aceitas e sugestões rejeitadas.
 1. Primeiro identifique sugestões que foram conversadas e validadas pela pessoa: concordância, escolha, pedido de aprofundamento, "faz sentido", "quero", "vamos" ou sinal claro de interesse.
 2. Transforme essas sugestões aceitas nas primeiras tarefas. Não priorize ideias que só a IA lançou e a pessoa não validou.
 3. Se a pessoa rejeitou, desviou ou mostrou incômodo com uma sugestão, NÃO transforme isso em tarefa.
@@ -3286,6 +3289,7 @@ REGRAS INVIOLÁVEIS:
 9. Evite duplicação entre tarefas.
 10. Qualquer leitura de problema útil, sinal antes de queda, movimento interrompido ou efeito indireto precisa estar baseada em evidência concreta da conversa. Não invente padrão para justificar tarefa.
 11. Ao escolher tarefas, cruze internamente: o que a pessoa precisa para não piorar, o que a situação permite hoje e o que ela prefere preservar. A tarefa deve caber nesse ponto, com execução pequena.
+12. Se só houver memória antiga ou leitura emocional sem fato atual suficiente, retorne [] em vez de inventar tarefa.
 
 PROIBIDO:
 - "descansar", "se cuidar", "tomar água", "organizar a vida", "pensar sobre", "refletir"
@@ -3399,6 +3403,7 @@ Com base em IPSRT, DBT e ritmo social, retorne:
 5. 2-3 sugestões baseadas em evidência, preventivas e práticas. Elas podem ser micro-ações, uma tarefa objetiva ou um compromisso concreto para hoje.
 
 REGRAS:
+- LEITURA TOTAL: cruze histórico de humor, humor atual, RAG/memória, planner, metas, hábitos e ações recentes antes de sugerir.
 - Não descreva só o óbvio; identifique implicação prática.
 - Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
 - As sugestões devem nascer dos sinais reais do histórico, não de conselhos genéricos.
@@ -3414,6 +3419,7 @@ REGRAS:
 - Prefira intervenções concretas de regulação: proteger sono, reduzir carga social, fracionar tarefa, cortar estímulo, ancorar rotina, criar pausa antes de agir no automático.
 - Só use corpo/respiração/água/alongamento se houver evidência explícita e atual de corpo, sede, tensão física ou sono. Do contrário, prefira ação ligada à vida real trazida no contexto.
 - Se a única sugestão possível for genérica, retorne "actions": [].
+- Se houver âncora real, tente entregar próximo passo, compromisso, tarefa, hábito ou ajuste de agenda aplicável.
 - Se houver sinal de queda sustentada, impulsividade, compulsão, isolamento ou sobrecarga, nomeie isso no "pattern" ou no "insight" sem dramatizar.
 - Cada "why" deve explicar qual risco ou padrão a ação está tentando conter.
 - Evite linguagem clínica pesada, mas mantenha raciocínio técnico por trás.
@@ -3494,12 +3500,14 @@ OBJETIVO:
 3. "proactive": 1 ação para fazer AGORA dentro do app. "title" com 2-5 palavras. "desc" com 1 frase dizendo por que isso faz sentido neste momento. "actionPath" deve ser uma rota real ou null.
 
 REGRAS:
+- LEITURA TOTAL: cruze estado atual, período, emoções/fatores, histórico de humor, RAG/memória, pendências, metas e ações recentes.
 - Não repita literalmente o estado na primeira frase.
 - Use o nome no máximo uma vez.
 - Se o estado indicar proteção ou baixa energia, reduza atrito e puxe para cuidado ou clareza.
 - Se houver energia boa e poucas tarefas, puxe para movimento e ação.
 - Se houver sinais recorrentes no diário ou na memória recente, aproveite isso com discrição para deixar as ações mais pessoais.
 - Se houver pendências abertas ou metas ativas, conecte pelo menos 1 movimento a algo real que já exista no app.
+- "proactive" deve tentar entregar ação concreta dentro do app quando houver âncora real; se não houver, use actionPath null e faça uma pergunta curta na descrição.
 - As 3 ações de "autocuidado" devem ser diferentes entre si e não podem reciclar a mesma ideia com palavras diferentes.
 - Se existir conteúdo recente acima, mude de verdade: não repita nem parafraseie a mesma frase, o mesmo gesto ou a mesma micro-ação.
 - Evite frases que sirvam igual para qualquer pessoa em qualquer horário.
@@ -3563,6 +3571,7 @@ ${context.requestVariant ? `Tentativa atual de geração: ${context.requestVaria
 ${context.groundingContext || ''}${ragContext}${recentSuggestionMemory}
 
 Monte complementos, não uma rotina inteira:
+- Faça leitura total antes de montar blocos: estado atual, histórico de humor, RAG/memória, agenda existente, metas, pendências e ações recentes.
 - Crie 1-4 blocos opcionais, somente se acrescentarem algo útil ao que já existe
 - Tipos: trabalho, autocuidado, casa, social, descanso, refeicao, flexivel
 - Não cubra o dia inteiro
@@ -3572,6 +3581,7 @@ Monte complementos, não uma rotina inteira:
 - Se focada → trabalho no pico da manhã (8h-12h)
 - Tarefas concretas e específicas, sem repetir títulos entre blocos
 - Se já houver pendências abertas ou metas ativas, complemente ou destrave isso; não replique com frases genéricas
+- Se não houver âncora real suficiente, retorne [] em vez de criar rotina genérica.
 - "tarefas_sugeridas" não pode repetir a mesma ação nem a mesma ideia em blocos diferentes
 - Se esta for uma nova tentativa, mude pelo menos 60% dos títulos e das tarefas em relação à tentativa anterior
 - Não repita nem reescreva superficialmente itens das listas recentes acima
@@ -3616,6 +3626,7 @@ ${nota}${context.groundingContext || ''}${ragContext}${recentSuggestionMemory}
 Responda como Airia, com leitura específica e útil para este momento.
 
 REGRAS:
+- Faça leitura total: check-in atual, nota, histórico de humor, RAG/memória, planner, metas, hábitos e sugestões recentes.
 - "message" deve ter 2-3 frases curtas. A primeira precisa ler um padrão, contraste ou nuance do momento; não repita o rótulo do estado como eco.
 - NÃO REPITA A NOTA DO USUÁRIO. Use-a apenas como contexto para sua análise.
 - Se o histórico ajudar, cite o padrão real de forma natural (ex: "nos últimos dias..." ou "hoje veio mais baixo que ontem...").
@@ -3626,6 +3637,7 @@ REGRAS:
 - NÃO use sermão, diagnóstico ou tom maternal demais.
 - "suggestion" deve ser uma micro-ação de 5-10 minutos que caiba nas próximas 2 horas.
 - A sugestão deve ser específica o bastante para a pessoa começar sem precisar planejar mais nada.
+- A sugestão deve virar próximo passo, tarefa, hábito, compromisso leve ou ajuste de agenda quando houver âncora real suficiente; se não houver, transforme "suggestion" em pergunta curta para localizar a âncora.
 - Memória passada pode explicar o padrão, mas a sugestão operacional precisa respeitar o grounding de hoje.
 - Não sugira tarefa/hábito já concluído hoje nem tarefa sem âncora real de agenda, hábito pendente ou meta ativa.
 - Use o nome de forma natural, no máximo uma vez.

@@ -780,7 +780,12 @@ export function HabitsPage() {
           >
             <ChevronLeft size={24} />
           </button>
-          <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, flex: 1 }}>Meus Hábitos</h1>
+          <div style={{ flex: 1 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Meus Hábitos</h1>
+            <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.35 }}>
+              Hábitos pequenos do tamanho da sua fase.
+            </p>
+          </div>
           <button
             onClick={() => setShowAddModal(true)}
             style={{

@@ -682,7 +682,7 @@ export function CheckinResultPage() {
           <p className="result-header-copy">{v.description}</p>
         </div>
 
-        {/* HERO — Fase do ciclo de humor */}
+        {/* HERO — Fase de humor e energia */}
         {cycleReport.phase !== "insufficient_data" ? (() => {
           const phaseColor = getPhaseColor(cycleReport.phase);
           const phaseLabel = t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel);

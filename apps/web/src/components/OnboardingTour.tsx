@@ -1,13 +1,24 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AuraButtonV2 } from "./editorial/AuraButtonV2";
 
 const TOUR_KEY = "aura_tour_v1_done";
 
-const STEPS = [
+type Step = {
+  icon: string;
+  title: string;
+  desc: string;
+  color: string;
+  bg: string;
+  primaryLabel?: string;
+  primaryAction?: "next" | "checkin";
+};
+
+const STEPS: Step[] = [
   {
     icon: "🌡️",
     title: "Check-in diário",
-    desc: "Registre seu humor, energia e sono uma vez por dia. A Airia usa esses dados para entender seus ciclos e orientar seu dia.",
+    desc: "Registre seu humor, energia e sono uma vez por dia. A Airia usa esses dados para entender seu ritmo e orientar seu dia.",
     color: "var(--nectarine, #D7897F)",
     bg: "rgba(215,137,127,0.08)",
   },
@@ -25,15 +36,24 @@ const STEPS = [
     color: "var(--lagune, #6398A9)",
     bg: "rgba(99,152,169,0.08)",
   },
+  {
+    icon: "🌿",
+    title: "É isto",
+    desc: "Airia organiza seu dia respeitando seu humor e energia. Vamos começar com seu primeiro check-in?",
+    color: "var(--menthe, #96C7B3)",
+    bg: "rgba(150,199,179,0.08)",
+    primaryLabel: "Fazer meu check-in",
+    primaryAction: "checkin",
+  },
 ];
 
 export function OnboardingTour() {
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!localStorage.getItem(TOUR_KEY)) {
-      // Pequeno delay para não sobrecarregar o carregamento inicial
       const t = setTimeout(() => setVisible(true), 800);
       return () => clearTimeout(t);
     }
@@ -45,6 +65,12 @@ export function OnboardingTour() {
   }
 
   function next() {
+    const cur = STEPS[step];
+    if (cur.primaryAction === "checkin") {
+      finish();
+      navigate("/checkin");
+      return;
+    }
     if (step < STEPS.length - 1) setStep(step + 1);
     else finish();
   }
@@ -145,7 +171,7 @@ export function OnboardingTour() {
             onClick={next}
             style={{ flex: 2, height: 48, fontSize: 14, fontWeight: 800 }}
           >
-            {step < STEPS.length - 1 ? "Próximo →" : "Começar 🚀"}
+            {s.primaryLabel ?? (step < STEPS.length - 1 ? "Próximo →" : "Começar 🚀")}
           </AuraButtonV2>
         </div>
       </div>

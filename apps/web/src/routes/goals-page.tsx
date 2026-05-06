@@ -846,6 +846,9 @@ export function GoalsPage() {
             }}>
               Metas & GTD
             </h1>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
+              Grandes objetivos, divididos em pequenos passos.
+            </p>
           </div>
           <div style={{
             width: 38, height: 38, borderRadius: 12,

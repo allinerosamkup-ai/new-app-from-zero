@@ -154,7 +154,7 @@ export function LoginPage() {
         <div className="auth-hero">
           <div className="auth-hero-eyebrow">Mood Energy</div>
           <h1>Seu ritmo merece um ponto de partida mais gentil.</h1>
-          <p>Acompanhe humor, energia e rotina em um fluxo que respeita sua ciclagem.</p>
+          <p>Acompanhe humor, energia e rotina em um fluxo que respeita seu humor e energia.</p>
         </div>
 
         {/* Tab switcher */}

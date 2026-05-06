@@ -41,7 +41,7 @@ export const AuthV2Page = () => {
             </h1>
             {activeTab === 'entrar' && (
               <p className="text-xs opacity-90 leading-relaxed">
-                Acompanhe humor, energia e rotina em um fluxo que respeita sua ciclagem.
+                Acompanhe humor, energia e rotina em um fluxo que respeita seu humor e energia.
               </p>
             )}
           </div>

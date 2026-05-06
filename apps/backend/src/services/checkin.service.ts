@@ -275,6 +275,8 @@ ${data.recentSuggestionMemory ? `${data.recentSuggestionMemory}\n` : ''}
 ${data.completionContext ? `JÁ FEITO / NÃO SUGERIR DE NOVO:\n${data.completionContext}\n` : ''}
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
+- Antes de escrever, faça a leitura total: fato atual do check-in + nota escrita + emoções/fatores + humor atual + histórico de humor + RAG/memória + planner/metas/hábitos + ações recentes.
+- Trate RAG e histórico de humor como lente obrigatória quando vierem no contexto; eles explicam padrão, mas a recomendação precisa nascer de âncora atual.
 - Se houver agenda hoje, leve em conta o peso e tipo de compromissos ao calibrar as recomendações e suggestedIntensity.
 - Se houver memória, metas ou padrões anteriores no contexto, use-os para reconhecer repetição e decisões pendentes; se não houver evidência, não finja memória.
 - Sempre cruze padrões, decisões e ciclos de humor: o que se repete, qual decisão está em jogo e que manobra o estado atual permite.
@@ -283,7 +285,7 @@ DIRETRIZES:
 - Se houver nota escrita, ela é o sinal de maior contexto: use a nota para reinterpretar humor, energia e sugestões antes de concluir qualquer padrão.
 - Se a nota explicar uma causa física ou situacional concreta, como doença, dor, gripe, febre, menstruação, noite ruim ou crise externa, não trate energia baixa como piora emocional; diferencie capacidade baixa de humor ruim.
 - analysis: 1-2 frases que leiam o momento sem repetir os números; se há nota, emoções ou fatores específicos, mencione a nuance concreta.
-- recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si, sem clichês; se há nota escrita, pelo menos 1 ação deve responder diretamente ao que ela revelou.
+- recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si, sem clichês; se há nota escrita, pelo menos 1 ação deve responder diretamente ao que ela revelou. Se não houver âncora suficiente, faça recomendação em forma de pergunta curta para localizar o fato atual.
 - Se uma recomendação recente já cobriu a mesma ideia, escolha uma alternativa real. Se a repetição for a melhor opção, escreva como retomada explícita da sugestão anterior e acrescente um ajuste concreto.
 - Não sugira treino, kit de treino, hábito, tarefa, meta ou subtarefa que já aparece como concluída hoje. Use concluídos como evidência de movimento, não como próxima ação.
 - Se citar horário explícito, ele deve ser posterior a ${currentLocalTime ?? 'agora'} e caber nas próximas 2 horas; nunca use madrugada ou horário já passado.

@@ -425,8 +425,11 @@ export function InsightsPage() {
 
         {/* ── Header ── */}
         <div className="aura-page-header insights-header">
-          <p className="aura-page-kicker">Sua Ciclagem</p>
+          <p className="aura-page-kicker">Seus padrões</p>
           <h1 className="aura-page-title insights-title">{t("insights.title")}</h1>
+          <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
+            Como suas fases se distribuem ao longo do tempo.
+          </p>
           {/* Seletor de período + Export */}
           <div style={{ display: "flex", gap: "6px", marginTop: "10px", alignItems: "center", flexWrap: "wrap" }}>
             {(['7d', '30d', '90d', '180d', '365d'] as const).map(p => {

@@ -1059,7 +1059,7 @@ export function HomePage() {
             ? `Base: "${firstTask.title}" estava marcado para ${firstTask.time} e ainda não foi concluído.`
             : `Base: ${overdueTasks.length} itens com horário vencido e status pendente no Planner de hoje.`,
         tone: overdueTasks.length >= 3 ? "critical" : "warning",
-        actionLabel: "Abrir planner",
+        actionLabel: "Montar meu dia",
         actionPath: "/planner",
       });
     }
@@ -1100,7 +1100,7 @@ export function HomePage() {
             : "Seu padrão entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
         evidence: `Base: baseline pessoal ${cycleReport.baselineComposite.toFixed(1)}/10, EWMA atual ${cycleReport.currentComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}/100 e sinal(is): ${cycleReport.warningFlags.join(", ") || "estabilidade baixa"}.`,
         tone: sustainedLow || cycleReport.stabilityScore <= 30 ? "critical" : "warning",
-        actionLabel: "Abrir diário",
+        actionLabel: "Abrir meu diário",
         actionPath: "/journal",
       });
     }
@@ -1343,6 +1343,17 @@ export function HomePage() {
               </div>
             )}
           </div>
+          {/* Eco da landing — sempre visível, intuitivo mesmo sem tour */}
+          <p style={{
+            margin: "10px 0 0",
+            fontSize: 11.5,
+            lineHeight: 1.45,
+            color: "var(--text-2)",
+            textAlign: "center",
+            opacity: 0.85,
+          }}>
+            Airia organiza seu dia respeitando seu humor e energia.
+          </p>
         </div>
 
         {/* ── Gráfico de check-ins ── */}

@@ -152,7 +152,17 @@ async function run() {
   const systemPrompt = capturedMessages[0]?.content || '';
   const userPrompt = capturedMessages[1]?.content || '';
 
-  assert.match(systemPrompt, /copiloto de vida/i);
+  assert.match(systemPrompt, /assistente pessoal de humor, energia e agenda adaptativa/i);
+  assert.match(systemPrompt, /AURA CHAT EXECUTOR/i);
+  assert.match(systemPrompt, /LEITURA TOTAL/i);
+  assert.match(systemPrompt, /humor atual, historico de humor/i);
+  assert.match(systemPrompt, /memorias RAG relevantes/i);
+  assert.match(systemPrompt, /POLITICA DE SUGESTAO CONCRETA/i);
+  assert.match(systemPrompt, /termos proprietarios/i);
+  assert.doesNotMatch(systemPrompt, /Aliança Divergente/i);
+  assert.doesNotMatch(systemPrompt, /Marca Passo/i);
+  assert.doesNotMatch(systemPrompt, /Ponto Cego/i);
+  assert.doesNotMatch(systemPrompt, /Efeito Paralelo/i);
   assert.match(userPrompt, /planner_task/i);
   assert.match(userPrompt, /checklist/i);
   assert.match(userPrompt, /reflective_handoff/i);

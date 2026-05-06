@@ -31,14 +31,14 @@
     "start": "Home"
   },
   "phases": {
-    "kicker": "Mood cycling",
-    "title": "The 8 phases of your cycle",
-    "subtitle": "Your mood isn't linear — it cycles. Airia automatically detects which phase you're in today and adapts the app to it.",
+    "kicker": "Your mood and energy",
+    "title": "Your 8 mood and energy phases",
+    "subtitle": "Your mood isn't linear — it has phases. Airia automatically detects which phase you're in today and adapts the app to it.",
     "youAreHere": "You are here",
     "tipPrefix": "💡",
     "viewAll": "see all 8 phases →",
     "viewAllShort": "see all 8",
-    "yourPhaseKicker": "Your cycle phase",
+    "yourPhaseKicker": "Your phase now",
     "dayInPhase": "day {{count}}",
     "daysInPhase_one": "{{count}} day in this phase",
     "daysInPhase_other": "{{count}} days in this phase",
@@ -64,7 +64,7 @@
     },
     "low": {
       "label": "Retreat",
-      "description": "You're in a phase of lower mood and energy. It's a natural pattern of the cycle.",
+      "description": "You're in a phase of lower mood and energy. It's a natural pattern of your rhythm.",
       "tip": "This is a time to restore — not to produce. Self-kindness is the priority."
     },
     "depleted": {
@@ -80,12 +80,12 @@
     "mixed": {
       "label": "Turbulence",
       "description": "High variability detected. Frequent highs and lows with no clear pattern.",
-      "tip": "Watch for impulsive decisions. Focus on routine and sleep — they stabilize the cycle."
+      "tip": "Watch for impulsive decisions. Focus on routine and sleep — they stabilize your rhythm."
     },
     "insufficient_data": {
       "label": "Not enough data",
-      "description": "Check in for at least 3 days to start tracking your cycle.",
-      "tip": "The more consistent your check-ins, the more accurate your cycle analysis."
+      "description": "Check in for at least 3 days to start tracking your rhythm.",
+      "tip": "The more consistent your check-ins, the more accurate your rhythm analysis."
     }
   },
   "home": {
@@ -121,7 +121,7 @@
     "humorLabel": "Mood",
     "energyLabel": "Energy",
     "registered": "CHECK-IN REGISTERED",
-    "yourPhase": "Your cycle phase",
+    "yourPhase": "Your phase now",
     "goHome": "Go to home"
   },
   "planner": {
@@ -160,7 +160,7 @@
     "viewGoals": "View goals →"
   },
   "insights": {
-    "kicker": "Cycling",
+    "kicker": "Patterns",
     "title": "Patterns and Harmony",
     "csvExport": "↓ CSV",
     "weekVsLastWeek": "This week vs last week",
@@ -202,10 +202,10 @@
       "description": "How Airia's AI works, what it calculates, and why it suggests each next step.",
       "openPhases": "View the 8-phase guide",
       "aiTitle": "How Airia was developed",
-      "aiDescription": "Airia combines generative AI with a proprietary mood-cycle engine. It does not answer from scratch: it cross-checks check-ins, journal, planner, goals, habits, history, and recent memories to understand the real context of the day.",
+      "aiDescription": "Airia combines generative AI with a proprietary mood-and-energy phase engine. It does not answer from scratch: it cross-checks check-ins, journal, planner, goals, habits, history, and recent memories to understand the real context of the day.",
       "purposeTitle": "Airia's role",
       "purposeDescription": "Its role is to be an emotional and operational copilot for non-linear minds. It separates fact from interpretation, recognizes patterns, points to pending decisions, and turns the current state into one possible next step.",
-      "phaseTitle": "8 cycle phases",
+      "phaseTitle": "8 mood and energy phases",
       "phaseDescription": "Your phase comes from recent mood and energy averages, multi-day trend, variation/stability, sleep, and time in phase. With little data, the reading stays conservative.",
       "chartTitle": "Mood and energy charts",
       "chartDescription": "Week and Today use real check-ins. Monthly uses the last 30 days. The solid line is mood, the dashed line is energy. Face emojis show mood intensity and the emojis below dates show the phase calculated for that point.",
@@ -215,7 +215,7 @@
       "autonomyDescription": "The score starts at 100 and loses points for high variation, abrupt trend, low days, sparse check-ins, and critical signals. The current phase calibrates whether the suggestion should advance, contain, simplify, or recover.",
       "alertsTitle": "Important alerts",
       "alertsDescription": "Alerts only appear with evidence: overdue commitment, stalled goal, rapid drop, low stability, many low days, impulse mentioned to the AI, or sleep with strong impact.",
-      "patternsTitle": "Patterns and cycles",
+      "patternsTitle": "Patterns and phases",
       "patternsDescription": "Patterns come from repetition in history: best/worst days, mood distribution, check-in streak, phase transitions, and the relationship between sleep, energy, social load, and mood.",
       "patternCardsTitle": "Patterns page cards",
       "patternCardsDescription": "The 7, 30, 90-day, half-year and yearly filters slice the history. Best day and difficult day come from average mood by weekday. Distribution separates high, stable and low records. Streak counts consecutive check-in days without a break.",

@@ -31,14 +31,14 @@
     "start": "Início"
   },
   "phases": {
-    "kicker": "Ciclagem de humor",
-    "title": "As 8 fases do seu ciclo",
-    "subtitle": "Seu humor não é linear — ele cicla. O Airia detecta automaticamente em qual fase você está hoje e adapta o app a isso.",
+    "kicker": "Seu humor e energia",
+    "title": "Suas 8 fases de humor e energia",
+    "subtitle": "Seu humor não é linear — ele tem fases. O Airia detecta automaticamente em qual fase você está hoje e adapta o app a isso.",
     "youAreHere": "Você está aqui",
     "tipPrefix": "💡",
-    "viewAll": "ver as 8 fases →",
+    "viewAll": "ver todas as 8 fases →",
     "viewAllShort": "ver as 8",
-    "yourPhaseKicker": "Sua fase do ciclo",
+    "yourPhaseKicker": "Sua fase agora",
     "dayInPhase": "{{count}}º dia",
     "daysInPhase_one": "{{count}} dia nesta fase",
     "daysInPhase_other": "{{count}} dias nesta fase",
@@ -64,7 +64,7 @@
     },
     "low": {
       "label": "Recolhimento",
-      "description": "Você está numa fase de menor energia e humor. É um padrão natural do ciclo.",
+      "description": "Você está numa fase de menor energia e humor. É um padrão natural do seu ritmo.",
       "tip": "Este é o momento de restaurar — não de produzir. Gentileza consigo mesma é a prioridade."
     },
     "depleted": {
@@ -80,12 +80,12 @@
     "mixed": {
       "label": "Turbulência",
       "description": "Alta variabilidade detectada. Altos e baixos frequentes sem padrão claro.",
-      "tip": "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam o ciclo."
+      "tip": "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam seu ritmo."
     },
     "insufficient_data": {
       "label": "Sem dados suficientes",
-      "description": "Faça check-ins por pelo menos 3 dias para começar a rastrear seu ciclo.",
-      "tip": "Quanto mais consistente o check-in, mais precisa a análise do seu ciclo."
+      "description": "Faça check-ins por pelo menos 3 dias para começar a rastrear seu ritmo.",
+      "tip": "Quanto mais consistente o check-in, mais precisa a análise do seu ritmo."
     }
   },
   "home": {
@@ -121,7 +121,7 @@
     "humorLabel": "Humor",
     "energyLabel": "Energia",
     "registered": "CHECK-IN REGISTRADO",
-    "yourPhase": "Sua fase do ciclo",
+    "yourPhase": "Sua fase agora",
     "goHome": "Ir para o início"
   },
   "planner": {
@@ -160,7 +160,7 @@
     "viewGoals": "Ver metas →"
   },
   "insights": {
-    "kicker": "Ciclagem",
+    "kicker": "Padrões",
     "title": "Padrões e Harmonia",
     "csvExport": "↓ CSV",
     "weekVsLastWeek": "Esta semana vs semana passada",
@@ -202,10 +202,10 @@
       "description": "Como a IA da Airia funciona, o que ela calcula e por que sugere cada próximo passo.",
       "openPhases": "Ver guia das 8 fases",
       "aiTitle": "Como a Airia foi desenvolvida",
-      "aiDescription": "A Airia combina IA generativa com um motor próprio de ciclo de humor. Ela não responde do zero: cruza check-ins, diário, planner, metas, hábitos, histórico e memórias recentes para entender o contexto real do dia.",
+      "aiDescription": "A Airia combina IA generativa com um motor próprio de fases de humor e energia. Ela não responde do zero: cruza check-ins, diário, planner, metas, hábitos, histórico e memórias recentes para entender o contexto real do dia.",
       "purposeTitle": "Função da Airia",
       "purposeDescription": "A função dela é ser um copiloto emocional e operacional para mentes não-lineares. Ela separa fato de interpretação, reconhece padrões, aponta decisões pendentes e transforma o estado atual em um próximo passo possível.",
-      "phaseTitle": "8 fases do ciclo",
+      "phaseTitle": "8 fases de humor e energia",
       "phaseDescription": "A fase vem da média recente de humor e energia, tendência dos últimos dias, variação/estabilidade, sono e tempo na fase. Com poucos dados, a leitura fica conservadora.",
       "chartTitle": "Gráficos de humor e energia",
       "chartDescription": "Semana e Hoje usam os check-ins reais. Mensal usa os últimos 30 dias. A linha cheia é humor, a tracejada é energia. As carinhas indicam intensidade do humor e os emojis abaixo das datas indicam a fase calculada naquele ponto.",
@@ -215,7 +215,7 @@
       "autonomyDescription": "O score começa em 100 e perde pontos por variação alta, tendência brusca, dias baixos, poucos check-ins e sinais críticos. A fase atual calibra se a sugestão deve avançar, conter, simplificar ou recuperar.",
       "alertsTitle": "Alertas importantes",
       "alertsDescription": "Alertas só aparecem quando há evidência: compromisso vencido, meta parada, queda rápida, baixa estabilidade, muitos dias em baixa, impulso citado na IA ou sono com impacto forte.",
-      "patternsTitle": "Padrões e ciclos",
+      "patternsTitle": "Padrões e fases",
       "patternsDescription": "Padrões vêm da repetição no histórico: melhores/piores dias, distribuição de humor, sequência de check-ins, transições de fase e relação entre sono, energia, social e humor.",
       "patternCardsTitle": "Cards da página Padrões",
       "patternCardsDescription": "Os filtros de 7, 30, 90 dias, semestral e anual recortam o histórico. Melhor dia e dia difícil vêm da média de humor por dia da semana. A distribuição separa registros altos, estáveis e baixos. A sequência conta check-ins consecutivos sem quebra.",

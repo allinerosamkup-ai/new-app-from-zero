@@ -313,7 +313,7 @@ export function AutonomousAIEngine() {
         message: days >= 3
           ? `Faz ${days} dias sem check-in. Pequenos registros fazem toda a diferença no seu padrão.`
           : "Ontem não teve check-in. 2 minutos bastam para manter o padrão.",
-        action: { label: "Fazer check-in agora", path: "/checkin" },
+        action: { label: "Fazer meu check-in", path: "/checkin" },
         priority: days >= 3 ? "high" : "medium",
         generatedAt: new Date().toISOString(),
       };

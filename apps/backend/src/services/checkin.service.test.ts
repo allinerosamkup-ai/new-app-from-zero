@@ -55,8 +55,9 @@ async function run() {
 
   assert.equal(result.stateLabel, 'Dia sensível');
   assert.equal(capturedMessages[0]?.role, 'system');
-  assert.match(capturedMessages[0]?.content || '', /COORDENADA BIO-PSÍQUICA/i);
-  assert.match(capturedMessages[0]?.content || '', /ritmo hoje/i);
+  assert.match(capturedMessages[0]?.content || '', /CHECK-IN/i);
+  assert.match(capturedMessages[0]?.content || '', /LEITURA TOTAL/i);
+  assert.match(capturedMessages[0]?.content || '', /ritmo atual/i);
   assert.equal(capturedModel, getOpenAiModel());
   assert.equal(capturedMessages[1]?.role, 'user');
   assert.match(capturedMessages[1]?.content || '', /Analise os dados de check-in/i);
@@ -64,7 +65,7 @@ async function run() {
   assert.match(capturedMessages[1]?.content || '', /Acordei mais arrastada hoje\./i);
   assert.match(capturedMessages[1]?.content || '', /não trate energia baixa como piora emocional/i);
   assert.match(capturedMessages[1]?.content || '', /Respirar por 1 minuto antes de responder/i);
-  assert.match(capturedMessages[0]?.content || '', /Somática é ferramenta auxiliar/i);
+  assert.match(capturedMessages[0]?.content || '', /POLITICA DE SUGESTAO CONCRETA/i);
   assert.match(capturedMessages[1]?.content || '', /fato vs interpretação/i);
 
   const completedFakeClient = {

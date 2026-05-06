@@ -2472,6 +2472,9 @@ export function PlannerPage() {
           <div>
             <span style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", fontSize: 11, marginBottom: 4 }}>AGENDA</span>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-1)", margin: 0, letterSpacing: "-0.02em" }}>Timeline do dia</h1>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
+              Blocos que respeitam sua energia.
+            </p>
           </div>
           <span style={{
             padding: "6px 14px", borderRadius: 99, background: "rgba(244,168,150,0.12)",

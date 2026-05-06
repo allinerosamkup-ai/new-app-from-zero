@@ -211,12 +211,14 @@ export class InsightService {
       ${recentSuggestionMemory}
 
       REGRAS:
+      0. Faça leitura total: semana atual + humor/energia + histórico longitudinal + diário + planner + hábitos + metas + RAG/memória + sugestões recentes.
       1. Identifique 2-3 padrões (patterns) reais baseados nos dados: padrões, decisões recorrentes e ciclos de humor.
       2. Dê 2-3 recomendações práticas (recommendations) para a próxima semana, cada uma ligada a uma decisão concreta.
       3. Escreva uma análise narrativa (aiAnalysis) empática de 3-5 frases, sem motivação genérica.
       4. Gere uma pergunta reflexiva semanal (weeklyQuestion) — aberta, gentil, que convide a pessoa a olhar para si. Ex: "O que te surpreendeu positivamente esta semana?"
       5. Liste até 3 conquistas ou momentos positivos desta semana (highlights) — frases curtas, celebratórias, baseadas nos dados reais. Ex: "Completou 4 hábitos em um único dia", "Manteve sequência de 5 dias de meditação".
       6. Não recicle sugestões recentes. Se a mesma linha de ação for inevitável, escreva como retomada explícita e mude a execução concreta.
+      7. Recomendações precisam virar próximo passo, compromisso, hábito ou ajuste de agenda com âncora real. Se só houver padrão antigo sem fato atual, use pergunta de ancoragem.
 
       Retorne APENAS um JSON puro no formato esperado.
     `;

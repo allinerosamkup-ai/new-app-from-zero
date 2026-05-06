@@ -92,7 +92,7 @@ const flowSteps: StepCard[] = [
 const features: FeatureCard[] = [
   {
     icon: Waves,
-    title: "Ciclagem de humor em 8 fases",
+    title: "Humor e energia em 8 fases",
     description:
       "O app mostra se você está em voo alto, fluxo, estabilidade, desaceleração, recolhimento, pausa, retomada ou turbulência.",
   },
@@ -100,7 +100,7 @@ const features: FeatureCard[] = [
     icon: CalendarRange,
     title: "Planner que respeita energia real",
     description:
-      "Agenda, hábitos, ações e metas aparecem calibrados pelo seu ciclo atual, sem transformar tudo em evento com horário.",
+      "Agenda, hábitos, ações e metas aparecem calibrados pela sua fase atual, sem transformar tudo em evento com horário.",
   },
   {
     icon: BrainCircuit,
@@ -116,7 +116,7 @@ const features: FeatureCard[] = [
   },
   {
     icon: ClipboardList,
-    title: "Histórico para ver o ciclo completo",
+    title: "Histórico para ver suas fases ao longo do tempo",
     description:
       "Gráficos semanais, mensais e previsões mostram humor e energia juntos, com faixas, baseline pessoal e alertas baseados em dados do próprio uso.",
   },
@@ -140,11 +140,11 @@ const screenshots: ScreenshotCard[] = [
   },
   {
     title: "Insights e padrões",
-    description: "Visualizações para perceber ciclos, quedas, estabilidade e sinais recorrentes.",
+    description: "Visualizações para perceber fases, quedas, estabilidade e sinais recorrentes.",
     src: "/screenshots/insights-page.png",
   },
   {
-    title: "Airia: padrões, decisões e ciclos",
+    title: "Airia: padrões, decisões e fases",
     description: "Uma conversa que lê contexto, reconhece padrões e transforma clareza emocional em ação prática.",
     src: "/screenshots/aura-page.png",
   },
@@ -175,7 +175,7 @@ const faqs = [
   },
   {
     question: "O que é Bio-sincronia?",
-    answer: "É a técnica de ajustar suas tarefas e expectativas à sua biologia real (energia, sono, ciclo de humor) em vez de seguir uma agenda rígida.",
+    answer: "É a técnica de ajustar suas tarefas e expectativas à sua biologia real (energia, sono, fases de humor) em vez de seguir uma agenda rígida.",
   },
   {
     question: "Por que o app está grátis?",
@@ -186,7 +186,7 @@ const faqs = [
 const heroHighlights = [
   "Perceba queda, aceleração e exaustão antes que virem apagão",
   "Entenda o padrão por trás do problema, não só o sentimento do momento",
-  "Receba uma próxima ação possível para o ciclo em que você está",
+  "Receba uma próxima ação possível para a fase em que você está",
 ];
 
 const sectionTitleStyle = {
