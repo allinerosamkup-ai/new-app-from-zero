@@ -1,7 +1,7 @@
 /**
  * MoodCycleEngine — Motor de Ciclagem de Humor
  *
- * Calcula algoritmicamente a fase atual do ciclo de humor
+ * Calcula algoritmicamente a fase atual do ritmo de humor e energia
  * baseado em dados históricos de checkin.
  *
  * Fundamentação clínica:
@@ -87,7 +87,7 @@ export type MoodCycleReport = {
   volatility14d: number;    // desvio padrão dos últimos 14 dias
   avgMood7d: number;        // média de humor 7 dias
   avgEnergy7d: number;      // média de energia 7 dias
-  avgSleep7d: number | null; // média de sono 7 dias (null = sem dados)
+  avgSleep7d: number | null; // média de sono 7 dias (null = sem base)
   energyForecast: EnergyForecast;
   energyForecastLabel: string;
   warningFlags: WarningFlag[];
@@ -191,7 +191,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     energyForecast: "moderate",
   },
   insufficient_data: {
-    label: "Sem dados suficientes",
+    label: "Começando a calibrar",
     emoji: "📊",
     description: "Faça check-ins por pelo menos 3 dias para começar a rastrear seu ciclo.",
     tip: "Quanto mais consistente o check-in, mais precisa a análise do seu ciclo.",

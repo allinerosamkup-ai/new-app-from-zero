@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraToggle } from "../components/editorial/AuraToggle";
+import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -2490,6 +2491,23 @@ export function PlannerPage() {
       </div>
 
       <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
+
+      {!plannerLoading && plannerTasks.length === 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <SmartEmptyState
+            icon={CalendarClock}
+            title="Monte um dia possivel"
+            description="O Planner serve para adaptar tarefas ao seu humor e energia. Comece com um bloco pequeno ou deixe a Airia sugerir uma estrutura."
+            ctaLabel="Criar primeira tarefa"
+            onAction={() => openNewFormAt(getCurrentTimeRounded())}
+            examples={[
+              { title: "Responder uma pendencia importante", description: "Bom para tirar peso acumulado." },
+              { title: "Separar 25 min para um projeto", description: "Bom quando a energia esta media." },
+              { title: "Criar uma janela de recuperacao", description: "Bom em fase de baixa energia." },
+            ]}
+          />
+        </div>
+      )}
 
       {/* ── All-Day Tasks Section (Smaller Cards) ── */}
       {allDayTasks.length > 0 && (

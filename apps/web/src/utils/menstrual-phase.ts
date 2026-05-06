@@ -1,4 +1,4 @@
-// Menstrual phase auto-compute - modulador do ciclo de humor, nunca foco principal.
+// Menstrual phase auto-compute - modulador do ritmo de humor e energia, nunca foco principal.
 
 export type MenstrualPhase = "menstrual" | "folicular" | "ovulatoria" | "lutea";
 

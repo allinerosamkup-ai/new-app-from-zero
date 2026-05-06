@@ -47,7 +47,9 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
-import { OnboardingTour } from "../components/OnboardingTour";
+import { ActivationChecklist } from "../components/activation/ActivationChecklist";
+import { FirstRunGuide } from "../components/activation/FirstRunGuide";
+import { getActivationState } from "../features/aura/activation";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -354,12 +356,17 @@ export function HomePage() {
 
   // Push notifications — get userId from supabase session
   const [pushUserId, setPushUserId] = useState<string | null>(null);
+  const [hasLocalJournalEntry, setHasLocalJournalEntry] = useState(false);
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setPushUserId(session?.user?.id ?? null);
     });
   }, []);
   usePushNotifications(pushUserId);
+
+  useEffect(() => {
+    setHasLocalJournalEntry(window.localStorage.getItem("airia.journal.hasEntry") === "true");
+  }, []);
 
   // Refresh on mount to pick up any check-ins done since the app loaded
   useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -409,6 +416,11 @@ export function HomePage() {
 
   const mood = moodMap[state.mood] ?? moodMap.equilibrada;
   const habits = state.habits || [];
+  const activationState = useMemo(
+    () => getActivationState(state, { hasLocalJournalEntry }),
+    [hasLocalJournalEntry, state],
+  );
+  const showActivationHome = activationState.isNewUser && activationState.activationLevel !== "active";
   const aggregatedCheckinHistory = useMemo(
     () => aggregateCheckinsByDay(state.checkinHistory || []),
     [state.checkinHistory]
@@ -1186,7 +1198,7 @@ export function HomePage() {
 
   return (
     <>
-    <OnboardingTour />
+    <FirstRunGuide activation={activationState} userId={pushUserId} />
     {scheduleModalAction && (
       <div style={{
         position: "fixed",
@@ -1356,8 +1368,40 @@ export function HomePage() {
           </p>
         </div>
 
+        {showActivationHome && (
+          <div
+            className="aura-card"
+            style={{
+              marginBottom: "calc(var(--a) * 1.1)",
+              padding: 16,
+              borderRadius: 22,
+              border: "1.5px solid rgba(244,190,168,.28)",
+              background: "rgba(255,253,249,.94)",
+            }}
+          >
+            <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
+              Comece por aqui
+            </p>
+            <h2 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.25 }}>
+              {activationState.nextAction.title}
+            </h2>
+            <p style={{ margin: "0 0 13px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
+              {activationState.nextAction.description}
+            </p>
+            <ActivationChecklist activation={activationState} />
+            <AuraButtonV2
+              variant="primary"
+              size="md"
+              onClick={() => navigate(activationState.nextAction.route)}
+              style={{ width: "100%", minHeight: 44, marginTop: 12 }}
+            >
+              {activationState.nextAction.label}
+            </AuraButtonV2>
+          </div>
+        )}
+
         {/* ── Gráfico de check-ins ── */}
-        <div className="mini-chart-area">
+        <div className="mini-chart-area" style={showActivationHome && activationState.checkinCount === 0 ? { padding: 12 } : undefined}>
           <div className="chart-header" style={{ alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
               <TrendingUp size={13} color="var(--horizon)" />
@@ -1466,8 +1510,8 @@ export function HomePage() {
                 <span style={{ fontSize: 20 }}>{homeChartMode === "day" ? "🌅" : "📊"}</span>
                 <span style={{ fontStyle: "italic" }}>
                   {homeChartMode === "day"
-                    ? "Nenhum check-in hoje ainda — faça o de hoje!"
-                    : "Faça seu primeiro check-in para ver o gráfico"}
+                    ? "Isso aparece depois do check-in de hoje."
+                    : "Isso aparece depois do seu primeiro check-in."}
                 </span>
               </div>
             ) : (
@@ -1566,7 +1610,7 @@ export function HomePage() {
               return (
                 <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
                   <span style={{ fontSize: 20 }}>📊</span>
-                  <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}>Sem dados nos últimos 30 dias ainda.</span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}>Isso aparece depois de alguns check-ins.</span>
                 </div>
               );
             }
@@ -1908,10 +1952,10 @@ export function HomePage() {
               {homeAgendaPreview.tasks.length === 0 && !homeAgendaPreview.habit && homeGoalActions.length === 0 ? (
                 <div style={{ padding: "14px 13px" }}>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
-                    Sem compromissos agora
+                    Seu planner ainda está livre
                   </p>
                   <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: 0 }}>
-                    A Airia pode sugerir um encaixe leve para preencher o dia sem pesar.
+                    Monte o dia com base no humor e energia de agora, ou crie uma primeira tarefa manual.
                   </p>
                 </div>
               ) : (

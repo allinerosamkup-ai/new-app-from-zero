@@ -5,11 +5,12 @@ import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useNavigate, useLocation } from "react-router-dom";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import {
   Plus, Mic, Trash2, ChevronDown, ChevronUp,
-  Link, X, Zap, Inbox, Edit2, RefreshCw,
+  Link, X, Zap, Inbox, Edit2, RefreshCw, Target,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import { normalizeSuggestionText } from "../utils/goal-suggestion-routing";
@@ -1135,12 +1136,18 @@ export function GoalsPage() {
 
         {metasOpen && (
           goals.length === 0 ? (
-            <div style={{
-              textAlign: "center", padding: "20px 0 8px",
-              color: "var(--text-3)", fontSize: "calc(var(--a) * 0.88)", fontStyle: "italic",
-            }}>
-              Capture algo acima — a Airia classifica e gera os passos automaticamente 🎯
-            </div>
+            <SmartEmptyState
+              icon={Target}
+              title="Transforme uma intenção em próximos passos"
+              description="Metas funcionam melhor quando a Airia quebra em ações pequenas. Escreva a ideia acima ou comece com um exemplo."
+              ctaLabel="Escrever uma meta"
+              onAction={() => captureInputRef.current?.focus()}
+              examples={[
+                { title: "Organizar minha rotina da semana", description: "Para transformar bagunça em passos." },
+                { title: "Retomar um projeto parado", description: "Para achar a primeira ação real." },
+                { title: "Cuidar melhor da minha energia", description: "Para criar metas compatíveis com seu ritmo." },
+              ]}
+            />
           ) : (
             goals.map((goal, idx) => (
               <GoalCard
@@ -1197,12 +1204,18 @@ export function GoalsPage() {
             </button>
 
             {actionsOpen && priorityActions.length === 0 && (
-              <div style={{
-                textAlign: "center", padding: "18px 0 8px",
-                color: "var(--text-3)", fontSize: "calc(var(--a) * 0.88)", fontStyle: "italic",
-              }}>
-                Nenhuma próxima ação pendente agora.
-              </div>
+              <SmartEmptyState
+                icon={Zap}
+                title="Nenhuma próxima ação ainda"
+                description="Quando uma meta tiver passos, a Airia puxa o que dá para fazer agora. Para começar, capture uma intenção acima."
+                ctaLabel="Capturar uma ação"
+                onAction={() => captureInputRef.current?.focus()}
+                examples={[
+                  { title: "Enviar mensagem para destravar X", description: "Ação clara com pessoa ou projeto." },
+                  { title: "Separar 20 min para revisar Y", description: "Bom para avanço mínimo." },
+                  { title: "Listar documentos de Z", description: "Bom quando a meta ainda está grande." },
+                ]}
+              />
             )}
 
             {actionsOpen && priorityActions.map(action => {

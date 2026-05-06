@@ -83,7 +83,7 @@
       "tip": "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam seu ritmo."
     },
     "insufficient_data": {
-      "label": "Sem dados suficientes",
+      "label": "Começando a calibrar",
       "description": "Faça check-ins por pelo menos 3 dias para começar a rastrear seu ritmo.",
       "tip": "Quanto mais consistente o check-in, mais precisa a análise do seu ritmo."
     }

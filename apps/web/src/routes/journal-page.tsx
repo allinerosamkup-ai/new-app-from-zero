@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
+import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useAuraStore } from "../features/aura/store";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
@@ -12,6 +13,7 @@ import { buildJournalPlannerSlot } from "./journal-page.helpers";
 import "../styles/aura.css";
 import { appendStoredGtdAction } from "../utils/goal-priority-actions";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
+import { MessageSquareText } from "lucide-react";
 
 type Message = {
   id?: string;
@@ -194,7 +196,11 @@ export function JournalPage() {
     setIsSessionsLoading(true);
     try {
       const result = await api.get("/journal/sessions?limit=50");
-      setSessions(Array.isArray(result) ? result : []);
+      const nextSessions = Array.isArray(result) ? result : [];
+      setSessions(nextSessions);
+      if (nextSessions.some((session) => session.status === "completed")) {
+        window.localStorage.setItem("airia.journal.hasEntry", "true");
+      }
     } catch (error) {
       showError(error instanceof Error ? error.message : "Não foi possível carregar seus resumos do diário.");
       setSessions([]);
@@ -350,6 +356,7 @@ export function JournalPage() {
         temporalLabel,
       });
       setShowFinalizationModal(true);
+      window.localStorage.setItem("airia.journal.hasEntry", "true");
       setSessionId(null);
       setMessages([]);
       setExpandedSessionId(null);
@@ -810,11 +817,18 @@ export function JournalPage() {
                 ))}
               </div>
             ) : sessions.length === 0 ? (
-              <div className="empty-state" style={{ background: "#fff", borderRadius: 20, border: "1.5px solid var(--warm-border)" }}>
-                <div className="empty-state-icon">📔</div>
-                <div className="empty-state-title">Nenhuma sessão ainda</div>
-                <div className="empty-state-sub">Seu histórico aparece aqui após a primeira sessão de diário concluída.</div>
-              </div>
+              <SmartEmptyState
+                icon={MessageSquareText}
+                title="Use o diario para dar contexto"
+                description="A Airia entende melhor seu humor e energia quando voce conta o que aconteceu, nao so a nota do check-in."
+                ctaLabel="Começar primeira sessão"
+                onAction={openJournal}
+                examples={[
+                  { title: "Hoje pesou porque...", description: "Bom para organizar um dia confuso." },
+                  { title: "Preciso decidir sobre...", description: "Bom quando tem uma escolha travada." },
+                  { title: "Quero guardar que...", description: "Bom para criar memória útil para depois." },
+                ]}
+              />
             ) : (
               (() => {
                 const q = searchQuery.toLowerCase().trim();

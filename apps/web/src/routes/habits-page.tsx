@@ -5,8 +5,9 @@ import type { Habit } from "../features/aura/types";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { getHabitCompletionCount, getHabitProgressLabel, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from "../features/aura/habit-helpers";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useToast } from "../components/Toast";
-import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil } from "lucide-react";
+import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil, Sparkles } from "lucide-react";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { getLocalDateKey } from "../utils/day-context";
@@ -886,14 +887,18 @@ export function HabitsPage() {
         {tab === "today" && (
           <div>
             {todayHabits.length === 0 ? (
-              <div className="empty-state" style={{ border: "2px dashed var(--warm-border)", borderRadius: 20 }}>
-                <div className="empty-state-icon">🌱</div>
-                <div className="empty-state-title">Nenhum hábito ainda</div>
-                <div className="empty-state-sub">Pequenos hábitos diários constroem grandes mudanças. Crie o primeiro agora.</div>
-                <AuraButtonV2 variant="primary" size="sm" onClick={() => setShowAddModal(true)} leftIcon={<Plus size={14} />} style={{ marginTop: 4 }}>
-                  Criar hábito
-                </AuraButtonV2>
-              </div>
+              <SmartEmptyState
+                icon={Sparkles}
+                title="Crie um habito pequeno"
+                description="Habito aqui nao e cobrança. É uma repetição leve que combina com seu humor e energia."
+                ctaLabel="Criar habito"
+                onAction={() => setShowAddModal(true)}
+                examples={[
+                  { title: "Abrir o planner de manha", description: "Para orientar o dia antes de começar." },
+                  { title: "Revisar uma pendencia as 16h", description: "Para evitar peso acumulado no fim do dia." },
+                  { title: "Registrar uma linha no diario", description: "Para dar contexto quando o dia oscilar." },
+                ]}
+              />
             ) : (
               <>
                 {/* Pending */}
@@ -970,14 +975,18 @@ export function HabitsPage() {
         {tab === "all" && (
           <div>
             {habits.length === 0 ? (
-              <div className="empty-state" style={{ border: "2px dashed var(--warm-border)", borderRadius: 20 }}>
-                <div className="empty-state-icon">📋</div>
-                <div className="empty-state-title">Sem hábitos cadastrados</div>
-                <div className="empty-state-sub">Adicione hábitos e acompanhe seu progresso ao longo do tempo.</div>
-                <AuraButtonV2 variant="primary" size="sm" onClick={() => setShowAddModal(true)} leftIcon={<Plus size={14} />} style={{ marginTop: 4 }}>
-                  Criar hábito
-                </AuraButtonV2>
-              </div>
+              <SmartEmptyState
+                icon={Sparkles}
+                title="Nenhum habito cadastrado"
+                description="Comece com algo que ajude a Airia a sustentar seu ritmo, sem virar lista pesada."
+                ctaLabel="Criar primeiro habito"
+                onAction={() => setShowAddModal(true)}
+                examples={[
+                  { title: "Check-in da manha", description: "Humor e energia antes da agenda." },
+                  { title: "Fechamento do dia", description: "Olhar o que ficou pendente." },
+                  { title: "Planejar uma janela leve", description: "Proteger energia em dias sensiveis." },
+                ]}
+              />
             ) : (
               (() => {
                 const grouped = habits.reduce<Record<string, Habit[]>>((acc, h) => {

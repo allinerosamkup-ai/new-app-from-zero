@@ -1,5 +1,6 @@
 // Insights Page v4 — Analytics profundo + Line chart + Correlações + Export + Relatório mensal
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +10,7 @@ import { useToast } from "../components/Toast";
 import { computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
+import { BarChart3 } from "lucide-react";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -466,6 +468,23 @@ export function InsightsPage() {
           </div>
         </div>
 
+        {history.length < 3 && (
+          <div style={{ marginBottom: 16 }}>
+            <SmartEmptyState
+              icon={BarChart3}
+              title="Seus padroes aparecem com repeticao"
+              description={`Voce tem ${history.length} check-in${history.length === 1 ? "" : "s"}. Com 3 check-ins, a Airia ja começa a mostrar leitura mais util de humor e energia.`}
+              ctaLabel="Fazer check-in"
+              route="/checkin"
+              examples={[
+                { title: "Depois de 3 check-ins", description: "Aparecem medias simples e comparacao inicial." },
+                { title: "Depois de 7 check-ins", description: "A leitura de fase fica mais confiavel." },
+                { title: "Depois de 30 dias", description: "Insights semanais ficam bem mais precisos." },
+              ]}
+            />
+          </div>
+        )}
+
         {/* ── Chart card ── */}
         <div className="aura-card aura-card--chart insights-chart-card">
           <div className="insights-chart-heading">
@@ -858,7 +877,7 @@ export function InsightsPage() {
                   }}
                 />
               </div>
-              {dimension.noData && <span className="harmony-dim-note">sem dados</span>}
+              {dimension.noData && <span className="harmony-dim-note">aparece com mais check-ins</span>}
             </div>
           ))}
         </div>
