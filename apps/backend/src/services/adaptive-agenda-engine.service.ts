@@ -4,13 +4,21 @@ import type { DailyContext } from './context-grounding.service';
 export type AgendaDecisionType = 'keep' | 'move' | 'shrink' | 'pause' | 'suggest' | 'convert' | 'notify' | 'block';
 
 export type AgendaAdaptationDecision = {
+  id: string;
   type: AgendaDecisionType;
   title: string;
   kind: DecisionCandidate['kind'];
   source: DecisionCandidate['source'];
+  targetId?: string | null;
+  targetType: NonNullable<DecisionCandidate['targetType']>;
   from?: string | null;
   to?: string | null;
+  suggestedStartTime?: string | null;
+  suggestedEndTime?: string | null;
+  suggestedDate?: string | null;
   reason: string;
+  bioReason: string;
+  impactLabel: NonNullable<DecisionCandidate['impactLabel']>;
   score: number;
   confidence: number;
   requiresConfirmation: boolean;
@@ -31,13 +39,21 @@ export type AdaptiveAgendaPlan = {
 function toAgendaDecision(candidate: DecisionCandidate): AgendaAdaptationDecision {
   const type: AgendaDecisionType = candidate.action === 'insight' ? 'block' : candidate.action;
   return {
+    id: candidate.id,
     type,
     title: candidate.title,
     kind: candidate.kind,
     source: candidate.source,
+    targetId: candidate.targetId ?? null,
+    targetType: candidate.targetType ?? 'system',
     from: candidate.from ?? null,
     to: candidate.to ?? null,
+    suggestedStartTime: candidate.suggestedStartTime ?? null,
+    suggestedEndTime: candidate.suggestedEndTime ?? null,
+    suggestedDate: candidate.suggestedDate ?? null,
     reason: candidate.reason,
+    bioReason: candidate.bioReason ?? candidate.reason,
+    impactLabel: candidate.impactLabel ?? 'mantém ritmo',
     score: candidate.score,
     confidence: candidate.confidence,
     requiresConfirmation: candidate.requiresConfirmation,

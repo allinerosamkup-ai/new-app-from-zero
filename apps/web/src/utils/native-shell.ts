@@ -1,7 +1,8 @@
 type NativeShellMessage =
   | { type: "auth.signOut" }
   | { type: "external.open"; url: string }
-  | { type: "widget.sync"; payload: NativeTodayWidgetPayload };
+  | { type: "widget.sync"; payload: NativeTodayWidgetPayload }
+  | { type: "health.connectSync"; requestId: string };
 
 export type NativeTodayWidgetPayload = {
   stateLabel: string;
@@ -109,5 +110,36 @@ export function postNativeWidgetSync(payload: NativeTodayWidgetPayload) {
   postNativeShellMessage({
     type: "widget.sync",
     payload: createNativeTodayWidgetPayload(payload),
+  });
+}
+
+export function isNativeShell() {
+  return Boolean(getNativeWebViewBridge());
+}
+
+export function requestNativeHealthConnectSync(): Promise<{ ok: boolean; snapshot?: unknown; error?: string }> {
+  const requestId = `health-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const bridge = getNativeWebViewBridge();
+
+  if (!bridge) {
+    return Promise.resolve({ ok: false, error: "Health Connect só está disponível no app Android." });
+  }
+
+  return new Promise((resolve) => {
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener("airia:health-connect-sync", handler as EventListener);
+      resolve({ ok: false, error: "A sincronização demorou demais. Tente de novo." });
+    }, 45000);
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { requestId?: string; ok?: boolean; snapshot?: unknown; error?: string };
+      if (detail?.requestId !== requestId) return;
+      window.clearTimeout(timeout);
+      window.removeEventListener("airia:health-connect-sync", handler as EventListener);
+      resolve({ ok: detail.ok === true, snapshot: detail.snapshot, error: detail.error });
+    };
+
+    window.addEventListener("airia:health-connect-sync", handler as EventListener);
+    bridge.postMessage(JSON.stringify({ type: "health.connectSync", requestId }));
   });
 }

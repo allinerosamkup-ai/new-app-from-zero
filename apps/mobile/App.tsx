@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Linking, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Linking, NativeModules, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { ActivityIndicator } from 'react-native-paper';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import type { Session } from '@supabase/supabase-js';
@@ -23,7 +23,43 @@ type NativeShellEvent =
   | { type: 'auth.signOut' }
   | { type: 'auth.googleSignIn' }
   | { type: 'external.open'; url: string }
-  | { type: 'widget.sync'; payload: unknown };
+  | { type: 'widget.sync'; payload: unknown }
+  | { type: 'health.connectSync'; requestId: string };
+
+type HealthSnapshot = {
+  source: 'health_connect';
+  localDate: string;
+  sleepMinutes?: number;
+  sleepScore?: number;
+  steps?: number;
+  avgHeartRate?: number;
+  exerciseMinutes?: number;
+  syncedAt?: string;
+};
+
+async function syncHealthSnapshotToBackend(snapshot: HealthSnapshot) {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) {
+    throw new Error('Sessao ausente para sincronizar Health Connect.');
+  }
+
+  const apiUrl = (process.env.EXPO_PUBLIC_API_URL || 'https://airia.pro').replace(/\/+$/, '');
+  const response = await fetch(`${apiUrl}/api/health-connect/sync`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(snapshot),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Falha ao salvar Health Connect (${response.status}).`);
+  }
+
+  return response.json();
+}
 
 async function checkForOtaUpdate() {
   // Em dev (__DEV__) ou ambiente Expo Go, expo-updates não funciona — pula silenciosamente
@@ -163,6 +199,14 @@ export default function App() {
   }, []);
 
   const handleMessage = useCallback(async (event: WebViewMessageEvent) => {
+    const emitHealthResult = (requestId: string, payload: { ok: boolean; snapshot?: unknown; error?: string }) => {
+      const detail = JSON.stringify({ requestId, ...payload });
+      webViewRef.current?.injectJavaScript(`
+        window.dispatchEvent(new CustomEvent('airia:health-connect-sync', { detail: ${detail} }));
+        true;
+      `);
+    };
+
     try {
       const message = JSON.parse(event.nativeEvent.data) as NativeShellEvent;
 
@@ -185,6 +229,24 @@ export default function App() {
         const payload = sanitizeTodayWidgetPayload(message.payload);
         if (!payload) return;
         await publishTodayWidgetData(payload);
+        return;
+      }
+
+      if (message.type === 'health.connectSync') {
+        try {
+          const module = NativeModules.AiriaHealthConnectModule;
+          if (!module?.requestPermissionsAndReadToday) {
+            throw new Error('Health Connect nao esta disponivel nesta versao do app.');
+          }
+          const snapshot = await module.requestPermissionsAndReadToday();
+          const saved = await syncHealthSnapshotToBackend(snapshot as HealthSnapshot);
+          emitHealthResult(message.requestId, { ok: true, snapshot: saved?.snapshot ?? snapshot });
+        } catch (error) {
+          emitHealthResult(message.requestId, {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Nao consegui sincronizar o Health Connect.',
+          });
+        }
       }
     } catch (error) {
       console.warn('AIRIA_NATIVE_MESSAGE_FAILED', error);

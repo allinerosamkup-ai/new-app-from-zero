@@ -217,6 +217,32 @@ type PlannerTask = {
 
 type RecurringDeleteScope = "this" | "future" | "this-and-future" | "all";
 
+type AgendaAdaptationChange = {
+  id: string;
+  type: "keep" | "move" | "shrink" | "pause" | "suggest" | "convert" | "notify" | "block" | "skip";
+  title: string;
+  targetId?: string | null;
+  targetType: "timeline" | "habit" | "goal" | "system";
+  from?: string | null;
+  to?: string | null;
+  suggestedStartTime?: string | null;
+  suggestedEndTime?: string | null;
+  suggestedDate?: string | null;
+  reason: string;
+  bioReason: string;
+  impactLabel: "reduz carga" | "protege energia" | "aproveita janela" | "mantém ritmo";
+  requiresConfirmation?: boolean;
+  applied?: boolean;
+};
+
+type AgendaAdaptationResponse = {
+  summary: string;
+  changes: AgendaAdaptationChange[];
+  appliedChanges?: AgendaAdaptationChange[];
+  skippedChanges?: AgendaAdaptationChange[];
+  timelineRefreshNeeded?: boolean;
+};
+
 const RECURRING_DELETE_OPTIONS: Array<{
   scope: RecurringDeleteScope;
   title: string;
@@ -1790,6 +1816,11 @@ export function PlannerPage() {
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
   const [recurringDeleteTask, setRecurringDeleteTask] = useState<PlannerTask | null>(null);
   const [recurringDeleteLoading, setRecurringDeleteLoading] = useState(false);
+  const [adaptationOpen, setAdaptationOpen] = useState(false);
+  const [adaptationLoading, setAdaptationLoading] = useState(false);
+  const [adaptationApplying, setAdaptationApplying] = useState(false);
+  const [adaptationPreview, setAdaptationPreview] = useState<AgendaAdaptationResponse | null>(null);
+  const [selectedAdaptationIds, setSelectedAdaptationIds] = useState<Set<string>>(new Set());
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
   const [now, setNow] = useState(() => new Date());
   const openedTaskFromLocationRef = useRef<string | null>(null);
@@ -1915,6 +1946,11 @@ export function PlannerPage() {
 
     return todayEntries[todayEntries.length - 1] ?? null;
   }, [state.checkinHistory]);
+  const hasAdaptiveSignal = selectedDateKey === getLocalDateKey() && (
+    latestTodayCheckin ||
+    cycleReport.phase !== "insufficient_data" ||
+    (state.checkinHistory || []).length > 0
+  );
 
   const plannerSummary = plannerLoading
     ? "Montando a visualização da sua agenda."
@@ -2039,6 +2075,12 @@ export function PlannerPage() {
     openEditForm(task);
   }, [location.state, plannerTasks]);
 
+  useEffect(() => {
+    const shouldOpen = Boolean((location.state as { openAgendaAdaptation?: boolean } | null)?.openAgendaAdaptation);
+    if (!shouldOpen || adaptationOpen || plannerLoading) return;
+    void openAgendaAdaptationPreview("home");
+  }, [location.state, adaptationOpen, plannerLoading, selectedDateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function reloadPlannerTasks() {
     try {
         const [timeline, gcalRes] = await Promise.all([
@@ -2067,6 +2109,68 @@ export function PlannerPage() {
     } catch (e) {
         console.error('[reloadPlannerTasks]', e);
         showError("Erro ao carregar agenda. Tente novamente.");
+    }
+  }
+
+  function buildAgendaAdaptContext() {
+    return {
+      localDate: selectedDateKey,
+      phase: cycleReport.phase,
+      phaseLabel: cycleReport.phaseLabel,
+      moodCycleContext: cycleReport.aiContext,
+      currentHour: now.getHours(),
+      currentMinute: now.getMinutes(),
+      currentMomentLabel: now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      pendingTasks: plannerTasks.filter((task) => !task.done).map((task) => task.title),
+      existingTasks: plannerTasks.map((task) => `${task.time}-${task.endTime} ${task.title}`),
+    };
+  }
+
+  async function openAgendaAdaptationPreview(trigger: "manual" | "home" | "planner" | "checkin" = "planner") {
+    setAdaptationOpen(true);
+    setAdaptationLoading(true);
+    try {
+      const result = await api.post("/agenda/adapt", {
+        date: selectedDateKey,
+        mode: "preview",
+        trigger,
+        context: buildAgendaAdaptContext(),
+      }) as AgendaAdaptationResponse;
+      setAdaptationPreview(result);
+      setSelectedAdaptationIds(new Set(
+        (result.changes || [])
+          .filter((change) => change.requiresConfirmation && !["keep", "block", "notify"].includes(change.type))
+          .map((change) => change.id),
+      ));
+    } catch (error: any) {
+      showError(error.message || "Não foi possível ajustar a agenda agora.");
+      setAdaptationOpen(false);
+    } finally {
+      setAdaptationLoading(false);
+    }
+  }
+
+  async function applyAgendaAdaptation() {
+    if (!adaptationPreview || selectedAdaptationIds.size === 0) return;
+    setAdaptationApplying(true);
+    try {
+      const result = await api.post("/agenda/adapt", {
+        date: selectedDateKey,
+        mode: "apply",
+        trigger: "planner",
+        selectedDecisionIds: Array.from(selectedAdaptationIds),
+        context: buildAgendaAdaptContext(),
+      }) as AgendaAdaptationResponse;
+      setAdaptationPreview(result);
+      if (result.timelineRefreshNeeded) {
+        await reloadPlannerTasks();
+        await refreshData();
+      }
+      showSuccess((result.appliedChanges?.length ?? 0) > 0 ? "Agenda ajustada." : "Nenhum ajuste foi aplicado.");
+    } catch (error: any) {
+      showError(error.message || "Não foi possível aplicar os ajustes.");
+    } finally {
+      setAdaptationApplying(false);
     }
   }
 
@@ -2491,6 +2595,59 @@ export function PlannerPage() {
       </div>
 
       <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
+
+      {hasAdaptiveSignal && (
+        <div style={{
+          borderRadius: 22,
+          padding: "16px",
+          marginBottom: 22,
+          background: "rgba(255,255,255,.72)",
+          border: "1.5px solid rgba(99,152,169,.22)",
+          boxShadow: "0 14px 34px rgba(99,152,169,.08)",
+        }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <div style={{
+              width: 40,
+              height: 40,
+              borderRadius: 14,
+              background: "rgba(99,152,169,.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <Sparkles size={18} color="var(--accent-sky)" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 850, color: "var(--text-1)" }}>
+                Ajustar meu dia
+              </p>
+              <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: "var(--text-2)" }}>
+                Airia usa a hora atual, sua fase, energia e janelas livres para sugerir o que mover, reduzir, pausar ou encaixar agora.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openAgendaAdaptationPreview("planner")}
+              disabled={adaptationLoading}
+              style={{
+                border: "none",
+                background: "var(--accent-sky)",
+                color: "#fff",
+                borderRadius: 12,
+                minHeight: 44,
+                padding: "0 14px",
+                fontSize: 12,
+                fontWeight: 850,
+                cursor: adaptationLoading ? "default" : "pointer",
+                opacity: adaptationLoading ? 0.68 : 1,
+              }}
+            >
+              {adaptationLoading ? "Lendo..." : "Ver ajustes"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {!plannerLoading && plannerTasks.length === 0 && (
         <div style={{ marginBottom: 22 }}>
@@ -2934,6 +3091,138 @@ export function PlannerPage() {
           </div>
         </div>
       ) : null}
+
+      {adaptationOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.38)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 120, padding: "16px 16px env(safe-area-inset-bottom)" }}>
+          <div style={{
+            width: "100%",
+            maxHeight: "84vh",
+            overflowY: "auto",
+            background: "#fff",
+            borderRadius: "28px 28px 20px 20px",
+            padding: 20,
+            boxShadow: "0 -12px 42px rgba(0,0,0,.18)",
+          }}>
+            <div style={{ width: 42, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 18px" }} />
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 14, background: "rgba(99,152,169,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Sparkles size={18} color="var(--accent-sky)" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3 style={{ margin: "0 0 4px", fontSize: 19, color: "var(--text-1)", fontWeight: 850 }}>Ajustes sugeridos</h3>
+                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--text-3)" }}>
+                  {adaptationPreview?.summary ?? "Airia está lendo sua agenda, fase e horário atual."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setAdaptationOpen(false)} style={{ border: "none", background: "transparent", fontSize: 18, color: "var(--text-3)", cursor: "pointer", minWidth: 32, minHeight: 32 }}>×</button>
+            </div>
+
+            {adaptationLoading ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                {[1, 2, 3].map((item) => (
+                  <div key={item} style={{ height: 74, borderRadius: 16, background: "rgba(0,0,0,.045)" }} />
+                ))}
+              </div>
+            ) : adaptationPreview?.changes?.length ? (
+              <div style={{ display: "grid", gap: 10 }}>
+                {adaptationPreview.changes.map((change) => {
+                  const selected = selectedAdaptationIds.has(change.id);
+                  const actionable = change.requiresConfirmation && !["keep", "block", "notify"].includes(change.type);
+                  const when = change.suggestedStartTime
+                    ? `${change.suggestedDate && change.suggestedDate !== selectedDateKey ? `${change.suggestedDate} · ` : ""}${change.suggestedStartTime}-${change.suggestedEndTime ?? "?"}`
+                    : change.type === "pause"
+                      ? "amanhã"
+                      : change.from ?? "sem horário";
+                  return (
+                    <button
+                      key={change.id}
+                      type="button"
+                      disabled={!actionable || adaptationApplying}
+                      onClick={() => {
+                        if (!actionable) return;
+                        setSelectedAdaptationIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(change.id)) next.delete(change.id);
+                          else next.add(change.id);
+                          return next;
+                        });
+                      }}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        border: `1.5px solid ${selected ? "rgba(99,152,169,.45)" : "var(--warm-border)"}`,
+                        background: selected ? "rgba(99,152,169,.09)" : "rgba(253,250,247,.84)",
+                        borderRadius: 18,
+                        padding: 14,
+                        cursor: actionable ? "pointer" : "default",
+                        opacity: actionable ? 1 : 0.64,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                        <span style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: 7,
+                          border: `2px solid ${selected ? "var(--accent-sky)" : "var(--warm-border-2)"}`,
+                          background: selected ? "var(--accent-sky)" : "transparent",
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 13,
+                          fontWeight: 900,
+                          flexShrink: 0,
+                          marginTop: 1,
+                        }}>
+                          {selected ? "✓" : ""}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 850, color: "var(--text-1)" }}>
+                            {change.title}
+                          </p>
+                          <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--accent-sky)", fontWeight: 800, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                            {change.impactLabel} · {when}
+                          </p>
+                          <p style={{ margin: "7px 0 0", fontSize: 12, lineHeight: 1.45, color: "var(--text-2)" }}>
+                            {change.reason}
+                          </p>
+                          <p style={{ margin: "5px 0 0", fontSize: 11, lineHeight: 1.45, color: "var(--text-3)" }}>
+                            {change.bioReason}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p style={{ margin: "12px 0", fontSize: 13, lineHeight: 1.5, color: "var(--text-2)" }}>
+                Nenhum ajuste confiável agora. Melhor manter a agenda como está.
+              </p>
+            )}
+
+            <button
+              type="button"
+              disabled={adaptationApplying || selectedAdaptationIds.size === 0}
+              onClick={applyAgendaAdaptation}
+              style={{
+                width: "100%",
+                marginTop: 16,
+                minHeight: 48,
+                borderRadius: 16,
+                border: "none",
+                background: selectedAdaptationIds.size === 0 ? "rgba(0,0,0,.08)" : "var(--accent-sky)",
+                color: selectedAdaptationIds.size === 0 ? "var(--text-3)" : "#fff",
+                fontSize: 14,
+                fontWeight: 850,
+                cursor: adaptationApplying || selectedAdaptationIds.size === 0 ? "default" : "pointer",
+              }}
+            >
+              {adaptationApplying ? "Aplicando..." : "Aplicar ajustes selecionados"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

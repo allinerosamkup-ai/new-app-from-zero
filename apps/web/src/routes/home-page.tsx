@@ -795,6 +795,21 @@ export function HomePage() {
   const totalTasks = state.tasks.length;
   const doneTasks = state.tasks.filter(t => t.done).length;
   const pendingTasks = state.tasks.filter(t => !t.done).length;
+  const bioSyncPrimarySignal = latestTodayCheckin
+    ? `Hoje: humor ${latestTodayCheckin.humor}/10 e energia ${latestTodayCheckin.energia}/10`
+    : cycleReport.phase !== "insufficient_data"
+      ? `Fase atual: ${currentPhaseLabel}`
+      : "Comece com um check-in para calibrar o ritmo de hoje";
+  const bioSyncBodySignals = [
+    latestTodayCheckin?.sono != null ? `sono ${latestTodayCheckin.sono}/10` : null,
+    latestTodayCheckin?.fisico != null ? `corpo ${latestTodayCheckin.fisico}/10` : null,
+    menstrualReport ? `${menstrualReport.label} d${menstrualReport.dayOfCycle}` : null,
+  ].filter(Boolean);
+  const bioSyncAgendaHint = pendingTasks > 0
+    ? `${pendingTasks} pendência${pendingTasks > 1 ? "s" : ""} para ajustar pelo horário atual.`
+    : goalTitles.length > 0 || habits.some((habit) => !(habit.completions || []).length)
+      ? "Sem agenda pesada: dá para encaixar um bloco leve com base em meta ou hábito."
+      : "Sem âncora operacional forte: melhor calibrar antes de criar compromisso.";
 
   async function fetchAgenda() {
     setAgendaPhase("loading");
@@ -1399,6 +1414,40 @@ export function HomePage() {
             </AuraButtonV2>
           </div>
         )}
+
+        <div
+          className="aura-card"
+          style={{
+            marginBottom: "calc(var(--a) * 1.1)",
+            padding: 16,
+            borderRadius: 22,
+            border: "1.5px solid rgba(99,152,169,.22)",
+            background: "rgba(255,255,255,.82)",
+          }}
+        >
+          <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sky)" }}>
+            Bio-sincronia de hoje
+          </p>
+          <h2 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.25 }}>
+            {bioSyncPrimarySignal}
+          </h2>
+          <p style={{ margin: "0 0 8px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
+            {bioSyncBodySignals.length > 0
+              ? `Sinais do corpo: ${bioSyncBodySignals.join(" · ")}.`
+              : "A Airia cruza fase, histórico e agenda mesmo quando ainda faltam sinais do corpo."}
+          </p>
+          <p style={{ margin: "0 0 13px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
+            {bioSyncAgendaHint}
+          </p>
+          <AuraButtonV2
+            variant="secondary"
+            size="md"
+            onClick={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
+            style={{ width: "100%", minHeight: 44 }}
+          >
+            Ajustar agenda pelo meu ritmo
+          </AuraButtonV2>
+        </div>
 
         {/* ── Gráfico de check-ins ── */}
         <div className="mini-chart-area" style={showActivationHome && activationState.checkinCount === 0 ? { padding: 12 } : undefined}>

@@ -598,6 +598,13 @@ export function CheckinResultPage() {
 
   const acceptedCount = tasks.filter((t) => !t.discarded).length;
   const isMenuthe = v.accent === "var(--accent-sage)";
+  const hasAgendaAnchor = pendingTaskTitles.length > 0;
+  const hasSoftAnchor = goalTitles.length > 0 || (state.habits || []).some((habit) => !(habit.completions || []).some((completion) => normalizeDateKey(completion.date) === dayContext.localDate));
+  const adaptivePlannerLabel = hasAgendaAnchor
+    ? "Ver ajustes sugeridos"
+    : hasSoftAnchor
+      ? "Montar um bloco possível"
+      : "Abrir Planner";
 
   async function finalizeAndGo(path: "/planner" | "/home" | "/journal", navState?: Record<string, unknown>) {
     try {
@@ -876,6 +883,29 @@ export function CheckinResultPage() {
           >
             {v.chipLabel}
           </span>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(255,253,250,.92)",
+            borderRadius: 14,
+            border: `1.5px solid ${v.accent}28`,
+            padding: 14,
+            marginBottom: 12,
+          }}
+        >
+          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>
+            Agenda adaptativa
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.55 }}>
+            A Airia pode usar esse check-in, a hora atual e seus blocos do dia para sugerir o que mover, reduzir, pausar ou encaixar.
+          </p>
+          <AuraButtonV2
+            className="btn btn-ghost btn-full"
+            onClick={() => { void finalizeAndGo("/planner", { openAgendaAdaptation: true }); }}
+          >
+            {adaptivePlannerLabel}
+          </AuraButtonV2>
         </div>
 
         {/* ─── BLOCO IA ─── */}

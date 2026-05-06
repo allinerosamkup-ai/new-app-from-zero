@@ -1226,14 +1226,14 @@ export function InsightsPage() {
             >
               {/* insight header */}
               <div className="insights-ai-body">
-                <p className="insights-ai-eyebrow">Padrao da semana</p>
+                <p className="insights-ai-eyebrow">Padrão de ritmo</p>
                 <p className="insights-ai-text">{aiInsight.insight}</p>
               </div>
 
               {/* action row */}
               <div className="insights-ai-action">
                 <div className="insights-ai-action-content">
-                  <p className="insights-ai-action-label">AÇÃO PARA A PRÓXIMA SEMANA</p>
+                  <p className="insights-ai-action-label">O QUE AJUSTAR NA PRÓXIMA SEMANA</p>
                   <p className="insights-ai-action-text">{aiInsight.action}</p>
                 </div>
                 <button
@@ -1241,7 +1241,7 @@ export function InsightsPage() {
                   onClick={applyAction}
                   disabled={taskAdded}
                 >
-                  {taskAdded ? "✓ Salvo" : "+ Planner"}
+                  {taskAdded ? "✓ Salvo" : "Confirmar no Planner"}
                 </button>
               </div>
             </div>
@@ -1320,7 +1320,7 @@ export function InsightsPage() {
             boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
-              📊 Padrões Detectados
+              📊 Sinais antes da queda
             </p>
 
             {/* Melhor / Pior dia */}

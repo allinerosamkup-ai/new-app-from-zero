@@ -10,6 +10,7 @@ import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
+import { isNativeShell, requestNativeHealthConnectSync } from "../utils/native-shell";
 import "../styles/aura.css";
 
 type GCalCalendar = {
@@ -265,6 +266,79 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
         </div>
       )}
     </>
+  );
+}
+
+function HealthConnectSettingsSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
+  const nativeAvailable = isNativeShell();
+
+  const loadLatest = useCallback(async () => {
+    try {
+      const res = await api.get("/health-connect/latest");
+      setSnapshot(res?.snapshot && typeof res.snapshot === "object" ? res.snapshot as Record<string, unknown> : null);
+    } catch {
+      setSnapshot(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadLatest(); }, [loadLatest]);
+
+  async function handleSync() {
+    if (!nativeAvailable) {
+      onStatusChange("Health Connect fica disponível no app Android instalado.");
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const result = await requestNativeHealthConnectSync();
+      if (!result.ok) {
+        onStatusChange(result.error || "Não consegui sincronizar o Health Connect.");
+        return;
+      }
+      await loadLatest();
+      onStatusChange("Health Connect sincronizado.");
+      setTimeout(() => onStatusChange(null), 2400);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  const sleepMinutes = typeof snapshot?.sleepMinutes === "number" ? snapshot.sleepMinutes : null;
+  const steps = typeof snapshot?.steps === "number" ? snapshot.steps : null;
+  const syncedAt = typeof snapshot?.syncedAt === "string" ? snapshot.syncedAt : null;
+  const sleepText = sleepMinutes ? `${Math.round((sleepMinutes / 60) * 10) / 10}h de sono` : "sono ainda não sincronizado";
+  const stepsText = steps != null ? `${Math.round(steps).toLocaleString("pt-BR")} passos` : "passos como complemento";
+
+  return (
+    <div className="config-row" style={{ cursor: syncing ? "wait" : "pointer", opacity: syncing ? 0.7 : 1 }} onClick={handleSync}>
+      <div className="config-row-label">
+        <div className="icon-bg" style={{ background: snapshot ? "rgba(150,199,179,.14)" : "rgba(176,180,196,.12)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={snapshot ? "var(--accent-sage)" : "var(--accent-sky)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+          </svg>
+        </div>
+        <div>
+          <p className="config-row-text">Health Connect</p>
+          <p className="config-row-sub">
+            {loading ? "Verificando..." : snapshot ? `${sleepText} · ${stepsText}` : nativeAvailable ? "Conectar sono como base da bio-sincronia" : "Disponível no app Android"}
+          </p>
+          {syncedAt && (
+            <p className="config-row-sub" style={{ marginTop: 2 }}>
+              Atualizado {new Date(syncedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </p>
+          )}
+        </div>
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 800, color: "var(--accent-peach)", flexShrink: 0 }}>
+        {syncing ? "Sincronizando" : snapshot ? "Atualizar" : "Conectar"}
+      </span>
+    </div>
   );
 }
 
@@ -914,6 +988,8 @@ export function PreferencesPage() {
           <p className="config-section-title">Conta e Integrações</p>
           
           <GCalSettingsSection onStatusChange={setAccountStatus} />
+          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
+          <HealthConnectSettingsSection onStatusChange={setAccountStatus} />
           
           <div
             className="config-row"

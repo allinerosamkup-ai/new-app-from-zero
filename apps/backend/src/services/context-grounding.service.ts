@@ -30,6 +30,7 @@ export type DailyContext = GroundingLists & {
   tasks: GroundedTask[];
   habits: GroundedHabit[];
   goals: GroundedGoal[];
+  healthSignals?: GroundedHealthSignals | null;
   actionFeedback: AiActionFeedbackItem[];
   postponedActions?: GroundedPostponement[];
   patternMemoryContext: string;
@@ -37,6 +38,7 @@ export type DailyContext = GroundingLists & {
 };
 
 export type GroundedTask = {
+  id?: string;
   title: string;
   status: string;
   startAt?: Date;
@@ -47,6 +49,7 @@ export type GroundedTask = {
 };
 
 export type GroundedHabit = {
+  id?: string;
   title: string;
   frequency?: string | null;
   targetDays?: number[] | null;
@@ -55,9 +58,21 @@ export type GroundedHabit = {
 };
 
 export type GroundedGoal = {
+  id?: string;
   title: string;
   progress: number;
   subgoals: unknown;
+};
+
+export type GroundedHealthSignals = {
+  source: 'health_connect';
+  localDate?: string | null;
+  sleepMinutes?: number | null;
+  sleepScore?: number | null;
+  steps?: number | null;
+  avgHeartRate?: number | null;
+  exerciseMinutes?: number | null;
+  lastSyncedAt?: string | null;
 };
 
 export type GroundedPostponement = {
@@ -192,6 +207,26 @@ function formatGroundingBlock(lists: GroundingLists & { postponedActions?: Groun
   return `\nGROUNDING OPERACIONAL DA AIRIA:\n${lines.join('\n')}`;
 }
 
+function normalizeHealthSignals(value: unknown): GroundedHealthSignals | null {
+  if (!value || typeof value !== 'object') return null;
+  const data = value as Record<string, unknown>;
+  const numberOrNull = (raw: unknown) => {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  return {
+    source: 'health_connect',
+    localDate: cleanText(data.localDate) || null,
+    sleepMinutes: numberOrNull(data.sleepMinutes),
+    sleepScore: numberOrNull(data.sleepScore),
+    steps: numberOrNull(data.steps),
+    avgHeartRate: numberOrNull(data.avgHeartRate),
+    exerciseMinutes: numberOrNull(data.exerciseMinutes),
+    lastSyncedAt: cleanText(data.syncedAt) || cleanText(data.lastSyncedAt) || null,
+  };
+}
+
 function surfaceFromType(type: string): DecisionSurface {
   if (type === 'stability-analysis' || type === 'home-messages') return 'home';
   if (type === 'checkin-response' || type === 'day-tasks') return 'checkin';
@@ -211,16 +246,17 @@ export class ContextGroundingService {
 
     const prismaAny = this.prisma as any;
 
-    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements] = await Promise.all([
+    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals] = await Promise.all([
       prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
         where: { userId: input.userId, localDate: { gte: start, lte: end } },
         orderBy: { startAt: 'asc' },
-        select: { title: true, status: true, startAt: true, endAt: true, category: true, intensity: true, isAiSuggested: true },
+        select: { id: true, title: true, status: true, startAt: true, endAt: true, category: true, intensity: true, isAiSuggested: true },
       }).catch(() => []) : Promise.resolve([]),
       prismaAny.habit?.findMany ? prismaAny.habit.findMany({
         where: { userId: input.userId, archived: false },
         orderBy: { createdAt: 'asc' },
         select: {
+          id: true,
           title: true,
           frequency: true,
           targetDays: true,
@@ -235,7 +271,7 @@ export class ContextGroundingService {
         where: { userId: input.userId, archived: false },
         orderBy: { updatedAt: 'desc' },
         take: 12,
-        select: { title: true, progress: true, subgoals: true },
+        select: { id: true, title: true, progress: true, subgoals: true },
       }).catch(() => []) : Promise.resolve([]),
       AiActionFeedbackService.getRecent(prismaAny, input.userId).catch(() => []),
       prismaAny.eventLog?.findMany ? prismaAny.eventLog.findMany({
@@ -256,6 +292,21 @@ export class ContextGroundingService {
           };
         })
         .filter(isPostponementLog)).catch(() => []) : Promise.resolve([]),
+      prismaAny.eventLog?.findFirst ? prismaAny.eventLog.findFirst({
+        where: {
+          userId: input.userId,
+          eventName: 'health_connect.synced',
+          OR: [
+            { createdAt: { gte: start, lte: end } },
+            { createdAt: { gte: new Date(start.getTime() - 36 * 60 * 60 * 1000) } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { properties: true, createdAt: true },
+      }).then((row: { properties: unknown; createdAt: Date } | null) => {
+        const signals = normalizeHealthSignals(row?.properties);
+        return signals ? { ...signals, lastSyncedAt: signals.lastSyncedAt ?? row?.createdAt?.toISOString?.() ?? null } : null;
+      }).catch(() => null) : Promise.resolve(null),
     ]);
 
     const tasks = rawTasks as GroundedTask[];
@@ -312,6 +363,7 @@ export class ContextGroundingService {
       tasks,
       habits,
       goals,
+      healthSignals: rawHealthSignals as GroundedHealthSignals | null,
       actionFeedback,
       postponedActions,
       patternMemoryContext: cleanText(input.ragContext),

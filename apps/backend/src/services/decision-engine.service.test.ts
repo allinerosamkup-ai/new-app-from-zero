@@ -59,6 +59,7 @@ const context: DailyContext = {
       pendingTaskTitles: ['Responder cliente'],
       tasks: [
         {
+          id: '11111111-1111-4111-8111-111111111111',
           title: 'Responder cliente',
           status: 'planned',
           category: 'trabalho',
@@ -73,8 +74,77 @@ const context: DailyContext = {
   });
 
   assert.equal(result.allowedActions[0]?.kind, 'real_commitment');
-  assert.equal(result.allowedActions[0]?.action, 'pause');
+  assert.equal(result.allowedActions[0]?.action, 'shrink');
+  assert.equal(result.allowedActions[0]?.targetId, '11111111-1111-4111-8111-111111111111');
+  assert.equal(result.allowedActions[0]?.targetType, 'timeline');
+  assert.equal(result.allowedActions[0]?.suggestedStartTime, '09:00');
+  assert.equal(result.allowedActions[0]?.suggestedEndTime, '09:30');
+  assert.match(result.allowedActions[0]?.bioReason ?? '', /reduzir duração/);
+  assert.equal(result.allowedActions[0]?.impactLabel, 'reduz carga');
   assert.equal(result.allowedActions[0]?.notificationAllowed, true);
+}
+
+{
+  const result = DecisionEngine.evaluate({
+    dailyContext: {
+      ...context,
+      pendingTaskTitles: ['Responder cliente'],
+      tasks: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          title: 'Responder cliente',
+          status: 'planned',
+          category: 'trabalho',
+          intensity: 'P',
+          startAt: new Date('2026-04-30T11:00:00.000Z'),
+          endAt: new Date('2026-04-30T12:00:00.000Z'),
+        },
+      ],
+    },
+    surface: 'planner',
+    requestContext: { phase: 'Pausa', currentHour: 8, currentMinute: 30 },
+  });
+
+  assert.equal(result.allowedActions[0]?.kind, 'real_commitment');
+  assert.equal(result.allowedActions[0]?.action, 'pause');
+  assert.equal(result.allowedActions[0]?.targetId, '22222222-2222-4222-8222-222222222222');
+  assert.equal(result.allowedActions[0]?.notificationAllowed, true);
+}
+
+{
+  const result = DecisionEngine.evaluate({
+    dailyContext: {
+      ...context,
+      healthSignals: {
+        source: 'health_connect',
+        localDate: '2026-04-30',
+        sleepMinutes: 285,
+        sleepScore: 3,
+        steps: 1200,
+        avgHeartRate: 82,
+        exerciseMinutes: 0,
+        lastSyncedAt: '2026-04-30T08:00:00.000Z',
+      },
+      pendingTaskTitles: ['Revisar proposta'],
+      tasks: [
+        {
+          id: '33333333-3333-4333-8333-333333333333',
+          title: 'Revisar proposta',
+          status: 'planned',
+          category: 'trabalho',
+          intensity: 'P',
+          startAt: new Date('2026-04-30T13:00:00.000Z'),
+          endAt: new Date('2026-04-30T14:00:00.000Z'),
+        },
+      ],
+    },
+    surface: 'planner',
+    requestContext: { phase: 'Estável', currentHour: 8, currentMinute: 30 },
+  });
+
+  assert.equal(result.allowedActions[0]?.action, 'shrink');
+  assert.match(result.allowedActions[0]?.bioReason ?? '', /Health Connect/);
+  assert.match(result.reasoning, /sinais corporais/);
 }
 
 console.log('decision-engine.service tests passed');

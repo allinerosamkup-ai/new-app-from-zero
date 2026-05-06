@@ -17,6 +17,8 @@ export type DecisionCandidate = {
   title: string;
   kind: DecisionKind;
   source: DecisionCandidateSource;
+  targetId?: string | null;
+  targetType?: 'timeline' | 'habit' | 'goal' | 'system';
   action: 'keep' | 'move' | 'shrink' | 'pause' | 'suggest' | 'convert' | 'notify' | 'block' | 'insight';
   score: number;
   confidence: number;
@@ -24,6 +26,11 @@ export type DecisionCandidate = {
   anchor?: string | null;
   from?: string | null;
   to?: string | null;
+  suggestedStartTime?: string | null;
+  suggestedEndTime?: string | null;
+  suggestedDate?: string | null;
+  bioReason?: string;
+  impactLabel?: 'reduz carga' | 'protege energia' | 'aproveita janela' | 'mantém ritmo';
   notificationAllowed: boolean;
   requiresConfirmation: boolean;
 };
@@ -119,6 +126,72 @@ function formatTime(value: unknown): string | null {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
+function formatMinutesAsTime(total: number): string {
+  const clamped = Math.max(7 * 60, Math.min(20 * 60, total));
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+}
+
+function roundUpToStep(minutes: number, step = 15): number {
+  return Math.ceil(minutes / step) * step;
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const date = new Date(`${dateKey}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function dayWindowFor(input: {
+  lowCapacity: boolean;
+  highCapacity: boolean;
+  targetType: 'timeline' | 'habit' | 'goal';
+}): { start: number; end: number } {
+  if (input.targetType === 'habit') return input.lowCapacity ? { start: 11 * 60, end: 18 * 60 } : { start: 8 * 60, end: 19 * 60 };
+  if (input.targetType === 'goal') return input.highCapacity ? { start: 9 * 60, end: 16 * 60 } : { start: 10 * 60, end: 18 * 60 };
+  return input.lowCapacity ? { start: 10 * 60, end: 17 * 60 } : { start: 8 * 60, end: 19 * 60 };
+}
+
+function findAvailableSlot(input: {
+  dateKey: string;
+  tasks: GroundedTask[];
+  now: number;
+  duration: number;
+  lowCapacity: boolean;
+  highCapacity: boolean;
+  targetType: 'timeline' | 'habit' | 'goal';
+}): { date: string; start: string; end: string; isNextDay: boolean } {
+  const window = dayWindowFor(input);
+  const earliestToday = Math.max(window.start, roundUpToStep(input.now + 15, 15));
+  const busy = input.tasks
+    .filter((task) => task.status !== 'completed')
+    .map((task) => ({
+      start: timeToMinutes(task.startAt),
+      end: timeToMinutes(task.endAt),
+    }))
+    .filter((slot): slot is { start: number; end: number } => slot.start !== null && slot.end !== null && slot.end > slot.start);
+
+  for (let cursor = earliestToday; cursor + input.duration <= window.end; cursor += 15) {
+    const end = cursor + input.duration;
+    const conflict = busy.some((slot) => cursor < slot.end && end > slot.start);
+    if (!conflict) {
+      return {
+        date: input.dateKey,
+        start: formatMinutesAsTime(cursor),
+        end: formatMinutesAsTime(end),
+        isNextDay: false,
+      };
+    }
+  }
+
+  const tomorrowStart = input.targetType === 'goal' && input.highCapacity ? 9 * 60 : input.lowCapacity ? 10 * 60 : 9 * 60;
+  return {
+    date: addDaysToDateKey(input.dateKey, 1),
+    start: formatMinutesAsTime(tomorrowStart),
+    end: formatMinutesAsTime(tomorrowStart + input.duration),
+    isNextDay: true,
+  };
+}
+
 function currentMinutes(context: Record<string, unknown>): number {
   const hour = Number(context.currentHour ?? context.hour ?? 9);
   const minute = Number(context.currentMinute ?? context.minute ?? 0);
@@ -132,6 +205,32 @@ function phaseKey(context: Record<string, unknown>): string {
 
 function isLowCapacityPhase(context: Record<string, unknown>): boolean {
   return /\b(turbulencia|pausa|recolhimento|desacelerando)\b/.test(phaseKey(context));
+}
+
+function healthSleepScore(context: DailyContext): number | null {
+  const score = Number(context.healthSignals?.sleepScore);
+  return Number.isFinite(score) ? score : null;
+}
+
+function hasPoorMeasuredSleep(context: DailyContext): boolean {
+  const score = healthSleepScore(context);
+  if (score !== null) return score <= 4;
+  const minutes = Number(context.healthSignals?.sleepMinutes);
+  return Number.isFinite(minutes) && minutes > 0 && minutes < 360;
+}
+
+function healthReasonSuffix(context: DailyContext): string {
+  const signals = context.healthSignals;
+  if (!signals) return '';
+  const parts: string[] = [];
+  if (signals.sleepMinutes != null) {
+    const hours = Math.round((signals.sleepMinutes / 60) * 10) / 10;
+    parts.push(`sono medido de ${hours}h`);
+  }
+  if (signals.steps != null) parts.push(`${Math.round(signals.steps)} passos`);
+  if (signals.avgHeartRate != null) parts.push(`batimento medio ${Math.round(signals.avgHeartRate)} bpm`);
+  if (signals.exerciseMinutes != null && signals.exerciseMinutes > 0) parts.push(`${Math.round(signals.exerciseMinutes)} min de exercicio`);
+  return parts.length ? ` Sinal do Health Connect: ${parts.join(', ')}.` : '';
 }
 
 function isHighCapacityPhase(context: Record<string, unknown>): boolean {
@@ -187,6 +286,7 @@ function makeBlocked(input: {
     title: input.title,
     kind: 'blocked',
     source: input.source,
+    targetType: input.source === 'timeline' ? 'timeline' : input.source === 'habit' ? 'habit' : input.source === 'goal' ? 'goal' : 'system',
     action: input.action ?? 'block',
     score: 0,
     confidence: 0.9,
@@ -216,7 +316,7 @@ export class DecisionEngine {
   }): DecisionResult {
     const requestContext = input.requestContext ?? {};
     const now = currentMinutes(requestContext);
-    const lowCapacity = isLowCapacityPhase(requestContext);
+    const lowCapacity = isLowCapacityPhase(requestContext) || hasPoorMeasuredSleep(input.dailyContext);
     const highCapacity = isHighCapacityPhase(requestContext);
     const allowed: DecisionCandidate[] = [];
     const blocked: DecisionCandidate[] = [];
@@ -246,13 +346,28 @@ export class DecisionEngine {
       }
 
       const past = taskMinutes !== null && taskMinutes < now;
-      const action = past ? 'move' : lowCapacity && isHeavy(task) ? 'pause' : 'keep';
+      const hardLowCapacity = /\b(pausa|recolhimento)\b/.test(phaseKey(requestContext));
+      const action = past ? 'move' : lowCapacity && isHeavy(task) ? (hardLowCapacity ? 'pause' : 'shrink') : 'keep';
+      const originalDuration = taskMinutes !== null && timeToMinutes(task.endAt) !== null
+        ? Math.max(30, Math.min(90, (timeToMinutes(task.endAt) as number) - taskMinutes))
+        : 45;
+      const slot = findAvailableSlot({
+        dateKey: input.dailyContext.date,
+        tasks: input.dailyContext.tasks,
+        now,
+        duration: action === 'shrink' ? 30 : originalDuration,
+        lowCapacity,
+        highCapacity,
+        targetType: 'timeline',
+      });
       const score = 70 + (isHeavy(task) ? 8 : 4) + (past ? 10 : 0) - (lowCapacity && isHeavy(task) ? 5 : 0);
       allowed.push({
         id: `task:${normalize(title)}`,
         title,
         kind: 'real_commitment',
         source: 'timeline',
+        targetId: task.id ?? null,
+        targetType: 'timeline',
         action,
         score,
         confidence: past ? 0.82 : 0.88,
@@ -260,10 +375,25 @@ export class DecisionEngine {
           ? 'Compromisso real pendente com horário já passado; precisa de revisão antes de continuar no dia.'
           : action === 'pause'
             ? 'Compromisso real pesado em fase de baixa capacidade; melhor pausar ou revisar escopo.'
+            : action === 'shrink'
+              ? 'Compromisso real pesado em fase de baixa capacidade; melhor reduzir escopo.'
             : 'Compromisso real do dia.',
         anchor: title,
         from,
         to: action === 'move' ? null : from,
+        suggestedDate: action === 'move' ? slot.date : input.dailyContext.date,
+        suggestedStartTime: action === 'move' ? slot.start : action === 'shrink' ? from : null,
+        suggestedEndTime: action === 'move' ? slot.end : action === 'shrink' && from ? formatMinutesAsTime((taskMinutes ?? now) + 30) : null,
+        bioReason: (action === 'move'
+          ? slot.isNextDay
+            ? 'O horário já passou e não há janela limpa hoje; mover para amanhã protege o dia sem forçar encaixe ruim.'
+            : 'O horário já passou; a Airia escolheu a próxima janela livre para manter continuidade sem fingir que ainda dá para cumprir no tempo antigo.'
+          : action === 'pause'
+            ? 'A fase atual sinaliza menor capacidade; pausar evita transformar uma tarefa pesada em sobrecarga.'
+            : action === 'shrink'
+              ? 'A fase atual pede menos carga; reduzir duração mantém avanço sem forçar o dia.'
+            : 'O bloco já combina com o ritmo atual e pode permanecer como está.') + healthReasonSuffix(input.dailyContext),
+        impactLabel: action === 'move' ? 'mantém ritmo' : action === 'pause' ? 'protege energia' : action === 'shrink' ? 'reduz carga' : 'mantém ritmo',
         notificationAllowed: !past,
         requiresConfirmation: action !== 'keep',
       });
@@ -274,16 +404,34 @@ export class DecisionEngine {
         blocked.push(makeBlocked({ id: `habit:${normalize(title)}`, title, source: 'habit', reason: 'Hábito já concluído/rejeitado recentemente ou genérico demais.' }));
         continue;
       }
+      const slot = findAvailableSlot({
+        dateKey: input.dailyContext.date,
+        tasks: input.dailyContext.tasks,
+        now,
+        duration: lowCapacity ? 15 : 25,
+        lowCapacity,
+        highCapacity,
+        targetType: 'habit',
+      });
       allowed.push({
         id: `habit:${normalize(title)}`,
         title,
         kind: 'real_commitment',
         source: 'habit',
+        targetId: input.dailyContext.habits.find((habit) => habit.title === title)?.id ?? null,
+        targetType: 'habit',
         action: lowCapacity ? 'pause' : 'convert',
         score: lowCapacity ? 42 : 68,
         confidence: 0.76,
         reason: lowCapacity ? 'Hábito real devido hoje, mas fase pede reduzir atrito.' : 'Hábito real devido hoje; pode virar bloco opcional.',
         anchor: title,
+        suggestedDate: lowCapacity ? null : slot.date,
+        suggestedStartTime: lowCapacity ? null : slot.start,
+        suggestedEndTime: lowCapacity ? null : slot.end,
+        bioReason: (lowCapacity
+          ? 'O hábito existe, mas o ritmo de hoje pede versão reduzida ou pausa consciente.'
+          : 'O hábito está devido hoje e pode entrar como bloco leve, sem virar cobrança solta.') + healthReasonSuffix(input.dailyContext),
+        impactLabel: lowCapacity ? 'protege energia' : 'mantém ritmo',
         notificationAllowed: !lowCapacity,
         requiresConfirmation: true,
       });
@@ -298,11 +446,22 @@ export class DecisionEngine {
         continue;
       }
       const score = (hasRealAgenda ? 52 : 62) + (highCapacity ? 12 : 0) - (lowCapacity ? 10 : 0);
+      const slot = findAvailableSlot({
+        dateKey: input.dailyContext.date,
+        tasks: input.dailyContext.tasks,
+        now,
+        duration: lowCapacity ? 25 : highCapacity ? 60 : 40,
+        lowCapacity,
+        highCapacity,
+        targetType: 'goal',
+      });
       allowed.push({
         id: `goal:${normalize(goalTitle)}`,
         title: goalTitle,
         kind: 'suggested_commitment',
         source: 'goal',
+        targetId: input.dailyContext.goals.find((goal) => goal.title === goalTitle)?.id ?? null,
+        targetType: 'goal',
         action: 'suggest',
         score,
         confidence: 0.68,
@@ -310,6 +469,15 @@ export class DecisionEngine {
           ? 'Meta ativa pode gerar bloco opcional se couber depois dos compromissos reais.'
           : 'Agenda sem pendências reais pode receber uma sugestão opcional ligada à meta ativa.',
         anchor: goalTitle,
+        suggestedDate: slot.date,
+        suggestedStartTime: slot.start,
+        suggestedEndTime: slot.end,
+        bioReason: (lowCapacity
+          ? 'A meta continua ativa, mas o bloco precisa ser mínimo para respeitar a energia de hoje.'
+          : highCapacity
+            ? 'A fase atual abre uma janela boa para avanço concreto sem criar uma frente nova.'
+            : 'Há meta ativa e espaço para um avanço pequeno conectado ao dia real.') + healthReasonSuffix(input.dailyContext),
+        impactLabel: lowCapacity ? 'reduz carga' : highCapacity ? 'aproveita janela' : 'mantém ritmo',
         notificationAllowed: false,
         requiresConfirmation: true,
       });
@@ -321,10 +489,13 @@ export class DecisionEngine {
         title: 'Sem ação útil agora',
         kind: 'insight_only',
         source: 'system',
+        targetType: 'system',
         action: 'insight',
         score: 10,
         confidence: 0.7,
         reason: 'Não há ação suficientemente ancorada no dia real.',
+        bioReason: 'Sem agenda, hábito ou meta suficiente para ajustar com segurança.',
+        impactLabel: 'mantém ritmo',
         notificationAllowed: false,
         requiresConfirmation: false,
       });
@@ -344,7 +515,7 @@ export class DecisionEngine {
       blockedActions,
       dayPriorities,
       reasoning: actionable.length
-        ? 'Decisão baseada em compromissos reais, hábitos/metas ativos, fase, horário local e bloqueios de repetição.'
+        ? `Decisão baseada em compromissos reais, hábitos/metas ativos, fase, horário local${input.dailyContext.healthSignals ? ', sinais corporais do Health Connect' : ''} e bloqueios de repetição.`
         : 'Nenhuma ação passou pelos critérios de âncora, horário e repetição.',
       confidence: actionable.length ? Math.round((actionable.reduce((sum, item) => sum + item.confidence, 0) / actionable.length) * 100) / 100 : 0.7,
       emptyReason: actionable.length ? null : 'Sem candidato operacional confiável; manter como insight.',

@@ -279,7 +279,7 @@ Blocking statuses: `done`, `dismissed`, `deleted`, `scheduled`, `rejected`.
 
 ### `POST /api/agenda/adapt`
 
-Returns an adaptation preview for the day. V1 does not silently move tasks; it proposes changes with reason and confidence.
+Returns an adaptation preview or applies selected confirmed decisions for the day. V1 never silently changes the agenda; `mode = "apply"` only runs decisions listed in `selectedDecisionIds`.
 
 Important rules:
 
@@ -296,8 +296,11 @@ Important rules:
   "date": "2026-04-30",
   "mode": "preview",
   "trigger": "checkin",
+  "selectedDecisionIds": [],
   "context": {
-    "phase": "Turbulência"
+    "phase": "Turbulência",
+    "currentHour": 11,
+    "currentMinute": 20
   }
 }
 ```
@@ -312,11 +315,19 @@ Important rules:
   "summary": "Agenda adaptativa encontrou 1 decisão(ões) possíveis, sem aplicar nada automaticamente.",
   "changes": [
     {
+      "id": "task:responder-cliente",
       "type": "pause",
       "title": "Responder cliente",
+      "targetId": "550e8400-e29b-41d4-a716-446655440000",
+      "targetType": "timeline",
       "from": "11:00",
       "to": null,
+      "suggestedDate": "2026-05-01",
+      "suggestedStartTime": "11:00",
+      "suggestedEndTime": "12:00",
       "reason": "Compromisso real pesado em fase de baixa capacidade; melhor pausar ou revisar escopo.",
+      "bioReason": "A fase atual sinaliza menor capacidade; pausar evita transformar uma tarefa pesada em sobrecarga.",
+      "impactLabel": "protege energia",
       "confidence": 0.82,
       "kind": "real_commitment",
       "requiresConfirmation": true,
@@ -344,6 +355,74 @@ Important rules:
 ```
 
 Allowed change `type`: `keep`, `move`, `shrink`, `pause`, `suggest`, `convert`, `notify`, `block`, `skip`.
+
+Apply response adds:
+
+```json
+{
+  "mode": "apply",
+  "applied": true,
+  "appliedChanges": [{ "id": "task:responder-cliente", "type": "move", "applied": true }],
+  "skippedChanges": [],
+  "timelineRefreshNeeded": true
+}
+```
+
+Scheduling rules:
+
+- The backend receives local client time through `currentHour/currentMinute`.
+- Suggestions use the current time and existing timeline blocks to find a viable free window.
+- If no safe window remains today, suggested blocks can target the next day.
+- `keep`, `block` and `notify` are never applied as structural agenda changes.
+- When a Health Connect snapshot exists, measured sleep becomes the strongest sleep signal; steps, heart rate and exercise complement `bioReason`.
+
+### Health Connect
+
+Android native integration. The web app requests sync through the React Native shell, the native layer asks Health Connect permissions, reads today's local signals and stores a snapshot through the backend.
+
+#### `GET /api/health-connect/latest`
+
+Returns the latest Health Connect snapshot saved for the authenticated user.
+
+```json
+{
+  "connected": true,
+  "snapshot": {
+    "source": "health_connect",
+    "localDate": "2026-05-06",
+    "sleepMinutes": 435,
+    "sleepScore": 8,
+    "steps": 6420,
+    "avgHeartRate": 72,
+    "exerciseMinutes": 25,
+    "syncedAt": "2026-05-06T12:30:00.000Z"
+  },
+  "createdAt": "2026-05-06T12:30:01.000Z"
+}
+```
+
+#### `POST /api/health-connect/sync`
+
+Stores a Health Connect snapshot as `event_logs.event_name = "health_connect.synced"`.
+
+```json
+{
+  "source": "health_connect",
+  "localDate": "2026-05-06",
+  "sleepMinutes": 435,
+  "sleepScore": 8,
+  "steps": 6420,
+  "avgHeartRate": 72,
+  "exerciseMinutes": 25,
+  "syncedAt": "2026-05-06T12:30:00.000Z"
+}
+```
+
+Usage in the decision engine:
+
+- sleep from Health Connect replaces subjective sleep as the primary sleep signal when present;
+- poor measured sleep can lower capacity even if the phase label is not low;
+- steps, heart rate and exercise are explanatory body signals, not automatic task generators.
 
 ## Planner
 

@@ -3048,6 +3048,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     mode: z.enum(['preview', 'apply']).optional().default('preview'),
     trigger: z.enum(['manual', 'checkin', 'cron', 'home', 'planner']).optional().default('manual'),
     context: z.record(z.unknown()).optional().default({}),
+    selectedDecisionIds: z.array(z.string().min(1)).optional().default([]),
   });
 
   app.post('/api/agenda/adapt', async (req: Request, res: Response) => {
@@ -3064,17 +3065,82 @@ export function createApp(dependencies: AppDependencies = {}) {
         recentSuggestionItems,
         ragContext: memoryService.formatForPrompt(ragMemories),
       });
-      const result = AgendaAdaptationService.buildPreview({
-        dailyContext,
-        requestContext: data.context,
-        mode: data.mode,
-        trigger: data.trigger,
-      });
+      const result = data.mode === 'apply'
+        ? await AgendaAdaptationService.apply({
+            prisma,
+            userId,
+            dailyContext,
+            requestContext: data.context,
+            trigger: data.trigger,
+            selectedDecisionIds: data.selectedDecisionIds,
+          })
+        : AgendaAdaptationService.buildPreview({
+            dailyContext,
+            requestContext: data.context,
+            mode: data.mode,
+            trigger: data.trigger,
+          });
       return res.json(result);
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
       console.error('[agenda/adapt] Error:', error);
       return res.status(500).json({ error: 'Failed to adapt agenda' });
+    }
+  });
+
+  const HealthConnectSyncSchema = z.object({
+    localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    source: z.literal('health_connect').optional().default('health_connect'),
+    sleepMinutes: z.number().min(0).max(24 * 60).nullable().optional(),
+    sleepScore: z.number().min(1).max(10).nullable().optional(),
+    steps: z.number().min(0).max(200000).nullable().optional(),
+    avgHeartRate: z.number().min(20).max(240).nullable().optional(),
+    exerciseMinutes: z.number().min(0).max(24 * 60).nullable().optional(),
+    syncedAt: z.string().datetime().optional(),
+  });
+
+  app.get('/api/health-connect/latest', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const event = await prisma.eventLog.findFirst({
+        where: { userId, eventName: 'health_connect.synced' },
+        orderBy: { createdAt: 'desc' },
+        select: { properties: true, createdAt: true },
+      });
+      return res.json({
+        connected: Boolean(event),
+        snapshot: event?.properties ?? null,
+        createdAt: event?.createdAt ?? null,
+      });
+    } catch (error) {
+      console.error('[health-connect/latest] Error:', error);
+      return res.status(500).json({ error: 'Failed to load Health Connect status' });
+    }
+  });
+
+  app.post('/api/health-connect/sync', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = HealthConnectSyncSchema.parse(req.body);
+      const snapshot = {
+        ...data,
+        source: 'health_connect',
+        syncedAt: data.syncedAt ?? new Date().toISOString(),
+      };
+      await prisma.eventLog.create({
+        data: {
+          userId,
+          eventName: 'health_connect.synced',
+          properties: snapshot,
+          path: req.path,
+          userAgent: req.get('user-agent') ?? null,
+        },
+      });
+      return res.json({ ok: true, snapshot });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[health-connect/sync] Error:', error);
+      return res.status(500).json({ error: 'Failed to sync Health Connect data' });
     }
   });
 
