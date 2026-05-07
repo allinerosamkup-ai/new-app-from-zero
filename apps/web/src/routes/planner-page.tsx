@@ -6,6 +6,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraToggle } from "../components/editorial/AuraToggle";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
+import { AiriaBottomSheet, AiriaButton, AiriaCard } from "../components/airia";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -2597,14 +2598,7 @@ export function PlannerPage() {
       <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
 
       {hasAdaptiveSignal && (
-        <div style={{
-          borderRadius: 22,
-          padding: "16px",
-          marginBottom: 22,
-          background: "rgba(255,255,255,.72)",
-          border: "1.5px solid rgba(99,152,169,.22)",
-          boxShadow: "0 14px 34px rgba(99,152,169,.08)",
-        }}>
+        <AiriaCard tone="action" style={{ marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
             <div style={{
               width: 40,
@@ -2620,33 +2614,24 @@ export function PlannerPage() {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 850, color: "var(--text-1)" }}>
-                Ajustar meu dia
+                Ajustar agenda
               </p>
               <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: "var(--text-2)" }}>
-                Airia usa a hora atual, sua fase, energia e janelas livres para sugerir o que mover, reduzir, pausar ou encaixar agora.
+                Sugestões com base na hora atual, energia e janelas livres.
               </p>
             </div>
-            <button
+            <AiriaButton
               type="button"
+              variant="primary"
+              size="md"
               onClick={() => openAgendaAdaptationPreview("planner")}
               disabled={adaptationLoading}
-              style={{
-                border: "none",
-                background: "var(--accent-sky)",
-                color: "#fff",
-                borderRadius: 12,
-                minHeight: 44,
-                padding: "0 14px",
-                fontSize: 12,
-                fontWeight: 850,
-                cursor: adaptationLoading ? "default" : "pointer",
-                opacity: adaptationLoading ? 0.68 : 1,
-              }}
+              style={{ flexShrink: 0 }}
             >
               {adaptationLoading ? "Lendo..." : "Ver ajustes"}
-            </button>
+            </AiriaButton>
           </div>
-        </div>
+        </AiriaCard>
       )}
 
       {!plannerLoading && plannerTasks.length === 0 && (
@@ -2965,40 +2950,24 @@ export function PlannerPage() {
       </button>
 
 
-      {recurringDeleteTask ? (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.38)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 110, padding: "16px 16px env(safe-area-inset-bottom)" }}>
-          <div style={{
-            background: "#fff",
-            width: "100%",
-            borderRadius: "28px 28px 20px 20px",
-            padding: "20px",
-            boxShadow: "0 -12px 40px rgba(0,0,0,0.18)",
-            border: "1px solid rgba(255,255,255,0.82)",
-          }}>
-            <div style={{ width: 42, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 18px" }} />
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-              <div style={{
-                width: 36,
-                height: 36,
-                borderRadius: 12,
-                background: "rgba(244,168,150,.14)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}>
-                <Trash2 size={17} color="var(--accent-peach)" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-1)", margin: "0 0 4px" }}>
-                  Excluir recorrência?
-                </h3>
-                <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: 0 }}>
-                  “{recurringDeleteTask.title}” é recorrente. Escolha o alcance da exclusão.
-                </p>
-              </div>
-            </div>
-
+      <AiriaBottomSheet
+        open={Boolean(recurringDeleteTask)}
+        title="Excluir recorrência?"
+        description={recurringDeleteTask ? `“${recurringDeleteTask.title}” é recorrente. Escolha o alcance da exclusão.` : undefined}
+        icon={<Trash2 size={17} />}
+        onClose={() => setRecurringDeleteTask(null)}
+        footer={(
+          <AiriaButton
+            type="button"
+            variant="ghost"
+            fullWidth
+            disabled={recurringDeleteLoading}
+            onClick={() => setRecurringDeleteTask(null)}
+          >
+            Cancelar
+          </AiriaButton>
+        )}
+      >
             <div style={{ display: "grid", gap: 8 }}>
               {RECURRING_DELETE_OPTIONS.map((option) => (
                 <button
@@ -3026,96 +2995,57 @@ export function PlannerPage() {
                 </button>
               ))}
             </div>
-
-            <button
-              type="button"
-              disabled={recurringDeleteLoading}
-              onClick={() => setRecurringDeleteTask(null)}
-              style={{
-                width: "100%",
-                marginTop: 12,
-                border: "none",
-                background: "transparent",
-                color: "var(--text-3)",
-                fontSize: 13,
-                fontWeight: 800,
-                padding: "10px",
-                cursor: recurringDeleteLoading ? "default" : "pointer",
-              }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : null}
+      </AiriaBottomSheet>
 
 
-      {showNewForm ? (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <div style={{ 
-            background: "#fff", width: "100%", padding: "24px 20px", 
-            borderRadius: "32px 32px 0 0", maxHeight: "92vh", overflowY: "auto",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
-            position: "relative"
-          }}>
-            <div style={{ width: 40, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 20px" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-              <button onClick={closeNewForm} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text-2)", padding: 4 }}>✕</button>
-              <h3 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>Nova <span style={{ color: "var(--accent-peach)" }}>Tarefa</span></h3>
-            </div>
-            <PlannerSheetBody form={newForm} setForm={setNewForm} onSave={handleAddBlock} onCancel={closeNewForm} saveLabel="Criar Tarefa" />
-          </div>
-        </div>
-      ) : null}
+      <AiriaBottomSheet
+        open={showNewForm}
+        title="Nova tarefa"
+        description="Crie um bloco possível para o seu dia."
+        icon={<Plus size={18} />}
+        onClose={closeNewForm}
+        maxHeight="92vh"
+      >
+        <PlannerSheetBody form={newForm} setForm={setNewForm} onSave={handleAddBlock} onCancel={closeNewForm} saveLabel="Criar tarefa" />
+      </AiriaBottomSheet>
 
-      {editingTaskId ? (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 100, paddingBottom: "env(safe-area-inset-bottom)" }}>
-          <div style={{ 
-            background: "#fff", width: "100%", padding: "24px 20px", 
-            borderRadius: "32px 32px 0 0", maxHeight: "92vh", overflowY: "auto",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
-            position: "relative"
-          }}>
-            <div style={{ width: 40, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 20px" }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-              <button onClick={closeEditForm} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text-2)", padding: 4 }}>✕</button>
-              <h3 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>Editar <span style={{ color: "var(--accent-peach)" }}>Tarefa</span></h3>
-            </div>
-            <PlannerSheetBody
-              form={editForm}
-              setForm={setEditForm}
-              onSave={handleSaveEdit}
-              onCancel={closeEditForm}
-              saveLabel="Salvar"
-            />
-          </div>
-        </div>
-      ) : null}
+      <AiriaBottomSheet
+        open={Boolean(editingTaskId)}
+        title="Editar tarefa"
+        description="Ajuste horário, carga e detalhes do bloco."
+        icon={<CalendarClock size={18} />}
+        onClose={closeEditForm}
+        maxHeight="92vh"
+      >
+        <PlannerSheetBody
+          form={editForm}
+          setForm={setEditForm}
+          onSave={handleSaveEdit}
+          onCancel={closeEditForm}
+          saveLabel="Salvar"
+        />
+      </AiriaBottomSheet>
 
-      {adaptationOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.38)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-end", zIndex: 120, padding: "16px 16px env(safe-area-inset-bottom)" }}>
-          <div style={{
-            width: "100%",
-            maxHeight: "84vh",
-            overflowY: "auto",
-            background: "#fff",
-            borderRadius: "28px 28px 20px 20px",
-            padding: 20,
-            boxShadow: "0 -12px 42px rgba(0,0,0,.18)",
-          }}>
-            <div style={{ width: 42, height: 5, background: "var(--warm-border-2)", borderRadius: 10, margin: "0 auto 18px" }} />
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 14, background: "rgba(99,152,169,.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Sparkles size={18} color="var(--accent-sky)" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ margin: "0 0 4px", fontSize: 19, color: "var(--text-1)", fontWeight: 850 }}>Ajustes sugeridos</h3>
-                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: "var(--text-3)" }}>
-                  {adaptationPreview?.summary ?? "Airia está lendo sua agenda, fase e horário atual."}
-                </p>
-              </div>
-              <button type="button" onClick={() => setAdaptationOpen(false)} style={{ border: "none", background: "transparent", fontSize: 18, color: "var(--text-3)", cursor: "pointer", minWidth: 32, minHeight: 32 }}>×</button>
-            </div>
+      <AiriaBottomSheet
+        open={adaptationOpen}
+        title="Ajustes sugeridos"
+        description={adaptationPreview?.summary ?? "Airia está lendo sua agenda, fase e horário atual."}
+        icon={<Sparkles size={18} />}
+        onClose={() => setAdaptationOpen(false)}
+        maxHeight="84vh"
+        footer={(
+          <AiriaButton
+            type="button"
+            variant={selectedAdaptationIds.size === 0 ? "secondary" : "primary"}
+            size="lg"
+            fullWidth
+            disabled={adaptationApplying || selectedAdaptationIds.size === 0}
+            onClick={applyAgendaAdaptation}
+          >
+            {adaptationApplying ? "Aplicando..." : "Aplicar ajustes selecionados"}
+          </AiriaButton>
+        )}
+      >
 
             {adaptationLoading ? (
               <div style={{ display: "grid", gap: 8 }}>
@@ -3201,28 +3131,7 @@ export function PlannerPage() {
               </p>
             )}
 
-            <button
-              type="button"
-              disabled={adaptationApplying || selectedAdaptationIds.size === 0}
-              onClick={applyAgendaAdaptation}
-              style={{
-                width: "100%",
-                marginTop: 16,
-                minHeight: 48,
-                borderRadius: 16,
-                border: "none",
-                background: selectedAdaptationIds.size === 0 ? "rgba(0,0,0,.08)" : "var(--accent-sky)",
-                color: selectedAdaptationIds.size === 0 ? "var(--text-3)" : "#fff",
-                fontSize: 14,
-                fontWeight: 850,
-                cursor: adaptationApplying || selectedAdaptationIds.size === 0 ? "default" : "pointer",
-              }}
-            >
-              {adaptationApplying ? "Aplicando..." : "Aplicar ajustes selecionados"}
-            </button>
-          </div>
-        </div>
-      )}
+      </AiriaBottomSheet>
     </div>
   );
 }

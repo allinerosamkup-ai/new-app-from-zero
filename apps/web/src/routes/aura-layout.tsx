@@ -370,7 +370,7 @@ export function AuraLayout() {
       </div>
 
       {/* Bottom Nav — Floating Pill — sempre fixo */}
-      <div className="bottom-nav" style={{
+      <div className="bottom-nav airia-bottom-nav" style={{
         position: "fixed",
         bottom: "calc(16px + env(safe-area-inset-bottom))",
         left: 0,
@@ -390,19 +390,27 @@ export function AuraLayout() {
           const isActive = location.pathname === item.route;
           if (idx === 2) { // Centro (Aura)
             return (
-              <div key={item.route} className="nav-item-center cursor-pointer hover:scale-110 transition-transform duration-300"
-                   onClick={() => navigate(item.route)}>
+              <button
+                key={item.route}
+                type="button"
+                className={`airia-nav-center${isActive ? " active" : ""}`}
+                aria-label={t(item.labelKey)}
+                onClick={() => navigate(item.route)}
+              >
                 {item.icon}
-              </div>
+              </button>
             );
           }
           return (
-            <div key={item.route}
-                 className={`flex flex-col items-center justify-center cursor-pointer transition-all duration-300 active:scale-90 hover:scale-110 p-2 nav-item${isActive ? ' active' : ''}`}
-                 onClick={() => navigate(item.route)}>
+            <button
+              key={item.route}
+              type="button"
+              className={`airia-nav-item flex flex-col items-center justify-center p-2 nav-item${isActive ? ' active' : ''}`}
+              onClick={() => navigate(item.route)}
+            >
               <span className="mb-0.5">{item.icon}</span>
-              <span className="text-[9px] font-bold tracking-wider uppercase">{t(item.labelKey)}</span>
-            </div>
+              <span className="text-[10px] font-bold tracking-normal">{t(item.labelKey)}</span>
+            </button>
           );
         })}
       </div>

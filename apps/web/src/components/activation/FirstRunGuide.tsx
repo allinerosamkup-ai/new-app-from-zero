@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { ActivationState } from "../../features/aura/activation";
 import { ActivationChecklist } from "./ActivationChecklist";
-import { AuraButtonV2 } from "../editorial/AuraButtonV2";
+import { AiriaButton, AiriaIconButton } from "../airia";
 
 type Props = {
   activation: ActivationState;
@@ -72,26 +72,13 @@ export function FirstRunGuide({ activation, userId }: Props) {
             {activation.nextAction.title}
           </h2>
         </div>
-        <button
-          type="button"
+        <AiriaIconButton
           onClick={dismiss}
           aria-label="Fechar guia inicial"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 12,
-            border: "1px solid var(--warm-border)",
-            background: "transparent",
-            color: "var(--text-3)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-        >
-          <X size={15} />
-        </button>
+          icon={<X size={15} />}
+          variant="outline"
+          style={{ flexShrink: 0 }}
+        />
       </div>
 
       <p style={{ margin: "0 0 12px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
@@ -101,32 +88,24 @@ export function FirstRunGuide({ activation, userId }: Props) {
       <ActivationChecklist activation={activation} />
 
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button
+        <AiriaButton
           type="button"
           onClick={dismiss}
-          style={{
-            flex: 1,
-            minHeight: 44,
-            borderRadius: 14,
-            border: "1.5px solid var(--warm-border)",
-            background: "transparent",
-            color: "var(--text-2)",
-            fontSize: 12,
-            fontWeight: 800,
-            cursor: "pointer",
-          }}
+          variant="secondary"
+          size="md"
+          style={{ flex: 1 }}
         >
           Depois
-        </button>
-        <AuraButtonV2
+        </AiriaButton>
+        <AiriaButton
           variant="primary"
           size="md"
           onClick={goNext}
           rightIcon={<ArrowRight size={14} />}
-          style={{ flex: 2, minHeight: 44 }}
+          style={{ flex: 2 }}
         >
           {activation.nextAction.label}
-        </AuraButtonV2>
+        </AiriaButton>
       </div>
     </div>
   );
