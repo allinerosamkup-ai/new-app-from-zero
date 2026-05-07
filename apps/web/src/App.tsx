@@ -1,6 +1,7 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { InstallPWA } from "./components/InstallPWA";
+import { trackInstallConversionOnce, trackMetaPixelPageView } from "./lib/meta-pixel";
 
 const loadAuraLayout = () => import("./routes/aura-layout");
 const loadLoginPage = () => import("./routes/login-page");
@@ -138,9 +139,18 @@ function RouteLoader() {
 
 export default function App() {
   const location = useLocation();
+  const firstPixelPageView = useRef(true);
 
   useEffect(() => {
     preloadNextRoutes(location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (firstPixelPageView.current) {
+      firstPixelPageView.current = false;
+      return;
+    }
+    trackMetaPixelPageView();
   }, [location.pathname]);
 
   useEffect(() => {
@@ -158,6 +168,7 @@ export default function App() {
 
     if (isStandalone) {
       doc.classList.add("airia-installed-shell");
+      trackInstallConversionOnce("standalone_open");
     }
 
     if (!isIOS || !isStandalone) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Download, Smartphone, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
+import { trackInstallConversion } from "../lib/meta-pixel";
 
 type Platform = "ios" | "android" | "desktop";
 
@@ -55,13 +56,17 @@ export function InstallCTA({ variant = "card" }: { variant?: "card" | "compact" 
     }
 
     if (platform === "ios") {
+      trackInstallConversion("manual_instructions");
       setShowIosSheet(true);
       return;
     }
 
     if (installPrompt) {
       await installPrompt.prompt();
-      await installPrompt.userChoice;
+      const { outcome } = await installPrompt.userChoice;
+      if (outcome === "accepted") {
+        trackInstallConversion("install_cta");
+      }
       setInstallPrompt(null);
       return;
     }

@@ -3,6 +3,7 @@ import { useEffect, useState, type KeyboardEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
+import { trackRegistrationConversion } from "../lib/meta-pixel";
 import "../styles/aura.css";
 
 type Tab = "entrar" | "criar";
@@ -81,6 +82,7 @@ export function LoginPage() {
         window.localStorage.removeItem(REMEMBERED_EMAIL_KEY);
       }
       if (tab === "criar") {
+        trackRegistrationConversion("email");
         setShowConfirmEmail(true);
         return;
       }

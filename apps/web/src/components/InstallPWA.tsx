@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import { trackInstallConversion } from "../lib/meta-pixel";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -79,13 +80,17 @@ export function InstallPWA() {
         await installEvent.prompt();
         const { outcome } = await installEvent.userChoice;
         setInstallEvent(null);
-        if (outcome === "accepted") setShow(false);
+        if (outcome === "accepted") {
+          trackInstallConversion("pwa_prompt");
+          setShow(false);
+        }
         return;
       } catch {
         // Se o prompt nativo falhar, cai pra instruções
       }
     }
     // Sem evento (iOS sempre; Android quando Chrome não dispara): instruções por plataforma
+    trackInstallConversion("manual_instructions");
     setSheet(platform);
   };
 
