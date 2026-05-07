@@ -207,6 +207,7 @@ export class CheckinService {
     activeGoalsContext?: string | null;
     recentSuggestionMemory?: string | null;
     completionContext?: string | null;
+    reasoningTraceContext?: string | null;
     avoidRecommendationTitles?: string[] | null;
     emotions?: string[];
     factors?: string[];
@@ -314,6 +315,7 @@ JSON APENAS:
             activeGoalsContext: data.activeGoalsContext,
             plannerContext: data.plannerContext,
             recentSuggestionMemory: data.recentSuggestionMemory,
+            reasoningTraceContext: data.reasoningTraceContext,
             currentHour: data.currentHour,
             currentMinute: data.currentMinute,
             phase: data.phase,

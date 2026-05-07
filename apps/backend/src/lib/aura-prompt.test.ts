@@ -11,6 +11,7 @@ async function run() {
     plannerContext: 'Planner hoje: Revisar proposta da cliente Julia as 15:00. Habito pendente: caminhada curta.',
     activeGoalsContext: 'Meta ativa: Fechar primeira proposta comercial da semana.',
     recentSuggestionMemory: 'MEMORIA RECENTE DE SUGESTOES DA AURA:\n- Revisar proposta antiga',
+    reasoningTraceContext: 'RACIOCINIO OPERACIONAL ESTRUTURADO (USO INTERNO - NAO MOSTRAR):\nEvidencias:\n- Agenda pendente: Revisar proposta da cliente Julia\nDecisao: acao | Revisar proposta da cliente Julia\nConfianca: alta',
     domain: 'checkin',
     currentHour: 10,
     currentMinute: 20,
@@ -35,6 +36,9 @@ async function run() {
   assert.match(basePrompt, /histórico de humor|historico de humor/i);
   assert.match(basePrompt, /2 ou 3 micro-acoes/i);
   assert.match(basePrompt, /10:20 \(manhã\)/);
+  assert.match(basePrompt, /RACIOCINIO OPERACIONAL ESTRUTURADO \(USO INTERNO\)/i);
+  assert.match(basePrompt, /Decisao: acao \| Revisar proposta da cliente Julia/i);
+  assert.match(basePrompt, /NAO MOSTRAR/i);
   assert.match(basePrompt, /RAG: Ana costuma travar/i);
   assert.match(basePrompt, /Revisar proposta da cliente Julia/i);
   assert.match(basePrompt, /Fechar primeira proposta comercial/i);

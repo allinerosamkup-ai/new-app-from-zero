@@ -49,6 +49,7 @@ export type JournalPromptContext = {
   activeGoalsContext?: string | null;
   ragContext?: string;
   plannerContext?: string | null;
+  reasoningTraceContext?: string | null;
   checkinToday?: {
     moodScore: number;
     energyScore: number;
@@ -151,6 +152,7 @@ export class AIService {
             recentSuggestionMemory: input.context.recentSuggestionMemory,
             activeGoalsContext: input.context.activeGoalsContext,
             plannerContext: input.context.plannerContext,
+            reasoningTraceContext: input.context.reasoningTraceContext,
             currentHour: input.context.currentHour,
             currentMinute: input.context.currentMinute,
             phase: input.context.phase,
@@ -251,6 +253,7 @@ export class AIService {
       longTermMemory?: string | null;
       activeGoalsContext?: string | null;
       recentSessionHistory?: string | null;
+      reasoningTraceContext?: string | null;
       currentHour?: number;
       currentMinute?: number;
     },
@@ -308,6 +311,7 @@ export class AIService {
             longTermMemory: context?.longTermMemory,
             recentSessionHistory: context?.recentSessionHistory,
             activeGoalsContext: context?.activeGoalsContext,
+            reasoningTraceContext: context?.reasoningTraceContext,
             currentHour: context?.currentHour,
             currentMinute: context?.currentMinute,
             domain: 'summary',

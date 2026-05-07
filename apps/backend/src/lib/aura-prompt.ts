@@ -34,6 +34,7 @@ type AuraPromptOptions = {
   recentSuggestionMemory?: string | null;
   activeGoalsContext?: string | null;
   plannerContext?: string | null;
+  reasoningTraceContext?: string | null;
   domain?: AuraPromptDomain;
   extraInstructions?: string[];
   phase?: string | null;
@@ -269,6 +270,7 @@ ${extra.length ? `\n${renderInstructionBlock('INSTRUCOES EXTRAS DA CHAMADA', ext
 
 ${renderInstructionBlock('FORMATO DE SAIDA', FORMAT_RULES)}
 ${adaptiveContextBlock}${forecastBlock}${momentumBlock}${temporalContext}
+${contextBlock('RACIOCINIO OPERACIONAL ESTRUTURADO (USO INTERNO)', options.reasoningTraceContext)}
 ${contextBlock(`PERFIL E ROTINA DE ${safeUserName.toUpperCase()}`, options.profileSummary)}
 ${contextBlock(`HUMOR ATUAL E HISTORICO DE HUMOR DE ${safeUserName.toUpperCase()}`, options.moodCycleContext)}
 ${contextBlock(`MEMORIA LONGITUDINAL DE ${safeUserName.toUpperCase()}`, options.longTermMemory)}

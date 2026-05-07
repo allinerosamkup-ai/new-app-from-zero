@@ -5,6 +5,8 @@ import { buildAuraSystemPrompt, getFirstName, humanizeScore } from '../lib/aura-
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 import { SuggestionMemoryService } from './suggestion-memory.service';
 import { MemoryService } from './memory.service';
+import { ContextGroundingService } from './context-grounding.service';
+import { ReasoningContextService } from './reasoning-context.service';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -184,6 +186,31 @@ export class InsightService {
     ]);
     const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
     const ragContext = memoryService.formatForPrompt(ragMemories);
+    const latestLocalDate = latestCheckin?.localDate instanceof Date
+      ? latestCheckin.localDate.toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    const insightDailyContext = await new ContextGroundingService(prisma).buildDailyContext({
+      userId,
+      type: 'weekly-insight',
+      context: {
+        localDate: latestLocalDate,
+        moodScore: latestCheckin?.moodScore,
+        energyScore: latestCheckin?.energyScore,
+      },
+      recentSuggestionItems,
+      ragContext,
+    });
+    const insightReasoning = ReasoningContextService.buildForPrompt({
+      dailyContext: insightDailyContext,
+      surface: 'insights',
+      requestContext: {
+        localDate: latestLocalDate,
+        moodScore: latestCheckin?.moodScore,
+        energyScore: latestCheckin?.energyScore,
+      },
+      currentMessage: 'Gerar leitura semanal e próximo ajuste possível.',
+      ragContext,
+    });
 
     // 4. Chamada OpenAI para Análise de Padrões
     const habitLines = rawData.habits.map(h => `- ${h.title}: ${h.completions} conclusões`).join('\n');
@@ -236,6 +263,7 @@ export class InsightService {
             contextualMemory: ragContext,
             activeGoalsContext,
             recentSuggestionMemory,
+            reasoningTraceContext: insightReasoning.context,
             domain: 'insight',
           }),
         },

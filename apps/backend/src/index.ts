@@ -32,6 +32,7 @@ import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
 import { ContextGroundingService } from './services/context-grounding.service';
+import { ReasoningContextService } from './services/reasoning-context.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
@@ -1702,6 +1703,22 @@ export function createApp(dependencies: AppDependencies = {}) {
     const checkinGroundingText = typeof checkinGroundingContext.groundingContext === 'string'
       ? checkinGroundingContext.groundingContext
       : '';
+    const checkinReasoning = ReasoningContextService.buildForPrompt({
+      dailyContext: checkinGroundingContext.grounding as any,
+      surface: 'checkin',
+      requestContext: {
+        ...extractAdaptiveFromRequest(req.body),
+        localDate: data.localDate,
+        moodScore: data.moodScore,
+        energyScore: data.energyScore,
+        sleepScore: data.sleepScore,
+        currentHour: (req.body as any)?.currentHour,
+        currentMinute: (req.body as any)?.currentMinute,
+      },
+      currentMessage: data.note ?? null,
+      ragContext: checkinRagContext,
+      decisionBrain: (checkinGroundingContext as any).decisionBrain ?? null,
+    });
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -1718,6 +1735,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       contextualMemory: checkinRagContext,
       activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
       recentSuggestionMemory,
+      reasoningTraceContext: checkinReasoning.context,
       completionContext: checkinCompletionContext.text,
       avoidRecommendationTitles: uniqueByKey([
         ...checkinCompletionContext.titles,
@@ -2131,6 +2149,23 @@ export function createApp(dependencies: AppDependencies = {}) {
       const journalGroundingText = typeof journalGroundingContext.groundingContext === 'string'
         ? journalGroundingContext.groundingContext
         : '';
+      const journalReasoning = ReasoningContextService.buildForPrompt({
+        dailyContext: journalDailyContext,
+        surface: 'journal',
+        requestContext: {
+          localDate: data.localDate,
+          currentHour: data.currentHour,
+          currentMinute: data.currentMinute,
+          phase: data.phase ?? null,
+          warningFlags: data.warningFlags ?? [],
+        },
+        currentMessage: data.message,
+        situationSummary: JournalUnderstandingService.formatSituationForPrompt(
+          journalSituation,
+          journalMemory.rejectedMemoryReasons,
+        ),
+        ragContext: journalRagContext,
+      });
 
       const assistantContent = await aiService.streamJournalReply({
         context: {
@@ -2141,6 +2176,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           activeGoalsContext: runtimeContext.activeGoalsContext,
           recentSessionHistory: routineCtx.recentSessionHistory,
           recentSuggestionMemory,
+          reasoningTraceContext: journalReasoning.context,
           ragContext: journalRagContext,
           journalContext: buildJournalReflectiveContext({
             currentMessage: data.message,
@@ -2281,6 +2317,17 @@ export function createApp(dependencies: AppDependencies = {}) {
       const commandGroundingText = typeof commandGroundingContext.groundingContext === 'string'
         ? commandGroundingContext.groundingContext
         : '';
+      const commandReasoning = ReasoningContextService.buildForPrompt({
+        dailyContext: commandGroundingContext.grounding as any,
+        surface: 'aura-chat',
+        requestContext: {
+          ...extractAdaptiveFromRequest(req.body),
+          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+        },
+        currentMessage: data.message,
+        ragContext: commandRagContext,
+        decisionBrain: (commandGroundingContext as any).decisionBrain ?? null,
+      });
 
       const commandResponse = await auraCommandService.interpretCommand({
         message: data.message,
@@ -2289,6 +2336,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         profileSummary: runtimeContext.userProfileSummary,
         moodCycleContext: [runtimeContext.moodCycleContext, commandGroundingText].filter(Boolean).join('\n'),
         recentSuggestionMemory,
+        reasoningTraceContext: commandReasoning.context,
         activeGoalsContext: runtimeContext.activeGoalsContext,
         ragContext: commandRagContext,
         plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
@@ -3196,6 +3244,19 @@ export function createApp(dependencies: AppDependencies = {}) {
         recentSuggestionItems,
         ragContext,
       });
+      const suggestReasoning = ReasoningContextService.buildForPrompt({
+        dailyContext: context.grounding as any,
+        surface: ((context.grounding as any)?.decisionBrain?.surface ?? 'home') as any,
+        requestContext: context,
+        currentMessage: [
+          typeof context.title === 'string' ? context.title : '',
+          typeof context.currentNote === 'string' ? context.currentNote : '',
+          typeof context.message === 'string' ? context.message : '',
+        ].filter(Boolean).join(' | '),
+        ragContext,
+        decisionBrain: (context as any).decisionBrain ?? null,
+      });
+      context.reasoningTraceContext = suggestReasoning.context;
 
       let prompt = '';
       if (type === 'task-notes') {
@@ -3904,6 +3965,7 @@ INSTRUÇÕES:
               contextualMemory: ragContext,
               activeGoalsContext,
               recentSuggestionMemory,
+              reasoningTraceContext: context.reasoningTraceContext,
               domain: getSuggestPromptDomain(type),
               ...extractAdaptiveFromRequest(req.body),
             }),
