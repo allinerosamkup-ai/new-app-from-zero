@@ -1326,11 +1326,21 @@ body {
 }
 
 .home-touch-button {
-  width: 36px !important;
-  height: 36px !important;
-  min-width: 36px;
-  min-height: 36px;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
+  border-radius: 14px;
+  border: 1px solid var(--warm-border);
+  background: rgba(255,255,255,.72);
+  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   touch-action: manipulation;
 }
 

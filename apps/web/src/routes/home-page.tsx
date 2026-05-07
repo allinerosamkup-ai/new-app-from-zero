@@ -2494,144 +2494,214 @@ export function HomePage() {
 
         {quickAccessSection}
 
-        {/* ── CARD: Ciclo de Humor (identidade central do app) ── */}
-        <div className="home-cycle-card" style={{ border: `1.5px solid ${phaseColor}30` }}>
-          {/* Faixa colorida lateral */}
-          <div className="home-cycle-rail" style={{ background: phaseColor }} />
-          <div className="home-cycle-content">
-            {/* Header do card */}
-            <div className="home-cycle-header">
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span className="home-cycle-kicker">
-                  CICLO DE HUMOR
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {/* Score de estabilidade */}
-                <span className="home-cycle-score" style={{ background: `${phaseColor}18`, color: phaseColor }}>
-                  {formatStabilityStatus(cycleReport.stabilityScore)}
-                </span>
-              </div>
-            </div>
+        {/* ── Card compacto: Ritmo + Autonomia ── */}
+        {(() => {
+          const ins = state.autonomousInsight;
+          const hasInsight = Boolean(ins);
+          const cfg = hasInsight ? (STATE_CONFIG[ins!.state] ?? STATE_CONFIG.stable) : STATE_CONFIG.stable;
+          const score = hasInsight ? ins!.stabilityScore : cycleReport.stabilityScore;
+          const isUrgent = hasInsight && score < 40;
+          const visibleActions = hasInsight
+            ? ins!.actions.filter(
+                a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && !isHomeAutonomyActionBlocked(a.title)
+              )
+            : [];
+          const primaryAction = visibleActions[0] ?? null;
+          const hasCycleData = cycleReport.phase !== "insufficient_data";
+          const rhythmCopy = hasInsight
+            ? ins!.insight
+            : hasCycleData
+              ? cycleReport.phaseTip
+              : "Faça um check-in para a Airia calibrar seu ritmo de hoje.";
 
-            {/* Fase atual */}
-            <div className="home-cycle-phase">
-              <span className="home-cycle-emoji">{cycleReport.phaseEmoji}</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <p className="home-cycle-title" style={{ margin: 0 }}>
-                    {currentPhaseLabel}
-                  </p>
-                  {streak >= 2 && (
-                    <span style={{
-                      fontSize: "10px", fontWeight: 800, padding: "2px 8px",
-                      borderRadius: "999px", background: "var(--accent-peach)",
-                      color: "#fff", letterSpacing: ".04em", flexShrink: 0,
-                    }}>
-                      🔥 {streak} dias
+          return (
+            <div className="home-cycle-card" style={{ border: `1.5px solid ${isUrgent ? cfg.color : phaseColor}33`, marginBottom: "calc(var(--a) * 1.1)" }}>
+              <div className="home-cycle-rail" style={{ background: isUrgent ? cfg.color : phaseColor }} />
+              <div className="home-cycle-content">
+                <div className="home-cycle-header" style={{ alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <span className="home-cycle-kicker">RITMO DE HOJE</span>
+                    <div className="home-cycle-phase" style={{ marginTop: 8, marginBottom: 0 }}>
+                      <span className="home-cycle-emoji">{hasCycleData ? cycleReport.phaseEmoji : mood.emoji}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <p className="home-cycle-title" style={{ margin: 0 }}>
+                          {hasCycleData ? currentPhaseLabel : "Ainda calibrando"}
+                        </p>
+                        <p className="home-cycle-subtitle">
+                          {hasCycleData
+                            ? `${cycleReport.daysInPhase} dia${cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase`
+                            : "A Home fica mais precisa depois do primeiro check-in"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <span className="home-cycle-score" style={{ background: `${isUrgent ? cfg.color : phaseColor}18`, color: isUrgent ? cfg.color : phaseColor }}>
+                      {formatStabilityStatus(score)}
                     </span>
-                  )}
+                    <button
+                      type="button"
+                      className="home-touch-button"
+                      onClick={() => setAutonomyExpanded(!autonomyExpanded)}
+                      aria-label={autonomyExpanded ? "Recolher detalhes do ritmo" : "Ver detalhes do ritmo"}
+                      title={autonomyExpanded ? "Recolher detalhes" : "Ver detalhes"}
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 14,
+                        border: `1px solid ${(isUrgent ? cfg.color : phaseColor)}33`,
+                        background: "rgba(255,255,255,.72)",
+                      }}
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="var(--text-3)"
+                        strokeWidth="2"
+                        style={{ transform: autonomyExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .18s ease" }}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                {cycleReport.phase !== "insufficient_data" && (
-                  <p className="home-cycle-subtitle">
-                    {cycleReport.daysInPhase} dia{cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase
-                    {cycleReport.cycleEstimate.estimatedLengthDays
-                      ? ` · ciclo estimado: ~${cycleReport.cycleEstimate.estimatedLengthDays}d`
-                      : ""}
-                  </p>
+
+                <p className="home-cycle-copy" style={{ marginTop: 10 }}>
+                  {rhythmCopy}
+                </p>
+
+                {isUrgent && (
+                  <div className="home-cycle-warning">
+                    <p className="home-cycle-warning-text">
+                      Atenção: a Airia detectou estabilidade baixa. Melhor reduzir carga e escolher uma ação pequena.
+                    </p>
+                  </div>
+                )}
+
+                {primaryAction ? (
+                  <AuraButtonV2
+                    variant="primary"
+                    size="md"
+                    onClick={() => openHomeScheduleModal(primaryAction)}
+                    style={{ width: "100%", minHeight: 44, marginTop: 12 }}
+                  >
+                    Transformar em bloco no Planner
+                  </AuraButtonV2>
+                ) : (
+                  <AuraButtonV2
+                    variant="secondary"
+                    size="md"
+                    onClick={() => navigate(hasCycleData ? "/insights" : "/checkin")}
+                    style={{ width: "100%", minHeight: 44, marginTop: 12 }}
+                  >
+                    {hasCycleData ? "Ver padrões" : "Fazer check-in"}
+                  </AuraButtonV2>
+                )}
+
+                {autonomyExpanded && (
+                  <div className="home-ai-card-body" style={{ padding: "12px 0 0" }}>
+                    {hasCycleData && (
+                      <div className="home-cycle-metrics" style={{ marginBottom: 10 }}>
+                        {[
+                          { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
+                          { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
+                          ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
+                        ].map(m => (
+                          <div key={m.label} className="home-cycle-metric">
+                            <p className="home-cycle-metric-label">{m.label}</p>
+                            <div className="home-cycle-metric-track">
+                              <div className="home-cycle-metric-fill" style={{ background: m.color, width: `${Math.min(100, (m.val / 10) * 100)}%` }} />
+                            </div>
+                            <p className="home-cycle-metric-value" style={{ color: m.color }}>{m.val.toFixed(1)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {hasInsight && ins!.pattern && (
+                      <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 10px" }}>
+                        {ins!.pattern}
+                      </p>
+                    )}
+
+                    {visibleActions.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
+                          Próximos movimentos
+                        </p>
+                        {visibleActions.slice(0, 2).map((action) => {
+                          const isAdding = addingActionTitle === action.title;
+                          const routeState = buildGoalSuggestionRouteState(`${action.title} ${action.why}`, state.goals || []);
+                          return (
+                            <div key={action.title} style={{
+                              display: "flex", alignItems: "center", gap: 8,
+                              padding: "8px 10px", borderRadius: 10,
+                              background: "rgba(255,255,255,.62)",
+                              border: `1px solid ${cfg.color}30`,
+                            }}>
+                              <div
+                                style={{ flex: 1, minWidth: 0, cursor: routeState ? "pointer" : "default" }}
+                                onClick={() => routeState && navigate("/goals", { state: routeState })}
+                              >
+                                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
+                                <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
+                              </div>
+                              <button
+                                className="home-touch-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  if (!isAdding) openHomeScheduleModal(action);
+                                }}
+                                disabled={isAdding}
+                                aria-label="Adicionar ao Planner"
+                                title="Adicionar ao Planner"
+                              >
+                                {isAdding ? "..." : "+"}
+                              </button>
+                              <button
+                                className="home-touch-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  recordHomeAutonomyFeedback(action.title, "done");
+                                  setAddedActionTitles(prev => new Set([...prev, action.title]));
+                                }}
+                                aria-label="Marcar como cumprido"
+                                title="Marcar como cumprido"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                className="home-touch-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  recordHomeAutonomyFeedback(action.title, "dismissed");
+                                  const remaining = ins!.actions.filter(
+                                    a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && !isHomeAutonomyActionBlocked(a.title) && a.title !== action.title
+                                  );
+                                  if (remaining.length === 0) {
+                                    setSkippedActionTitles(new Set());
+                                  } else {
+                                    setSkippedActionTitles(prev => new Set([...prev, action.title]));
+                                  }
+                                }}
+                                aria-label="Trocar sugestão"
+                                title="Trocar sugestão"
+                              >
+                                ↻
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
-
-            <p className="home-cycle-copy">
-              {cycleReport.phase !== "insufficient_data"
-                ? t(`phases.${cycleReport.phase}.description`, cycleReport.phaseDescription)
-                : cycleReport.phaseDescription}
-            </p>
-
-            {/* Barra de métricas */}
-            {cycleReport.phase !== "insufficient_data" && (
-              <div className="home-cycle-metrics">
-                {[
-                  { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
-                  { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
-                  ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
-                ].map(m => (
-                  <div key={m.label} className="home-cycle-metric">
-                    <p className="home-cycle-metric-label">{m.label}</p>
-                    <div className="home-cycle-metric-track">
-                      <div className="home-cycle-metric-fill" style={{ background: m.color, width: `${Math.min(100, (m.val / 10) * 100)}%` }} />
-                    </div>
-                    <p className="home-cycle-metric-value" style={{ color: m.color }}>{m.val.toFixed(1)}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ── 7.4 Score de consistência ── */}
-            {cycleReport.phase !== "insufficient_data" && (
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "8px 10px", borderRadius: 10,
-                background: "rgba(255,255,255,.5)", border: "1px solid rgba(0,0,0,.06)",
-                marginBottom: 8,
-              }}>
-                <div>
-                  <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 1px" }}>
-                    {t("home.consistencyWeek")}
-                  </p>
-                  <div style={{ height: 4, width: 80, borderRadius: 999, background: "rgba(0,0,0,.08)", overflow: "hidden" }}>
-                    <div style={{
-                      height: "100%", borderRadius: 999, transition: "width .6s ease",
-                      width: `${consistencyScore}%`,
-                      background: consistencyScore >= 70 ? "var(--accent-sage)" : consistencyScore >= 40 ? "var(--accent-sky)" : "var(--accent-peach)",
-                    }} />
-                  </div>
-                </div>
-                <span style={{
-                  fontSize: 18, fontWeight: 800,
-                  color: consistencyScore >= 70 ? "var(--accent-sage)" : consistencyScore >= 40 ? "var(--accent-sky)" : "var(--accent-peach)",
-                }}>
-                  {consistencyScore}<span style={{ fontSize: 10, fontWeight: 400 }}>/100</span>
-                </span>
-              </div>
-            )}
-
-
-            {/* Dica da fase */}
-            <div className="home-cycle-tip" style={{ background: `${phaseColor}10`, border: `1px solid ${phaseColor}20` }}>
-              <p className="home-cycle-tip-text">
-                💡 {cycleReport.phaseTip}
-              </p>
-            </div>
-
-            {/* Warning flags */}
-            {cycleReport.warningFlags.includes("sustained_low") && (
-              <div className="home-cycle-warning">
-                <p className="home-cycle-warning-text">
-                  ⚠️ 5+ dias em fase baixa detectados. Considere conversar com um profissional de saúde.
-                </p>
-              </div>
-            )}
-            {cycleReport.warningFlags.includes("rapid_drop") && (
-              <div className="home-cycle-warning">
-                <p className="home-cycle-warning-text">
-                  ⚠️ Queda brusca de humor nas últimas 48h detectada.
-                </p>
-              </div>
-            )}
-
-            {/* Previsão de energia */}
-            {cycleReport.phase !== "insufficient_data" && (
-              <div className="home-cycle-forecast">
-                <p className="home-cycle-forecast-label">Previsao de energia hoje</p>
-                <span className="home-cycle-forecast-pill" style={{ background: `${phaseColor}18`, color: phaseColor }}>
-                  {cycleReport.energyForecastLabel}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
+          );
+        })()}
 
         {/* ── Nudge proativo da Airia ──────────────────────────── */}
         {state.proactiveNudge && (() => {
@@ -2693,8 +2763,8 @@ export function HomePage() {
           );
         })()}
 
-        {/* ── Card de Insight Autônomo da IA (#3 — urgente quando score < 40) ── */}
-        {(() => {
+        {/* Card antigo de autonomia foi fundido ao card "Ritmo de hoje". */}
+        {false && (() => {
           const ins = state.autonomousInsight;
           const hasInsight = Boolean(ins);
           const cfg = hasInsight ? (STATE_CONFIG[ins!.state] ?? STATE_CONFIG.stable) : STATE_CONFIG.stable;

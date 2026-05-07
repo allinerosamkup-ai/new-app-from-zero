@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { useToast } from "../components/Toast";
-import { computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
+import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { BarChart3 } from "lucide-react";
@@ -174,6 +174,7 @@ export function InsightsPage() {
   }, [allHistory, periodDays]);
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
+  const consistencyScore = useMemo(() => computeConsistencyScore(history), [history]);
   const phaseHistory = useMemo(() => computePhaseHistory(allHistory, 30), [allHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
   const currentPhaseLabel = cycleReport.phase !== "insufficient_data"
@@ -986,6 +987,10 @@ export function InsightsPage() {
 
             {/* Corpo — métricas + cycleEstimate */}
             <div style={{ padding: "12px 14px" }}>
+              <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.55, margin: "0 0 12px" }}>
+                {cycleReport.phaseDescription}
+              </p>
+
               {/* Barra de progresso do ciclo estimado */}
               {cycleReport.cycleEstimate.hasEnoughData && cycleReport.cycleEstimate.estimatedLengthDays && cycleReport.cycleEstimate.currentDayInCycle !== null && (
                 <div style={{ marginBottom: 12 }}>
@@ -1006,6 +1011,32 @@ export function InsightsPage() {
                   </div>
                 </div>
               )}
+
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "9px 10px", borderRadius: 12,
+                background: "rgba(255,255,255,.62)", border: "1px solid rgba(0,0,0,.06)",
+                marginBottom: 10,
+              }}>
+                <div>
+                  <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 3px" }}>
+                    Consistência da semana
+                  </p>
+                  <div style={{ height: 5, width: 96, borderRadius: 999, background: "rgba(0,0,0,.08)", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", borderRadius: 999, transition: "width .6s ease",
+                      width: `${consistencyScore}%`,
+                      background: consistencyScore >= 70 ? "var(--accent-sage)" : consistencyScore >= 40 ? "var(--accent-sky)" : "var(--accent-peach)",
+                    }} />
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 18, fontWeight: 800,
+                  color: consistencyScore >= 70 ? "var(--accent-sage)" : consistencyScore >= 40 ? "var(--accent-sky)" : "var(--accent-peach)",
+                }}>
+                  {consistencyScore}<span style={{ fontSize: 10, fontWeight: 400 }}>/100</span>
+                </span>
+              </div>
 
               {/* Métricas 7d */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
@@ -1030,6 +1061,25 @@ export function InsightsPage() {
                 </p>
               </div>
 
+              <div style={{
+                marginTop: 8,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                padding: "8px 10px",
+                borderRadius: 10,
+                background: "rgba(255,255,255,.56)",
+                border: "1px solid rgba(0,0,0,.06)",
+              }}>
+                <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
+                  Previsão de energia hoje
+                </p>
+                <span style={{ background: `${phaseColor}18`, color: phaseColor, borderRadius: 999, padding: "4px 9px", fontSize: 11, fontWeight: 800 }}>
+                  {cycleReport.energyForecastLabel}
+                </span>
+              </div>
+
               {/* Warning flags */}
               {cycleReport.warningFlags.length > 0 && (
                 <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 5 }}>
@@ -1052,6 +1102,36 @@ export function InsightsPage() {
                       </span>
                     );
                   })}
+                </div>
+              )}
+
+              {phaseHistory.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 6px" }}>
+                    Histórico recente de fases
+                  </p>
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                    {phaseHistory.slice(-6).map((item) => {
+                      const color = getPhaseColor(item.phase);
+                      return (
+                        <span
+                          key={`${item.phase}-${item.startDate}-${item.endDate}`}
+                          style={{
+                            flexShrink: 0,
+                            borderRadius: 999,
+                            border: `1px solid ${color}33`,
+                            background: `${color}12`,
+                            color,
+                            padding: "5px 9px",
+                            fontSize: 10,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {PHASE_CONFIG[item.phase]?.emoji ?? "•"} {formatPhaseHistoryRange(item.startDate, item.endDate)}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
