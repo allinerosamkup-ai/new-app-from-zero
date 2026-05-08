@@ -23,7 +23,7 @@ async function run() {
   assert.match(basePrompt, /fato atual, relato da pessoa, emocao e energia do momento, humor atual, historico de humor/i);
   assert.match(basePrompt, /memorias RAG relevantes, planner, metas, habitos, tarefas e acoes recentes/i);
   assert.match(basePrompt, /POLITICA DE SUGESTAO CONCRETA/i);
-  assert.match(basePrompt, /pelo menos um proximo passo concreto/i);
+  assert.match(basePrompt, /um proximo movimento principal/i);
   assert.match(basePrompt, /tarefa, compromisso, habito, ajuste de agenda/i);
   assert.match(basePrompt, /Se houver agenda pendente, priorize adaptar, mover, reduzir, quebrar ou confirmar/i);
   assert.match(basePrompt, /Se houver meta ativa sem agenda forte, proponha o menor avanco possivel/i);
@@ -34,7 +34,7 @@ async function run() {
   assert.match(basePrompt, /Memoria RAG e historico de humor sao obrigatorios como lente/i);
   assert.match(basePrompt, /CHECK-IN/i);
   assert.match(basePrompt, /histórico de humor|historico de humor/i);
-  assert.match(basePrompt, /2 ou 3 micro-acoes/i);
+  assert.match(basePrompt, /uma acao principal/i);
   assert.match(basePrompt, /10:20 \(manhã\)/);
   assert.match(basePrompt, /RACIOCINIO OPERACIONAL ESTRUTURADO \(USO INTERNO\)/i);
   assert.match(basePrompt, /Decisao: acao \| Revisar proposta da cliente Julia/i);

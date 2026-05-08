@@ -138,7 +138,7 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
     instructions: [
       'Leia estado atual, nota escrita, emocoes, fatores, sono, corpo, fase, historico de humor, RAG e agenda antes de classificar.',
       'A analise deve citar uma nuance concreta do check-in ou do historico. Nao resuma numeros.',
-      'Entregue 2 ou 3 micro-acoes para as proximas horas quando houver ancora suficiente. Se nao houver, faca uma pergunta curta.',
+      'Entregue uma acao principal para as proximas horas quando houver ancora suficiente. Se nao houver, faca uma pergunta curta.',
       'Baixa energia pede reducao de carga, versao minima ou protecao de janela. Energia alta pede foco com borda. Agitacao pede contencao.',
     ],
   },

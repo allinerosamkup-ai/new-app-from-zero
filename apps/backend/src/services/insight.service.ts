@@ -7,6 +7,7 @@ import { SuggestionMemoryService } from './suggestion-memory.service';
 import { MemoryService } from './memory.service';
 import { ContextGroundingService } from './context-grounding.service';
 import { ReasoningContextService } from './reasoning-context.service';
+import { AiriaOperationalReasoningService } from './airia-operational-reasoning.service';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -211,6 +212,18 @@ export class InsightService {
       currentMessage: 'Gerar leitura semanal e próximo ajuste possível.',
       ragContext,
     });
+    const insightActionPlan = AiriaOperationalReasoningService.build({
+      dailyContext: insightDailyContext,
+      surface: 'insights',
+      requestContext: {
+        localDate: latestLocalDate,
+        moodScore: latestCheckin?.moodScore,
+        energyScore: latestCheckin?.energyScore,
+      },
+      currentMessage: 'Gerar leitura semanal e próximo ajuste possível.',
+      ragContext,
+      trace: insightReasoning.trace,
+    });
 
     // 4. Chamada OpenAI para Análise de Padrões
     const habitLines = rawData.habits.map(h => `- ${h.title}: ${h.completions} conclusões`).join('\n');
@@ -246,6 +259,7 @@ export class InsightService {
       5. Liste até 3 conquistas ou momentos positivos desta semana (highlights) — frases curtas, celebratórias, baseadas nos dados reais. Ex: "Completou 4 hábitos em um único dia", "Manteve sequência de 5 dias de meditação".
       6. Não recicle sugestões recentes. Se a mesma linha de ação for inevitável, escreva como retomada explícita e mude a execução concreta.
       7. Recomendações precisam virar próximo passo, compromisso, hábito ou ajuste de agenda com âncora real. Se só houver padrão antigo sem fato atual, use pergunta de ancoragem.
+      8. Use o plano operacional validado como direção da recomendação principal: ${AiriaOperationalReasoningService.visibleSuggestion(insightActionPlan)}
 
       Retorne APENAS um JSON puro no formato esperado.
     `;
@@ -263,7 +277,10 @@ export class InsightService {
             contextualMemory: ragContext,
             activeGoalsContext,
             recentSuggestionMemory,
-            reasoningTraceContext: insightReasoning.context,
+            reasoningTraceContext: [
+              insightReasoning.context,
+              AiriaOperationalReasoningService.formatForPrompt(insightActionPlan),
+            ].join('\n\n'),
             domain: 'insight',
           }),
         },

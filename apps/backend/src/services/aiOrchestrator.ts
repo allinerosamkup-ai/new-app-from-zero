@@ -44,16 +44,14 @@ const DEFAULT_FALLBACKS: Record<string, SuggestFallback> = {
     actions: [],
   },
   'home-messages': {
-    motivacional: 'Hoje vale escolher uma única prioridade real e começar por ela.',
+    motivacional: 'Hoje a Airia precisa de uma âncora real do dia para ajustar sem inventar tarefa.',
     autocuidado: [
-      '🌿 Respire por 1 minuto antes de agir.',
-      '💧 Beba água e ajuste sua postura agora.',
-      '📝 Defina o próximo passo em até 5 minutos.',
+      'Abrir o Planner e escolher uma pendência real para ajustar agora.',
     ],
     proactive: {
       emoji: '🎯',
-      title: 'Próximo passo',
-      desc: 'Uma ação curta agora reduz atrito do restante do dia.',
+      title: 'Abrir Planner',
+      desc: 'Ajustar uma pendência real vale mais do que receber cuidado genérico.',
       actionPath: '/planner',
     },
   },

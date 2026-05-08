@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { buildAuraSystemPrompt, humanizeScore } from '../lib/aura-prompt';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { AiriaOperationalReasoningService, type AiriaActionPlan } from './airia-operational-reasoning.service';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -34,6 +35,9 @@ const GENERIC_RECOMMENDATION_PATTERNS = [
   /\bum\s+passo\s+de\s+cada\s+vez\b/,
   /\borganizar\s+(o\s+)?dia\b/,
   /\bplanejar\s+(o\s+)?dia\b/,
+  /\bescrev(a|er)\b/,
+  /\banot(e|ar)\b/,
+  /\bregistr(e|ar)\b/,
   /\btrein(o|ar)\b/,
   /\bkit(s)?\s+do\s+treino\b/,
 ];
@@ -208,6 +212,8 @@ export class CheckinService {
     recentSuggestionMemory?: string | null;
     completionContext?: string | null;
     reasoningTraceContext?: string | null;
+    airiaActionPlan?: AiriaActionPlan | null;
+    operationalRecommendation?: string | null;
     avoidRecommendationTitles?: string[] | null;
     emotions?: string[];
     factors?: string[];
@@ -259,6 +265,12 @@ export class CheckinService {
       ? `- Nota escrita (SINAL PRIORITÁRIO - dê mais peso a isto do que a inferências genéricas dos números): "${trimmedNote}"`
       : '- Nota escrita: Nenhuma';
 
+    const operationalPlanContext = data.airiaActionPlan
+      ? AiriaOperationalReasoningService.formatForPrompt(data.airiaActionPlan)
+      : '';
+    const operationalRecommendation = data.operationalRecommendation?.trim()
+      || (data.airiaActionPlan ? AiriaOperationalReasoningService.visibleSuggestion(data.airiaActionPlan) : '');
+
     const prompt = `
 Analise os dados de check-in e retorne uma leitura humanizada, específica e útil.
 
@@ -274,6 +286,7 @@ ${data.activeGoalsContext ? `METAS ATIVAS:\n${data.activeGoalsContext}\n` : ''}
 ${data.contextualMemory ? `MEMÓRIAS RELEVANTES:\n${data.contextualMemory}\n` : ''}
 ${data.recentSuggestionMemory ? `${data.recentSuggestionMemory}\n` : ''}
 ${data.completionContext ? `JÁ FEITO / NÃO SUGERIR DE NOVO:\n${data.completionContext}\n` : ''}
+${operationalPlanContext ? `${operationalPlanContext}\n` : ''}
 DIRETRIZES:
 - Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
 - Antes de escrever, faça a leitura total: fato atual do check-in + nota escrita + emoções/fatores + humor atual + histórico de humor + RAG/memória + planner/metas/hábitos + ações recentes.
@@ -286,7 +299,8 @@ DIRETRIZES:
 - Se houver nota escrita, ela é o sinal de maior contexto: use a nota para reinterpretar humor, energia e sugestões antes de concluir qualquer padrão.
 - Se a nota explicar uma causa física ou situacional concreta, como doença, dor, gripe, febre, menstruação, noite ruim ou crise externa, não trate energia baixa como piora emocional; diferencie capacidade baixa de humor ruim.
 - analysis: 1-2 frases que leiam o momento sem repetir os números; se há nota, emoções ou fatores específicos, mencione a nuance concreta.
-- recommendations: 2-3 micro-ações realmente executáveis nas próximas horas, diferentes entre si, sem clichês; se há nota escrita, pelo menos 1 ação deve responder diretamente ao que ela revelou. Se não houver âncora suficiente, faça recomendação em forma de pergunta curta para localizar o fato atual.
+- recommendations: retorne 1 ação principal. Se houver PLANO OPERACIONAL DA AIRIA, use a ação validada por ele e não invente outra. Se não houver âncora suficiente, faça recomendação em forma de pergunta curta para localizar o fato atual.
+- Fora do Diário ou de mensagem pronta, não use "escreva", "anote" ou "registre" como sugestão. Ação real é compromisso, adaptação de agenda, hábito devido, meta ativa ou pergunta de ancoragem.
 - Se uma recomendação recente já cobriu a mesma ideia, escolha uma alternativa real. Se a repetição for a melhor opção, escreva como retomada explícita da sugestão anterior e acrescente um ajuste concreto.
 - Não sugira treino, kit de treino, hábito, tarefa, meta ou subtarefa que já aparece como concluída hoje. Use concluídos como evidência de movimento, não como próxima ação.
 - Se citar horário explícito, ele deve ser posterior a ${currentLocalTime ?? 'agora'} e caber nas próximas 2 horas; nunca use madrugada ou horário já passado.
@@ -315,7 +329,7 @@ JSON APENAS:
             activeGoalsContext: data.activeGoalsContext,
             plannerContext: data.plannerContext,
             recentSuggestionMemory: data.recentSuggestionMemory,
-            reasoningTraceContext: data.reasoningTraceContext,
+            reasoningTraceContext: [data.reasoningTraceContext, operationalPlanContext].filter(Boolean).join('\n\n'),
             currentHour: data.currentHour,
             currentMinute: data.currentMinute,
             phase: data.phase,
@@ -338,10 +352,10 @@ JSON APENAS:
     return {
       ...parsed,
       recommendations: sanitizeRecommendations(
-        parsed.recommendations,
+        operationalRecommendation ? [operationalRecommendation] : parsed.recommendations,
         currentLocalTime,
         data.avoidRecommendationTitles ?? [],
-      ),
+      ).slice(0, 1),
     };
   }
 }

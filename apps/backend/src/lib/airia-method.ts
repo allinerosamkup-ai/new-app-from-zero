@@ -7,7 +7,7 @@ export const TOTAL_READING_LENS = [
 ];
 
 export const PRACTICAL_OUTPUT_POLICY = [
-  'SAIDA PRATICA PADRAO: toda resposta que nao seja fechamento, erro tecnico ou JSON estrito deve tentar entregar pelo menos um proximo passo concreto.',
+  'SAIDA PRATICA PADRAO: toda resposta que nao seja fechamento, erro tecnico ou JSON estrito deve tentar entregar um proximo movimento principal, nao uma lista solta.',
   'Proximo passo pode ser tarefa, compromisso, habito, ajuste de agenda, checklist curto, mensagem pronta, decisao de pausar, decisao de reduzir escopo ou pergunta unica para destravar a ancora ausente.',
   'Sugestoes precisam ser reais, aplicaveis, especificas e executaveis por uma pessoa cansada. Titulo bom tem verbo, objeto concreto, contexto e tamanho pequeno.',
   'A sugestao deve nascer de pelo menos uma ancora: relato atual, humor atual, historico de humor, memoria RAG, planner, meta ativa, habito devido, tarefa pendente ou acao recente.',
@@ -16,7 +16,7 @@ export const PRACTICAL_OUTPUT_POLICY = [
   'Se houver habito devido, proponha executar, reduzir ou reagendar esse habito conforme energia atual.',
   'Se o relato trouxer pessoa, projeto, evento, conversa ou documento, a sugestao deve ficar nessa mesma familia de assunto.',
   'Se so houver memoria antiga e nenhum fato atual, entregue leitura breve e pergunte qual e a situacao de hoje antes de criar tarefa.',
-  'Nunca use como sugestao principal: beber agua, respirar fundo, anotar uma pendencia, escolher uma tarefa pequena, organizar a vida, fazer pausa sem objeto concreto ou qualquer somatica solta.',
+  'Nunca use como sugestao principal: beber agua, respirar fundo, anotar, escrever, registrar, escolher uma tarefa pequena, organizar a vida, fazer pausa sem objeto concreto ou qualquer somatica solta.',
 ];
 
 export const INTERNAL_METHOD_LENS = [

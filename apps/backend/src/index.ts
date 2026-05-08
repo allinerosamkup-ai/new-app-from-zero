@@ -33,6 +33,7 @@ import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
 import { ContextGroundingService } from './services/context-grounding.service';
 import { ReasoningContextService } from './services/reasoning-context.service';
+import { AiriaOperationalReasoningService, type AiriaActionPlan } from './services/airia-operational-reasoning.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
@@ -848,6 +849,10 @@ function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record
 
   if (type === 'home-messages' && suggestion && typeof suggestion === 'object') {
     const payload = suggestion as Record<string, unknown>;
+    const actionPlan = context.airiaActionPlan as AiriaActionPlan | undefined;
+    const plannedAction = typeof context.airiaOperationalSuggestion === 'string'
+      ? context.airiaOperationalSuggestion.trim()
+      : actionPlan?.action?.displayText?.trim();
     const rawAutocuidado = Array.isArray(payload.autocuidado)
       ? uniqueByKey(
           payload.autocuidado
@@ -856,6 +861,18 @@ function sanitizeAiSuggestion(type: string, suggestion: unknown, context: Record
             .filter(Boolean),
         )
       : [];
+    if (plannedAction) {
+      return {
+        ...payload,
+        autocuidado: [plannedAction],
+        proactive: {
+          emoji: '🎯',
+          title: actionPlan?.decision.type === 'ask_anchor' ? 'Dar contexto' : 'Próximo movimento',
+          desc: actionPlan?.visibleReason || 'A Airia escolheu uma ação ancorada no que existe hoje.',
+          actionPath: actionPlan?.action?.route ?? null,
+        },
+      };
+    }
     const novelAutocuidado = rawAutocuidado
       .filter((item) => !recentSuggestionItems.some((recent) => SuggestionMemoryService.isSimilar(item, recent)));
     const autocuidado = (novelAutocuidado.length > 0
@@ -1720,6 +1737,23 @@ export function createApp(dependencies: AppDependencies = {}) {
       ragContext: checkinRagContext,
       decisionBrain: (checkinGroundingContext as any).decisionBrain ?? null,
     });
+    const checkinActionPlan = AiriaOperationalReasoningService.build({
+      dailyContext: checkinGroundingContext.grounding as any,
+      surface: 'checkin',
+      requestContext: {
+        ...extractAdaptiveFromRequest(req.body),
+        localDate: data.localDate,
+        moodScore: data.moodScore,
+        energyScore: data.energyScore,
+        sleepScore: data.sleepScore,
+        currentHour: (req.body as any)?.currentHour,
+        currentMinute: (req.body as any)?.currentMinute,
+      },
+      currentMessage: data.note ?? null,
+      ragContext: checkinRagContext,
+      decisionBrain: (checkinGroundingContext as any).decisionBrain ?? null,
+      trace: checkinReasoning.trace,
+    });
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -1736,7 +1770,12 @@ export function createApp(dependencies: AppDependencies = {}) {
       contextualMemory: checkinRagContext,
       activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
       recentSuggestionMemory,
-      reasoningTraceContext: checkinReasoning.context,
+      reasoningTraceContext: [
+        checkinReasoning.context,
+        AiriaOperationalReasoningService.formatForPrompt(checkinActionPlan),
+      ].join('\n\n'),
+      airiaActionPlan: checkinActionPlan,
+      operationalRecommendation: AiriaOperationalReasoningService.visibleSuggestion(checkinActionPlan),
       completionContext: checkinCompletionContext.text,
       avoidRecommendationTitles: uniqueByKey([
         ...checkinCompletionContext.titles,
@@ -2167,6 +2206,24 @@ export function createApp(dependencies: AppDependencies = {}) {
         ),
         ragContext: journalRagContext,
       });
+      const journalActionPlan = AiriaOperationalReasoningService.build({
+        dailyContext: journalDailyContext,
+        surface: 'journal',
+        requestContext: {
+          localDate: data.localDate,
+          currentHour: data.currentHour,
+          currentMinute: data.currentMinute,
+          phase: data.phase ?? null,
+          warningFlags: data.warningFlags ?? [],
+        },
+        currentMessage: data.message,
+        situationSummary: JournalUnderstandingService.formatSituationForPrompt(
+          journalSituation,
+          journalMemory.rejectedMemoryReasons,
+        ),
+        ragContext: journalRagContext,
+        trace: journalReasoning.trace,
+      });
 
       const assistantContent = await aiService.streamJournalReply({
         context: {
@@ -2177,7 +2234,10 @@ export function createApp(dependencies: AppDependencies = {}) {
           activeGoalsContext: runtimeContext.activeGoalsContext,
           recentSessionHistory: routineCtx.recentSessionHistory,
           recentSuggestionMemory,
-          reasoningTraceContext: journalReasoning.context,
+          reasoningTraceContext: [
+            journalReasoning.context,
+            AiriaOperationalReasoningService.formatForPrompt(journalActionPlan),
+          ].join('\n\n'),
           ragContext: journalRagContext,
           journalContext: buildJournalReflectiveContext({
             currentMessage: data.message,
@@ -2329,6 +2389,18 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
         decisionBrain: (commandGroundingContext as any).decisionBrain ?? null,
       });
+      const commandActionPlan = AiriaOperationalReasoningService.build({
+        dailyContext: commandGroundingContext.grounding as any,
+        surface: 'aura-chat',
+        requestContext: {
+          ...extractAdaptiveFromRequest(req.body),
+          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+        },
+        currentMessage: data.message,
+        ragContext: commandRagContext,
+        decisionBrain: (commandGroundingContext as any).decisionBrain ?? null,
+        trace: commandReasoning.trace,
+      });
 
       const commandResponse = await auraCommandService.interpretCommand({
         message: data.message,
@@ -2337,7 +2409,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         profileSummary: runtimeContext.userProfileSummary,
         moodCycleContext: [runtimeContext.moodCycleContext, commandGroundingText].filter(Boolean).join('\n'),
         recentSuggestionMemory,
-        reasoningTraceContext: commandReasoning.context,
+        reasoningTraceContext: [
+          commandReasoning.context,
+          AiriaOperationalReasoningService.formatForPrompt(commandActionPlan),
+        ].join('\n\n'),
         activeGoalsContext: runtimeContext.activeGoalsContext,
         ragContext: commandRagContext,
         plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
@@ -3257,7 +3332,25 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext,
         decisionBrain: (context as any).decisionBrain ?? null,
       });
-      context.reasoningTraceContext = suggestReasoning.context;
+      const airiaActionPlan = AiriaOperationalReasoningService.build({
+        dailyContext: context.grounding as any,
+        surface: ((context.grounding as any)?.decisionBrain?.surface ?? 'home') as any,
+        requestContext: context,
+        currentMessage: [
+          typeof context.title === 'string' ? context.title : '',
+          typeof context.currentNote === 'string' ? context.currentNote : '',
+          typeof context.message === 'string' ? context.message : '',
+        ].filter(Boolean).join(' | '),
+        ragContext,
+        decisionBrain: (context as any).decisionBrain ?? null,
+        trace: suggestReasoning.trace,
+      });
+      context.airiaActionPlan = airiaActionPlan;
+      context.airiaOperationalSuggestion = AiriaOperationalReasoningService.visibleSuggestion(airiaActionPlan);
+      context.reasoningTraceContext = [
+        suggestReasoning.context,
+        AiriaOperationalReasoningService.formatForPrompt(airiaActionPlan),
+      ].join('\n\n');
 
       let prompt = '';
       if (type === 'task-notes') {
@@ -3642,7 +3735,7 @@ Gere uma presença de home que pareça real, não texto de chatbot.
 
 OBJETIVO:
 1. "motivacional": 1-2 frases curtas que mostrem leitura do momento + direção suave. Não use clichês como "você consegue", "vá com calma" ou "um passo de cada vez" sem contexto.
-2. "autocuidado": 3 ações diferentes entre si, concretas e situadas no momento atual. Cada item deve começar com emoji e ter 6-16 palavras. Use frases naturais de português brasileiro, com verbo claro + objeto + duração/limite quando fizer sentido.
+2. "autocuidado": 1 ação principal, concreta e situada no momento atual. Ela deve seguir o PLANO OPERACIONAL DA AIRIA quando existir. Use frase natural de português brasileiro, com verbo claro + objeto + duração/limite quando fizer sentido.
 3. "proactive": 1 ação para fazer AGORA dentro do app. "title" com 2-5 palavras. "desc" com 1 frase dizendo por que isso faz sentido neste momento. "actionPath" deve ser uma rota real ou null.
 
 REGRAS:
@@ -3658,7 +3751,8 @@ REGRAS:
 - Se a âncora for ansiedade, a ação deve diminuir decisão aberta: escolher uma frente, limitar tempo, fechar um bloco ou escrever a próxima decisão.
 - Se a âncora for baixa energia, reduza escopo antes de sugerir avanço.
 - "proactive" deve tentar entregar ação concreta dentro do app quando houver âncora real; se não houver, use actionPath null e faça uma pergunta curta na descrição.
-- As 3 ações de "autocuidado" devem ser diferentes entre si e não podem reciclar a mesma ideia com palavras diferentes.
+- "autocuidado" não é lista solta: retorne só o próximo movimento principal. Não complete array com cuidados decorativos.
+- Não use escrever, anotar ou registrar fora do Diário, mensagem pronta ou pedido explícito da usuária.
 - Redação das ações: escreva como instrução aplicável, não como fragmento. Bom: "🧼 Lave bem as mãos por 20 segundos." Bom: "🕯️ Escute um som baixo por 15 minutos sem aumentar o volume."
 - Evite construção esquisita com dois verbos grudados, como "continue sem alternar", "separe uma categoria: só...", "definir o próximo limite".
 - Não use "20s", "30s" ou abreviações quando o texto for exibido para usuária. Use "20 segundos", "30 segundos", "15 minutos".
@@ -3666,7 +3760,7 @@ REGRAS:
 - Evite frases que sirvam igual para qualquer pessoa em qualquer horário.
 - Nada aqui pode servir igual para qualquer pessoa em qualquer horário.
 
-JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["...","...","..."],"proactive":{"emoji":"🎯","title":"...","desc":"...","actionPath":"rota da app ou null (ex: /checkin, /goals, /planner, /insights, /journal)"}}`;
+JSON APENAS (sem markdown): {"motivacional":"...","autocuidado":["ação principal"],"proactive":{"emoji":"🎯","title":"...","desc":"...","actionPath":"rota da app ou null (ex: /checkin, /goals, /planner, /insights, /journal)"}}`;
       } else if (type === 'agenda-blocks') {
         const mood = context.mood || 'equilibrada';
         const moodLabel = context.moodLabel || 'Em Equilíbrio';
