@@ -4273,7 +4273,24 @@ JSON APENAS: {"profileSummary":"..."}`,
           headers: { Authorization: `Bearer ${t}` },
         });
 
-      const getDefaultCalendarIds = async (): Promise<string[]> => {
+      const normalizeCalendarSummary = (value: unknown) =>
+        String(value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim()
+          .toLowerCase();
+
+      const isMinhaAgendaCalendar = (calendar: any) =>
+        normalizeCalendarSummary(calendar?.summaryOverride || calendar?.summary) === 'minha agenda';
+
+      const isReadableCalendar = (calendar: any) => {
+        const accessRole = String(calendar?.accessRole || '').trim();
+        return accessRole !== 'none' && accessRole !== 'freeBusyReader';
+      };
+
+      const uniqueCalendarIds = (ids: string[]) => Array.from(new Set(ids.map((id) => String(id).trim()).filter(Boolean)));
+
+      const getCalendarSelectionDefaults = async (): Promise<{ defaultIds: string[]; requiredIds: string[] }> => {
         let listRes = await fetchCalendarList(token!);
 
         if (listRes.status === 401 && pref?.gcalRefreshToken) {
@@ -4284,21 +4301,33 @@ JSON APENAS: {"profileSummary":"..."}`,
           }
         }
 
-        if (!listRes.ok) return ['primary'];
+        if (!listRes.ok) return { defaultIds: ['primary'], requiredIds: [] };
 
         const data = await listRes.json() as any;
-        const calendarIds = (data.items || [])
-          .filter((calendar: any) => calendar?.selected !== false && calendar?.accessRole !== 'none')
+        const readableCalendars = (data.items || []).filter(isReadableCalendar);
+        const requiredIds = readableCalendars
+          .filter(isMinhaAgendaCalendar)
+          .map((calendar: any) => String(calendar.id || '').trim())
+          .filter(Boolean);
+        const defaultIds = readableCalendars
+          .filter((calendar: any) => calendar?.selected !== false || calendar?.primary === true || isMinhaAgendaCalendar(calendar))
           .map((calendar: any) => String(calendar.id || '').trim())
           .filter(Boolean);
 
-        return calendarIds.length > 0 ? calendarIds : ['primary'];
+        return {
+          defaultIds: defaultIds.length > 0 ? uniqueCalendarIds(defaultIds) : ['primary'],
+          requiredIds: uniqueCalendarIds(requiredIds),
+        };
       };
 
       const savedCalendarIds = Array.isArray(pref?.gcalSelectedCalendars)
         ? (pref?.gcalSelectedCalendars as unknown[]).map((id) => String(id).trim()).filter(Boolean)
         : [];
-      const selectedCalendars = savedCalendarIds.length > 0 ? savedCalendarIds : await getDefaultCalendarIds();
+      const calendarSelectionDefaults = await getCalendarSelectionDefaults();
+      const selectedCalendars = uniqueCalendarIds([
+        ...(savedCalendarIds.length > 0 ? savedCalendarIds : calendarSelectionDefaults.defaultIds),
+        ...calendarSelectionDefaults.requiredIds,
+      ]);
 
       // Helper to attempt fetch, auto-refresh token on 401
       const fetchWithRetry = async (calendarId: string): Promise<any[]> => {
@@ -4383,6 +4412,14 @@ JSON APENAS: {"profileSummary":"..."}`,
       if (!listRes.ok) return res.json({ connected: false, calendars: [] });
 
       const data = await listRes.json() as any;
+      const normalizeCalendarSummary = (value: unknown) =>
+        String(value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim()
+          .toLowerCase();
+      const isMinhaAgendaCalendar = (calendar: any) =>
+        normalizeCalendarSummary(calendar?.summaryOverride || calendar?.summary) === 'minha agenda';
       const calendars = (data.items || []).map((c: any) => ({
         id: c.id,
         summary: c.summary || c.id,
@@ -4401,10 +4438,16 @@ JSON APENAS: {"profileSummary":"..."}`,
       const savedSelectedIds = Array.isArray(pref?.gcalSelectedCalendars)
         ? (pref?.gcalSelectedCalendars as unknown[]).map((id) => String(id).trim()).filter(Boolean)
         : [];
-      const defaultSelectedIds = calendars
-        .filter((calendar: any) => calendar.selected && calendar.accessRole !== 'none')
+      const requiredSelectedIds = calendars
+        .filter((calendar: any) => calendar.accessRole !== 'none' && calendar.accessRole !== 'freeBusyReader' && isMinhaAgendaCalendar(calendar))
         .map((calendar: any) => calendar.id);
-      const selectedIds = savedSelectedIds.length > 0 ? savedSelectedIds : defaultSelectedIds;
+      const defaultSelectedIds = calendars
+        .filter((calendar: any) => (calendar.selected || isMinhaAgendaCalendar(calendar)) && calendar.accessRole !== 'none' && calendar.accessRole !== 'freeBusyReader')
+        .map((calendar: any) => calendar.id);
+      const selectedIds = Array.from(new Set([
+        ...(savedSelectedIds.length > 0 ? savedSelectedIds : defaultSelectedIds),
+        ...requiredSelectedIds,
+      ]));
 
       return res.json({ connected: true, calendars, selectedIds });
     } catch (err) {

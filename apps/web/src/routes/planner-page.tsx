@@ -1607,13 +1607,13 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 
   return (
     <div
-       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 24, background: "transparent", marginBottom: "10px" }}
+       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 18, background: "transparent", marginBottom: "7px" }}
     >
       <div style={{ 
         position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, 
         display: 'flex', alignItems: 'center', 
         justifyContent: offset < 0 ? 'flex-end' : 'flex-start', 
-        padding: '0 24px', color: '#fff', zIndex: 0, borderRadius: 24, 
+        padding: '0 18px', color: '#fff', zIndex: 0, borderRadius: 18, 
         transition: 'all 0.2s ease', 
         background: offset === 0 ? 'transparent' : (offset < 0 ? 'var(--accent-sage)' : 'var(--accent-peach)'),
         opacity: Math.abs(offset) > 10 ? 1 : 0
@@ -1639,8 +1639,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         style={{
           width: "100%", textAlign: "left",
           border: `1px solid ${categoryOption.cor}30`,
-          borderLeft: `3px solid ${categoryOption.cor}`,
-          borderRadius: 24,
+          borderLeft: `2px solid ${categoryOption.cor}`,
+          borderRadius: 18,
           opacity: slot.task.done ? 0.55 : 1,
           transform: `translateX(${offset}px)`,
           transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1649,20 +1649,21 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
           background: '#FFFFFF',
           cursor: 'pointer',
           touchAction: "pan-y",
-          padding: "13px 16px",
-          boxShadow: slot.task.done ? 'none' : '0 5px 18px rgba(43,31,24,0.035)',
+          padding: "9px 11px",
+          boxShadow: slot.task.done ? 'none' : '0 4px 14px rgba(43,31,24,0.028)',
           display: "flex",
-          gap: 12,
-          alignItems: "center"
+          gap: 8,
+          alignItems: "flex-start"
         }}
       >
         {/* Energy Icon em destaque à esquerda */}
         <div style={{
-          width: 24, height: 24, borderRadius: 8,
+          width: 20, height: 20, borderRadius: 7,
           background: slot.task.done ? 'var(--surface-variant)' : `${categoryOption.cor}18`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
           flexShrink: 0,
-          border: slot.task.done ? 'none' : `1px solid ${categoryOption.cor}40`
+          border: slot.task.done ? 'none' : `1px solid ${categoryOption.cor}35`,
+          marginTop: isGcal ? 4 : 1,
         }}>
            { (() => { 
                 const meta = getTaskMeta(slot.task.id);
@@ -1679,61 +1680,62 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 
         <div style={{ flex: 1, minWidth: 0 }}>
           {isGcal && (
-            <div style={{ fontSize: 9, color: categoryOption.cor, display: "flex", alignItems: "center", gap: 4, fontWeight: 800, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              <img src="https://www.google.com/favicon.ico" width={10} height={10} alt="GCal" style={{ filter: 'grayscale(0.2)' }} /> Google Agenda
+            <div style={{ fontSize: 8, color: categoryOption.cor, display: "flex", alignItems: "center", gap: 3, fontWeight: 800, marginBottom: 2, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              <img src="https://www.google.com/favicon.ico" width={8} height={8} alt="GCal" style={{ filter: 'grayscale(0.2)' }} /> Google Agenda
             </div>
           )}
           <div className="block-title" style={{
-            fontSize: 12.5,
+            fontSize: 11.5,
             fontWeight: 720,
-            marginBottom: 2,
+            marginBottom: 1,
             color: 'var(--text-1)',
             textDecoration: slot.task.done ? "line-through" : "none",
-            letterSpacing: "-0.01em",
-            lineHeight: 1.35,
+            letterSpacing: 0,
+            lineHeight: 1.25,
           }}>{slot.task.title}</div>
 
-          <div className="block-meta" style={{ fontSize: 10, opacity: 0.58, fontWeight: 560, marginBottom: 7, color: "var(--text-2)" }}>
+          <div className="block-meta" style={{ fontSize: 9.5, opacity: 0.56, fontWeight: 560, marginBottom: 5, color: "var(--text-2)" }}>
             {slot.time} — {slot.endTime} · {slot.durationLabel}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
             <div className="block-chip" style={{ 
-              padding: '3px 10px',
-              fontSize: 10,
+              padding: '2px 7px',
+              fontSize: 8.5,
               fontWeight: 800,
-              borderRadius: 8,
+              borderRadius: 999,
               background: categoryOption.bg, 
               color: categoryOption.textColor, 
               border: `1px solid ${categoryOption.cor}22`,
-              display: "flex", alignItems: "center", gap: 5,
+              display: "flex", alignItems: "center", gap: 4,
               textTransform: "uppercase",
-              letterSpacing: "0.03em"
+              letterSpacing: "0.02em",
+              minHeight: 20,
             }}>
               {slot.task.icon && !/^lucide/i.test(slot.task.icon) ? (
-                <span style={{ fontSize: 11 }}>{slot.task.icon}</span>
+                <span style={{ fontSize: 9 }}>{slot.task.icon}</span>
               ) : (
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: categoryOption.cor }} />
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: categoryOption.cor }} />
               )}
               {categoryOption.shortLabel}
             </div>
 
             {slot.task.persistentReminderEnabled && (
-              <div style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(244,190,168,0.1)", padding: "2px 8px", borderRadius: 6, border: "1px solid rgba(244,190,168,0.2)" }}>
-                <Bell size={10} color="var(--accent-peach)" />
-                <span style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach-ink)" }}>{slot.task.persistentReminderIntervalMinutes}m</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(244,190,168,0.1)", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(244,190,168,0.2)", minHeight: 20 }}>
+                <Bell size={9} color="var(--accent-peach)" />
+                <span style={{ fontSize: 8.5, fontWeight: 800, color: "var(--accent-peach-ink)" }}>{slot.task.persistentReminderIntervalMinutes}m</span>
               </div>
             )}
 
             {(slot.task.alarmEnabled || slot.task.vibrateEnabled) && (
-               <div style={{ display: "flex", gap: 5, opacity: 0.7 }}>
-                  {slot.task.alarmEnabled && <span style={{ fontSize: 12 }}>⏰</span>}
-                  {slot.task.vibrateEnabled && <span style={{ fontSize: 12 }}>📳</span>}
+               <div style={{ display: "flex", gap: 4, opacity: 0.7 }}>
+                  {slot.task.alarmEnabled && <span style={{ fontSize: 10 }}>⏰</span>}
+                  {slot.task.vibrateEnabled && <span style={{ fontSize: 10 }}>📳</span>}
                </div>
             )}
 
             {slot.task.isAiSuggested && (
-              <div className="block-chip" style={{ background: "rgba(244,190,168,.12)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.30)", fontWeight: 800, fontSize: 9 }}>
+              <div className="block-chip" style={{ background: "rgba(244,190,168,.12)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.30)", fontWeight: 800, fontSize: 8.5, minHeight: 20, padding: "2px 7px", borderRadius: 999 }}>
                 AIRIA
               </div>
             )}
@@ -1748,16 +1750,16 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                 background: "rgba(99,152,169,.10)",
                 color: "var(--accent-sky)",
                 borderRadius: 999,
-                minHeight: 30,
-                padding: "5px 9px",
-                fontSize: 9,
+                minHeight: 22,
+                padding: "3px 7px",
+                fontSize: 8.5,
                 fontWeight: 850,
-                letterSpacing: ".04em",
+                letterSpacing: ".02em",
                 textTransform: "uppercase",
                 cursor: "pointer",
               }}
             >
-              Conversar
+              Falar
             </button>
             {isGcal && (
               <button
@@ -1771,20 +1773,20 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                   background: "rgba(80,112,91,.08)",
                   color: "var(--accent-sage-ink)",
                   borderRadius: 999,
-                  minHeight: 30,
-                  padding: "5px 9px",
-                  fontSize: 9,
+                  minHeight: 22,
+                  padding: "3px 7px",
+                  fontSize: 8.5,
                   fontWeight: 850,
-                  letterSpacing: ".04em",
+                  letterSpacing: ".02em",
                   textTransform: "uppercase",
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 4,
+                  gap: 3,
                 }}
               >
-                <ClipboardCheck size={11} />
-                Virar tarefa
+                <ClipboardCheck size={10} />
+                Tarefa
               </button>
             )}
             {!slot.task.done && (
@@ -1799,19 +1801,19 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                   background: "rgba(215,137,127,.10)",
                   color: "var(--accent-peach-ink)",
                   borderRadius: 999,
-                  minHeight: 30,
-                  padding: "5px 9px",
-                  fontSize: 9,
+                  minHeight: 22,
+                  padding: "3px 7px",
+                  fontSize: 8.5,
                   fontWeight: 850,
-                  letterSpacing: ".04em",
+                  letterSpacing: ".02em",
                   textTransform: "uppercase",
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: 4,
+                  gap: 3,
                 }}
               >
-                <CalendarClock size={11} />
+                <CalendarClock size={10} />
                 Adiar
               </button>
             )}

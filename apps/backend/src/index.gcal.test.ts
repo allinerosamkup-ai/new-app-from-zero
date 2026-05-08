@@ -53,6 +53,13 @@ async function run() {
             accessRole: 'writer',
             backgroundColor: '#16A765',
           },
+          {
+            id: 'minha-agenda@example.com',
+            summary: 'Minha agenda',
+            selected: false,
+            accessRole: 'writer',
+            backgroundColor: '#F4511E',
+          },
         ],
       }), {
         status: 200,
@@ -155,16 +162,16 @@ async function run() {
     const calendarsResponse = await fetch(`${baseUrl}/api/gcal/calendars`);
     const calendarsBody = await calendarsResponse.json();
     assert.equal(calendarsResponse.status, 200);
-    assert.deepEqual(calendarsBody.selectedIds, ['primary', 'terapia@example.com']);
+    assert.deepEqual(calendarsBody.selectedIds, ['primary', 'terapia@example.com', 'minha-agenda@example.com']);
 
     const eventsResponse = await fetch(`${baseUrl}/api/gcal/events?date=2026-04-13`);
     const eventsBody = await eventsResponse.json();
     assert.equal(eventsResponse.status, 200);
     assert.equal(eventsBody.connected, true);
-    assert.deepEqual(calendarEventRequests.sort(), ['primary', 'terapia@example.com']);
-    assert.equal(eventsBody.events.length, 2);
-    assert.equal(eventsBody.events[1].calendarId, 'terapia@example.com');
-    assert.equal(eventsBody.events[1].airiaStatus, 'completed');
+    assert.deepEqual(calendarEventRequests.sort(), ['minha-agenda@example.com', 'primary', 'terapia@example.com']);
+    assert.equal(eventsBody.events.length, 3);
+    assert.equal(eventsBody.events.some((event: any) => event.calendarId === 'minha-agenda@example.com'), true);
+    assert.equal(eventsBody.events.find((event: any) => event.calendarId === 'terapia@example.com')?.airiaStatus, 'completed');
 
     const saveCalendarsResponse = await fetch(`${baseUrl}/api/gcal/calendars`, {
       method: 'PUT',
@@ -173,6 +180,11 @@ async function run() {
     });
     assert.equal(saveCalendarsResponse.status, 200);
     assert.deepEqual(userPreference.gcalSelectedCalendars, ['terapia@example.com']);
+
+    calendarEventRequests.length = 0;
+    const savedEventsResponse = await fetch(`${baseUrl}/api/gcal/events?date=2026-04-13`);
+    assert.equal(savedEventsResponse.status, 200);
+    assert.deepEqual(calendarEventRequests.sort(), ['minha-agenda@example.com', 'terapia@example.com']);
 
     const patchResponse = await fetch(`${baseUrl}/api/gcal/events/therapy-event?calendarId=${encodeURIComponent('terapia@example.com')}`, {
       method: 'PATCH',
