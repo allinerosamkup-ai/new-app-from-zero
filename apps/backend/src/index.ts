@@ -34,6 +34,7 @@ import { MemoryService } from './services/memory.service';
 import { ContextGroundingService } from './services/context-grounding.service';
 import { ReasoningContextService } from './services/reasoning-context.service';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './services/airia-operational-reasoning.service';
+import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-interpreter.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
@@ -1754,6 +1755,26 @@ export function createApp(dependencies: AppDependencies = {}) {
       decisionBrain: (checkinGroundingContext as any).decisionBrain ?? null,
       trace: checkinReasoning.trace,
     });
+    const checkinCognitive = await AiriaCognitiveInterpreterService.interpret({
+      surface: 'checkin',
+      dailyContext: checkinGroundingContext.grounding as any,
+      requestContext: {
+        ...extractAdaptiveFromRequest(req.body),
+        localDate: data.localDate,
+        moodScore: data.moodScore,
+        energyScore: data.energyScore,
+        sleepScore: data.sleepScore,
+        currentHour: (req.body as any)?.currentHour,
+        currentMinute: (req.body as any)?.currentMinute,
+      },
+      currentMessage: data.note ?? null,
+      ragContext: checkinRagContext,
+      moodCycleContext: [checkinRuntimeContext.moodCycleContext, checkinGroundingText].filter(Boolean).join('\n'),
+      plannerContext: [checkinPlannerContext, checkinGroundingText].filter(Boolean).join('\n'),
+      activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
+      recentSuggestionMemory,
+      actionPlan: checkinActionPlan,
+    });
     const aiState = await CheckinService.evaluateDayState({
       checkinSlot,
       moodScore: data.moodScore,
@@ -1773,6 +1794,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       reasoningTraceContext: [
         checkinReasoning.context,
         AiriaOperationalReasoningService.formatForPrompt(checkinActionPlan),
+        AiriaCognitiveInterpreterService.formatForPrompt(checkinCognitive),
       ].join('\n\n'),
       airiaActionPlan: checkinActionPlan,
       operationalRecommendation: AiriaOperationalReasoningService.visibleSuggestion(checkinActionPlan),
@@ -2224,6 +2246,28 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: journalRagContext,
         trace: journalReasoning.trace,
       });
+      const journalCognitive = await AiriaCognitiveInterpreterService.interpret({
+        surface: 'journal',
+        dailyContext: journalDailyContext,
+        requestContext: {
+          localDate: data.localDate,
+          currentHour: data.currentHour,
+          currentMinute: data.currentMinute,
+          phase: data.phase ?? null,
+          warningFlags: data.warningFlags ?? [],
+        },
+        currentMessage: data.message,
+        history: existingMessages.map((message) => ({
+          role: message.role as 'user' | 'assistant',
+          content: message.content,
+        })),
+        ragContext: journalRagContext,
+        moodCycleContext: runtimeContext.moodCycleContext,
+        plannerContext: journalPlannerContext,
+        activeGoalsContext: runtimeContext.activeGoalsContext,
+        recentSuggestionMemory,
+        actionPlan: journalActionPlan,
+      });
 
       const assistantContent = await aiService.streamJournalReply({
         context: {
@@ -2237,6 +2281,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           reasoningTraceContext: [
             journalReasoning.context,
             AiriaOperationalReasoningService.formatForPrompt(journalActionPlan),
+            AiriaCognitiveInterpreterService.formatForPrompt(journalCognitive),
           ].join('\n\n'),
           ragContext: journalRagContext,
           journalContext: buildJournalReflectiveContext({
@@ -2401,6 +2446,22 @@ export function createApp(dependencies: AppDependencies = {}) {
         decisionBrain: (commandGroundingContext as any).decisionBrain ?? null,
         trace: commandReasoning.trace,
       });
+      const commandCognitive = await AiriaCognitiveInterpreterService.interpret({
+        surface: 'aura-chat',
+        dailyContext: commandGroundingContext.grounding as any,
+        requestContext: {
+          ...extractAdaptiveFromRequest(req.body),
+          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+        },
+        currentMessage: data.message,
+        history: data.history,
+        ragContext: commandRagContext,
+        moodCycleContext: [runtimeContext.moodCycleContext, commandGroundingText].filter(Boolean).join('\n'),
+        plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
+        activeGoalsContext: runtimeContext.activeGoalsContext,
+        recentSuggestionMemory,
+        actionPlan: commandActionPlan,
+      });
 
       const commandResponse = await auraCommandService.interpretCommand({
         message: data.message,
@@ -2412,6 +2473,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         reasoningTraceContext: [
           commandReasoning.context,
           AiriaOperationalReasoningService.formatForPrompt(commandActionPlan),
+          AiriaCognitiveInterpreterService.formatForPrompt(commandCognitive),
         ].join('\n\n'),
         activeGoalsContext: runtimeContext.activeGoalsContext,
         ragContext: commandRagContext,
@@ -3345,11 +3407,40 @@ export function createApp(dependencies: AppDependencies = {}) {
         decisionBrain: (context as any).decisionBrain ?? null,
         trace: suggestReasoning.trace,
       });
+      const shouldRunCognitiveSuggest = [
+        'home-messages',
+        'checkin-response',
+        'stability-analysis',
+        'weekly-insight',
+        'agenda-blocks',
+        'day-tasks',
+        'journal-tasks',
+      ].includes(type);
+      const suggestCognitive = shouldRunCognitiveSuggest
+        ? await AiriaCognitiveInterpreterService.interpret({
+            surface: ((context.grounding as any)?.decisionBrain?.surface ?? 'home') as any,
+            dailyContext: context.grounding as any,
+            requestContext: context,
+            currentMessage: [
+              typeof context.title === 'string' ? context.title : '',
+              typeof context.currentNote === 'string' ? context.currentNote : '',
+              typeof context.message === 'string' ? context.message : '',
+              typeof context.note === 'string' ? context.note : '',
+            ].filter(Boolean).join(' | '),
+            ragContext,
+            moodCycleContext,
+            plannerContext: typeof context.groundingContext === 'string' ? context.groundingContext : '',
+            activeGoalsContext,
+            recentSuggestionMemory,
+            actionPlan: airiaActionPlan,
+          })
+        : null;
       context.airiaActionPlan = airiaActionPlan;
       context.airiaOperationalSuggestion = AiriaOperationalReasoningService.visibleSuggestion(airiaActionPlan);
       context.reasoningTraceContext = [
         suggestReasoning.context,
         AiriaOperationalReasoningService.formatForPrompt(airiaActionPlan),
+        suggestCognitive ? AiriaCognitiveInterpreterService.formatForPrompt(suggestCognitive) : '',
       ].join('\n\n');
 
       let prompt = '';

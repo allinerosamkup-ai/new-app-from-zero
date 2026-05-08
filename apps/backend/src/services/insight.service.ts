@@ -8,6 +8,7 @@ import { MemoryService } from './memory.service';
 import { ContextGroundingService } from './context-grounding.service';
 import { ReasoningContextService } from './reasoning-context.service';
 import { AiriaOperationalReasoningService } from './airia-operational-reasoning.service';
+import { AiriaCognitiveInterpreterService } from './airia-cognitive-interpreter.service';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -224,6 +225,21 @@ export class InsightService {
       ragContext,
       trace: insightReasoning.trace,
     });
+    const insightCognitive = await AiriaCognitiveInterpreterService.interpret({
+      surface: 'insights',
+      dailyContext: insightDailyContext,
+      requestContext: {
+        localDate: latestLocalDate,
+        moodScore: latestCheckin?.moodScore,
+        energyScore: latestCheckin?.energyScore,
+      },
+      currentMessage: 'Gerar leitura semanal e próximo ajuste possível.',
+      ragContext,
+      moodCycleContext,
+      activeGoalsContext,
+      recentSuggestionMemory,
+      actionPlan: insightActionPlan,
+    });
 
     // 4. Chamada OpenAI para Análise de Padrões
     const habitLines = rawData.habits.map(h => `- ${h.title}: ${h.completions} conclusões`).join('\n');
@@ -280,6 +296,7 @@ export class InsightService {
             reasoningTraceContext: [
               insightReasoning.context,
               AiriaOperationalReasoningService.formatForPrompt(insightActionPlan),
+              AiriaCognitiveInterpreterService.formatForPrompt(insightCognitive),
             ].join('\n\n'),
             domain: 'insight',
           }),

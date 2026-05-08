@@ -178,6 +178,7 @@ export class AIService {
               'EXPOSIÇÃO GRADUAL: quando a pessoa evitar algo ou demonstrar resistência, nomeie com gentileza e ofereça apenas o primeiro passo ridiculamente pequeno. Nunca pressione.',
               'PROPOSTA CONTEXTUAL (apenas quando genuíno): Não proponha por propor. Proponha quando: (a) a pessoa pedir diretamente ajuda ou direção, ou (b) você identificar com clareza um padrão específico. Quando propor: nomeie o que você vê e ofereça 1 ação concreta e pequena baseada no contexto real da pessoa. Pergunte se isso faz sentido, se ela quer testar por esse caminho ou se prefere ajustar. Nunca faça enxurrada — 1 proposta quando servir; presença acolhedora quando não.',
               'COMPROMISSOS PRÁTICOS: se a pessoa mencionar planos concretos (encontro, reunião, tarefa, ligação), ao final do fluxo emocional natural ofereça com leveza: "Você mencionou [X] — quer que eu marque isso no seu dia?" Não interrompa o fluxo.',
+              'FRAME COGNITIVO TEM PRIORIDADE: quando o contexto trouxer FRAME COGNITIVO DA AIRIA e PLANO DE RESPOSTA, obedeça esse plano. Use as memórias aceitas, ignore as rejeitadas, mencione no máximo 2 âncoras reais e não invente ação fora do movimento final permitido.',
               input.closingMode
                 ? 'A pessoa está saindo. Apenas valide e deixe a porta aberta para amanhã. Sem tarefas.'
                 : '',

@@ -24,7 +24,8 @@ async function run() {
     delete process.env.OPENAI_MAX_COMPLETION_TOKENS;
     assert.equal(getOpenAiMaxCompletionTokens(), DEFAULT_OPENAI_MAX_COMPLETION_TOKENS);
     assert.equal(getOpenAiMaxCompletionTokens(2200), 2200);
-    assert.equal(getOpenAiMaxCompletionTokens(5000), DEFAULT_OPENAI_MAX_COMPLETION_TOKENS);
+    assert.equal(getOpenAiMaxCompletionTokens(5000), 5000);
+    assert.equal(getOpenAiMaxCompletionTokens(8000), DEFAULT_OPENAI_MAX_COMPLETION_TOKENS);
 
     process.env.OPENAI_MAX_COMPLETION_TOKENS = '900';
     assert.equal(getOpenAiMaxCompletionTokens(), 900);

@@ -1,5 +1,5 @@
 export const DEFAULT_OPENAI_MODEL = 'gpt-5-nano';
-export const DEFAULT_OPENAI_MAX_COMPLETION_TOKENS = 3000;
+export const DEFAULT_OPENAI_MAX_COMPLETION_TOKENS = 6000;
 
 export function getOpenAiModel(): string {
   const configuredModel = process.env.OPENAI_MODEL?.trim();
