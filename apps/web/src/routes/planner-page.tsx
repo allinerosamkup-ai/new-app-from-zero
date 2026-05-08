@@ -1,6 +1,6 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2, CalendarClock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2, CalendarClock, ClipboardCheck } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -1557,7 +1557,7 @@ function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
   );
 }
 
-function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone }: any) {
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone, onConvertToTask }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -1607,13 +1607,13 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 
   return (
     <div
-       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 32, background: "transparent", marginBottom: "12px" }}
+       style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 24, background: "transparent", marginBottom: "10px" }}
     >
       <div style={{ 
         position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, 
         display: 'flex', alignItems: 'center', 
         justifyContent: offset < 0 ? 'flex-end' : 'flex-start', 
-        padding: '0 28px', color: '#fff', zIndex: 0, borderRadius: 32, 
+        padding: '0 24px', color: '#fff', zIndex: 0, borderRadius: 24, 
         transition: 'all 0.2s ease', 
         background: offset === 0 ? 'transparent' : (offset < 0 ? 'var(--accent-sage)' : 'var(--accent-peach)'),
         opacity: Math.abs(offset) > 10 ? 1 : 0
@@ -1638,9 +1638,9 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         onTouchEnd={handleTouchEnd}
         style={{
           width: "100%", textAlign: "left",
-          border: `1.5px solid ${categoryOption.cor}50`,
-          borderLeft: `5px solid ${categoryOption.cor}`,
-          borderRadius: 32,
+          border: `1px solid ${categoryOption.cor}30`,
+          borderLeft: `3px solid ${categoryOption.cor}`,
+          borderRadius: 24,
           opacity: slot.task.done ? 0.55 : 1,
           transform: `translateX(${offset}px)`,
           transition: dragging ? 'none' : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1649,8 +1649,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
           background: '#FFFFFF',
           cursor: 'pointer',
           touchAction: "pan-y",
-          padding: "16px 20px",
-          boxShadow: slot.task.done ? 'none' : '0 8px 24px rgba(0,0,0,0.02)',
+          padding: "13px 16px",
+          boxShadow: slot.task.done ? 'none' : '0 5px 18px rgba(43,31,24,0.035)',
           display: "flex",
           gap: 12,
           alignItems: "center"
@@ -1658,7 +1658,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
       >
         {/* Energy Icon em destaque à esquerda */}
         <div style={{
-          width: 28, height: 28, borderRadius: 8,
+          width: 24, height: 24, borderRadius: 8,
           background: slot.task.done ? 'var(--surface-variant)' : `${categoryOption.cor}18`,
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13,
           flexShrink: 0,
@@ -1684,16 +1684,16 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             </div>
           )}
           <div className="block-title" style={{
-            fontSize: 13,
-            fontWeight: 600,
+            fontSize: 12.5,
+            fontWeight: 720,
             marginBottom: 2,
             color: 'var(--text-1)',
             textDecoration: slot.task.done ? "line-through" : "none",
             letterSpacing: "-0.01em",
-            lineHeight: 1.3,
+            lineHeight: 1.35,
           }}>{slot.task.title}</div>
 
-          <div className="block-meta" style={{ fontSize: 10, opacity: 0.5, fontWeight: 500, marginBottom: 6, color: "var(--text-2)" }}>
+          <div className="block-meta" style={{ fontSize: 10, opacity: 0.58, fontWeight: 560, marginBottom: 7, color: "var(--text-2)" }}>
             {slot.time} — {slot.endTime} · {slot.durationLabel}
           </div>
 
@@ -1748,8 +1748,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                 background: "rgba(99,152,169,.10)",
                 color: "var(--accent-sky)",
                 borderRadius: 999,
-                minHeight: 32,
-                padding: "6px 10px",
+                minHeight: 30,
+                padding: "5px 9px",
                 fontSize: 9,
                 fontWeight: 850,
                 letterSpacing: ".04em",
@@ -1759,6 +1759,34 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             >
               Conversar
             </button>
+            {isGcal && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onConvertToTask(slot.task);
+                }}
+                style={{
+                  border: "1px solid rgba(80,112,91,.28)",
+                  background: "rgba(80,112,91,.08)",
+                  color: "var(--accent-sage-ink)",
+                  borderRadius: 999,
+                  minHeight: 30,
+                  padding: "5px 9px",
+                  fontSize: 9,
+                  fontWeight: 850,
+                  letterSpacing: ".04em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <ClipboardCheck size={11} />
+                Virar tarefa
+              </button>
+            )}
             {!slot.task.done && (
               <button
                 type="button"
@@ -1771,8 +1799,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                   background: "rgba(215,137,127,.10)",
                   color: "var(--accent-peach-ink)",
                   borderRadius: 999,
-                  minHeight: 32,
-                  padding: "6px 10px",
+                  minHeight: 30,
+                  padding: "5px 9px",
                   fontSize: 9,
                   fontWeight: 850,
                   letterSpacing: ".04em",
@@ -2455,6 +2483,56 @@ export function PlannerPage() {
     }
   }
 
+  async function handleConvertCommitmentToTask(task: PlannerTask) {
+    if (task.source !== "gcal") return;
+
+    try {
+      const title = stripGoogleCalendarTaskTitle(task.title).trim();
+      const res: any = await api.post("/timeline", {
+        date: selectedDateKey,
+        forceSave: true,
+        blocks: [{
+          title,
+          startTime: task.time,
+          endTime: task.endTime || addMinutesToTime(task.time, 30),
+          status: "planned",
+          category: normalizePlannerCategory(task.category, title),
+          intensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
+          noteMode: "text",
+          note: task.note ?? "",
+          gcalEventId: task.gcalEventId ?? parseGoogleCalendarTaskId(task.id).eventId,
+          isAiSuggested: false,
+          aiReasoning: null,
+        }],
+      });
+
+      const savedBlock = Array.isArray(res.savedBlocks) ? res.savedBlocks[0] : null;
+      if (savedBlock?.id) {
+        setTaskMeta(savedBlock.id, {
+          noteMode: "text",
+          note: task.note ?? "",
+          checklist: [],
+          recurring: { ...DEFAULT_RECURRING },
+          energyLevel: mapIntensityToEnergyLevel(task.intensity),
+          persistentReminderEnabled: false,
+          persistentReminderIntervalMinutes: null,
+          vibrateEnabled: false,
+          alarmEnabled: false,
+          recurringNotificationEnabled: false,
+          visualRepeatEnabled: false,
+          icon: task.icon ?? "",
+          color: task.color ?? "var(--accent-sage)",
+        });
+      }
+
+      await reloadPlannerTasks();
+      await refreshData();
+      showSuccess("Compromisso transformado em tarefa.");
+    } catch (error: any) {
+      showError(error.message || "Não foi possível transformar em tarefa.");
+    }
+  }
+
   async function deleteTimelineTask(task: PlannerTask, scope: RecurringDeleteScope = "this") {
     try {
       if (task.source === "gcal") {
@@ -2879,6 +2957,7 @@ export function PlannerPage() {
                    onDelete={handleDeleteTaskDirect}
                    onChat={openTaskChat}
                    onPostpone={handlePostponeTaskDirect}
+                   onConvertToTask={handleConvertCommitmentToTask}
                 />
               </div>
             );

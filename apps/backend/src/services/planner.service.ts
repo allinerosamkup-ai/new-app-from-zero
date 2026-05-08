@@ -88,6 +88,7 @@ export const TimelineBlockSchema = z.object({
   color: z.string().optional().nullable(),
   isAiSuggested: z.boolean().optional(),
   aiReasoning: z.string().optional().nullable(),
+  gcalEventId: z.string().optional().nullable(),
 });
 
 export type TimelineBlockInput = z.infer<typeof TimelineBlockSchema>;

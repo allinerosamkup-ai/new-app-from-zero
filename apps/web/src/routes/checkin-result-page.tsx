@@ -653,19 +653,7 @@ export function CheckinResultPage() {
   }
 
   function buildCheckinJournalDraft() {
-    const recommendations = checkinAI?.recommendations?.filter(Boolean) ?? [];
-    const parts = [
-      "Quero registrar o que apareceu no check-in de agora.",
-      `Estado: ${checkinAI?.stateLabel || v.label}.`,
-      todayNote ? `Nota que eu escrevi no check-in: ${todayNote}` : null,
-      todayFactors.length ? `Fatores marcados: ${todayFactors.join(", ")}.` : null,
-      todayEmotions.length ? `Emoções marcadas: ${todayEmotions.join(", ")}.` : null,
-      checkinAI?.analysis ? `Leitura da Airia: ${checkinAI.analysis}` : auraMsg?.message ? `Leitura da Airia: ${auraMsg.message}` : null,
-      recommendations.length ? `Sugestões que apareceram: ${recommendations.map((item) => `- ${item}`).join("\n")}` : null,
-      auraMsg?.suggestion ? `Sugestão principal: ${auraMsg.suggestion}` : null,
-    ].filter(Boolean);
-
-    return parts.join("\n\n");
+    return todayNote.trim();
   }
 
   return (

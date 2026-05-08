@@ -96,12 +96,48 @@ const HOME_CHART_TABS: Array<{ id: HomeChartMode; label: string }> = [
   { id: "forecast", label: "7 dias" },
 ];
 
+function polishHomeMicroAction(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  const withoutFinalPeriod = trimmed.replace(/[.。]+$/, "");
+  const emojiMatch = withoutFinalPeriod.match(/^(\p{Extended_Pictographic}(?:\uFE0F)?\s*)/u);
+  const emoji = emojiMatch?.[1] ?? "";
+  const text = emoji ? withoutFinalPeriod.slice(emoji.length).trim() : withoutFinalPeriod;
+  const normalized = text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (/enxagu(e|ar).+maos.+20s|maos.+20s/.test(normalized)) {
+    return `${emoji || "🧼"} Lave bem as mãos por 20 segundos.`;
+  }
+
+  if (/som baixo/.test(normalized) && /(sem alternar|sem aumentar|continue)/.test(normalized)) {
+    return `${emoji || "🕯️"} Escute um som baixo por 15 minutos sem aumentar o volume.`;
+  }
+
+  return `${emoji}${text}${text.endsWith(".") ? "" : "."}`.trim();
+}
+
+function polishHomeActionTitle(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  const normalized = trimmed
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  if (/definir.+(proximo|proxima).+(limite|caixa)|categoria.+mudanca|100%/.test(normalized)) {
+    return "Definir próxima caixa: escolher uma categoria da casa e só terminar quando estiver tudo embalado.";
+  }
+
+  return trimmed;
+}
+
 function normalizeHomeAiMessage(payload: unknown): HomeAiMsg | null {
   if (!payload || typeof payload !== "object") return null;
   const source = payload as Partial<HomeAiMsg> & { proactive?: unknown };
   const motivacional = typeof source.motivacional === "string" ? source.motivacional.trim() : "";
   const autocuidado = Array.isArray(source.autocuidado)
-    ? source.autocuidado.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean).slice(0, 3)
+    ? source.autocuidado.filter((item): item is string => typeof item === "string").map(polishHomeMicroAction).filter(Boolean).slice(0, 3)
     : [];
 
   if (!motivacional && autocuidado.length === 0) return null;
@@ -115,7 +151,7 @@ function normalizeHomeAiMessage(payload: unknown): HomeAiMsg | null {
     autocuidado: autocuidado.length > 0 ? autocuidado : ["🌿 Respire por 1 minuto e alongue os ombros."],
     proactive: {
       emoji: typeof proactiveRaw?.emoji === "string" ? proactiveRaw.emoji : "🎯",
-      title: typeof proactiveRaw?.title === "string" ? proactiveRaw.title : "Ação rápida",
+      title: typeof proactiveRaw?.title === "string" ? polishHomeActionTitle(proactiveRaw.title) : "Ação rápida",
       desc: typeof proactiveRaw?.desc === "string" ? proactiveRaw.desc : "Escolha um próximo passo simples para agora.",
       actionPath: typeof proactiveRaw?.actionPath === "string" ? proactiveRaw.actionPath : null,
     },
@@ -1014,8 +1050,9 @@ export function HomePage() {
 
   function openHomeScheduleModal(action: { title: string; category: string }) {
     const slot = findSmartPlannerSlot(state.tasks || [], new Date());
+    const title = polishHomeActionTitle(action.title);
     setScheduleModalAction({
-      title: action.title,
+      title,
       category: action.category,
       date: slot.date,
       time: slot.time,
@@ -2645,7 +2682,7 @@ export function HomePage() {
                                 style={{ flex: 1, minWidth: 0, cursor: routeState ? "pointer" : "default" }}
                                 onClick={() => routeState && navigate("/goals", { state: routeState })}
                               >
-                                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
+                                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{polishHomeActionTitle(action.title)}</p>
                                 <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
                               </div>
                               <button
@@ -2905,7 +2942,7 @@ export function HomePage() {
                                   style={{ flex: 1, cursor: routeState ? "pointer" : "default" }}
                                   onClick={() => routeState && navigate("/goals", { state: routeState })}
                                 >
-                                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{action.title}</p>
+                                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>{polishHomeActionTitle(action.title)}</p>
                                   <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{action.category} · {action.why}</p>
                                 </div>
                                 {/* Botão + adicionar ao planner */}

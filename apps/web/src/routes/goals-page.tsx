@@ -10,7 +10,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import {
   Plus, Mic, Trash2, ChevronDown, ChevronUp,
-  Link, X, Zap, Inbox, Edit2, RefreshCw, Target,
+  Link, X, Zap, Inbox, Edit2, RefreshCw, Target, CheckCircle2,
 } from "lucide-react";
 import { AuraIcon } from "../components/AuraIcon";
 import { normalizeSuggestionText } from "../utils/goal-suggestion-routing";
@@ -488,6 +488,7 @@ export function GoalsPage() {
   const [isRecording, setIsRecording] = useState(false);
   const captureInputRef = useRef<HTMLInputElement>(null);
   const [metasOpen, setMetasOpen] = useState(true);
+  const [completedOpen, setCompletedOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(true);
   const [inboxOpen, setInboxOpen] = useState(true);
   const [loadingBreakdown, setLoadingBreakdown] = useState<number | string | null>(null);
@@ -515,6 +516,8 @@ export function GoalsPage() {
   }, [gtdItems]);
 
   const goals = state.goals;
+  const activeGoals = useMemo(() => goals.filter((goal) => goal.completedPct < 100), [goals]);
+  const completedGoals = useMemo(() => goals.filter((goal) => goal.completedPct >= 100), [goals]);
 
   const standaloneActions = gtdItems.filter(i =>
     !i.archived && !i.sentToGoal && i.clarified &&
@@ -522,8 +525,8 @@ export function GoalsPage() {
   );
 
   const priorityActions = useMemo(
-    () => buildGoalPriorityActions(goals, { gtdItems }),
-    [goals, gtdItems]
+    () => buildGoalPriorityActions(activeGoals, { gtdItems }),
+    [activeGoals, gtdItems]
   );
 
   const inbox = gtdItems.filter(i =>
@@ -891,7 +894,7 @@ export function GoalsPage() {
           background: "rgba(0,0,0,0.04)", borderRadius: 14, padding: 4,
         }}>
           {([
-            { key: "metas" as const, label: "Metas", count: goals.length },
+            { key: "metas" as const, label: "Metas", count: activeGoals.length },
             { key: "acoes" as const, label: "Ações", count: priorityActions.filter(i => i.source === "goal" || i.source === "capture").length },
           ] as const).map(tab => {
             const isActive = activeTab === tab.key;
@@ -1120,13 +1123,13 @@ export function GoalsPage() {
           <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
             Metas & Projetos
           </span>
-          {goals.length > 0 && (
+          {activeGoals.length > 0 && (
             <span style={{
               background: "var(--accent-peach)", color: "#fff",
               borderRadius: 99, padding: "1px 8px",
               fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
             }}>
-              {goals.length}
+              {activeGoals.length}
             </span>
           )}
           {metasOpen
@@ -1135,7 +1138,7 @@ export function GoalsPage() {
         </button>
 
         {metasOpen && (
-          goals.length === 0 ? (
+          activeGoals.length === 0 ? (
             <SmartEmptyState
               icon={Target}
               title="Transforme uma intenção em próximos passos"
@@ -1149,7 +1152,7 @@ export function GoalsPage() {
               ]}
             />
           ) : (
-            goals.map((goal, idx) => (
+            activeGoals.map((goal, idx) => (
               <GoalCard
                 key={goal.id}
                 goal={goal}
@@ -1172,6 +1175,50 @@ export function GoalsPage() {
               />
             ))
           )
+        )}
+
+        {completedGoals.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <button
+              onClick={() => setCompletedOpen(o => !o)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 8,
+                background: "none", border: "none", borderBottom: "1px solid rgba(0,0,0,0.07)",
+                padding: "6px 0 10px", marginBottom: 12, cursor: "pointer",
+              }}
+            >
+              <CheckCircle2 size={15} style={{ color: "var(--accent-sage)" }} />
+              <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
+                Concluídas
+              </span>
+              <span style={{
+                background: "rgba(150,199,179,.22)", color: "var(--accent-sage-ink)",
+                borderRadius: 99, padding: "1px 8px",
+                fontSize: "calc(var(--a) * 0.75)", fontWeight: 800,
+              }}>
+                {completedGoals.length}
+              </span>
+              {completedOpen
+                ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} />
+                : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
+            </button>
+
+            {completedOpen && completedGoals.map((goal, idx) => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                colorIndex={idx}
+                onToggleSubtask={subId => toggleSubGoal(goal.id, subId)}
+                onBreakDown={() => breakGoalDown(goal.id)}
+                onAddSubtask={text => addSubGoals(goal.id, [text])}
+                onRemove={() => removeGoal(goal.id)}
+                loadingBreakdown={loadingBreakdown === goal.id}
+                onJournalReflect={() => navigate("/journal")}
+                onUpdateTitle={newTitle => handleUpdateGoalTitle(goal.id, newTitle)}
+                onConvertToTask={handleConvertToTask}
+              />
+            ))}
+          </div>
         )}
         </>)}
 

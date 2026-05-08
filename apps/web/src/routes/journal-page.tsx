@@ -227,7 +227,7 @@ export function JournalPage() {
         setMessages([{
           role: "assistant",
           content: initialDraft
-            ? "Trouxe o contexto do check-in para o diário. Ajuste o texto se quiser e me envie para eu te ajudar a organizar isso."
+            ? "Trouxe sua nota do check-in para iniciar o diário. Complete do seu jeito e me envie quando quiser organizar isso."
             : INITIAL_ASSISTANT_MESSAGE,
         }]);
       }

@@ -133,6 +133,7 @@ function buildTimelineMetadataData(block: TimelineBlockInput) {
   }
   if (block.isAiSuggested !== undefined) metadata.isAiSuggested = block.isAiSuggested;
   if (block.aiReasoning !== undefined) metadata.aiReasoning = block.aiReasoning ?? null;
+  if (block.gcalEventId !== undefined) metadata.gcalEventId = block.gcalEventId ?? null;
   if (block.icon !== undefined) metadata.icon = block.icon ?? null;
   if (block.color !== undefined) metadata.color = block.color ?? null;
   if (block.vibrateEnabled !== undefined) metadata.vibrateEnabled = block.vibrateEnabled;
@@ -3549,6 +3550,8 @@ REGRAS:
 - Se houver âncora real, tente entregar próximo passo, compromisso, tarefa, hábito ou ajuste de agenda aplicável.
 - Se houver sinal de queda sustentada, impulsividade, compulsão, isolamento ou sobrecarga, nomeie isso no "pattern" ou no "insight" sem dramatizar.
 - Cada "why" deve explicar qual risco ou padrão a ação está tentando conter.
+- Redação das ações: cada "title" precisa ser uma frase natural, específica e executável. Use verbo claro + objeto + limite. Bom: "Definir próxima caixa: escolher uma categoria da casa e só terminar quando estiver tudo embalado." Ruim: "Definir o próximo limite: só voltar ao resto quando essa categoria estiver 100%".
+- Evite títulos truncados, telegráficos ou com "só..." solto. A usuária precisa bater o olho e entender o que fazer.
 - Evite linguagem clínica pesada, mas mantenha raciocínio técnico por trás.
 
 Retorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases úteis sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"sugestão prática","category":"trabalho|social|autocuidado|rotina|foco|pessoal","why":"razão breve"}]}. Sem texto fora do JSON.`;
@@ -3623,7 +3626,7 @@ Gere uma presença de home que pareça real, não texto de chatbot.
 
 OBJETIVO:
 1. "motivacional": 1-2 frases curtas que mostrem leitura do momento + direção suave. Não use clichês como "você consegue", "vá com calma" ou "um passo de cada vez" sem contexto.
-2. "autocuidado": 3 ações diferentes entre si, concretas e situadas no momento atual. Cada item deve começar com emoji e ter 4-12 palavras. Use micro-passos ligados ao corpo, ao ambiente imediato, ao foco ou a uma decisão prática leve.
+2. "autocuidado": 3 ações diferentes entre si, concretas e situadas no momento atual. Cada item deve começar com emoji e ter 6-16 palavras. Use frases naturais de português brasileiro, com verbo claro + objeto + duração/limite quando fizer sentido.
 3. "proactive": 1 ação para fazer AGORA dentro do app. "title" com 2-5 palavras. "desc" com 1 frase dizendo por que isso faz sentido neste momento. "actionPath" deve ser uma rota real ou null.
 
 REGRAS:
@@ -3636,6 +3639,9 @@ REGRAS:
 - Se houver pendências abertas ou metas ativas, conecte pelo menos 1 movimento a algo real que já exista no app.
 - "proactive" deve tentar entregar ação concreta dentro do app quando houver âncora real; se não houver, use actionPath null e faça uma pergunta curta na descrição.
 - As 3 ações de "autocuidado" devem ser diferentes entre si e não podem reciclar a mesma ideia com palavras diferentes.
+- Redação das ações: escreva como instrução aplicável, não como fragmento. Bom: "🧼 Lave bem as mãos por 20 segundos." Bom: "🕯️ Escute um som baixo por 15 minutos sem aumentar o volume."
+- Evite construção esquisita com dois verbos grudados, como "continue sem alternar", "separe uma categoria: só...", "definir o próximo limite".
+- Não use "20s", "30s" ou abreviações quando o texto for exibido para usuária. Use "20 segundos", "30 segundos", "15 minutos".
 - Se existir conteúdo recente acima, mude de verdade: não repita nem parafraseie a mesma frase, o mesmo gesto ou a mesma micro-ação.
 - Evite frases que sirvam igual para qualquer pessoa em qualquer horário.
 - Nada aqui pode servir igual para qualquer pessoa em qualquer horário.
