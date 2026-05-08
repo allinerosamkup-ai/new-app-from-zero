@@ -1822,6 +1822,7 @@ export function PlannerPage() {
   const [adaptationApplying, setAdaptationApplying] = useState(false);
   const [adaptationPreview, setAdaptationPreview] = useState<AgendaAdaptationResponse | null>(null);
   const [selectedAdaptationIds, setSelectedAdaptationIds] = useState<Set<string>>(new Set());
+  const agendaAdaptationLocationHandledRef = useRef(false);
   const [todayAnchor, setTodayAnchor] = useState(() => createBaseDate());
   const [now, setNow] = useState(() => new Date());
   const openedTaskFromLocationRef = useRef<string | null>(null);
@@ -2078,9 +2079,11 @@ export function PlannerPage() {
 
   useEffect(() => {
     const shouldOpen = Boolean((location.state as { openAgendaAdaptation?: boolean } | null)?.openAgendaAdaptation);
-    if (!shouldOpen || adaptationOpen || plannerLoading) return;
+    if (!shouldOpen || agendaAdaptationLocationHandledRef.current || adaptationOpen || plannerLoading) return;
+    agendaAdaptationLocationHandledRef.current = true;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     void openAgendaAdaptationPreview("home");
-  }, [location.state, adaptationOpen, plannerLoading, selectedDateKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state, adaptationOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reloadPlannerTasks() {
     try {
@@ -2173,6 +2176,13 @@ export function PlannerPage() {
     } finally {
       setAdaptationApplying(false);
     }
+  }
+
+  function closeAgendaAdaptationPreview() {
+    setAdaptationOpen(false);
+    setAdaptationApplying(false);
+    setAdaptationLoading(false);
+    setSelectedAdaptationIds(new Set());
   }
 
   function closeNewForm() {
@@ -3031,7 +3041,7 @@ export function PlannerPage() {
         title="Ajustes sugeridos"
         description={adaptationPreview?.summary ?? "Airia está lendo sua agenda, fase e horário atual."}
         icon={<Sparkles size={18} />}
-        onClose={() => setAdaptationOpen(false)}
+        onClose={closeAgendaAdaptationPreview}
         maxHeight="84vh"
         footer={(
           <AiriaButton

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 import { AiriaIconButton } from "./AiriaIconButton";
@@ -26,16 +26,32 @@ export function AiriaBottomSheet({
   closeLabel = "Fechar",
   maxHeight = "88vh",
 }: AiriaBottomSheetProps) {
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="airia-sheet-backdrop" role="presentation">
+    <div
+      className="airia-sheet-backdrop"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
       <section
         className="airia-bottom-sheet"
         role="dialog"
         aria-modal="true"
         aria-label={title}
         style={{ maxHeight }}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="airia-bottom-sheet__handle" />
         <header className="airia-bottom-sheet__header">

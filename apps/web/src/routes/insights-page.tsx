@@ -165,6 +165,8 @@ export function InsightsPage() {
 
   // Derive data from checkinHistory (fallback to empty if missing)
   const allHistory = state.checkinHistory || [];
+  const habits = state.habits || [];
+  const journalSessions = state.journal?.trim() ? 1 : 0;
   const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : period === '180d' ? 180 : 365;
   const history = useMemo(() => {
     const cutoff = new Date();
@@ -174,7 +176,10 @@ export function InsightsPage() {
   }, [allHistory, periodDays]);
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
-  const consistencyScore = useMemo(() => computeConsistencyScore(history), [history]);
+  const consistencyScore = useMemo(
+    () => computeConsistencyScore(history, habits, journalSessions),
+    [history, habits, journalSessions],
+  );
   const phaseHistory = useMemo(() => computePhaseHistory(allHistory, 30), [allHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
   const currentPhaseLabel = cycleReport.phase !== "insufficient_data"

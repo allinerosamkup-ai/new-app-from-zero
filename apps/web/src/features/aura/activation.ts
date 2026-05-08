@@ -1,4 +1,5 @@
 import type { AuraState } from "./types";
+import { getLocalDateKey } from "../../utils/day-context";
 
 export type ActivationLevel = "empty" | "started" | "calibrating" | "active";
 export type ActivationActionId = "checkin" | "planner" | "journal" | "explore";
@@ -72,14 +73,16 @@ function isRecentAccount(accountCreatedAt: string | null | undefined, now: Date)
 
 export function getActivationState(state: AuraState, options: ActivationOptions = {}): ActivationState {
   const now = options.now ?? new Date();
+  const todayKey = getLocalDateKey(now);
   const checkinCount = state.checkinHistory?.length ?? 0;
+  const todayCheckinCount = (state.checkinHistory ?? []).filter((entry) => entry.date === todayKey).length;
   const plannerItemCount = (state.tasks?.length ?? 0) + (state.goals?.length ?? 0) + (state.habits?.length ?? 0);
   const journalEntryCount = Math.max(
     options.journalEntryCount ?? 0,
     options.hasLocalJournalEntry || state.journal?.trim() ? 1 : 0,
   );
 
-  const hasCheckin = checkinCount > 0;
+  const hasCheckin = todayCheckinCount > 0;
   const hasPlannerItem = plannerItemCount > 0;
   const hasJournalEntry = journalEntryCount > 0;
   const completedSteps = [hasCheckin, hasPlannerItem, hasJournalEntry].filter(Boolean).length;
