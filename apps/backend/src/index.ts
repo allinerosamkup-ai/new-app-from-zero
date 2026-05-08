@@ -3599,11 +3599,25 @@ Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta
         };
         const emotions = (context.emotions as string[] | undefined) || [];
         const factors = (context.factors as string[] | undefined) || [];
+        const currentEnergy = Number.isFinite(Number(context.energia)) ? Number(context.energia) : null;
+        const checkinHumor = Number.isFinite(Number(context.checkinHumor)) ? Number(context.checkinHumor) : null;
+        const checkinEnergy = Number.isFinite(Number(context.checkinEnergy)) ? Number(context.checkinEnergy) : currentEnergy;
+        const sleepScore = Number.isFinite(Number(context.sleepScore)) ? Number(context.sleepScore) : null;
+        const bodyScore = Number.isFinite(Number(context.bodyScore)) ? Number(context.bodyScore) : null;
+        const checkinNote = typeof context.note === 'string' ? context.note.trim() : '';
         const emotionsCtx = emotions.length > 0
           ? `- Emoções do check-in atual: ${emotions.map((id) => EMOTION_LABELS[id] ?? id).join(', ')}`
           : '';
         const factorsCtx = factors.length > 0
           ? `- Fatores do check-in atual: ${factors.map((id) => FACTOR_LABELS[id] ?? id).join(', ')}`
+          : '';
+        const checkinScoresCtx = checkinHumor != null || checkinEnergy != null || sleepScore != null || bodyScore != null
+          ? `- Check-in atual em números: ${[
+              checkinHumor != null ? `humor ${checkinHumor}/10` : null,
+              checkinEnergy != null ? `energia ${checkinEnergy}/10` : null,
+              sleepScore != null ? `sono ${sleepScore}/10` : null,
+              bodyScore != null ? `corpo ${bodyScore}/10` : null,
+            ].filter(Boolean).join(', ')}`
           : '';
         prompt = `${userName} está abrindo a home agora.
 
@@ -3614,8 +3628,10 @@ SINAIS DO MOMENTO:
 - Tarefas ativas hoje: ${taskCount}
 ${pendingTaskTitles.length ? `- Pendências abertas: ${pendingTaskTitles.join(' | ')}` : ''}
 ${goals.length ? `- Metas ativas: ${goals.join(' | ')}` : ''}
+${checkinScoresCtx}
 ${emotionsCtx}
 ${factorsCtx}
+${checkinNote ? `- Nota escrita no check-in: ${checkinNote}` : ''}
 ${previousMotivacional ? `- Última mensagem recente para NÃO reciclar: ${previousMotivacional}` : ''}
 ${previousAutocuidado.length ? `- Micro-ações recentes para NÃO repetir: ${previousAutocuidado.join(' | ')}` : ''}
 ${context.moodCycleContext ? `- Contexto vivo recente: ${context.moodCycleContext}` : ''}
@@ -3637,6 +3653,10 @@ REGRAS:
 - Se houver energia boa e poucas tarefas, puxe para movimento e ação.
 - Se houver sinais recorrentes no diário ou na memória recente, aproveite isso com discrição para deixar as ações mais pessoais.
 - Se houver pendências abertas ou metas ativas, conecte pelo menos 1 movimento a algo real que já exista no app.
+- Autocuidado aqui significa reduzir atrito, proteger energia ou apoiar a execução real. Não invente objetos, sujeira, café, luvas, pano, limpeza ou abas se isso não apareceu literalmente no check-in, agenda, meta ou memória.
+- Se a âncora for mudança/caixas/organização, transforme em limite claro de execução: qual caixa, por quanto tempo, quando parar. Não sugira limpar superfície, mexer em poeira ou separar luvas.
+- Se a âncora for ansiedade, a ação deve diminuir decisão aberta: escolher uma frente, limitar tempo, fechar um bloco ou escrever a próxima decisão.
+- Se a âncora for baixa energia, reduza escopo antes de sugerir avanço.
 - "proactive" deve tentar entregar ação concreta dentro do app quando houver âncora real; se não houver, use actionPath null e faça uma pergunta curta na descrição.
 - As 3 ações de "autocuidado" devem ser diferentes entre si e não podem reciclar a mesma ideia com palavras diferentes.
 - Redação das ações: escreva como instrução aplicável, não como fragmento. Bom: "🧼 Lave bem as mãos por 20 segundos." Bom: "🕯️ Escute um som baixo por 15 minutos sem aumentar o volume."

@@ -16,6 +16,24 @@ export type HomeAiMsg = {
   proactive: { emoji: string; title: string; desc: string; actionPath: string | null };
 };
 
+export type HomeCareGroundingInput = {
+  actions: string[];
+  hour: number;
+  partOfDay: string;
+  moodLabel?: string | null;
+  energy?: number | null;
+  latestCheckin?: {
+    humor?: number | null;
+    energia?: number | null;
+    emotions?: string[];
+    factors?: string[];
+    note?: string | null;
+  } | null;
+  pendingTaskTitles: string[];
+  goalTitles: string[];
+  hasMoodCycle: boolean;
+};
+
 export type HomeAutonomyFeedbackStatus = "done" | "dismissed" | "deleted" | "scheduled";
 
 export type HomeAutonomyFeedbackItem = {
@@ -95,6 +113,129 @@ function uniqueStrings(values: string[]): string[] {
   });
 
   return result;
+}
+
+function normalizeTextKey(value: string): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function hasExplicitAnchor(action: string, anchors: string[]): boolean {
+  const normalizedAction = normalizeTextKey(action);
+  return anchors.some((anchor) => {
+    const normalizedAnchor = normalizeTextKey(anchor);
+    if (!normalizedAnchor) return false;
+    const anchorWords = normalizedAnchor.split(/\s+/).filter((word) => word.length >= 4);
+    return anchorWords.some((word) => normalizedAction.includes(word));
+  });
+}
+
+function isConcreteButUngroundedCare(action: string, anchors: string[]): boolean {
+  const normalized = normalizeTextKey(action);
+  const needsExplicitAnchor = [
+    /\bcafe\b|\bcafezinho\b/,
+    /\bluva|\bpoeira|\bpano\b/,
+    /\blimp(e|ar|eza)\b|\bsuperficie\b/,
+    /\bab(a|as)\b|\bcelular\b/,
+  ].some((pattern) => pattern.test(normalized));
+
+  return needsExplicitAnchor && !hasExplicitAnchor(action, anchors);
+}
+
+function buildFallbackCareActions(input: HomeCareGroundingInput): string[] {
+  const anchors = [...input.pendingTaskTitles, ...input.goalTitles, input.latestCheckin?.note || ""].join(" ");
+  const normalizedAnchors = normalizeTextKey(anchors);
+  const lowEnergy = Number(input.energy ?? input.latestCheckin?.energia ?? 0) > 0
+    && Number(input.energy ?? input.latestCheckin?.energia ?? 0) <= 4;
+  const anxious = normalizeTextKey(`${input.moodLabel || ""} ${(input.latestCheckin?.emotions || []).join(" ")}`)
+    .includes("ansios");
+  const hasMoveContext = /mudanca|caixa|encaixotar|embal|cama|dormir/.test(normalizedAnchors);
+
+  if (hasMoveContext) {
+    return [
+      "📦 Escolha uma caixa pequena e feche só ela por 20 minutos.",
+      "🧾 Separe fita, saco e etiqueta antes de mexer no resto.",
+      "⏱️ Pare quando a caixa fechar, mesmo se ainda houver bagunça.",
+    ];
+  }
+
+  if (lowEnergy) {
+    return [
+      "🔋 Reduza a próxima tarefa para 15 minutos e pare no alarme.",
+      "🧺 Tire da agenda uma pendência que não precisa ser hoje.",
+      "🗂️ Escolha só uma tarefa aberta e ignore o resto por enquanto.",
+    ];
+  }
+
+  if (anxious) {
+    return [
+      "🧠 Escreva a próxima decisão em uma frase antes de agir.",
+      "📌 Escolha uma pendência real e defina o primeiro limite dela.",
+      "⏱️ Faça 15 minutos da primeira ação e reavalie depois.",
+    ];
+  }
+
+  if (input.pendingTaskTitles.length > 0) {
+    return [
+      `🎯 Comece por "${input.pendingTaskTitles[0]}" por 15 minutos.`,
+      "🗂️ Quebre a próxima pendência em uma ação visível e curta.",
+      "⏱️ Defina um limite de tempo antes de abrir outra tarefa.",
+    ];
+  }
+
+  if (input.goalTitles.length > 0) {
+    return [
+      `🎯 Faça um avanço mínimo em "${input.goalTitles[0]}" hoje.`,
+      "🧩 Escolha uma subtarefa que caiba em 20 minutos.",
+      "📌 Transforme o próximo passo da meta em bloco no Planner.",
+    ];
+  }
+
+  return [];
+}
+
+export function resolveGroundedHomeCare(input: HomeCareGroundingInput): {
+  actions: string[];
+  evidence: string | null;
+} {
+  const anchors = [
+    ...input.pendingTaskTitles,
+    ...input.goalTitles,
+    input.moodLabel || "",
+    ...(input.latestCheckin?.emotions || []),
+    ...(input.latestCheckin?.factors || []),
+    input.latestCheckin?.note || "",
+  ].filter(Boolean);
+  const hasCurrentAnchor = Boolean(input.latestCheckin)
+    || input.pendingTaskTitles.length > 0
+    || input.goalTitles.length > 0
+    || input.hasMoodCycle;
+
+  if (!hasCurrentAnchor) {
+    return { actions: [], evidence: null };
+  }
+
+  const filteredActions = uniqueStrings(input.actions)
+    .filter((action) => !isConcreteButUngroundedCare(action, anchors));
+  const fallbackActions = buildFallbackCareActions(input);
+  const actions = uniqueStrings([...filteredActions, ...fallbackActions]).slice(0, 3);
+
+  const evidenceParts = [
+    input.latestCheckin?.humor != null && input.latestCheckin?.energia != null
+      ? `check-in: humor ${input.latestCheckin.humor}/10 e energia ${input.latestCheckin.energia}/10`
+      : null,
+    input.pendingTaskTitles.length > 0 ? `agenda: ${input.pendingTaskTitles[0]}` : null,
+    input.goalTitles.length > 0 ? `meta: ${input.goalTitles[0]}` : null,
+    input.hasMoodCycle ? "histórico de ritmo" : null,
+    `horário: ${input.partOfDay}`,
+  ].filter(Boolean);
+
+  return {
+    actions,
+    evidence: evidenceParts.length > 0 ? `Baseado em ${evidenceParts.join(" + ")}.` : null,
+  };
 }
 
 function safeTimeValue(time: string | undefined): string {

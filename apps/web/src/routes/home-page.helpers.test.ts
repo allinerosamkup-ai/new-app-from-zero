@@ -13,6 +13,7 @@ import {
   isHomeAutonomyTitleBlocked,
   readHomeAutonomyFeedback,
   rememberHomeAutonomyActionFeedback,
+  resolveGroundedHomeCare,
   resolveHomeAgendaSuggestionDate,
   shouldRefreshHomeSuggestionAfterAction,
 } from "./home-page.helpers.ts";
@@ -86,6 +87,46 @@ describe("home page helpers", () => {
       previousLabels: ["Foco inicial", "Fluxo"],
       previousTasks: ["Abrir o Notion", "Responder cliente", "Enviar proposta"],
     });
+  });
+
+  it("removes care suggestions that introduce unanchored concrete objects", () => {
+    const resolved = resolveGroundedHomeCare({
+      actions: [
+        "☕ Tome seu café sem abrir abas, só até terminar o primeiro gole.",
+        "🧤 Separe luvas ou algo pra manusear poeira por 10 minutos, depois pare.",
+        "🧼 Limpe uma superfície pequena com pano úmido e pronto, sem expandir.",
+      ],
+      hour: 8,
+      partOfDay: "manhã",
+      moodLabel: "Ansiosa",
+      energy: 6,
+      latestCheckin: { humor: 5, energia: 6, emotions: ["anxious"], factors: [], note: "Ansiedade com a mudança" },
+      pendingTaskTitles: ["Separar camas e itens de dormir para mudança"],
+      goalTitles: [],
+      hasMoodCycle: true,
+    });
+
+    assert.deepEqual(resolved.actions, [
+      "📦 Escolha uma caixa pequena e feche só ela por 20 minutos.",
+      "🧾 Separe fita, saco e etiqueta antes de mexer no resto.",
+      "⏱️ Pare quando a caixa fechar, mesmo se ainda houver bagunça.",
+    ]);
+    assert.match(resolved.evidence || "", /check-in/);
+    assert.match(resolved.evidence || "", /agenda/);
+  });
+
+  it("does not show care actions when there is no real anchor", () => {
+    const resolved = resolveGroundedHomeCare({
+      actions: ["🌿 Faça algo leve agora."],
+      hour: 10,
+      partOfDay: "manhã",
+      pendingTaskTitles: [],
+      goalTitles: [],
+      hasMoodCycle: false,
+    });
+
+    assert.deepEqual(resolved.actions, []);
+    assert.equal(resolved.evidence, null);
   });
 
   it("builds a home agenda preview with next commitments and one pending habit", () => {

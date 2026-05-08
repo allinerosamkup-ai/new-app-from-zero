@@ -33,6 +33,7 @@ import {
   isHomeAutonomyTitleBlocked,
   readHomeAutonomyFeedback,
   rememberHomeAutonomyActionFeedback,
+  resolveGroundedHomeCare,
   resolveHomeAgendaSuggestionDate,
 } from "./home-page.helpers";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
@@ -764,6 +765,7 @@ export function HomePage() {
           context: {
             mood: state.mood,
             moodLabel: mood.label,
+            energia: state.energia,
             taskCount: state.tasks.length,
             pendingTaskTitles,
             goals: goalTitles,
@@ -771,6 +773,13 @@ export function HomePage() {
             partOfDay: dayContext.partOfDay,
             weekday: dayContext.weekday,
             localDate: dayContext.localDate,
+            emotions: latestTodayCheckin?.emotions || [],
+            factors: latestTodayCheckin?.factors || [],
+            note: latestTodayCheckin?.note || "",
+            sleepScore: latestTodayCheckin?.sono ?? null,
+            bodyScore: latestTodayCheckin?.fisico ?? null,
+            checkinHumor: latestTodayCheckin?.humor ?? null,
+            checkinEnergy: latestTodayCheckin?.energia ?? null,
             moodCycleContext: moodCycleContextForAi,
             previousMotivacional: previousHomeContext.previousMotivacional,
             previousAutocuidado: previousHomeContext.previousAutocuidado,
@@ -805,9 +814,11 @@ export function HomePage() {
     goalTitles,
     homeAiRequestKey,
     hydrated,
+    latestTodayCheckin,
     mood.label,
     pendingTaskTitles,
     refreshBucket,
+    state.energia,
     state.mood,
     state.tasks.length,
   ]);
@@ -824,8 +835,39 @@ export function HomePage() {
 
   // Mensagem motivacional — apenas IA
   const motivacionalFinal = homeAiMsg?.motivacional ?? null;
-  // Autocuidado — apenas IA
-  const autocuidadoFinal = homeAiMsg?.autocuidado ?? null;
+  const groundedCare = useMemo(
+    () => resolveGroundedHomeCare({
+      actions: homeAiMsg?.autocuidado ?? [],
+      hour: dayContext.hour,
+      partOfDay: dayContext.partOfDay,
+      moodLabel: mood.label,
+      energy: state.energia,
+      latestCheckin: latestTodayCheckin
+        ? {
+            humor: latestTodayCheckin.humor,
+            energia: latestTodayCheckin.energia,
+            emotions: latestTodayCheckin.emotions,
+            factors: latestTodayCheckin.factors,
+            note: latestTodayCheckin.note,
+          }
+        : null,
+      pendingTaskTitles,
+      goalTitles,
+      hasMoodCycle: cycleReport.phase !== "insufficient_data",
+    }),
+    [
+      cycleReport.phase,
+      dayContext.hour,
+      dayContext.partOfDay,
+      goalTitles,
+      homeAiMsg?.autocuidado,
+      latestTodayCheckin,
+      mood.label,
+      pendingTaskTitles,
+      state.energia,
+    ],
+  );
+  const autocuidadoFinal = groundedCare.actions.length > 0 ? groundedCare.actions : null;
 
   // Task stats
   const totalTasks = state.tasks.length;
@@ -3104,7 +3146,7 @@ export function HomePage() {
             </div>
             {!homeAiLoading && autocuidadoFinal && (
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: "4px 0 0", fontStyle: "italic" }}>
-                Leituras suaves para este momento:
+                {groundedCare.evidence || "Sugestões ancoradas no momento atual."}
               </p>
             )}
           </div>
@@ -3175,7 +3217,7 @@ export function HomePage() {
               </div>
             ) : (
               <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0, fontStyle: "italic", textAlign: "center", padding: "8px 0" }}>
-                Faça um check-in para receber sugestões de autocuidado personalizadas.
+                Faça um check-in ou coloque uma pendência no Planner para receber sugestões que façam sentido agora.
               </p>
             )}
           </div>
