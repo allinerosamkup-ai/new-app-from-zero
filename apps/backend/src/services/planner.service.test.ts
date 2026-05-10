@@ -157,4 +157,20 @@ import { PlannerService } from './planner.service';
   assert.equal(blocks[0].endTime, '05:00');
 }
 
+{
+  const baseDate = new Date('2026-05-10T00:00:00.000Z');
+  const start = PlannerService.parseTimeToDate(baseDate, '23:30');
+  const end = PlannerService.parseTimeToDate(baseDate, '23:59');
+
+  assert.equal(start.toISOString(), '2026-05-10T23:30:00.000Z');
+  assert.equal(end.toISOString(), '2026-05-10T23:59:00.000Z');
+}
+
+{
+  const baseDate = new Date('2026-05-10T00:00:00.000Z');
+  const start = PlannerService.parseTimeToDate(baseDate, '00:15');
+
+  assert.equal(start.toISOString(), '2026-05-10T00:15:00.000Z');
+}
+
 console.log('planner.service tests passed');

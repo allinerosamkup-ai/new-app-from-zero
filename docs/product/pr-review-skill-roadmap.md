@@ -7,30 +7,39 @@ Fonte: PRs recentes do GitHub, commits de correção e revisão direta da Home e
 1. **Produto final antes de apresentação**
    - Evidência: PR #1 começou removendo botões mortos, `user-temp-id` e placeholders; depois os commits `74348d1`/`7baaffe` introduziram superfícies de demo, e `42a287f` removeu 463 linhas de modo/copy de demo.
    - Prática obrigatória: qualquer PR de UI deve responder se a mudança ajuda a usuária a usar o app agora. Se for pitch, venda, demo ou explicação para investidor, não entra no app.
+   - Classificação obrigatória de copy:
+     - `consumer_app_copy`: texto que ajuda a usuária a agir dentro do produto agora.
+     - `sales_or_investor_material`: pitch, prova comercial, narrativa de investimento, lista de espera, demonstração ou explicação de mercado. Esse material fica fora de `apps/web/src` e `apps/backend/src`.
 
 2. **Fluxos reais sem estado falso**
    - Evidência: PR #1 conectou navegação, auth real, planner e journal ao backend real; PR #3 corrigiu falhas persistentes de sync.
    - Prática obrigatória: não usar seed, usuário temporário, botão morto, Alert placeholder ou navegação simulada em fluxo consumidor.
+   - Checklist de fluxo real: entrada da usuária, chamada real ao backend, persistência confirmada, erro visível, retorno útil e próxima ação. Se qualquer item faltar, a feature não está pronta para UI polida.
 
 3. **Contratos API e erro visível**
    - Evidência: PR #3 corrigiu Prisma `P2025`, trocou `update` por `upsert`, melhorou extração de `err.response.data.error` e evitou fechar modal quando sync falha.
    - Prática obrigatória: toda ação de escrita precisa ter sucesso/erro explícito; UI só atualiza ou fecha modal depois de confirmação real.
+   - Contratos críticos: Check-in, Diário, Aura e Planner devem validar payload e resposta com Zod quando houver escrita, streaming concluído ou protocolo de risco.
 
 4. **Tempo e agenda sem drift**
    - Evidência: PR #3 corrigiu `setHours` para `setUTCHours` para evitar drift entre escrita e leitura de blocos.
    - Prática obrigatória: backend guarda horário de agenda de forma UTC-consistente e UI trabalha com data local explícita.
+   - Em serviços de agenda do backend, `setHours()` é proibido sem refatoração explícita para helper UTC. Use `setUTCHours()` ou construção `Date.UTC`.
 
 5. **IA ancorada em contexto atual**
    - Evidência: commits `0af5d58`, `4f362be`, `f8f7db4`, `9267dba` e `20128b2` reforçaram grounding, Decision Brain e raciocínio operacional.
    - Prática obrigatória: sugestão operacional da Airia precisa citar âncora real do dia: tarefa, hábito, meta, check-in, diário ou pedido explícito. Sem âncora, perguntar.
+   - Pergunta de revisão: "qual dado atual sustenta essa ação?". Se a resposta for só memória antiga, padrão genérico ou intuição da IA, a ação deve virar pergunta curta.
 
 6. **Segurança sem terapeuta falsa**
    - Evidência: `riskSafety` foi adicionado a Check-in, Diário e Aura; revisão recente exigiu produto final, não copy de clínica/pitch.
    - Prática obrigatória: linguagem de risco usa protocolo, apoio humano e adaptação de carga; nunca diagnóstico, promessa de cura ou substituição clínica.
+   - Termos clínicos podem aparecer como limite, educação ou contexto da usuária. A Airia não pode concluir "você tem", prometer tratamento, cura ou substituição de psicóloga/psiquiatra/emergência.
 
 7. **Higiene de release**
    - Evidência: `e34f16d` ajustou healthcheck; a operação recente exigiu GitHub, VPS e produção no mesmo SHA.
    - Prática obrigatória: PR importante só fecha com testes/builds relevantes, branch limpa, GitHub atualizado, VPS no mesmo commit e healthcheck `200` quando houver deploy.
+   - Sequência oficial: backend tests, backend build, web tests, web build, commit, push, deploy VPS quando aplicável, `/api/health` 200 e `/home` 200.
 
 ## Checklist de Revisão
 
@@ -41,3 +50,20 @@ Fonte: PRs recentes do GitHub, commits de correção e revisão direta da Home e
 - Datas de planner preservam horário local sem drift?
 - Risco emocional aciona `riskSafety` e protocolo humano/crise?
 - Testes e build cobrem a área tocada?
+
+## Guardrails Automatizados
+
+- `apps/backend/src/lib/product-guardrails.test.ts` bloqueia copy de venda/demo/investidor, fluxo falso, alegação clínica perigosa e `setHours()` em serviços de agenda.
+- `apps/backend/src/contracts/risk-safety.contract.test.ts` valida o contrato único de `riskSafety` em Check-in, Diário e Aura.
+- `apps/backend/src/services/planner.service.test.ts` cobre preservação UTC de horários em virada de dia.
+- Esses guardrails rodam dentro de `npm run test --workspace=@app/backend`.
+
+## Checklist de Release Integrado
+
+- `npm run test --workspace=@app/backend`
+- `npm run build --workspace=@app/backend`
+- `npm run test --workspace=@app/web`
+- `npm run build --workspace=@app/web`
+- `git status --short --branch` sem mudanças não commitadas de entrega.
+- `git push` para a branch ativa.
+- Quando houver deploy: VPS no mesmo SHA do GitHub, `https://airia.pro/api/health` 200 e `https://airia.pro/home` 200.

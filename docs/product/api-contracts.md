@@ -175,6 +175,8 @@ Processes the 8 fixed onboarding answers and returns the initial AI profile used
 
 AI surfaces can return a `riskSafety` object. This is not a diagnosis. It is a safety routing layer used to keep Airia positioned as an adaptive support product, not a clinical replacement.
 
+Canonical shape shared by Check-in, Journal and Aura completed responses:
+
 ```json
 {
   "riskLevel": "none | low | moderate | high | crisis",
@@ -195,6 +197,7 @@ Client behavior:
 - Check-in Result, Journal, and Aura Chat render the shared safety protocol card when route is not `self_support`.
 - `human_support` and `crisis_protocol` record `risk_protocol_triggered`.
 - `crisis_protocol` shows Brazil-ready emergency resources: CVV 188, SAMU 192, and 190, plus the instruction to use local emergency services outside Brazil.
+- The assistant must not diagnose, promise treatment/cure, or position itself as a therapist, psychologist, psychiatrist or emergency service.
 
 ### `GET /api/context/day?date=YYYY-MM-DD`
 

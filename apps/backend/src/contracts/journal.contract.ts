@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RiskSafetySchema } from './risk-safety.contract';
 
 const LONG_TEXT_LIMIT = 30000;
 
@@ -32,6 +33,13 @@ export const JournalExternalMessageSchema = z.object({
   referenceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+export const JournalAssistantCompletedSchema = z.object({
+  type: z.literal('assistant.completed'),
+  message: z.string().trim().min(1),
+  riskSafety: RiskSafetySchema,
+}).catchall(z.unknown());
+
 export type JournalStartInput = z.infer<typeof JournalStartSchema>;
 export type JournalMessageStreamInput = z.infer<typeof JournalMessageStreamSchema>;
 export type JournalExternalMessageInput = z.infer<typeof JournalExternalMessageSchema>;
+export type JournalAssistantCompleted = z.infer<typeof JournalAssistantCompletedSchema>;

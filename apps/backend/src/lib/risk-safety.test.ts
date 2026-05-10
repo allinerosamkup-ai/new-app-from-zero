@@ -35,6 +35,14 @@ function run() {
   assert.equal(violence.riskLevel, 'high');
   assert.equal(violence.route, 'human_support');
 
+  const hopelessness = assessRiskSafety({
+    text: 'sinto uma desesperanca enorme e perdi o controle',
+    moodScore: 3,
+    energyScore: 3,
+  });
+  assert.equal(hopelessness.riskLevel, 'high');
+  assert.equal(hopelessness.route, 'human_support');
+
   const moderate = assessRiskSafety({
     text: 'estou em crise e com insonia',
     moodScore: 4,
@@ -50,6 +58,23 @@ function run() {
   });
   assert.equal(acceleration.riskLevel, 'moderate');
   assert.equal(acceleration.route, 'adapt_day');
+
+  const lowSleepWithoutCrisis = assessRiskSafety({
+    text: 'dormi muito mal mas consigo trabalhar se reduzir carga',
+    moodScore: 6,
+    energyScore: 4,
+    sleepScore: 1,
+  });
+  assert.equal(lowSleepWithoutCrisis.riskLevel, 'low');
+  assert.equal(lowSleepWithoutCrisis.route, 'adapt_day');
+
+  const moderateDistress = assessRiskSafety({
+    text: 'estou em panico e preciso diminuir o dia',
+    moodScore: 5,
+    energyScore: 5,
+  });
+  assert.equal(moderateDistress.riskLevel, 'moderate');
+  assert.equal(moderateDistress.route, 'adapt_day');
 
   const none = assessRiskSafety({
     text: 'estou bem e focada',

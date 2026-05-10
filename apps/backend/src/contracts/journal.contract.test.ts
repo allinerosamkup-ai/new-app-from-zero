@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  JournalAssistantCompletedSchema,
   JournalMessageStreamSchema,
   JournalStartSchema,
 } from './journal.contract';
@@ -68,6 +69,21 @@ const validSessionId = '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11';
   });
 
   assert.equal(result.success, false);
+}
+
+{
+  const result = JournalAssistantCompletedSchema.safeParse({
+    type: 'assistant.completed',
+    message: 'O foco agora é diminuir a carga e pedir apoio se piorar.',
+    riskSafety: {
+      riskLevel: 'high',
+      signals: ['sofrimento intenso ou risco contextual'],
+      route: 'human_support',
+      message: 'A Airia deve sugerir apoio humano e reduzir carga do dia, sem diagnosticar.',
+    },
+  });
+
+  assert.equal(result.success, true);
 }
 
 console.log('journal.contract tests passed');

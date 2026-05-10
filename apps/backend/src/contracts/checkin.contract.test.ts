@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { CheckinCreateSchema } from './checkin.contract';
+import { CheckinCreateSchema, CheckinResponseSchema } from './checkin.contract';
 
 const validCheckin = {
   userId: '550e8400-e29b-41d4-a716-446655440000',
@@ -54,6 +54,21 @@ const validCheckin = {
   });
 
   assert.equal(result.success, false);
+}
+
+{
+  const result = CheckinResponseSchema.safeParse({
+    id: validCheckin.userId,
+    stateLabel: 'queda de energia',
+    riskSafety: {
+      riskLevel: 'low',
+      signals: ['sono muito baixo'],
+      route: 'adapt_day',
+      message: 'A Airia pode oferecer autoapoio pratico e adaptacao leve do dia.',
+    },
+  });
+
+  assert.equal(result.success, true);
 }
 
 console.log('checkin.contract tests passed');
