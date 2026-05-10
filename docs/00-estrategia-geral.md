@@ -72,3 +72,17 @@ Dos apps de referência, os três blocos valiosos:
 - **Onda 1.5:** DailyContext + feedback de ações + Decision Brain + AdaptiveAgendaEngine.
 - **Onda 2:** Expansão do replanejamento adaptativo para todos os cards, notificações e diário com observabilidade.
 - **Onda 3:** Wearable, previsão de ciclo e automações profundas.
+
+## 8. Robustez Para Demonstração e Venda
+
+Para a Airia ficar demonstrável como produto forte, a experiência precisa provar dentro do app a tese central: humor e energia viram decisão prática de agenda.
+
+Implementações de robustez adicionadas:
+
+- `POST /api/demo/seed` semeia uma conta autenticada com dados reais de demo: check-ins, planner, hábitos, meta e eventos.
+- `riskSafety` foi adicionado a check-in, diário e Aura Chat para separar suporte funcional de risco humano/clínico.
+- Home passa a explicar o valor do produto dentro da experiência: transformar estado interno em dia executável.
+- Planner registra eventos de preview e aplicação da agenda adaptativa.
+- Insights registra geração de relatório semanal e reforça a prova de valor: padrões conectados à execução real.
+
+Regra de posicionamento: Airia não é médica, terapeuta nem promessa de cura. Airia é assistente de ciclagem de humor, energia e agenda adaptativa.

@@ -69,6 +69,13 @@ Validar com usuárias reais se:
 - Tela de consentimentos de dados.
 - Botão de exclusão de conta e dados.
 
+**Demo real e segurança mínima (v1.1):**
+
+- Modo demo persistido no backend para reunião, pitch e validação guiada.
+- Dados demonstráveis incluem 21 check-ins, planner do dia, hábitos, meta ativa e histórico suficiente para Insights.
+- `riskSafety` nas superfícies de IA para classificar sinais de atenção sem diagnóstico.
+- Copy do produto reforça que Airia é suporte funcional e adaptativo, não substituto clínico.
+
 ### 3.2 Fora do escopo imediato (Fase 2+)
 
 - Integração real com ŌURA Ring e outros wearables (ficará planejado, mas não implementado na primeira build).
@@ -181,6 +188,7 @@ Validar com usuárias reais se:
 - Resumir sessão e extrair emoções/temas.
 - Sugerir estrutura do dia no planner com base em estado energético + histórico.
 - Gerar insights semanais no painel.
+- Classificar segurança mínima com `riskSafety` e rotear para autoapoio, adaptação do dia, apoio humano ou protocolo de crise.
 
 **8.2 Memória mínima**
 
@@ -188,6 +196,13 @@ Validar com usuárias reais se:
 - Entender padrões simples (ex.: “dia X costuma ser pesado”).
 - Separar memória de padrão de memória operacional: histórico explica, mas só contexto de hoje vira ação.
 - Guardar feedback leve sobre sugestões da IA para reduzir repetição.
+
+**8.3 Segurança**
+
+- Nunca diagnosticar TDAH, bipolaridade, depressão ou qualquer quadro clínico.
+- Nunca prometer cura ou substituir profissional.
+- Diante de linguagem de crise, sair do modo coaching comum e orientar busca de apoio humano/emergencial.
+- Persistir `riskSafety` no check-in para auditoria e evolução futura.
 
 ## 9. Estratégia de clonagem de código por módulo
 

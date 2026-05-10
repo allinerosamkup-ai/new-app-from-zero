@@ -2170,6 +2170,11 @@ export function PlannerPage() {
         trigger,
         context: buildAgendaAdaptContext(),
       }) as AgendaAdaptationResponse;
+      trackEvent("agenda_adaptation_previewed", {
+        trigger,
+        changes_count: result.changes?.length ?? 0,
+        blocked_count: (result as any).blockedDecisions?.length ?? 0,
+      });
       setAdaptationPreview(result);
       setSelectedAdaptationIds(new Set(
         (result.changes || [])
@@ -2195,6 +2200,11 @@ export function PlannerPage() {
         selectedDecisionIds: Array.from(selectedAdaptationIds),
         context: buildAgendaAdaptContext(),
       }) as AgendaAdaptationResponse;
+      trackEvent("agenda_adaptation_applied", {
+        selected_count: selectedAdaptationIds.size,
+        applied_count: result.appliedChanges?.length ?? 0,
+        skipped_count: result.skippedChanges?.length ?? 0,
+      });
       setAdaptationPreview(result);
       if (result.timelineRefreshNeeded) {
         await reloadPlannerTasks();

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
 import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
@@ -344,6 +345,11 @@ export function InsightsPage() {
       setWeeklyQuestion(res.insights.weeklyQuestion ?? null);
       setHighlights(res.insights.highlights ?? []);
       setInsightPhase("done");
+      trackEvent("weekly_report_generated", {
+        source: "weekly_insights_endpoint",
+        period,
+        checkins: history.length,
+      });
     } catch (error) {
       console.warn("[insights] weekly AI failed, using local fallback.", error);
       const localAction = cycleReport.phase === "depleted" || cycleReport.phase === "low"
@@ -364,6 +370,11 @@ export function InsightsPage() {
         `Fase atual: ${currentPhaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
       ]);
       setInsightPhase("done");
+      trackEvent("weekly_report_generated", {
+        source: "local_fallback",
+        period,
+        checkins: history.length,
+      });
     }
   }
 
@@ -472,6 +483,24 @@ export function InsightsPage() {
               ↓ CSV
             </button>
           </div>
+        </div>
+
+        <div style={{
+          borderRadius: 20,
+          border: "1.5px solid rgba(99,152,169,.24)",
+          background: "linear-gradient(135deg, rgba(255,255,255,.82), rgba(99,152,169,.10))",
+          padding: "16px",
+          marginBottom: "calc(var(--a))",
+        }}>
+          <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 850, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sky)" }}>
+            Prova de valor
+          </p>
+          <h2 style={{ margin: "0 0 8px", fontSize: 18, lineHeight: 1.25, color: "var(--text-1)" }}>
+            A Airia conecta estado interno com capacidade real de execução.
+          </h2>
+          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: "var(--text-2)" }}>
+            Esta tela mostra se humor, energia, sono, hábitos e metas estão sustentando ou sabotando a rotina. É a diferença entre “monitorar humor” e ajustar a semana antes da queda.
+          </p>
         </div>
 
         {history.length < 3 && (

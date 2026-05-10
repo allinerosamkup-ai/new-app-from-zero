@@ -36,6 +36,8 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 - Feedback de ações IA: `apps/backend/src/services/ai-action-feedback.service.ts`.
 - Preview de adaptação: `apps/backend/src/services/agenda-adaptation.service.ts`.
 - Prompt Aura: `apps/backend/src/lib/aura-prompt.ts`.
+- Segurança mínima IA: `apps/backend/src/lib/risk-safety.ts`.
+- Demo real para pitch/reunião: `POST /api/demo/seed`.
 
 ## Checklist Antes de Finalizar
 - Rodar testes relevantes.

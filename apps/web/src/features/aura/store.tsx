@@ -86,7 +86,7 @@ type AuraStoreContextValue = {
   saveProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   prepareJournalFromMood: () => void;
-  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<{ stateLabel: string | null; analysis: string | null; recommendations: string[]; suggestedIntensity: string | null } | null>;
+  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<{ stateLabel: string | null; analysis: string | null; recommendations: string[]; suggestedIntensity: string | null; riskSafety?: unknown } | null>;
   addGoal: (title: string) => Promise<void>;
   addGoalWithSubGoals: (title: string, subgoals: string[]) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
@@ -584,6 +584,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             analysis: checkinResponse?.stateSummary ?? (checkinResponse?.aiState as any)?.analysis ?? null,
             recommendations: (checkinResponse?.aiState as any)?.recommendations ?? [],
             suggestedIntensity: (checkinResponse?.aiState as any)?.suggestedIntensity ?? null,
+            riskSafety: checkinResponse?.riskSafety ?? (checkinResponse?.aiState as any)?.riskSafety,
           };
           console.log('[DEBUG] extracted for router state:', extracted);
           return extracted;

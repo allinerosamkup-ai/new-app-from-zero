@@ -64,10 +64,10 @@ type AuraRouteState = {
 };
 
 const QUICK_ACTIONS: Array<{ labelKey: string; fallback: string; prompt: string }> = [
-  { labelKey: "aura.suggestions.organizeDay", fallback: "Organizar meu dia", prompt: "Organize meu dia de hoje no planner." },
-  { labelKey: "aura.suggestions.createChecklist", fallback: "Criar checklist", prompt: "Crie um checklist para preparar minha semana." },
-  { labelKey: "aura.suggestions.transformGoal", fallback: "Transformar em meta", prompt: "Quero transformar voltar a treinar em uma meta com próximos passos." },
-  { labelKey: "aura.suggestions.reflective", fallback: "Abrir conversa reflexiva", prompt: "Quero conversar sobre o que estou sentindo hoje." },
+  { labelKey: "aura.suggestions.organizeDay", fallback: "Organizar pela energia", prompt: "Organize meu dia de acordo com minha energia atual e com o que já existe no planner." },
+  { labelKey: "aura.suggestions.transformGoal", fallback: "Meta em passos", prompt: "Transforme minha meta ativa mais importante em próximos passos possíveis para esta semana." },
+  { labelKey: "aura.suggestions.patterns", fallback: "Ler últimos dias", prompt: "O que meus últimos dias mostram sobre humor, energia, sono e execução?" },
+  { labelKey: "aura.suggestions.falling", fallback: "Estou caindo", prompt: "Estou caindo, com baixa energia e risco de travar. O que eu faço agora sem me violentar?" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

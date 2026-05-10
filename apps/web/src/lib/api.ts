@@ -37,7 +37,7 @@ export function getAdaptiveSnapshot(): AdaptiveSnapshot {
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return {};
+  if (!session) return { 'Content-Type': 'application/json' };
   return {
     Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RiskSafetySchema } from './risk-safety.contract';
 
 const LONG_TEXT_LIMIT = 30000;
 
@@ -41,6 +42,7 @@ export const AuraCommandResponseSchema = z.object({
   needsConfirmation: z.boolean().default(false),
   needsClarification: z.boolean().default(false),
   clarifyingQuestion: z.string().trim().min(1).nullable().default(null),
+  riskSafety: RiskSafetySchema.optional(),
 });
 
 export const AuraCommandStartSchema = z.object({

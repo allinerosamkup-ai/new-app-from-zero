@@ -68,6 +68,7 @@ packages/
 - Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups legados.
 
 ## Atualizações Recentes
+- **2026-05-09:** Robustez de demo/investimento adicionada: `/api/demo/seed`, `riskSafety` em check-in/diário/Aura, eventos de agenda adaptativa e roteiro de ligação em `docs/product/airia-investor-call-script.md`.
 - **2026-04-30:** Airia Decision Brain + AdaptiveAgendaEngine adicionados ao backend para classificar ações reais, sugestões opcionais, insights, bloqueios e permissão de notificação.
 - **2026-04-30:** Planner ganhou ação “Adiar” para mover bloco ao dia seguinte e registrar padrão de adiamento para análise.
 - **2026-04-30:** `DailyContext`, `/api/context/day`, `/api/agenda/adapt` e `/api/ai/action-feedback` publicados em produção no commit `7c44742`.

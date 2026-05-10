@@ -239,6 +239,12 @@ export function CheckinResultPage() {
     analysis?: string | null;
     recommendations?: string[];
     suggestedIntensity?: string | null;
+    riskSafety?: {
+      riskLevel?: string;
+      signals?: string[];
+      route?: string;
+      message?: string;
+    };
   } | null) ?? null;
   const { state, addTask, prepareJournalFromMood, refreshData, hydrated } = useAuraStore();
   const { showError, showSuccess } = useToast();
@@ -785,6 +791,18 @@ export function CheckinResultPage() {
                 {checkinAI.suggestedIntensity === "P" ? "Ritmo intenso" : checkinAI.suggestedIntensity === "M" ? "Ritmo médio" : "Ritmo leve"}
               </span>
             )}
+            {checkinAI?.riskSafety?.riskLevel && checkinAI.riskSafety.riskLevel !== "none" && !auraMsgLoading && (
+              <span style={{
+                fontSize: 9,
+                borderRadius: 999,
+                padding: "2px 7px",
+                fontWeight: 800,
+                background: "rgba(161,125,108,.12)",
+                color: "#8A5D4B",
+              }}>
+                Segurança: {checkinAI.riskSafety.route === "crisis_protocol" ? "crise" : "atenção"}
+              </span>
+            )}
             {auraMsgLoading && (
               <span style={{ fontSize: 9, color: "var(--text-3)", fontStyle: "italic" }}>gerando...</span>
             )}
@@ -826,6 +844,19 @@ export function CheckinResultPage() {
                   ))}
                 </div>
               )}
+              {checkinAI.riskSafety?.route === "human_support" || checkinAI.riskSafety?.route === "crisis_protocol" ? (
+                <div style={{
+                  marginTop: 10,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  background: "rgba(161,125,108,.08)",
+                  border: "1px solid rgba(161,125,108,.22)",
+                }}>
+                  <p style={{ margin: 0, fontSize: 12, color: "#6F4D40", lineHeight: 1.55, fontWeight: 700 }}>
+                    A Airia não substitui ajuda humana. Se existir risco imediato, procure emergência local ou alguém de confiança agora.
+                  </p>
+                </div>
+              ) : null}
             </>
           ) : auraMsg ? (
             <>

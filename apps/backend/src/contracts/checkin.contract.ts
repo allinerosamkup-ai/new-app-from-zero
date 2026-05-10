@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { RiskSafetySchema } from './risk-safety.contract';
 
 export const CheckinSlotSchema = z.string().regex(/^(morning|midday|evening)(-[a-zA-Z0-9:_-]+)?$/);
 
@@ -29,3 +30,14 @@ export const CheckinCreateSchema = z.object({
 });
 
 export type CheckinCreateInput = z.infer<typeof CheckinCreateSchema>;
+
+export const CheckinResponseSchema = z.object({
+  id: z.string().uuid(),
+  stateLabel: z.string().nullable().optional(),
+  stateLabelType: z.string().nullable().optional(),
+  stateSummary: z.string().nullable().optional(),
+  aiState: z.unknown().optional(),
+  riskSafety: RiskSafetySchema.optional(),
+}).catchall(z.unknown());
+
+export type CheckinResponse = z.infer<typeof CheckinResponseSchema>;
