@@ -37,5 +37,5 @@ docker logs --tail 20 airia_web || true
 
 echo "== Health =="
 if command -v curl >/dev/null 2>&1; then
-  curl -sS -o /dev/null -w "HTTP %{http_code}\n" --max-time 15 https://airia.pro || true
+  curl -sS -o /dev/null -w "HTTP %{http_code}\n" --max-time 15 https://airia.pro/api/health || true
 fi
