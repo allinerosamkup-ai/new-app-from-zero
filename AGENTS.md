@@ -43,6 +43,9 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 ## Regra de Produto Consumidor
 O app não deve ter modo demo, seed de demo, copy de investidor, pitch, “produto vendável”, “carregar demo” ou explicações comerciais internas. A interface final é sempre para a usuária usar.
 
+## Revisão de PR
+Antes de aprovar ou finalizar mudanças, aplicar `docs/product/pr-review-skill-roadmap.md`. Essa checklist é obrigatória porque PRs recentes mostraram regressões em produto final vs. demo, grounding de IA, sync backend/frontend, timezone de planner e higiene de release.
+
 ## Checklist Antes de Finalizar
 - Rodar testes relevantes.
 - Rodar build do app alterado.

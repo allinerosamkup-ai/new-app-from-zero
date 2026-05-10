@@ -68,6 +68,7 @@ packages/
 - Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups legados.
 
 ## Atualizações Recentes
+- **2026-05-10:** Guardrails de revisão adicionados: `product-guardrails.test.ts`, ampliação de `risk-safety.test.ts` e checklist em `docs/product/pr-review-skill-roadmap.md`.
 - **2026-05-10:** Modo/seed de demo removidos do produto. Ficam apenas fluxos reais de consumidor, protocolo de segurança em Check-in/Diário/Aura e `risk_protocol_triggered`.
 - **2026-05-09:** Robustez de produto adicionada: `riskSafety` em check-in/diário/Aura, eventos de agenda adaptativa e roteiro de ligação em `docs/product/airia-investor-call-script.md`.
 - **2026-04-30:** Airia Decision Brain + AdaptiveAgendaEngine adicionados ao backend para classificar ações reais, sugestões opcionais, insights, bloqueios e permissão de notificação.
