@@ -10,6 +10,7 @@ import { api } from "../lib/api";
 import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { trackEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
+import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import type { MoodOption } from "../features/aura/types";
 import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
@@ -240,9 +241,9 @@ export function CheckinResultPage() {
     recommendations?: string[];
     suggestedIntensity?: string | null;
     riskSafety?: {
-      riskLevel?: string;
+      riskLevel?: RiskSafety["riskLevel"];
       signals?: string[];
-      route?: string;
+      route?: RiskSafety["route"];
       message?: string;
     };
   } | null) ?? null;
@@ -379,8 +380,20 @@ export function CheckinResultPage() {
       has_router_state: Boolean(checkinAI),
       has_analysis: Boolean(checkinAI?.analysis),
       recommendations_count: checkinAI?.recommendations?.length ?? 0,
+      riskLevel: checkinAI?.riskSafety?.riskLevel ?? "none",
+      riskRoute: checkinAI?.riskSafety?.route ?? "self_support",
       mood: state.mood,
     });
+
+    if (checkinAI?.riskSafety?.route === "human_support" || checkinAI?.riskSafety?.route === "crisis_protocol") {
+      trackEvent("risk_protocol_triggered", {
+        surface: "checkin_result",
+        action: "protocol_shown",
+        riskLevel: checkinAI.riskSafety.riskLevel,
+        route: checkinAI.riskSafety.route,
+        signals: checkinAI.riskSafety.signals ?? [],
+      });
+    }
   }, []);
 
   const [phase, setPhase] = useState<AiPhase>("idle");
@@ -844,19 +857,11 @@ export function CheckinResultPage() {
                   ))}
                 </div>
               )}
-              {checkinAI.riskSafety?.route === "human_support" || checkinAI.riskSafety?.route === "crisis_protocol" ? (
-                <div style={{
-                  marginTop: 10,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  background: "rgba(161,125,108,.08)",
-                  border: "1px solid rgba(161,125,108,.22)",
-                }}>
-                  <p style={{ margin: 0, fontSize: 12, color: "#6F4D40", lineHeight: 1.55, fontWeight: 700 }}>
-                    A Airia não substitui ajuda humana. Se existir risco imediato, procure emergência local ou alguém de confiança agora.
-                  </p>
-                </div>
-              ) : null}
+              <SafetyProtocolCard
+                riskSafety={checkinAI.riskSafety as RiskSafety | undefined}
+                surface="checkin_result"
+                onAdaptDay={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
+              />
             </>
           ) : auraMsg ? (
             <>

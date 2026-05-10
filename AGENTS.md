@@ -25,8 +25,10 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 
 ## Superfícies da Airia
 - **Home:** visão do dia, ciclo, agenda curta, card “Análise e Autonomia”.
+- **Home comercial/demo:** tese do produto, CTA de demo real, pitch e prova de adaptação sem parecer landing page genérica.
 - **Planner:** timeline editável e futura superfície principal de adaptação da agenda.
 - **Check-in:** leitura do estado atual; sugestões precisam respeitar horário local e o que já foi feito.
+- **Check-in/Diário/Aura:** devem renderizar protocolo de segurança quando `riskSafety.route` exigir apoio humano ou crise.
 - **Diário:** superfície reflexiva, com resposta natural e leitura de padrão.
 - **Aura Chat:** superfície operacional e estratégica; quando vem do Planner/meta, deve explicar a ação e oferecer ideias práticas.
 - **Insights:** leitura longitudinal, sem virar gerador de tarefas soltas.
@@ -38,6 +40,8 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 - Prompt Aura: `apps/backend/src/lib/aura-prompt.ts`.
 - Segurança mínima IA: `apps/backend/src/lib/risk-safety.ts`.
 - Demo real para pitch/reunião: `POST /api/demo/seed`.
+- Demo automática web: `VITE_AIRIA_DEMO_MODE=true`.
+- Evento de segurança: `risk_protocol_triggered`.
 
 ## Checklist Antes de Finalizar
 - Rodar testes relevantes.

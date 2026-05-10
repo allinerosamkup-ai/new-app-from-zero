@@ -72,8 +72,11 @@ Validar com usuárias reais se:
 **Demo real e segurança mínima (v1.1):**
 
 - Modo demo persistido no backend para reunião, pitch e validação guiada.
+- `VITE_AIRIA_DEMO_MODE=true` ativa carregamento automático de demo em contas sem histórico suficiente, sem substituir dados reais da usuária.
 - Dados demonstráveis incluem 21 check-ins, planner do dia, hábitos, meta ativa e histórico suficiente para Insights.
 - `riskSafety` nas superfícies de IA para classificar sinais de atenção sem diagnóstico.
+- Protocolo de segurança visível em Check-in, Diário e Aura Chat, com rotas de adaptação do dia, apoio humano e crise.
+- Evento `risk_protocol_triggered` registra quando a camada de segurança aparece ou é acionada.
 - Copy do produto reforça que Airia é suporte funcional e adaptativo, não substituto clínico.
 
 ### 3.2 Fora do escopo imediato (Fase 2+)

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { useToast } from "../components/Toast";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useAuraStore } from "../features/aura/store";
@@ -140,6 +141,7 @@ export function JournalPage() {
   const { state } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
   const routeState = location.state as { initialDraft?: string; contextLabel?: string } | null;
   const initialDraft = typeof routeState?.initialDraft === "string" ? routeState.initialDraft : "";
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
@@ -150,6 +152,7 @@ export function JournalPage() {
   const [input, setInput] = useState(initialDraft);
   const [isTyping, setIsTyping] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [lastRiskSafety, setLastRiskSafety] = useState<RiskSafety | null>(null);
   const [sessions, setSessions] = useState<JournalSessionCard[]>([]);
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [latestSummary, setLatestSummary] = useState<JournalSummary | null>(null);
@@ -175,7 +178,7 @@ export function JournalPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, isTyping, lastRiskSafety]);
 
   useEffect(() => {
     if (hasAutoOpenedRef.current) return;
@@ -256,6 +259,7 @@ export function JournalPage() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
+    setLastRiskSafety(null);
 
     try {
       if (explicitAction) {
@@ -317,6 +321,20 @@ export function JournalPage() {
                 next[next.length - 1] = data.message;
                 return next;
               });
+            }
+
+            if (data.riskSafety) {
+              const riskSafety = data.riskSafety as RiskSafety;
+              setLastRiskSafety(riskSafety);
+              if (riskSafety.route === "human_support" || riskSafety.route === "crisis_protocol") {
+                trackEvent("risk_protocol_triggered", {
+                  surface: "journal",
+                  action: "protocol_shown",
+                  riskLevel: riskSafety.riskLevel,
+                  route: riskSafety.route,
+                  signals: riskSafety.signals ?? [],
+                });
+              }
             }
           } catch {
             continue;
@@ -1065,6 +1083,12 @@ export function JournalPage() {
               </div>
             </div>
           )}
+
+          <SafetyProtocolCard
+            riskSafety={lastRiskSafety}
+            surface="journal"
+            onAdaptDay={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
+          />
 
           <div ref={chatEndRef} />
         </div>

@@ -183,6 +183,8 @@ Seeds the authenticated account with a realistic Airia investor/demo dataset. It
 - demo habits and completions;
 - `demo_mode_loaded` event log.
 
+The web client also supports automatic demo loading with `VITE_AIRIA_DEMO_MODE=true`. When enabled, Home seeds a sparse account once per day and records `demo_mode_loaded` with source `env_demo_mode`.
+
 **Response 200**
 
 ```json
@@ -214,6 +216,12 @@ Current surfaces:
 - `POST /api/checkins`: response includes top-level `riskSafety` and stores it under `aiState.riskSafety`.
 - `POST /api/journal/message/stream`: `assistant.completed` SSE includes `riskSafety`.
 - `POST /api/aura/command/stream`: `assistant.completed.response` includes `riskSafety`.
+
+Client behavior:
+
+- Check-in Result, Journal, and Aura Chat render the shared safety protocol card when route is not `self_support`.
+- `human_support` and `crisis_protocol` record `risk_protocol_triggered`.
+- `crisis_protocol` shows Brazil-ready emergency resources: CVV 188, SAMU 192, and 190, plus the instruction to use local emergency services outside Brazil.
 
 ### `GET /api/context/day?date=YYYY-MM-DD`
 

@@ -68,6 +68,7 @@ packages/
 - Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups legados.
 
 ## Atualizações Recentes
+- **2026-05-10:** Robustez pendente fechada: `VITE_AIRIA_DEMO_MODE`, card compartilhado de protocolo de segurança em Check-in/Diário/Aura, `risk_protocol_triggered` e superfície comercial interna na Home.
 - **2026-05-09:** Robustez de demo/investimento adicionada: `/api/demo/seed`, `riskSafety` em check-in/diário/Aura, eventos de agenda adaptativa e roteiro de ligação em `docs/product/airia-investor-call-script.md`.
 - **2026-04-30:** Airia Decision Brain + AdaptiveAgendaEngine adicionados ao backend para classificar ações reais, sugestões opcionais, insights, bloqueios e permissão de notificação.
 - **2026-04-30:** Planner ganhou ação “Adiar” para mover bloco ao dia seguinte e registrar padrão de adiamento para análise.

@@ -54,6 +54,8 @@ import { getActivationState } from "../features/aura/activation";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
+const AIRIA_DEMO_MODE = import.meta.env.VITE_AIRIA_DEMO_MODE === "true";
+
 const STATE_CONFIG = {
   stable:  { emoji: "💚", label: "Estável",   color: "var(--accent-sage)",    bg: "rgba(180,185,169,.10)" },
   rising:  { emoji: "📈", label: "Subindo",   color: "var(--accent-sky)",    bg: "rgba(176,180,196,.10)"  },
@@ -419,13 +421,14 @@ export function HomePage() {
   const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
   const [expandedAgendaRows, setExpandedAgendaRows] = useState<Set<string>>(new Set());
+  const autoDemoLoadedRef = useRef(false);
 
-  async function loadInvestorDemoData() {
+  async function loadInvestorDemoData(source: "manual_button" | "env_demo_mode" = "manual_button") {
     if (demoSeeding) return;
     setDemoSeeding(true);
     try {
       await api.post("/demo/seed", {});
-      trackEvent("demo_mode_loaded", { surface: "home", source: "manual_button" });
+      trackEvent("demo_mode_loaded", { surface: "home", source });
       await refreshData();
       showSuccess("Demo real carregada nesta conta.");
     } catch (error) {
@@ -434,6 +437,19 @@ export function HomePage() {
       setDemoSeeding(false);
     }
   }
+
+  useEffect(() => {
+    if (!AIRIA_DEMO_MODE || autoDemoLoadedRef.current || !hydrated || demoSeeding) return;
+    if ((state.checkinHistory?.length ?? 0) >= 14 && state.tasks.length > 0 && state.goals.length > 0) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const storageKey = `airia.demo.autoloaded.${today}`;
+    if (window.localStorage.getItem(storageKey) === "true") return;
+
+    autoDemoLoadedRef.current = true;
+    window.localStorage.setItem(storageKey, "true");
+    void loadInvestorDemoData("env_demo_mode");
+  }, [hydrated, demoSeeding, state.checkinHistory?.length, state.tasks.length, state.goals.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Relógio e Contexto de Tempo (necessários para IDs e filtros)
   const [clockTime, setClockTime] = useState(() => new Date());
@@ -1583,11 +1599,65 @@ export function HomePage() {
             <AuraButtonV2
               variant="secondary"
               size="md"
-              onClick={loadInvestorDemoData}
+              onClick={() => loadInvestorDemoData()}
               disabled={demoSeeding}
               style={{ flex: "1 1 160px", minHeight: 42 }}
             >
               {demoSeeding ? "Carregando..." : "Carregar demo real"}
+            </AuraButtonV2>
+          </div>
+        </div>
+
+        <div
+          className="aura-card"
+          style={{
+            marginBottom: "calc(var(--a) * 1.1)",
+            padding: 16,
+            borderRadius: 22,
+            border: "1.5px solid rgba(215,137,127,.22)",
+            background: "linear-gradient(135deg, rgba(255,255,255,.92), rgba(215,137,127,.10))",
+          }}
+        >
+          <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)" }}>
+            Produto vendável
+          </p>
+          <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.25 }}>
+            Uma assistente para quem precisa produzir em dias emocionalmente diferentes.
+          </h2>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {[
+              ["Estado", "lê humor, energia, sono e corpo"],
+              ["Decisão", "transforma sinal em ajuste de agenda"],
+              ["Prova", "mostra padrões e risco antes da queda"],
+            ].map(([title, body]) => (
+              <div key={title} style={{ flex: "1 1 130px", padding: "9px 8px", borderRadius: 12, background: "rgba(255,255,255,.62)", border: "1px solid rgba(255,255,255,.74)" }}>
+                <p style={{ margin: "0 0 3px", fontSize: 11.5, fontWeight: 900, color: "var(--text-1)" }}>{title}</p>
+                <p style={{ margin: 0, fontSize: 10.5, lineHeight: 1.35, color: "var(--text-2)" }}>{body}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <AuraButtonV2
+              variant="primary"
+              size="md"
+              onClick={() => navigate("/aura", {
+                state: {
+                  mode: "conversation",
+                  contextLabel: "Pitch comercial da Airia",
+                  initialPrompt: "Prepare meu roteiro de venda da Airia para uma ligação com possível investidora ou parceira. Use o produto atual: check-in, planner adaptativo, insights, Aura e demo real.",
+                },
+              })}
+              style={{ flex: "1 1 180px", minHeight: 42 }}
+            >
+              Preparar pitch
+            </AuraButtonV2>
+            <AuraButtonV2
+              variant="secondary"
+              size="md"
+              onClick={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
+              style={{ flex: "1 1 180px", minHeight: 42 }}
+            >
+              Mostrar adaptação
             </AuraButtonV2>
           </div>
         </div>

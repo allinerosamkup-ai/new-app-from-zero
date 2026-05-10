@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import i18n from "../i18n";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { supabase } from "../lib/supabase";
+import { trackEvent } from "../lib/track";
 import { buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
@@ -43,6 +45,7 @@ type AuraCommandResponse = {
   needsConfirmation: boolean;
   needsClarification: boolean;
   clarifyingQuestion: string | null;
+  riskSafety?: RiskSafety;
 };
 
 type ActionCard = {
@@ -205,6 +208,7 @@ export function AuraChatPage() {
   const [input, setInput] = useState(initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
   const [actionCard, setActionCard] = useState<ActionCard | null>(null);
+  const [lastRiskSafety, setLastRiskSafety] = useState<RiskSafety | null>(null);
   const [pendingTaskConfirmation, setPendingTaskConfirmation] = useState<PendingTaskConfirmation | null>(null);
   const [isApplyingPendingAction, setIsApplyingPendingAction] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -357,6 +361,7 @@ export function AuraChatPage() {
     setInput("");
     setIsTyping(true);
     setActionCard(null);
+    setLastRiskSafety(null);
     setPendingTaskConfirmation(null);
 
     try {
@@ -419,6 +424,18 @@ export function AuraChatPage() {
         ...prev,
         { role: "assistant", content: completedResponse!.assistantMessage },
       ]);
+
+      const riskSafety = completedResponse.riskSafety ?? null;
+      setLastRiskSafety(riskSafety);
+      if (riskSafety?.route === "human_support" || riskSafety?.route === "crisis_protocol") {
+        trackEvent("risk_protocol_triggered", {
+          surface: "aura_chat",
+          action: "protocol_shown",
+          riskLevel: riskSafety.riskLevel,
+          route: riskSafety.route,
+          signals: riskSafety.signals ?? [],
+        });
+      }
 
       const executionFollowUp = await executeAuraAction(completedResponse);
       if (executionFollowUp) {
@@ -725,6 +742,14 @@ export function AuraChatPage() {
             )}
           </div>
         )}
+
+        <div style={{ margin: lastRiskSafety && lastRiskSafety.route !== "self_support" ? "6px 0 10px 33px" : 0 }}>
+          <SafetyProtocolCard
+            riskSafety={lastRiskSafety}
+            surface="aura_chat"
+            onAdaptDay={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
+          />
+        </div>
 
         {pendingTaskConfirmation && (
           <div
