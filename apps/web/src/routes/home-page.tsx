@@ -46,6 +46,7 @@ import {
   TrendingUp,
   Sparkles,
   ChevronRight,
+  ClipboardCheck,
 } from "lucide-react";
 import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { ActivationChecklist } from "../components/activation/ActivationChecklist";
@@ -1257,6 +1258,13 @@ export function HomePage() {
           </div>
           <span className="shortcut-label">Planner</span>
           <span className="shortcut-sub">Organizar</span>
+        </button>
+        <button className="shortcut-card" onClick={() => navigate("/daily-summary")}>
+          <div className="icon-badge" style={{ background: "rgba(197,165,147,.16)" }}>
+            <ClipboardCheck size={18} color="var(--accent-peach)" />
+          </div>
+          <span className="shortcut-label">Fechar</span>
+          <span className="shortcut-sub">Amanhã</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/insights")}>
           <div className="icon-badge shortcut-icon shortcut-icon-insights">

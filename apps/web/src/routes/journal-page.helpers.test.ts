@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
-import { buildJournalPlannerSlot } from "./journal-page.helpers.ts";
+import { buildJournalClosePrompt, buildJournalPlannerSlot } from "./journal-page.helpers.ts";
 
 describe("journal page helpers", () => {
   it("never creates a zero-duration planner block at 20h", () => {
@@ -30,5 +30,27 @@ describe("journal page helpers", () => {
       startTime: "09:00",
       endTime: "10:00",
     });
+  });
+
+  it("frames the journal close action from actual summary data", () => {
+    const prompt = buildJournalClosePrompt({
+      hasSummary: true,
+      suggestedTaskCount: 2,
+      commitmentCount: 1,
+    });
+
+    assert.equal(prompt.label, "Revisar o dia");
+    assert.equal(prompt.description, "Use o resumo, 2 tarefas e 1 compromisso para ajustar o Planner.");
+  });
+
+  it("does not imply planner work when the journal has no extracted action", () => {
+    const prompt = buildJournalClosePrompt({
+      hasSummary: false,
+      suggestedTaskCount: 0,
+      commitmentCount: 0,
+    });
+
+    assert.equal(prompt.label, "Fechar");
+    assert.equal(prompt.description, "Sessao salva. Sem acao nova extraida deste diario.");
   });
 });

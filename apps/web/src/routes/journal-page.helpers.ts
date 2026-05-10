@@ -35,3 +35,35 @@ export function buildJournalPlannerSlot(input: {
     endTime: addMinutes(startTime, 60),
   };
 }
+
+export function buildJournalClosePrompt(input: {
+  hasSummary: boolean;
+  suggestedTaskCount: number;
+  commitmentCount: number;
+}): { label: string; description: string } {
+  const taskCount = Math.max(0, input.suggestedTaskCount);
+  const commitmentCount = Math.max(0, input.commitmentCount);
+  const hasAction = taskCount > 0 || commitmentCount > 0;
+
+  if (!input.hasSummary && !hasAction) {
+    return {
+      label: "Fechar",
+      description: "Sessao salva. Sem acao nova extraida deste diario.",
+    };
+  }
+
+  if (!hasAction) {
+    return {
+      label: "Revisar o dia",
+      description: "Use o resumo salvo para fechar o dia sem criar tarefa solta.",
+    };
+  }
+
+  const taskText = taskCount === 1 ? "1 tarefa" : `${taskCount} tarefas`;
+  const commitmentText = commitmentCount === 1 ? "1 compromisso" : `${commitmentCount} compromissos`;
+
+  return {
+    label: "Revisar o dia",
+    description: `Use o resumo, ${taskText} e ${commitmentText} para ajustar o Planner.`,
+  };
+}

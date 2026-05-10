@@ -342,6 +342,216 @@ function HealthConnectSettingsSection({ onStatusChange }: { onStatusChange: (msg
   );
 }
 
+type DeletionStatusResponse =
+  | { status: "none" }
+  | { status: "requested"; token: string; requestedAt: string; confirmDeadline: string }
+  | { status: "confirmed"; confirmedAt: string; scheduledFor: string }
+  | { status: "cancelled"; cancelledAt: string };
+
+function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [state, setState] = useState<DeletionStatusResponse>({ status: "none" });
+
+  const refresh = useCallback(async () => {
+    try {
+      const data = (await api.get("/privacy/deletion-status")) as DeletionStatusResponse;
+      setState(data);
+    } catch {
+      // tolerate transient errors; user can retry
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function handleRequest() {
+    if (!confirm("Iniciar pedido de exclusão? Você terá 24h para confirmar.")) return;
+    setBusy(true);
+    onStatusChange(null);
+    try {
+      const data = (await api.post("/privacy/delete-request", {})) as DeletionStatusResponse;
+      setState(data);
+      onStatusChange("Pedido iniciado. Confirme em até 24h para agendar a exclusão.");
+    } catch {
+      onStatusChange("Não consegui iniciar o pedido agora.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirm() {
+    if (state.status !== "requested") return;
+    if (!confirm("Confirmar exclusão? Seus dados serão removidos em 30 dias e isto pode ser cancelado durante esse período.")) return;
+    setBusy(true);
+    onStatusChange(null);
+    try {
+      const data = (await api.post("/privacy/delete-confirm", { token: state.token })) as DeletionStatusResponse;
+      setState(data);
+      onStatusChange("Exclusão agendada. Você pode cancelar até a data agendada.");
+    } catch {
+      onStatusChange("Não consegui confirmar o pedido. Tente reabrir o pedido.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCancel() {
+    setBusy(true);
+    onStatusChange(null);
+    try {
+      const data = (await api.post("/privacy/delete-cancel", {})) as DeletionStatusResponse;
+      setState(data);
+      onStatusChange("Pedido de exclusão cancelado.");
+    } catch {
+      onStatusChange("Não consegui cancelar agora.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const subText =
+    state.status === "requested"
+      ? `Aguardando confirmação até ${new Date(state.confirmDeadline).toLocaleString("pt-BR")}`
+      : state.status === "confirmed"
+      ? `Agendada para ${new Date(state.scheduledFor).toLocaleDateString("pt-BR")} — você pode cancelar até lá`
+      : "Remove permanentemente perfil, check-ins, diário, planner, hábitos e memórias após 30 dias";
+
+  const primaryLabel =
+    state.status === "requested"
+      ? "Confirmar exclusão"
+      : state.status === "confirmed"
+      ? "Cancelar exclusão"
+      : "Solicitar exclusão dos meus dados";
+
+  const primaryAction =
+    state.status === "requested"
+      ? handleConfirm
+      : state.status === "confirmed"
+      ? handleCancel
+      : handleRequest;
+
+  const dangerColor = state.status === "confirmed" ? "var(--accent-sky)" : "var(--accent-warm-coral, #d77b6c)";
+
+  return (
+    <div
+      className="config-row"
+      style={{ cursor: busy ? "wait" : "pointer", opacity: busy ? 0.72 : 1 }}
+      onClick={() => {
+        if (!busy) void primaryAction();
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && !busy) {
+          event.preventDefault();
+          void primaryAction();
+        }
+      }}
+    >
+      <div className="config-row-label">
+        <div className="icon-bg" style={{ background: "rgba(215,123,108,.12)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={dangerColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
+        </div>
+        <div>
+          <p className="config-row-text">{busy ? "Processando..." : primaryLabel}</p>
+          <p className="config-row-sub">{subText}</p>
+        </div>
+      </div>
+      {state.status === "requested" ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!busy) void handleCancel();
+          }}
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: "var(--text-secondary)",
+            background: "transparent",
+            border: "none",
+            padding: "6px 10px",
+            cursor: busy ? "wait" : "pointer",
+          }}
+        >
+          Cancelar
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function PrivacyDataSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    onStatusChange(null);
+
+    try {
+      const data = await api.get("/privacy/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `airia-dados-${stamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      onStatusChange("Arquivo de dados gerado.");
+    } catch {
+      onStatusChange("Não consegui exportar seus dados agora.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  return (
+    <div
+      className="config-row"
+      style={{ cursor: exporting ? "wait" : "pointer", opacity: exporting ? 0.72 : 1 }}
+      onClick={() => {
+        if (!exporting) void handleExport();
+      }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && !exporting) {
+          event.preventDefault();
+          void handleExport();
+        }
+      }}
+    >
+      <div className="config-row-label">
+        <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+            <path d="M14 2v6h6" />
+            <path d="M12 18v-6" />
+            <path d="m9 15 3 3 3-3" />
+          </svg>
+        </div>
+        <div>
+          <p className="config-row-text">{exporting ? "Gerando exportação..." : "Exportar meus dados"}</p>
+          <p className="config-row-sub">Baixa um JSON com perfil, check-ins, diário, planner, hábitos, memórias e consentimentos</p>
+        </div>
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 800, color: "var(--accent-sky)", flexShrink: 0 }}>
+        JSON
+      </span>
+    </div>
+  );
+}
+
 type ToggleProps = { on: boolean; onToggle: () => void | Promise<void> };
 
 function Toggle({ on, onToggle }: ToggleProps) {
@@ -987,6 +1197,10 @@ export function PreferencesPage() {
         <div className="config-section">
           <p className="config-section-title">Conta e Integrações</p>
           
+          <PrivacyDataSection onStatusChange={setAccountStatus} />
+          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
+          <PrivacyDeleteSection onStatusChange={setAccountStatus} />
+          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
           <GCalSettingsSection onStatusChange={setAccountStatus} />
           <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
           <HealthConnectSettingsSection onStatusChange={setAccountStatus} />

@@ -91,7 +91,8 @@
       "Bash(npx -w @app/backend tsc --noEmit)",
       "Bash(findstr \":3001\")",
       "Bash(git check-ignore *)",
-      "Bash(cmd //c \"del /Q /S C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\* 2>nul & rd /S /Q C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude 2>nul & echo done\")"
+      "Bash(cmd //c \"del /Q /S C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\* 2>nul & rd /S /Q C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude 2>nul & echo done\")",
+      "Bash(npx tsx *)"
     ]
   },
   "enabledMcpjsonServers": [

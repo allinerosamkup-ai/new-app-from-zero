@@ -8,6 +8,7 @@ import { useToast } from "../components/Toast";
 import { labelMood } from "../features/aura/data";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraIcon } from "../components/AuraIcon";
+import { buildDailyCloseSummary } from "./daily-summary-page.helpers";
 import "../styles/aura.css";
 
 type JTask = { title: string; category: string; time: string; discarded: boolean };
@@ -27,6 +28,7 @@ export function DailySummaryPage() {
   const [phase, setPhase] = useState<"idle" | "loading" | "preview" | "done">("idle");
   const [tasks, setTasks] = useState<JTask[]>([]);
   const [saved, setSaved] = useState(false);
+  const closeSummary = buildDailyCloseSummary(state);
 
   async function fetchJournalTasks() {
     if (!state.journal) return;
@@ -119,7 +121,7 @@ export function DailySummaryPage() {
               marginBottom: 6,
             }}
           >
-            Sessão Concluída
+            Fechamento do dia
           </h1>
           <p
             style={{
@@ -129,9 +131,122 @@ export function DailySummaryPage() {
               lineHeight: 1.5,
             }}
           >
-            O que a IA percebeu: humor {labelMood(state.mood).toLowerCase()}
+            {closeSummary.hasData ? closeSummary.headline : "Vamos criar a primeira pista real do seu ritmo."}
           </p>
         </div>
+
+        {closeSummary.hasData ? (
+          <>
+            <div
+              style={{
+                width: "100%",
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 8,
+              }}
+            >
+              {[
+                { label: "Feitas", value: closeSummary.stats.completedTasks },
+                { label: "Pendentes", value: closeSummary.stats.pendingTasks },
+                { label: "Check-ins", value: closeSummary.stats.checkins },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  style={{
+                    borderRadius: 14,
+                    background: "rgba(255,253,249,.9)",
+                    border: "1.5px solid rgba(197,165,147,.18)",
+                    padding: "12px 10px",
+                    textAlign: "center",
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 850, color: "var(--text-1)" }}>{stat.value}</p>
+                  <p style={{ margin: "2px 0 0", fontSize: 10, fontWeight: 750, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".08em" }}>{stat.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {closeSummary.evidence.length > 0 && (
+              <div
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 14,
+                  background: "rgba(150,199,179,.08)",
+                  border: "1.5px solid rgba(150,199,179,.22)",
+                }}
+              >
+                <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: 800, color: "var(--accent-sage)", textTransform: "uppercase", letterSpacing: ".12em" }}>
+                  Base real de hoje
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {closeSummary.evidence.slice(0, 4).map((item) => (
+                    <p key={item} style={{ margin: 0, fontSize: 12, color: "var(--text-2)", lineHeight: 1.45 }}>
+                      {item}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {closeSummary.tomorrowAdjustments.length > 0 && (
+              <div
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  borderRadius: 16,
+                  background: "#fff",
+                  border: "1.5px solid var(--warm-border)",
+                  boxShadow: "0 6px 16px rgba(31,42,54,0.04)",
+                }}
+              >
+                <p style={{ margin: "0 0 12px", fontSize: 10, fontWeight: 850, color: "var(--accent-peach)", textTransform: "uppercase", letterSpacing: ".12em" }}>
+                  Levar para amanha
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {closeSummary.tomorrowAdjustments.map((item) => (
+                    <button
+                      key={`${item.source}-${item.title}`}
+                      type="button"
+                      onClick={() => navigate(item.path)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        border: "1.5px solid rgba(197,165,147,.18)",
+                        background: "rgba(255,251,246,.72)",
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--text-1)" }}>{item.title}</p>
+                      <p style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45 }}>{item.description}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              padding: "16px",
+              borderRadius: 16,
+              background: "#fff",
+              border: "1.5px solid var(--warm-border)",
+              textAlign: "center",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--text-2)" }}>
+              Sem check-in, planner, habito, meta ou diario, a Airia nao tem base confiavel para fechar o dia.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+              <AuraButtonV2 variant="primary" size="sm" onClick={() => navigate("/checkin")}>Check-in</AuraButtonV2>
+              <AuraButtonV2 variant="outline" size="sm" onClick={() => navigate("/planner")}>Planner</AuraButtonV2>
+            </div>
+          </div>
+        )}
 
         {/* Emotion chips */}
         <div
@@ -223,7 +338,7 @@ export function DailySummaryPage() {
               onClick={fetchJournalTasks}
               useAuraIcon
             >
-              Gerar tarefas
+              Extrair possiveis tarefas do diario
             </AuraButtonV2>
           </div>
         )}
@@ -321,7 +436,7 @@ export function DailySummaryPage() {
             size="md"
             onClick={() => navigate("/planner")}
           >
-            Planner
+            {closeSummary.primaryAction.label}
           </AuraButtonV2>
           <AuraButtonV2
             variant="primary"
@@ -335,4 +450,3 @@ export function DailySummaryPage() {
     </div>
   );
 }
-

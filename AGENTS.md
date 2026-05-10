@@ -50,6 +50,8 @@ Toda UI nova precisa ter fluxo real antes de polimento: entrada da usuária, cha
 ## Revisão de PR
 Antes de aprovar ou finalizar mudanças, aplicar `docs/product/pr-review-skill-roadmap.md`. Essa checklist é obrigatória porque PRs recentes mostraram regressões em produto final vs. demo, grounding de IA, sync backend/frontend, timezone de planner e higiene de release.
 
+Quando a tarefa envolver PR, revisão, fechamento de feature, publicação ou deploy, usar também a skill local `skills/airia-pr-review/SKILL.md`.
+
 ## Checklist Antes de Finalizar
 - Rodar testes relevantes.
 - Rodar build do app alterado.

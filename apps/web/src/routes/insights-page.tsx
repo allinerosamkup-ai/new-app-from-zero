@@ -11,7 +11,8 @@ import { useToast } from "../components/Toast";
 import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ClipboardCheck } from "lucide-react";
+import { buildInsightActionDecision, type InsightActionDecision } from "./insights-page.helpers";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -156,6 +157,7 @@ export function InsightsPage() {
 
   const [insightPhase, setInsightPhase] = useState<InsightPhase>("idle");
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
+  const [insightDecision, setInsightDecision] = useState<InsightActionDecision | null>(null);
   const [weeklyQuestion, setWeeklyQuestion] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
@@ -342,6 +344,11 @@ export function InsightsPage() {
         actionTitle: topRecommendation?.text?.slice(0, 40) ?? "Revisar minha semana",
       };
       setAiInsight(parsed);
+      setInsightDecision(buildInsightActionDecision({
+        ...parsed,
+        checkins: history.length,
+        source: "weekly_endpoint",
+      }));
       setWeeklyQuestion(res.insights.weeklyQuestion ?? null);
       setHighlights(res.insights.highlights ?? []);
       setInsightPhase("done");
@@ -357,12 +364,18 @@ export function InsightsPage() {
         : cycleReport.phase === "elevated" || cycleReport.phase === "mixed"
           ? "Reduza estímulos e escolha uma decisão antes de abrir outra frente."
           : "Escolha uma ação concreta que mantenha o ritmo sem esticar o dia.";
-      setAiInsight({
+      const fallbackInsight: AiInsight = {
         insight: `Pelo histórico de ${periodDays} dias, sua leitura atual combina fase ${currentPhaseLabel.toLowerCase()}, baseline pessoal de ${cycleReport.baselineComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
         action: localAction,
         category: "rotina",
         actionTitle: localAction.slice(0, 40),
-      });
+      };
+      setAiInsight(fallbackInsight);
+      setInsightDecision(buildInsightActionDecision({
+        ...fallbackInsight,
+        checkins: history.length,
+        source: "local_fallback",
+      }));
       setWeeklyQuestion("Qual pequeno ajuste de hoje impediria que esse padrão se repetisse amanhã?");
       setHighlights([
         `${history.length} registros no período selecionado`,
@@ -380,6 +393,10 @@ export function InsightsPage() {
 
   function applyAction() {
     if (!aiInsight) return;
+    if (!insightDecision?.canSaveToPlanner) {
+      showError(insightDecision?.reason ?? "Ainda falta base para transformar isso em tarefa.");
+      return;
+    }
     addTask(aiInsight.actionTitle, "09:00", aiInsight.category, { forceSave: true })
       .then(() => {
         setTaskAdded(true);
@@ -482,6 +499,19 @@ export function InsightsPage() {
             >
               ↓ CSV
             </button>
+            <button
+              onClick={() => navigate("/daily-summary")}
+              style={{
+                padding: "5px 12px", borderRadius: "999px", fontSize: "11px",
+                fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer",
+                border: "1.5px solid rgba(176,180,196,.32)", background: "rgba(176,180,196,.12)",
+                color: "var(--accent-sky-ink)", backdropFilter: "blur(14px)", transition: "all 150ms",
+                display: "flex", alignItems: "center", gap: 4,
+              }}
+            >
+              <ClipboardCheck size={13} strokeWidth={2.4} />
+              Fechar dia
+            </button>
           </div>
         </div>
 
@@ -493,13 +523,13 @@ export function InsightsPage() {
           marginBottom: "calc(var(--a))",
         }}>
           <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 850, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sky)" }}>
-            Prova de valor
+            Leitura pratica
           </p>
           <h2 style={{ margin: "0 0 8px", fontSize: 18, lineHeight: 1.25, color: "var(--text-1)" }}>
-            A Airia conecta estado interno com capacidade real de execução.
+            A Airia conecta seu estado interno com sua capacidade real de execução.
           </h2>
           <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: "var(--text-2)" }}>
-            Esta tela mostra se humor, energia, sono, hábitos e metas estão sustentando ou sabotando a rotina. É a diferença entre “monitorar humor” e ajustar a semana antes da queda.
+            Esta tela mostra se humor, energia, sono, hábitos e metas estão sustentando ou atrapalhando a rotina. A próxima ação boa deve sair de dado real, não de cobrança solta.
           </p>
         </div>
 
@@ -1349,13 +1379,18 @@ export function InsightsPage() {
                 <div className="insights-ai-action-content">
                   <p className="insights-ai-action-label">O QUE AJUSTAR NA PRÓXIMA SEMANA</p>
                   <p className="insights-ai-action-text">{aiInsight.action}</p>
+                  {insightDecision && (
+                    <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                      {insightDecision.canSaveToPlanner ? insightDecision.evidence : insightDecision.reason}
+                    </p>
+                  )}
                 </div>
                 <button
                   className="insights-ai-save-btn"
                   onClick={applyAction}
-                  disabled={taskAdded}
+                  disabled={taskAdded || !insightDecision?.canSaveToPlanner}
                 >
-                  {taskAdded ? "✓ Salvo" : "Confirmar no Planner"}
+                  {taskAdded ? "✓ Salvo" : insightDecision?.canSaveToPlanner ? "Confirmar no Planner" : "Aguardar base"}
                 </button>
               </div>
             </div>

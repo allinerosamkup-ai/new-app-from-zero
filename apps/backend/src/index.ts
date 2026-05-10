@@ -39,6 +39,16 @@ import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
+import { buildPrivacyExport, type PrivacyExportPrisma } from './services/privacy-export.service';
+import {
+  DeletionConfirmError,
+  PRIVACY_DELETION_EVENT_NAMES,
+  cancelDeletion,
+  confirmDeletion,
+  getDeletionStatus,
+  requestDeletion,
+  type PrivacyDeletePrisma,
+} from './services/privacy-delete.service';
 import { JournalUnderstandingService, type JournalSituationModel } from './services/journal-understanding.service';
 import {
   buildUnifiedSuggestContext,
@@ -2917,6 +2927,137 @@ export function createApp(dependencies: AppDependencies = {}) {
       return res.status(500).json({ error: 'Failed to update preferences' });
     }
   });
+
+  /**
+   * GET /api/privacy/export
+   * Gera um pacote JSON com os dados pessoais da usuária.
+   * Rate-limit: 1 export por 24h por usuária (anti-abuso).
+   */
+  const PRIVACY_EXPORT_EVENT = 'privacy.export.generated';
+  const PRIVACY_EXPORT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  app.get('/api/privacy/export', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const since = new Date(Date.now() - PRIVACY_EXPORT_WINDOW_MS);
+      const recent = await prisma.eventLog.findFirst({
+        where: { userId, eventName: PRIVACY_EXPORT_EVENT, createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (recent) {
+        const retryAfterMs =
+          PRIVACY_EXPORT_WINDOW_MS - (Date.now() - recent.createdAt.getTime());
+        const retryAfterSeconds = Math.max(60, Math.ceil(retryAfterMs / 1000));
+        res.setHeader('Retry-After', String(retryAfterSeconds));
+        return res.status(429).json({
+          error: 'rate_limited',
+          message: 'Você já exportou seus dados nas últimas 24 horas.',
+          retryAfterSeconds,
+        });
+      }
+
+      const payload = await buildPrivacyExport(prisma as unknown as PrivacyExportPrisma, userId);
+      await prisma.eventLog.create({
+        data: {
+          userId,
+          eventName: PRIVACY_EXPORT_EVENT,
+          properties: { bytes: JSON.stringify(payload).length },
+        },
+      });
+      res.setHeader('Content-Disposition', `attachment; filename="airia-data-${userId}.json"`);
+      return res.json(payload);
+    } catch (error: any) {
+      console.error('[privacy/export] Error:', error);
+      return res.status(500).json({ error: 'Failed to export privacy data' });
+    }
+  });
+
+  /**
+   * GET /api/privacy/deletion-status
+   * Devolve o estado atual do pedido de exclusão.
+   */
+  app.get('/api/privacy/deletion-status', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const status = await getDeletionStatus(
+        prisma as unknown as PrivacyDeletePrisma,
+        userId,
+      );
+      return res.json(status);
+    } catch (error: any) {
+      console.error('[privacy/deletion-status] Error:', error);
+      return res.status(500).json({ error: 'Failed to read deletion status' });
+    }
+  });
+
+  /**
+   * POST /api/privacy/delete-request
+   * Inicia pedido de exclusão; devolve token de confirmação válido por 24h.
+   */
+  app.post('/api/privacy/delete-request', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const status = await requestDeletion(
+        prisma as unknown as PrivacyDeletePrisma,
+        userId,
+      );
+      return res.json(status);
+    } catch (error: any) {
+      console.error('[privacy/delete-request] Error:', error);
+      return res.status(500).json({ error: 'Failed to request deletion' });
+    }
+  });
+
+  /**
+   * POST /api/privacy/delete-confirm
+   * Confirma exclusão usando o token retornado em delete-request.
+   * Body: { token: string }
+   */
+  const DeleteConfirmSchema = z.object({ token: z.string().min(8).max(128) });
+  app.post('/api/privacy/delete-confirm', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { token } = DeleteConfirmSchema.parse(req.body ?? {});
+      const status = await confirmDeletion(
+        prisma as unknown as PrivacyDeletePrisma,
+        userId,
+        token,
+      );
+      return res.json(status);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      if (error instanceof DeletionConfirmError) {
+        return res.status(409).json({ error: error.code });
+      }
+      console.error('[privacy/delete-confirm] Error:', error);
+      return res.status(500).json({ error: 'Failed to confirm deletion' });
+    }
+  });
+
+  /**
+   * POST /api/privacy/delete-cancel
+   * Cancela um pedido de exclusão (válido a qualquer momento antes do purge).
+   */
+  app.post('/api/privacy/delete-cancel', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const status = await cancelDeletion(
+        prisma as unknown as PrivacyDeletePrisma,
+        userId,
+      );
+      return res.json(status);
+    } catch (error: any) {
+      console.error('[privacy/delete-cancel] Error:', error);
+      return res.status(500).json({ error: 'Failed to cancel deletion' });
+    }
+  });
+
+  // Reservado para o cron de purge (out of scope desta sprint):
+  // varrer EventLog por privacy.deletion.confirmed cujo properties.scheduledFor
+  // já passou e deletar o Profile (cascade leva tudo).
+  void PRIVACY_DELETION_EVENT_NAMES;
 
   /**
    * PATCH /api/profile

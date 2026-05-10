@@ -2,6 +2,8 @@
 
 Fonte: PRs recentes do GitHub, commits de correção e revisão direta da Home em 2026-05-10.
 
+Skill operacional criada em `skills/airia-pr-review/SKILL.md` e registrada em `skills/_registry.md`. Esta página explica o embasamento; a skill é o fluxo executável.
+
 ## Habilidades a Aprofundar
 
 1. **Produto final antes de apresentação**

@@ -2651,7 +2651,24 @@ export function PlannerPage() {
       <WeeklyAgendaHeader todayAnchor={todayAnchor} offsetDias={offsetDias} setOffsetDias={setOffsetDias} />
 
       {/* ── Link para Metas ── */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14, marginTop: -6 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 14, marginTop: -6 }}>
+        <button
+          onClick={() => navigate("/daily-summary")}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "rgba(176, 180, 196, 0.12)",
+            border: "1.5px solid rgba(176, 180, 196, 0.32)",
+            borderRadius: 99,
+            cursor: "pointer",
+            padding: "8px 14px",
+            zIndex: 50,
+            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+            boxShadow: "0 4px 12px rgba(176, 180, 196, 0.08)"
+          }}
+        >
+          <ClipboardCheck size={15} strokeWidth={2.4} color="var(--accent-sky)" />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-sky-ink)", letterSpacing: ".01em" }}>Fechar dia</span>
+        </button>
         <button
           onClick={() => navigate("/goals")}
           style={{

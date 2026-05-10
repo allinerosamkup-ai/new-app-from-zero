@@ -10,7 +10,7 @@ import { useAuraStore } from "../features/aura/store";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
-import { buildJournalPlannerSlot } from "./journal-page.helpers";
+import { buildJournalClosePrompt, buildJournalPlannerSlot } from "./journal-page.helpers";
 import "../styles/aura.css";
 import { appendStoredGtdAction } from "../utils/goal-priority-actions";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
@@ -462,6 +462,11 @@ export function JournalPage() {
   const mainButtonLabel = sessionId || activePersistedSession ? "Continuar meu diário" : "Abrir meu diário";
 
   const commitmentSuggestions = buildCommitmentSuggestions(finalizationResult?.summary ?? null, finalizationResult?.temporalLabel ?? "Hoje");
+  const journalClosePrompt = buildJournalClosePrompt({
+    hasSummary: Boolean(finalizationResult?.summary?.text),
+    suggestedTaskCount: finalizationResult?.suggestedTasks.length ?? 0,
+    commitmentCount: commitmentSuggestions.length,
+  });
 
   const finalizationModal = showFinalizationModal && finalizationResult ? (
     <div
@@ -641,9 +646,29 @@ export function JournalPage() {
         )}
 
 
-        <AuraButtonV2 className="ui-btn-gradient" onClick={() => setShowFinalizationModal(false)}>
-          Continuar
-        </AuraButtonV2>
+        <div style={{ borderRadius: 14, background: "rgba(176,180,196,.10)", border: "1px solid rgba(176,180,196,.26)", padding: "11px 12px" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 800, color: "var(--text-1)" }}>
+            {journalClosePrompt.label}
+          </p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)", lineHeight: 1.45 }}>
+            {journalClosePrompt.description}
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <AuraButtonV2 className="btn btn-ghost" onClick={() => setShowFinalizationModal(false)}>
+            Continuar
+          </AuraButtonV2>
+          <AuraButtonV2
+            className="ui-btn-gradient"
+            onClick={() => {
+              setShowFinalizationModal(false);
+              navigate("/daily-summary");
+            }}
+          >
+            Revisar dia
+          </AuraButtonV2>
+        </div>
       </div>
     </div>
   ) : null;

@@ -52,6 +52,22 @@ const backendAgendaFilesWithUtcTimePolicy = [
   'apps/backend/src/services/adaptive-agenda-engine.service.ts',
 ];
 
+const reviewSkillPath = 'skills/airia-pr-review/SKILL.md';
+const reviewSkillRegistryPath = 'skills/_registry.md';
+const reviewSkillRequiredTerms = [
+  'Produto final antes de apresentacao',
+  'Fluxo real sem estado falso',
+  'Contratos API e erro visivel',
+  'Tempo e agenda sem drift',
+  'IA ancorada em contexto atual',
+  'Seguranca emocional sem terapeuta falsa',
+  'Higiene de release',
+  '42a287f',
+  'f8f7db4',
+  'b8b35f2',
+  'PR #3',
+];
+
 const scannedRoots = [
   'apps/web/src',
   'apps/backend/src',
@@ -82,6 +98,14 @@ function run() {
   const fakeFlowMatches: string[] = [];
   const unsafeClinicalMatches: string[] = [];
   const timezoneMatches: string[] = [];
+  const reviewSkillMatches: string[] = [];
+
+  // Fixture files whose purpose is to LIST forbidden phrases (so the test
+  // harness can prove the model avoids them). They are allowed to mention
+  // demo/investor/pitch language as data, not as product copy.
+  const fixtureAllowlist = new Set<string>([
+    'apps/backend/src/lib/aura-eval/cases.ts',
+  ]);
 
   for (const root of scannedRoots) {
     const files = listFiles(path.join(repoRoot, root));
@@ -89,6 +113,7 @@ function run() {
       const relative = path.relative(repoRoot, file).replace(/\\/g, '/');
       if (relative === 'apps/backend/src/lib/product-guardrails.test.ts') continue;
       if (relative.endsWith('.test.ts') || relative.endsWith('.test.tsx')) continue;
+      if (fixtureAllowlist.has(relative)) continue;
       const content = readFileSync(file, 'utf8');
 
       for (const pattern of forbiddenConsumerPatterns) {
@@ -137,6 +162,39 @@ function run() {
     timezoneMatches,
     [],
     `Planner and agenda backend services must preserve UTC-consistent time semantics:\n${timezoneMatches.join('\n')}`,
+  );
+
+  const reviewSkillAbsolutePath = path.join(repoRoot, reviewSkillPath);
+  if (!existsSync(reviewSkillAbsolutePath)) {
+    reviewSkillMatches.push(`${reviewSkillPath} is missing`);
+  } else {
+    const content = readFileSync(reviewSkillAbsolutePath, 'utf8');
+    for (const term of reviewSkillRequiredTerms) {
+      if (!content.includes(term)) {
+        reviewSkillMatches.push(`${reviewSkillPath} must include "${term}"`);
+      }
+    }
+  }
+
+  const registryAbsolutePath = path.join(repoRoot, reviewSkillRegistryPath);
+  if (!existsSync(registryAbsolutePath)) {
+    reviewSkillMatches.push(`${reviewSkillRegistryPath} is missing`);
+  } else {
+    const registry = readFileSync(registryAbsolutePath, 'utf8');
+    if (!registry.includes('airia-pr-review')) {
+      reviewSkillMatches.push(`${reviewSkillRegistryPath} must register airia-pr-review`);
+    }
+  }
+
+  const agents = readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+  if (!agents.includes(reviewSkillPath)) {
+    reviewSkillMatches.push(`AGENTS.md must require ${reviewSkillPath}`);
+  }
+
+  assert.deepEqual(
+    reviewSkillMatches,
+    [],
+    `Airia PR review skill must stay available and evidence-based:\n${reviewSkillMatches.join('\n')}`,
   );
 
   console.log('product-guardrails tests passed');

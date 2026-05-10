@@ -69,6 +69,7 @@ packages/
 
 ## Atualizações Recentes
 - **2026-05-10:** Guardrails reais de produto ampliados: bloqueio de copy de venda/demo no app, fluxo falso, alegação clínica perigosa, `setHours()` em serviços de agenda, contrato único de `riskSafety` e checklist de release integrado.
+- **2026-05-10:** Skill local `skills/airia-pr-review/SKILL.md` criada para tornar obrigatoria a revisao Airia baseada em evidencias antes de finalizar PRs/features/deploys.
 - **2026-05-10:** Guardrails de revisão adicionados: `product-guardrails.test.ts`, ampliação de `risk-safety.test.ts` e checklist em `docs/product/pr-review-skill-roadmap.md`.
 - **2026-05-10:** Modo/seed de demo removidos do produto. Ficam apenas fluxos reais de consumidor, protocolo de segurança em Check-in/Diário/Aura e `risk_protocol_triggered`.
 - **2026-05-09:** Robustez de produto adicionada: `riskSafety` em check-in/diário/Aura, eventos de agenda adaptativa e roteiro de ligação em `docs/product/airia-investor-call-script.md`.
