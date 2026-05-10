@@ -25,7 +25,6 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 
 ## Superfícies da Airia
 - **Home:** visão do dia, ciclo, agenda curta, card “Análise e Autonomia”.
-- **Home comercial/demo:** tese do produto, CTA de demo real, pitch e prova de adaptação sem parecer landing page genérica.
 - **Planner:** timeline editável e futura superfície principal de adaptação da agenda.
 - **Check-in:** leitura do estado atual; sugestões precisam respeitar horário local e o que já foi feito.
 - **Check-in/Diário/Aura:** devem renderizar protocolo de segurança quando `riskSafety.route` exigir apoio humano ou crise.
@@ -39,9 +38,10 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 - Preview de adaptação: `apps/backend/src/services/agenda-adaptation.service.ts`.
 - Prompt Aura: `apps/backend/src/lib/aura-prompt.ts`.
 - Segurança mínima IA: `apps/backend/src/lib/risk-safety.ts`.
-- Demo real para pitch/reunião: `POST /api/demo/seed`.
-- Demo automática web: `VITE_AIRIA_DEMO_MODE=true`.
 - Evento de segurança: `risk_protocol_triggered`.
+
+## Regra de Produto Consumidor
+O app não deve ter modo demo, seed de demo, copy de investidor, pitch, “produto vendável”, “carregar demo” ou explicações comerciais internas. A interface final é sempre para a usuária usar.
 
 ## Checklist Antes de Finalizar
 - Rodar testes relevantes.

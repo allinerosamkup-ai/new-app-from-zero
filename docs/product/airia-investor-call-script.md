@@ -25,12 +25,12 @@ A Airia não promete curar. Ela promete ajudar a pessoa a não quebrar o própri
 
 O app já tem check-in, diário com IA, planner adaptativo, análise de padrões, metas, hábitos, Health Connect e um motor de decisão que evita a IA inventar tarefas soltas.
 
-Agora a experiência foi reforçada para demonstração real: existe um modo demo persistente no backend, `riskSafety` nas superfícies de IA, eventos de produto e uma narrativa clara dentro da Home, Planner, Check-in, Aura e Insights.
+Agora a experiência foi reforçada como produto real: `riskSafety` nas superfícies de IA, eventos de produto e fluxos claros em Home, Planner, Check-in, Aura e Insights.
 
-## Demo Path de 5 Minutos
+## Caminho de Apresentação de 5 Minutos
 
-1. Abrir Home e mostrar a promessa: humor e energia viram um dia executável.
-2. Carregar demo real, se a conta ainda estiver vazia.
+1. Abrir Home e mostrar a experiência real da usuária.
+2. Usar uma conta real com registros próprios; a UI de consumo não deve mostrar botão de demo ou pitch.
 3. Mostrar o gráfico de humor e energia.
 4. Abrir Check-in e registrar estado baixo ou sobrecarregado.
 5. Mostrar resultado: leitura do estado, segurança e botão de adaptar agenda.

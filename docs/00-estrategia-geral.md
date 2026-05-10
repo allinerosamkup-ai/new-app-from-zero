@@ -73,19 +73,18 @@ Dos apps de referência, os três blocos valiosos:
 - **Onda 2:** Expansão do replanejamento adaptativo para todos os cards, notificações e diário com observabilidade.
 - **Onda 3:** Wearable, previsão de ciclo e automações profundas.
 
-## 8. Robustez Para Demonstração e Venda
+## 8. Robustez do Produto Final
 
-Para a Airia ficar demonstrável como produto forte, a experiência precisa provar dentro do app a tese central: humor e energia viram decisão prática de agenda.
+Para a Airia ser um produto forte, a experiência precisa provar dentro do app a tese central: humor e energia viram decisão prática de agenda.
 
 Implementações de robustez adicionadas:
 
-- `POST /api/demo/seed` semeia uma conta autenticada com dados reais de demo: check-ins, planner, hábitos, meta e eventos.
-- `VITE_AIRIA_DEMO_MODE=true` permite demo automática em ambiente preparado, sem depender de seed manual.
 - `riskSafety` foi adicionado a check-in, diário e Aura Chat para separar suporte funcional de risco humano/clínico.
 - Protocolo de segurança aparece no app quando há rota `human_support` ou `crisis_protocol`, registra `risk_protocol_triggered` e mostra recursos humanos/emergenciais.
-- Home passa a explicar o valor do produto dentro da experiência: transformar estado interno em dia executável.
-- Home tem superfície comercial interna com tese, benefícios e CTA para pitch/adaptação.
+- Home permanece como superfície de uso da consumidora, sem pitch, demo visível ou copy comercial.
 - Planner registra eventos de preview e aplicação da agenda adaptativa.
 - Insights registra geração de relatório semanal e reforça a prova de valor: padrões conectados à execução real.
+
+Regra de produto: não existe modo demo no app final. Qualquer conversa com investidor deve mostrar o produto real funcionando como a usuária usaria.
 
 Regra de posicionamento: Airia não é médica, terapeuta nem promessa de cura. Airia é assistente de ciclagem de humor, energia e agenda adaptativa.

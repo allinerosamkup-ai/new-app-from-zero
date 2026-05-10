@@ -67,7 +67,7 @@ Você tem 6 documentos prontos. Agora é só colar na IA certa, na ordem certa, 
 
 > Implemente fluxo completo: 1) Tela Home + check-in → chama IA → mostra estado do dia. 2) Tela de Planner com timeline básica (drag-and-drop simples). 3) Backend com 1 endpoint de IA mockado (respostas fixas por enquanto).
 
-**Resultado esperado:** App funcionando em modo demo (sem IA real ainda).
+**Resultado esperado:** App funcionando em fluxo real de usuária, sem modo demo.
 
 ### Passo 5: Configurar IA real (1 hora)
 

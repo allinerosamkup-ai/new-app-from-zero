@@ -171,33 +171,6 @@ Processes the 8 fixed onboarding answers and returns the initial AI profile used
 
 ## Daily Context and AI Feedback
 
-## Demo Seed
-
-### `POST /api/demo/seed`
-
-Seeds the authenticated account with a realistic Airia investor/demo dataset. It is intended for demos, QA, and product walkthroughs. The route deletes only previous records explicitly marked as `Airia demo` or `airia-demo`, then persists:
-
-- 21 daily check-ins with mood, energy, sleep, factors, emotions, AI state, and `riskSafety`;
-- today's planner blocks with AI reasoning;
-- demo objective and subtasks;
-- demo habits and completions;
-- `demo_mode_loaded` event log.
-
-The web client also supports automatic demo loading with `VITE_AIRIA_DEMO_MODE=true`. When enabled, Home seeds a sparse account once per day and records `demo_mode_loaded` with source `env_demo_mode`.
-
-**Response 200**
-
-```json
-{
-  "seeded": true,
-  "checkins": 21,
-  "timelineBlocks": 5,
-  "habits": 2,
-  "objectives": 1,
-  "message": "Demo real da Airia carregada nesta conta."
-}
-```
-
 ## Risk Safety
 
 AI surfaces can return a `riskSafety` object. This is not a diagnosis. It is a safety routing layer used to keep Airia positioned as an adaptive support product, not a clinical replacement.
