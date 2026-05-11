@@ -113,6 +113,30 @@ function shouldTreatAsJournal(message: string): boolean {
   return /\b(desabafar|di[aá]rio|senti|sinto|sentindo|ansios|triste|raiva|medo|culpa|chorei|mexida)\b/i.test(message);
 }
 
+export type AgendaCommand = {
+  type: 'reschedule' | 'shrink' | 'pause' | 'summarize';
+  targetTitle: string;
+  targetTime?: string | null;
+  reason: string;
+};
+
+function extractAgendaCommand(parsed: unknown): AgendaCommand | null {
+  if (!isRecord(parsed)) return null;
+  const raw = parsed.agendaCommand;
+  if (!isRecord(raw)) return null;
+  const type = asString(raw.type);
+  const targetTitle = asString(raw.targetTitle);
+  const reason = asString(raw.reason);
+  if (!type || !targetTitle || !reason) return null;
+  if (!['reschedule', 'shrink', 'pause', 'summarize'].includes(type)) return null;
+  return {
+    type: type as AgendaCommand['type'],
+    targetTitle,
+    targetTime: asString(raw.targetTime),
+    reason,
+  };
+}
+
 function buildPayloadFromRoot(value: unknown): Record<string, unknown> {
   if (Array.isArray(value)) {
     return { blocks: value };
@@ -183,6 +207,10 @@ export function parseAuraCommandResponse(content: string, originalMessage = ''):
   return AuraCommandResponseSchema.parse(normalized);
 }
 
+export type AuraCommandResponseWithAgenda = AuraCommandResponse & {
+  agendaCommand?: AgendaCommand | null;
+};
+
 export class AuraCommandService {
   private static readonly MODEL = getOpenAiModel();
 
@@ -198,6 +226,7 @@ export class AuraCommandService {
       ragContext?: string | null;
       plannerContext?: string | null;
       reasoningTraceContext?: string | null;
+      dayPlanContext?: string | null;
       interactionMode?: 'conversation' | 'executor';
       currentHour?: number;
       currentMinute?: number;
@@ -207,7 +236,7 @@ export class AuraCommandService {
       taskMomentum7d?: number | null;
     },
     client: Pick<OpenAI, 'chat'> = openai,
-  ): Promise<AuraCommandResponse> {
+  ): Promise<AuraCommandResponseWithAgenda> {
     const interactionMode = input.interactionMode === 'conversation' ? 'conversation' : 'executor';
     const isPlannerConversation = interactionMode === 'conversation' && (
       /bot[aã]o\s+CONVERSAR/i.test(input.message) ||
@@ -313,6 +342,7 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
             activeGoalsContext: input.activeGoalsContext,
             plannerContext: input.plannerContext,
             reasoningTraceContext: input.reasoningTraceContext,
+            dayPlanContext: input.dayPlanContext,
             currentHour: input.currentHour,
             currentMinute: input.currentMinute,
             phase: input.phase,
@@ -351,6 +381,10 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
       throw new Error('Falha ao interpretar o comando da Airia');
     }
 
-    return parseAuraCommandResponse(content, input.message);
+    const parsedRaw = extractJsonValue(content);
+    const agendaCommand = extractAgendaCommand(parsedRaw);
+    const commandResponse = parseAuraCommandResponse(content, input.message);
+
+    return { ...commandResponse, agendaCommand: agendaCommand ?? null };
   }
 }

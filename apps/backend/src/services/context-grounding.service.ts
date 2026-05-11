@@ -2,6 +2,7 @@ import { PrismaClient } from '@app/database';
 import type { SuggestionMemoryItem } from './suggestion-memory.service';
 import { AiActionFeedbackService, type AiActionFeedbackItem } from './ai-action-feedback.service';
 import { DecisionEngine, type DecisionSurface } from './decision-engine.service';
+import type { AdaptiveAgendaPlan } from './adaptive-agenda-engine.service';
 
 type GroundingInput = {
   userId: string;
@@ -9,6 +10,7 @@ type GroundingInput = {
   context: Record<string, unknown>;
   recentSuggestionItems?: SuggestionMemoryItem[];
   ragContext?: string;
+  adaptivePlan?: AdaptiveAgendaPlan | null;
 };
 
 export type GroundingLists = {
@@ -227,6 +229,19 @@ function normalizeHealthSignals(value: unknown): GroundedHealthSignals | null {
   };
 }
 
+function serializeAdaptivePlan(plan: AdaptiveAgendaPlan | null | undefined): string | null {
+  if (!plan || plan.decisions.length === 0) return null;
+  const lines: string[] = [`Plano adaptativo — ${plan.date} (fase: ${plan.trigger})`];
+  for (const d of plan.decisions) {
+    const time = d.suggestedStartTime ? ` → ${d.suggestedStartTime}` : '';
+    lines.push(`[${d.type.toUpperCase()}] ${d.title}${time} — ${d.reason}`);
+  }
+  if (plan.blocked.length > 0) {
+    lines.push(`Bloqueados: ${plan.blocked.map((b) => b.title).join(', ')}`);
+  }
+  return lines.join('\n');
+}
+
 function surfaceFromType(type: string): DecisionSurface {
   if (type === 'stability-analysis' || type === 'home-messages') return 'home';
   if (type === 'checkin-response' || type === 'day-tasks') return 'checkin';
@@ -383,6 +398,8 @@ export class ContextGroundingService {
     const groundingContext = formatGroundingBlock(lists, dateKey, cleanText(input.ragContext));
     const mergedGoals = mergeContextList(input.context.goals, lists.activeGoalTitles);
 
+    const adaptivePlanSummary = serializeAdaptivePlan(input.adaptivePlan);
+
     return {
       ...input.context,
       localDate: dateKey,
@@ -400,6 +417,7 @@ export class ContextGroundingService {
       decisionBrain,
       allowedActionTitles: decisionBrain.allowedActions.map((action) => action.title),
       blockedDecisionTitles: decisionBrain.blockedActions.map((action) => action.title),
+      adaptivePlanSummary,
       grounding: {
         type: input.type,
         ...lists,

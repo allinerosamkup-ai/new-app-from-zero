@@ -402,6 +402,44 @@ export function CheckinResultPage() {
   const [savingTasks, setSavingTasks] = useState(false);
   const [syncingContext, setSyncingContext] = useState(true);
 
+  // Recalibração de agenda ("life happens")
+  const [recalibrateLoading, setRecalibrateLoading] = useState(false);
+  const [recalibrateResult, setRecalibrateResult] = useState<string | null>(null);
+
+  const recalibrateSignal: "day_hard" | "day_great" | null = (() => {
+    if (state.mood === "focada") return "day_great";
+    if (state.mood === "sobrecarregada" || state.mood === "cansada" || state.mood === "sensivel") return "day_hard";
+    return null;
+  })();
+
+  async function handleRecalibrateDay() {
+    if (!recalibrateSignal || recalibrateLoading) return;
+    setRecalibrateLoading(true);
+    setRecalibrateResult(null);
+    try {
+      const res = await api.post("/agenda/recalibrate", {
+        signal: recalibrateSignal,
+        date: dayContext.localDate,
+        context: {
+          moodCycleContext: cycleReport.aiContext,
+          localDate: dayContext.localDate,
+        },
+      }) as any;
+      const kept = (res?.decisions ?? []).filter((d: any) => d.type === "keep").length;
+      const paused = (res?.decisions ?? []).filter((d: any) => d.type === "pause" || d.type === "move").length;
+      if (recalibrateSignal === "day_great") {
+        setRecalibrateResult(`Energia alta — ${kept} compromisso${kept !== 1 ? "s" : ""} mantido${kept !== 1 ? "s" : ""}, foco no que já existe na lista.`);
+      } else {
+        setRecalibrateResult(`Dia difícil — ${paused} bloco${paused !== 1 ? "s" : ""} pausado${paused !== 1 ? "s" : ""}. Só o essencial ficou.`);
+      }
+      trackEvent("agenda_recalibrated", { signal: recalibrateSignal, mood: state.mood });
+    } catch {
+      showError("Não foi possível reajustar a agenda agora.");
+    } finally {
+      setRecalibrateLoading(false);
+    }
+  }
+
   useEffect(() => {
     let mounted = true;
     setSyncingContext(true);
@@ -930,6 +968,33 @@ export function CheckinResultPage() {
           >
             {adaptivePlannerLabel}
           </AuraButtonV2>
+
+          {recalibrateSignal && !recalibrateResult && (
+            <AuraButtonV2
+              className="btn btn-ghost btn-full"
+              style={{ marginTop: 8 }}
+              onClick={handleRecalibrateDay}
+              disabled={recalibrateLoading}
+            >
+              {recalibrateLoading
+                ? "Reajustando..."
+                : recalibrateSignal === "day_great"
+                  ? "Aproveitar a energia de hoje"
+                  : "Reajustar minha agenda a esse ritmo"}
+            </AuraButtonV2>
+          )}
+
+          {recalibrateResult && (
+            <div style={{
+              marginTop: 10, padding: "10px 12px", borderRadius: 10,
+              background: isMenuthe ? "rgba(180,185,169,.10)" : "var(--accent-peach-a3)",
+              border: `1px solid ${v.accent}30`,
+            }}>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+                ✓ {recalibrateResult}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ─── BLOCO IA ─── */}

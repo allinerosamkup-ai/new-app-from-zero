@@ -34,8 +34,10 @@ const emptyAgendaWithGoal: DailyContext = {
 
   assert.equal(plan.decisions[0]?.type, 'suggest');
   assert.equal(plan.decisions[0]?.targetType, 'goal');
-  assert.equal(plan.decisions[0]?.suggestedStartTime, '11:15');
-  assert.equal(plan.decisions[0]?.suggestedEndTime, '12:15');
+  // Phase-aware: at 11:00 in Fluindo, a 60-min task would end at 12:15 (past the 12:00 peak boundary).
+  // The algorithm correctly picks the next peak window starting at 15:00.
+  assert.equal(plan.decisions[0]?.suggestedStartTime, '15:00');
+  assert.equal(plan.decisions[0]?.suggestedEndTime, '16:00');
   assert.equal(plan.decisions[0]?.impactLabel, 'aproveita janela');
   assert.match(plan.decisions[0]?.bioReason ?? '', /janela boa|meta ativa/);
   assert.equal(plan.decisions[0]?.kind, 'suggested_commitment');

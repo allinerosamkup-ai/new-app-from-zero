@@ -73,14 +73,16 @@ const context: DailyContext = {
     requestContext: { phase: 'Turbulência', currentHour: 8, currentMinute: 30 },
   });
 
+  // With phase-aware windows: Turbulência has no peak/flow; 09:00 is 'rest' tier.
+  // Heavy task outside the window gets 'pause' (not 'shrink') + phaseNote bioReason.
   assert.equal(result.allowedActions[0]?.kind, 'real_commitment');
-  assert.equal(result.allowedActions[0]?.action, 'shrink');
+  assert.equal(result.allowedActions[0]?.action, 'pause');
   assert.equal(result.allowedActions[0]?.targetId, '11111111-1111-4111-8111-111111111111');
   assert.equal(result.allowedActions[0]?.targetType, 'timeline');
-  assert.equal(result.allowedActions[0]?.suggestedStartTime, '09:00');
-  assert.equal(result.allowedActions[0]?.suggestedEndTime, '09:30');
-  assert.match(result.allowedActions[0]?.bioReason ?? '', /reduzir duração/);
-  assert.equal(result.allowedActions[0]?.impactLabel, 'reduz carga');
+  assert.equal(result.allowedActions[0]?.suggestedStartTime, null);
+  assert.equal(result.allowedActions[0]?.suggestedEndTime, null);
+  assert.match(result.allowedActions[0]?.bioReason ?? '', /fora da janela|turbulencia|11:00/);
+  assert.equal(result.allowedActions[0]?.impactLabel, 'protege energia');
   assert.equal(result.allowedActions[0]?.notificationAllowed, true);
 }
 
@@ -105,8 +107,10 @@ const context: DailyContext = {
     requestContext: { phase: 'Pausa', currentHour: 8, currentMinute: 30 },
   });
 
+  // Task at 11:00 is WITHIN Pausa's maintenance window [11:00,13:00).
+  // In-window heavy tasks get 'shrink' (reduce scope); 'pause' is reserved for out-of-window tasks.
   assert.equal(result.allowedActions[0]?.kind, 'real_commitment');
-  assert.equal(result.allowedActions[0]?.action, 'pause');
+  assert.equal(result.allowedActions[0]?.action, 'shrink');
   assert.equal(result.allowedActions[0]?.targetId, '22222222-2222-4222-8222-222222222222');
   assert.equal(result.allowedActions[0]?.notificationAllowed, true);
 }

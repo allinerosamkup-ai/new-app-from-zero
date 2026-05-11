@@ -49,6 +49,12 @@ type AuraPromptOptions = {
    * suggestion type. Empty array or undefined = no specialization.
    */
   priorDiagnoses?: string[] | null;
+  /**
+   * Summary of the current adaptive agenda plan: which tasks are in which
+   * phase windows, which are paused/moved/suggested. Injected as context
+   * block so Aura can reference and act on the day's plan in conversation.
+   */
+  dayPlanContext?: string | null;
 };
 
 const DIAGNOSIS_LABELS: Record<string, string> = {
@@ -90,6 +96,9 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
       'Transforme estado atual em agenda possivel: manter, mover, reduzir, pausar, quebrar, encaixar ou sugerir compromisso.',
       'Compromissos reais vem antes de ideias novas. Metas ativas so viram sugestao quando couberem no dia.',
       'Se a energia estiver baixa, reduza escopo. Se estiver alta, estruture limite. Se estiver instavel, diminua estimulo e escolha uma acao reversivel.',
+      'Cada fase tem janelas de energia (pico, foco, manutencao, descanso). Se houver bloco pesado fora da janela da fase atual no AGENDA ADAPTATIVA DO DIA, diga com naturalidade que esta fora da janela e indique o horario certo — sem dramatizar.',
+      'Se houver hiperfoco reportado: nao empilhe tarefa nova. Proponha usar o hiperfoco em algo que ja existe na lista.',
+      'Quando a pessoa pedir acao direta na agenda ("move o pesado", "ajusta meu dia", "reagenda X"), retorne ao final da resposta um bloco JSON compacto com a acao: {"agendaCommand":{"type":"reschedule"|"shrink"|"pause"|"summarize","targetTitle":"...","targetTime":"HH:MM","reason":"..."}}. Omita o JSON se a acao for apenas conversa.',
     ],
   },
   home: {
@@ -132,6 +141,7 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
       'Se a pessoa pediu criar, marcar, excluir, concluir, reagendar, montar agenda, tarefa, habito, meta ou checklist, aja como executora.',
       'Resposta operacional e curta: confirme o que foi preparado, o que foi feito ou pergunte apenas o dado indispensavel.',
       'Se a interacao for conversa estrategica, entregue leitura especifica e proximo passo. Se virar comando claro, abandone analise e execute.',
+      'Quando a pessoa pedir acao direta na agenda ("arruma meu dia", "move o pesado para depois das 16h", "reduz essa tarefa"), retorne ao final um bloco JSON compacto: {"agendaCommand":{"type":"reschedule"|"shrink"|"pause"|"summarize","targetTitle":"...","targetTime":"HH:MM","reason":"..."}}. Omita se for so conversa.',
     ],
   },
   'goal-execution': {
@@ -312,6 +322,7 @@ ${contextBlock(`HISTORICO RECENTE DE SESSOES DE ${safeUserName.toUpperCase()}`, 
 ${contextBlock(`METAS ATIVAS E DECISOES DE ${safeUserName.toUpperCase()}`, options.activeGoalsContext)}
 ${contextBlock(`PLANNER, TAREFAS, HABITOS E AGENDA DE ${safeUserName.toUpperCase()}`, options.plannerContext)}
 ${contextBlock('ACOES RECENTES, BLOQUEIOS E SUGESTOES PARA NAO RECICLAR', options.recentSuggestionMemory)}
+${contextBlock('AGENDA ADAPTATIVA DO DIA (USE PARA AGIR E REFERENCIAR)', options.dayPlanContext)}
 
 REGRA FINAL:
 Antes de gerar a resposta, faca a leitura total. Depois entregue uma fala amiga, especifica e aplicavel. Se existir ancora real, ofereca o proximo passo concreto. Se nao existir, pergunte uma unica coisa que permita sugerir bem.`;

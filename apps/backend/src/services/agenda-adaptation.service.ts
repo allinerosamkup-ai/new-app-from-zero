@@ -4,7 +4,7 @@ import { PlannerService } from './planner.service';
 import { AiActionFeedbackService } from './ai-action-feedback.service';
 import type { DailyContext } from './context-grounding.service';
 
-export type AgendaAdaptationTrigger = 'manual' | 'checkin' | 'cron' | 'home' | 'planner';
+export type AgendaAdaptationTrigger = 'manual' | 'checkin' | 'cron' | 'home' | 'planner' | `recalibrate:${string}`;
 export type AgendaAdaptationMode = 'preview' | 'apply';
 
 export type AgendaAdaptationChange = {

@@ -3452,6 +3452,59 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
   });
 
+  const AgendaRecalibrateSchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    signal: z.enum(['day_hard', 'day_great', 'hyperfocus', 'energy_crash']),
+    reason: z.string().max(500).optional(),
+    context: z.record(z.unknown()).optional().default({}),
+  });
+
+  app.post('/api/agenda/recalibrate', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = AgendaRecalibrateSchema.parse(req.body);
+      const localDate = data.date ?? format(new Date(), 'yyyy-MM-dd');
+      const recentSuggestionItems = await SuggestionMemoryService.getRecent(prisma, userId).catch(() => []);
+      const ragMemories = await memoryService.retrieve(userId, `ritmo e rotina em ${localDate}`, 3).catch(() => []);
+
+      const requestContext: Record<string, unknown> = {
+        ...(data.context ?? {}),
+        localDate,
+        recalibrationSignal: data.signal,
+        recalibrationReason: data.reason ?? null,
+      };
+
+      const dailyContext = await contextGroundingService.buildDailyContext({
+        userId,
+        type: 'agenda-adapt',
+        context: requestContext,
+        recentSuggestionItems,
+        ragContext: memoryService.formatForPrompt(ragMemories),
+      });
+
+      const result = AgendaAdaptationService.buildPreview({
+        dailyContext,
+        requestContext,
+        mode: 'preview',
+        trigger: `recalibrate:${data.signal}`,
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          userId,
+          eventName: 'agenda.recalibrated',
+          properties: { signal: data.signal, reason: data.reason ?? null, date: localDate },
+        },
+      }).catch(() => {});
+
+      return res.json({ ...result, recalibrationSignal: data.signal, recalibrationReason: data.reason ?? null });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[agenda/recalibrate] Error:', error);
+      return res.status(500).json({ error: 'Failed to recalibrate agenda' });
+    }
+  });
+
   const HealthConnectSyncSchema = z.object({
     localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     source: z.literal('health_connect').optional().default('health_connect'),
