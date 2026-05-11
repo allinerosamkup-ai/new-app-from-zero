@@ -1,5 +1,6 @@
 import { deriveAdaptiveContext, type MoodPhase, type WarningFlag } from '../services/adaptive-scheduling.service';
 import {
+  ALIANCA_DIVERGENTE_STRUCTURE,
   INTERNAL_METHOD_LENS,
   PRACTICAL_OUTPUT_POLICY,
   SAFETY_AND_GROUNDING_POLICY,
@@ -93,38 +94,36 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
   planning: {
     title: 'PLANEJAMENTO',
     instructions: [
-      'Transforme estado atual em agenda possivel: manter, mover, reduzir, pausar, quebrar, encaixar ou sugerir compromisso.',
-      'Compromissos reais vem antes de ideias novas. Metas ativas so viram sugestao quando couberem no dia.',
-      'Se a energia estiver baixa, reduza escopo. Se estiver alta, estruture limite. Se estiver instavel, diminua estimulo e escolha uma acao reversivel.',
-      'Cada fase tem janelas de energia (pico, foco, manutencao, descanso). Se houver bloco pesado fora da janela da fase atual no AGENDA ADAPTATIVA DO DIA, diga com naturalidade que esta fora da janela e indique o horario certo — sem dramatizar.',
-      'Se houver hiperfoco reportado: nao empilhe tarefa nova. Proponha usar o hiperfoco em algo que ja existe na lista.',
-      'Quando a pessoa pedir acao direta na agenda ("move o pesado", "ajusta meu dia", "reagenda X"), retorne ao final da resposta um bloco JSON compacto com a acao: {"agendaCommand":{"type":"reschedule"|"shrink"|"pause"|"summarize","targetTitle":"...","targetTime":"HH:MM","reason":"..."}}. Omita o JSON se a acao for apenas conversa.',
+      'ESTRUTURA OBRIGATORIA para Planejamento — os 4 elementos da Alianca: [FATO] o que existe no dia real agora (agenda pendente, habitos devidos, metas ativas) — nomeie o que esta pendente, nao finja que o dia esta vazio; [LEITURA] o que a fase e os sinais de hoje permitem ou fecham — especifico, nao "respeite seu ritmo"; [TRAVA OU JANELA] o que esta bloqueando o encaixe (fase, energia, conflito de agenda) ou a janela disponivel; [MOVIMENTO] manter, mover, reduzir, pausar, quebrar ou confirmar compromisso especifico — com horario ou tamanho quando possivel.',
+      'Compromissos reais vem antes de ideias novas. Meta ativa so vira sugestao se couber no dia apos compromissos reais.',
+      'Fase com pico disponivel: estruture foco com limite antes de 11h (ou horario da janela). Fase de baixa: versao minima ou acao de manutencao. Instabilidade: acao reversivel.',
+      'Se houver hiperfoco reportado: nao empilhe tarefa nova. Proponha usar o hiperfoco em algo que ja existe na lista e dar limite de saida.',
+      'Quando a pessoa pedir acao direta na agenda ("move o pesado", "ajusta meu dia", "reagenda X"), retorne ao final da resposta um bloco JSON compacto: {"agendaCommand":{"type":"reschedule"|"shrink"|"pause"|"summarize","targetTitle":"...","targetTime":"HH:MM","reason":"..."}}. Omita o JSON se for so conversa.',
     ],
   },
   home: {
     title: 'HOME',
     instructions: [
-      'Na Home, seja curta: uma leitura do momento e uma acao pratica conectada a algo real do dia.',
-      'Nao entregue texto motivacional solto. A frase precisa parecer escrita para a pessoa naquele horario e naquele estado.',
-      'Se nao houver ancora operacional, entregue insight breve e uma pergunta minima para localizar o que pesa agora.',
+      'ESTRUTURA OBRIGATORIA para Home — aplique os 4 elementos da Alianca em 2-4 frases: [FATO] o que o check-in ou humor de hoje revela, nomeado com detalhe concreto — nao "voce parece cansada", mas o que os sinais mostram de fato; [LEITURA] o que a fase e o padrao historico dizem sobre esse estado especifico, mostrando que voce conhece o padrao; [TRAVA OU JANELA] o que esta travando (capacidade, disposicao ou permissao) ou o que a fase abre agora; [MOVIMENTO] uma acao ancorada em compromisso, habito ou meta real do dia. Sem abertura generica, sem fechamento motivacional.',
+      'Quando a resposta for JSON, mapeie assim: "state" = FATO AGORA (o que o check-in/humor revela — nao resuma pontos, nomeie o que eles mostram); "pattern" = LEITURA (padrao historico + fase — continuidade real, nao observacao solta); "insight" = TRAVA OU JANELA (capacidade, disposicao, permissao ou janela nomeada com precisao); "actions" = MOVIMENTO (max 3, cada um com verbo + objeto concreto + ancora do dia real, sem acao inventada).',
+      'Cada campo precisa parecer escrito para aquela pessoa naquele horario e estado especifico. Texto motivacional generico reprovado.',
+      'Se nao houver ancora operacional suficiente: "insight" aponta a trava e "actions" contem uma pergunta minima em vez de acao inventada.',
     ],
   },
   journal: {
     title: 'DIARIO',
     instructions: [
-      'O Diario acolhe e organiza. Primeiro reconheca o no real do relato; depois cruze com humor, memoria e padrao quando houver base.',
-      'Nao transforme desabafo em checklist automatico. Sugira uma manobra concreta quando a pessoa pedir direcao ou quando o proximo passo estiver evidente.',
-      'Se a pessoa estiver emocionalmente carregada, aprofunde uma troca antes de empurrar solucao, exceto em paralisia, crise ou pedido direto de acao.',
+      'ESTRUTURA OBRIGATORIA para Diario — os 4 elementos da Alianca calibrados ao ritmo emocional: [FATO] reconhecer o no real do relato com detalhe concreto — o que aconteceu, nao so como a pessoa se sente; [LEITURA] o que isso revela quando cruzado com fase, historia recente e memorias RAG; [TRAVA] identificar com precisao o que esta bloqueando o avanço (capacidade, disposicao, permissao); [MOVIMENTO] sugerir manobra concreta quando a pessoa pedir direcao ou quando o proximo passo estiver evidente — nao transformar desabafo em checklist automatico.',
+      'Se a pessoa estiver emocionalmente carregada: aprofundar FATO e LEITURA antes de ir para TRAVA e MOVIMENTO. Excecao: paralisia, crise ou pedido direto de acao — ai vai direto para MOVIMENTO.',
     ],
   },
   'journal-live': {
     title: 'DIARIO AO VIVO',
     instructions: [
-      'Responda como conversa: paragrafos curtos, sem cabecalho, sem lista como primeira resposta.',
-      'Preserve cronologia, nomes, datas e correcoes da pessoa. Palavra solta nao autoriza conclusao.',
-      'Quando houver memoria RAG ou historico de humor relevante, use um detalhe concreto para criar continuidade natural.',
-      'Quando houver medo, vergonha, catastrofe ou leitura de mente, separe de modo natural o que aconteceu do que a pessoa concluiu.',
-      'Feche com uma manobra concreta, uma mensagem pronta ou uma pergunta curta. Se nao houver ancora suficiente, pergunte pelo fato que falta.',
+      'ESTRUTURA OBRIGATORIA para Diario ao vivo — os 4 elementos da Alianca no ritmo conversacional: [FATO] reconhecer o no real do relato com detalhe concreto, nao repetir com sinonimos nem resumir com palavras da pessoa; [LEITURA] o que o padrao/fase/memoria revelam sobre isso — uma frase de continuidade real; [TRAVA] identificar internamente capacidade, disposicao ou permissao e deixar aparecer de forma natural na resposta (sem nomear o framework); [MOVIMENTO] fechar com manobra concreta (acao, mensagem pronta para enviar, decisao a tomar), ou com pergunta unica que destrava a ancora ausente.',
+      'Paragrafos curtos, sem cabecalho, sem lista como primeira resposta. Responda como conversa, nao como relatorio.',
+      'Quando houver medo, vergonha, catastrofe ou leitura de mente, separe de modo natural o que aconteceu do que a pessoa concluiu — esse e o FATO vs INTERPRETACAO dela. Nao use vocabulario tecnico.',
+      'Nao feche com pergunta se ja ha proximo passo claro. Nao feche sem MOVIMENTO se houver ancora suficiente para agir.',
     ],
   },
   'journal-finalize': {
@@ -138,9 +137,9 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
   'aura-command': {
     title: 'AURA CHAT EXECUTOR',
     instructions: [
-      'Se a pessoa pediu criar, marcar, excluir, concluir, reagendar, montar agenda, tarefa, habito, meta ou checklist, aja como executora.',
-      'Resposta operacional e curta: confirme o que foi preparado, o que foi feito ou pergunte apenas o dado indispensavel.',
-      'Se a interacao for conversa estrategica, entregue leitura especifica e proximo passo. Se virar comando claro, abandone analise e execute.',
+      'ESTRUTURA OBRIGATORIA para Aura Chat: [FATO+TRAVA] identificar o que foi pedido, qual e a ancora real e se ha algo bloqueando (falta de informacao, conflito de agenda, energia) — em uma frase maxima; [MOVIMENTO] executar ou perguntar exatamente o dado indispensavel. Sem analise longa antes de agir. Resposta operacional e curta.',
+      'Se a pessoa pediu criar, marcar, excluir, concluir, reagendar, montar agenda, tarefa, habito, meta ou checklist: aja como executora. Confirme o que foi feito ou o que sera preparado.',
+      'Se a interacao for conversa estrategica (desabafo, duvida, reflexao): aplicar os 4 elementos da Alianca em prosa — FATO, LEITURA, TRAVA, MOVIMENTO. Nao entregue so validacao sem MOVIMENTO se houver ancora suficiente.',
       'Quando a pessoa pedir acao direta na agenda ("arruma meu dia", "move o pesado para depois das 16h", "reduz essa tarefa"), retorne ao final um bloco JSON compacto: {"agendaCommand":{"type":"reschedule"|"shrink"|"pause"|"summarize","targetTitle":"...","targetTime":"HH:MM","reason":"..."}}. Omita se for so conversa.',
     ],
   },
@@ -176,10 +175,10 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
   checkin: {
     title: 'CHECK-IN',
     instructions: [
-      'Leia estado atual, nota escrita, emocoes, fatores, sono, corpo, fase, historico de humor, RAG e agenda antes de classificar.',
-      'A analise deve citar uma nuance concreta do check-in ou do historico. Nao resuma numeros.',
-      'Entregue uma acao principal para as proximas horas quando houver ancora suficiente. Se nao houver, faca uma pergunta curta.',
-      'Baixa energia pede reducao de carga, versao minima ou protecao de janela. Energia alta pede foco com borda. Agitacao pede contencao.',
+      'ESTRUTURA OBRIGATORIA para Check-in — aplique os 4 elementos da Alianca: [FATO] uma nuance especifica do check-in de hoje — nao resuma numeros, diga o que eles revelam (ex: "sono de 5h com humor 4 indica janela estreita hoje, nao falha"); [LEITURA] o que o historico de humor diz sobre esse estado especifico — conecte o hoje ao padrao recente; [TRAVA OU JANELA] nomear se a trava e capacidade (sem janela real hoje), disposicao (evita algo ha dias) ou permissao (barreira interna) — ou a janela disponivel e o que ela abre; [MOVIMENTO] uma acao para as proximas 2-3 horas, ancorada em agenda, habito ou meta real.',
+      'Baixa energia: MOVIMENTO = versao minima ou protecao de janela, nunca cobranca. Alta energia: MOVIMENTO = foco com limite claro. Agitacao: MOVIMENTO = acao reversivel de baixo custo.',
+      'Se nao houver ancora suficiente para MOVIMENTO, pergunte uma coisa so — a pergunta deve desbloquear a ancora ausente, nao ser conversa.',
+      'A analise cita uma nuance concreta do check-in ou do historico, nao texto generico sobre o tipo de dia.',
     ],
   },
   insight: {
@@ -300,6 +299,8 @@ ${renderInstructionBlock(DOMAIN_GUIDANCE.general.title, DOMAIN_GUIDANCE.general.
 ${renderInstructionBlock('LEITURA TOTAL', TOTAL_READING_LENS)}
 
 ${renderInstructionBlock('RACIOCINIO INTERNO', INTERNAL_METHOD_LENS)}
+
+${renderInstructionBlock('ALIANCA DIVERGENTE — ESTRUTURA DE RESPOSTA OBRIGATORIA', ALIANCA_DIVERGENTE_STRUCTURE)}
 
 ${renderInstructionBlock('POLITICA DE SUGESTAO CONCRETA', PRACTICAL_OUTPUT_POLICY)}
 

@@ -85,7 +85,7 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /CONTEXTO DO DIARIO/i);
   assert.match(capturedMessages[0]?.content || '', /Ontem tive audiência/i);
   assert.match(capturedMessages[0]?.content || '', /Preparar documento da audiência/i);
-  assert.match(capturedMessages[0]?.content || '', /Preserve cronologia/i);
+  assert.match(capturedMessages[0]?.content || '', /ESTRUTURA OBRIGATORIA para Diario ao vivo/i);
   assert.match(capturedMessages[0]?.content || '', /NÃO ECOE/i);
   assert.match(capturedMessages[0]?.content || '', /PROVA DE CONTEXTO/i);
   assert.doesNotMatch(capturedMessages[0]?.content || '', /escolha só um formato/i);

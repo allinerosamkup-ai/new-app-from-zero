@@ -34,7 +34,7 @@ async function run() {
   assert.match(basePrompt, /Memoria RAG e historico de humor sao obrigatorios como lente/i);
   assert.match(basePrompt, /CHECK-IN/i);
   assert.match(basePrompt, /histórico de humor|historico de humor/i);
-  assert.match(basePrompt, /uma acao principal/i);
+  assert.match(basePrompt, /ESTRUTURA OBRIGATORIA para Check-in/i);
   assert.match(basePrompt, /10:20 \(manhã\)/);
   assert.match(basePrompt, /RACIOCINIO OPERACIONAL ESTRUTURADO \(USO INTERNO\)/i);
   assert.match(basePrompt, /Decisao: acao \| Revisar proposta da cliente Julia/i);
@@ -57,9 +57,9 @@ async function run() {
     moodCycleContext: 'Humor atual sensivel; historico mostra queda depois de sono ruim.',
   });
   assert.match(journalPrompt, /DIARIO AO VIVO/i);
-  assert.match(journalPrompt, /Preserve cronologia/i);
-  assert.match(journalPrompt, /memoria RAG ou historico de humor relevante/i);
-  assert.match(journalPrompt, /manobra concreta, uma mensagem pronta ou uma pergunta curta/i);
+  assert.match(journalPrompt, /ESTRUTURA OBRIGATORIA para Diario ao vivo/i);
+  assert.match(journalPrompt, /manobra concreta/i);
+  assert.match(journalPrompt, /pergunta unica que destrava/i);
 
   const commandPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
@@ -68,15 +68,15 @@ async function run() {
   assert.match(commandPrompt, /AURA CHAT EXECUTOR/i);
   assert.match(commandPrompt, /criar, marcar, excluir, concluir, reagendar/i);
   assert.match(commandPrompt, /aja como executora/i);
-  assert.match(commandPrompt, /pergunte apenas o dado indispensavel/i);
+  assert.match(commandPrompt, /dado indispensavel/i);
 
   const homePrompt = buildAuraSystemPrompt({
     userName: 'Ana',
     domain: 'home',
   });
   assert.match(homePrompt, /HOME/i);
-  assert.match(homePrompt, /uma leitura do momento e uma acao pratica/i);
-  assert.match(homePrompt, /Se nao houver ancora operacional/i);
+  assert.match(homePrompt, /ESTRUTURA OBRIGATORIA para Home/i);
+  assert.match(homePrompt, /Se nao houver ancora operacional suficiente/i);
 
   const planningPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
@@ -119,7 +119,7 @@ async function run() {
   assert.match(lowCheckinPrompt, /queda sustentada/i);
   assert.match(lowCheckinPrompt, /pagar conta da luz/i);
   assert.match(lowCheckinPrompt, /Habito pendente/i);
-  assert.match(lowCheckinPrompt, /Baixa energia pede reducao de carga/i);
+  assert.match(lowCheckinPrompt, /versao minima ou protecao de janela/i);
 
   const onlyMemoryPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
