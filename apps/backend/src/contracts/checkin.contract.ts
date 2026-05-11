@@ -27,6 +27,14 @@ export const CheckinCreateSchema = z.object({
   }).optional(),
   factors: z.array(z.string()).optional(),
   emotions: z.array(z.string()).max(3).optional(),
+  // Diagnostic-aware optional signals.
+  // Only persisted when the user has a relevant prior diagnosis (TDAH/bipolar);
+  // backend tolerates them on any check-in for forward compatibility.
+  medicationTakenToday: z.boolean().nullable().optional(),
+  focusScore: z.number().int().min(1).max(10).nullable().optional(),
+  hyperfocusOccurred: z.boolean().nullable().optional(),
+  mixedEpisodeNote: z.string().trim().max(500).nullable().optional(),
+  dayType: z.enum(['up', 'down', 'mixed', 'stable']).nullable().optional(),
 });
 
 export type CheckinCreateInput = z.infer<typeof CheckinCreateSchema>;

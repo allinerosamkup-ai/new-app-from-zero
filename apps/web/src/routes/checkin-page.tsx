@@ -275,6 +275,13 @@ export function CheckinPage() {
   const [flowDay, setFlowDay] = useState<number | null>(null);
   const [flowIntensity, setFlowIntensity] = useState<FlowIntensity | null>(null);
   const [symptomLvls, setSymptomLvls] = useState<{ colica?: 1|2|3; dorCabeca?: 1|2|3 }>({});
+  // Diagnostic-aware optional signals (TDAH, bipolar, ciclotimia)
+  const [showSinais, setShowSinais] = useState(false);
+  const [medTaken, setMedTaken] = useState<boolean | null>(null);
+  const [focusScore, setFocusScore] = useState<number | null>(null);
+  const [hyperfocus, setHyperfocus] = useState<boolean | null>(null);
+  const [dayType, setDayType] = useState<'up' | 'down' | 'mixed' | 'stable' | null>(null);
+  const [mixedNote, setMixedNote] = useState("");
   const [note, setNote] = useState("");
 
   const dayContext = useMemo(() => getClientDayContext(), []);
@@ -327,6 +334,11 @@ export function CheckinPage() {
         flowDay: flowDay ?? undefined,
         flowIntensity: flowIntensity ?? undefined,
         symptomLevels: Object.keys(symptomLvls).length > 0 ? symptomLvls : undefined,
+        medicationTakenToday: medTaken,
+        focusScore: focusScore,
+        hyperfocusOccurred: hyperfocus,
+        mixedEpisodeNote: mixedNote.trim() || null,
+        dayType,
       });
       trackEvent("checkin_completed", {
         step_count: STEPS.length,
@@ -781,6 +793,195 @@ export function CheckinPage() {
                         </>
                       )}
                     </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Mais sinais (TDAH/bipolaridade/ciclotimia) */}
+              <div style={{
+                borderRadius: 16,
+                border: "1.5px solid var(--warm-border-2)",
+                background: "rgba(150,199,179,0.04)",
+                padding: "12px 14px",
+                marginBottom: 10,
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowSinais((v) => !v)}
+                  style={{
+                    width: "100%",
+                    background: "none",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text-1)" }}>
+                    Mais sinais <span style={{ fontWeight: 500, color: "var(--text-3)" }}>(opcional · TDAH/bipolaridade)</span>
+                  </span>
+                  <span style={{ fontSize: 12, color: "var(--text-3)" }}>{showSinais ? "▲" : "▼"}</span>
+                </button>
+
+                {showSinais && (
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+                    {/* Tipo de dia */}
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>Como foi o dia hoje?</p>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {(["up", "down", "mixed", "stable"] as const).map((t) => {
+                          const labels = { up: "↑ Pra cima", down: "↓ Pra baixo", mixed: "↕ Misto", stable: "= Estável" };
+                          const active = dayType === t;
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => setDayType(active ? null : t)}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: 999,
+                                border: `1.5px solid ${active ? "var(--accent-peach)" : "rgba(176,180,196,.32)"}`,
+                                background: active ? "var(--accent-peach-a3)" : "rgba(255,255,255,.7)",
+                                color: active ? "var(--accent-peach-ink)" : "var(--text-2)",
+                                fontSize: 12,
+                                fontWeight: active ? 800 : 600,
+                                cursor: "pointer",
+                                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                              }}
+                            >
+                              {labels[t]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Foco TDAH */}
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>
+                        Foco hoje (1-10)
+                      </p>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
+                          const active = focusScore === n;
+                          return (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => setFocusScore(active ? null : n)}
+                              style={{
+                                flex: 1,
+                                padding: "6px 0",
+                                borderRadius: 8,
+                                border: `1.5px solid ${active ? "var(--menthe, #96C7B3)" : "rgba(176,180,196,.32)"}`,
+                                background: active ? "rgba(150,199,179,.18)" : "rgba(255,255,255,.7)",
+                                color: active ? "var(--text-1)" : "var(--text-3)",
+                                fontSize: 11,
+                                fontWeight: active ? 800 : 500,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {n}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Hyperfocus + Medication toggles */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>Hiperfoco hoje?</p>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {[
+                            { l: "Sim", v: true },
+                            { l: "Não", v: false },
+                          ].map((opt) => {
+                            const active = hyperfocus === opt.v;
+                            return (
+                              <button
+                                key={opt.l}
+                                type="button"
+                                onClick={() => setHyperfocus(active ? null : opt.v)}
+                                style={{
+                                  flex: 1,
+                                  padding: "6px 8px",
+                                  borderRadius: 8,
+                                  border: `1.5px solid ${active ? "var(--accent-peach)" : "rgba(176,180,196,.32)"}`,
+                                  background: active ? "var(--accent-peach-a3)" : "rgba(255,255,255,.7)",
+                                  color: active ? "var(--accent-peach-ink)" : "var(--text-2)",
+                                  fontSize: 11,
+                                  fontWeight: active ? 800 : 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {opt.l}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>Medicação hoje?</p>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {[
+                            { l: "Sim", v: true },
+                            { l: "Não", v: false },
+                          ].map((opt) => {
+                            const active = medTaken === opt.v;
+                            return (
+                              <button
+                                key={opt.l}
+                                type="button"
+                                onClick={() => setMedTaken(active ? null : opt.v)}
+                                style={{
+                                  flex: 1,
+                                  padding: "6px 8px",
+                                  borderRadius: 8,
+                                  border: `1.5px solid ${active ? "var(--menthe, #96C7B3)" : "rgba(176,180,196,.32)"}`,
+                                  background: active ? "rgba(150,199,179,.18)" : "rgba(255,255,255,.7)",
+                                  color: active ? "var(--text-1)" : "var(--text-2)",
+                                  fontSize: 11,
+                                  fontWeight: active ? 800 : 600,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {opt.l}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mixed episode note (only if dayType=mixed) */}
+                    {dayType === "mixed" && (
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>
+                          O que tá misto?
+                        </p>
+                        <input
+                          type="text"
+                          value={mixedNote}
+                          maxLength={500}
+                          onChange={(e) => setMixedNote(e.target.value)}
+                          placeholder="Ex.: energia alta, humor baixo"
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            borderRadius: 8,
+                            border: "1.5px solid rgba(176,180,196,.32)",
+                            background: "rgba(255,255,255,.85)",
+                            fontSize: 12,
+                            fontFamily: "'Plus Jakarta Sans', sans-serif",
+                            outline: "none",
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

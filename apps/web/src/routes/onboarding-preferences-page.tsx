@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
+import { PRIOR_DIAGNOSIS_OPTIONS, type PriorDiagnosis } from "../features/aura/onboarding";
 import "../styles/aura.css";
 
 const STEP = 5;
@@ -23,6 +24,12 @@ export function OnboardingPreferencesPage() {
   const [selected, setSelected] = useState<Set<string>>(
     new Set(PREF_CARDS.filter((card) => state.onboardingDraft.cognitivePreferences.includes(card.label)).map((card) => card.id)),
   );
+  const [diagnoses, setDiagnoses] = useState<Set<PriorDiagnosis>>(
+    new Set(state.onboardingDraft.priorDiagnoses ?? []),
+  );
+  const [medication, setMedication] = useState<boolean | null>(
+    state.onboardingDraft.medicationCurrentlyUsing ?? null,
+  );
 
   function toggle(id: string) {
     const next = new Set(selected);
@@ -34,6 +41,20 @@ export function OnboardingPreferencesPage() {
     setSelected(next);
   }
 
+  function toggleDiagnosis(value: PriorDiagnosis) {
+    const next = new Set(diagnoses);
+    if (value === "prefer_not_to_say") {
+      // Mutually exclusive: marking "prefer not to say" clears other choices.
+      next.clear();
+      next.add(value);
+    } else {
+      next.delete("prefer_not_to_say");
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+    }
+    setDiagnoses(next);
+  }
+
   function persistAndGo(path: string) {
     const labels = PREF_CARDS
       .filter((card) => selected.has(card.id))
@@ -43,6 +64,8 @@ export function OnboardingPreferencesPage() {
       cognitivePreferences: labels,
       supportGoals: labels,
       primaryGoal: labels[0] ?? state.onboardingDraft.primaryGoal,
+      priorDiagnoses: Array.from(diagnoses),
+      medicationCurrentlyUsing: medication,
     });
     navigate(path);
   }
@@ -110,6 +133,78 @@ export function OnboardingPreferencesPage() {
               </button>
             );
           })}
+        </div>
+
+        {/* Contexto opcional — autorrelato, não diagnóstico */}
+        <div style={{ marginBottom: 24, padding: "16px 14px", background: "rgba(150,199,179,.08)", borderRadius: 14, border: "1.5px solid rgba(150,199,179,.20)" }}>
+          <p style={{ fontSize: 12, fontWeight: 800, color: "var(--text-1)", margin: "0 0 4px" }}>
+            Você convive com algum desses? <span style={{ fontWeight: 500, color: "var(--text-3)" }}>(opcional)</span>
+          </p>
+          <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 12px", lineHeight: 1.5 }}>
+            Isso é autorrelato — a Airia nunca diagnostica. Ajuda só a ajustar o tom e o tipo de sugestão.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {PRIOR_DIAGNOSIS_OPTIONS.map((opt) => {
+              const active = diagnoses.has(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleDiagnosis(opt.value)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 999,
+                    border: `1.5px solid ${active ? "var(--menthe, #96C7B3)" : "rgba(176,180,196,.32)"}`,
+                    background: active ? "rgba(150,199,179,.18)" : "rgba(255,255,255,.7)",
+                    color: active ? "var(--text-1)" : "var(--text-2)",
+                    fontSize: 12,
+                    fontWeight: active ? 800 : 600,
+                    cursor: "pointer",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {diagnoses.size > 0 && !diagnoses.has("prefer_not_to_say") && (
+            <div style={{ marginTop: 14 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>
+                Faz uso de medicação contínua?
+              </p>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[
+                  { label: "Sim", value: true },
+                  { label: "Não", value: false },
+                  { label: "Prefiro não dizer", value: null },
+                ].map((opt) => {
+                  const active = medication === opt.value;
+                  return (
+                    <button
+                      key={String(opt.value)}
+                      type="button"
+                      onClick={() => setMedication(opt.value)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: 999,
+                        border: `1.5px solid ${active ? "var(--menthe, #96C7B3)" : "rgba(176,180,196,.32)"}`,
+                        background: active ? "rgba(150,199,179,.18)" : "rgba(255,255,255,.7)",
+                        color: active ? "var(--text-1)" : "var(--text-2)",
+                        fontSize: 12,
+                        fontWeight: active ? 800 : 600,
+                        cursor: "pointer",
+                        fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* CTAs */}

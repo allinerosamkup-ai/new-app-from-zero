@@ -68,6 +68,12 @@ export type CheckinEntry = {
   };
   factors?: string[];
   note?: string;
+  // Diagnostic-aware optional signals (TDAH, bipolar, ciclotimia)
+  medicationTakenToday?: boolean | null;
+  focusScore?: number | null;
+  hyperfocusOccurred?: boolean | null;
+  mixedEpisodeNote?: string | null;
+  dayType?: 'up' | 'down' | 'mixed' | 'stable' | null;
 };
 
 export type AutonomousInsight = {

@@ -551,6 +551,11 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             flowDay: entry.flowDay,
             flowIntensity: entry.flowIntensity,
             symptomLevels: entry.symptomLevels,
+            medicationTakenToday: entry.medicationTakenToday,
+            focusScore: entry.focusScore,
+            hyperfocusOccurred: entry.hyperfocusOccurred,
+            mixedEpisodeNote: entry.mixedEpisodeNote,
+            dayType: entry.dayType,
           }) as any;
 
           // DEBUG: Log response structure to diagnose data flow

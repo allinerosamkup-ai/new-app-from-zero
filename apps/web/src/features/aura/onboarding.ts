@@ -3,6 +3,16 @@ import {
   DEFAULT_MORNING_CHECKIN_TIME,
 } from "./settings";
 
+export const PRIOR_DIAGNOSIS_OPTIONS = [
+  { value: "bipolar_ii", label: "Bipolaridade tipo II" },
+  { value: "cyclothymia", label: "Ciclotimia" },
+  { value: "adhd", label: "TDAH" },
+  { value: "cyclical_depression", label: "Depressão cíclica / sazonal" },
+  { value: "prefer_not_to_say", label: "Prefiro não dizer" },
+] as const;
+
+export type PriorDiagnosis = (typeof PRIOR_DIAGNOSIS_OPTIONS)[number]["value"];
+
 export type OnboardingDraft = {
   fullName: string;
   age: string;
@@ -23,6 +33,8 @@ export type OnboardingDraft = {
   cognitivePreferences: string[];
   primaryGoal: string;
   supportGoals: string[];
+  priorDiagnoses: PriorDiagnosis[];
+  medicationCurrentlyUsing: boolean | null;
 };
 
 export type OnboardingProcessPayload = {
@@ -39,6 +51,8 @@ export type OnboardingProcessPayload = {
   cycleStart: string | null;
   cycleLength: number | null;
   lutealLength: number | null;
+  priorDiagnoses: PriorDiagnosis[];
+  medicationCurrentlyUsing: boolean | null;
 };
 
 export const ONBOARDING_BASIC_STEPS: Array<{
@@ -100,6 +114,8 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     cognitivePreferences: [],
     primaryGoal: "",
     supportGoals: [],
+    priorDiagnoses: [],
+    medicationCurrentlyUsing: null,
   };
 }
 
@@ -153,5 +169,7 @@ export function buildOnboardingProcessPayload(draft: OnboardingDraft): Onboardin
     cycleStart: clean(draft.cycleStart) || null,
     cycleLength: Number.isFinite(draft.cycleLength) ? draft.cycleLength : null,
     lutealLength: Number.isFinite(draft.lutealLength) ? draft.lutealLength : null,
+    priorDiagnoses: Array.isArray(draft.priorDiagnoses) ? draft.priorDiagnoses : [],
+    medicationCurrentlyUsing: typeof draft.medicationCurrentlyUsing === "boolean" ? draft.medicationCurrentlyUsing : null,
   };
 }

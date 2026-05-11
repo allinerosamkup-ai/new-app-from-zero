@@ -43,7 +43,37 @@ type AuraPromptOptions = {
   taskMomentum7d?: number | null;
   currentHour?: number;
   currentMinute?: number;
+  /**
+   * Self-reported prior diagnoses from onboarding. NEVER used as clinical
+   * diagnosis. Aura uses this only to calibrate tone, examples, and
+   * suggestion type. Empty array or undefined = no specialization.
+   */
+  priorDiagnoses?: string[] | null;
 };
+
+const DIAGNOSIS_LABELS: Record<string, string> = {
+  bipolar_ii: 'bipolaridade tipo II',
+  cyclothymia: 'ciclotimia',
+  adhd: 'TDAH adulto',
+  cyclical_depression: 'depressao ciclica',
+  prefer_not_to_say: '',
+};
+
+function buildDiagnosisContextBlock(diagnoses: string[] | null | undefined): string {
+  if (!diagnoses || diagnoses.length === 0) return '';
+  const named = diagnoses
+    .map((d) => DIAGNOSIS_LABELS[d])
+    .filter((label): label is string => Boolean(label));
+  if (named.length === 0) return '';
+  const list = named.length === 1 ? named[0] : `${named.slice(0, -1).join(', ')} e ${named[named.length - 1]}`;
+  return `\nCONTEXTO DE AUTORRELATO (USO INTERNO):
+A pessoa marcou no onboarding que convive com ${list}. Isso e autorrelato, nao diagnostico clinico — Airia NUNCA confirma, nega, diagnostica nem prescreve.
+Use esse contexto apenas para calibrar tom e tipo de sugestao:
+- TDAH: evite empilhar tarefa nova quando a pessoa relata hiperfoco; ofereca encerramento com limite. Reconheca oscilacao intra-diaria como real.
+- Bipolaridade tipo II / ciclotimia: leia ciclos longos com mais sensibilidade; em fases elevadas, proteja sono e ofereca limite; em fases baixas, reduza escopo sem julgar.
+- Depressao ciclica: trate dia ruim como parte do ciclo, nao falha; insista em micro-acao reversivel.
+Nunca diga "voce tem", "isso e seu transtorno", "como bipolar voce deveria". Use linguagem de ritmo e padrao.`;
+}
 
 const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: string[] }> = {
   general: {
@@ -247,6 +277,8 @@ export function buildAuraSystemPrompt(options: AuraPromptOptions): string {
 - Nao anuncie a hora na conversa.
 - Se sugerir horario, ele precisa ser futuro e caber no planner.`;
 
+  const diagnosisBlock = buildDiagnosisContextBlock(options.priorDiagnoses);
+
   return `Você é Airia, assistente pessoal de humor, energia e agenda adaptativa de ${safeUserName}.
 
 IDENTIDADE DO PRODUTO:
@@ -269,7 +301,7 @@ ${renderInstructionBlock(domainGuide.title, domainGuide.instructions)}
 ${extra.length ? `\n${renderInstructionBlock('INSTRUCOES EXTRAS DA CHAMADA', extra)}` : ''}
 
 ${renderInstructionBlock('FORMATO DE SAIDA', FORMAT_RULES)}
-${adaptiveContextBlock}${forecastBlock}${momentumBlock}${temporalContext}
+${adaptiveContextBlock}${forecastBlock}${momentumBlock}${temporalContext}${diagnosisBlock}
 ${contextBlock('RACIOCINIO OPERACIONAL ESTRUTURADO (USO INTERNO)', options.reasoningTraceContext)}
 ${contextBlock(`PERFIL E ROTINA DE ${safeUserName.toUpperCase()}`, options.profileSummary)}
 ${contextBlock(`HUMOR ATUAL E HISTORICO DE HUMOR DE ${safeUserName.toUpperCase()}`, options.moodCycleContext)}

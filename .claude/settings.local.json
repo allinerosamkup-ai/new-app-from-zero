@@ -92,7 +92,8 @@
       "Bash(findstr \":3001\")",
       "Bash(git check-ignore *)",
       "Bash(cmd //c \"del /Q /S C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\* 2>nul & rd /S /Q C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude 2>nul & echo done\")",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "mcp__67a82d94-d27d-4df2-933c-a256070e9b4e__apply_migration"
     ]
   },
   "enabledMcpjsonServers": [

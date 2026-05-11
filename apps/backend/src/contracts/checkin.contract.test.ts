@@ -71,4 +71,33 @@ const validCheckin = {
   assert.equal(result.success, true);
 }
 
+// Diagnostic-aware optional fields
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    medicationTakenToday: true,
+    focusScore: 4,
+    hyperfocusOccurred: false,
+    mixedEpisodeNote: 'energia alta mas humor baixo',
+    dayType: 'mixed',
+  });
+  assert.equal(result.success, true);
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    focusScore: 11,
+  });
+  assert.equal(result.success, false);
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    dayType: 'whatever',
+  });
+  assert.equal(result.success, false);
+}
+
 console.log('checkin.contract tests passed');

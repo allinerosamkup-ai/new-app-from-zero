@@ -1471,6 +1471,9 @@ export function createApp(dependencies: AppDependencies = {}) {
               ...result,
               input: data,
             },
+            priorDiagnoses: data.priorDiagnoses ?? [],
+            medicationCurrentlyUsing: data.medicationCurrentlyUsing ?? null,
+            medicationNotes: data.medicationNotes ?? null,
           },
           create: {
             userId,
@@ -1491,6 +1494,9 @@ export function createApp(dependencies: AppDependencies = {}) {
               ...result,
               input: data,
             },
+            priorDiagnoses: data.priorDiagnoses ?? [],
+            medicationCurrentlyUsing: data.medicationCurrentlyUsing ?? null,
+            medicationNotes: data.medicationNotes ?? null,
           },
         }),
         prisma.userPreference.upsert({
@@ -1680,6 +1686,11 @@ export function createApp(dependencies: AppDependencies = {}) {
         flowIntensity: data.flowIntensity,
         symptomColica: data.symptomLevels?.colica,
         symptomDorCabeca: data.symptomLevels?.dorCabeca,
+        medicationTakenToday: data.medicationTakenToday ?? null,
+        focusScore: data.focusScore ?? null,
+        hyperfocusOccurred: data.hyperfocusOccurred ?? null,
+        mixedEpisodeNote: data.mixedEpisodeNote ?? null,
+        dayType: data.dayType ?? null,
       },
       create: {
         userId: data.userId,
@@ -1704,6 +1715,11 @@ export function createApp(dependencies: AppDependencies = {}) {
         flowIntensity: data.flowIntensity,
         symptomColica: data.symptomLevels?.colica,
         symptomDorCabeca: data.symptomLevels?.dorCabeca,
+        medicationTakenToday: data.medicationTakenToday ?? null,
+        focusScore: data.focusScore ?? null,
+        hyperfocusOccurred: data.hyperfocusOccurred ?? null,
+        mixedEpisodeNote: data.mixedEpisodeNote ?? null,
+        dayType: data.dayType ?? null,
       },
     });
 

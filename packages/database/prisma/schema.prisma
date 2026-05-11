@@ -53,6 +53,11 @@ model OnboardingResponse {
   aiTopThemes           String[] @default([]) @map("ai_top_themes")
   aiInitialSuggestions  String[] @default([]) @map("ai_initial_suggestions")
   aiProfilePayload      Json?    @map("ai_profile_payload")
+  // Self-reported prior diagnoses (autorrelato, nao diagnostico clinico).
+  // Valores aceitos: bipolar_ii, cyclothymia, adhd, cyclical_depression, prefer_not_to_say.
+  priorDiagnoses           String[] @default([]) @map("prior_diagnoses")
+  medicationCurrentlyUsing Boolean? @map("medication_currently_using")
+  medicationNotes          String?  @map("medication_notes") @db.Text
   version               String   @default("v1")
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -146,6 +151,12 @@ model DailyCheckin {
   factors           String[] @default([])
   emotions          String[] @default([])
   note              String?  @db.Text
+  // Diagnostic-aware optional signals (bipolar / TDAH / ciclotimia)
+  medicationTakenToday Boolean? @map("medication_taken_today")
+  focusScore           Int?     @map("focus_score")
+  hyperfocusOccurred   Boolean? @map("hyperfocus_occurred")
+  mixedEpisodeNote     String?  @map("mixed_episode_note") @db.Text
+  dayType              String?  @map("day_type") // up | down | mixed | stable
   stateLabel        String?  @map("state_label")
   stateLabelType    String?  @map("state_label_type")
   stateSummary      String?  @map("state_summary") @db.Text
