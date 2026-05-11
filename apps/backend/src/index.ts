@@ -3977,11 +3977,20 @@ REGRAS:
 - Se houver âncora real, tente entregar próximo passo, compromisso, tarefa, hábito ou ajuste de agenda aplicável.
 - Se houver sinal de queda sustentada, impulsividade, compulsão, isolamento ou sobrecarga, nomeie isso no "pattern" ou no "insight" sem dramatizar.
 - Cada "why" deve explicar qual risco ou padrão a ação está tentando conter.
-- Redação das ações: cada "title" precisa ser uma frase natural, específica e executável. Use verbo claro + objeto + limite. Bom: "Definir próxima caixa: escolher uma categoria da casa e só terminar quando estiver tudo embalado." Ruim: "Definir o próximo limite: só voltar ao resto quando essa categoria estiver 100%".
-- Evite títulos truncados, telegráficos ou com "só..." solto. A usuária precisa bater o olho e entender o que fazer.
+- Redação dos títulos (obrigatório): estrutura = [verbo no imperativo] + [objeto concreto do dia desta usuária] + [escopo limitado: tempo OU quantidade OU critério de parada]. O título deve fazer sentido lido sozinho, sem conhecer o contexto. Tamanho ideal: 8 a 14 palavras.
+- Exemplos BONS — use como modelo de estrutura, adapte ao contexto real da usuária, não copie literalmente:
+  • "Responda o e-mail da Julia — só esse, antes do almoço." (trabalho + âncora específica + limite temporal)
+  • "Faça os 15 minutos de caminhada antes das 18h — não precisa de roupa de treino." (hábito + remoção de atrito + horário)
+  • "Monte os 3 primeiros slides da apresentação — pare quando tiver título e estrutura de cada um." (meta + parcial + critério de parada claro)
+- Exemplos RUINS — nunca use esses padrões:
+  • "Definir prioridades" — sem objeto concreto nem limite.
+  • "Fecha uma caixa por 20 min" — telegráfico, sem artigo, sem contexto.
+  • "Continuar no projeto" — sem começo definido nem limite de parada.
+  • "Organizar a agenda" — genérico, vago, sem âncora real.
+- Proibido: iniciar com verbo conjugado em 3ª pessoa ("fecha", "abre", "envia" — use imperativo: "Feche", "Abra", "Envie"). Proibido: "só..." como início de frase, fragmento sem sujeito implícito, porcentagem solta ("100%"), frase sem verbo.
 - Evite linguagem clínica pesada, mas mantenha raciocínio técnico por trás.
 
-Retorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases úteis sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"sugestão prática","category":"trabalho|social|autocuidado|rotina|foco|pessoal","why":"razão breve"}]}. Sem texto fora do JSON.`;
+Retorne SOMENTE JSON: {"stabilityScore":número,"state":"stable|rising|falling|alert","pattern":"2 frases úteis sobre o padrão","insight":"1 frase personalizada e empática","actions":[{"title":"[imperativo] [objeto concreto do dia] [limite: tempo, qtd ou critério de parada]","category":"trabalho|social|autocuidado|rotina|foco|pessoal","why":"razão breve"}]}. Sem texto fora do JSON.`;
       } else if (type === 'ai-goals') {
         const mood = context.mood || 'equilibrada';
         const existing = (context.existingGoals || []).join(', ') || 'nenhuma ainda';

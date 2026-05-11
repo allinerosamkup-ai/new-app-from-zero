@@ -122,16 +122,37 @@ function polishHomeMicroAction(value: string): string {
 
 function polishHomeActionTitle(value: string): string {
   const trimmed = value.trim().replace(/\s+/g, " ");
-  const normalized = trimmed
+
+  // Remove ponto final — títulos de ação não precisam de pontuação terminal
+  const withoutPeriod = trimmed.replace(/[.。]+$/, "");
+
+  // Capitaliza primeira letra
+  const capitalized = withoutPeriod.charAt(0).toUpperCase() + withoutPeriod.slice(1);
+
+  // Detecta verbos em 3ª pessoa do presente no início da frase
+  // (padrão indesejado: "fecha uma caixa por 20 min" → corrige para "Feche uma caixa por 20 min")
+  const normalized = capitalized
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
 
-  if (/definir.+(proximo|proxima).+(limite|caixa)|categoria.+mudanca|100%/.test(normalized)) {
-    return "Definir próxima caixa: escolher uma categoria da casa e só terminar quando estiver tudo embalado.";
+  const imperativoMap: Record<string, string> = {
+    fecha: "Feche", abre: "Abra", envia: "Envie", responde: "Responda",
+    faz: "Faça", termina: "Termine", conclui: "Conclua", inicia: "Inicie",
+    comeca: "Comece", revisa: "Revise", define: "Defina", liga: "Ligue",
+    manda: "Mande", separa: "Separe", verifica: "Verifique", anota: "Anote",
+    passa: "Passe", retoma: "Retome", avanca: "Avance", bloqueia: "Bloqueie",
+    deleta: "Delete", cancela: "Cancele", agenda: "Agende", organiza: "Organize",
+    registra: "Registre", escreve: "Escreva", resolve: "Resolva", testa: "Teste",
+  };
+
+  const firstWord = normalized.split(" ")[0];
+  const imperative = imperativoMap[firstWord];
+  if (imperative) {
+    return imperative + capitalized.slice(firstWord.length);
   }
 
-  return trimmed;
+  return capitalized;
 }
 
 function normalizeHomeAiMessage(payload: unknown): HomeAiMsg | null {
