@@ -12,6 +12,9 @@
 Arquivo: `src/lib/aura-prompt.ts`
 Gera o prompt de sistema unificado para a Aura. O `domain` define a policy da superfície (`journal-live`, `journal-finalize`, `aura-command`, `checkin`, `planning`, `home`, `insight`, `summary`, etc.) e o `moodCycleContext` deve ser injetado quando houver contexto de fase.
 
+**Aliança Divergente — estrutura de output obrigatória (injetada em todo prompt):**
+Todo output substantivo deve conter 4 elementos: **FATO AGORA** (o que está acontecendo de verdade, nomeado com detalhe concreto) → **LEITURA** (o que esse fato revela no padrão, cruzando fase + histórico + RAG) → **TRAVA OU JANELA** (capacidade / disposição / permissão, ou a janela disponível) → **MOVIMENTO** (próximo passo com verbo + objeto concreto + âncora do dia real). Definido em `ALIANCA_DIVERGENTE_STRUCTURE` em `airia-method.ts`. Cada domínio tem mapeamento explícito desses 4 elementos para seu formato de saída.
+
 ### `ContextGroundingService.buildDailyContext(...)`
 Arquivo: `src/services/context-grounding.service.ts`
 Monta o pacote operacional único do dia (`DailyContext`): agenda pendente/concluída, hábitos pendentes/concluídos, metas ativas/concluídas, subtarefas feitas, sugestões recentes, feedback de ações e memória RAG como contexto de padrão.
