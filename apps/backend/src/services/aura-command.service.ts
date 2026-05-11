@@ -227,6 +227,7 @@ export class AuraCommandService {
       plannerContext?: string | null;
       reasoningTraceContext?: string | null;
       dayPlanContext?: string | null;
+      priorDiagnoses?: string[] | null;
       interactionMode?: 'conversation' | 'executor';
       currentHour?: number;
       currentMinute?: number;
@@ -343,6 +344,7 @@ REGRAS PARA TAREFAS EXISTENTES (update_task / delete_task):
             plannerContext: input.plannerContext,
             reasoningTraceContext: input.reasoningTraceContext,
             dayPlanContext: input.dayPlanContext,
+            priorDiagnoses: input.priorDiagnoses,
             currentHour: input.currentHour,
             currentMinute: input.currentMinute,
             phase: input.phase,

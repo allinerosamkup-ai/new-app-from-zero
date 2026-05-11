@@ -457,7 +457,13 @@ export function aggregateCheckinsByDay(history: CheckinEntry[]): CheckinEntry[] 
 
 // ── Motor principal ────────────────────────────────────────
 
-export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
+export function computeMoodCycle(
+  history: CheckinEntry[],
+  userContext?: { diagnoses?: string[] },
+): MoodCycleReport {
+  const hasBipolarII =
+    userContext?.diagnoses?.some((d) => d === 'bipolar_ii' || d === 'cyclothymia') ?? false;
+  const hasAdhd = userContext?.diagnoses?.includes('adhd') ?? false;
   // Ordenar por data (mais antigo → mais recente)
   const sorted = aggregateCheckinsByDay(history);
 
@@ -619,7 +625,13 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
   // ── Warning flags ──────────────────────────────────────
   const warningFlags: WarningFlag[] = [];
 
-  if (volatility14d > 1.8) warningFlags.push("high_volatility");
+  // ADHD: use a shorter 7-day volatility window (more reactive to recent swings)
+  const volatilityWindowData = hasAdhd ? last7 : last14;
+  const volatilityForFlags = stdDev(
+    volatilityWindowData.map((e) => weightedComposite(e.humor, e.energia)),
+  );
+  const volatilityThreshold = hasAdhd ? 1.4 : 1.8; // lower threshold for ADHD
+  if (volatilityForFlags > volatilityThreshold) warningFlags.push("high_volatility");
 
   // sustained_low: só dispara se o humor ainda está baixo AGORA.
   // Se a tendência é positiva ou a fase é de recuperação, não alarmar por dias antigos.
@@ -630,7 +642,9 @@ export function computeMoodCycle(history: CheckinEntry[]): MoodCycleReport {
     if (lowDays >= 5 && criticalDays < 3) warningFlags.push("sustained_low");
   }
 
-  if (highDays >= 5) warningFlags.push("sustained_elevated");
+  // bipolar_ii / cyclothymia: lower sustained_elevated threshold (3 days vs 5)
+  const sustainedElevatedThreshold = hasBipolarII ? 3 : 5;
+  if (highDays >= sustainedElevatedThreshold) warningFlags.push("sustained_elevated");
 
   // Queda rápida: últimos 2 dias vs 2 dias anteriores
   // Só dispara se a queda é recente E o humor não está subindo agora

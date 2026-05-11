@@ -67,6 +67,8 @@ export type JournalPromptContext = {
   forecast7dSummary?: string | null;
   /** Tarefas pesadas concluídas nos últimos 7 dias. */
   taskMomentum7d?: number | null;
+  /** Diagnósticos auto-relatados no onboarding (ex: adhd, bipolar_ii). */
+  priorDiagnoses?: string[] | null;
 };
 
 export type OnboardingProfileInput = {
@@ -159,6 +161,7 @@ export class AIService {
             warningFlags: input.context.warningFlags,
             forecast7dSummary: input.context.forecast7dSummary,
             taskMomentum7d: input.context.taskMomentum7d,
+            priorDiagnoses: input.context.priorDiagnoses,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',
@@ -257,6 +260,7 @@ export class AIService {
       reasoningTraceContext?: string | null;
       currentHour?: number;
       currentMinute?: number;
+      priorDiagnoses?: string[] | null;
     },
   ): Promise<JournalSummary> {
     const recentMessages = messages.slice(-this.CONTEXT_LIMIT);
@@ -315,6 +319,7 @@ export class AIService {
             reasoningTraceContext: context?.reasoningTraceContext,
             currentHour: context?.currentHour,
             currentMinute: context?.currentMinute,
+            priorDiagnoses: context?.priorDiagnoses,
             domain: 'summary',
           }),
         },
@@ -343,6 +348,7 @@ export class AIService {
     timeOfDay: string;
     currentHour?: number;
     currentMinute?: number;
+    priorDiagnoses?: string[] | null;
   }): Promise<Array<{ title: string; category: string; reason: string; icon: string }>> {
     const prompt = `
       Com base no estado atual de ${input.userName}, sugira 3 hábitos ou micro-ações para este momento do dia (${input.timeOfDay}).
@@ -378,6 +384,7 @@ export class AIService {
             recentSuggestionMemory: input.recentSuggestionMemory,
             currentHour: input.currentHour,
             currentMinute: input.currentMinute,
+            priorDiagnoses: input.priorDiagnoses,
             domain: 'planning',
           }),
         },

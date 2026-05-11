@@ -32,6 +32,7 @@ const loadOnboardingPreferencesPage = () => import("./routes/onboarding-preferen
 const loadOnboardingDonePage = () => import("./routes/onboarding-done-page");
 const loadPrivacyPage = () => import("./routes/privacy-page");
 const loadTermsPage = () => import("./routes/terms-page");
+const loadConteudoPage = () => import("./routes/conteudo-page");
 
 const AuraLayout = lazy(() => loadAuraLayout().then((module) => ({ default: module.AuraLayout })));
 const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
@@ -62,6 +63,7 @@ const OnboardingPreferencesPage = lazy(() => loadOnboardingPreferencesPage().the
 const OnboardingDonePage = lazy(() => loadOnboardingDonePage().then((module) => ({ default: module.OnboardingDonePage })));
 const PrivacyPage = lazy(() => loadPrivacyPage().then((module) => ({ default: module.PrivacyPage })));
 const TermsPage = lazy(() => loadTermsPage().then((module) => ({ default: module.TermsPage })));
+const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: module.ConteudoPage })));
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
@@ -265,6 +267,7 @@ export default function App() {
           <Route path="/harmony" element={<HarmonyPage />} />
           <Route path="/checkin-result" element={<CheckinResultPage />} />
           <Route path="/aura" element={<AuraChatPage />} />
+          <Route path="/conteudo" element={<ConteudoPage />} />
         </Route>
       </Routes>
       </div>

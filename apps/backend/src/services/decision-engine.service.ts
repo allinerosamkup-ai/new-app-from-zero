@@ -423,7 +423,10 @@ export class DecisionEngine {
       : null;
     const forceHard = recalibSignal === 'day_hard' || recalibSignal === 'energy_crash';
     const forceGreat = recalibSignal === 'day_great' || recalibSignal === 'hyperfocus';
-    const structureHyperfocus = recalibSignal === 'hyperfocus';
+    // TDAH + hyperfocus: profile reports ADHD and today's checkin has hyperfocusOccurred
+    const adhdHyperfocusActive =
+      requestContext.adhdProfile === true && requestContext.hyperfocusOccurred === true;
+    const structureHyperfocus = recalibSignal === 'hyperfocus' || adhdHyperfocusActive;
 
     const lowCapacity = forceHard || (!forceGreat && (isLowCapacityPhase(requestContext) || hasPoorMeasuredSleep(input.dailyContext)));
     const highCapacity = forceGreat || (!forceHard && isHighCapacityPhase(requestContext));
@@ -664,6 +667,25 @@ export class DecisionEngine {
         notificationAllowed: false,
         requiresConfirmation: true,
         travaType: trava,
+      });
+    }
+
+    // TDAH+hyperfocus guard: prevent new tasks, suggest closing what's open
+    if (adhdHyperfocusActive) {
+      allowed.push({
+        id: 'insight:adhd-hyperfocus-close',
+        title: 'Encerrar com limite — hiperfoco ativo',
+        kind: 'insight_only',
+        source: 'system',
+        targetType: 'system',
+        action: 'insight',
+        score: 90,
+        confidence: 0.9,
+        reason: 'Hiperfoco detectado com perfil TDAH: não é hora de abrir nova frente, mas de fechar o que está aberto.',
+        bioReason: 'Hiperfoco é janela de entrega — não de expansão. O que está em andamento merece atenção total; tarefa nova agora dilui o ganho real.',
+        impactLabel: 'protege energia',
+        notificationAllowed: false,
+        requiresConfirmation: false,
       });
     }
 

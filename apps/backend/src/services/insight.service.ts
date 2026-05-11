@@ -106,7 +106,7 @@ export class InsightService {
       }),
       prisma.onboardingResponse.findUnique({
         where: { userId },
-        select: { aiProfileSummary: true, aiProfilePayload: true },
+        select: { aiProfileSummary: true, aiProfilePayload: true, priorDiagnoses: true },
       }),
       prisma.objective.findMany({
         where: { userId, archived: false },
@@ -298,6 +298,7 @@ export class InsightService {
               AiriaOperationalReasoningService.formatForPrompt(insightActionPlan),
               AiriaCognitiveInterpreterService.formatForPrompt(insightCognitive),
             ].join('\n\n'),
+            priorDiagnoses: onboarding?.priorDiagnoses ?? null,
             domain: 'insight',
           }),
         },

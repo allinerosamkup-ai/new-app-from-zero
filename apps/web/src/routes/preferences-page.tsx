@@ -1193,6 +1193,34 @@ export function PreferencesPage() {
           </div>
         </div>
 
+        {/* Biblioteca section */}
+        <div className="config-section">
+          <p className="config-section-title">Conteúdo</p>
+          <div
+            className="config-row"
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate("/conteudo")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate("/conteudo"); }}
+          >
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(150,199,179,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--menthe, #96C7B3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Biblioteca de conteúdo</p>
+                <p className="config-row-sub">TDAH, bipolar II, ciclotimia e produtividade</p>
+              </div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+        </div>
+
         {/* Conta e Integrações section */}
         <div className="config-section">
           <p className="config-section-title">Conta e Integrações</p>

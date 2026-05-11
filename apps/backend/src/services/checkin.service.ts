@@ -224,6 +224,7 @@ export class CheckinService {
     warningFlags?: string[] | null;
     forecast7dSummary?: string | null;
     taskMomentum7d?: number | null;
+    priorDiagnoses?: string[] | null;
   }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState> {
     const checkinMoment = data.checkinSlot?.split('-')[0] || 'não informado';
     const currentLocalTime = extractClockFromCheckinSlot(data.checkinSlot);
@@ -336,6 +337,7 @@ JSON APENAS:
             warningFlags: data.warningFlags,
             forecast7dSummary: data.forecast7dSummary,
             taskMomentum7d: data.taskMomentum7d,
+            priorDiagnoses: data.priorDiagnoses,
             domain: 'checkin',
           }),
         },

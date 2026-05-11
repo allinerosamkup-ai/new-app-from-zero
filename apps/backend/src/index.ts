@@ -354,7 +354,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     }).catch(() => null),
     prisma.onboardingResponse.findUnique({
       where: { userId },
-      select: { aiProfileSummary: true, aiProfilePayload: true },
+      select: { aiProfileSummary: true, aiProfilePayload: true, priorDiagnoses: true },
     }).catch(() => null),
     prisma.dailyCheckin.findFirst({
       where: { userId },
@@ -446,6 +446,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     userName: explicitUserName ?? derivedUserName ?? 'você',
     moodCycleContext: sharedMoodCycleContext || null,
     userProfileSummary: sanitizePromptContent(onboarding?.aiProfileSummary ?? null),
+    priorDiagnoses: (onboarding?.priorDiagnoses as string[] | null | undefined) ?? null,
     longTermMemory,
     activeGoalsContext,
     latestCheckinSignals,
@@ -1073,6 +1074,7 @@ async function finalizeJournalSession(args: {
   recentSessionHistory?: string | null;
   currentHour?: number;
   currentMinute?: number;
+  priorDiagnoses?: string[] | null;
 }) {
   const summary = await args.aiService.summarizeJournalSession(args.messages, undefined as any, {
     userName: args.userName,
@@ -1081,6 +1083,7 @@ async function finalizeJournalSession(args: {
     longTermMemory: args.longTermMemory,
     activeGoalsContext: args.activeGoalsContext,
     recentSessionHistory: args.recentSessionHistory,
+    priorDiagnoses: args.priorDiagnoses,
   });
 
   let suggestedTasks: SuggestedTask[] = [];
@@ -1096,6 +1099,7 @@ async function finalizeJournalSession(args: {
         domain: 'journal-finalize',
         currentHour: args.currentHour,
         currentMinute: args.currentMinute,
+        priorDiagnoses: args.priorDiagnoses,
       }),
       userName: args.userName,
       moodCycleContext: args.moodCycleContext,
@@ -1749,7 +1753,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     const checkinGroundingContext = await contextGroundingService.buildForSuggest({
       userId: data.userId,
       type: 'checkin',
-      context: { localDate: data.localDate },
+      context: {
+        localDate: data.localDate,
+        adhdProfile: Array.isArray(checkinRuntimeContext.priorDiagnoses) && checkinRuntimeContext.priorDiagnoses.includes('adhd'),
+        hyperfocusOccurred: (data as any).hyperfocusOccurred === true,
+      },
       recentSuggestionItems,
       ragContext: checkinRagContext,
     });
@@ -1845,6 +1853,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       emotions: (data as any).emotions,
       factors: data.factors,
       plannerContext: [checkinPlannerContext, checkinGroundingText].filter(Boolean).join('\n'),
+      priorDiagnoses: checkinRuntimeContext.priorDiagnoses,
       ...extractAdaptiveFromRequest(req.body),
     });
 
@@ -2345,6 +2354,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           warningFlags: data.warningFlags ?? [],
           forecast7dSummary: data.forecast7dSummary ?? null,
           taskMomentum7d: data.taskMomentum7d ?? null,
+          priorDiagnoses: runtimeContext.priorDiagnoses,
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
@@ -2525,6 +2535,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
         plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
         interactionMode: data.mode,
+        priorDiagnoses: runtimeContext.priorDiagnoses,
         ...extractAdaptiveFromRequest(req.body),
       });
 
@@ -2716,6 +2727,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       recentSessionHistory: routineContext?.recentSessionHistory,
       currentHour: typeof req.body.currentHour === 'number' ? req.body.currentHour : undefined,
       currentMinute: typeof req.body.currentMinute === 'number' ? req.body.currentMinute : undefined,
+      priorDiagnoses: runtimeContext.priorDiagnoses,
     });
 
     // Agendar RAG indexing para absorver o que foi escrito no diário
@@ -3582,7 +3594,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const userId = (req as AuthRequest).userId;
       const plainTextTypes = new Set(['task-notes', 'task-title', 'monthly-report']);
-      const { userName, moodCycleContext, userProfileSummary, longTermMemory, activeGoalsContext, latestCheckinSignals } =
+      const { userName, moodCycleContext, userProfileSummary, priorDiagnoses, longTermMemory, activeGoalsContext, latestCheckinSignals } =
         await resolveAiRuntimeContext(prisma, userId, context);
 
       // Shared Brain: todas as superfícies de IA buscam memória vetorial com intenção específica
@@ -4379,6 +4391,7 @@ INSTRUÇÕES:
           timeOfDay,
           currentHour: typeof (req.body as any)?.currentHour === 'number' ? (req.body as any).currentHour : undefined,
           currentMinute: typeof (req.body as any)?.currentMinute === 'number' ? (req.body as any).currentMinute : undefined,
+          priorDiagnoses,
         });
         SuggestionMemoryService.append(
           prisma,
@@ -4408,6 +4421,7 @@ INSTRUÇÕES:
               activeGoalsContext,
               recentSuggestionMemory,
               reasoningTraceContext: context.reasoningTraceContext,
+              priorDiagnoses,
               domain: getSuggestPromptDomain(type),
               ...extractAdaptiveFromRequest(req.body),
             }),
