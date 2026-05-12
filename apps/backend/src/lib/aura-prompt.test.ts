@@ -34,7 +34,7 @@ async function run() {
   assert.match(basePrompt, /Memoria RAG e historico de humor sao obrigatorios como lente/i);
   assert.match(basePrompt, /CHECK-IN/i);
   assert.match(basePrompt, /histórico de humor|historico de humor/i);
-  assert.match(basePrompt, /ESTRUTURA OBRIGATORIA para Check-in/i);
+  assert.match(basePrompt, /nuance especifica do check-in/i);
   assert.match(basePrompt, /10:20 \(manhã\)/);
   assert.match(basePrompt, /RACIOCINIO OPERACIONAL ESTRUTURADO \(USO INTERNO\)/i);
   assert.match(basePrompt, /Decisao: acao \| Revisar proposta da cliente Julia/i);
@@ -57,9 +57,9 @@ async function run() {
     moodCycleContext: 'Humor atual sensivel; historico mostra queda depois de sono ruim.',
   });
   assert.match(journalPrompt, /DIARIO AO VIVO/i);
-  assert.match(journalPrompt, /ESTRUTURA OBRIGATORIA para Diario ao vivo/i);
+  assert.match(journalPrompt, /objetivo nao e analisar/i);
   assert.match(journalPrompt, /manobra concreta/i);
-  assert.match(journalPrompt, /pergunta unica que destrava/i);
+  assert.match(journalPrompt, /pergunta que abre acao/i);
 
   const commandPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
@@ -75,7 +75,7 @@ async function run() {
     domain: 'home',
   });
   assert.match(homePrompt, /HOME/i);
-  assert.match(homePrompt, /ESTRUTURA OBRIGATORIA para Home/i);
+  assert.match(homePrompt, /Se nao houver ancora operacional suficiente/i);
   assert.match(homePrompt, /Se nao houver ancora operacional suficiente/i);
 
   const planningPrompt = buildAuraSystemPrompt({
