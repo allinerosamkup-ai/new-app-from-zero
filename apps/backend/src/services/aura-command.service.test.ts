@@ -158,7 +158,9 @@ async function run() {
   assert.match(systemPrompt, /humor atual, historico de humor/i);
   assert.match(systemPrompt, /memorias RAG relevantes/i);
   assert.match(systemPrompt, /POLITICA DE SUGESTAO CONCRETA/i);
-  assert.match(systemPrompt, /termos proprietarios/i);
+  // INTERNAL_METHOD_LENS reescrita — checa concept-key estável em vez de "termos proprietarios"
+  assert.match(systemPrompt, /UM PROBLEMA POR VEZ/i);
+  assert.match(systemPrompt, /APOIO, NAO SOLUCAO/i);
   assert.doesNotMatch(systemPrompt, /Aliança Divergente/i);
   assert.doesNotMatch(systemPrompt, /Marca Passo/i);
   assert.doesNotMatch(systemPrompt, /Ponto Cego/i);

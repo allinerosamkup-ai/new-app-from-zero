@@ -58,8 +58,8 @@ async function run() {
   });
   assert.match(journalPrompt, /DIARIO AO VIVO/i);
   assert.match(journalPrompt, /objetivo nao e analisar/i);
-  assert.match(journalPrompt, /manobra concreta/i);
-  assert.match(journalPrompt, /pergunta que abre acao/i);
+  assert.match(journalPrompt, /acao concreta/i);
+  assert.match(journalPrompt, /pergunta aberta curta/i);
 
   const commandPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
@@ -144,6 +144,31 @@ async function run() {
     currentMinute: 15,
   });
   assert.match(dawnPrompt, /03:15 \(madrugada\)/);
+
+  // ─── Fix 1: jargão técnico não pode estar autorizado em VOICE_POLICY ────
+  const journalForJargonAudit = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'journal-live',
+  });
+  // VOICE_POLICY antiga dizia "Acrescente leitura, decisão, manobra ou pergunta concreta" — proibido agora
+  assert.doesNotMatch(journalForJargonAudit, /Acrescente leitura, decisao, manobra/i);
+  // Nova regra explícita de palavras proibidas precisa estar presente
+  assert.match(journalForJargonAudit, /PROIBIDO no texto visivel/i);
+  assert.match(journalForJargonAudit, /manobra.*ancora/i);
+
+  // ─── Fix 2: INTERNAL_METHOD_LENS reescrita com 9 regras concretas ──────
+  assert.match(journalForJargonAudit, /UM PROBLEMA POR VEZ/);
+  assert.match(journalForJargonAudit, /NUNCA costure tres numa resposta so/i);
+  assert.match(journalForJargonAudit, /APOIO, NAO SOLUCAO/);
+  assert.match(journalForJargonAudit, /PARA QUE, NAO POR QUE/);
+  assert.match(journalForJargonAudit, /DIAGNOSTICO INICIAL/);
+
+  // ─── Fix 3: journal-live policy com regras anti-eco/MC/costura ─────────
+  assert.match(journalForJargonAudit, /PROIBIDO MULTIPLA ESCOLHA/);
+  assert.match(journalForJargonAudit, /PROIBIDO ECOAR/);
+  assert.match(journalForJargonAudit, /PROIBIDO COSTURAR DOIS PROBLEMAS/);
+  assert.match(journalForJargonAudit, /no maximo 12 palavras/);
+  assert.match(journalForJargonAudit, /PROIBIDO VALIDAR SEM MOVIMENTO/);
 }
 
 run()

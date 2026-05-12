@@ -8,11 +8,23 @@ export type AiActionFeedbackItem = {
   sourceType?: string | null;
   localDate?: string | null;
   createdAt: string;
+  /**
+   * Número de vezes que essa sugestão foi mostrada sem aceite/dismiss explícito.
+   * Ao atingir SHOWN_THRESHOLD_TO_BLOCK, o status é auto-promovido para 'dismissed'
+   * (com auto=true), bloqueando repetição em futuras gerações.
+   */
+  shownCount?: number;
+  /**
+   * True quando o status foi promovido automaticamente (ex.: 3 'shown' sem ação).
+   * Diferencia de uma rejeição explícita feita pela usuária.
+   */
+  auto?: boolean;
 };
 
 const PAYLOAD_KEY = 'aiActionFeedback';
 const MAX_ITEMS = 80;
 const DEFAULT_LIMIT = 40;
+const SHOWN_THRESHOLD_TO_BLOCK = 3;
 
 function cleanText(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
@@ -96,19 +108,45 @@ export class AiActionFeedbackService {
 
     const existingPayload = ((existing?.aiProfilePayload ?? {}) as Record<string, unknown>);
     const existingItems = await this.getRecent(prisma, userId, MAX_ITEMS);
+    const surface = cleanText(input.surface) || 'unknown';
+    const incomingStatus = normalizeStatus(input.status);
+    const matchKey = `${surface}:${key}`;
+    const previousEntry = existingItems.find((entry) => `${entry.surface}:${entry.key}` === matchKey) ?? null;
+
+    // Auto-bloqueio: se a sugestão foi exibida (shown) >= SHOWN_THRESHOLD_TO_BLOCK
+    // vezes consecutivas SEM ação explícita da usuária, promove para 'dismissed'.
+    // Status explícito (done/dismissed/deleted/scheduled/rejected/accepted) sempre
+    // sobrescreve a contagem.
+    let resolvedStatus: AiActionFeedbackStatus = incomingStatus;
+    let shownCount: number | undefined;
+    let auto: boolean | undefined;
+
+    if (incomingStatus === 'shown') {
+      const previousShown = previousEntry?.status === 'shown'
+        ? Math.max(1, Number(previousEntry.shownCount ?? 1))
+        : 0;
+      shownCount = previousShown + 1;
+      if (shownCount >= SHOWN_THRESHOLD_TO_BLOCK) {
+        resolvedStatus = 'dismissed';
+        auto = true;
+      }
+    }
+
     const item: AiActionFeedbackItem = {
       key,
       title,
-      status: normalizeStatus(input.status),
-      surface: cleanText(input.surface) || 'unknown',
+      status: resolvedStatus,
+      surface,
       sourceType: cleanText(input.sourceType) || null,
       localDate: normalizeDate(input.localDate),
       createdAt: new Date().toISOString(),
+      ...(shownCount !== undefined ? { shownCount } : {}),
+      ...(auto ? { auto: true } : {}),
     };
 
     const nextItems = [
       item,
-      ...existingItems.filter((entry) => `${entry.surface}:${entry.key}` !== `${item.surface}:${item.key}`),
+      ...existingItems.filter((entry) => `${entry.surface}:${entry.key}` !== matchKey),
     ].slice(0, MAX_ITEMS);
 
     await prisma.onboardingResponse?.upsert?.({

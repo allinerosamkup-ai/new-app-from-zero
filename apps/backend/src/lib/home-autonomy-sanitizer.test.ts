@@ -139,6 +139,76 @@ function run() {
       actions: [],
     },
   );
+
+  // ─── Fix 5: novos padrões genéricos observados em produção ─────────────
+  // "Reduza a próxima tarefa pra 15 min" — sem dizer QUAL tarefa
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Reduza a próxima tarefa pra 15 minutos e pare no alarme', category: 'rotina', why: 'Foco controlado.' },
+        ],
+      },
+      { pendingTaskTitles: ['Pintar parede da sala'] },
+    ),
+    { actions: [] },
+  );
+
+  // "Tire da agenda uma pendência que não precisa ser hoje" — sem dizer QUAL
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Tire da agenda uma pendência que não precisa ser hoje', category: 'rotina', why: 'Reduz carga.' },
+        ],
+      },
+      { pendingTaskTitles: ['Pintar parede da sala'] },
+    ),
+    { actions: [] },
+  );
+
+  // Pergunta disfarçada de ação
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Qual é a única coisa real que hoje você mais precisa ajustar', category: 'pessoal', why: 'Foco.' },
+        ],
+      },
+      { pendingTaskTitles: ['Pintar parede da sala'] },
+    ),
+    { actions: [] },
+  );
+
+  // Verbo abstrato + objeto abstrato sem nada concreto
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Escolha uma tarefa pequena pra começar', category: 'rotina', why: 'Quebra a inércia.' },
+        ],
+      },
+      { pendingTaskTitles: ['Pintar parede da sala'] },
+    ),
+    { actions: [] },
+  );
+
+  // Ação ancorada em tarefa REAL do dia → passa
+  assert.deepEqual(
+    sanitizeStabilityAnalysisSuggestion(
+      {
+        actions: [
+          { title: 'Pinta uma parede com o que você tem em casa hoje', category: 'casa', why: 'Move sem precisar sair.' },
+        ],
+      },
+      { pendingTaskTitles: ['Pintar parede da sala'] },
+    ),
+    {
+      actions: [
+        { title: 'Pinta uma parede com o que você tem em casa hoje', category: 'casa', why: 'Move sem precisar sair.' },
+      ],
+    },
+  );
 }
 
 run();

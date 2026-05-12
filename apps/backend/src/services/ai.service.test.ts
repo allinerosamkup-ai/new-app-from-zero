@@ -90,12 +90,18 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /PROVA DE CONTEXTO/i);
   assert.doesNotMatch(capturedMessages[0]?.content || '', /escolha só um formato/i);
   assert.match(capturedMessages[0]?.content || '', /máximo 1 pergunta/i);
-  assert.match(capturedMessages[0]?.content || '', /proximo passo pequeno/i);
+  assert.match(capturedMessages[0]?.content || '', /UM PROBLEMA POR VEZ/i);
   assert.match(capturedMessages[0]?.content || '', /BASE DOCUMENTADA, NÃO IMPROVISO/i);
   assert.match(capturedMessages[0]?.content || '', /utilidade possível do problema/i);
   assert.match(capturedMessages[0]?.content || '', /RESPOSTA EXCELENTE/i);
   assert.match(capturedMessages[0]?.content || '', /POLITICA DE SUGESTAO CONCRETA/i);
-  assert.match(capturedMessages[0]?.content || '', /manobra concreta/i);
+  assert.match(capturedMessages[0]?.content || '', /acao concreta/i);
+  // Garante que jargão proibido NÃO aparece como ordem visível
+  assert.doesNotMatch(capturedMessages[0]?.content || '', /Acrescente leitura, decisao, manobra/i);
+  assert.doesNotMatch(capturedMessages[0]?.content || '', /feche com uma manobra/i);
+  // Auto-bloqueio + anti-eco + UM problema por vez precisam estar presentes
+  assert.match(capturedMessages[0]?.content || '', /PROIBIDO COSTURAR DOIS PROBLEMAS/i);
+  assert.match(capturedMessages[0]?.content || '', /PROIBIDO MULTIPLA ESCOLHA/i);
   assert.match(capturedMessages[0]?.content || '', /mensagem pronta/i);
   assert.match(capturedMessages[0]?.content || '', /MEMÓRIA ANTES DE PADRÃO/i);
   assert.match(capturedMessages[0]?.content || '', /SINAIS ANTES DA QUEDA/i);

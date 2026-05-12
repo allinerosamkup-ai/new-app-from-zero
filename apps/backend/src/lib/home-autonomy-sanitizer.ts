@@ -29,7 +29,25 @@ const GENERIC_ACTION_PATTERNS = [
   /\bfechar\s+(o\s+)?dia\b/,
   /\bpausa\s+de\s+tela\b/,
   /\bfazer\s+check-?in\b/,
+  // Novos padrões observados em produção (Alline 12/05):
+  /^reduza\s+(a|sua|uma)\s+pr[oó]xima\s+tarefa\b/,         // "Reduza a próxima tarefa pra 15 min"
+  /^tire\s+(da\s+agenda\s+)?(uma|alguma)\s+pend[eê]ncia\b/, // "Tire da agenda uma pendência"
+  /^(diminua|reduza|encurte)\s+(a|uma|sua)\s+(pr[oó]xima|primeira)\b/,
+  /\bqual\s+(e|é)\s+(a|o)\s+(unica|única)\s+coisa\b/,        // pergunta disfarçada
+  /\bescolha\s+(uma|um)\s+(coisa|tarefa|atividade|item|pend[eê]ncia)\b/,
+  /\b(uma|alguma)\s+(coisa|tarefa|atividade|pend[eê]ncia|atividade)\s+(que|de|para|pra)\b/,
+  /^ajust(e|ar)\s+(o|seu|sua|a)?\s*(dia|ritmo|agenda)\b/,
+  /^defina?\s+(uma|um|sua|seu)\s+(prioridade|prioridades)\b/,
+  /^continu(e|ar)\s+(no|com|o)\s+\w+/,                       // "continue no projeto"
+  // Pergunta disfarçada de ação:
+  /^(qual|que|como|quando)\s+/,
 ];
+
+// Verbo abstrato sem complemento concreto = sugestão genérica.
+// Se começar com um desses E não citar nenhum nome próprio (palavra com >= 1 letra
+// maiúscula no meio do título) E não tiver número específico → genérico.
+const ABSTRACT_VERB_OPENERS = /^(reduza|aument(e|ar)|diminua|tire|coloque|ajuste|defina|escolha|fa[cç]a|monte|comece|inicie|termine|conclua|revise|encerre|continue|organize|priorize)\b/i;
+const ABSTRACT_OBJECTS = /\b(uma\s+(tarefa|coisa|pend[eê]ncia|atividade|item)|algum|alguma|tudo|nada|isso|aquilo)\b/i;
 
 const STOPWORDS = new Set([
   'a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'e', 'em',
@@ -102,9 +120,22 @@ function isSimilar(a: unknown, b: unknown): boolean {
 }
 
 function isGenericAction(action: StabilityAction): boolean {
-  const text = normalizeHomeAutonomyText(`${action.title} ${action.why ?? ''}`);
-  if (!text) return true;
-  return GENERIC_ACTION_PATTERNS.some((pattern) => pattern.test(text));
+  const fullText = normalizeHomeAutonomyText(`${action.title} ${action.why ?? ''}`);
+  if (!fullText) return true;
+
+  // 1. Padrões explícitos proibidos (lista crescente)
+  if (GENERIC_ACTION_PATTERNS.some((pattern) => pattern.test(fullText))) return true;
+
+  // 2. Verbo abstrato + objeto abstrato sem nada concreto
+  //    Ex.: "Reduza uma tarefa" — abstrato em ambos os lados.
+  //    Mantém o título original (não normalizado) para preservar capitalização e dígitos
+  //    (nomes próprios e números são sinais de concretude).
+  const rawTitle = action.title.trim();
+  if (ABSTRACT_VERB_OPENERS.test(rawTitle) && ABSTRACT_OBJECTS.test(rawTitle)) {
+    return true;
+  }
+
+  return false;
 }
 
 function mentionsTraining(value: unknown): boolean {
