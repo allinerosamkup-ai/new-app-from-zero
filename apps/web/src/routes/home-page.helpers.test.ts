@@ -227,6 +227,68 @@ describe("home page helpers", () => {
     assert.deepEqual(preview.items.map((item) => item.title), ["Medicação", "Consulta"]);
   });
 
+  it("filters out a weekly habit when reference weekday is not in targetDays", () => {
+    // 2026-05-12 é uma terça (weekday=2). Hábito agendado seg/qua/sex (1,3,5) NÃO deve aparecer.
+    const tuesday = new Date("2026-05-12T09:00:00");
+    const preview = buildHomeAgendaPreview({
+      referenceDate: tuesday,
+      tasks: [],
+      habits: [
+        {
+          id: "lift",
+          title: "Treino de força",
+          completions: [],
+          reminderTime: "07:00",
+          frequency: "weekly",
+          targetDays: [1, 3, 5],
+        },
+      ],
+    });
+
+    assert.equal(preview.habit, null);
+  });
+
+  it("keeps a weekly habit when reference weekday matches targetDays", () => {
+    // 2026-05-12 é terça (weekday=2). Hábito ter/qui (2,4) DEVE aparecer.
+    const tuesday = new Date("2026-05-12T09:00:00");
+    const preview = buildHomeAgendaPreview({
+      referenceDate: tuesday,
+      tasks: [],
+      habits: [
+        {
+          id: "yoga",
+          title: "Yoga",
+          completions: [],
+          reminderTime: "07:00",
+          frequency: "weekly",
+          targetDays: [2, 4],
+        },
+      ],
+    });
+
+    assert.equal(preview.habit?.title, "Yoga");
+  });
+
+  it("keeps a daily habit regardless of weekday", () => {
+    const sunday = new Date("2026-05-10T09:00:00"); // domingo
+    const preview = buildHomeAgendaPreview({
+      referenceDate: sunday,
+      tasks: [],
+      habits: [
+        {
+          id: "water",
+          title: "Beber água",
+          completions: [],
+          reminderTime: "08:00",
+          frequency: "daily",
+          targetDays: [],
+        },
+      ],
+    });
+
+    assert.equal(preview.habit?.title, "Beber água");
+  });
+
   it("resolves agenda suggestions to tomorrow from 18h onward", () => {
     assert.equal(resolveHomeAgendaSuggestionDate("2026-04-12", 17), "2026-04-12");
     assert.equal(resolveHomeAgendaSuggestionDate("2026-04-12", 18), "2026-04-13");

@@ -403,14 +403,45 @@ export function isHomeAutonomyTitleBlocked(title: string, blockedTitles: string[
   });
 }
 
+/**
+ * Decide se um hábito é devido no dia da semana de referência.
+ * - frequency 'daily' → sempre devido.
+ * - frequency 'weekly' → devido só se targetDays incluir o weekday (0-6, dom-sáb).
+ *   Se targetDays vazio em weekly, trata como devido (defesa: usuária não configurou).
+ * - frequency ausente / 'monthly' / outros → devido (mantém compat com testes antigos).
+ */
+function isHabitDueOnReferenceWeekday(
+  habit: { frequency?: string; targetDays?: number[] },
+  weekday: number,
+): boolean {
+  if (!habit.frequency) return true;
+  if (habit.frequency === "daily") return true;
+  if (habit.frequency === "weekly") {
+    const days = Array.isArray(habit.targetDays) ? habit.targetDays : [];
+    return days.length === 0 || days.includes(weekday);
+  }
+  return true;
+}
+
 export function buildHomeAgendaPreview(input: {
   tasks: Array<{ id: string | number; title: string; time: string; done: boolean; category?: string; isAiSuggested?: boolean }>;
-  habits: Array<{ id: string; title: string; icon?: string; targetCount?: number | null; completions?: Array<{ completionCount?: number | null } | unknown>; reminderEnabled?: boolean; reminderTime?: string | null }>;
+  habits: Array<{
+    id: string;
+    title: string;
+    icon?: string;
+    targetCount?: number | null;
+    completions?: Array<{ completionCount?: number | null } | unknown>;
+    reminderEnabled?: boolean;
+    reminderTime?: string | null;
+    frequency?: 'daily' | 'weekly' | 'monthly' | string;
+    targetDays?: number[];
+  }>;
   referenceDate?: Date;
 }): { tasks: HomeAgendaTaskItem[]; habit: HomeAgendaHabitItem | null; items: HomeAgendaItem[] } {
   const nowMinutes = input.referenceDate
     ? input.referenceDate.getHours() * 60 + input.referenceDate.getMinutes()
     : null;
+  const referenceWeekday = (input.referenceDate ?? new Date()).getDay();
 
   const tasks = input.tasks
     .filter((task) => !task.done && normalizeWhitespace(task.title).length > 0)
@@ -429,6 +460,7 @@ export function buildHomeAgendaPreview(input: {
   const taskTitles = new Set(tasks.map((task) => comparableKey(task.title)));
   const habit = input.habits
     .filter((habit) => normalizeWhitespace(habit.title).length > 0)
+    .filter((habit) => isHabitDueOnReferenceWeekday(habit, referenceWeekday))
     .filter((habit) => habitCompletionCount(habit) < habitTargetCount(habit))
     .filter((habit) => !taskTitles.has(comparableKey(habit.title)))
     .sort((a, b) => safeTimeValue(a.reminderTime ?? undefined).localeCompare(safeTimeValue(b.reminderTime ?? undefined)))
