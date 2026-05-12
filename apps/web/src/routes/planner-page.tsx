@@ -38,6 +38,11 @@ import {
   type RecurringConfig,
 } from "../utils/task-metadata";
 import { getLocalDateKey, getLocalNoonDate, normalizeDateKey } from "../utils/day-context";
+import {
+  isHabitDueOnWeekday,
+  getHabitCompletionCount,
+  getHabitTargetCount,
+} from "../features/aura/habit-helpers";
 import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
@@ -1825,7 +1830,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 }
 
 export function PlannerPage() {
-  const { refreshData, state, toggleSubGoal } = useAuraStore();
+  const { refreshData, state, toggleSubGoal, toggleHabit } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -1994,6 +1999,35 @@ export function PlannerPage() {
     : plannerTasks.length === 0
       ? "Agenda livre"
       : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""}`;
+
+  // ── Hábitos devidos no dia selecionado ──
+  // Filtra por dia da semana (frequency weekly + targetDays) e remove os já completados.
+  const dueHabitsForDate = useMemo(() => {
+    const parts = selectedDateKey.split("-").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return [];
+    const [yyyy, mm, dd] = parts;
+    const dateObj = new Date(yyyy, mm - 1, dd);
+    const weekday = dateObj.getDay();
+    return (state.habits || []).filter((habit) => {
+      if (!isHabitDueOnWeekday(habit, weekday)) return false;
+      if (getHabitCompletionCount(habit, selectedDateKey) >= getHabitTargetCount(habit)) return false;
+      return true;
+    });
+  }, [state.habits, selectedDateKey]);
+
+  const [animatingHabitIds, setAnimatingHabitIds] = useState<string[]>([]);
+  async function handleToggleHabit(habitId: string) {
+    if (animatingHabitIds.includes(habitId)) return;
+    setAnimatingHabitIds((prev) => [...prev, habitId]);
+    try {
+      await toggleHabit(habitId);
+    } catch (error) {
+      console.error("[planner/habit-toggle]", error);
+      showError("Não foi possível atualizar o hábito.");
+    } finally {
+      setAnimatingHabitIds((prev) => prev.filter((id) => id !== habitId));
+    }
+  }
 
   // ── Foco do dia — primeiras ações de metas + capturas soltas ──
   const focusItems = useMemo(
@@ -2829,6 +2863,100 @@ export function PlannerPage() {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Hábitos do dia ── */}
+      {dueHabitsForDate.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, paddingLeft: 4 }}>
+            <span style={{ fontSize: 14 }}>🌿</span>
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage-ink, #50705B)" }}>
+              Hábitos de hoje
+            </span>
+            <span style={{
+              background: "rgba(150,199,179,.18)",
+              color: "var(--accent-sage-ink, #50705B)",
+              borderRadius: 999,
+              padding: "0 8px",
+              fontSize: 10,
+              fontWeight: 800,
+              border: "1.5px solid rgba(150,199,179,.45)",
+            }}>{dueHabitsForDate.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {dueHabitsForDate.map((habit) => {
+              const isAnimating = animatingHabitIds.includes(habit.id);
+              return (
+                <div
+                  key={habit.id}
+                  className="glass-card"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "10px 14px",
+                    borderLeft: "4px solid var(--accent-sage, #96C7B3)",
+                    borderRadius: 16,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+                    opacity: isAnimating ? 0.5 : 1,
+                    transform: isAnimating ? "scale(0.98)" : "scale(1)",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleHabit(habit.id)}
+                    aria-label={`Marcar ${habit.title} como feito`}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 6,
+                      flexShrink: 0,
+                      cursor: "pointer",
+                      background: isAnimating ? "var(--accent-sage, #96C7B3)" : "transparent",
+                      border: "2px solid var(--accent-sage, #96C7B3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {isAnimating && <CheckCircle2 size={14} color="#fff" />}
+                  </button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.4, display: "flex", alignItems: "center", gap: 6 }}>
+                      {habit.icon ? <span>{habit.icon}</span> : null}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{habit.title}</span>
+                    </div>
+                    {habit.reminderTime ? (
+                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
+                        Lembrete às {habit.reminderTime}
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/habits")}
+                    style={{
+                      border: "1px solid rgba(150,199,179,.35)",
+                      background: "rgba(150,199,179,.12)",
+                      color: "var(--accent-sage-ink, #50705B)",
+                      borderRadius: 999,
+                      padding: "3px 8px",
+                      fontSize: 9,
+                      fontWeight: 850,
+                      letterSpacing: ".04em",
+                      textTransform: "uppercase",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Abrir
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
