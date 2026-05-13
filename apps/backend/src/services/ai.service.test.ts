@@ -12,19 +12,26 @@ async function run() {
 
   delete process.env.OPENAI_MODEL;
 
+  let streamCallCount = 0;
   const fakeClient = {
     chat: {
       completions: {
         create: async ({ model, messages }: any) => {
-          capturedStreamModel = model;
-          capturedMessages = messages;
+          // Captura SÓ a primeira chamada (a do stream principal). Eventuais
+          // chamadas de reescrita do validador não devem sobrescrever.
+          if (streamCallCount === 0) {
+            capturedStreamModel = model;
+            capturedMessages = messages;
+          }
+          streamCallCount += 1;
           return {
             async *[Symbol.asyncIterator]() {
+              // Resposta menciona "audiência" (âncora do journalContext) → passa validador.
               yield {
-                choices: [{ delta: { content: 'Olá, ' } }],
+                choices: [{ delta: { content: 'A audiência ' } }],
               };
               yield {
-                choices: [{ delta: { content: 'vamos organizar isso juntas.' } }],
+                choices: [{ delta: { content: 'de ontem ainda pesa hoje.' } }],
               };
             },
           };
@@ -69,8 +76,8 @@ async function run() {
     fakeClient as any,
   );
 
-  assert.equal(result, 'Olá, vamos organizar isso juntas.');
-  assert.deepEqual(deltas, ['Olá, ', 'vamos organizar isso juntas.']);
+  assert.equal(result, 'A audiência de ontem ainda pesa hoje.');
+  assert.deepEqual(deltas, ['A audiência ', 'de ontem ainda pesa hoje.']);
   assert.equal(capturedMessages[0]?.role, 'system');
   assert.match(capturedMessages[0]?.content || '', /DIARIO AO VIVO/i);
   assert.match(capturedMessages[0]?.content || '', /Nao diagnostique/i);

@@ -701,8 +701,10 @@ async function retrieveJournalMemoryContext(args: {
   const rejectedMemoryReasons = memoryCritic.rejected.map((item) => item.reason);
 
   if (acceptedMemories.length > 0) {
+    // Fix H: marcar explicitamente que isto é busca direta (alta confiança).
+    const directHeader = '✅ MEMÓRIAS RELEVANTES (recuperação direta da fala da pessoa em diários/check-ins anteriores). Cite pelo menos 1 elemento concreto se conectar ao relato atual:';
     return {
-      ragContext: args.memoryService.formatForPrompt(acceptedMemories as any),
+      ragContext: `${directHeader}\n${args.memoryService.formatForPrompt(acceptedMemories as any)}`,
       retrievedCount: acceptedMemories.length,
       usedFallback: false,
       rejectedMemoryReasons,
@@ -738,8 +740,11 @@ async function retrieveJournalMemoryContext(args: {
   }
 
   console.warn('[journal/memory] RAG vetorial vazio; usando fallback reflexivo de sessões/perfil.');
+  // Fix H: avisar EXPLICITAMENTE ao modelo que isso é fallback, não busca direta.
+  // Sem esse aviso, o modelo tratava como evidência específica e citava errado.
+  const fallbackHeader = '⚠️ ATENÇÃO: busca vetorial sem resultado direto sobre o relato atual. Memória abaixo é resumo de sessões anteriores e perfil — use SÓ como contexto longitudinal de padrão, NÃO como evidência específica do que ela disse hoje. Não escreva "lembro que você disse X" baseado nisso.';
   return {
-    ragContext: `\nMEMÓRIA REFLEXIVA DISPONÍVEL (fallback semântico):\n${fallbackParts.join('\n\n')}`,
+    ragContext: `\n${fallbackHeader}\n\nMEMÓRIA LONGITUDINAL DISPONÍVEL (fallback semântico):\n${fallbackParts.join('\n\n')}`,
     retrievedCount: 0,
     usedFallback: true,
     rejectedMemoryReasons,
@@ -2347,7 +2352,9 @@ export function createApp(dependencies: AppDependencies = {}) {
             plannerContext: journalPlannerContext,
             groundingText: journalGroundingText,
           }),
-          plannerContext: '',
+          // Fix G (12/05): plannerContext era '' — Aura no diário nunca via tarefas/hábitos
+          // do dia atual. Agora passa o contexto operacional já calculado em journalPlannerContext.
+          plannerContext: journalPlannerContext,
           currentHour: data.currentHour,
           currentMinute: data.currentMinute,
           phase: data.phase ?? null,

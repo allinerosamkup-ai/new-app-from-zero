@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { OnboardingAiOutputSchema, type OnboardingAiOutput } from '../contracts/onboarding-ai.contract';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
+import {
+  validateJournalReply,
+  buildRevisionInstruction,
+  type JournalValidationContext,
+} from '../lib/journal-reply-validator';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -125,6 +130,15 @@ export class AIService {
     `.trim();
   }
 
+  /**
+   * Janela de mensagens da sessão atual mantida em INTEIRO no prompt.
+   * Mensagens anteriores a essa janela são preservadas em uma síntese curta
+   * (system message), pra que a Aura não perca fatos ditos no início de uma
+   * conversa longa (raiz reportada: Alline disse "fui na rua, pintei",
+   * "anunciei em 3 redes" e a Aura ignorou — porque slice(-10) cortou).
+   */
+  static readonly JOURNAL_HISTORY_WINDOW = 30;
+
   static async streamJournalReply(
     input: {
       context: JournalPromptContext;
@@ -135,7 +149,25 @@ export class AIService {
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<string> {
-    const recentHistory = input.history.slice(-10);
+    const window = AIService.JOURNAL_HISTORY_WINDOW;
+    let recentHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    if (input.history.length <= window) {
+      recentHistory = input.history.map((m) => ({ role: m.role, content: m.content }));
+    } else {
+      // Comprime as primeiras mensagens em uma síntese pra não perder contexto
+      const overflowCount = input.history.length - window + 5;
+      const olderMessages = input.history.slice(0, overflowCount);
+      const synthesis = olderMessages
+        .map((m) => `${m.role === 'user' ? 'Usuária' : 'Airia'}: ${m.content.replace(/\s+/g, ' ').slice(0, 220)}`)
+        .join(' || ');
+      recentHistory = [
+        {
+          role: 'system' as const,
+          content: `[CONTEXTO COMPRIMIDO da sessão atual — ${overflowCount} mensagens anteriores a esta janela. NÃO IGNORE estes fatos, use pra cruzar padrão]: ${synthesis}`,
+        },
+        ...input.history.slice(-window + 5).map((m) => ({ role: m.role, content: m.content })),
+      ];
+    }
 
     const stream = await client.chat.completions.create({
       model: this.MODEL,
@@ -213,7 +245,74 @@ export class AIService {
       throw new Error('Falha ao gerar resposta do diário');
     }
 
+    // ─── Fix I — Validador server-side anti-loop / anti-eco / prova de âncora ───
+    // Se a resposta cair em padrão crítico, faz UMA reescrita silenciosa.
+    // Não loop infinito — máximo 1 retentativa.
+    const validationContext = AIService.buildValidationContext(input);
+    const validation = validateJournalReply(finalContent, validationContext);
+    if (!validation.ok) {
+      console.warn(`[journal/validator] resposta rejeitada: ${validation.reason} — ${validation.details}`);
+      try {
+        const revisionInstruction = buildRevisionInstruction(validation.reason, validation.details);
+        const revisionResponse = await client.chat.completions.create({
+          model: this.MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: `Você é a Airia. Sua resposta anterior foi rejeitada por um validador interno: ${revisionInstruction}\n\nResposta original (rejeitada):\n"""${finalContent}"""\n\nRELATO ORIGINAL DA USUÁRIA:\n"""${input.message}"""\n\nReescreva agora. Mesmo tom e voz, mesmas regras do diário, mas corrigindo o problema apontado. Devolva APENAS a nova resposta, sem comentários.`,
+            },
+          ],
+        } as any);
+        const revised = revisionResponse.choices?.[0]?.message?.content?.trim();
+        if (revised) {
+          // Emite a versão revisada como bloco final (frontend exibe a nova).
+          input.onDelta?.(`\n\n${revised}`);
+          return revised;
+        }
+      } catch (revisionError) {
+        console.warn('[journal/validator] reescrita falhou, mantendo resposta original:', revisionError);
+      }
+    }
+
     return finalContent;
+  }
+
+  /** Constrói o contexto pro validador a partir do input do streamJournalReply. */
+  private static buildValidationContext(input: {
+    context: JournalPromptContext;
+    history: JournalStreamHistoryMessage[];
+    message: string;
+  }): JournalValidationContext {
+    const lastAssistantReplies = input.history
+      .filter((m) => m.role === 'assistant')
+      .slice(-3)
+      .map((m) => m.content);
+    const lastUserMessages = input.history
+      .filter((m) => m.role === 'user')
+      .slice(-3)
+      .map((m) => m.content)
+      .concat(input.message);
+
+    // Coleta âncoras concretas: planner + metas + RAG + journalContext + recentSessionHistory.
+    // Extrai linhas significativas (>= 5 chars) e pega até 12 — suficiente pra validar
+    // se a Aura citou pelo menos 1 elemento concreto.
+    const collectAnchors = (text: string | null | undefined): string[] => {
+      if (!text) return [];
+      return text
+        .split(/[\n\|]/g)
+        .map((line) => line.replace(/^[\-\*•·:\s]+/, '').trim())
+        .filter((line) => line.length >= 5 && line.length <= 200);
+    };
+
+    const anchorTitles = [
+      ...collectAnchors(input.context.plannerContext),
+      ...collectAnchors(input.context.activeGoalsContext),
+      ...collectAnchors(input.context.ragContext),
+      ...collectAnchors(input.context.journalContext),
+      ...collectAnchors(input.context.recentSessionHistory),
+    ].slice(0, 12);
+
+    return { lastAssistantReplies, lastUserMessages, anchorTitles };
   }
 
   static async generateOnboardingProfile(

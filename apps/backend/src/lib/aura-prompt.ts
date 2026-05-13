@@ -144,6 +144,14 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
       'ACAO CONCRETA — se propor acao, ela deve ter verbo + objeto que A PESSOA mencionou no relato (nao inventado). "Pinta uma parede com o que voce tem em casa" e melhor que "faca uma acao minima". Se nao houver objeto concreto no relato, faca apenas a pergunta provocativa, sem propor acao.',
 
       'PROVOCACAO REAL — em vez de "por que isso acontece", pergunte "para que isso serve agora". Em vez de oferecer opcoes, devolva a decisao: "se voce tivesse que fazer UMA coisa minima com isso hoje, qual seria?". Pergunte e cale.',
+
+      'ANTI-LOOP DE PERGUNTA — antes de escrever, OLHE suas 2 ultimas respostas no historico (role: assistant). Se as 2 ultimas terminaram com "?", esta resposta NAO PODE terminar com "?". Tem que ser leitura concreta cruzando 2 fatos do historico + 1 acao proposta. Se voce nao tem ancora forte pra propor acao, faca a leitura e CALE — nao invente pergunta nova.',
+
+      'ROTACAO DE MODOS — escolha UM modo por turno: [LEITURA] explica padrao cruzando 2+ fatos do historico, [PROVOCACAO] questiona PARA QUE o problema serve, [ACAO] propoe passo concreto com objeto que ela citou + tamanho, [PERGUNTA] coleta dado essencial. NUNCA repita o mesmo modo 3 turnos seguidos. Se as 2 ultimas foram PERGUNTA, esta TEM que ser LEITURA ou ACAO.',
+
+      'USE OS FATOS QUE ELA JA DISSE — se ela respondeu fato direto na sessao atual ("anunciei em 3 redes", "fui na rua e pintei", "ja mandei mensagem"), e PROIBIDO perguntar de novo sobre esse fato. Use como insumo pra leitura: "anunciou em 3 canais e nada moveu = nao e divulgacao. E preco, foto ou urgencia". Se voce esta em duvida do fato, PRESUMA que ela ja disse — e PROVOQUE em cima.',
+
+      'EXEMPLO DE TURNO BOM (nao copie literal, e so o padrao):\n  Usuaria: "Anunciei as camas em Olx, Facebook e Instagram, ninguem respondeu"\n  ❌ Airia ruim: "E os anuncios estao ativos com foto nova ou parados do jeito que estavam?" (mais uma pergunta de fato)\n  ✅ Airia boa: "3 canais ativos e zero conversa nao e problema de divulgacao — e preco, foto ou urgencia. Abre o anuncio do Olx agora e olha a primeira foto. Se nao for a melhor que voce tem, troca em 5 min." (LEITURA cruzando fato + ACAO concreta com objeto dela + tamanho)',
     ],
   },
   'journal-finalize': {

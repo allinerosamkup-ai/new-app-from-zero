@@ -169,6 +169,14 @@ async function run() {
   assert.match(journalForJargonAudit, /PROIBIDO COSTURAR DOIS PROBLEMAS/);
   assert.match(journalForJargonAudit, /no maximo 12 palavras/);
   assert.match(journalForJargonAudit, /PROIBIDO VALIDAR SEM MOVIMENTO/);
+
+  // ─── Fix J+K: anti-loop, rotação de modos, few-shot example ────────────
+  assert.match(journalForJargonAudit, /ANTI-LOOP DE PERGUNTA/);
+  assert.match(journalForJargonAudit, /ROTACAO DE MODOS/);
+  assert.match(journalForJargonAudit, /\[LEITURA\].*\[PROVOCACAO\].*\[ACAO\].*\[PERGUNTA\]/s);
+  assert.match(journalForJargonAudit, /USE OS FATOS QUE ELA JA DISSE/);
+  assert.match(journalForJargonAudit, /EXEMPLO DE TURNO BOM/);
+  assert.match(journalForJargonAudit, /Olx, Facebook e Instagram/);
 }
 
 run()
