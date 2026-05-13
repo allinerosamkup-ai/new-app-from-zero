@@ -30,7 +30,7 @@ export type JournalValidationResult =
   | { ok: true }
   | {
       ok: false;
-      reason: 'question_loop' | 'no_concrete_anchor' | 'echo_only';
+      reason: 'question_loop' | 'no_concrete_anchor' | 'echo_only' | 'analysis_missing';
       details: string;
     };
 
@@ -137,10 +137,34 @@ export function validateJournalReply(
     }
   }
 
+  // 4. ANÁLISE PRONTA OBRIGATÓRIA — resposta longa com 2+ sentenças, mas TODAS
+  //    são perguntas (interrogatório). Caso clássico do print da Alline: 3-5
+  //    perguntas seguidas sem nenhuma frase declarativa entregando leitura.
+  //    Pergunta única curta NÃO é interrogatório — é coleta de dado essencial.
+  if (trimmed.length >= 60) {
+    const sentenceCandidates = trimmed
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 10);
+    const declarativeSentences = sentenceCandidates.filter((s) => !/[?？]/.test(s));
+    // Só reprova se há 2+ sentenças e nenhuma é declarativa
+    if (sentenceCandidates.length >= 2 && declarativeSentences.length === 0) {
+      return {
+        ok: false,
+        reason: 'analysis_missing',
+        details: `Resposta tem ${sentenceCandidates.length} perguntas em sequência, sem nenhuma frase declarativa entregando análise pronta.`,
+      };
+    }
+  }
+
   return { ok: true };
 }
 
-export type JournalValidationFailureReason = 'question_loop' | 'no_concrete_anchor' | 'echo_only';
+export type JournalValidationFailureReason =
+  | 'question_loop'
+  | 'no_concrete_anchor'
+  | 'echo_only'
+  | 'analysis_missing';
 
 /**
  * Constrói a mensagem de reforço pra reescrita quando a validação falha.
@@ -154,6 +178,8 @@ export function buildRevisionInstruction(reason: JournalValidationFailureReason,
       return `REESCREVA a resposta — você não citou nenhum elemento concreto do contexto. ${details} Use pelo menos UM desses na sua resposta.`;
     case 'echo_only':
       return `REESCREVA a resposta — você só reformulou o que a usuária disse com sinônimos. ${details} Acrescente leitura nova: cruze fato do dia anterior, identifique o que está se repetindo, ou proponha ação concreta.`;
+    case 'analysis_missing':
+      return `REESCREVA a resposta — ${details} A pessoa NÃO conhece a metodologia. Quem precisa ver primeiro é VOCÊ, e mostrar pronto. Estrutura obrigatória: (1) 1-3 frases DECLARATIVAS dizendo o que você está lendo no contexto cruzando fatos; (2) 1-2 frases direcionando o próximo passo concreto com objeto que ela citou + tamanho; (3) opcional, UMA pergunta curta de até 12 palavras no fim. NUNCA devolva só perguntas — entregue a análise pronta.`;
     default:
       return 'REESCREVA a resposta seguindo as regras do diário.';
   }

@@ -74,6 +74,45 @@ function run() {
   assert.match(buildRevisionInstruction('question_loop', 'detalhes'), /loop de perguntas/i);
   assert.match(buildRevisionInstruction('no_concrete_anchor', 'detalhes'), /elemento concreto/i);
   assert.match(buildRevisionInstruction('echo_only', 'detalhes'), /sin[oô]nimos|reformulou/i);
+  assert.match(buildRevisionInstruction('analysis_missing', 'detalhes'), /1-3 frases DECLARATIVAS|an[aá]lise pronta/i);
+
+  // 7. analysis_missing — resposta com SÓ perguntas, nenhuma frase declarativa, é reprovada.
+  // Inclui "pintura" e "camas" (âncoras) pra não cair em no_concrete_anchor antes.
+  const onlyQuestionsResult = validateJournalReply(
+    'O que você está tentando fazer com a pintura agora? E sobre as camas, o pintor já respondeu? Qual seria a primeira coisa pra hoje?',
+    {
+      lastAssistantReplies: [],
+      lastUserMessages: ['Tô travada com pintura e camas'],
+      anchorTitles: ['pintura', 'camas'],
+    },
+  );
+  assert.equal(onlyQuestionsResult.ok, false);
+  if (!onlyQuestionsResult.ok) {
+    assert.equal(onlyQuestionsResult.reason, 'analysis_missing');
+  }
+
+  // 8. analysis_missing — resposta com 2 frases declarativas + 1 pergunta no fim → ok
+  const balancedResult = validateJournalReply(
+    'Você anunciou as camas em três canais e ninguém chamou. Isso indica que o gargalo é preço, não divulgação. Qual valor você colocou?',
+    {
+      lastAssistantReplies: [],
+      lastUserMessages: ['Tô travada com a venda das camas'],
+      anchorTitles: ['camas'],
+    },
+  );
+  assert.equal(balancedResult.ok, true, 'resposta balanceada (declarativas + 1 pergunta no fim) deve passar');
+
+  // 9. resposta curta sem ponto final mas com pergunta — não é considerada analysis_missing
+  //    (heurística só dispara em respostas >= 30 chars com sentenças quebráveis)
+  const shortQuestion = validateJournalReply(
+    'O que tá pesando agora?',
+    {
+      lastAssistantReplies: ['Como foi sua manhã?'],
+      lastUserMessages: ['Travei'],
+      anchorTitles: [],
+    },
+  );
+  assert.equal(shortQuestion.ok, true);
 }
 
 run();

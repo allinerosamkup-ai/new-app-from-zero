@@ -57,9 +57,12 @@ async function run() {
     moodCycleContext: 'Humor atual sensivel; historico mostra queda depois de sono ruim.',
   });
   assert.match(journalPrompt, /DIARIO AO VIVO/i);
-  assert.match(journalPrompt, /objetivo nao e analisar/i);
+  // Fix #3: a Aura agora entrega análise PRONTA (não substitui análise por pergunta)
+  assert.match(journalPrompt, /entregar ANALISE PRONTA do que esta acontecendo/i);
+  assert.match(journalPrompt, /DIRECIONAMENTO/);
+  assert.match(journalPrompt, /ESTRUTURA OBRIGATORIA DE TODA RESPOSTA SUBSTANTIVA/);
+  assert.match(journalPrompt, /PROIBIDO substituir a ANALISE por pergunta/i);
   assert.match(journalPrompt, /acao concreta/i);
-  assert.match(journalPrompt, /pergunta aberta curta/i);
 
   const commandPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
@@ -162,6 +165,9 @@ async function run() {
   assert.match(journalForJargonAudit, /APOIO, NAO SOLUCAO/);
   assert.match(journalForJargonAudit, /PARA QUE, NAO POR QUE/);
   assert.match(journalForJargonAudit, /DIAGNOSTICO INICIAL/);
+  // ─── Fix #3: regra 7 reescrita — análise pronta + direcionamento + provocação ──
+  assert.match(journalForJargonAudit, /ANALISE PRONTA \+ DIRECIONAMENTO \+ PROVOCACAO/i);
+  assert.doesNotMatch(journalForJargonAudit, /PROVOCACAO, NAO INFORMACAO/i);
 
   // ─── Fix 3: journal-live policy com regras anti-eco/MC/costura ─────────
   assert.match(journalForJargonAudit, /PROIBIDO MULTIPLA ESCOLHA/);
