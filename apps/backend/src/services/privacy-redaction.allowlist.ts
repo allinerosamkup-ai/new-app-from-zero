@@ -300,6 +300,62 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
     ],
     redact: [],
   },
+  UserEntity: {
+    include: [
+      'id',
+      'userId',
+      'canonicalName',
+      'aliases',
+      'type',
+      'status',
+      'firstMentionAt',
+      'lastMentionAt',
+      'metadata',
+      'createdAt',
+      'updatedAt',
+    ],
+    redact: [],
+  },
+  UserFact: {
+    include: [
+      'id',
+      'userId',
+      'entityId',
+      'statement',
+      'source',
+      'occurredAt',
+      'confidence',
+      'supersedes',
+      'createdAt',
+    ],
+    redact: [],
+  },
+  UserPattern: {
+    include: [
+      'id',
+      'userId',
+      'pattern',
+      'evidenceFactIds',
+      'strength',
+      'lastConfirmedAt',
+      'createdAt',
+      'updatedAt',
+    ],
+    redact: [],
+  },
+  UserOpenDecision: {
+    include: [
+      'id',
+      'userId',
+      'question',
+      'context',
+      'raisedAt',
+      'resolvedAt',
+      'resolution',
+      'createdAt',
+    ],
+    redact: [],
+  },
 };
 
 /**

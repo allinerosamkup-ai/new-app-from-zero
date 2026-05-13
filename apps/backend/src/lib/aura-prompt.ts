@@ -56,6 +56,12 @@ type AuraPromptOptions = {
    * block so Aura can reference and act on the day's plan in conversation.
    */
   dayPlanContext?: string | null;
+  /**
+   * Knowledge graph compacto da usuária (entidades + fatos + padrões + decisões
+   * em aberto). Formato pronto pra colar — Aura usa pra raciocinar antes de
+   * responder, NÃO pra citar literalmente. Veja KnowledgeGraphService.
+   */
+  knowledgeGraphContext?: string | null;
 };
 
 const DIAGNOSIS_LABELS: Record<string, string> = {
@@ -357,6 +363,7 @@ ${contextBlock(`METAS ATIVAS E DECISOES DE ${safeUserName.toUpperCase()}`, optio
 ${contextBlock(`PLANNER, TAREFAS, HABITOS E AGENDA DE ${safeUserName.toUpperCase()}`, options.plannerContext)}
 ${contextBlock('ACOES RECENTES, BLOQUEIOS E SUGESTOES PARA NAO RECICLAR', options.recentSuggestionMemory)}
 ${contextBlock('AGENDA ADAPTATIVA DO DIA (USE PARA AGIR E REFERENCIAR)', options.dayPlanContext)}
+${options.knowledgeGraphContext ? `\n${options.knowledgeGraphContext.trim()}` : ''}
 
 REGRA FINAL:
 Antes de gerar a resposta, faca a leitura total. Depois entregue uma fala amiga, especifica e aplicavel. Se existir ancora real, ofereca o proximo passo concreto. Se nao existir, pergunte uma unica coisa que permita sugerir bem.`;

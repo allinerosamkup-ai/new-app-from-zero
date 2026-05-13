@@ -74,6 +74,8 @@ export type JournalPromptContext = {
   taskMomentum7d?: number | null;
   /** Diagnósticos auto-relatados no onboarding (ex: adhd, bipolar_ii). */
   priorDiagnoses?: string[] | null;
+  /** Knowledge graph compacto (entidades+fatos+padrões+decisões em aberto). */
+  knowledgeGraphContext?: string | null;
 };
 
 export type OnboardingProfileInput = {
@@ -194,6 +196,7 @@ export class AIService {
             forecast7dSummary: input.context.forecast7dSummary,
             taskMomentum7d: input.context.taskMomentum7d,
             priorDiagnoses: input.context.priorDiagnoses,
+            knowledgeGraphContext: input.context.knowledgeGraphContext,
             domain: 'journal-live',
             extraInstructions: [
               'Seja uma presença lenta. Use frases que respirem.',

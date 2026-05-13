@@ -9,6 +9,7 @@ import path from 'path';
 import { PrismaClient } from '@app/database';
 import { requireAuth, AuthRequest } from './middleware/auth';
 import { AIService } from './services/ai.service';
+import { KnowledgeGraphService } from './services/knowledge-graph.service';
 import { PlannerService, type TimelineBlockInput } from './services/planner.service';
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
@@ -2323,6 +2324,20 @@ export function createApp(dependencies: AppDependencies = {}) {
         text: data.message,
       });
 
+      // Fix #4 — Knowledge Graph: busca contexto estruturado da usuária pra injetar
+      // no prompt. Falha silenciosa pra não quebrar resposta se serviço indisponível.
+      let knowledgeGraphContext: string | null = null;
+      try {
+        const kgCtx = await KnowledgeGraphService.getRelevantContextForMessage(
+          data.userId,
+          data.message,
+        );
+        const formatted = KnowledgeGraphService.formatContextForPrompt(kgCtx);
+        if (formatted) knowledgeGraphContext = formatted;
+      } catch (kgError) {
+        console.warn('[journal/kg] consulta falhou, continuando sem KG:', kgError);
+      }
+
       const assistantContent = await aiService.streamJournalReply({
         context: {
           ...context,
@@ -2362,6 +2377,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           forecast7dSummary: data.forecast7dSummary ?? null,
           taskMomentum7d: data.taskMomentum7d ?? null,
           priorDiagnoses: runtimeContext.priorDiagnoses,
+          knowledgeGraphContext,
         },
         history: existingMessages.map((message) => ({
           role: message.role as 'user' | 'assistant',
@@ -2398,6 +2414,17 @@ export function createApp(dependencies: AppDependencies = {}) {
           createdAt: assistantMessage.createdAt?.toISOString?.() ?? new Date().toISOString(),
         },
         riskSafety: journalRiskSafety,
+      });
+
+      // Fix #4 — Extração assíncrona do Knowledge Graph. Roda DEPOIS da resposta
+      // ir pra usuária (não bloqueia UX). Falha silenciosa.
+      setImmediate(() => {
+        void KnowledgeGraphService.extractFromMessage(data.userId, data.message, {
+          assistantReply: assistantContent,
+          source: 'journal',
+        }).catch((err) => {
+          console.warn('[journal/kg] extração assíncrona falhou:', err);
+        });
       });
 
       return res.end();

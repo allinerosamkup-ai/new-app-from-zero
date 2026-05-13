@@ -31,6 +31,10 @@ model Profile {
   memoryEmbeddings  MemoryEmbedding[]
   aiBackgroundJobs  AiBackgroundJob[]
   pushSubscriptions PushSubscription[]
+  userEntities      UserEntity[]
+  userFacts         UserFact[]
+  userPatterns      UserPattern[]
+  userOpenDecisions UserOpenDecision[]
 
   @@map("profiles")
 }
@@ -380,4 +384,82 @@ model PushSubscription {
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("push_subscriptions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER KNOWLEDGE GRAPH — "mini Obsidian por usuário"
+// Estrutura que persiste entidades, fatos, padrões e decisões em aberto
+// extraídos das conversas. Permite que a Aura RACIOCINE em cima de contexto
+// estruturado (8-12 elementos cirúrgicos) em vez de pilha de texto bruto.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserEntity {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  canonicalName  String   @map("canonical_name") // ex: "venda das camas", "Julia", "pintor"
+  aliases        String[] @default([])           // ex: ["camas", "as camas", "anuncio das camas"]
+  type           String                          // person | project | event | object | place | habit
+  status         String?                         // active | resolved | paused | abandoned
+  firstMentionAt DateTime @map("first_mention_at") @db.Timestamptz(6)
+  lastMentionAt  DateTime @map("last_mention_at")  @db.Timestamptz(6)
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facts UserFact[]
+
+  @@unique([userId, canonicalName], name: "userId_canonicalName")
+  @@index([userId, lastMentionAt], name: "idx_user_entities_recent")
+  @@map("user_entities")
+}
+
+model UserFact {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  entityId   String?  @map("entity_id") @db.Uuid
+  statement  String   @db.Text                    // ex: "Anuncio postado em Olx/FB/IG em 12/05, 0 respostas em 24h"
+  source     String                               // journal | checkin | manual | derived
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz(6)
+  confidence Float    @default(0.8)
+  supersedes String?  @map("supersedes") @db.Uuid // id de fato anterior atualizado por este
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user   Profile     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity UserEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, entityId, occurredAt], name: "idx_user_facts_lookup")
+  @@map("user_facts")
+}
+
+model UserPattern {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  pattern         String   @db.Text                       // ex: "Vende rápido pelo Olx quando preço alinhado"
+  evidenceFactIds String[] @default([]) @map("evidence_fact_ids") @db.Uuid
+  strength        Float    @default(0.5)                  // ganha/perde peso conforme aceitação
+  lastConfirmedAt DateTime @default(now()) @map("last_confirmed_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, strength], name: "idx_user_patterns_strong")
+  @@map("user_patterns")
+}
+
+model UserOpenDecision {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  question   String    @db.Text                          // ex: "Qual preço usar para as camas?"
+  context    String?   @db.Text                          // breve contexto pra Aura
+  raisedAt   DateTime  @map("raised_at") @db.Timestamptz(6)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+  resolution String?   @db.Text
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, resolvedAt], name: "idx_user_open_decisions")
+  @@map("user_open_decisions")
 }
