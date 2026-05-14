@@ -17,7 +17,8 @@ import { CheckinService } from './services/checkin.service';
 import { GCalService } from './services/gcal.service';
 import { CheckinCreateSchema } from './contracts/checkin.contract';
 import { deriveCheckinSlot } from './contracts/checkin-slot';
-import { PlannerSyncSchema } from './contracts/planner.contract';
+import { PlannerSyncSchema, PlannerAISuggestionRequestSchema } from './contracts/planner.contract';
+import { PlannerAIService } from './services/planner-ai.service';
 import { HabitCreateSchema, HabitPatchSchema } from './contracts/habit.contract';
 import { JournalExternalMessageSchema, JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { EventLogCreateSchema } from './contracts/event-log.contract';
@@ -3637,6 +3638,62 @@ export function createApp(dependencies: AppDependencies = {}) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
       console.error('[agenda/recalibrate] Error:', error);
       return res.status(500).json({ error: 'Failed to recalibrate agenda' });
+    }
+  });
+
+  /**
+   * POST /api/ai/planner-suggestions — Sprint Frente 1
+   * Endpoint dedicado: gera schedule (novos blocos) + adjustedExisting (mudanças
+   * propostas) sem persistir nada. Frontend confirma bloco-a-bloco via cards.
+   */
+  app.post('/api/ai/planner-suggestions', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = PlannerAISuggestionRequestSchema.parse(req.body);
+
+      // Reusa runtime context já existente (perfil, mood cycle, diagnoses)
+      const runtimeCtx = await resolveAiRuntimeContext(prisma, userId, req.body ?? {});
+
+      // Knowledge graph compacto (Fix #4)
+      let kgContext: string | null = null;
+      try {
+        const kg = await KnowledgeGraphService.getRelevantContextForMessage(
+          userId,
+          `Planejamento do dia ${data.date}: ${data.energyState.label}`,
+        );
+        kgContext = KnowledgeGraphService.formatContextForPrompt(kg) || null;
+      } catch (e) {
+        console.warn('[planner-suggestions/kg] falhou:', e);
+      }
+
+      const result = await PlannerAIService.getSuggestions(data, {
+        userName: runtimeCtx.userName,
+        profileSummary: runtimeCtx.userProfileSummary,
+        moodCycleContext: runtimeCtx.moodCycleContext,
+        knowledgeGraphContext: kgContext,
+        priorDiagnoses: runtimeCtx.priorDiagnoses,
+        // learningContext: virá da Frente 2 (ainda não pluggado)
+      });
+
+      // EventLog leve pra observabilidade (sem PII sensível)
+      await prisma.eventLog.create({
+        data: {
+          userId,
+          eventName: 'planner.ai.suggested',
+          properties: {
+            date: data.date,
+            energyLabel: data.energyState.label,
+            scheduleCount: result.schedule.length,
+            adjustedCount: result.adjustedExisting.length,
+          },
+        },
+      }).catch(() => null);
+
+      return res.json(result);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[ai/planner-suggestions] Error:', error);
+      return res.status(500).json({ error: 'Failed to generate planner suggestions' });
     }
   });
 

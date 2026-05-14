@@ -7,6 +7,12 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraToggle } from "../components/editorial/AuraToggle";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { AiriaBottomSheet, AiriaButton, AiriaCard } from "../components/airia";
+import {
+  PlannerAISuggestionSheet,
+  type PlannerAISuggestionResult,
+  type PlannerAIScheduleItem,
+  type PlannerAIAdjustItem,
+} from "../components/planner/PlannerAISuggestionSheet";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -1847,6 +1853,11 @@ export function PlannerPage() {
   const [plannerLoading, setPlannerLoading] = useState(false);
   const [focusActionTick, setFocusActionTick] = useState(0);
   const [showNewForm, setShowNewForm] = useState(false);
+  // Sprint Frente 1 — Planner AI Suggestions (cards confirmar)
+  const [aiSuggestionSheetOpen, setAiSuggestionSheetOpen] = useState(false);
+  const [aiSuggestionLoading, setAiSuggestionLoading] = useState(false);
+  const [aiSuggestionResult, setAiSuggestionResult] = useState<PlannerAISuggestionResult | null>(null);
+  const [aiSuggestionError, setAiSuggestionError] = useState<string | null>(null);
   const [newForm, setNewForm] = useState<FormState>({ ...EMPTY_FORM });
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
@@ -2192,6 +2203,152 @@ export function PlannerPage() {
       pendingTasks: plannerTasks.filter((task) => !task.done).map((task) => task.title),
       existingTasks: plannerTasks.map((task) => `${task.time}-${task.endTime} ${task.title}`),
     };
+  }
+
+  // ─── Sprint Frente 1 — Planner AI Suggestions ──────────────────────────
+  function buildPlannerAISuggestionPayload() {
+    const now = new Date();
+    const energyState = {
+      label: cycleReport.phaseLabel || "Sem leitura clara",
+      analysis: cycleReport.aiContext ?? null,
+      suggestedIntensity: (isLowPhase ? "L" : cycleReport.phase === "high" ? "P" : "M") as "L" | "M" | "P",
+      avgMood: cycleReport.avgMood7d ?? null,
+      avgEnergy: cycleReport.avgEnergy7d ?? null,
+    };
+    return {
+      date: selectedDateKey,
+      existingBlocks: plannerTasks
+        .filter((t) => !t.done)
+        .slice(0, 30)
+        .map((t) => ({
+          id: String(t.id),
+          title: t.title,
+          startTime: t.time,
+          endTime: t.endTime ?? t.time,
+          category: normalizePlannerCategory(t.category) || "outro",
+          intensity: ((t.intensity?.toUpperCase()?.[0] || "M") as "L" | "M" | "P"),
+          status: (t.done ? "completed" : "planned") as "completed" | "planned",
+        })),
+      energyState,
+      currentHour: now.getHours(),
+      currentMinute: now.getMinutes(),
+      phase: cycleReport.phase,
+    };
+  }
+
+  async function openPlannerAISuggestions() {
+    if (aiSuggestionLoading) return;
+    setAiSuggestionSheetOpen(true);
+    setAiSuggestionLoading(true);
+    setAiSuggestionError(null);
+    setAiSuggestionResult(null);
+    try {
+      const payload = buildPlannerAISuggestionPayload();
+      const raw = await api.post("/ai/planner-suggestions", payload);
+      const result = raw as PlannerAISuggestionResult;
+      // Enriquecer adjustedExisting com título/horário do bloco atual pra UI
+      const blocksById = new Map(plannerTasks.map((t) => [String(t.id), t]));
+      const enriched: PlannerAIAdjustItem[] = (result.adjustedExisting ?? []).map((a) => {
+        const b = blocksById.get(a.id);
+        return { ...a, blockTitle: b?.title, blockTime: b ? `${b.time}–${b.endTime ?? b.time}` : undefined };
+      });
+      setAiSuggestionResult({
+        schedule: result.schedule ?? [],
+        adjustedExisting: enriched,
+        adjustments: result.adjustments ?? [],
+        warnings: result.warnings ?? [],
+      });
+    } catch (error) {
+      console.error("[planner-ai] failed:", error);
+      setAiSuggestionError(error instanceof Error ? error.message : "Não foi possível gerar sugestões.");
+    } finally {
+      setAiSuggestionLoading(false);
+    }
+  }
+
+  async function recordAiActionFeedback(title: string, status: "accepted" | "dismissed" | "done" | "scheduled") {
+    try {
+      await api.post("/ai/action-feedback", {
+        title,
+        status,
+        surface: "planner",
+        sourceType: "planner-suggestion",
+        localDate: selectedDateKey,
+      });
+    } catch (e) {
+      console.warn("[planner-ai/feedback]", e);
+    }
+  }
+
+  async function handleAcceptScheduleItem(item: PlannerAIScheduleItem) {
+    try {
+      const energyLevel = item.intensity === "P" ? "alta" : item.intensity === "L" ? "leve" : "media";
+      await api.post("/timeline", {
+        blocks: [{
+          title: item.title,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          category: normalizePlannerCategory(item.category) || "outro",
+          intensity: item.intensity,
+          energyLevel,
+          status: "planned",
+          isAiSuggested: true,
+          aiReasoning: item.reasoning,
+          localDate: selectedDateKey,
+        }],
+      });
+      await recordAiActionFeedback(item.title, "accepted");
+      showSuccess(`"${item.title}" adicionado à agenda.`);
+      await reloadPlannerTasks();
+    } catch (error) {
+      console.error("[planner-ai/accept-schedule]", error);
+      showError("Não foi possível adicionar o bloco.");
+    }
+  }
+
+  async function handleRejectScheduleItem(item: PlannerAIScheduleItem) {
+    await recordAiActionFeedback(item.title, "dismissed");
+  }
+
+  async function handleAcceptAdjustItem(item: PlannerAIAdjustItem) {
+    try {
+      if (item.action === "MOVE_TOMORROW") {
+        await api.post(`/timeline/${item.id}/postpone`, {});
+        showSuccess(`"${item.blockTitle ?? "Bloco"}" movido pra amanhã.`);
+      } else if (item.action === "DOWNGRADE_INTENSITY") {
+        const block = plannerTasks.find((t) => String(t.id) === item.id);
+        if (!block) throw new Error("Bloco não encontrado");
+        const currentLevel = (block.intensity ?? "M").toUpperCase()[0];
+        const nextLevel = currentLevel === "P" ? "M" : "L";
+        const energyLevel = nextLevel === "M" ? "media" : "leve";
+        await api.post("/timeline", {
+          blocks: [{
+            id: item.id,
+            title: block.title,
+            startTime: block.time,
+            endTime: block.endTime ?? block.time,
+            category: block.category,
+            intensity: nextLevel,
+            energyLevel,
+            status: block.done ? "completed" : "planned",
+            localDate: selectedDateKey,
+          }],
+        });
+        showSuccess(`"${item.blockTitle ?? "Bloco"}" agora com intensidade ${nextLevel === "M" ? "média" : "leve"}.`);
+      } else if (item.action === "CANCEL") {
+        await api.delete(`/timeline/${item.id}`);
+        showSuccess(`"${item.blockTitle ?? "Bloco"}" cancelado.`);
+      }
+      await recordAiActionFeedback(item.blockTitle ?? item.id, "accepted");
+      await reloadPlannerTasks();
+    } catch (error) {
+      console.error("[planner-ai/accept-adjust]", error);
+      showError("Não foi possível aplicar a mudança.");
+    }
+  }
+
+  async function handleRejectAdjustItem(item: PlannerAIAdjustItem) {
+    await recordAiActionFeedback(item.blockTitle ?? item.id, "dismissed");
   }
 
   async function openAgendaAdaptationPreview(trigger: "manual" | "home" | "planner" | "checkin" = "planner") {
@@ -2781,6 +2938,29 @@ export function PlannerPage() {
             >
               {adaptationLoading ? "Lendo..." : "Ver ajustes"}
             </AiriaButton>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+            <button
+              type="button"
+              onClick={() => void openPlannerAISuggestions()}
+              disabled={aiSuggestionLoading}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                border: "1.5px solid var(--accent-peach, #D7897F)",
+                background: aiSuggestionLoading ? "rgba(215,137,127,.15)" : "rgba(215,137,127,.08)",
+                color: "var(--accent-peach-ink, #A8584A)",
+                borderRadius: 999,
+                padding: "6px 14px",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: aiSuggestionLoading ? "default" : "pointer",
+              }}
+            >
+              <Sparkles size={13} />
+              {aiSuggestionLoading ? "Pensando…" : "Sugerir blocos com IA"}
+            </button>
           </div>
         </AiriaCard>
       )}
@@ -3378,6 +3558,18 @@ export function PlannerPage() {
             )}
 
       </AiriaBottomSheet>
+
+      <PlannerAISuggestionSheet
+        open={aiSuggestionSheetOpen}
+        loading={aiSuggestionLoading}
+        result={aiSuggestionResult}
+        errorMessage={aiSuggestionError}
+        onClose={() => setAiSuggestionSheetOpen(false)}
+        onAcceptSchedule={(item) => handleAcceptScheduleItem(item)}
+        onRejectSchedule={(item) => handleRejectScheduleItem(item)}
+        onAcceptAdjust={(item) => handleAcceptAdjustItem(item)}
+        onRejectAdjust={(item) => handleRejectAdjustItem(item)}
+      />
     </div>
   );
 }
