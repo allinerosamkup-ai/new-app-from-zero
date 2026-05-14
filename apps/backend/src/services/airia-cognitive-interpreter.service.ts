@@ -97,18 +97,31 @@ const CognitiveModelSchema = z.object({
     currentFact: z.string().default(''),
     userInterpretation: z.string().default(''),
     emotionalSignal: z.string().default(''),
-    intent: z.enum([
-      'conversation',
-      'execution',
-      'decision',
-      'agenda_adaptation',
-      'journal_reflection',
-      'checkin_reading',
-      'home_guidance',
-      'insight_reading',
-      'message_draft',
-      'clarification',
-    ]).default('conversation'),
+    // Aceita o enum oficial mas cai pra 'clarification' se a IA cuspir valor
+    // não-mapeado (ex.: "perguntar_ancora") — evita derrubar todo o pipeline
+    // cognitivo por causa de variação léxica do modelo.
+    intent: z.preprocess(
+      (val) => {
+        const allowed = new Set([
+          'conversation', 'execution', 'decision', 'agenda_adaptation',
+          'journal_reflection', 'checkin_reading', 'home_guidance',
+          'insight_reading', 'message_draft', 'clarification',
+        ]);
+        return typeof val === 'string' && allowed.has(val) ? val : 'clarification';
+      },
+      z.enum([
+        'conversation',
+        'execution',
+        'decision',
+        'agenda_adaptation',
+        'journal_reflection',
+        'checkin_reading',
+        'home_guidance',
+        'insight_reading',
+        'message_draft',
+        'clarification',
+      ]).default('conversation'),
+    ),
     decisionInPlay: z.string().default(''),
     moodCycleReading: z.string().default(''),
     relevantEvidence: z.array(z.string()).default([]),
@@ -121,21 +134,31 @@ const CognitiveModelSchema = z.object({
     confidence: z.enum(['alta', 'media', 'baixa']).default('media'),
   }),
   responsePlan: z.object({
-    responseMode: z.enum([
-      'acolher',
-      'explicar',
-      'executar',
-      'adaptar_agenda',
-      'preparar_mensagem',
-      'perguntar_ancora',
-      'fechar_sem_tarefa',
-    ]).default('explicar'),
-    tone: z.enum(['doce', 'firme', 'objetivo', 'reflexivo', 'executor']).default('doce'),
+    responseMode: z.preprocess(
+      (val) => {
+        const allowed = new Set(['acolher','explicar','executar','adaptar_agenda','preparar_mensagem','perguntar_ancora','fechar_sem_tarefa']);
+        return typeof val === 'string' && allowed.has(val) ? val : 'explicar';
+      },
+      z.enum(['acolher','explicar','executar','adaptar_agenda','preparar_mensagem','perguntar_ancora','fechar_sem_tarefa']).default('explicar'),
+    ),
+    tone: z.preprocess(
+      (val) => {
+        const allowed = new Set(['doce','firme','objetivo','reflexivo','executor']);
+        return typeof val === 'string' && allowed.has(val) ? val : 'doce';
+      },
+      z.enum(['doce','firme','objetivo','reflexivo','executor']).default('doce'),
+    ),
     oneSentenceReading: z.string().default(''),
     finalMove: z.string().default(''),
     mustMention: z.array(z.string()).default([]),
     mustAvoid: z.array(z.string()).default([]),
-    allowedActionSource: z.enum(['agenda', 'habit', 'goal', 'user_report', 'memory_pattern', 'none']).default('none'),
+    allowedActionSource: z.preprocess(
+      (val) => {
+        const allowed = new Set(['agenda','habit','goal','user_report','memory_pattern','none']);
+        return typeof val === 'string' && allowed.has(val) ? val : 'none';
+      },
+      z.enum(['agenda','habit','goal','user_report','memory_pattern','none']).default('none'),
+    ),
   }),
 });
 

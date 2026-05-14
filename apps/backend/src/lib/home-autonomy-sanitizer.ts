@@ -29,25 +29,21 @@ const GENERIC_ACTION_PATTERNS = [
   /\bfechar\s+(o\s+)?dia\b/,
   /\bpausa\s+de\s+tela\b/,
   /\bfazer\s+check-?in\b/,
-  // Novos padrões observados em produção (Alline 12/05):
-  /^reduza\s+(a|sua|uma)\s+pr[oó]xima\s+tarefa\b/,         // "Reduza a próxima tarefa pra 15 min"
-  /^tire\s+(da\s+agenda\s+)?(uma|alguma)\s+pend[eê]ncia\b/, // "Tire da agenda uma pendência"
-  /^(diminua|reduza|encurte)\s+(a|uma|sua)\s+(pr[oó]xima|primeira)\b/,
-  /\bqual\s+(e|é)\s+(a|o)\s+(unica|única)\s+coisa\b/,        // pergunta disfarçada
-  /\bescolha\s+(uma|um)\s+(coisa|tarefa|atividade|item|pend[eê]ncia)\b/,
-  /\b(uma|alguma)\s+(coisa|tarefa|atividade|pend[eê]ncia|atividade)\s+(que|de|para|pra)\b/,
-  /^ajust(e|ar)\s+(o|seu|sua|a)?\s*(dia|ritmo|agenda)\b/,
-  /^defina?\s+(uma|um|sua|seu)\s+(prioridade|prioridades)\b/,
-  /^continu(e|ar)\s+(no|com|o)\s+\w+/,                       // "continue no projeto"
-  // Pergunta disfarçada de ação:
-  /^(qual|que|como|quando)\s+/,
+  // Padrões claramente genéricos observados em produção (Alline 12/05).
+  // ATENÇÃO: aqui SÓ entram regex que NUNCA deveriam passar. Quando em dúvida,
+  // não bloquear — o anchor check abaixo já filtra ações sem âncora real.
+  /^reduza\s+(a|sua|uma)\s+pr[oó]xima\s+tarefa\b/,           // "Reduza a próxima tarefa pra 15 min"
+  /^tire\s+(da\s+agenda\s+)?(uma|alguma)\s+pend[eê]ncia\b/,  // "Tire da agenda uma pendência"
+  /\bqual\s+(e|é)\s+(a|o)\s+(unica|única)\s+coisa\b/,         // pergunta disfarçada
 ];
 
-// Verbo abstrato sem complemento concreto = sugestão genérica.
-// Se começar com um desses E não citar nenhum nome próprio (palavra com >= 1 letra
-// maiúscula no meio do título) E não tiver número específico → genérico.
-const ABSTRACT_VERB_OPENERS = /^(reduza|aument(e|ar)|diminua|tire|coloque|ajuste|defina|escolha|fa[cç]a|monte|comece|inicie|termine|conclua|revise|encerre|continue|organize|priorize)\b/i;
-const ABSTRACT_OBJECTS = /\b(uma\s+(tarefa|coisa|pend[eê]ncia|atividade|item)|algum|alguma|tudo|nada|isso|aquilo)\b/i;
+// Removido (Fix bloqueio total 14/05):
+//   - ABSTRACT_VERB_OPENERS + ABSTRACT_OBJECTS estavam matando ações boas
+//     como "Reduza essa tarefa pra 15 minutos" (com "essa" referenciando algo).
+//   - Regex /^(qual|que|como|quando)/ matava qualquer pergunta no início.
+//   - /^continu(e|ar)\s+(no|com|o)\s+\w+/ pegava continuação legítima.
+//   - /^ajust(e|ar)\s+(dia|ritmo)/ pegava "Ajuste o ritmo agora".
+// O hasConcreteAnchor() abaixo já garante grounding real — confiar nele.
 
 const STOPWORDS = new Set([
   'a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'e', 'em',
@@ -123,19 +119,11 @@ function isGenericAction(action: StabilityAction): boolean {
   const fullText = normalizeHomeAutonomyText(`${action.title} ${action.why ?? ''}`);
   if (!fullText) return true;
 
-  // 1. Padrões explícitos proibidos (lista crescente)
-  if (GENERIC_ACTION_PATTERNS.some((pattern) => pattern.test(fullText))) return true;
-
-  // 2. Verbo abstrato + objeto abstrato sem nada concreto
-  //    Ex.: "Reduza uma tarefa" — abstrato em ambos os lados.
-  //    Mantém o título original (não normalizado) para preservar capitalização e dígitos
-  //    (nomes próprios e números são sinais de concretude).
-  const rawTitle = action.title.trim();
-  if (ABSTRACT_VERB_OPENERS.test(rawTitle) && ABSTRACT_OBJECTS.test(rawTitle)) {
-    return true;
-  }
-
-  return false;
+  // Apenas padrões explícitos proibidos. A heurística verbo+objeto abstrato foi
+  // removida no Fix de 14/05 porque estava matando ações legítimas como
+  // "Reduza essa tarefa pra 15 minutos". O hasConcreteAnchor() depois filtra
+  // o que sobra com base em contexto real do dia.
+  return GENERIC_ACTION_PATTERNS.some((pattern) => pattern.test(fullText));
 }
 
 function mentionsTraining(value: unknown): boolean {
@@ -197,6 +185,7 @@ export function sanitizeStabilityAnalysisSuggestion(
   const anchoredTraining = anchors.some((title) => mentionsTraining(title));
   const seen = new Set<string>();
 
+  const rejectionReasons: Array<{ title: string; reason: string }> = [];
   const actions = rawActions
     .map((item): StabilityAction | null => {
       if (!item || typeof item !== 'object') return null;
@@ -210,14 +199,38 @@ export function sanitizeStabilityAnalysisSuggestion(
     .filter((item): item is StabilityAction => item !== null)
     .filter((action) => {
       const key = normalizeHomeAutonomyText(action.title);
-      if (!key || seen.has(key)) return false;
+      if (!key || seen.has(key)) {
+        rejectionReasons.push({ title: action.title, reason: 'duplicate' });
+        return false;
+      }
       seen.add(key);
-      if (isGenericAction(action)) return false;
-      if (blocked.some((title) => isSimilar(action.title, title))) return false;
-      if (mentionsTraining(`${action.title} ${action.why ?? ''}`) && (blockedTraining || !anchoredTraining)) return false;
-      return hasConcreteAnchor(action, anchors);
+      if (isGenericAction(action)) {
+        rejectionReasons.push({ title: action.title, reason: 'generic_pattern' });
+        return false;
+      }
+      if (blocked.some((title) => isSimilar(action.title, title))) {
+        rejectionReasons.push({ title: action.title, reason: 'blocked_by_feedback' });
+        return false;
+      }
+      if (mentionsTraining(`${action.title} ${action.why ?? ''}`) && (blockedTraining || !anchoredTraining)) {
+        rejectionReasons.push({ title: action.title, reason: 'training_without_anchor' });
+        return false;
+      }
+      if (!hasConcreteAnchor(action, anchors)) {
+        rejectionReasons.push({ title: action.title, reason: 'no_concrete_anchor' });
+        return false;
+      }
+      return true;
     })
     .slice(0, 3);
+
+  if (rawActions.length > 0 && actions.length === 0) {
+    console.warn(
+      `[home-autonomy-sanitizer] todas as ${rawActions.length} ações rejeitadas. Motivos:`,
+      rejectionReasons.map((r) => `"${r.title.slice(0, 50)}" → ${r.reason}`).join(' | '),
+      `| anchors disponíveis: ${anchors.length}`,
+    );
+  }
 
   return {
     ...payload,
