@@ -1751,7 +1751,25 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             )}
 
             {slot.task.isAiSuggested && (
-              <div className="block-chip" style={{ background: "rgba(244,190,168,.12)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.30)", fontWeight: 800, fontSize: 8.5, minHeight: 20, padding: "2px 7px", borderRadius: 999 }}>
+              <div
+                className="block-chip"
+                title={slot.task.aiReasoning ? `Por que a Airia sugeriu: ${slot.task.aiReasoning}` : "Sugerido pela Airia"}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  background: "rgba(244,190,168,.12)",
+                  color: "var(--accent-peach-ink)",
+                  border: "1px solid rgba(244,190,168,.30)",
+                  fontWeight: 800,
+                  fontSize: 8.5,
+                  minHeight: 20,
+                  padding: "2px 7px",
+                  borderRadius: 999,
+                  cursor: slot.task.aiReasoning ? "help" : "default",
+                }}
+              >
+                <Sparkles size={9} />
                 AIRIA
               </div>
             )}
@@ -2252,6 +2270,16 @@ export function PlannerPage() {
     void openAgendaAdaptationPreview("home");
   }, [location.state, adaptationOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sprint Frente 3 — abre proactive-replan vindo da Home
+  const proactiveReplanLocationHandledRef = useRef(false);
+  useEffect(() => {
+    const shouldOpen = Boolean((location.state as { openProactiveReplan?: boolean } | null)?.openProactiveReplan);
+    if (!shouldOpen || proactiveReplanLocationHandledRef.current || aiSuggestionSheetOpen || plannerLoading) return;
+    proactiveReplanLocationHandledRef.current = true;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    void openPlannerAISuggestions("proactive-replan");
+  }, [location.state, aiSuggestionSheetOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function reloadPlannerTasks() {
     try {
         const [timeline, gcalRes] = await Promise.all([
@@ -2328,7 +2356,7 @@ export function PlannerPage() {
     };
   }
 
-  async function openPlannerAISuggestions() {
+  async function openPlannerAISuggestions(mode: "normal" | "proactive-replan" = "normal") {
     if (aiSuggestionLoading) return;
     setAiSuggestionSheetOpen(true);
     setAiSuggestionLoading(true);
@@ -2336,7 +2364,8 @@ export function PlannerPage() {
     setAiSuggestionResult(null);
     try {
       const payload = buildPlannerAISuggestionPayload();
-      const raw = await api.post("/ai/planner-suggestions", payload);
+      const endpoint = mode === "proactive-replan" ? "/ai/proactive-replan" : "/ai/planner-suggestions";
+      const raw = await api.post(endpoint, payload);
       const result = raw as PlannerAISuggestionResult;
       // Enriquecer adjustedExisting com título/horário do bloco atual pra UI
       const blocksById = new Map(plannerTasks.map((t) => [String(t.id), t]));

@@ -1555,6 +1555,30 @@ export function HomePage() {
           >
             Ajustar agenda pelo meu ritmo
           </AuraButtonV2>
+          <button
+            type="button"
+            onClick={() => navigate("/planner", { state: { openProactiveReplan: true } })}
+            style={{
+              marginTop: 10,
+              width: "100%",
+              minHeight: 40,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              border: "1.5px solid var(--accent-peach, #D7897F)",
+              background: "transparent",
+              color: "var(--accent-peach-ink, #A8584A)",
+              borderRadius: 999,
+              padding: "8px 14px",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            <Sparkles size={14} />
+            Replanejar meu dia com IA
+          </button>
         </div>
 
         {/* ── Gráfico de check-ins ── */}
