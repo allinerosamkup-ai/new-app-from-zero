@@ -93,10 +93,24 @@ export const TimelineBlockSchema = z.object({
 
 export type TimelineBlockInput = z.infer<typeof TimelineBlockSchema>;
 
+export interface ConflictResolution {
+  type: 'MOVE_BLOCK_LATER' | 'MOVE_BLOCK_EARLIER' | 'DOWNGRADE_INTENSITY' | 'POSTPONE_TOMORROW' | 'CANCEL';
+  /** ID (ou title fallback) do bloco que vai ser ajustado. */
+  targetBlockId: string;
+  targetBlockTitle: string;
+  parameters?: Record<string, unknown>;
+  reason: string;
+  confidence: number;
+}
+
 export interface TimeConflict {
   block1: string;
   block2: string;
   overlapMinutes: number;
+  /** Sprint Frente 3: resoluções heurísticas determinísticas */
+  block1Id?: string;
+  block2Id?: string;
+  suggestedResolutions?: ConflictResolution[];
 }
 
 export type BusyWindow = {
@@ -405,6 +419,8 @@ export class PlannerService {
 
   /**
    * Detecta conflitos de horário em uma lista de blocos.
+   * Sprint Frente 3: agora retorna `suggestedResolutions` heurísticas
+   * (determinísticas, sem chamar IA) por conflito.
    */
   static detectConflicts(blocks: any[]): TimeConflict[] {
     const conflicts: TimeConflict[] = [];
@@ -428,12 +444,88 @@ export class PlannerService {
           conflicts.push({
             block1: b1.title,
             block2: b2.title,
+            block1Id: b1.id ?? undefined,
+            block2Id: b2.id ?? undefined,
             overlapMinutes,
+            suggestedResolutions: this.buildHeuristicResolutions(b1, b2, overlapMinutes),
           });
         }
       }
     }
 
     return conflicts;
+  }
+
+  /**
+   * Heurística determinística pra sugerir resoluções de conflito.
+   * Não chama IA — o endpoint /api/ai/resolve-conflict é fallback opcional.
+   */
+  private static buildHeuristicResolutions(
+    blockA: any,
+    blockB: any,
+    overlapMinutes: number,
+  ): ConflictResolution[] {
+    const resolutions: ConflictResolution[] = [];
+    const intensityRank: Record<string, number> = { L: 1, M: 2, P: 3 };
+    const a = {
+      id: blockA.id ?? blockA.title,
+      title: blockA.title ?? '',
+      intensity: String(blockA.intensity ?? 'M').toUpperCase()[0],
+      isAiSuggested: Boolean(blockA.isAiSuggested),
+    };
+    const b = {
+      id: blockB.id ?? blockB.title,
+      title: blockB.title ?? '',
+      intensity: String(blockB.intensity ?? 'M').toUpperCase()[0],
+      isAiSuggested: Boolean(blockB.isAiSuggested),
+    };
+
+    // Heurística 1: bloco P sobrepõe bloco L → sugere DOWNGRADE_INTENSITY no L
+    // (ou seja, transformar o L em "tarefa rápida" pra dar espaço pro P)
+    if (intensityRank[a.intensity] > intensityRank[b.intensity]) {
+      resolutions.push({
+        type: 'DOWNGRADE_INTENSITY',
+        targetBlockId: b.id,
+        targetBlockTitle: b.title,
+        reason: `"${a.title}" é mais pesado que "${b.title}". Reduzir intensidade de "${b.title}" libera foco.`,
+        confidence: 0.78,
+      });
+    } else if (intensityRank[b.intensity] > intensityRank[a.intensity]) {
+      resolutions.push({
+        type: 'DOWNGRADE_INTENSITY',
+        targetBlockId: a.id,
+        targetBlockTitle: a.title,
+        reason: `"${b.title}" é mais pesado que "${a.title}". Reduzir intensidade de "${a.title}" libera foco.`,
+        confidence: 0.78,
+      });
+    }
+
+    // Heurística 2: blocos com mesma intensidade → sugere MOVE_BLOCK_LATER
+    // pro bloco com título mais longo (mais "trabalho") OU pro AI-suggested.
+    if (a.intensity === b.intensity) {
+      const moveTarget = a.isAiSuggested ? a : b.isAiSuggested ? b : (a.title.length >= b.title.length ? a : b);
+      const minutesLater = overlapMinutes + 15;
+      resolutions.push({
+        type: 'MOVE_BLOCK_LATER',
+        targetBlockId: moveTarget.id,
+        targetBlockTitle: moveTarget.title,
+        parameters: { minutesLater },
+        reason: `Mover "${moveTarget.title}" ${minutesLater} min pra frente resolve a sobreposição.`,
+        confidence: 0.72,
+      });
+    }
+
+    // Heurística 3: sempre oferece "postpone tomorrow" como saída final
+    // pro bloco AI-suggested (se houver) ou pro maior título
+    const postponeTarget = a.isAiSuggested ? a : b.isAiSuggested ? b : (a.title.length >= b.title.length ? a : b);
+    resolutions.push({
+      type: 'POSTPONE_TOMORROW',
+      targetBlockId: postponeTarget.id,
+      targetBlockTitle: postponeTarget.title,
+      reason: `Adiar "${postponeTarget.title}" pra amanhã libera o slot inteiro.`,
+      confidence: 0.65,
+    });
+
+    return resolutions.slice(0, 3);
   }
 }

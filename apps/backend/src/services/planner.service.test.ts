@@ -173,4 +173,50 @@ import { PlannerService } from './planner.service';
   assert.equal(start.toISOString(), '2026-05-10T00:15:00.000Z');
 }
 
+// ─── Sprint Frente 3: detectConflicts com suggestedResolutions ────────────
+{
+  // Caso 1: bloco P (id=A) sobrepõe bloco L (id=B) — sugere DOWNGRADE_INTENSITY no L
+  const conflicts1 = PlannerService.detectConflicts([
+    { id: 'A', title: 'Apresentação cliente', startAt: '2026-05-14T09:00:00Z', endAt: '2026-05-14T10:30:00Z', intensity: 'P' },
+    { id: 'B', title: 'Café com Maria',       startAt: '2026-05-14T10:00:00Z', endAt: '2026-05-14T10:30:00Z', intensity: 'L' },
+  ]);
+  assert.equal(conflicts1.length, 1);
+  assert.equal(conflicts1[0].overlapMinutes, 30);
+  assert.equal(conflicts1[0].block1Id, 'A');
+  assert.equal(conflicts1[0].block2Id, 'B');
+  const downgrade = conflicts1[0].suggestedResolutions?.find((r) => r.type === 'DOWNGRADE_INTENSITY');
+  assert.ok(downgrade, 'deve ter resolução DOWNGRADE_INTENSITY');
+  assert.equal(downgrade?.targetBlockId, 'B', 'downgrade no bloco menos intenso');
+
+  // Caso 2: blocos com mesma intensidade — sugere MOVE_BLOCK_LATER no maior título
+  const conflicts2 = PlannerService.detectConflicts([
+    { id: 'X', title: 'Tarefa um',  startAt: '2026-05-14T09:00:00Z', endAt: '2026-05-14T10:00:00Z', intensity: 'M' },
+    { id: 'Y', title: 'Tarefa dois muito mais longa', startAt: '2026-05-14T09:30:00Z', endAt: '2026-05-14T10:30:00Z', intensity: 'M' },
+  ]);
+  const move = conflicts2[0].suggestedResolutions?.find((r) => r.type === 'MOVE_BLOCK_LATER');
+  assert.ok(move, 'deve ter resolução MOVE_BLOCK_LATER quando intensidades iguais');
+  assert.equal(move?.targetBlockId, 'Y');
+
+  // Caso 3: AI-suggested vence prioridade no MOVE_LATER
+  const conflicts3 = PlannerService.detectConflicts([
+    { id: 'real', title: 'Compromisso firmado', startAt: '2026-05-14T14:00:00Z', endAt: '2026-05-14T15:00:00Z', intensity: 'M', isAiSuggested: false },
+    { id: 'ai',   title: 'Sugestão',            startAt: '2026-05-14T14:30:00Z', endAt: '2026-05-14T15:30:00Z', intensity: 'M', isAiSuggested: true },
+  ]);
+  const move3 = conflicts3[0].suggestedResolutions?.find((r) => r.type === 'MOVE_BLOCK_LATER');
+  assert.equal(move3?.targetBlockId, 'ai', 'AI-suggested move antes do firmado');
+
+  // Caso 4: POSTPONE_TOMORROW sempre presente
+  for (const c of [conflicts1, conflicts2, conflicts3]) {
+    const postpone = c[0].suggestedResolutions?.find((r) => r.type === 'POSTPONE_TOMORROW');
+    assert.ok(postpone, 'POSTPONE_TOMORROW sempre presente');
+  }
+
+  // Caso 5: sem conflito → array vazio
+  const noConflicts = PlannerService.detectConflicts([
+    { id: 'A', title: 'X', startAt: '2026-05-14T09:00:00Z', endAt: '2026-05-14T10:00:00Z', intensity: 'M' },
+    { id: 'B', title: 'Y', startAt: '2026-05-14T11:00:00Z', endAt: '2026-05-14T12:00:00Z', intensity: 'M' },
+  ]);
+  assert.equal(noConflicts.length, 0);
+}
+
 console.log('planner.service tests passed');

@@ -3643,6 +3643,93 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * POST /api/planner/conflicts — Sprint Frente 3
+   * Detecta conflitos no dia + retorna resoluções heurísticas (sem IA).
+   * Body: { date: 'YYYY-MM-DD' }
+   */
+  const PlannerConflictsRequestSchema = z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  });
+  app.post('/api/planner/conflicts', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = PlannerConflictsRequestSchema.parse(req.body);
+      const baseDate = parseLocalDateInput(data.date);
+      const blocks = await prisma.timelineBlock.findMany({
+        where: { userId, localDate: baseDate, status: 'planned' },
+        orderBy: { startAt: 'asc' },
+      });
+      const conflicts = PlannerService.detectConflicts(blocks);
+      return res.json({ date: data.date, totalBlocks: blocks.length, conflicts });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[planner/conflicts]', error);
+      return res.status(500).json({ error: 'Failed to detect conflicts' });
+    }
+  });
+
+  /**
+   * POST /api/ai/proactive-replan — Sprint Frente 3
+   * Replanejamento PROATIVO do dia inteiro com base no estado atual.
+   * Reusa PlannerAIService mas zera existingBlocks pra IA reconstruir do zero.
+   * Body igual a /api/ai/planner-suggestions; existingBlocks pode vir vazio.
+   */
+  app.post('/api/ai/proactive-replan', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = PlannerAISuggestionRequestSchema.parse(req.body);
+      const runtimeCtx = await resolveAiRuntimeContext(prisma, userId, req.body ?? {});
+
+      let kgContext: string | null = null;
+      try {
+        const kg = await KnowledgeGraphService.getRelevantContextForMessage(
+          userId,
+          `Replanejamento proativo do dia ${data.date}: ${data.energyState.label}`,
+        );
+        kgContext = KnowledgeGraphService.formatContextForPrompt(kg) || null;
+      } catch (e) {
+        console.warn('[proactive-replan/kg]', e);
+      }
+
+      let learningCtx: string | null = null;
+      try {
+        const lc = await LearningContextService.get(userId);
+        learningCtx = LearningContextService.formatForPrompt(lc) || null;
+      } catch (e) {
+        console.warn('[proactive-replan/learning]', e);
+      }
+
+      const result = await PlannerAIService.getSuggestions(data, {
+        userName: runtimeCtx.userName,
+        profileSummary: runtimeCtx.userProfileSummary,
+        moodCycleContext: runtimeCtx.moodCycleContext,
+        knowledgeGraphContext: kgContext,
+        priorDiagnoses: runtimeCtx.priorDiagnoses,
+        learningContext: learningCtx,
+      });
+
+      await prisma.eventLog.create({
+        data: {
+          userId,
+          eventName: 'planner.ai.proactive_replan',
+          properties: {
+            date: data.date,
+            energyLabel: data.energyState.label,
+            scheduleCount: result.schedule.length,
+            adjustedCount: result.adjustedExisting.length,
+          },
+        },
+      }).catch(() => null);
+
+      return res.json(result);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[ai/proactive-replan]', error);
+      return res.status(500).json({ error: 'Failed to replan day' });
+    }
+  });
+
+  /**
    * POST /api/ai/planner-suggestions — Sprint Frente 1
    * Endpoint dedicado: gera schedule (novos blocos) + adjustedExisting (mudanças
    * propostas) sem persistir nada. Frontend confirma bloco-a-bloco via cards.

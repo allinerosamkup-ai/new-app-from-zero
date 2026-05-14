@@ -13,6 +13,11 @@ import {
   type PlannerAIScheduleItem,
   type PlannerAIAdjustItem,
 } from "../components/planner/PlannerAISuggestionSheet";
+import {
+  ConflictResolutionBanner,
+  type Conflict,
+  type ConflictResolution,
+} from "../components/planner/ConflictResolutionBanner";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
@@ -1858,6 +1863,10 @@ export function PlannerPage() {
   const [aiSuggestionLoading, setAiSuggestionLoading] = useState(false);
   const [aiSuggestionResult, setAiSuggestionResult] = useState<PlannerAISuggestionResult | null>(null);
   const [aiSuggestionError, setAiSuggestionError] = useState<string | null>(null);
+  // Sprint Frente 3 — Conflitos com sugestões de resolução
+  const [conflicts, setConflicts] = useState<Conflict[]>([]);
+  const [conflictsDismissed, setConflictsDismissed] = useState(false);
+  const [busyResolutionKey, setBusyResolutionKey] = useState<string | null>(null);
   const [newForm, setNewForm] = useState<FormState>({ ...EMPTY_FORM });
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
@@ -2151,6 +2160,89 @@ export function PlannerPage() {
     openedTaskFromLocationRef.current = normalizedTaskId;
     openEditForm(task);
   }, [location.state, plannerTasks]);
+
+  // Sprint Frente 3 — busca conflitos do dia sempre que mudam blocos
+  useEffect(() => {
+    let cancelled = false;
+    async function loadConflicts() {
+      try {
+        const result = await api.post("/planner/conflicts", { date: selectedDateKey });
+        if (cancelled) return;
+        const c = (result as { conflicts?: Conflict[] })?.conflicts ?? [];
+        setConflicts(c);
+        if (c.length === 0) setConflictsDismissed(false);
+      } catch (e) {
+        console.warn("[planner/conflicts]", e);
+      }
+    }
+    if (plannerTasks.length >= 2) {
+      void loadConflicts();
+    } else {
+      setConflicts([]);
+    }
+    return () => { cancelled = true; };
+  }, [selectedDateKey, plannerTasks.length]);
+
+  async function handleApplyConflictResolution(resolution: ConflictResolution) {
+    const key = `${resolution.type}-${resolution.targetBlockId}`;
+    if (busyResolutionKey) return;
+    setBusyResolutionKey(key);
+    try {
+      const block = plannerTasks.find((t) => String(t.id) === resolution.targetBlockId);
+      if (!block) {
+        showError("Bloco não encontrado.");
+        return;
+      }
+      if (resolution.type === "POSTPONE_TOMORROW") {
+        await api.post(`/timeline/${resolution.targetBlockId}/postpone`, {});
+        showSuccess(`"${resolution.targetBlockTitle}" adiado pra amanhã.`);
+      } else if (resolution.type === "MOVE_BLOCK_LATER") {
+        const minutesLater = Number((resolution.parameters as any)?.minutesLater ?? 30);
+        const newStart = addMinutesToTime(block.time, minutesLater);
+        const newEnd = block.endTime ? addMinutesToTime(block.endTime, minutesLater) : addMinutesToTime(newStart, 30);
+        await api.post("/timeline", {
+          blocks: [{
+            id: resolution.targetBlockId,
+            title: block.title,
+            startTime: newStart,
+            endTime: newEnd,
+            category: block.category,
+            intensity: block.intensity,
+            status: block.done ? "completed" : "planned",
+            localDate: selectedDateKey,
+          }],
+        });
+        showSuccess(`"${resolution.targetBlockTitle}" movido pra ${newStart}.`);
+      } else if (resolution.type === "DOWNGRADE_INTENSITY") {
+        const currentLevel = (block.intensity ?? "M").toUpperCase()[0];
+        const nextLevel = currentLevel === "P" ? "M" : "L";
+        const energyLevel = nextLevel === "M" ? "media" : "leve";
+        await api.post("/timeline", {
+          blocks: [{
+            id: resolution.targetBlockId,
+            title: block.title,
+            startTime: block.time,
+            endTime: block.endTime ?? block.time,
+            category: block.category,
+            intensity: nextLevel,
+            energyLevel,
+            status: block.done ? "completed" : "planned",
+            localDate: selectedDateKey,
+          }],
+        });
+        showSuccess(`"${resolution.targetBlockTitle}" agora com intensidade ${nextLevel === "M" ? "média" : "leve"}.`);
+      } else if (resolution.type === "CANCEL") {
+        await api.delete(`/timeline/${resolution.targetBlockId}`);
+        showSuccess(`"${resolution.targetBlockTitle}" cancelado.`);
+      }
+      await reloadPlannerTasks();
+    } catch (error) {
+      console.error("[planner/resolve-conflict]", error);
+      showError("Não foi possível aplicar a resolução.");
+    } finally {
+      setBusyResolutionKey(null);
+    }
+  }
 
   useEffect(() => {
     const shouldOpen = Boolean((location.state as { openAgendaAdaptation?: boolean } | null)?.openAgendaAdaptation);
@@ -2904,6 +2996,15 @@ export function PlannerPage() {
       </div>
 
       <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
+
+      {!conflictsDismissed && conflicts.length > 0 && (
+        <ConflictResolutionBanner
+          conflicts={conflicts}
+          onApply={handleApplyConflictResolution}
+          onDismiss={() => setConflictsDismissed(true)}
+          busyResolutionKey={busyResolutionKey}
+        />
+      )}
 
       {hasAdaptiveSignal && (
         <AiriaCard tone="action" style={{ marginBottom: 22 }}>
