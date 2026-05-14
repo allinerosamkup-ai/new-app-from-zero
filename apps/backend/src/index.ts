@@ -3723,7 +3723,11 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       return res.json(result);
     } catch (error: any) {
-      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      if (error instanceof z.ZodError) {
+        console.warn('[ai/proactive-replan] ZodError:', JSON.stringify(error.errors, null, 2));
+        console.warn('[ai/proactive-replan] body recebido:', JSON.stringify(req.body, null, 2));
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
       console.error('[ai/proactive-replan]', error);
       return res.status(500).json({ error: 'Failed to replan day' });
     }
@@ -3738,6 +3742,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     const userId = (req as AuthRequest).userId;
     try {
       const data = PlannerAISuggestionRequestSchema.parse(req.body);
+      console.log('[planner-suggestions] OK userId=%s date=%s blocks=%d', userId, data.date, data.existingBlocks.length);
 
       // Reusa runtime context já existente (perfil, mood cycle, diagnoses)
       const runtimeCtx = await resolveAiRuntimeContext(prisma, userId, req.body ?? {});
@@ -3788,7 +3793,11 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       return res.json(result);
     } catch (error: any) {
-      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      if (error instanceof z.ZodError) {
+        console.warn('[ai/planner-suggestions] ZodError:', JSON.stringify(error.errors, null, 2));
+        console.warn('[ai/planner-suggestions] body recebido:', JSON.stringify(req.body, null, 2));
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
       console.error('[ai/planner-suggestions] Error:', error);
       return res.status(500).json({ error: 'Failed to generate planner suggestions' });
     }
