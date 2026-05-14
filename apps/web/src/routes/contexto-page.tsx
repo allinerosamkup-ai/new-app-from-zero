@@ -1,0 +1,384 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, RefreshCw, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+import { useToast } from "../components/Toast";
+import { api } from "../lib/api";
+import "../styles/aura.css";
+import "../styles/editorial.css";
+
+type UserEntity = {
+  id: string;
+  canonicalName: string;
+  aliases: string[];
+  type: string;
+  status: string | null;
+  firstMentionAt: string;
+  lastMentionAt: string;
+};
+
+type UserFact = {
+  id: string;
+  statement: string;
+  source: string;
+  occurredAt: string;
+  confidence: number;
+  entity?: { canonicalName: string } | null;
+};
+
+type UserPattern = {
+  id: string;
+  pattern: string;
+  strength: number;
+  lastConfirmedAt: string;
+};
+
+type UserOpenDecision = {
+  id: string;
+  question: string;
+  context: string | null;
+  raisedAt: string;
+  resolvedAt: string | null;
+  resolution: string | null;
+};
+
+type KGStatus = {
+  journalMessagesTotal: number;
+  journalSessionsTotal: number;
+  checkinsWithNoteTotal: number;
+  entitiesInGraph: number;
+  factsInGraph: number;
+  patternsInGraph: number;
+  openDecisionsInGraph: number;
+  lastBackfillAt: string | null;
+};
+
+type Tab = "entidades" | "fatos" | "padroes" | "decisoes";
+
+function relativeDays(dateString: string): string {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(dateString).getTime()) / 86400000));
+  if (days === 0) return "hoje";
+  if (days === 1) return "1 dia atrás";
+  return `${days} dias atrás`;
+}
+
+export function ContextoPage() {
+  const navigate = useNavigate();
+  const { showError, showSuccess } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<KGStatus | null>(null);
+  const [entities, setEntities] = useState<UserEntity[]>([]);
+  const [facts, setFacts] = useState<UserFact[]>([]);
+  const [patterns, setPatterns] = useState<UserPattern[]>([]);
+  const [decisions, setDecisions] = useState<UserOpenDecision[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>("entidades");
+  const [backfillRunning, setBackfillRunning] = useState(false);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [statusRes, graphRes] = await Promise.all([
+        api.get("/me/knowledge-graph/status").catch(() => null),
+        api.get("/me/knowledge-graph").catch(() => null),
+      ]);
+      if (statusRes) setStatus(statusRes as KGStatus);
+      if (graphRes && typeof graphRes === "object") {
+        const g = graphRes as { entities?: UserEntity[]; facts?: UserFact[]; patterns?: UserPattern[]; decisions?: UserOpenDecision[] };
+        setEntities(g.entities ?? []);
+        setFacts(g.facts ?? []);
+        setPatterns(g.patterns ?? []);
+        setDecisions(g.decisions ?? []);
+      }
+    } catch (error) {
+      console.error("[contexto] failed to load", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
+
+  async function runBackfill() {
+    if (backfillRunning) return;
+    setBackfillRunning(true);
+    try {
+      const result = await api.post("/me/knowledge-graph/backfill", {});
+      const r = result as { sessionsProcessed?: number; checkinsProcessed?: number; extractionsSucceeded?: number };
+      showSuccess(
+        `Processado: ${r.sessionsProcessed ?? 0} sessões, ${r.checkinsProcessed ?? 0} check-ins (${r.extractionsSucceeded ?? 0} extrações).`,
+      );
+      await loadAll();
+    } catch (error) {
+      showError("Falha ao rodar backfill.");
+      console.error(error);
+    } finally {
+      setBackfillRunning(false);
+    }
+  }
+
+  async function deleteEntity(id: string) {
+    if (!confirm("Apagar essa entidade do contexto da Airia?")) return;
+    try {
+      await api.delete(`/me/knowledge-graph/entity/${id}`);
+      setEntities((prev) => prev.filter((e) => e.id !== id));
+    } catch (error) {
+      showError("Falha ao apagar entidade.");
+    }
+  }
+
+  async function deleteFact(id: string) {
+    if (!confirm("Apagar esse fato?")) return;
+    try {
+      await api.delete(`/me/knowledge-graph/fact/${id}`);
+      setFacts((prev) => prev.filter((f) => f.id !== id));
+    } catch (error) {
+      showError("Falha ao apagar fato.");
+    }
+  }
+
+  async function deletePattern(id: string) {
+    if (!confirm("Apagar esse padrão observado?")) return;
+    try {
+      await api.delete(`/me/knowledge-graph/pattern/${id}`);
+      setPatterns((prev) => prev.filter((p) => p.id !== id));
+    } catch (error) {
+      showError("Falha ao apagar padrão.");
+    }
+  }
+
+  async function resolveDecision(id: string) {
+    const resolution = prompt("Como você resolveu essa decisão? (opcional)") ?? undefined;
+    try {
+      await api.post(`/me/knowledge-graph/decision/${id}/resolve`, { resolution });
+      setDecisions((prev) => prev.map((d) => (d.id === id ? { ...d, resolvedAt: new Date().toISOString(), resolution: resolution ?? null } : d)));
+      showSuccess("Decisão marcada como resolvida.");
+    } catch (error) {
+      showError("Falha ao marcar decisão.");
+    }
+  }
+
+  const isFresh = status?.lastBackfillAt !== null;
+  const needsBackfill = useMemo(() => {
+    if (!status) return false;
+    const sourceCount = status.journalSessionsTotal + status.checkinsWithNoteTotal;
+    return sourceCount > 5 && status.entitiesInGraph < 3;
+  }, [status]);
+
+  return (
+    <div style={{ padding: "13px 13px 100px", maxWidth: 720, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <button onClick={() => navigate(-1)} style={{ border: "none", background: "transparent", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", color: "var(--text-2)" }}>
+          <ArrowLeft size={18} />
+          <span style={{ fontSize: 13 }}>Voltar</span>
+        </button>
+        <button
+          onClick={() => void runBackfill()}
+          disabled={backfillRunning || loading}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            border: "1.5px solid var(--accent-sage, #96C7B3)",
+            background: backfillRunning ? "rgba(150,199,179,.2)" : "rgba(150,199,179,.08)",
+            color: "var(--accent-sage-ink, #50705B)",
+            borderRadius: 999,
+            padding: "6px 14px",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: backfillRunning ? "default" : "pointer",
+          }}
+        >
+          <RefreshCw size={13} style={{ animation: backfillRunning ? "spin 0.8s linear infinite" : undefined }} />
+          {backfillRunning ? "Processando histórico…" : "Processar histórico"}
+        </button>
+      </div>
+
+      <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: "var(--text-1)" }}>O que a Airia entende de você</h1>
+      <p style={{ fontSize: 13, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
+        Tudo aqui é construído a partir dos seus diários, check-ins e conversas. Você pode corrigir, apagar e marcar decisões como resolvidas.
+      </p>
+
+      {/* Status / Banner */}
+      {status && (
+        <div
+          style={{
+            background: needsBackfill ? "rgba(247,231,166,.32)" : "rgba(255,253,249,.97)",
+            border: `1.5px solid ${needsBackfill ? "rgba(247,231,166,.7)" : "var(--warm-border)"}`,
+            borderRadius: 14,
+            padding: 14,
+            marginBottom: 16,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          {needsBackfill ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <AlertCircle size={16} style={{ color: "#7C641A", marginTop: 2, flexShrink: 0 }} />
+              <p style={{ fontSize: 12.5, color: "#7C641A", margin: 0, lineHeight: 1.5 }}>
+                Você tem <strong>{status.journalSessionsTotal} sessões de diário</strong> e <strong>{status.checkinsWithNoteTotal} check-ins com nota</strong>, mas só <strong>{status.entitiesInGraph} entidades</strong> processadas. Toca em <em>Processar histórico</em> pra Airia ler tudo de uma vez.
+              </p>
+            </div>
+          ) : (
+            <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0 }}>
+              {isFresh ? `Último processamento: ${relativeDays(status.lastBackfillAt!)}.` : "Ainda não processado."}
+              {" "}
+              No grafo: <strong>{status.entitiesInGraph}</strong> entidades, <strong>{status.factsInGraph}</strong> fatos, <strong>{status.patternsInGraph}</strong> padrões, <strong>{status.openDecisionsInGraph}</strong> decisões abertas.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--warm-border)" }}>
+        {([
+          { key: "entidades", label: "Entidades", count: entities.length },
+          { key: "fatos", label: "Fatos", count: facts.length },
+          { key: "padroes", label: "Padrões", count: patterns.length },
+          { key: "decisoes", label: "Decisões", count: decisions.filter((d) => !d.resolvedAt).length },
+        ] as const).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              flex: 1,
+              border: "none",
+              background: "transparent",
+              padding: "10px 4px",
+              fontSize: 12,
+              fontWeight: 700,
+              color: activeTab === tab.key ? "var(--text-1)" : "var(--text-3)",
+              borderBottom: activeTab === tab.key ? "2px solid var(--accent-peach)" : "2px solid transparent",
+              cursor: "pointer",
+            }}
+          >
+            {tab.label} <span style={{ color: "var(--text-3)", fontWeight: 600 }}>({tab.count})</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Loading */}
+      {loading && <p style={{ textAlign: "center", color: "var(--text-3)", padding: 24 }}>Carregando…</p>}
+
+      {/* Empty state */}
+      {!loading && activeTab === "entidades" && entities.length === 0 && (
+        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>
+          Nada extraído ainda. Use o diário ou rode o processamento de histórico.
+        </p>
+      )}
+
+      {/* Entidades */}
+      {!loading && activeTab === "entidades" && entities.map((e) => (
+        <div key={e.id} className="glass-card" style={{ padding: 12, marginBottom: 8, borderRadius: 12, border: "1px solid var(--warm-border)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{e.canonicalName}</p>
+              <p style={{ fontSize: 11, color: "var(--text-3)", margin: "3px 0 0" }}>
+                {e.type}{e.status ? ` · ${e.status}` : ""} · mencionado {relativeDays(e.lastMentionAt)}
+              </p>
+              {e.aliases.length > 0 && (
+                <p style={{ fontSize: 11, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
+                  Também chamado de: {e.aliases.join(", ")}
+                </p>
+              )}
+            </div>
+            <button onClick={() => void deleteEntity(e.id)} aria-label="Apagar" style={{ border: "none", background: "transparent", cursor: "pointer", padding: 4 }}>
+              <Trash2 size={14} color="var(--text-3)" />
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Fatos */}
+      {!loading && activeTab === "fatos" && facts.length === 0 && (
+        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>Nenhum fato ainda.</p>
+      )}
+      {!loading && activeTab === "fatos" && facts.map((f) => (
+        <div key={f.id} className="glass-card" style={{ padding: 12, marginBottom: 8, borderRadius: 12, border: "1px solid var(--warm-border)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 13, color: "var(--text-1)", margin: 0, lineHeight: 1.5 }}>{f.statement}</p>
+              <p style={{ fontSize: 10.5, color: "var(--text-3)", margin: "4px 0 0" }}>
+                {f.entity?.canonicalName ? `[${f.entity.canonicalName}] · ` : ""}
+                {new Date(f.occurredAt).toLocaleDateString("pt-BR")} · {f.source} · confiança {Math.round(f.confidence * 100)}%
+              </p>
+            </div>
+            <button onClick={() => void deleteFact(f.id)} aria-label="Apagar" style={{ border: "none", background: "transparent", cursor: "pointer", padding: 4 }}>
+              <Trash2 size={14} color="var(--text-3)" />
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Padrões */}
+      {!loading && activeTab === "padroes" && patterns.length === 0 && (
+        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>Nenhum padrão observado ainda.</p>
+      )}
+      {!loading && activeTab === "padroes" && patterns.map((p) => (
+        <div key={p.id} className="glass-card" style={{ padding: 12, marginBottom: 8, borderRadius: 12, border: "1px solid var(--warm-border)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 13, color: "var(--text-1)", margin: 0, lineHeight: 1.5 }}>{p.pattern}</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                  <div style={{ width: `${Math.round(p.strength * 100)}%`, height: "100%", background: "var(--accent-sage, #96C7B3)" }} />
+                </div>
+                <span style={{ fontSize: 10.5, color: "var(--text-3)", minWidth: 40, textAlign: "right" }}>{Math.round(p.strength * 100)}%</span>
+              </div>
+            </div>
+            <button onClick={() => void deletePattern(p.id)} aria-label="Apagar" style={{ border: "none", background: "transparent", cursor: "pointer", padding: 4 }}>
+              <Trash2 size={14} color="var(--text-3)" />
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Decisões */}
+      {!loading && activeTab === "decisoes" && decisions.length === 0 && (
+        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>Nenhuma decisão em aberto.</p>
+      )}
+      {!loading && activeTab === "decisoes" && decisions.map((d) => (
+        <div key={d.id} className="glass-card" style={{ padding: 12, marginBottom: 8, borderRadius: 12, border: "1px solid var(--warm-border)", opacity: d.resolvedAt ? 0.55 : 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0, lineHeight: 1.5 }}>{d.question}</p>
+              {d.context && (
+                <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "4px 0 0", lineHeight: 1.45 }}>{d.context}</p>
+              )}
+              <p style={{ fontSize: 10.5, color: "var(--text-3)", margin: "4px 0 0" }}>
+                {d.resolvedAt ? `Resolvida ${relativeDays(d.resolvedAt)}` : `Aberta ${relativeDays(d.raisedAt)}`}
+                {d.resolution ? ` · ${d.resolution}` : ""}
+              </p>
+            </div>
+            {!d.resolvedAt && (
+              <button
+                onClick={() => void resolveDecision(d.id)}
+                aria-label="Marcar como resolvida"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  border: "1.5px solid var(--accent-peach)",
+                  background: "transparent",
+                  color: "var(--accent-peach-ink)",
+                  borderRadius: 999,
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                <CheckCircle2 size={12} />
+                Resolver
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

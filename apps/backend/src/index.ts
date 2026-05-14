@@ -10,6 +10,7 @@ import { PrismaClient } from '@app/database';
 import { requireAuth, AuthRequest } from './middleware/auth';
 import { AIService } from './services/ai.service';
 import { KnowledgeGraphService } from './services/knowledge-graph.service';
+import { KnowledgeGraphBackfillService } from './services/knowledge-graph-backfill.service';
 import { PlannerService, type TimelineBlockInput } from './services/planner.service';
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
@@ -129,6 +130,71 @@ type AppDependencies = {
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
 };
+
+/**
+ * Fase C — reforço de padrão a partir do feedback de uma ação sugerida.
+ * Busca padrões ativos do usuário e ajusta `strength` conforme aceitação.
+ */
+const REINFORCE_STOPWORDS = new Set([
+  'a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das',
+  'em', 'no', 'na', 'nos', 'nas', 'para', 'pra', 'por', 'com', 'sem',
+  'que', 'se', 'sua', 'seu', 'suas', 'seus', 'voce', 'você',
+  'hoje', 'agora', 'fazer', 'abrir', 'ver',
+]);
+function normalizeForReinforce(text: string): string {
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\w\s]/g, ' ');
+}
+function tokensForReinforce(text: string): Set<string> {
+  return new Set(
+    normalizeForReinforce(text)
+      .split(/\s+/)
+      .filter((t) => t.length >= 4 && !REINFORCE_STOPWORDS.has(t)),
+  );
+}
+async function reinforcePatternsFromActionFeedback(
+  prisma: PrismaClient,
+  userId: string,
+  actionTitle: string,
+  status: string,
+): Promise<void> {
+  const deltaByStatus: Record<string, number> = {
+    accepted: 0.05,
+    done: 0.05,
+    scheduled: 0.02,
+    dismissed: -0.10,
+    rejected: -0.15,
+    deleted: -0.15,
+  };
+  const delta = deltaByStatus[status];
+  if (!delta) return;
+  const patterns = await prisma.userPattern.findMany({
+    where: { userId },
+    orderBy: { strength: 'desc' },
+    take: 40,
+  });
+  if (patterns.length === 0) return;
+  const actionTokens = tokensForReinforce(actionTitle);
+  if (actionTokens.size < 2) return;
+  for (const pattern of patterns) {
+    const patternTokens = tokensForReinforce(pattern.pattern);
+    if (patternTokens.size === 0) continue;
+    let overlap = 0;
+    for (const t of actionTokens) if (patternTokens.has(t)) overlap += 1;
+    const ratio = overlap / Math.min(actionTokens.size, patternTokens.size);
+    if (ratio >= 0.4) {
+      const next = Math.max(0, Math.min(1, pattern.strength + delta));
+      if (Math.abs(next - pattern.strength) >= 0.005) {
+        await prisma.userPattern.update({
+          where: { id: pattern.id },
+          data: {
+            strength: next,
+            lastConfirmedAt: delta > 0 ? new Date() : pattern.lastConfirmedAt,
+          },
+        });
+      }
+    }
+  }
+}
 
 function buildTimelineMetadataData(block: TimelineBlockInput) {
   const metadata: Record<string, unknown> = {};
@@ -3444,6 +3510,19 @@ export function createApp(dependencies: AppDependencies = {}) {
             userAgent: req.get('user-agent') ?? null,
           },
         }).catch(() => null);
+
+        // Fase C — reforço de padrão em ação aceita/feita ou rejeitada.
+        // Heurística: busca padrões ativos do usuário, vê quais têm overlap de
+        // palavras ≥ 0.4 com o título da ação, aplica delta de força:
+        //   accepted/done  → +0.05  (até 1.0)
+        //   dismissed      → -0.10
+        //   deleted/rejected → -0.15
+        // Roda em background pra não atrasar response.
+        setImmediate(() => {
+          void reinforcePatternsFromActionFeedback(prisma, userId, item.title, item.status).catch((err) => {
+            console.warn('[kg/reinforce-from-action]', err);
+          });
+        });
       }
       return res.json({ stored: Boolean(item), item });
     } catch (error: any) {
@@ -5204,6 +5283,156 @@ JSON APENAS: {"profileSummary":"..."}`,
    * GET /api/habits
    * Lista os hábitos do usuário para uma data específica.
    */
+  // ─── KNOWLEDGE GRAPH — Backfill + Fase B (CRUD) ──────────────────────────
+
+  /** GET /api/me/knowledge-graph/status — quanto existe vs já processado */
+  app.get('/api/me/knowledge-graph/status', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const status = await KnowledgeGraphBackfillService.getStatus(userId);
+      return res.json(status);
+    } catch (error) {
+      console.error('[kg/status]', error);
+      return res.status(500).json({ error: 'Failed to load knowledge graph status' });
+    }
+  });
+
+  /** POST /api/me/knowledge-graph/backfill — processa históricos existentes
+   *  Body opcional: { forceFromScratch?: boolean, limit?: number, sinceDate?: 'YYYY-MM-DD' }
+   *  Roda síncrono até MAX_MESSAGES_PER_RUN — cliente pode chamar várias vezes
+   *  pra processar em pedaços (cursor preservado via EventLog).
+   */
+  app.post('/api/me/knowledge-graph/backfill', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const body = (req.body ?? {}) as { forceFromScratch?: boolean; limit?: number; sinceDate?: string };
+      const result = await KnowledgeGraphBackfillService.runForUser(userId, body);
+      return res.json({ ok: true, ...result });
+    } catch (error) {
+      console.error('[kg/backfill]', error);
+      return res.status(500).json({ error: 'Backfill failed', message: (error as Error).message });
+    }
+  });
+
+  /** GET /api/me/knowledge-graph — lista completa do contexto pra tela /me/contexto */
+  app.get('/api/me/knowledge-graph', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const [entities, facts, patterns, decisions] = await Promise.all([
+        prisma.userEntity.findMany({
+          where: { userId },
+          orderBy: { lastMentionAt: 'desc' },
+          take: 100,
+        }),
+        prisma.userFact.findMany({
+          where: { userId },
+          orderBy: { occurredAt: 'desc' },
+          take: 200,
+          include: { entity: { select: { canonicalName: true } } },
+        }),
+        prisma.userPattern.findMany({
+          where: { userId },
+          orderBy: { strength: 'desc' },
+          take: 50,
+        }),
+        prisma.userOpenDecision.findMany({
+          where: { userId },
+          orderBy: { raisedAt: 'desc' },
+          take: 50,
+        }),
+      ]);
+      return res.json({ entities, facts, patterns, decisions });
+    } catch (error) {
+      console.error('[kg/list]', error);
+      return res.status(500).json({ error: 'Failed to load knowledge graph' });
+    }
+  });
+
+  /** DELETE /api/me/knowledge-graph/entity/:id — remove entidade (e fatos órfãos viram null) */
+  app.delete('/api/me/knowledge-graph/entity/:id', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    try {
+      const entity = await prisma.userEntity.findFirst({ where: { id, userId } });
+      if (!entity) return res.status(404).json({ error: 'Entity not found' });
+      await prisma.userEntity.delete({ where: { id } });
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[kg/entity/delete]', error);
+      return res.status(500).json({ error: 'Failed to delete entity' });
+    }
+  });
+
+  /** PATCH /api/me/knowledge-graph/entity/:id — corrigir nome, status, etc. */
+  app.patch('/api/me/knowledge-graph/entity/:id', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const body = req.body as Partial<{ canonicalName: string; aliases: string[]; type: string; status: string }>;
+    try {
+      const entity = await prisma.userEntity.findFirst({ where: { id, userId } });
+      if (!entity) return res.status(404).json({ error: 'Entity not found' });
+      const updated = await prisma.userEntity.update({
+        where: { id },
+        data: {
+          canonicalName: typeof body.canonicalName === 'string' ? body.canonicalName.trim() : undefined,
+          aliases: Array.isArray(body.aliases) ? body.aliases : undefined,
+          type: typeof body.type === 'string' ? body.type : undefined,
+          status: typeof body.status === 'string' ? body.status : undefined,
+        },
+      });
+      return res.json(updated);
+    } catch (error) {
+      console.error('[kg/entity/patch]', error);
+      return res.status(500).json({ error: 'Failed to update entity' });
+    }
+  });
+
+  /** DELETE /api/me/knowledge-graph/fact/:id — remove fato */
+  app.delete('/api/me/knowledge-graph/fact/:id', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    try {
+      const fact = await prisma.userFact.findFirst({ where: { id, userId } });
+      if (!fact) return res.status(404).json({ error: 'Fact not found' });
+      await prisma.userFact.delete({ where: { id } });
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[kg/fact/delete]', error);
+      return res.status(500).json({ error: 'Failed to delete fact' });
+    }
+  });
+
+  /** DELETE /api/me/knowledge-graph/pattern/:id — remove padrão observado */
+  app.delete('/api/me/knowledge-graph/pattern/:id', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    try {
+      const p = await prisma.userPattern.findFirst({ where: { id, userId } });
+      if (!p) return res.status(404).json({ error: 'Pattern not found' });
+      await prisma.userPattern.delete({ where: { id } });
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[kg/pattern/delete]', error);
+      return res.status(500).json({ error: 'Failed to delete pattern' });
+    }
+  });
+
+  /** POST /api/me/knowledge-graph/decision/:id/resolve — marca decisão como resolvida */
+  app.post('/api/me/knowledge-graph/decision/:id/resolve', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const { resolution } = (req.body ?? {}) as { resolution?: string };
+    try {
+      const d = await prisma.userOpenDecision.findFirst({ where: { id, userId } });
+      if (!d) return res.status(404).json({ error: 'Decision not found' });
+      await KnowledgeGraphService.markDecisionResolved(id, resolution);
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[kg/decision/resolve]', error);
+      return res.status(500).json({ error: 'Failed to resolve decision' });
+    }
+  });
+
   app.get('/api/habits', requireAuth, async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     const { date } = req.query;
