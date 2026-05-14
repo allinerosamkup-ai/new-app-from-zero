@@ -19,6 +19,7 @@ import { CheckinCreateSchema } from './contracts/checkin.contract';
 import { deriveCheckinSlot } from './contracts/checkin-slot';
 import { PlannerSyncSchema, PlannerAISuggestionRequestSchema } from './contracts/planner.contract';
 import { PlannerAIService } from './services/planner-ai.service';
+import { LearningContextService } from './services/learning-context.service';
 import { HabitCreateSchema, HabitPatchSchema } from './contracts/habit.contract';
 import { JournalExternalMessageSchema, JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { EventLogCreateSchema } from './contracts/event-log.contract';
@@ -3666,13 +3667,22 @@ export function createApp(dependencies: AppDependencies = {}) {
         console.warn('[planner-suggestions/kg] falhou:', e);
       }
 
+      // Sprint Frente 2 — Learning context longitudinal via SQL views
+      let learningCtx: string | null = null;
+      try {
+        const lc = await LearningContextService.get(userId);
+        learningCtx = LearningContextService.formatForPrompt(lc) || null;
+      } catch (e) {
+        console.warn('[planner-suggestions/learning] falhou:', e);
+      }
+
       const result = await PlannerAIService.getSuggestions(data, {
         userName: runtimeCtx.userName,
         profileSummary: runtimeCtx.userProfileSummary,
         moodCycleContext: runtimeCtx.moodCycleContext,
         knowledgeGraphContext: kgContext,
         priorDiagnoses: runtimeCtx.priorDiagnoses,
-        // learningContext: virá da Frente 2 (ainda não pluggado)
+        learningContext: learningCtx,
       });
 
       // EventLog leve pra observabilidade (sem PII sensível)
