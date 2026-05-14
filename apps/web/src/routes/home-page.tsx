@@ -1547,37 +1547,29 @@ export function HomePage() {
           <p style={{ margin: "0 0 13px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
             {bioSyncAgendaHint}
           </p>
-          <AuraButtonV2
-            variant="secondary"
-            size="md"
-            onClick={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
-            style={{ width: "100%", minHeight: 44 }}
-          >
-            Ajustar agenda pelo meu ritmo
-          </AuraButtonV2>
           <button
             type="button"
             onClick={() => navigate("/planner", { state: { openProactiveReplan: true } })}
             style={{
-              marginTop: 10,
               width: "100%",
-              minHeight: 40,
+              minHeight: 44,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
-              border: "1.5px solid var(--accent-peach, #D7897F)",
-              background: "transparent",
-              color: "var(--accent-peach-ink, #A8584A)",
+              border: "none",
+              background: "var(--accent-peach, #D7897F)",
+              color: "#fff",
               borderRadius: 999,
-              padding: "8px 14px",
-              fontSize: 13,
-              fontWeight: 700,
+              padding: "10px 16px",
+              fontSize: 14,
+              fontWeight: 800,
               cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(215,137,127,0.25)",
             }}
           >
-            <Sparkles size={14} />
-            Replanejar meu dia com IA
+            <Sparkles size={15} />
+            Ajustar meu dia com IA
           </button>
         </div>
 
