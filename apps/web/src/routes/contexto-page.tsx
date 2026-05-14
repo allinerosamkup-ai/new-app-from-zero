@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, RefreshCw, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowLeft, Trash2, CheckCircle2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useToast } from "../components/Toast";
@@ -72,7 +72,6 @@ export function ContextoPage() {
   const [patterns, setPatterns] = useState<UserPattern[]>([]);
   const [decisions, setDecisions] = useState<UserOpenDecision[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>("entidades");
-  const [backfillRunning, setBackfillRunning] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -99,24 +98,6 @@ export function ContextoPage() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
-
-  async function runBackfill() {
-    if (backfillRunning) return;
-    setBackfillRunning(true);
-    try {
-      const result = await api.post("/me/knowledge-graph/backfill", {});
-      const r = result as { sessionsProcessed?: number; checkinsProcessed?: number; extractionsSucceeded?: number };
-      showSuccess(
-        `Processado: ${r.sessionsProcessed ?? 0} sessões, ${r.checkinsProcessed ?? 0} check-ins (${r.extractionsSucceeded ?? 0} extrações).`,
-      );
-      await loadAll();
-    } catch (error) {
-      showError("Falha ao rodar backfill.");
-      console.error(error);
-    } finally {
-      setBackfillRunning(false);
-    }
-  }
 
   async function deleteEntity(id: string) {
     if (!confirm("Apagar essa entidade do contexto da Airia?")) return;
@@ -159,76 +140,36 @@ export function ContextoPage() {
     }
   }
 
-  const isFresh = status?.lastBackfillAt !== null;
-  const needsBackfill = useMemo(() => {
-    if (!status) return false;
-    const sourceCount = status.journalSessionsTotal + status.checkinsWithNoteTotal;
-    return sourceCount > 5 && status.entitiesInGraph < 3;
-  }, [status]);
-
   return (
     <div style={{ padding: "13px 13px 100px", maxWidth: 720, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
         <button onClick={() => navigate(-1)} style={{ border: "none", background: "transparent", display: "flex", alignItems: "center", gap: 4, cursor: "pointer", color: "var(--text-2)" }}>
           <ArrowLeft size={18} />
           <span style={{ fontSize: 13 }}>Voltar</span>
-        </button>
-        <button
-          onClick={() => void runBackfill()}
-          disabled={backfillRunning || loading}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            border: "1.5px solid var(--accent-sage, #96C7B3)",
-            background: backfillRunning ? "rgba(150,199,179,.2)" : "rgba(150,199,179,.08)",
-            color: "var(--accent-sage-ink, #50705B)",
-            borderRadius: 999,
-            padding: "6px 14px",
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: backfillRunning ? "default" : "pointer",
-          }}
-        >
-          <RefreshCw size={13} style={{ animation: backfillRunning ? "spin 0.8s linear infinite" : undefined }} />
-          {backfillRunning ? "Processando histórico…" : "Processar histórico"}
         </button>
       </div>
 
       <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: "var(--text-1)" }}>O que a Airia entende de você</h1>
       <p style={{ fontSize: 13, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
-        Tudo aqui é construído a partir dos seus diários, check-ins e conversas. Você pode corrigir, apagar e marcar decisões como resolvidas.
+        A Airia aprende automaticamente do seu diário e check-ins. Você pode corrigir, apagar e marcar decisões como resolvidas.
       </p>
 
-      {/* Status / Banner */}
+      {/* Status compacto, sem botão */}
       {status && (
         <div
           style={{
-            background: needsBackfill ? "rgba(247,231,166,.32)" : "rgba(255,253,249,.97)",
-            border: `1.5px solid ${needsBackfill ? "rgba(247,231,166,.7)" : "var(--warm-border)"}`,
+            background: "rgba(255,253,249,.97)",
+            border: "1.5px solid var(--warm-border)",
             borderRadius: 14,
             padding: 14,
             marginBottom: 16,
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
           }}
         >
-          {needsBackfill ? (
-            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <AlertCircle size={16} style={{ color: "#7C641A", marginTop: 2, flexShrink: 0 }} />
-              <p style={{ fontSize: 12.5, color: "#7C641A", margin: 0, lineHeight: 1.5 }}>
-                Você tem <strong>{status.journalSessionsTotal} sessões de diário</strong> e <strong>{status.checkinsWithNoteTotal} check-ins com nota</strong>, mas só <strong>{status.entitiesInGraph} entidades</strong> processadas. Toca em <em>Processar histórico</em> pra Airia ler tudo de uma vez.
-              </p>
-            </div>
-          ) : (
-            <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0 }}>
-              {isFresh ? `Último processamento: ${relativeDays(status.lastBackfillAt!)}.` : "Ainda não processado."}
-              {" "}
-              No grafo: <strong>{status.entitiesInGraph}</strong> entidades, <strong>{status.factsInGraph}</strong> fatos, <strong>{status.patternsInGraph}</strong> padrões, <strong>{status.openDecisionsInGraph}</strong> decisões abertas.
-            </p>
-          )}
+          <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0 }}>
+            <strong>{status.entitiesInGraph}</strong> entidades · <strong>{status.factsInGraph}</strong> fatos · <strong>{status.patternsInGraph}</strong> padrões · <strong>{status.openDecisionsInGraph}</strong> decisões abertas
+            {status.lastBackfillAt && ` · atualizado ${relativeDays(status.lastBackfillAt)}`}
+          </p>
         </div>
       )}
 

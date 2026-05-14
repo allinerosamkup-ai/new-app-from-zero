@@ -1988,6 +1988,16 @@ export function createApp(dependencies: AppDependencies = {}) {
     AiBackgroundService.scheduleJob(data.userId, 'rag-indexing', '1h').catch(() => {});
     AiBackgroundService.scheduleJob(data.userId, 'profile-update', '6h').catch(() => {});
 
+    // 6. Trigger automático de extração no Knowledge Graph quando há nota textual.
+    //    Roda em background — não atrasa response.
+    if (data.note && data.note.trim().length >= 12) {
+      setImmediate(() => {
+        void KnowledgeGraphService.extractFromMessage(data.userId, data.note!.trim(), {
+          source: 'checkin',
+        }).catch((err) => console.warn('[checkin/kg] extração falhou:', err));
+      });
+    }
+
     return res.json({ ...updatedCheckin, riskSafety });
 
   } catch (error: any) {
@@ -5635,6 +5645,41 @@ function getSaoPauloHHMM(date: Date): string {
 }
 
 if (require.main === module) {
+  // Knowledge Graph backfill — roda a cada hora, processa incrementalmente
+  // qualquer usuário com diário ativo nas últimas 24h. Usuário NUNCA precisa
+  // apertar nada — Aura aprende sozinha conforme escreve.
+  cron.schedule('17 * * * *', async () => {
+    try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentUsers = await defaultPrisma.profile.findMany({
+        where: {
+          OR: [
+            { journalSessions: { some: { updatedAt: { gte: since } } } },
+            { checkins: { some: { recordedAt: { gte: since } } } },
+          ],
+        },
+        select: { id: true },
+        take: 50,
+      }).catch(() => []);
+
+      if (recentUsers.length === 0) return;
+      console.log(`[cron/kg-backfill] processando ${recentUsers.length} usuários`);
+
+      for (const u of recentUsers) {
+        try {
+          const result = await KnowledgeGraphBackfillService.runForUser(u.id, { limit: 30 });
+          if (result.extractionsSucceeded > 0) {
+            console.log(`[cron/kg-backfill] user=${u.id} extracted=${result.extractionsSucceeded}`);
+          }
+        } catch (err) {
+          console.warn(`[cron/kg-backfill] user=${u.id} falhou:`, err);
+        }
+      }
+    } catch (err) {
+      console.warn('[cron/kg-backfill] erro geral:', err);
+    }
+  });
+
   // Push notification cron — runs every minute
   cron.schedule('* * * * *', async () => {
     try {

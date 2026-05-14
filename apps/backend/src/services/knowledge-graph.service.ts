@@ -260,12 +260,20 @@ export class KnowledgeGraphService {
       take: 4,
     })).map((p) => ({ pattern: p.pattern, strength: p.strength }));
 
-    // 4. Decisões em aberto
-    const openDecisions = (await prisma.userOpenDecision.findMany({
+    // 4. Decisões em aberto. Prioriza ANTIGAS (>= 7d) — sinal de que precisa
+    //    cutucar a usuária pra resolver. Mistura 2 antigas + 2 recentes.
+    const allOpen = await prisma.userOpenDecision.findMany({
       where: { userId, resolvedAt: null },
-      orderBy: { raisedAt: 'desc' },
-      take: 4,
-    })).map((d) => ({ question: d.question, raisedAt: d.raisedAt }));
+      orderBy: { raisedAt: 'asc' },
+      take: 20,
+    });
+    const sevenDaysAgo = Date.now() - 7 * 86400000;
+    const stale = allOpen.filter((d) => d.raisedAt.getTime() < sevenDaysAgo).slice(0, 2);
+    const fresh = allOpen.filter((d) => d.raisedAt.getTime() >= sevenDaysAgo).slice(-2);
+    const openDecisions = [...stale, ...fresh].map((d) => ({
+      question: d.question,
+      raisedAt: d.raisedAt,
+    }));
 
     return { entitiesActive, factsRecent, patternsRelevant, openDecisions };
   }
@@ -304,10 +312,11 @@ export class KnowledgeGraphService {
 
     if (ctx.openDecisions.length > 0) {
       lines.push('');
-      lines.push('DECISÕES EM ABERTO:');
+      lines.push('DECISÕES EM ABERTO (cutuque proativamente as marcadas com ⏰):');
       for (const d of ctx.openDecisions) {
         const days = Math.max(0, Math.floor((Date.now() - d.raisedAt.getTime()) / 86400000));
-        lines.push(`- ${d.question} (aberta há ${days}d)`);
+        const stale = days >= 7 ? '⏰ ' : '';
+        lines.push(`- ${stale}${d.question} (aberta há ${days}d)`);
       }
     }
 

@@ -53,8 +53,9 @@ export class KnowledgeGraphBackfillService {
       ? { gte: new Date(`${options.sinceDate}T00:00:00.000Z`) }
       : undefined;
 
-    // 1. Recupera cursor da última execução (último messageId processado)
+    // 1. Recupera cursores da última execução (mensagem + checkin processados)
     let lastProcessedId: string | null = null;
+    let lastProcessedCheckinId: string | null = null;
     if (!options.forceFromScratch) {
       const lastEvent = await prisma.eventLog.findFirst({
         where: { userId, eventName: 'kg.backfill.run' },
@@ -65,6 +66,9 @@ export class KnowledgeGraphBackfillService {
         if (typeof props.lastMessageId === 'string') {
           lastProcessedId = props.lastMessageId;
         }
+        if (typeof props.lastCheckinId === 'string') {
+          lastProcessedCheckinId = props.lastCheckinId;
+        }
       }
     }
 
@@ -73,6 +77,7 @@ export class KnowledgeGraphBackfillService {
     let extractionsAttempted = 0;
     let extractionsSucceeded = 0;
     let lastIdInRun: string | null = null;
+    let lastCheckinIdInRun: string | null = null;
 
     // 2. Processa SESSÕES de diário — agrupa por session, monta a conversa,
     //    extrai 1x por sessão (não 1x por mensagem — economiza chamadas).
@@ -122,14 +127,15 @@ export class KnowledgeGraphBackfillService {
       lastIdInRun = messages[messages.length - 1].id;
     }
 
-    // 3. Processa CHECK-INS com nota textual (note != '')
+    // 3. Processa CHECK-INS com nota textual (note != '') a partir do cursor
     const checkins = await prisma.dailyCheckin.findMany({
       where: {
         userId,
         note: { not: null },
+        ...(lastProcessedCheckinId ? { id: { gt: lastProcessedCheckinId } } : {}),
         ...(sinceFilter ? { recordedAt: sinceFilter } : {}),
       },
-      orderBy: { recordedAt: 'asc' },
+      orderBy: { id: 'asc' },
       take: Math.floor(limit / 4), // até ~50 check-ins
     });
 
@@ -142,16 +148,25 @@ export class KnowledgeGraphBackfillService {
       });
       if (result.saved) extractionsSucceeded += 1;
       checkinsProcessed += 1;
+      lastCheckinIdInRun = checkin.id;
     }
 
-    // 4. Salva cursor pra retomar próxima execução
-    if (lastIdInRun) {
+    // 4. Salva cursores pra retomar próxima execução. Sempre escreve evento
+    //    (mesmo sem cursor novo) pra registrar a execução automática.
+    if (lastIdInRun || lastCheckinIdInRun || sessionsProcessed > 0 || checkinsProcessed > 0) {
+      // Carrega cursores existentes pra preservar quando esta execução não avançou um deles
+      const existingCursors = await prisma.eventLog.findFirst({
+        where: { userId, eventName: 'kg.backfill.run' },
+        orderBy: { createdAt: 'desc' },
+      }).catch(() => null);
+      const prevProps = (existingCursors?.properties ?? {}) as Record<string, unknown>;
       await prisma.eventLog.create({
         data: {
           userId,
           eventName: 'kg.backfill.run',
           properties: {
-            lastMessageId: lastIdInRun,
+            lastMessageId: lastIdInRun ?? prevProps.lastMessageId ?? null,
+            lastCheckinId: lastCheckinIdInRun ?? prevProps.lastCheckinId ?? null,
             sessionsProcessed,
             checkinsProcessed,
             extractionsSucceeded,
