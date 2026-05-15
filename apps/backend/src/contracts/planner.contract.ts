@@ -31,8 +31,14 @@ export const PlannerAISuggestionExistingBlockSchema = z.object({
 });
 
 export const PlannerAIEnergyStateSchema = z.object({
-  label: z.string().max(120),
-  analysis: z.string().max(400).optional().nullable(),
+  label: z.string().max(200),
+  // analysis aceita texto longo do MoodCycleEngine (até ~800 chars). Fix 15/05:
+  // payload real chegou com 537 chars, max=400 derrubava request inteira.
+  // Truncamos no service se vier maior, em vez de rejeitar.
+  analysis: z.string().max(2000).optional().nullable().transform((val) => {
+    if (!val) return val;
+    return val.length > 800 ? val.slice(0, 800) + '…' : val;
+  }),
   suggestedIntensity: PlannerIntensitySchema.optional().default('M'),
   avgMood: z.number().nullable().optional(),
   avgEnergy: z.number().nullable().optional(),
