@@ -15,6 +15,13 @@ import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { aggregateCheckinsByDay, computeConsistencyScore, computeDailyPhaseMap, computeMoodCycle, computeStreak, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import { computeDaysSinceLastCheckin, REENTRY_GAP_DAYS } from "./checkin-page.helpers";
+import {
+  computeFirstInsight,
+  resolveHomeDensity,
+  shouldOfferWeeklySummary,
+  weekKeyOf,
+  type FirstInsight,
+} from "./phase-ux.helpers";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
@@ -653,6 +660,52 @@ export function HomePage() {
     }),
     [clockTime, hasEveningCheckinToday, homeAgendaPreview, isCheckinReentry, todayCheckinData.length],
   );
+
+  // ── UI adaptativa por fase (Onda 3) ─────────────────────────────────────────
+  const density = useMemo(() => resolveHomeDensity(cycleReport.phase), [cycleReport.phase]);
+
+  // ── Primeiro insight após 7 dias — mostrado uma única vez ───────────────────
+  const FIRST_INSIGHT_SEEN_KEY = "airia.firstInsight.seen.v1";
+  const [firstInsightDismissed, setFirstInsightDismissed] = useState(false);
+  useEffect(() => {
+    try { setFirstInsightDismissed(localStorage.getItem(FIRST_INSIGHT_SEEN_KEY) === "1"); } catch { /* ignore */ }
+  }, []);
+  const firstInsight = useMemo<FirstInsight | null>(
+    () => (firstInsightDismissed ? null : computeFirstInsight(aggregatedCheckinHistory, dayContext.localDate)),
+    [aggregatedCheckinHistory, dayContext.localDate, firstInsightDismissed],
+  );
+  function dismissFirstInsight() {
+    try { localStorage.setItem(FIRST_INSIGHT_SEEN_KEY, "1"); } catch { /* ignore */ }
+    setFirstInsightDismissed(true);
+  }
+
+  // ── Resumo semanal automático (domingo à noite / segunda) ───────────────────
+  const WEEKLY_SUMMARY_DISMISS_KEY = "airia.weeklySummary.dismissedWeek.v1";
+  const weekKey = useMemo(() => weekKeyOf(clockTime), [clockTime]);
+  const [weeklySummary, setWeeklySummary] = useState<{ analysis: string; recommendation: string | null } | null>(null);
+  const [weeklySummaryDismissed, setWeeklySummaryDismissed] = useState(true);
+  useEffect(() => {
+    try { setWeeklySummaryDismissed(localStorage.getItem(WEEKLY_SUMMARY_DISMISS_KEY) === weekKey); } catch { /* ignore */ }
+  }, [weekKey]);
+  const offerWeeklySummary = shouldOfferWeeklySummary(clockTime) && !weeklySummaryDismissed && cycleReport.phase !== "insufficient_data";
+  useEffect(() => {
+    if (!offerWeeklySummary || weeklySummary) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get("/insights/weekly") as { aiAnalysis?: string; recommendations?: Array<{ text?: string }> };
+        if (cancelled) return;
+        const analysis = (res?.aiAnalysis ?? "").trim();
+        if (!analysis) return;
+        setWeeklySummary({ analysis, recommendation: res?.recommendations?.[0]?.text?.trim() || null });
+      } catch { /* silencioso: resumo é bônus, não bloqueia a home */ }
+    })();
+    return () => { cancelled = true; };
+  }, [offerWeeklySummary, weeklySummary]);
+  function dismissWeeklySummary() {
+    try { localStorage.setItem(WEEKLY_SUMMARY_DISMISS_KEY, weekKey); } catch { /* ignore */ }
+    setWeeklySummaryDismissed(true);
+  }
 
   function buildSparkPath(points: ChartPoint[], getter: (p: ChartPoint) => number | null): string {
     const valid = points
@@ -1523,36 +1576,125 @@ export function HomePage() {
 
         {/* Ação principal do momento — 1 só, conforme hora do dia e estado real */}
         {primaryAction && (
-          <button
-            type="button"
-            onClick={() => navigate(primaryAction.route)}
+          <>
+            <button
+              type="button"
+              onClick={() => navigate(primaryAction.route)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                width: "100%",
+                minHeight: density.primaryActionMinHeight,
+                padding: "15px 16px",
+                marginBottom: density.toneNote ? 8 : "calc(var(--a) * 1.1)",
+                borderRadius: 16,
+                border: "1.5px solid rgba(215,137,127,0.35)",
+                background: "rgba(215,137,127,0.08)",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{primaryAction.emoji}</span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "var(--accent-peach-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {primaryAction.title}
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                    {primaryAction.subtitle}
+                  </p>
+                </div>
+              </div>
+              <span style={{ fontSize: 18, color: "var(--accent-peach)", fontWeight: 800, flexShrink: 0, marginLeft: 8 }}>→</span>
+            </button>
+            {density.toneNote && (
+              <p style={{ margin: "0 0 calc(var(--a) * 1.1)", fontSize: 11, color: "var(--text-3)", lineHeight: 1.4, paddingLeft: 4 }}>
+                {density.toneNote}
+              </p>
+            )}
+          </>
+        )}
+
+        {/* ── Primeiro insight (após 7 dias) — momento "isso funciona" ── */}
+        {firstInsight && (
+          <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              width: "100%",
-              padding: "15px 16px",
               marginBottom: "calc(var(--a) * 1.1)",
+              padding: "15px 16px",
               borderRadius: 16,
-              border: "1.5px solid rgba(215,137,127,0.35)",
-              background: "rgba(215,137,127,0.08)",
-              cursor: "pointer",
-              textAlign: "left",
+              border: "1.5px solid rgba(150,199,179,0.5)",
+              background: "rgba(150,199,179,0.10)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <span style={{ fontSize: 20, flexShrink: 0 }}>{primaryAction.emoji}</span>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "var(--accent-peach-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {primaryAction.title}
-                </p>
-                <p style={{ margin: 0, fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
-                  {primaryAction.subtitle}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ fontSize: 16 }}>🔎</span>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage)" }}>
+                  Primeiro padrão que a Airia notou
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={dismissFirstInsight}
+                aria-label="Dispensar insight"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
+              >
+                ×
+              </button>
             </div>
-            <span style={{ fontSize: 18, color: "var(--accent-peach)", fontWeight: 800, flexShrink: 0, marginLeft: 8 }}>→</span>
-          </button>
+            <p style={{ margin: "8px 0 4px", fontSize: 15, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.3 }}>
+              {firstInsight.headline}
+            </p>
+            <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.55 }}>
+              {firstInsight.detail}
+            </p>
+          </div>
+        )}
+
+        {/* ── Resumo semanal automático (domingo à noite / segunda) ── */}
+        {offerWeeklySummary && weeklySummary && (
+          <div
+            style={{
+              marginBottom: "calc(var(--a) * 1.1)",
+              padding: "15px 16px",
+              borderRadius: 16,
+              border: "1.5px solid rgba(99,152,169,0.4)",
+              background: "rgba(99,152,169,0.08)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ fontSize: 16 }}>🗓️</span>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sky)" }}>
+                  Sua semana, em 1 leitura
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={dismissWeeklySummary}
+                aria-label="Dispensar resumo"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
+              >
+                ×
+              </button>
+            </div>
+            <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.6 }}>
+              {weeklySummary.analysis}
+            </p>
+            {weeklySummary.recommendation && (
+              <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.55, fontWeight: 600 }}>
+                ↳ {weeklySummary.recommendation}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => navigate("/insights")}
+              style={{ marginTop: 12, background: "none", border: "none", cursor: "pointer", color: "var(--accent-sky)", fontSize: 12.5, fontWeight: 800, padding: 0 }}
+            >
+              Ver detalhes da semana →
+            </button>
+          </div>
         )}
 
         {showActivationHome && (
@@ -3191,7 +3333,8 @@ export function HomePage() {
           );
         })()}
 
-        {/* ── Como está seu dia? ── */}
+        {/* ── Como está seu dia? — card de pressão, oculto em fase baixa ── */}
+        {!density.hidePressureCards && (
         <div className="aura-card" style={{ marginBottom: "calc(var(--a))", padding: "14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
             <span style={{ fontSize: 15 }}>♡</span>
@@ -3241,6 +3384,7 @@ export function HomePage() {
             )}
           </div>
         </div>
+        )}
 
         {/* ── Momento de Autocuidado ── */}
         <div className="home-panel" style={{ border: "1.5px solid rgba(161,140,120,.25)" }}>
