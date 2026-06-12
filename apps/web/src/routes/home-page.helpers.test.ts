@@ -7,6 +7,7 @@ import {
   buildHomeAiRequestKey,
   buildHomeAgendaPreview,
   dedupeAgendaBlocks,
+  deriveHomePrimaryAction,
   extractAgendaRepeatContext,
   extractBlockedHomeAutonomyTitles,
   extractHomeRepeatContext,
@@ -344,5 +345,72 @@ describe("home page helpers", () => {
       isHomeAutonomyTitleBlocked("Abrir anúncio do apartamento", ["Enviar mensagem ao Matteo"]),
       false,
     );
+  });
+});
+
+describe("home primary action", () => {
+  const base = {
+    hour: 9,
+    hasCheckinToday: false,
+    hasEveningCheckinToday: false,
+    isReentry: false,
+    nextTask: null,
+    dueHabit: null,
+  };
+
+  it("prioritizes check-in when there is none today", () => {
+    const action = deriveHomePrimaryAction({ ...base, nextTask: { title: "Reunião", time: "14:00" } });
+    assert.equal(action?.kind, "checkin");
+    assert.equal(action?.route, "/checkin");
+  });
+
+  it("uses welcoming re-entry copy after absence", () => {
+    const action = deriveHomePrimaryAction({ ...base, isReentry: true });
+    assert.equal(action?.kind, "checkin");
+    assert.equal(action?.title, "Que bom te ver de novo");
+  });
+
+  it("suggests evening close after 18h when evening check-in is missing", () => {
+    const action = deriveHomePrimaryAction({
+      ...base,
+      hour: 20,
+      hasCheckinToday: true,
+      nextTask: { title: "Lavar louça", time: "21:00" },
+    });
+    assert.equal(action?.kind, "evening-close");
+    assert.equal(action?.route, "/checkin");
+  });
+
+  it("points to the next pending block during the day", () => {
+    const action = deriveHomePrimaryAction({
+      ...base,
+      hour: 14,
+      hasCheckinToday: true,
+      nextTask: { title: "Revisar proposta", time: "15:00" },
+    });
+    assert.equal(action?.kind, "next-block");
+    assert.equal(action?.route, "/planner");
+    assert.ok(action?.title.includes("Revisar proposta"));
+  });
+
+  it("falls back to a due habit when agenda is empty", () => {
+    const action = deriveHomePrimaryAction({
+      ...base,
+      hour: 14,
+      hasCheckinToday: true,
+      dueHabit: { title: "Beber água", icon: "💧" },
+    });
+    assert.equal(action?.kind, "habit");
+    assert.equal(action?.route, "/habits");
+  });
+
+  it("returns null when everything is done", () => {
+    const action = deriveHomePrimaryAction({
+      ...base,
+      hour: 14,
+      hasCheckinToday: true,
+      hasEveningCheckinToday: true,
+    });
+    assert.equal(action, null);
   });
 });

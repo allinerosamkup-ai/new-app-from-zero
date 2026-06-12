@@ -28,6 +28,7 @@ import {
   buildHomeAiRequestKey,
   buildQuarterHourRefreshBucket,
   dedupeAgendaBlocks,
+  deriveHomePrimaryAction,
   extractAgendaRepeatContext,
   extractBlockedHomeAutonomyTitles,
   extractHomeRepeatContext,
@@ -629,6 +630,29 @@ export function HomePage() {
       isHighlight: index === todayEntries.length - 1,
     }));
   }, [cycleReport.phase, dayContext.localDate, state.checkinHistory]);
+
+  // ── 1 ação principal por momento do dia ────────────────────────────────────
+  const hasEveningCheckinToday = useMemo(
+    () => (state.checkinHistory || []).some(
+      (entry) => normalizeDateKey(entry.date) === dayContext.localDate && getCheckinMoment(entry) === 2,
+    ),
+    [dayContext.localDate, state.checkinHistory],
+  );
+  const primaryAction = useMemo(
+    () => deriveHomePrimaryAction({
+      hour: clockTime.getHours(),
+      hasCheckinToday: todayCheckinData.length > 0,
+      hasEveningCheckinToday,
+      isReentry: isCheckinReentry,
+      nextTask: homeAgendaPreview.tasks[0]
+        ? { title: homeAgendaPreview.tasks[0].title, time: homeAgendaPreview.tasks[0].time }
+        : null,
+      dueHabit: homeAgendaPreview.habit
+        ? { title: homeAgendaPreview.habit.title, icon: homeAgendaPreview.habit.icon }
+        : null,
+    }),
+    [clockTime, hasEveningCheckinToday, homeAgendaPreview, isCheckinReentry, todayCheckinData.length],
+  );
 
   function buildSparkPath(points: ChartPoint[], getter: (p: ChartPoint) => number | null): string {
     const valid = points
@@ -1497,17 +1521,17 @@ export function HomePage() {
           </p>
         </div>
 
-        {/* CTA check-in — aparece quando não há check-in hoje */}
-        {todayCheckinData.length === 0 && (
+        {/* Ação principal do momento — 1 só, conforme hora do dia e estado real */}
+        {primaryAction && (
           <button
             type="button"
-            onClick={() => navigate("/checkin")}
+            onClick={() => navigate(primaryAction.route)}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               width: "100%",
-              padding: "13px 16px",
+              padding: "15px 16px",
               marginBottom: "calc(var(--a) * 1.1)",
               borderRadius: 16,
               border: "1.5px solid rgba(215,137,127,0.35)",
@@ -1516,20 +1540,18 @@ export function HomePage() {
               textAlign: "left",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20 }}>{isCheckinReentry ? "🤍" : "🌤"}</span>
-              <div>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--accent-peach-ink)" }}>
-                  {isCheckinReentry ? "Que bom te ver de novo" : "Check-in de hoje"}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{primaryAction.emoji}</span>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: "var(--accent-peach-ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {primaryAction.title}
                 </p>
                 <p style={{ margin: 0, fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
-                  {isCheckinReentry
-                    ? "Sem repor nada — só me conta como você tá agora. Leva 10 segundos."
-                    : "1 toque e a Airia calibra o dia com seu humor e energia."}
+                  {primaryAction.subtitle}
                 </p>
               </div>
             </div>
-            <span style={{ fontSize: 18, color: "var(--accent-peach)", fontWeight: 800 }}>→</span>
+            <span style={{ fontSize: 18, color: "var(--accent-peach)", fontWeight: 800, flexShrink: 0, marginLeft: 8 }}>→</span>
           </button>
         )}
 

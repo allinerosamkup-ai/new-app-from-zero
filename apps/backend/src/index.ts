@@ -78,7 +78,12 @@ import { sanitizeStabilityAnalysisSuggestion } from './lib/home-autonomy-sanitiz
 import {
   allowsHabitNotifications,
   getSaoPauloDateContext,
+  getSaoPauloDayStartUtc,
+  NUDGE_EVENT_NAME,
+  resolveCheckinNudgeTime,
+  shouldSendCheckinNudge,
   shouldSendHabitReminderToday,
+  shouldSendJournalNudge,
 } from './lib/notification-filters';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from './lib/openai-config';
 import { ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
@@ -5859,6 +5864,53 @@ function getSaoPauloHHMM(date: Date): string {
   return `${hour}:${minute}`;
 }
 
+// ─── Nudge único diário — suporte ────────────────────────────────────────────
+// Horário do nudge por usuária é recalculado 1x por dia (cache em memória).
+const checkinNudgeTimeCache = new Map<string, { dateKey: string; time: string }>();
+
+async function resolveUserCheckinNudgeTime(userId: string, preferredTime: string | null, dateKey: string): Promise<string> {
+  const cached = checkinNudgeTimeCache.get(userId);
+  if (cached && cached.dateKey === dateKey) return cached.time;
+
+  let recentTimes: string[] = [];
+  try {
+    const recent = await defaultPrisma.dailyCheckin.findMany({
+      where: { userId },
+      orderBy: [{ localDate: 'desc' }, { recordedAt: 'desc' }],
+      take: 10,
+      select: { recordedAt: true },
+    });
+    recentTimes = recent.map((row) => getSaoPauloHHMM(row.recordedAt));
+  } catch (e) {
+    console.warn('[push-cron] falha ao ler padrão de check-in, usando horário preferido:', e);
+  }
+
+  const time = resolveCheckinNudgeTime({ preferredTime, recentCheckinTimes: recentTimes });
+  checkinNudgeTimeCache.set(userId, { dateKey, time });
+  return time;
+}
+
+async function countNudgesSentToday(userId: string, spDayStartUtc: Date): Promise<number> {
+  try {
+    return await defaultPrisma.eventLog.count({
+      where: { userId, eventName: NUDGE_EVENT_NAME, createdAt: { gte: spDayStartUtc } },
+    });
+  } catch {
+    // Sem leitura confiável, melhor não enviar do que arriscar spam
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+async function logNudgeSent(userId: string, kind: 'checkin' | 'journal', time: string): Promise<void> {
+  try {
+    await defaultPrisma.eventLog.create({
+      data: { userId, eventName: NUDGE_EVENT_NAME, properties: { kind, time } },
+    });
+  } catch (e) {
+    console.warn('[push-cron] falha ao registrar nudge enviado:', e);
+  }
+}
+
 if (require.main === module) {
   // Knowledge Graph backfill — roda a cada hora, processa incrementalmente
   // qualquer usuário com diário ativo nas últimas 24h. Usuário NUNCA precisa
@@ -6002,34 +6054,65 @@ if (require.main === module) {
         });
       }
 
-      // 3. Check-in reminders
+      // 3. Nudges de engajamento (check-in / diário) — máx. 1/dia por usuária,
+      // no horário do padrão real de check-in, e nunca se o check-in já foi feito.
       const prefsCheckin = await defaultPrisma.userPreference.findMany({
         where: { notificationsOn: true },
       });
+      const spDayStartUtc = getSaoPauloDayStartUtc(saoPauloToday.dateKey);
       for (const pref of prefsCheckin) {
         const notifPrefs = (pref.notificationPreferences as any) || {};
-        if (!notifPrefs.checkin) continue;
-        const checkinTime = pref.morningCheckinTime || '09:00';
-        if (checkinTime === currentTimeStr) {
-          await sendPushToUser(pref.userId, {
-            title: '✨ Como você está agora?',
-            body: 'Hora do check-in de humor.',
-            url: '/checkin',
-            tag: 'checkin-reminder',
-          });
+        const journalTimes = notifPrefs.journal
+          ? [notifPrefs.journalMorningTime || '10:00', notifPrefs.journalEveningTime || '21:00']
+          : [];
+
+        if (notifPrefs.checkin) {
+          const nudgeTime = await resolveUserCheckinNudgeTime(pref.userId, pref.morningCheckinTime, saoPauloToday.dateKey);
+          if (nudgeTime === currentTimeStr) {
+            const [todayCheckin, nudgesSentToday] = await Promise.all([
+              defaultPrisma.dailyCheckin.findFirst({
+                where: { userId: pref.userId, localDate: saoPauloToday.dbDate },
+                select: { id: true },
+              }),
+              countNudgesSentToday(pref.userId, spDayStartUtc),
+            ]);
+            const decision = shouldSendCheckinNudge({
+              currentTime: currentTimeStr,
+              nudgeTime,
+              hasCheckinToday: Boolean(todayCheckin),
+              nudgesSentToday,
+            });
+            if (decision.send) {
+              await sendPushToUser(pref.userId, {
+                title: '✨ Como você tá agora?',
+                body: '1 toque e pronto — a Airia calibra seu dia.',
+                url: '/checkin',
+                tag: 'checkin-reminder',
+              });
+              await logNudgeSent(pref.userId, 'checkin', nudgeTime);
+            } else {
+              console.log(`[push-cron] checkin nudge skipped for ${pref.userId}: ${decision.reason}`);
+            }
+          }
         }
-        if (notifPrefs.journal) {
-          const journalTimes = [
-            notifPrefs.journalMorningTime || '10:00',
-            notifPrefs.journalEveningTime || '21:00',
-          ];
-          if (journalTimes.includes(currentTimeStr)) {
+
+        if (journalTimes.includes(currentTimeStr)) {
+          const nudgesSentToday = await countNudgesSentToday(pref.userId, spDayStartUtc);
+          const decision = shouldSendJournalNudge({
+            currentTime: currentTimeStr,
+            journalTimes,
+            nudgesSentToday,
+          });
+          if (decision.send) {
             await sendPushToUser(pref.userId, {
               title: 'Diário da Airia',
               body: 'Dois minutos para registrar o que mudou por dentro.',
               url: '/journal',
               tag: `journal-reminder-${currentTimeStr}`,
             });
+            await logNudgeSent(pref.userId, 'journal', currentTimeStr);
+          } else {
+            console.log(`[push-cron] journal nudge skipped for ${pref.userId}: ${decision.reason}`);
           }
         }
       }

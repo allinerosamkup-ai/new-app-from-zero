@@ -485,6 +485,77 @@ export function shouldRefreshHomeSuggestionAfterAction(item: { kind: "task" | "h
   return item.kind === "task" && Boolean(item.isAiSuggested);
 }
 
+// ─── 1 ação principal por momento do dia ─────────────────────────────────────
+// A home destaca UMA próxima ação: manhã/sem registro = check-in; tarde = próximo
+// bloco; noite = fechamento leve; sobra = hábito devido. Sem âncora real, sem card.
+
+export type HomePrimaryAction = {
+  kind: "checkin" | "evening-close" | "next-block" | "habit";
+  emoji: string;
+  title: string;
+  subtitle: string;
+  route: string;
+};
+
+export function deriveHomePrimaryAction(input: {
+  hour: number;
+  hasCheckinToday: boolean;
+  hasEveningCheckinToday: boolean;
+  isReentry: boolean;
+  nextTask: { title: string; time: string } | null;
+  dueHabit: { title: string; icon?: string } | null;
+}): HomePrimaryAction | null {
+  if (!input.hasCheckinToday) {
+    return input.isReentry
+      ? {
+          kind: "checkin",
+          emoji: "🤍",
+          title: "Que bom te ver de novo",
+          subtitle: "Sem repor nada — só me conta como você tá agora. Leva 10 segundos.",
+          route: "/checkin",
+        }
+      : {
+          kind: "checkin",
+          emoji: "🌤",
+          title: "Check-in de hoje",
+          subtitle: "1 toque e a Airia calibra o dia com seu humor e energia.",
+          route: "/checkin",
+        };
+  }
+
+  if (input.hour >= 18 && !input.hasEveningCheckinToday) {
+    return {
+      kind: "evening-close",
+      emoji: "🌙",
+      title: "Fechamento do dia",
+      subtitle: "Como você tá terminando? 1 toque e o dia fica registrado.",
+      route: "/checkin",
+    };
+  }
+
+  if (input.nextTask) {
+    return {
+      kind: "next-block",
+      emoji: "📅",
+      title: `Próximo: ${input.nextTask.title}`,
+      subtitle: `às ${input.nextTask.time} — toca pra abrir no Planner.`,
+      route: "/planner",
+    };
+  }
+
+  if (input.dueHabit) {
+    return {
+      kind: "habit",
+      emoji: input.dueHabit.icon || "🌱",
+      title: input.dueHabit.title,
+      subtitle: "Hábito leve de hoje — quando fizer sentido pra você.",
+      route: "/habits",
+    };
+  }
+
+  return null;
+}
+
 export function resolveHomeAgendaSuggestionDate(localDate: string, hour: number): string {
   if (hour < 18) {
     return localDate;
