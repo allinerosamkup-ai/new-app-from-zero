@@ -1221,6 +1221,34 @@ export function PreferencesPage() {
           </div>
         </div>
 
+        {/* Plano section */}
+        <div className="config-section">
+          <p className="config-section-title">Plano</p>
+          <div
+            className="config-row"
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate("/billing")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate("/billing"); }}
+          >
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(215,137,127,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach, #D7897F)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21.4 8 14 2 9.4h7.6z" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">Airia Pro</p>
+                <p className="config-row-sub">Assinatura, IA ilimitada e recursos avançados</p>
+              </div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+        </div>
+
         {/* Conta e Integrações section */}
         <div className="config-section">
           <p className="config-section-title">Conta e Integrações</p>

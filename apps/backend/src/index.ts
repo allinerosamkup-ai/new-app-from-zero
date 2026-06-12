@@ -5746,6 +5746,58 @@ JSON APENAS: {"profileSummary":"..."}`,
     return res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
+  // ── Billing / Stripe ─────────────────────────────────────────────────────
+  // Webhook precisa de raw body — registrar ANTES do express.json() global por isso
+  // usamos a rota separada com express.raw()
+  app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+    const sig = req.headers['stripe-signature'] as string;
+    if (!sig) return res.status(400).json({ error: 'no_signature' });
+    try {
+      const { StripeService } = await import('./services/stripe.service');
+      await StripeService.handleWebhook(req.body as Buffer, sig);
+      res.json({ received: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/billing/checkout', async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: 'unauthorized' });
+      const { StripeService } = await import('./services/stripe.service');
+      const url = await StripeService.createCheckoutSession(user.userId, user.email);
+      res.json({ url });
+    } catch {
+      res.status(500).json({ error: 'checkout_failed' });
+    }
+  });
+
+  app.post('/api/billing/portal', async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: 'unauthorized' });
+      const { StripeService } = await import('./services/stripe.service');
+      const url = await StripeService.createPortalSession(user.userId);
+      res.json({ url });
+    } catch (err: any) {
+      if (err.message === 'no_stripe_customer') return res.status(404).json({ error: 'no_subscription' });
+      res.status(500).json({ error: 'portal_failed' });
+    }
+  });
+
+  app.get('/api/billing/status', async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (!user) return res.status(401).json({ error: 'unauthorized' });
+      const { StripeService } = await import('./services/stripe.service');
+      const data = await StripeService.getSubscriptionStatus(user.userId);
+      res.json(data);
+    } catch {
+      res.status(500).json({ error: 'status_failed' });
+    }
+  });
+
   return app;
 }
 

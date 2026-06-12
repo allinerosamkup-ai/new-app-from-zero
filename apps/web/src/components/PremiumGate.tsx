@@ -1,0 +1,91 @@
+import { ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
+import { Sparkles, Lock } from "lucide-react";
+import { useSubscription } from "../hooks/useSubscription";
+
+type PremiumGateProps = {
+  children: ReactNode;
+  /** Texto curto do que essa feature premium oferece. */
+  feature?: string;
+  /** Se true, mostra o conteúdo desfocado por trás do CTA em vez de escondê-lo. */
+  blurBehind?: boolean;
+};
+
+/**
+ * Envolve uma feature premium. Se a usuária for Pro, renderiza children normalmente.
+ * Caso contrário, mostra um CTA de upgrade que leva para /billing.
+ * Enquanto carrega o status, renderiza children (evita flash de paywall em quem é Pro).
+ */
+export function PremiumGate({ children, feature, blurBehind = false }: PremiumGateProps) {
+  const navigate = useNavigate();
+  const { isPro, loading } = useSubscription();
+
+  if (loading || isPro) return <>{children}</>;
+
+  return (
+    <div style={{ position: "relative", borderRadius: 20, overflow: "hidden" }}>
+      {blurBehind && (
+        <div style={{ filter: "blur(6px)", pointerEvents: "none", userSelect: "none", opacity: 0.5 }}>
+          {children}
+        </div>
+      )}
+      <div
+        style={{
+          ...(blurBehind
+            ? { position: "absolute", inset: 0, display: "flex" }
+            : {}),
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px 20px",
+          borderRadius: 20,
+          border: "1.5px solid rgba(215,137,127,0.3)",
+          background: "rgba(255,253,249,.96)",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ maxWidth: 320 }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              background: "rgba(215,137,127,0.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 12px",
+            }}
+          >
+            <Lock size={18} color="var(--accent-peach)" />
+          </div>
+          <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 900, color: "var(--text-1)" }}>
+            Recurso do Airia Pro
+          </p>
+          <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5 }}>
+            {feature ?? "Desbloqueie IA ilimitada, insights avançados e mais."}
+          </p>
+          <button
+            onClick={() => navigate("/billing")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              minHeight: 44,
+              padding: "0 22px",
+              borderRadius: 999,
+              border: "none",
+              background: "var(--accent-peach)",
+              color: "#fff",
+              fontSize: 13.5,
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            <Sparkles size={15} />
+            Conhecer o Pro
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
