@@ -289,11 +289,10 @@ function HabitCard({
             onClick={async (e) => {
               e.stopPropagation();
               if (archiving) return;
-              if (confirm("Deseja mesmo excluir este hábito?")) {
-                setArchiving(true);
-                await onArchive();
-                setArchiving(false);
-              }
+              // Sem modal de confirmação: a ação executa na hora e o toast oferece "Desfazer"
+              setArchiving(true);
+              await onArchive();
+              setArchiving(false);
             }}
             disabled={archiving}
             style={{
@@ -666,9 +665,20 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
 
 // ─── Main page ────────────────────────────────────────────────────────────
 export function HabitsPage() {
-  const { state, addHabit, updateHabit, toggleHabit, archiveHabit } = useAuraStore();
+  const { state, addHabit, updateHabit, toggleHabit, archiveHabit, unarchiveHabit } = useAuraStore();
   const navigate = useNavigate();
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError, showUndo } = useToast();
+
+  async function handleArchiveHabit(habit: Habit) {
+    try {
+      await archiveHabit(habit.id);
+      showUndo(`"${habit.title}" excluído`, () => {
+        unarchiveHabit(habit.id).catch(() => showError("Não consegui restaurar o hábito"));
+      });
+    } catch {
+      showError("Não consegui excluir o hábito");
+    }
+  }
   const [tab, setTab] = useState<"today" | "all" | "badges">("today");
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
@@ -915,7 +925,7 @@ export function HabitsPage() {
                           dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
                           onEdit={() => setEditingHabit(h)}
-                          onArchive={() => archiveHabit(h.id)}
+                          onArchive={() => handleArchiveHabit(h)}
                           isToggling={togglingIds.has(h.id)}
                         />
                       ))}
@@ -937,7 +947,7 @@ export function HabitsPage() {
                           dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
                           onEdit={() => setEditingHabit(h)}
-                          onArchive={() => archiveHabit(h.id)}
+                          onArchive={() => handleArchiveHabit(h)}
                           isToggling={togglingIds.has(h.id)}
                         />
                       ))}
@@ -1012,7 +1022,7 @@ export function HabitsPage() {
                             key={h.id}
                             habit={h}
                             dateKey={todayKey}
-                            onArchive={() => archiveHabit(h.id)}
+                            onArchive={() => handleArchiveHabit(h)}
                             onEdit={() => setEditingHabit(h)}
                           />
                         ))}
@@ -1118,6 +1128,32 @@ export function HabitsPage() {
           );
         })()}
       </div>
+
+      {/* FAB — quick add fixo no bottom */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        style={{
+          position: "fixed",
+          bottom: 88,
+          right: 20,
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          background: "var(--accent-peach)",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 20px rgba(215,137,127,0.45)",
+          zIndex: 100,
+          transition: "transform 0.15s ease",
+        }}
+        onPointerDown={(e) => (e.currentTarget.style.transform = "scale(0.92)")}
+        onPointerUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      >
+        <Plus size={22} color="#fff" strokeWidth={2.5} />
+      </button>
 
       {/* Add modal */}
       {showAddModal && (

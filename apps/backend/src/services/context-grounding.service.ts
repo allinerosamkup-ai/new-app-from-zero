@@ -35,6 +35,8 @@ export type DailyContext = GroundingLists & {
   healthSignals?: GroundedHealthSignals | null;
   actionFeedback: AiActionFeedbackItem[];
   postponedActions?: GroundedPostponement[];
+  // null = nunca fez check-in; 0 = hoje; N = dias desde o último (sempre preenchido pelo serviço)
+  daysSinceLastCheckin?: number | null;
   patternMemoryContext: string;
   operationalRule: string;
 };
@@ -182,7 +184,12 @@ function mergeContextList(existing: unknown, discovered: string[]): string[] {
   return unique([...stringList(existing), ...discovered]);
 }
 
-function formatGroundingBlock(lists: GroundingLists & { postponedActions?: GroundedPostponement[] }, dateKey: string, ragContext: string): string {
+function formatCheckinAbsenceLine(daysSinceLastCheckin: number | null | undefined): string {
+  if (typeof daysSinceLastCheckin !== 'number' || daysSinceLastCheckin < 2) return '';
+  return `Sinal de ausência: ${daysSinceLastCheckin} dias sem check-in. Para este público, ausência é dado provável de fase baixa ou sobrecarga — nunca falha. Proibido cobrar, mencionar sequência perdida ou pedir registro retroativo. Acolher a volta em no máximo 1 frase curta e reduzir a carga sugerida para hoje.`;
+}
+
+function formatGroundingBlock(lists: GroundingLists & { postponedActions?: GroundedPostponement[]; daysSinceLastCheckin?: number | null }, dateKey: string, ragContext: string): string {
   const postponementLines = (lists.postponedActions ?? [])
     .slice(0, 5)
     .map((item) => {
@@ -201,6 +208,7 @@ function formatGroundingBlock(lists: GroundingLists & { postponedActions?: Groun
     lists.recentSuggestionTitles.length ? `Sugestões recentes para não reciclar: ${lists.recentSuggestionTitles.join(' | ')}` : '',
     lists.blockedActionTitles.length ? `Ações rejeitadas/concluídas pelo card: ${lists.blockedActionTitles.join(' | ')}` : '',
     postponementLines.length ? `Adiamentos recentes para análise de padrão: ${postponementLines.join(' | ')}` : '',
+    formatCheckinAbsenceLine(lists.daysSinceLastCheckin),
     'Regra de grounding: memórias e histórico explicam padrão; ação nova só pode nascer de agenda pendente, hábito pendente ou meta ativa de hoje.',
     'Regra de compromisso: sugestão opcional pode ser proposta, mas só compromisso real salvo/confirmado pode virar pendência ou notificação.',
     ragContext ? 'Memórias RAG entram como padrão/contexto, não como autorização para inventar tarefa operacional.' : '',
@@ -261,7 +269,7 @@ export class ContextGroundingService {
 
     const prismaAny = this.prisma as any;
 
-    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals] = await Promise.all([
+    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals, rawLastCheckin] = await Promise.all([
       prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
         where: { userId: input.userId, localDate: { gte: start, lte: end } },
         orderBy: { startAt: 'asc' },
@@ -322,7 +330,19 @@ export class ContextGroundingService {
         const signals = normalizeHealthSignals(row?.properties);
         return signals ? { ...signals, lastSyncedAt: signals.lastSyncedAt ?? row?.createdAt?.toISOString?.() ?? null } : null;
       }).catch(() => null) : Promise.resolve(null),
+      prismaAny.dailyCheckin?.findFirst ? prismaAny.dailyCheckin.findFirst({
+        where: { userId: input.userId, localDate: { lte: end } },
+        orderBy: { localDate: 'desc' },
+        select: { localDate: true },
+      }).catch(() => null) : Promise.resolve(null),
     ]);
+
+    const lastCheckinKey = normalizeDateKey((rawLastCheckin as { localDate?: Date } | null)?.localDate);
+    let daysSinceLastCheckin: number | null = null;
+    if (lastCheckinKey) {
+      const diffMs = new Date(`${dateKey}T00:00:00.000Z`).getTime() - new Date(`${lastCheckinKey}T00:00:00.000Z`).getTime();
+      daysSinceLastCheckin = Math.max(0, Math.round(diffMs / 86_400_000));
+    }
 
     const tasks = rawTasks as GroundedTask[];
     const habits = rawHabits as GroundedHabit[];
@@ -381,6 +401,7 @@ export class ContextGroundingService {
       healthSignals: rawHealthSignals as GroundedHealthSignals | null,
       actionFeedback,
       postponedActions,
+      daysSinceLastCheckin,
       patternMemoryContext: cleanText(input.ragContext),
       operationalRule: 'Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual.',
     };
@@ -413,6 +434,7 @@ export class ContextGroundingService {
       completedSubgoalTitles: mergeContextList(input.context.completedSubgoalTitles, lists.completedSubgoalTitles),
       blockedActionTitles: mergeContextList(input.context.blockedActionTitles, [...lists.blockedActionTitles, ...lists.recentSuggestionTitles]),
       todayAnchorTitles: mergeContextList(input.context.todayAnchorTitles, lists.todayAnchorTitles),
+      daysSinceLastCheckin: lists.daysSinceLastCheckin,
       groundingContext,
       decisionBrain,
       allowedActionTitles: decisionBrain.allowedActions.map((action) => action.title),

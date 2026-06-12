@@ -1,4 +1,4 @@
-// Checkin Page v5 — wizard multi-step (4 telas)
+// Checkin Page v6 — modo expresso (1 tela, predição) + wizard completo opcional
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +7,14 @@ import type { MoodOption } from "../features/aura/types";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { trackEvent } from "../lib/track";
 import { getClientDayContext } from "../utils/day-context";
+import {
+  baseSlotFromDate,
+  computeDaysSinceLastCheckin,
+  deriveExpressEmotion,
+  predictCheckinDefaults,
+  QUICK_LEVELS,
+  REENTRY_GAP_DAYS,
+} from "./checkin-page.helpers";
 import { ChevronLeft, Check } from "lucide-react";
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -244,17 +252,36 @@ const STEPS: Array<{ labelKey: string; hintKey: string; label: string; hint: str
 // ─── Main page ────────────────────────────────────────────────────────────────
 export function CheckinPage() {
   const { t } = useTranslation();
-  const { setMood, addCheckin } = useAuraStore();
+  const { state, setMood, addCheckin } = useAuraStore();
   const navigate = useNavigate();
+
+  const dayContext = useMemo(() => getClientDayContext(), []);
+
+  // ── express: predição a partir do padrão + ausência como dado
+  const prediction = useMemo(
+    () => predictCheckinDefaults(state.checkinHistory ?? [], baseSlotFromDate(new Date()), dayContext.localDate),
+    // só na montagem: a predição é o ponto de partida, não deve reagir a saves
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const daysSinceLastCheckin = useMemo(
+    () => computeDaysSinceLastCheckin(state.checkinHistory ?? [], dayContext.localDate),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const isReentry = (daysSinceLastCheckin ?? 0) >= REENTRY_GAP_DAYS;
+
+  // ── mode: expresso (default) ou wizard completo
+  const [mode, setMode] = useState<"express" | "wizard">("express");
 
   // ── wizard state
   const [wizardStep, setWizardStep] = useState(1);
   const [slideDir, setSlideDir] = useState<1 | -1>(1);
   const [isSaving, setIsSaving] = useState(false);
 
-  // ── step 1: humor + energia
-  const [humor, setHumor] = useState(7);
-  const [energia, setEnergia] = useState(6);
+  // ── step 1: humor + energia (pré-marcados pela predição; re-entrada usa neutro)
+  const [humor, setHumor] = useState(isReentry ? 6 : prediction.humor);
+  const [energia, setEnergia] = useState(isReentry ? 6 : prediction.energia);
 
   // ── step 2: emoção (até 3)
   const [emotionsSelected, setEmotionsSelected] = useState<string[]>(INITIAL_EMOTIONS_SELECTED);
@@ -284,7 +311,6 @@ export function CheckinPage() {
   const [mixedNote, setMixedNote] = useState("");
   const [note, setNote] = useState("");
 
-  const dayContext = useMemo(() => getClientDayContext(), []);
   const touchStartX = useRef<number | null>(null);
 
   function toggleDetailCard(card: DetailCardKey) {
@@ -311,6 +337,32 @@ export function CheckinPage() {
   function goBack() {
     setSlideDir(-1);
     setWizardStep((s) => s - 1);
+  }
+
+  async function handleExpressFinish() {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const emotion = deriveExpressEmotion(humor, energia);
+      setMood(emotionToMood[emotion] ?? "equilibrada");
+      const checkinAI = await addCheckin({
+        humor,
+        energia,
+        emotion,
+        emotions: [emotion],
+      });
+      trackEvent("checkin_completed", {
+        mode: "express",
+        prediction_source: prediction.source,
+        prediction_kept: humor === prediction.humor && energia === prediction.energia,
+        days_since_last: daysSinceLastCheckin ?? -1,
+      });
+      navigate("/checkin-result", { state: checkinAI ?? undefined });
+    } catch (err) {
+      console.error("Erro ao registrar check-in expresso:", err);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleFinish() {
@@ -341,6 +393,7 @@ export function CheckinPage() {
         dayType,
       });
       trackEvent("checkin_completed", {
+        mode: "wizard",
         step_count: STEPS.length,
         emotions_count: emotionsSelected.length,
         factors_count: selectedFactors.length,
@@ -377,7 +430,11 @@ export function CheckinPage() {
         {/* ── Back button + date ─────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, marginTop: 8 }}>
           <button
-            onClick={() => wizardStep > 1 ? goBack() : navigate(-1)}
+            onClick={() => {
+              if (mode === "express") { navigate(-1); return; }
+              if (wizardStep > 1) { goBack(); return; }
+              setMode("express");
+            }}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-1)", padding: 4, display: "flex", alignItems: "center" }}
           >
             <ChevronLeft size={22} />
@@ -386,6 +443,122 @@ export function CheckinPage() {
             {dayContext.dateWithWeekdayLabel}
           </p>
         </div>
+
+        {/* ── MODO EXPRESSO — 1 tela, pré-marcado pelo padrão ─────────── */}
+        {mode === "express" && (
+          <div className="checkin-step-enter-fwd">
+            <div style={{ marginBottom: 20 }}>
+              <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
+                Como você tá agora?
+              </h2>
+              <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>
+                Confirma e pronto — detalhar é opcional.
+              </p>
+            </div>
+
+            {isReentry && (
+              <div style={{
+                borderRadius: 14,
+                border: "1.5px solid rgba(150,199,179,0.45)",
+                background: "rgba(150,199,179,0.10)",
+                padding: "12px 14px",
+                marginBottom: 18,
+              }}>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.5 }}>
+                  Que bom te ver 🤍
+                </p>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+                  Sem repor nada dos dias anteriores — me conta só como você tá agora.
+                </p>
+              </div>
+            )}
+
+            {([
+              { key: "humor" as const, title: "Humor", icon: "😊", value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: ["Pesado", "Baixo", "Ok", "Bem", "Ótimo"] },
+              { key: "energia" as const, title: "Energia", icon: "⚡", value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: ["Zerada", "Baixa", "Média", "Boa", "Alta"] },
+            ]).map((row) => (
+              <div key={row.key} style={{ marginBottom: 18 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>
+                  {row.icon} {row.title}
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+                  {QUICK_LEVELS.map((level, i) => {
+                    const active = row.value === level;
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => row.onSelect(level)}
+                        aria-pressed={active}
+                        style={{
+                          minHeight: 64,
+                          borderRadius: 14,
+                          border: `1.5px solid ${active ? row.color : "var(--warm-border-2)"}`,
+                          background: active ? `${row.color}1f` : "rgba(255,255,255,.72)",
+                          cursor: "pointer",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                          padding: "8px 2px",
+                          transform: active ? "scale(1.04)" : "none",
+                          transition: "all 0.15s ease",
+                          fontFamily: "'Plus Jakarta Sans', sans-serif",
+                        }}
+                      >
+                        <span style={{ fontSize: 22, lineHeight: 1 }}>{row.emojiOf(level)}</span>
+                        <span style={{ fontSize: 10, fontWeight: active ? 800 : 600, color: active ? "var(--text-1)" : "var(--text-3)" }}>
+                          {row.labels[i]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {!isReentry && prediction.source !== "neutral" && (
+              <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
+                ✦ Pré-marcado pelo seu padrão — ajusta se não bater.
+              </p>
+            )}
+
+            <AuraButtonV2
+              variant="primary"
+              onClick={handleExpressFinish}
+              disabled={isSaving}
+              style={{ width: "100%", height: 52, fontSize: 15, fontWeight: 800, borderRadius: 14 }}
+            >
+              {isSaving ? "Salvando..." : (
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  Confirmar check-in <Check size={16} />
+                </span>
+              )}
+            </AuraButtonV2>
+
+            <button
+              type="button"
+              onClick={() => { setMode("wizard"); setSlideDir(1); setWizardStep(2); }}
+              style={{
+                width: "100%",
+                marginTop: 12,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 700,
+                color: "var(--text-2)",
+                padding: 10,
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+              }}
+            >
+              Quero detalhar (emoções, sono, ciclo…)
+            </button>
+          </div>
+        )}
+
+        {mode === "wizard" && (<>
 
         {/* ── Progress dots ──────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
@@ -1077,6 +1250,8 @@ export function CheckinPage() {
             </AuraButtonV2>
           )}
         </div>
+
+        </>)}
 
       </div>
     </div>

@@ -14,6 +14,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { aggregateCheckinsByDay, computeConsistencyScore, computeDailyPhaseMap, computeMoodCycle, computeStreak, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
+import { computeDaysSinceLastCheckin, REENTRY_GAP_DAYS } from "./checkin-page.helpers";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
@@ -505,6 +506,11 @@ export function HomePage() {
     return parts.filter(Boolean).join(" · ");
   }, [cycleReport.aiContext, menstrualReport?.aiContext]);
   const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
+  const daysSinceLastCheckin = useMemo(
+    () => computeDaysSinceLastCheckin(aggregatedCheckinHistory, dayContext.localDate),
+    [aggregatedCheckinHistory, dayContext.localDate],
+  );
+  const isCheckinReentry = (daysSinceLastCheckin ?? 0) >= REENTRY_GAP_DAYS;
   const phaseColor = getPhaseColor(cycleReport.phase);
   const currentPhaseLabel = cycleReport.phase !== "insufficient_data"
     ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)
@@ -1490,6 +1496,42 @@ export function HomePage() {
             Airia organiza seu dia respeitando seu humor e energia.
           </p>
         </div>
+
+        {/* CTA check-in — aparece quando não há check-in hoje */}
+        {todayCheckinData.length === 0 && (
+          <button
+            type="button"
+            onClick={() => navigate("/checkin")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              padding: "13px 16px",
+              marginBottom: "calc(var(--a) * 1.1)",
+              borderRadius: 16,
+              border: "1.5px solid rgba(215,137,127,0.35)",
+              background: "rgba(215,137,127,0.08)",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>{isCheckinReentry ? "🤍" : "🌤"}</span>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--accent-peach-ink)" }}>
+                  {isCheckinReentry ? "Que bom te ver de novo" : "Check-in de hoje"}
+                </p>
+                <p style={{ margin: 0, fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>
+                  {isCheckinReentry
+                    ? "Sem repor nada — só me conta como você tá agora. Leva 10 segundos."
+                    : "1 toque e a Airia calibra o dia com seu humor e energia."}
+                </p>
+              </div>
+            </div>
+            <span style={{ fontSize: 18, color: "var(--accent-peach)", fontWeight: 800 }}>→</span>
+          </button>
+        )}
 
         {showActivationHome && (
           <div

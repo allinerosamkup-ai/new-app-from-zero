@@ -111,6 +111,7 @@ type AuraStoreContextValue = {
   reorderTasks: (fromIdx: number, toIdx: number) => void;
   toggleHabit: (habitId: string) => Promise<void>;
   archiveHabit: (habitId: string) => Promise<void>;
+  unarchiveHabit: (habitId: string) => Promise<void>;
   updateHabit: (habitId: string, habit: Partial<{
     title: string;
     category: string;
@@ -758,6 +759,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       },
       archiveHabit: async (habitId) => {
         await api.patch(`/habits/${habitId}`, { archived: true });
+        await refreshData();
+      },
+      unarchiveHabit: async (habitId) => {
+        await api.patch(`/habits/${habitId}`, { archived: false });
         await refreshData();
       },
       updateHabit: async (habitId, habit) => {
