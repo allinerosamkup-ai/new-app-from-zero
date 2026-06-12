@@ -237,8 +237,20 @@ const FORMAT_RULES = [
   'Nao abra com lista. Use lista so quando organizar tres ou mais passos de acao concreta.',
   'Nao use cabecalhos em caps ou negrito como estrutura da conversa.',
   'Evite parenteses, colchetes e barras na fala natural. Em JSON, siga o schema.',
-  'Tamanho padrao: entrada leve recebe 1 ou 2 frases; entrada media recebe 2 a 4 paragrafos curtos; entrada densa recebe o suficiente para leitura e acao sem virar relatorio.',
+  'Prefira frases curtas e escaneaveis. A resposta padrao deve poder ser lida em poucos segundos.',
+  'Tamanho padrao: entrada leve recebe 1 ou 2 frases; entrada media recebe no maximo 2 paragrafos curtos; entrada densa recebe o minimo necessario para leitura e acao, nunca relatorio.',
 ];
+
+// Brevidade adaptativa por fase: em Recolhimento/Pausa, texto longo pesa em vez
+// de cuidar. Retorna a diretiva extra ou null quando a fase nao pede corte.
+const LOW_ENERGY_PHASES = new Set<MoodPhase>(['low', 'depleted']);
+
+export function resolveBrevityDirective(phase?: string | null): string | null {
+  if (phase && LOW_ENERGY_PHASES.has(phase as MoodPhase)) {
+    return 'BREVIDADE EM FASE BAIXA: a pessoa esta em recolhimento ou pausa. Responda em no maximo 2 a 3 frases curtas e escaneaveis: uma leitura do agora e um proximo passo minimo. Texto longo agora pesa, nao cuida. Sem lista e sem multiplos paragrafos.';
+  }
+  return null;
+}
 
 export function humanizeScore(score: number | null | undefined, type: 'mood' | 'energy' | 'sleep' | 'generic' = 'generic'): string {
   if (score == null) return 'não informado';
@@ -353,7 +365,10 @@ ${renderInstructionBlock('VOZ', VOICE_POLICY)}
 ${renderInstructionBlock(domainGuide.title, domainGuide.instructions)}
 ${extra.length ? `\n${renderInstructionBlock('INSTRUCOES EXTRAS DA CHAMADA', extra)}` : ''}
 
-${renderInstructionBlock('FORMATO DE SAIDA', FORMAT_RULES)}
+${renderInstructionBlock('FORMATO DE SAIDA', FORMAT_RULES)}${(() => {
+  const brevity = resolveBrevityDirective(options.phase);
+  return brevity ? `\n${renderInstructionBlock('BREVIDADE ADAPTATIVA', [brevity])}` : '';
+})()}
 ${adaptiveContextBlock}${forecastBlock}${momentumBlock}${temporalContext}${diagnosisBlock}
 ${contextBlock('RACIOCINIO OPERACIONAL ESTRUTURADO (USO INTERNO)', options.reasoningTraceContext)}
 ${contextBlock(`PERFIL E ROTINA DE ${safeUserName.toUpperCase()}`, options.profileSummary)}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { buildAuraSystemPrompt } from './aura-prompt';
+import { buildAuraSystemPrompt, resolveBrevityDirective } from './aura-prompt';
 
 async function run() {
   const basePrompt = buildAuraSystemPrompt({
@@ -183,6 +183,33 @@ async function run() {
   assert.match(journalForJargonAudit, /USE OS FATOS QUE ELA JA DISSE/);
   assert.match(journalForJargonAudit, /EXEMPLO DE TURNO BOM/);
   assert.match(journalForJargonAudit, /Olx, Facebook e Instagram/);
+
+  // Brevidade adaptativa: fase baixa pede corte; demais fases nao
+  assert.ok(resolveBrevityDirective('low'));
+  assert.ok(resolveBrevityDirective('depleted'));
+  assert.equal(resolveBrevityDirective('stable'), null);
+  assert.equal(resolveBrevityDirective('elevated'), null);
+  assert.equal(resolveBrevityDirective(null), null);
+  assert.equal(resolveBrevityDirective(undefined), null);
+
+  const lowPhasePrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'checkin',
+    phase: 'low',
+    currentHour: 16,
+    currentMinute: 0,
+  });
+  assert.match(lowPhasePrompt, /BREVIDADE ADAPTATIVA/);
+  assert.match(lowPhasePrompt, /no maximo 2 a 3 frases/);
+
+  const stablePhasePrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'checkin',
+    phase: 'stable',
+    currentHour: 16,
+    currentMinute: 0,
+  });
+  assert.doesNotMatch(stablePhasePrompt, /BREVIDADE ADAPTATIVA/);
 }
 
 run()

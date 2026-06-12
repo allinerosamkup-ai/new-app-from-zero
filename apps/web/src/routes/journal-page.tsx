@@ -11,6 +11,7 @@ import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
 import { buildJournalClosePrompt, buildJournalPlannerSlot } from "./journal-page.helpers";
+import { extractTranscript, isSpeechRecognitionSupported, mergeTranscript, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
 import "../styles/aura.css";
 import { appendStoredGtdAction } from "../utils/goal-priority-actions";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
@@ -160,6 +161,9 @@ export function JournalPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterEmotion, setFilterEmotion] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [interimVoice, setInterimVoice] = useState("");
+  const voiceSupported = useMemo(() => isSpeechRecognitionSupported(), []);
+  const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFinalizationModal, setShowFinalizationModal] = useState(false);
   const [finalizationResult, setFinalizationResult] = useState<JournalFinalizationResult | null>(null);
   const [addingToPlanner, setAddingToPlanner] = useState<string | null>(null);
@@ -388,30 +392,53 @@ export function JournalPage() {
     }
   }
 
+  function stopVoice() {
+    if (voiceTimerRef.current) {
+      clearTimeout(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+    }
+    setInterimVoice("");
+    setIsRecording(false);
+  }
+
   function toggleVoice() {
     const SpeechRecognitionApi = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionApi) return;
 
     if (isRecording && recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
+      stopVoice();
       return;
     }
 
     const recognition = new SpeechRecognitionApi();
     recognition.lang = "pt-BR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    // Contínuo + interim: aguenta pausas ("falar 30s") e mostra o texto ao vivo.
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      const { finalText, interimText } = extractTranscript(event.results, event.resultIndex ?? 0);
+      if (finalText) setInput((prev) => mergeTranscript(prev, finalText));
+      setInterimVoice(interimText);
     };
-    recognition.onend = () => setIsRecording(false);
-    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => stopVoice();
+    recognition.onerror = () => stopVoice();
     recognition.start();
     recognitionRef.current = recognition;
     setIsRecording(true);
+    // Para sozinho depois do limite de segurança.
+    voiceTimerRef.current = setTimeout(() => stopVoice(), VOICE_MAX_DURATION_MS);
   }
+
+  // Encerra o ditado se a usuária sair da tela no meio.
+  useEffect(() => {
+    return () => {
+      if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
+      if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch { /* ignore */ } }
+    };
+  }, []);
 
   async function addTaskToPlanner(key: string, task: SuggestedTask, dayOffset: number) {
     setAddingToPlanner(key);
@@ -1147,10 +1174,12 @@ export function JournalPage() {
               }}
             />
             <div style={{ display: "flex", gap: "6px" }}>
+              {voiceSupported && (
               <button
                 type="button"
                 onClick={() => toggleVoice()}
                 title={isRecording ? "Parar" : "Falar"}
+                aria-label={isRecording ? "Parar de gravar" : "Ditar por voz"}
                 style={{
                   width: "36px",
                   height: "36px",
@@ -1163,6 +1192,7 @@ export function JournalPage() {
                   cursor: "pointer",
                   transition: "all 200ms",
                   color: isRecording ? "#fff" : "var(--text-2)",
+                  animation: isRecording ? "voicePulse 1.4s ease-in-out infinite" : "none",
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1172,6 +1202,7 @@ export function JournalPage() {
                   <line x1="8" y1="23" x2="16" y2="23" />
                 </svg>
               </button>
+              )}
               <div
                 className="journal-send"
                 onClick={() => void sendMessage()}
@@ -1195,6 +1226,16 @@ export function JournalPage() {
               </div>
             </div>
           </div>
+
+          {isRecording && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "0 4px" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-sage)", flexShrink: 0, animation: "voicePulse 1.4s ease-in-out infinite" }} />
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)", lineHeight: 1.4, fontStyle: interimVoice ? "italic" : "normal" }}>
+                {interimVoice || "Ouvindo… pode falar, eu escrevo pra você."}
+              </p>
+            </div>
+          )}
+          <style>{`@keyframes voicePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }`}</style>
 
           <AuraButtonV2
             onClick={() => void finalizeSession()}
