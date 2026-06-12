@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
-// Aura Layout v2 — bottom nav + Phase Transition Alert + Follow-up Card
+// Aura Layout v2 — bottom nav (valor + camadas) + Phase Transition Alert + Follow-up Card
 import { Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
@@ -9,13 +9,27 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
 import { AuraIcon } from "../components/AuraIcon";
 import { useHabitReminders } from "../hooks/useHabitReminders";
+import { getActivationState } from "../features/aura/activation";
+import { resolveUnlockedNav, type NavKey } from "./nav-access.helpers";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
-const NAV_ITEMS = [
+type NavItem = {
+  key: NavKey;
+  labelKey: string;
+  route: string;
+  icon: ReactNode;
+  side?: "left" | "right";
+  center?: boolean;
+};
+
+// Ordem por valor: Hoje · Planner · Airia (centro) · Padrões · Diário.
+// Config saiu da barra e virou o gear no header da Home.
+const NAV_ITEMS: NavItem[] = [
   {
+    key: "home",
+    side: "left",
     labelKey: "nav.home",
-    label: "Início",
     route: "/home",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -25,8 +39,9 @@ const NAV_ITEMS = [
     ),
   },
   {
+    key: "planner",
+    side: "left",
     labelKey: "nav.planner",
-    label: "Planner",
     route: "/planner",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -38,14 +53,28 @@ const NAV_ITEMS = [
     ),
   },
   {
+    key: "aura",
+    center: true,
     labelKey: "nav.aura",
-    label: "Airia",
     route: "/aura",
     icon: <AuraIcon size={88} variant="hybrid" />,
   },
   {
+    key: "insights",
+    side: "right",
+    labelKey: "nav.insights",
+    route: "/insights",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="3 15 8 10 13 13 21 5" />
+        <polyline points="15 5 21 5 21 11" />
+      </svg>
+    ),
+  },
+  {
+    key: "journal",
+    side: "right",
     labelKey: "nav.journal",
-    label: "Diário",
     route: "/journal",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -54,17 +83,6 @@ const NAV_ITEMS = [
         <line x1="8" y1="7" x2="16" y2="7" />
         <line x1="8" y1="11" x2="16" y2="11" />
         <line x1="8" y1="15" x2="12" y2="15" />
-      </svg>
-    ),
-  },
-  {
-    labelKey: "nav.config",
-    label: "Config",
-    route: "/preferences",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0A1.65 1.65 0 0 0 10.91 3H11a2 2 0 1 1 4 0h.09a1.65 1.65 0 0 0 1.51 1h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0A1.65 1.65 0 0 0 21 10.91V11a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
       </svg>
     ),
   },
@@ -141,6 +159,31 @@ export function AuraLayout() {
     () => !state.onboardingDone && isWithinOnboardingPromptWindow(state.accountCreatedAt),
     [state.accountCreatedAt, state.onboardingDone],
   );
+
+  // Camadas de onboarding: a barra revela Planner/Padrões conforme o uso.
+  const activation = useMemo(() => getActivationState(state), [state]);
+  const unlockedNav = useMemo(
+    () => resolveUnlockedNav({ checkinCount: activation.checkinCount, isNewUser: activation.isNewUser }),
+    [activation.checkinCount, activation.isNewUser],
+  );
+  const leftNavItems = NAV_ITEMS.filter((item) => item.side === "left" && unlockedNav.has(item.key));
+  const rightNavItems = NAV_ITEMS.filter((item) => item.side === "right" && unlockedNav.has(item.key));
+  const centerNavItem = NAV_ITEMS.find((item) => item.center)!;
+
+  function renderNavItem(item: NavItem) {
+    const isActive = location.pathname === item.route;
+    return (
+      <button
+        key={item.route}
+        type="button"
+        className={`airia-nav-item flex flex-col items-center justify-center p-2 nav-item${isActive ? ' active' : ''}`}
+        onClick={() => navigate(item.route)}
+      >
+        <span className="mb-0.5">{item.icon}</span>
+        <span className="text-[10px] font-bold tracking-normal">{t(item.labelKey)}</span>
+      </button>
+    );
+  }
 
   useEffect(() => {
     if (!hydrated || !hasSession || !onboardingPromptEligible || location.pathname.startsWith('/onboarding')) {
@@ -369,7 +412,7 @@ export function AuraLayout() {
         </div>
       </div>
 
-      {/* Bottom Nav — Floating Pill — sempre fixo */}
+      {/* Bottom Nav — Floating Pill — Airia sempre no centro, laterais por camada */}
       <div className="bottom-nav airia-bottom-nav" style={{
         position: "fixed",
         bottom: "calc(16px + env(safe-area-inset-bottom))",
@@ -382,37 +425,25 @@ export function AuraLayout() {
         borderRadius: 28,
         zIndex: 50,
         display: "flex",
-        justifyContent: "space-around",
+        justifyContent: "space-between",
         alignItems: "center",
         padding: "10px 16px 12px",
       }}>
-        {NAV_ITEMS.map((item, idx) => {
-          const isActive = location.pathname === item.route;
-          if (idx === 2) { // Centro (Aura)
-            return (
-              <button
-                key={item.route}
-                type="button"
-                className={`airia-nav-center${isActive ? " active" : ""}`}
-                aria-label={t(item.labelKey)}
-                onClick={() => navigate(item.route)}
-              >
-                {item.icon}
-              </button>
-            );
-          }
-          return (
-            <button
-              key={item.route}
-              type="button"
-              className={`airia-nav-item flex flex-col items-center justify-center p-2 nav-item${isActive ? ' active' : ''}`}
-              onClick={() => navigate(item.route)}
-            >
-              <span className="mb-0.5">{item.icon}</span>
-              <span className="text-[10px] font-bold tracking-normal">{t(item.labelKey)}</span>
-            </button>
-          );
-        })}
+        <div style={{ display: "flex", flex: 1, justifyContent: "space-around", alignItems: "center" }}>
+          {leftNavItems.map(renderNavItem)}
+        </div>
+        <button
+          key={centerNavItem.route}
+          type="button"
+          className={`airia-nav-center${location.pathname === centerNavItem.route ? " active" : ""}`}
+          aria-label={t(centerNavItem.labelKey)}
+          onClick={() => navigate(centerNavItem.route)}
+        >
+          {centerNavItem.icon}
+        </button>
+        <div style={{ display: "flex", flex: 1, justifyContent: "space-around", alignItems: "center" }}>
+          {rightNavItems.map(renderNavItem)}
+        </div>
       </div>
     </div>
   );
