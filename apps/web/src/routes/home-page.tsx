@@ -14,6 +14,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { aggregateCheckinsByDay, computeDailyPhaseMap, computeMoodCycle, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
+import { Card, SectionTitle, Stat } from "../components/ui/card";
 import { computeDaysSinceLastCheckin, REENTRY_GAP_DAYS } from "./checkin-page.helpers";
 import {
   computeFirstInsight,
@@ -1641,67 +1642,49 @@ export function HomePage() {
 
         {/* ── Primeiro insight (após 7 dias) — momento "isso funciona" ── */}
         {firstInsight && (
-          <div
-            style={{
-              marginBottom: "calc(var(--a) * 1.1)",
-              padding: "15px 16px",
-              borderRadius: 16,
-              border: "1.5px solid rgba(150,199,179,0.5)",
-              background: "rgba(150,199,179,0.10)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ fontSize: 16 }}>🔎</span>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage)" }}>
-                  Primeiro padrão que a Airia notou
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={dismissFirstInsight}
-                aria-label="Dispensar insight"
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
-              >
-                ×
-              </button>
-            </div>
+          <Card accent="sage" style={{ marginBottom: "calc(var(--a) * 1.1)" }}>
+            <SectionTitle
+              eyebrow="Primeiro padrão que a Airia notou"
+              accent="sage"
+              icon="🔎"
+              action={
+                <button
+                  type="button"
+                  onClick={dismissFirstInsight}
+                  aria-label="Dispensar insight"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
+                >
+                  ×
+                </button>
+              }
+            />
             <p style={{ margin: "8px 0 4px", fontSize: 15, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.3 }}>
               {firstInsight.headline}
             </p>
             <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.55 }}>
               {firstInsight.detail}
             </p>
-          </div>
+          </Card>
         )}
 
         {/* ── Resumo semanal automático (domingo à noite / segunda) ── */}
         {offerWeeklySummary && weeklySummary && (
-          <div
-            style={{
-              marginBottom: "calc(var(--a) * 1.1)",
-              padding: "15px 16px",
-              borderRadius: 16,
-              border: "1.5px solid rgba(99,152,169,0.4)",
-              background: "rgba(99,152,169,0.08)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ fontSize: 16 }}>🗓️</span>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sky)" }}>
-                  Sua semana, em 1 leitura
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={dismissWeeklySummary}
-                aria-label="Dispensar resumo"
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
-              >
-                ×
-              </button>
-            </div>
+          <Card accent="sky" style={{ marginBottom: "calc(var(--a) * 1.1)" }}>
+            <SectionTitle
+              eyebrow="Sua semana, em 1 leitura"
+              accent="sky"
+              icon="🗓️"
+              action={
+                <button
+                  type="button"
+                  onClick={dismissWeeklySummary}
+                  aria-label="Dispensar resumo"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
+                >
+                  ×
+                </button>
+              }
+            />
             <p style={{ margin: "8px 0 0", fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.6 }}>
               {weeklySummary.analysis}
             </p>
@@ -1717,7 +1700,7 @@ export function HomePage() {
             >
               Ver detalhes da semana →
             </button>
-          </div>
+          </Card>
         )}
 
         {showActivationHome && (
@@ -3364,26 +3347,11 @@ export function HomePage() {
             <p style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-peach-ink)", margin: 0 }}>Como está seu dia?</p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, color: "var(--text-2)" }}>Tarefas de hoje</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sky)", background: "rgba(176,180,196,.1)", padding: "2px 10px", borderRadius: 999 }}>
-                {totalTasks} planejada{totalTasks !== 1 ? "s" : ""}
-              </span>
-            </div>
+            <Stat label="Tarefas de hoje" value={`${totalTasks} planejada${totalTasks !== 1 ? "s" : ""}`} accent="sky" />
             <div style={{ height: 1, background: "var(--warm-border)" }} />
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, color: "var(--text-2)" }}>Concluídas</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", background: "rgba(180,185,169,.12)", padding: "2px 10px", borderRadius: 999 }}>
-                {doneTasks} ✓
-              </span>
-            </div>
+            <Stat label="Concluídas" value={`${doneTasks} ✓`} accent="sage" />
             <div style={{ height: 1, background: "var(--warm-border)" }} />
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 12, color: "var(--text-2)" }}>Em andamento</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-peach)", background: "var(--accent-peach-a3)", padding: "2px 10px", borderRadius: 999 }}>
-                {pendingTasks}
-              </span>
-            </div>
+            <Stat label="Em andamento" value={pendingTasks} accent="peach" />
           </div>
           <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(197,165,147,.06)", borderRadius: 10, border: "1px solid var(--accent-peach-a5)" }}>
             {homeAiLoading ? (
