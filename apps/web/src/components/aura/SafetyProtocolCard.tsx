@@ -84,7 +84,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {onAdaptDay && riskSafety.route !== "crisis_protocol" && (
           <AuraButtonV2
-            variant="secondary"
+            variant="outline"
             size="sm"
             onClick={() => {
               trackProtocol("adapt_day");

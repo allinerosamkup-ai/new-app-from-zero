@@ -92,7 +92,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
 
   async function handleDisconnect() {
     try {
-      await api.post("/gcal/disconnect");
+      await api.post("/gcal/disconnect", {});
       setConnected(false);
       setCalendars([]);
       setSelectedIds([]);

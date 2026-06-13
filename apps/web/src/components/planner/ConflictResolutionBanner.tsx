@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CalendarClock, ChevronsDown, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarClock, ChevronsDown, Trash2, type LucideIcon } from "lucide-react";
 
 export type ConflictResolutionType =
   | "MOVE_BLOCK_LATER"
@@ -40,7 +40,7 @@ const RESOLUTION_LABEL: Record<ConflictResolutionType, string> = {
   CANCEL: "Cancelar",
 };
 
-const RESOLUTION_ICON: Record<ConflictResolutionType, React.ComponentType<{ size?: number }>> = {
+const RESOLUTION_ICON: Record<ConflictResolutionType, LucideIcon> = {
   MOVE_BLOCK_LATER: ArrowRight,
   MOVE_BLOCK_EARLIER: ArrowRight,
   DOWNGRADE_INTENSITY: ChevronsDown,

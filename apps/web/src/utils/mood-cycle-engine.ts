@@ -251,9 +251,6 @@ function computePersonalTrendProfile(sorted: CheckinEntry[]): PersonalTrendProfi
   const recentWindow = sorted.slice(-7);
   const previousWindow = sorted.slice(-14, -7);
   const compositeRecent = recentWindow.map((entry) => weightedComposite(entry.humor, entry.energia));
-  const compositePrevious = previousWindow.length > 0
-    ? previousWindow.map((entry) => weightedComposite(entry.humor, entry.energia))
-    : sorted.slice(0, Math.max(1, sorted.length - recentWindow.length)).map((entry) => weightedComposite(entry.humor, entry.energia));
   const composite14d = sorted.slice(-14).map((entry) => weightedComposite(entry.humor, entry.energia));
 
   const baselineMood = baselineMoodValues.length >= 2 ? ewma(baselineMoodValues, 0.12) : mean(sorted.map((entry) => entry.humor));

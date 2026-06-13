@@ -33,7 +33,8 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title || 'Airia';
   const tag = payload.tag || 'airia-push';
-  const options: NotificationOptions = {
+  // renotify/timestamp são válidos no spec mas ainda fora do lib.dom; estendemos o tipo.
+  const options: NotificationOptions & { renotify?: boolean; timestamp?: number } = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',

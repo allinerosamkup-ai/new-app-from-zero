@@ -1,5 +1,4 @@
 // PhaseHeader — header gradiente com fase, dia, energia e HRV
-import React from "react";
 import { PhaseBadge, type CyclePhase } from "./PhaseBadge";
 
 interface PhaseHeaderProps {

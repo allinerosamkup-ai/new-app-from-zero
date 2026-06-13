@@ -4,7 +4,6 @@ import { useAuraStore } from "../features/aura/store";
 import type { Habit } from "../features/aura/types";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { getHabitCompletionCount, getHabitProgressLabel, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from "../features/aura/habit-helpers";
-import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useToast } from "../components/Toast";
 import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil, Sparkles } from "lucide-react";

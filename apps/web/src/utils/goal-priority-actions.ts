@@ -90,7 +90,7 @@ export function buildGoalPriorityActions(
         subId: nextSub.id,
       };
     })
-    .filter((item): item is GoalPriorityAction => Boolean(item));
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const gtdItems = options.gtdItems ?? readStoredGtdActions();
   const captureActions = gtdItems

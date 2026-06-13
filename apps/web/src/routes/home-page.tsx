@@ -13,7 +13,7 @@ import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
-import { aggregateCheckinsByDay, computeConsistencyScore, computeDailyPhaseMap, computeMoodCycle, computeStreak, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
+import { aggregateCheckinsByDay, computeDailyPhaseMap, computeMoodCycle, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import { computeDaysSinceLastCheckin, REENTRY_GAP_DAYS } from "./checkin-page.helpers";
 import {
   computeFirstInsight,
@@ -513,7 +513,6 @@ export function HomePage() {
     if (menstrualReport?.aiContext) parts.push(menstrualReport.aiContext);
     return parts.filter(Boolean).join(" · ");
   }, [cycleReport.aiContext, menstrualReport?.aiContext]);
-  const streak = useMemo(() => computeStreak(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const daysSinceLastCheckin = useMemo(
     () => computeDaysSinceLastCheckin(aggregatedCheckinHistory, dayContext.localDate),
     [aggregatedCheckinHistory, dayContext.localDate],
@@ -563,10 +562,6 @@ export function HomePage() {
     });
     return out;
   }, [dailyPhaseMap, monthlyHistory]);
-  const consistencyScore = useMemo(
-    () => computeConsistencyScore(aggregatedCheckinHistory, state.habits ?? [], 0),
-    [aggregatedCheckinHistory, state.habits],
-  );
   const goalTitles = useMemo(
     () => (state.goals || []).filter((goal) => goal.completedPct < 100).map((goal) => goal.title),
     [state.goals],
@@ -1182,7 +1177,7 @@ export function HomePage() {
   }
 
   async function handleHomeGoalActionDone(action: (typeof homeGoalActions)[number]) {
-    recordHomeAutonomyFeedback(action.title, "done");
+    recordHomeAutonomyFeedback(action.text, "done");
     try {
       if (action.source === "goal" && action.goalId != null && action.subId != null) {
         await toggleSubGoal(action.goalId, action.subId);
@@ -2949,7 +2944,7 @@ export function HomePage() {
                   </AuraButtonV2>
                 ) : (
                   <AuraButtonV2
-                    variant="secondary"
+                    variant="outline"
                     size="md"
                     onClick={() => navigate(hasCycleData ? "/insights" : "/checkin")}
                     style={{ width: "100%", minHeight: 44, marginTop: 12 }}

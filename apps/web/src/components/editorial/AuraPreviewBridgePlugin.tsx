@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Monitor, Play, Shield, Zap, Settings, X, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { Monitor, Shield, Zap, Settings, X, ExternalLink } from 'lucide-react';
 
 const AuraPreviewBridgePlugin = () => {
     const [isOpen, setIsOpen] = useState(false);

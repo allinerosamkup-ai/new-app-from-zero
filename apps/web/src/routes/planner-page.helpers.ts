@@ -85,33 +85,6 @@ export type SwipeGestureInput = {
   deltaY: number;
 };
 
-const EMPTY_AGENDA_TEMPLATE: Array<Pick<Extract<PlannerAgendaSlot, { kind: "empty" }>, "time" | "title" | "description">> = [
-  {
-    time: "08:00",
-    title: "Manhã livre",
-    description: "Um começo sem pressa para encaixar um primeiro bloco com calma.",
-  },
-  {
-    time: "10:30",
-    title: "Janela de foco",
-    description: "Espaço aberto para trabalho profundo, estudo ou uma reunião curta.",
-  },
-  {
-    time: "13:00",
-    title: "Pausa do meio-dia",
-    description: "Mantém a cara de agenda e deixa um respiro visível no centro do dia.",
-  },
-  {
-    time: "15:30",
-    title: "Bloco flexível",
-    description: "Use para ajustar imprevistos, deslocamentos ou uma tarefa leve.",
-  },
-  {
-    time: "18:00",
-    title: "Fechamento do dia",
-    description: "Reserve um encerramento gentil para não deixar a agenda sumir ao anoitecer.",
-  },
-];
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -237,7 +210,7 @@ export function normalizePlannerCategory(category?: string | null, title = "") {
 
 export function mapEnergyLevelToIntensity(
   energyLevel: FormStateLike["energyLevel"],
-  fallback: TimelineBlockIntensity = "M",
+  _fallback: TimelineBlockIntensity = "M",
 ): TimelineBlockIntensity {
   if (energyLevel >= 4) return "P";
   if (energyLevel <= 2) return "L";

@@ -146,7 +146,7 @@ export function AuraLayout() {
       if (session) {
         setHasSession(true);
         setSessionUserId(session.user.id);
-      } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      } else if (event === 'SIGNED_OUT') {
         setHasSession(false);
         setSessionUserId(null);
       }

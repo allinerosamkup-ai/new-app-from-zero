@@ -532,7 +532,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         }));
 
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+        if (!session) return null;
 
         try {
           const checkinResponse = await api.post('/checkins', {

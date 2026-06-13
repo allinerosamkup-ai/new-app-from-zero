@@ -57,7 +57,7 @@ function habitIsDueToday(habit: { frequency?: string | null; targetDays?: number
 
 function habitCompletedToday(habit: { completions?: Array<{ date?: string; completionCount?: number | null } | unknown>; targetCount?: number | null }, today: string): boolean {
   const target = habitTargetCount(habit);
-  const count = (habit.completions || []).reduce((total, completion) => {
+  const count = (habit.completions || []).reduce((total: number, completion) => {
     if (!completion || typeof completion !== "object") return total;
     const item = completion as { date?: string; completionCount?: number | null };
     if (normalizeDateKey(item.date) !== today) return total;
@@ -87,7 +87,8 @@ function buildHomeAutonomyRuntimeContext(state: ReturnType<typeof useAuraStore>[
     .filter((habit) => !habitCompletedToday(habit, today))
     .map((habit) => habit.title)
     .filter(Boolean);
-  const feedback = readHomeAutonomyFeedback().map((item) => ({
+  const feedbackItems = readHomeAutonomyFeedback();
+  const feedback = feedbackItems.map((item) => ({
     title: item.title,
     status: item.status,
     createdAt: item.createdAt,
@@ -107,7 +108,7 @@ function buildHomeAutonomyRuntimeContext(state: ReturnType<typeof useAuraStore>[
       .filter((subgoal) => subgoal.done)
       .map((subgoal) => subgoal.title)
       .filter(Boolean),
-    blockedActionTitles: extractBlockedHomeAutonomyTitles(feedback),
+    blockedActionTitles: extractBlockedHomeAutonomyTitles(feedbackItems),
     homeAutonomyFeedback: feedback,
     todayAnchorTitles: [
       ...pendingTodayTasks,
@@ -463,7 +464,7 @@ async function runPhaseTransitionAlert(
     setAlert({
       fromPhase,
       toPhase,
-      fromLabel: PHASE_LABELS[fromPhase] ?? fromPhase,
+      fromLabel: phaseLabel(fromPhase),
       toLabel,
       message: raw.message,
       tip: raw.tip ?? "",

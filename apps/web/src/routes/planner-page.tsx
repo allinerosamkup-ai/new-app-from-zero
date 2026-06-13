@@ -1,6 +1,6 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Waves, Info, Star, Heart, Briefcase, Home, ShoppingCart, Coffee, Book, Music, Mic, Plus, Trash2, CheckCircle2, CalendarClock, ClipboardCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Mic, Plus, Trash2, CheckCircle2, CalendarClock, ClipboardCheck } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -110,31 +110,6 @@ const LABEL_STYLE: React.CSSProperties = {
   color: "var(--text-3)",
   textTransform: "uppercase",
   letterSpacing: ".08em",
-};
-
-const PLANNER_SUMMARY_CARD_STYLE: React.CSSProperties = {
-  borderRadius: 20,
-  padding: "16px",
-  marginBottom: "14px",
-  background: "linear-gradient(135deg, rgba(243,176,140,.12), rgba(255,255,255,.58))",
-  border: "1px solid rgba(255,255,255,.78)",
-  boxShadow: "0 16px 38px rgba(243,176,140,.09), 0 1px 0 rgba(255,255,255,.82) inset",
-};
-
-const EMPTY_TIMELINE_CARD_STYLE: React.CSSProperties = {
-  width: '100%',
-  padding: '12px 14px',
-  borderRadius: 12,
-  background: 'rgba(255,255,255,0.48)',
-  backdropFilter: 'blur(12px)',
-  WebkitBackdropFilter: 'blur(12px)',
-  border: '1px dashed rgba(17,24,39,0.08)',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'flex-start',
-  textAlign: 'left',
-  gap: 4,
-  boxShadow: 'none',
 };
 
 function TimelineProgressIndicator({ nowMinutes, slots }: { nowMinutes: number; slots: any[] }) {
@@ -365,12 +340,6 @@ function diffMinutes(start: string, end: string) {
 function timeToMinutesValue(time: string) {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
-}
-
-function formatMinutesAsTime(totalMinutes: number) {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 function mapTaskFromApi(task: any): PlannerTask {
@@ -795,58 +764,6 @@ const NoteSection = React.memo(function NoteSection({
   );
 });
 
-const DIAS_RECORRENCIA = [
-  { label: "D", val: 6 },
-  { label: "S", val: 0 },
-  { label: "T", val: 1 },
-  { label: "Q", val: 2 },
-  { label: "Q", val: 3 },
-  { label: "S", val: 4 },
-  { label: "S", val: 5 },
-];
-
-function RecurringSection({
-  recurring,
-  setRecurring,
-}: {
-  recurring: RecurringConfig;
-  setRecurring: (value: RecurringConfig) => void;
-}) {
-  return (
-    <div style={{ marginBottom: "12px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", textTransform: "uppercase", letterSpacing: ".05em" }}>Repetir nos dias</span>
-        <span style={{ fontSize: 10, color: "var(--accent-peach)", fontWeight: 700 }}>{recurring.days.length} DIAS</span>
-      </div>
-      <div style={{ display: "flex", gap: "6px", justifyContent: "space-between" }}>
-        {DIAS_RECORRENCIA.map(d => {
-          const isSelected = recurring.days.includes(d.val);
-          return (
-             <button
-               key={d.val}
-               type="button"
-               onClick={() => {
-                 const cur = new Set(recurring.days);
-                 if (cur.has(d.val)) cur.delete(d.val);
-                 else cur.add(d.val);
-                 setRecurring({ ...recurring, days: Array.from(cur) });
-               }}
-               style={{
-                 width: 38, height: 38, borderRadius: '12px', border: '1.5px solid transparent',
-                 background: isSelected ? 'var(--accent-peach)' : 'var(--surface-variant)',
-                 color: isSelected ? '#fff' : 'var(--text-2)',
-                 fontWeight: 800, fontSize: 12, cursor: 'pointer', transition: 'all 0.2s',
-                 boxShadow: isSelected ? '0 4px 12px rgba(244,190,168,0.25)' : 'none'
-               }}
-             >{d.label}</button>
-          )
-        })}
-      </div>
-    </div>
-  );
-}
-
-
 const ICON_GRID = [
   "✅", "📅", "🕐", "⭐", "❤️", "💼", "🏠", "🛒",
   "☕", "💪", "📚", "🎵", "🏃", "🧘", "🎯", "🔥", "✍️", "💡"
@@ -863,8 +780,6 @@ const ALERT_PRESETS: { id: string; label: string }[] = [
   { id: "before-30", label: "30m antes do início" },
   { id: "before-60", label: "1h antes do início" },
 ];
-
-const ENERGY_GRAY = "#C5B5A8";
 
 function renderEnergyIcon(level: number, color: string) {
   switch (level) {
@@ -2331,7 +2246,7 @@ export function PlannerPage() {
     const energyState = {
       label: cycleReport.phaseLabel || "Sem leitura clara",
       analysis: cycleReport.aiContext ?? null,
-      suggestedIntensity: (isLowPhase ? "L" : cycleReport.phase === "high" ? "P" : "M") as "L" | "M" | "P",
+      suggestedIntensity: (isLowPhase ? "L" : (cycleReport.phase === "elevated" || cycleReport.phase === "flowing") ? "P" : "M") as "L" | "M" | "P",
       avgMood: cycleReport.avgMood7d ?? null,
       avgEnergy: cycleReport.avgEnergy7d ?? null,
     };

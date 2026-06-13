@@ -469,7 +469,7 @@ function GoalCard({
 // ── Main Page ─────────────────────────────────────────────────
 
 export function GoalsPage() {
-  const { state, addGoal, addGoalWithSubGoals, addSubGoals, toggleSubGoal, removeGoal, updateGoal, addTask, addHabit } = useAuraStore();
+  const { state, addGoal, addGoalWithSubGoals, addSubGoals, toggleSubGoal, removeGoal, updateGoal, addHabit } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -525,7 +525,7 @@ export function GoalsPage() {
   );
 
   const priorityActions = useMemo(
-    () => buildGoalPriorityActions(activeGoals, { gtdItems }),
+    () => buildGoalPriorityActions(activeGoals, { gtdItems: gtdItems.map((item) => ({ id: item.id, text: item.text })) }),
     [activeGoals, gtdItems]
   );
 

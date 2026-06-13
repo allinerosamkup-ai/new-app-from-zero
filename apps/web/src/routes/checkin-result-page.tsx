@@ -3,7 +3,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
-import { computeMoodCycle, computeStreak, getPhaseColor, PHASE_CONFIG } from '../utils/mood-cycle-engine';
+import { computeMoodCycle, computeStreak, getPhaseColor } from '../utils/mood-cycle-engine';
 import { PhaseLegendSheet } from '../components/PhaseLegendSheet';
 import { useTranslation } from 'react-i18next';
 import { api } from "../lib/api";
@@ -464,7 +464,7 @@ export function CheckinResultPage() {
     if (!Array.isArray(payload)) return [];
     const seen = new Set<string>();
     const normalized: AiTask[] = [];
-    const virtualTasks = [...(state.tasks || [])];
+    const virtualTasks: Array<{ time: string; endTime?: string | null }> = (state.tasks || []).map((task) => ({ time: task.time, endTime: task.endTime }));
     const now = new Date();
     for (const raw of payload) {
       if (!raw || typeof raw !== "object") continue;

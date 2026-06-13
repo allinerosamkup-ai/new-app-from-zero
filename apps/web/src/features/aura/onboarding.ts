@@ -1,5 +1,4 @@
 import {
-  DEFAULT_EVENING_CHECKIN_TIME,
   DEFAULT_MORNING_CHECKIN_TIME,
 } from "./settings";
 

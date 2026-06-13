@@ -5,7 +5,6 @@ import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
-import { labelMood } from "../features/aura/data";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraIcon } from "../components/AuraIcon";
 import { buildDailyCloseSummary } from "./daily-summary-page.helpers";
@@ -27,7 +26,7 @@ export function DailySummaryPage() {
 
   const [phase, setPhase] = useState<"idle" | "loading" | "preview" | "done">("idle");
   const [tasks, setTasks] = useState<JTask[]>([]);
-  const [saved, setSaved] = useState(false);
+  const [, setSaved] = useState(false);
   const closeSummary = buildDailyCloseSummary(state);
 
   async function fetchJournalTasks() {
