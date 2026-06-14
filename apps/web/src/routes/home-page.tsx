@@ -3138,7 +3138,7 @@ export function HomePage() {
         )}
 
         {/* ── Momento de Autocuidado ── */}
-        <div className="home-panel" style={{ border: "1.5px solid rgba(161,140,120,.25)" }}>
+        <Card surface="panel" style={{ border: "1.5px solid rgba(161,140,120,.25)" }}>
           <div className="home-panel-header">
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <p className="home-panel-title" style={{ color: "var(--earth-11)" }}>
@@ -3225,11 +3225,11 @@ export function HomePage() {
               </p>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* ── Alertas Importantes ── */}
         {importantAlerts.filter(a => !dismissedAlerts.has(a.key)).length > 0 && (
-          <div className="home-panel" style={{ border: "1.5px solid rgba(161,140,120,.3)" }}>
+          <Card surface="panel" style={{ border: "1.5px solid rgba(161,140,120,.3)" }}>
             <div className="home-panel-header">
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <p className="home-panel-title" style={{ color: "var(--earth-11)" }}>
@@ -3303,7 +3303,7 @@ export function HomePage() {
                 );
               })}
             </div>
-          </div>
+          </Card>
         )}
 
       </div>

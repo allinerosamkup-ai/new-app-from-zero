@@ -24,12 +24,15 @@ export const ACCENT_INK: Record<CardAccent, string> = {
 
 type CardProps = HTMLAttributes<HTMLDivElement> & {
   accent?: CardAccent;
+  // "card" = .aura-card padrão; "panel" = .home-panel (header/body). Unifica os
+  // dois sistemas de card do app sob um único componente.
+  surface?: "card" | "panel";
 };
 
-export function Card({ className, accent = "neutral", style, ...props }: CardProps) {
-  // Neutro reaproveita a classe .aura-card (visual padrão); acentos são inline tokenizados.
+export function Card({ className, accent = "neutral", surface = "card", style, ...props }: CardProps) {
+  // Neutro reaproveita a classe existente (visual padrão); acentos são inline tokenizados.
   if (accent === "neutral") {
-    return <div className={cn("aura-card", className)} style={style} {...props} />;
+    return <div className={cn(surface === "panel" ? "home-panel" : "aura-card", className)} style={style} {...props} />;
   }
   return (
     <div
