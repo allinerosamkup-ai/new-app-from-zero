@@ -10,6 +10,7 @@ import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
 import { AuraIcon } from "../components/AuraIcon";
 import { useHabitReminders } from "../hooks/useHabitReminders";
 import { getActivationState } from "../features/aura/activation";
+import { resolveActiveBanner } from "./aura-layout.helpers";
 import { resolveUnlockedNav, type NavKey } from "./nav-access.helpers";
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -247,12 +248,17 @@ export function AuraLayout() {
     );
   }
 
+  // Um banner por vez (prioridade: fase > onboarding > follow-up) para não empilhar avisos.
+  const hasPhaseAlert = Boolean(state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed);
+  const hasFollowUp = Boolean(state.pendingFollowUp?.followUpMessage && state.pendingFollowUp.response === null);
+  const activeBanner = resolveActiveBanner({ hasPhaseAlert, showOnboarding: showOnboardingPrompt, hasFollowUp });
+
   return (
     <div className="aura-layout-root min-h-screen overflow-x-hidden" style={{ color: 'var(--on-surface)' }}>
       {/* Daemon IA proativa — invisível, roda após hydration */}
       <AutonomousAIEngine />
 
-      {showOnboardingPrompt && (
+      {activeBanner === "onboarding" && (
         <div style={{
           position: "fixed",
           top: "calc(10px + env(safe-area-inset-top))",
@@ -307,7 +313,7 @@ export function AuraLayout() {
       )}
 
       {/* ── #2: Phase Transition Alert — banner fixo topo ── */}
-      {state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed && (() => {
+      {activeBanner === "phase" && (() => {
         const alert = state.phaseTransitionAlert!;
         const cfg = PHASE_ALERT_CONFIG[alert.toPhase] ?? SEVERITY_CONFIG[alert.severity];
         return (
@@ -351,7 +357,7 @@ export function AuraLayout() {
       })()}
 
       {/* ── #7: Follow-up Card — banner fixo acima do bottom nav ── */}
-      {state.pendingFollowUp?.followUpMessage && state.pendingFollowUp.response === null && (() => {
+      {activeBanner === "followup" && (() => {
         const followUp = state.pendingFollowUp!;
         return (
           <div style={{
@@ -395,7 +401,7 @@ export function AuraLayout() {
 
       {/* Conteúdo das rotas filhas */}
       <div className="aura-layout-content" style={{
-        paddingTop: state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed
+        paddingTop: activeBanner === "phase"
           ? "calc(80px + env(safe-area-inset-top))"
           : "calc(18px + env(safe-area-inset-top))",
         paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
