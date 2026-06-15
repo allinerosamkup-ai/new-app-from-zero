@@ -46,7 +46,7 @@ if command -v curl >/dev/null 2>&1; then
   CODE="000"
   i=1
   while [ "$i" -le "$ATTEMPTS" ]; do
-    CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>/dev/null || echo 000)"
+    CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>/dev/null)" || CODE="000"
     if [ "$CODE" = "200" ]; then
       echo "HTTP 200 (ok na tentativa ${i})"
       break
