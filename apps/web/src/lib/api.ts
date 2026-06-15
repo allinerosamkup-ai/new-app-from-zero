@@ -44,12 +44,44 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
+// Evita disparar vários refresh/signOut concorrentes num storm de 401 (ex.: Promise.all).
+let _recoveringSession = false;
+
 async function handleResponse(response: Response) {
   if (response.ok) return response.status === 204 ? null : response.json();
 
   if (response.status === 401) {
-    // Não deslogamos mais automaticamente para evitar "kick outs" agressivos.
-    // O getSession() no getAuthHeaders tentará renovar o token na próxima chamada.
+    // 401 pode ser token de acesso expirado (transitório, recuperável via refresh) OU
+    // sessão realmente morta (refresh token expirado/revogado). Antes não fazíamos nada
+    // pra evitar kick-out agressivo, mas isso deixava o app "logado-zumbi": UI logada de
+    // cache + 401 em loop, sem nunca voltar pro login. Então: tenta renovar; se o refresh
+    // falhar de verdade, desloga limpo (aura-layout redireciona pro /login no SIGNED_OUT).
+    if (!_recoveringSession) {
+      _recoveringSession = true;
+      let sessionDead = false;
+      try {
+        // refreshSession() pode pendurar (token malformado / rede ruim). Nunca deixar a
+        // recuperação travar: corre contra um timeout que, se vencer, trata como sessão morta.
+        const timeout = new Promise<{ data: { session: null }; error: Error }>((resolve) =>
+          setTimeout(() => resolve({ data: { session: null }, error: new Error('refresh timeout') }), 8000),
+        );
+        const { data, error } = await Promise.race([supabase.auth.refreshSession(), timeout]);
+        sessionDead = Boolean(error) || !data?.session;
+      } catch {
+        sessionDead = true;
+      } finally {
+        _recoveringSession = false;
+      }
+      if (sessionDead) {
+        // Sessão realmente morta: limpa e manda pro login. Redirect duro (não só signOut)
+        // porque com a sessão já inválida no servidor o evento SIGNED_OUT pode não disparar,
+        // deixando o app "logado-zumbi". O reload ainda zera o estado em memória.
+        await supabase.auth.signOut().catch(() => {});
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.assign('/login');
+        }
+      }
+    }
     throw new Error('Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
   }
 
