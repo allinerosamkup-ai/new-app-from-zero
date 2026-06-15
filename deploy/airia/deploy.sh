@@ -37,5 +37,26 @@ docker logs --tail 20 airia_web || true
 
 echo "== Health =="
 if command -v curl >/dev/null 2>&1; then
-  curl -sS -o /dev/null -w "HTTP %{http_code}\n" --max-time 15 https://airia.pro/api/health || true
+  # O backend Node leva alguns segundos pra ficar pronto após o 'up'. Sem retry,
+  # o health roda cedo demais e mostra um 502 falso. Aqui fazemos polling até 200
+  # (ou ~60s), e só então tratamos como falha real.
+  HEALTH_URL="https://airia.pro/api/health"
+  ATTEMPTS=20
+  DELAY=3
+  CODE="000"
+  i=1
+  while [ "$i" -le "$ATTEMPTS" ]; do
+    CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>/dev/null || echo 000)"
+    if [ "$CODE" = "200" ]; then
+      echo "HTTP 200 (ok na tentativa ${i})"
+      break
+    fi
+    echo "tentativa ${i}/${ATTEMPTS}: HTTP ${CODE} — aguardando o backend subir..."
+    i=$((i + 1))
+    sleep "$DELAY"
+  done
+  if [ "$CODE" != "200" ]; then
+    echo "FALHA: health não retornou 200 após ~$((ATTEMPTS * DELAY))s (último: HTTP ${CODE})"
+    exit 1
+  fi
 fi
