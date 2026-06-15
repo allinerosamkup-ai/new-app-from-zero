@@ -660,6 +660,20 @@ export function HomePage() {
   // ── UI adaptativa por fase (Onda 3) ─────────────────────────────────────────
   const density = useMemo(() => resolveHomeDensity(cycleReport.phase), [cycleReport.phase]);
 
+  // ── Today view: detalhes do dia colapsados por padrão (lembra a preferência) ──
+  const DAY_DETAILS_KEY = "airia.home.dayDetailsOpen.v1";
+  const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
+  useEffect(() => {
+    try { setDayDetailsOpen(localStorage.getItem(DAY_DETAILS_KEY) === "1"); } catch { /* ignore */ }
+  }, []);
+  function toggleDayDetails() {
+    setDayDetailsOpen((open) => {
+      const next = !open;
+      try { localStorage.setItem(DAY_DETAILS_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   // ── Primeiro insight após 7 dias — mostrado uma única vez ───────────────────
   const FIRST_INSIGHT_SEEN_KEY = "airia.firstInsight.seen.v1";
   const [firstInsightDismissed, setFirstInsightDismissed] = useState(false);
@@ -1556,21 +1570,27 @@ export function HomePage() {
               </div>
             </div>
           </div>
-          {/* Phase chip + menstrual chip (modulador secundário) */}
-          <div style={{ marginTop: "12px", display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+          {/* Hero de fase — o centro da today view */}
+          <div style={{ textAlign: "center", marginTop: 18 }}>
             <div style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              background: "rgba(255,255,255,.72)",
-              border: "1px solid rgba(17,24,39,.05)",
-              borderRadius: 999, padding: "5px 14px",
-              boxShadow: "0 8px 14px rgba(17,24,39,.04)",
+              width: 76, height: 76, borderRadius: "50%",
+              background: "rgba(255,255,255,.80)",
+              border: `2px solid ${phaseColor}`,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              fontSize: 32, marginBottom: 12,
+              boxShadow: "0 10px 22px rgba(17,24,39,.05)",
             }}>
-              <span style={{ fontSize: 13 }}>{cycleReport.phaseEmoji}</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)" }}>{currentPhaseLabel}</span>
+              {cycleReport.phaseEmoji}
             </div>
+            <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.2 }}>
+              {currentPhaseLabel}
+            </p>
+            <p style={{ margin: "8px auto 0", fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, maxWidth: 250 }}>
+              {PHASE_CONFIG[cycleReport.phase]?.tip ?? "Airia organiza seu dia respeitando seu humor e energia."}
+            </p>
             {menstrualReport && (
               <div style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
+                display: "inline-flex", alignItems: "center", gap: 5, marginTop: 12,
                 background: "rgba(247,230,230,.55)",
                 border: "1px solid rgba(184,109,124,.12)",
                 borderRadius: 999, padding: "4px 10px",
@@ -1585,21 +1605,10 @@ export function HomePage() {
               </div>
             )}
           </div>
-          {/* Eco da landing — sempre visível, intuitivo mesmo sem tour */}
-          <p style={{
-            margin: "10px 0 0",
-            fontSize: 11.5,
-            lineHeight: 1.45,
-            color: "var(--text-2)",
-            textAlign: "center",
-            opacity: 0.85,
-          }}>
-            Airia organiza seu dia respeitando seu humor e energia.
-          </p>
         </div>
 
         {/* Ação principal do momento — 1 só, conforme hora do dia e estado real */}
-        {primaryAction && (
+        {primaryAction && !showActivationHome && (
           <>
             <button
               type="button"
@@ -1784,6 +1793,37 @@ export function HomePage() {
             Ajustar meu dia com IA
           </button>
         </div>
+
+        {/* ── Ver meu dia — detalhes colapsados (today view) ── */}
+        <button
+          type="button"
+          onClick={toggleDayDetails}
+          aria-expanded={dayDetailsOpen}
+          style={{
+            width: "100%",
+            marginTop: 4,
+            marginBottom: dayDetailsOpen ? "calc(var(--a))" : 0,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            color: "var(--text-3)",
+            fontSize: 13,
+            fontWeight: 700,
+            padding: "14px 0",
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
+          }}
+        >
+          {dayDetailsOpen ? "Recolher" : "Ver meu dia"}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: dayDetailsOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }} aria-hidden="true">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        {dayDetailsOpen && (<>
 
         {/* ── Gráfico de check-ins ── */}
         <div className="mini-chart-area" style={showActivationHome && activationState.checkinCount === 0 ? { padding: 12 } : undefined}>
@@ -3305,6 +3345,8 @@ export function HomePage() {
             </div>
           </Card>
         )}
+
+        </>)}
 
       </div>
       {showHabitIdeasModal && (
