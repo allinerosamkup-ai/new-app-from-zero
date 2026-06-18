@@ -832,6 +832,9 @@ function PlannerSheetBody({
   const [showConfig, setShowConfig] = useState(false);
   const [showAddAlert, setShowAddAlert] = useState(false);
   const [titleTouched, setTitleTouched] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(
+    () => (form.alerts?.length ?? 0) > 0 || (form.checklist?.length ?? 0) > 0
+  );
   const dateInputRef = useRef<HTMLInputElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
   const titleEmpty = !form.title.trim();
@@ -1073,6 +1076,21 @@ function PlannerSheetBody({
         </div>
       </section>
 
+      {/* ── Mais opções (avançado, colapsado) ── */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          width: "100%", padding: "14px", borderRadius: "14px",
+          border: "1.5px dashed var(--outline-variant)", background: "var(--surface-variant)",
+          color: "var(--text-2)", fontSize: 14, fontWeight: 700, cursor: "pointer",
+        }}
+      >
+        {showAdvanced ? "Menos opções ▴" : "Mais opções ▾"}
+      </button>
+
+      {showAdvanced && (<>
       {/* ── 5. Categoria ── */}
       <section>
         <label style={STITLE}>Categoria</label>
@@ -1311,6 +1329,7 @@ function PlannerSheetBody({
           context={{ title: form.title, category: form.category, energyLevel: form.energyLevel }}
         />
       </section>
+      </>)}
 
       {/* ── 8. Ações ── */}
       <div style={{ display: "flex", gap: 12, marginTop: 12 }}>

@@ -162,6 +162,7 @@ export function InsightsPage() {
   const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '180d' | '365d'>('7d');
+  const [insightTab, setInsightTab] = useState<'agora' | 'padroes'>('agora');
   const [monthlyReport, setMonthlyReport] = useState<string | null>(null);
   const [monthlyReportPhase, setMonthlyReportPhase] = useState<'idle' | 'loading' | 'done'>('idle');
   const goals = state.goals || [];
@@ -515,22 +516,31 @@ export function InsightsPage() {
           </div>
         </div>
 
-        <div style={{
-          borderRadius: 20,
-          border: "1.5px solid rgba(99,152,169,.24)",
-          background: "linear-gradient(135deg, rgba(255,255,255,.82), rgba(99,152,169,.10))",
-          padding: "16px",
-          marginBottom: "calc(var(--a))",
-        }}>
-          <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 850, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sky)" }}>
-            Leitura pratica
-          </p>
-          <h2 style={{ margin: "0 0 8px", fontSize: 18, lineHeight: 1.25, color: "var(--text-1)" }}>
-            A Airia conecta seu estado interno com sua capacidade real de execução.
-          </h2>
-          <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: "var(--text-2)" }}>
-            Esta tela mostra se humor, energia, sono, hábitos e metas estão sustentando ou atrapalhando a rotina. A próxima ação boa deve sair de dado real, não de cobrança solta.
-          </p>
+        {/* ── Abas: Agora / Padrões ── */}
+        <div style={{ display: "flex", gap: 6, marginBottom: "calc(var(--a))" }}>
+          {([
+            { id: "agora", label: "Agora" },
+            { id: "padroes", label: "Padrões" },
+          ] as const).map(tab => {
+            const active = insightTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setInsightTab(tab.id)}
+                style={{
+                  flex: 1, minHeight: 40, borderRadius: 999, cursor: "pointer",
+                  fontSize: 13, fontWeight: 800, fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  border: active ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
+                  background: active ? "var(--accent-peach)" : "rgba(255,255,255,.62)",
+                  color: active ? "#fff" : "var(--text-2)",
+                  backdropFilter: "blur(14px)", transition: "all 150ms",
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
         {history.length < 3 && (
@@ -551,6 +561,7 @@ export function InsightsPage() {
         )}
 
         {/* ── Chart card ── */}
+        {insightTab === "padroes" && (
         <div className="aura-card aura-card--chart insights-chart-card">
           <div className="insights-chart-heading">
             <span className="insights-chart-bullet" />
@@ -604,8 +615,10 @@ export function InsightsPage() {
           </>
           )}
         </div>
+        )}
 
         {/* ── Stats row — 3 cards ── */}
+        {insightTab === "agora" && (
         <div className="insights-stats-row">
           {[
             { value: avgHumor, label: "Humor" },
@@ -622,9 +635,10 @@ export function InsightsPage() {
             </div>
           ))}
         </div>
+        )}
 
         {/* ── Comparativo Semana a Semana (7.3) ── */}
-        {weeklyCompare && (weeklyCompare.thisWeek.checkins > 0 || weeklyCompare.lastWeek.checkins > 0) && (
+        {insightTab === "padroes" && weeklyCompare && (weeklyCompare.thisWeek.checkins > 0 || weeklyCompare.lastWeek.checkins > 0) && (
           <div style={{
             borderRadius: 18, border: "1.5px solid var(--warm-border)",
             background: "rgba(255,255,255,.62)", backdropFilter: "blur(16px)",
@@ -662,7 +676,7 @@ export function InsightsPage() {
         )}
 
         {/* ── HISTÓRICO DE FASES (timeline 30 dias) ── */}
-        {phaseHistory.length > 0 && (
+        {insightTab === "padroes" && phaseHistory.length > 0 && (
           <div
             className="aura-card"
             style={{
@@ -798,6 +812,7 @@ export function InsightsPage() {
           </div>
         )}
 
+        {insightTab === "padroes" && (<>
         <div className="aura-page-header" style={{ marginBottom: 12 }}>
           <p className="aura-page-kicker">{t("insights.harmonyKicker")}</p>
           <h2 className="aura-page-title" style={{ fontSize: "24px", marginBottom: 4 }}>{t("insights.harmonyTitle")}</h2>
@@ -946,9 +961,10 @@ export function InsightsPage() {
             </div>
           ))}
         </div>
+        </>)}
 
         {/* ── Correlações ─────────────────────────────────────── */}
-        {history.length >= 5 && (() => {
+        {insightTab === "padroes" && history.length >= 5 && (() => {
           const humorVals  = history.map(h => h.humor);
           const energyVals = history.map(h => h.energia);
           const sleepArr   = history.filter(h => h.sono != null).map(h => ({ humor: h.humor, sono: h.sono! }));
@@ -1013,7 +1029,7 @@ export function InsightsPage() {
         })()}
 
         {/* ── #4: Ciclo de Humor — card com phase + cycleEstimate ── */}
-        {cycleReport.phase !== "insufficient_data" && (
+        {insightTab === "agora" && cycleReport.phase !== "insufficient_data" && (
           <div style={{
             borderRadius: 16, border: `1.5px solid ${phaseColor}33`,
             background: "rgba(255,253,249,.97)",
@@ -1203,7 +1219,7 @@ export function InsightsPage() {
         )}
 
         {/* ── Seção: Hábitos e Momentum ──────────────────────── */}
-        {(() => {
+        {insightTab === "padroes" && (() => {
           const habits = state.habits || [];
           if (habits.length === 0) return null;
 
@@ -1344,8 +1360,14 @@ export function InsightsPage() {
           );
         })()}
 
+        {/* ── Leitura da Airia (agrupada) ── */}
+        {insightTab === "agora" && (
+          <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: 850, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
+            Leitura da Airia
+          </p>
+        )}
         {/* ── AI Insight Card ── */}
-        {insightPhase === "idle" && (
+        {insightTab === "agora" && insightPhase === "idle" && (
           <AuraButtonV2
             onClick={fetchInsight}
             className="btn btn-primary btn-full insights-cta-btn"
@@ -1354,14 +1376,14 @@ export function InsightsPage() {
           </AuraButtonV2>
         )}
 
-        {insightPhase === "loading" && (
+        {insightTab === "agora" && insightPhase === "loading" && (
           <div className="insights-loading-card">
             <div className="insights-loading-icon" />
             <p className="insights-loading-text">Lendo seus padrões da semana...</p>
           </div>
         )}
 
-        {insightPhase === "done" && aiInsight && (() => {
+        {insightTab === "agora" && insightPhase === "done" && aiInsight && (() => {
           const cor = CAT_COLOR[aiInsight.category] ?? "var(--atomic-tangerine)";
           return (
             <div
@@ -1398,7 +1420,7 @@ export function InsightsPage() {
         })()}
 
         {/* ── Highlights da semana ───────────────────────────── */}
-        {insightPhase === "done" && highlights.length > 0 && (
+        {insightTab === "agora" && insightPhase === "done" && highlights.length > 0 && (
           <div style={{
             borderRadius: 18,
             border: "1.5px solid rgba(150,199,179,0.28)",
@@ -1431,7 +1453,7 @@ export function InsightsPage() {
         )}
 
         {/* ── Pergunta da semana ─────────────────────────────── */}
-        {insightPhase === "done" && weeklyQuestion && (
+        {insightTab === "agora" && insightPhase === "done" && weeklyQuestion && (
           <div style={{
             borderRadius: 18,
             background: "linear-gradient(135deg, rgba(215,137,127,0.10) 0%, rgba(150,199,179,0.08) 100%)",
@@ -1459,7 +1481,7 @@ export function InsightsPage() {
         )}
 
         {/* ── Padrões Preditivos ──────────────────────────────── */}
-        {patterns && (
+        {insightTab === "padroes" && patterns && (
           <div style={{
             backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
             background: "rgba(255,255,255,0.62)",
@@ -1531,6 +1553,7 @@ export function InsightsPage() {
         )}
 
         {/* ── Relatório Mensal IA ─────────────────────────────── */}
+        {insightTab === "padroes" && (
         <div style={{
           borderRadius: 18, border: "1.5px solid var(--warm-border)",
           background: "rgba(255,255,255,.62)", backdropFilter: "blur(16px)",
@@ -1580,6 +1603,7 @@ export function InsightsPage() {
             </div>
           )}
         </div>
+        )}
 
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 

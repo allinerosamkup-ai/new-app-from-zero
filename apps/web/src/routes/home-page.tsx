@@ -988,22 +988,6 @@ export function HomePage() {
   const totalTasks = state.tasks.length;
   const doneTasks = state.tasks.filter(t => t.done).length;
   const pendingTasks = state.tasks.filter(t => !t.done).length;
-  const bioSyncPrimarySignal = latestTodayCheckin
-    ? `Hoje: humor ${latestTodayCheckin.humor}/10 e energia ${latestTodayCheckin.energia}/10`
-    : cycleReport.phase !== "insufficient_data"
-      ? `Fase atual: ${currentPhaseLabel}`
-      : "Comece com um check-in para calibrar o ritmo de hoje";
-  const bioSyncBodySignals = [
-    latestTodayCheckin?.sono != null ? `sono ${latestTodayCheckin.sono}/10` : null,
-    latestTodayCheckin?.fisico != null ? `corpo ${latestTodayCheckin.fisico}/10` : null,
-    menstrualReport ? `${menstrualReport.label} d${menstrualReport.dayOfCycle}` : null,
-  ].filter(Boolean);
-  const bioSyncAgendaHint = pendingTasks > 0
-    ? `${pendingTasks} pendência${pendingTasks > 1 ? "s" : ""} para ajustar pelo horário atual.`
-    : goalTitles.length > 0 || habits.some((habit) => !(habit.completions || []).length)
-      ? "Sem agenda pesada: dá para encaixar um bloco leve com base em meta ou hábito."
-      : "Sem âncora operacional forte: melhor calibrar antes de criar compromisso.";
-
   async function fetchAgenda() {
     setAgendaPhase("loading");
     try {
@@ -1743,56 +1727,6 @@ export function HomePage() {
             </AuraButtonV2>
           </div>
         )}
-
-        <div
-          className="aura-card"
-          style={{
-            marginBottom: "calc(var(--a) * 1.1)",
-            padding: 16,
-            borderRadius: 22,
-            border: "1.5px solid rgba(99,152,169,.22)",
-            background: "rgba(255,255,255,.82)",
-          }}
-        >
-          <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sky)" }}>
-            Bio-sincronia de hoje
-          </p>
-          <h2 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.25 }}>
-            {bioSyncPrimarySignal}
-          </h2>
-          <p style={{ margin: "0 0 8px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
-            {bioSyncBodySignals.length > 0
-              ? `Sinais do corpo: ${bioSyncBodySignals.join(" · ")}.`
-              : "A Airia cruza fase, histórico e agenda mesmo quando ainda faltam sinais do corpo."}
-          </p>
-          <p style={{ margin: "0 0 13px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
-            {bioSyncAgendaHint}
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate("/planner", { state: { openProactiveReplan: true } })}
-            style={{
-              width: "100%",
-              minHeight: 44,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-              border: "none",
-              background: "var(--accent-peach, #D7897F)",
-              color: "#fff",
-              borderRadius: 999,
-              padding: "10px 16px",
-              fontSize: 14,
-              fontWeight: 800,
-              cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(215,137,127,0.25)",
-            }}
-          >
-            <Sparkles size={15} />
-            Ajustar meu dia com IA
-          </button>
-        </div>
 
         {/* ── Ver meu dia — detalhes colapsados (today view) ── */}
         <button
@@ -2901,13 +2835,15 @@ export function HomePage() {
                       <span className="home-cycle-emoji">{hasCycleData ? cycleReport.phaseEmoji : mood.emoji}</span>
                       <div style={{ minWidth: 0 }}>
                         <p className="home-cycle-title" style={{ margin: 0 }}>
-                          {hasCycleData ? currentPhaseLabel : "Ainda calibrando"}
-                        </p>
-                        <p className="home-cycle-subtitle">
                           {hasCycleData
                             ? `${cycleReport.daysInPhase} dia${cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase`
-                            : "A Home fica mais precisa depois do primeiro check-in"}
+                            : "Ainda calibrando"}
                         </p>
+                        {!hasCycleData && (
+                          <p className="home-cycle-subtitle">
+                            A Home fica mais precisa depois do primeiro check-in
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
