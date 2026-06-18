@@ -933,19 +933,6 @@ export function CheckinResultPage() {
           )}
         </div>
 
-        {/* Chip de estado */}
-        <div className="result-chip-row">
-          <span
-            className="result-state-chip"
-            style={{
-              background: isMenuthe ? "rgba(180,185,169,.15)" : "rgba(197,165,147,.13)",
-              color: v.accent,
-              border: `1.5px solid ${isMenuthe ? "rgba(180,185,169,.3)" : "rgba(197,165,147,.3)"}`,
-            }}
-          >
-            {v.chipLabel}
-          </span>
-        </div>
 
         <div
           style={{
