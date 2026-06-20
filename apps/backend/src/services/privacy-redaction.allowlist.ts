@@ -60,11 +60,22 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'priorDiagnoses',
       'medicationCurrentlyUsing',
       'medicationNotes',
+      // Stripe billing: the user's own subscription metadata. No payment
+      // instrument data here (that lives in Stripe), so it is safe to include
+      // verbatim in the user's own data export.
+      'subscriptionStatus',
+      'subscriptionPlan',
+      'subscriptionPeriodEnd',
       'version',
       'createdAt',
       'updatedAt',
     ],
-    redact: [],
+    redact: [
+      // Internal Stripe customer identifier (cus_…). Maps to the payment
+      // processor, is not user-facing data, and never leaves the database —
+      // same stance as the redacted OAuth tokens.
+      'stripeCustomerId',
+    ],
   },
   UserPreference: {
     include: [
