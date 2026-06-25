@@ -7,18 +7,22 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2026-05-27.dahlia',
 });
 
-const PRICE_ID = process.env.STRIPE_PRICE_ID!;
+const PRICE_ID_MONTHLY = process.env.STRIPE_PRICE_ID!;
+const PRICE_ID_ANNUAL = process.env.STRIPE_PRICE_ID_ANNUAL || process.env.STRIPE_PRICE_ID!;
 const APP_URL = process.env.APP_URL || 'https://airia.pro';
 
 export class StripeService {
-  static async getOrCreateCustomer(userId: string, email: string): Promise<string> {
+  static async getOrCreateCustomer(userId: string, email?: string): Promise<string> {
     const onboarding = await prisma.onboardingResponse.findUnique({ where: { userId } });
 
     if (onboarding?.stripeCustomerId) {
       return onboarding.stripeCustomerId;
     }
 
-    const customer = await stripe.customers.create({ email, metadata: { userId } });
+    const customer = await stripe.customers.create({
+      ...(email ? { email } : {}),
+      metadata: { userId },
+    });
 
     await prisma.onboardingResponse.update({
       where: { userId },
@@ -28,16 +32,21 @@ export class StripeService {
     return customer.id;
   }
 
-  static async createCheckoutSession(userId: string, email: string): Promise<string> {
+  static async createCheckoutSession(
+    userId: string,
+    email?: string,
+    plan: 'monthly' | 'annual' = 'monthly',
+  ): Promise<string> {
     const customerId = await StripeService.getOrCreateCustomer(userId, email);
+    const priceId = plan === 'annual' ? PRICE_ID_ANNUAL : PRICE_ID_MONTHLY;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
-      line_items: [{ price: PRICE_ID, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${APP_URL}/billing?status=success`,
       cancel_url: `${APP_URL}/billing?status=canceled`,
-      metadata: { userId },
+      metadata: { userId, plan },
     });
 
     return session.url!;

@@ -1426,6 +1426,21 @@ export function createApp(dependencies: AppDependencies = {}) {
     credentials: true,
   }));
   app.set('trust proxy', true);
+
+  // Stripe webhook — PRECISA do corpo cru (raw) e fica fora do express.json()
+  // e do requireAuth. Registrado aqui de propósito, antes de tudo.
+  app.post('/api/billing/webhook', express.raw({ type: '*/*' }), async (req: Request, res: Response) => {
+    const sig = req.headers['stripe-signature'] as string;
+    if (!sig) return res.status(400).json({ error: 'no_signature' });
+    try {
+      const { StripeService } = await import('./services/stripe.service');
+      await StripeService.handleWebhook(req.body as Buffer, sig);
+      res.json({ received: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   app.use(express.json());
 
   app.get('/health', (req: Request, res: Response) => {
@@ -5751,27 +5766,14 @@ JSON APENAS: {"profileSummary":"..."}`,
     return res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
-  // ── Billing / Stripe ─────────────────────────────────────────────────────
-  // Webhook precisa de raw body — registrar ANTES do express.json() global por isso
-  // usamos a rota separada com express.raw()
-  app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string;
-    if (!sig) return res.status(400).json({ error: 'no_signature' });
-    try {
-      const { StripeService } = await import('./services/stripe.service');
-      await StripeService.handleWebhook(req.body as Buffer, sig);
-      res.json({ received: true });
-    } catch (err: any) {
-      res.status(400).json({ error: err.message });
-    }
-  });
-
+  // ── Billing / Stripe (checkout/portal/status — atrás do requireAuth) ──────
   app.post('/api/billing/checkout', async (req: Request, res: Response) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: 'unauthorized' });
+      const userId = (req as AuthRequest).userId;
+      const email = typeof req.body?.email === 'string' ? req.body.email : undefined;
+      const plan = req.body?.plan === 'annual' ? 'annual' : 'monthly';
       const { StripeService } = await import('./services/stripe.service');
-      const url = await StripeService.createCheckoutSession(user.userId, user.email);
+      const url = await StripeService.createCheckoutSession(userId, email, plan);
       res.json({ url });
     } catch {
       res.status(500).json({ error: 'checkout_failed' });
@@ -5780,10 +5782,9 @@ JSON APENAS: {"profileSummary":"..."}`,
 
   app.post('/api/billing/portal', async (req: Request, res: Response) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: 'unauthorized' });
+      const userId = (req as AuthRequest).userId;
       const { StripeService } = await import('./services/stripe.service');
-      const url = await StripeService.createPortalSession(user.userId);
+      const url = await StripeService.createPortalSession(userId);
       res.json({ url });
     } catch (err: any) {
       if (err.message === 'no_stripe_customer') return res.status(404).json({ error: 'no_subscription' });
@@ -5793,13 +5794,54 @@ JSON APENAS: {"profileSummary":"..."}`,
 
   app.get('/api/billing/status', async (req: Request, res: Response) => {
     try {
-      const user = (req as any).user;
-      if (!user) return res.status(401).json({ error: 'unauthorized' });
+      const userId = (req as AuthRequest).userId;
       const { StripeService } = await import('./services/stripe.service');
-      const data = await StripeService.getSubscriptionStatus(user.userId);
+      const data = await StripeService.getSubscriptionStatus(userId);
       res.json(data);
     } catch {
       res.status(500).json({ error: 'status_failed' });
+    }
+  });
+
+  // ── Jornada Interior (fusão do livro "Além da Solidão") ───────────────────
+  app.get('/api/jornada', async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const { JORNADA_STEPS } = await import('./lib/livro-essencia');
+      const onboarding = await defaultPrisma.onboardingResponse.findUnique({
+        where: { userId }, select: { aiProfilePayload: true },
+      });
+      const payload = (onboarding?.aiProfilePayload as Record<string, unknown>) ?? {};
+      const jornada = (payload.jornada as { currentStep?: number; completed?: number[] }) ?? {};
+      res.json({
+        steps: JORNADA_STEPS,
+        currentStep: jornada.currentStep ?? 1,
+        completed: jornada.completed ?? [],
+      });
+    } catch {
+      res.status(500).json({ error: 'jornada_failed' });
+    }
+  });
+
+  app.post('/api/jornada/:n/complete', async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const n = Math.max(1, Math.min(13, parseInt(req.params.n, 10) || 0));
+      if (!n) return res.status(400).json({ error: 'invalid_step' });
+      const existing = await defaultPrisma.onboardingResponse.findUnique({
+        where: { userId }, select: { aiProfilePayload: true },
+      });
+      const payload = (existing?.aiProfilePayload as Record<string, unknown>) ?? {};
+      const jornada = (payload.jornada as { currentStep?: number; completed?: number[] }) ?? {};
+      const completed = Array.from(new Set([...(jornada.completed ?? []), n])).sort((a, b) => a - b);
+      const currentStep = Math.min(13, Math.max(jornada.currentStep ?? 1, n + 1));
+      await defaultPrisma.onboardingResponse.update({
+        where: { userId },
+        data: { aiProfilePayload: { ...payload, jornada: { currentStep, completed } } },
+      });
+      res.json({ currentStep, completed });
+    } catch {
+      res.status(500).json({ error: 'jornada_complete_failed' });
     }
   });
 

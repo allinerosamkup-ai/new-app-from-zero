@@ -13,6 +13,7 @@ import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
+import { JornadaHomeCard } from "../components/JornadaHomeCard";
 import { aggregateCheckinsByDay, computeDailyPhaseMap, computeMoodCycle, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import { Card, SectionTitle, Stat } from "../components/ui/card";
 import { computeDaysSinceLastCheckin, REENTRY_GAP_DAYS } from "./checkin-page.helpers";
@@ -62,6 +63,7 @@ import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { ActivationChecklist } from "../components/activation/ActivationChecklist";
 import { FirstRunGuide } from "../components/activation/FirstRunGuide";
 import { getActivationState } from "../features/aura/activation";
+import { NotificationPromptBanner } from "../components/NotificationPromptBanner";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -1591,6 +1593,8 @@ export function HomePage() {
           </div>
         </div>
 
+        <JornadaHomeCard />
+
         {/* Ação principal do momento — 1 só, conforme hora do dia e estado real */}
         {primaryAction && !showActivationHome && (
           <>
@@ -2803,6 +2807,12 @@ export function HomePage() {
         </div>
 
         {quickAccessSection}
+
+        {/* ── Banner de notificação contextual ── */}
+        <NotificationPromptBanner
+          userId={pushUserId}
+          checkinCount={(state.checkinHistory || []).length}
+        />
 
         {/* ── Card compacto: Ritmo + Autonomia ── */}
         {(() => {
