@@ -85,7 +85,7 @@ import {
   shouldSendHabitReminderToday,
   shouldSendJournalNudge,
 } from './lib/notification-filters';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel } from './lib/openai-config';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
 import { ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
@@ -640,7 +640,7 @@ REGRAS:
 {"tasks":[{"title":"...","category":"trabalho|saude|rotina|social","time":"HH:MM","dayOffset":0}]}`,
       },
     ],
-    temperature: 0.4,
+    ...openAiTemperature(getOpenAiModel(), 0.4),
     response_format: { type: 'json_object' },
     max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
   });
@@ -1092,7 +1092,7 @@ JSON APENAS: {"goals":["string"],"people":["string"],"patterns":["string"],"insi
     ],
     response_format: { type: 'json_object' },
     max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
-    temperature: 0.2,
+    ...openAiTemperature(getOpenAiModel(), 0.2),
   });
 
   const content = response.choices[0]?.message?.content;
@@ -4729,7 +4729,7 @@ INSTRUÇÕES:
           { role: 'user' as const, content: prompt },
         ],
         max_completion_tokens: getOpenAiMaxCompletionTokens(generationConfig.maxTokens),
-        temperature: generationConfig.temperature,
+        ...openAiTemperature(getOpenAiModel(), generationConfig.temperature),
         ...(generationConfig.useJsonResponse && usesJsonObjectResponse(type)
           ? { response_format: { type: 'json_object' as const } }
           : {}),
@@ -4844,7 +4844,7 @@ JSON APENAS: {"profileSummary":"..."}`,
         model: getOpenAiModel(),
         response_format: { type: 'json_object' },
         max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
-        temperature: 0.4,
+        ...openAiTemperature(getOpenAiModel(), 0.4),
       } as any);
 
       const content = completion.choices[0]?.message?.content;

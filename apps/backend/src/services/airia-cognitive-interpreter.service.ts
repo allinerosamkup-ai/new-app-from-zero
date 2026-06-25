@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { DailyContext } from './context-grounding.service';
 import type { DecisionSurface } from './decision-engine.service';
 import type { AiriaActionPlan } from './airia-operational-reasoning.service';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -385,7 +385,7 @@ export class AiriaCognitiveInterpreterService {
         ],
         response_format: { type: 'json_object' },
         max_completion_tokens: getOpenAiMaxCompletionTokens(5000),
-        temperature: 0.2,
+        ...openAiTemperature(this.MODEL, 0.2),
       } as any);
 
       const content = response.choices?.[0]?.message?.content;

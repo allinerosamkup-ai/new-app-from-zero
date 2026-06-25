@@ -1,6 +1,6 @@
 import { PrismaClient } from '@app/database';
 import { MemoryService } from './memory.service';
-import { getOpenAiModel } from '../lib/openai-config';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
 
 const prisma = new PrismaClient();
 
@@ -156,8 +156,8 @@ Retorne JSON:
         { role: 'system', content: prompt },
         { role: 'user', content: JSON.stringify(checkinsData) },
       ],
-      temperature: 0.3,
-      max_tokens: 700,
+      ...openAiTemperature(getOpenAiModel(), 0.3),
+      max_completion_tokens: getOpenAiMaxCompletionTokens(4000),
     });
 
     const content = completion.choices[0]?.message?.content;

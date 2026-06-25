@@ -17,3 +17,32 @@ export function getOpenAiMaxCompletionTokens(
 
   return Math.min(preferred, cap);
 }
+
+/**
+ * Reasoning models in the gpt-5 / o-series only accept the default
+ * `temperature` of 1 and reject any custom value with a 400
+ * ("Unsupported value: 'temperature' does not support X with this model").
+ * For those models the parameter must be omitted entirely.
+ */
+export function modelSupportsCustomTemperature(model: string): boolean {
+  const m = (model || '').toLowerCase();
+  return !(
+    m.startsWith('gpt-5') ||
+    m.startsWith('o1') ||
+    m.startsWith('o3') ||
+    m.startsWith('o4')
+  );
+}
+
+/**
+ * Spread into a `chat.completions.create()` payload. Yields `{ temperature }`
+ * only when the active model accepts a custom value; otherwise yields `{}` so
+ * the request falls back to the model default (1) instead of 400-ing into the
+ * canned fallback path.
+ */
+export function openAiTemperature(
+  model: string,
+  temperature: number,
+): { temperature?: number } {
+  return modelSupportsCustomTemperature(model) ? { temperature } : {};
+}
