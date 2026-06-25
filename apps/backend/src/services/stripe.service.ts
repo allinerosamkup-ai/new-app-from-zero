@@ -99,7 +99,7 @@ export class StripeService {
 
       await prisma.onboardingResponse.update({
         where: { userId: onboarding.userId },
-        data: {
+             data: {
           subscriptionStatus: sub.status,
           subscriptionPlan: interval === 'year' ? 'annual' : 'monthly',
           subscriptionPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,

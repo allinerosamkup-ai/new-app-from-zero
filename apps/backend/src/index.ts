@@ -6239,6 +6239,11 @@ if (require.main === module) {
   }, FIFTEEN_MINUTES);
 
   app.listen(port, () => {
-    console.log(`[backend]: Server is running at http://localhost:${port}`);
+    console.log(`[Airia Backend] Server running on port ${port}`);
   });
 }
+
+startServer().catch((err) => {
+  console.error('[Airia Backend] Fatal startup error:', err);
+  process.exit(1);
+});
