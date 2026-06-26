@@ -13,6 +13,7 @@ import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { BarChart3, ClipboardCheck } from "lucide-react";
 import { buildInsightActionDecision, type InsightActionDecision } from "./insights-page.helpers";
+import { WeeklyShareCard } from "../components/WeeklyShareCard";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -1418,6 +1419,18 @@ export function InsightsPage() {
             </div>
           );
         })()}
+
+        {/* ── Compartilhamento semanal ── */}
+        {insightTab === "agora" && insightPhase === "done" && aiInsight && (
+          <WeeklyShareCard
+            phaseName={cycleReport.phase}
+            phaseColor={getPhaseColor(cycleReport.phase)}
+            avgMood={cycleReport.avgMood7d}
+            avgEnergy={cycleReport.avgEnergy7d}
+            insight={aiInsight.insight.slice(0, 120)}
+            weekLabel={`Semana de ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "short" })}`}
+          />
+        )}
 
         {/* ── Highlights da semana ───────────────────────────── */}
         {insightTab === "agora" && insightPhase === "done" && highlights.length > 0 && (

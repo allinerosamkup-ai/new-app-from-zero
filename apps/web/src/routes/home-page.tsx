@@ -64,6 +64,9 @@ import { ActivationChecklist } from "../components/activation/ActivationChecklis
 import { FirstRunGuide } from "../components/activation/FirstRunGuide";
 import { getActivationState } from "../features/aura/activation";
 import { NotificationPromptBanner } from "../components/NotificationPromptBanner";
+import { PresenceCard } from "../components/PresenceCard";
+import { GoalNudgeCard } from "../components/GoalNudgeCard";
+import { ReferralCard } from "../components/ReferralCard";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -2805,6 +2808,23 @@ export function HomePage() {
             </div>
           )}
         </div>
+
+        {/* ── Presença sem cobrança ── */}
+        {(state.checkinHistory || []).length > 0 && (
+          <PresenceCard checkinHistory={state.checkinHistory || []} />
+        )}
+
+        {/* ── Sugestão por meta quando agenda vazia ── */}
+        <GoalNudgeCard
+          goals={state.goals || []}
+          tasks={state.tasks || []}
+          onAddTask={(title) => addTask({ title, date: new Date().toISOString().split("T")[0] })}
+        />
+
+        {/* ── Referral ── */}
+        {pushUserId && (state.checkinHistory || []).length >= 7 && (
+          <ReferralCard userId={pushUserId} />
+        )}
 
         {quickAccessSection}
 

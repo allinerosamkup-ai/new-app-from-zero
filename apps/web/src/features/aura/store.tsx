@@ -13,6 +13,7 @@ import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodO
 import { createEmptyOnboardingDraft, type OnboardingDraft } from "./onboarding";
 import { normalizeReminderPreferences } from "./settings";
 import { api } from "../../lib/api";
+import { queueCheckin } from "../../lib/offline-checkin";
 import { supabase } from "../../lib/supabase";
 import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
 import { postNativeShellMessage } from "../../utils/native-shell";
@@ -596,6 +597,19 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           return extracted;
         } catch (err) {
           console.error("Failed to persist checkin; kept local copy.", err);
+          // Salva na fila offline para sincronizar quando a conexão voltar
+          if (!navigator.onLine) {
+            queueCheckin({
+              date: today,
+              humor: entry.humor,
+              energia: entry.energia,
+              irritabilidade: entry.irritabilidade,
+              clareza: entry.clareza,
+              sono: entry.sono,
+              checkinSlot,
+            });
+            console.log("[offline-sync] Check-in enfileirado para sync posterior.");
+          }
           return null;
         }
       },
