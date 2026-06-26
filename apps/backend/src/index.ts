@@ -5968,12 +5968,12 @@ JSON APENAS: {"profileSummary":"..."}`,
 
       // Busca último check-in do usuário antes do período
       const lastCheckin = await prisma.dailyCheckin.findFirst({
-        where: { userId, date: { lt: new Date(periodStart) } },
-        orderBy: { date: 'desc' },
+        where: { userId, localDate: { lt: new Date(periodStart) } },
+        orderBy: { localDate: 'desc' },
       });
 
-      const baseHumor = lastCheckin ? (lastCheckin as any).humor ?? 6 : 6;
-      const baseEnergia = lastCheckin ? (lastCheckin as any).energia ?? 6 : 6;
+      const baseHumor = lastCheckin ? lastCheckin.moodScore ?? 6 : 6;
+      const baseEnergia = lastCheckin ? lastCheckin.energyScore ?? 6 : 6;
 
       // Gera datas entre periodStart e periodEnd (exclusive today)
       const dates: string[] = [];
@@ -5989,27 +5989,27 @@ JSON APENAS: {"profileSummary":"..."}`,
         const dateKey = dates[i];
         // Evita duplicata
         const existing = await prisma.dailyCheckin.findFirst({
-          where: { userId, date: { gte: new Date(dateKey + 'T00:00:00.000Z'), lt: new Date(dateKey + 'T23:59:59.999Z') } },
+          where: { userId, localDate: new Date(dateKey) },
         });
         if (existing) continue;
 
         // Para 'mixed', alterna positivo/negativo
         const mixedSign = pattern === 'mixed' ? (i % 2 === 0 ? 1 : -1) : 1;
-        const humor = Math.max(1, Math.min(10, baseHumor + delta.humor * mixedSign));
-        const energia = Math.max(1, Math.min(10, baseEnergia + delta.energia * mixedSign));
+        const moodScore = Math.max(1, Math.min(10, baseHumor + delta.humor * mixedSign));
+        const energyScore = Math.max(1, Math.min(10, baseEnergia + delta.energia * mixedSign));
 
-        await prisma.checkin.create({
+        await prisma.dailyCheckin.create({
           data: {
             userId,
-            date: new Date(dateKey + 'T12:00:00.000Z'),
-            humor,
-            energia,
-            emotion: pattern === 'good' ? 'calm' : pattern === 'hard' ? 'tired' : pattern === 'crisis' ? 'sad' : 'calm',
-            stateLabel: 'Período retroativo',
-            stateLabelType: 'backfill',
-            note: note || null,
+            localDate: new Date(dateKey),
             checkinSlot: 'midday-backfill',
-          } as any,
+            moodScore,
+            energyScore,
+            clarityScore: moodScore,
+            irritabilityScore: Math.max(1, 10 - moodScore),
+            physicalScore: energyScore,
+            socialScore: moodScore,
+          },
         });
         created++;
       }
@@ -6023,4 +6023,47 @@ JSON APENAS: {"profileSummary":"..."}`,
 
 
   return app;
+}
+
+async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
+  const subs = await defaultPrisma.pushSubscription.findMany({ where: { userId } });
+
+  const expoMessages: ExpoPushMessage[] = [];
+
+  await Promise.allSettled(
+    subs.map(async sub => {
+      if (Expo.isExpoPushToken(sub.endpoint)) {
+        expoMessages.push({
+          to: sub.endpoint,
+          title: payload.title,
+          body: payload.body,
+          data: { url: payload.url || '/' },
+          sound: 'default',
+        });
+        return;
+      }
+
+      if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+      const data = JSON.stringify(payload);
+      return webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dhKey, auth: sub.authKey } },
+        data
+      ).catch(async (err: any) => {
+        if (err.statusCode === 410) {
+          await defaultPrisma.pushSubscription.delete({ where: { endpoint: sub.endpoint } }).catch(() => {});
+        }
+      });
+    })
+  );
+
+  if (expoMessages.length > 0) {
+    const chunks = expo.chunkPushNotifications(expoMessages);
+    for (const chunk of chunks) {
+      try {
+        await expo.sendPushNotificationsAsync(chunk);
+      } catch (e) {
+        console.error('[expo-push] send error:', e);
+      }
+    }
+  }
 }
