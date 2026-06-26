@@ -8,6 +8,7 @@ import {
   VOICE_POLICY,
   renderInstructionBlock,
 } from './airia-method';
+import { LIVRO_ESSENCE_LENS, SOUL_DOMAINS } from './livro-essencia';
 
 export type AuraPromptDomain =
   | 'general'
@@ -361,7 +362,7 @@ ${renderInstructionBlock('POLITICA DE SUGESTAO CONCRETA', PRACTICAL_OUTPUT_POLIC
 ${renderInstructionBlock('SEGURANCA E GROUNDING', SAFETY_AND_GROUNDING_POLICY)}
 
 ${renderInstructionBlock('VOZ', VOICE_POLICY)}
-
+${SOUL_DOMAINS.has(domain) ? `\n${renderInstructionBlock('BASE FILOSOFICA — alma do livro Alem da Solidao', LIVRO_ESSENCE_LENS)}\n` : ''}
 ${renderInstructionBlock(domainGuide.title, domainGuide.instructions)}
 ${extra.length ? `\n${renderInstructionBlock('INSTRUCOES EXTRAS DA CHAMADA', extra)}` : ''}
 

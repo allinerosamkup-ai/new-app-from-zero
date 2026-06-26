@@ -6242,8 +6242,3 @@ if (require.main === module) {
     console.log(`[Airia Backend] Server running on port ${port}`);
   });
 }
-
-startServer().catch((err) => {
-  console.error('[Airia Backend] Fatal startup error:', err);
-  process.exit(1);
-});
