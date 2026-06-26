@@ -15,7 +15,8 @@ import {
   QUICK_LEVELS,
   REENTRY_GAP_DAYS,
 } from "./checkin-page.helpers";
-import { ChevronLeft, Check } from "lucide-react";
+import { ChevronLeft, Check, Mic, MicOff, Loader } from "lucide-react";
+import { api } from "../lib/api";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -308,10 +309,144 @@ export function CheckinPage() {
 
   // ── express: fase atual (emoção → confirmação → sliders opcionais)
   const [expressPhase, setExpressPhase] = useState<"emotion" | "confirm" | "sliders">("emotion");
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // ── reentry backfill state
+  const [reentryDone, setReentryDone] = useState(false);
+  const [reentryPattern, setReentryPattern] = useState<string | null>(null);
+  const [reentryNote, setReentryNote] = useState("");
+  const [reentrySubmitting, setReentrySubmitting] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
 
   // ── sono em horas (para o wizard detalhado)
   const [sonoHoras, setSonoHoras] = useState(7);
+
+  async function submitReentry() {
+    if (!reentryPattern) return;
+    setReentrySubmitting(true);
+    try {
+      const history = state.checkinHistory ?? [];
+      const lastDate = history
+        .map((e) => e.date)
+        .filter(Boolean)
+        .sort()
+        .reverse()[0];
+      if (lastDate) {
+        // periodStart = dia após o último check-in, periodEnd = hoje
+        const periodStart = (() => {
+          const d = new Date(lastDate + "T12:00:00.000Z");
+          d.setUTCDate(d.getUTCDate() + 1);
+          return d.toISOString().slice(0, 10);
+        })();
+        const periodEnd = dayContext.localDate;
+        await api.post("/checkins/backfill", {
+          periodStart,
+          periodEnd,
+          pattern: reentryPattern,
+          note: reentryNote.trim() || null,
+        });
+      }
+    } catch {
+      // silencia — não bloqueia o check-in de hoje
+    } finally {
+      setReentrySubmitting(false);
+      setReentryDone(true);
+    }
+  }
+
+  function startReentryVoice() {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { setVoiceError("Seu navegador não suporta voz."); return; }
+    setVoiceError(null);
+    const recognition = new SpeechRecognition();
+    recognition.lang = "pt-BR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognitionRef.current = recognition;
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => { setIsListening(false); setVoiceError("Não ouvi bem. Tente de novo."); };
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[0]?.[0]?.transcript ?? "";
+      if (!transcript.trim()) return;
+      setVoiceLoading(true);
+      try {
+        // Usa o mesmo endpoint de voz para extrair padrão dos dias
+        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number; energia: number; emotions: string[]; factors: string[]; note: string | null };
+        // Infere pattern a partir do humor extraído
+        const h = result.humor ?? 5;
+        const inferred = h >= 8 ? "good" : h >= 6 ? "stable" : h >= 4 ? "mixed" : h >= 3 ? "hard" : "crisis";
+        setReentryPattern(inferred);
+        if (result.note) setReentryNote(result.note);
+        // Auto-avança
+        await new Promise(r => setTimeout(r, 400));
+        await submitReentry();
+      } catch {
+        setVoiceError("Não consegui processar. Escolha uma opção abaixo.");
+      } finally {
+        setVoiceLoading(false);
+      }
+    };
+    recognition.start();
+  }
+
+
+  function startVoiceCheckin() {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setVoiceError("Seu navegador não suporta reconhecimento de voz.");
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    setVoiceError(null);
+    setVoiceTranscript("");
+    const recognition = new SpeechRecognition();
+    recognition.lang = "pt-BR";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognitionRef.current = recognition;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => {
+      setIsListening(false);
+      setVoiceError("Não consegui ouvir. Tente de novo.");
+    };
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[0]?.[0]?.transcript ?? "";
+      setVoiceTranscript(transcript);
+      if (!transcript.trim()) return;
+      setVoiceLoading(true);
+      try {
+        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number; energia: number; emotions: string[]; factors: string[]; note: string | null };
+        if (result.humor) setHumor(result.humor);
+        if (result.energia) setEnergia(result.energia);
+        if (result.emotions?.length) setEmotionsSelected(result.emotions.slice(0, 1));
+        if (result.factors?.length) setSelectedFactors(result.factors);
+        if (result.note) setNote(result.note);
+        if (result.emotions?.[0]) {
+          const vals = emotionToValues[result.emotions[0]];
+          if (vals) { setHumor(vals.humor); setEnergia(vals.energia); }
+        }
+        setExpressPhase("confirm");
+      } catch {
+        setVoiceError("Não consegui processar. Tente de novo ou escolha a emoção manualmente.");
+      } finally {
+        setVoiceLoading(false);
+      }
+    };
+
+    recognition.start();
+  }
+
+
 
   // ── wizard state
   const [wizardStep, setWizardStep] = useState(1);
@@ -482,8 +617,128 @@ export function CheckinPage() {
           </p>
         </div>
 
+        {/* ── TELA DE RETORNO — dias sem check-in ──────────────── */}
+        {isReentry && !reentryDone && (
+          <div className="checkin-step-enter-fwd">
+            <div style={{ marginBottom: 24 }}>
+              <h2 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", color: "var(--text-1)", lineHeight: 1.25 }}>
+                Você ficou {daysSinceLastCheckin} {(daysSinceLastCheckin ?? 0) === 1 ? "dia" : "dias"} sem check-in
+              </h2>
+              <p style={{ fontSize: 14, color: "var(--text-3)", margin: 0, lineHeight: 1.6 }}>
+                Como foram esses dias? Uma resposta rápida ajuda a Aura entender seu padrão.
+              </p>
+            </div>
+
+            {/* Opção de falar */}
+            <button
+              type="button"
+              onClick={startReentryVoice}
+              disabled={voiceLoading}
+              style={{
+                width: "100%", padding: "13px 16px", borderRadius: 14, marginBottom: 18,
+                border: isListening ? "2px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
+                background: isListening ? "rgba(215,137,127,0.08)" : "rgba(255,255,255,.70)",
+                cursor: voiceLoading ? "wait" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+              }}
+            >
+              {voiceLoading ? <Loader size={16} style={{ color: "var(--accent-peach)", animation: "aura-spin 1s linear infinite" }} /> :
+               isListening ? <MicOff size={16} style={{ color: "var(--accent-peach)" }} /> :
+               <Mic size={16} style={{ color: "var(--text-2)" }} />}
+              <span style={{ fontSize: 13, fontWeight: 700, color: isListening ? "var(--accent-peach)" : "var(--text-2)" }}>
+                {voiceLoading ? "Processando..." : isListening ? "Ouvindo..." : "Falar sobre esses dias"}
+              </span>
+            </button>
+
+            {voiceError && <p style={{ fontSize: 12, color: "var(--accent-peach-ink)", marginBottom: 12 }}>{voiceError}</p>}
+
+            {/* Cards de padrão */}
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 10px" }}>
+              Como esses dias foram no geral?
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+              {[
+                { id: "good",   emoji: "✨", label: "Bons dias", sub: "Me senti bem, produtiva, com energia" },
+                { id: "stable", emoji: "🌤", label: "Estável",   sub: "Sem altos ou baixos marcantes" },
+                { id: "mixed",  emoji: "🌊", label: "Misturado", sub: "Alternei entre dias bons e difíceis" },
+                { id: "hard",   emoji: "🌧", label: "Dias difíceis", sub: "Cansada, humor baixo, pouca energia" },
+                { id: "crisis", emoji: "⛈", label: "Muito pesado", sub: "Crise, paralisia ou dias muito ruins" },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setReentryPattern(reentryPattern === opt.id ? null : opt.id)}
+                  style={{
+                    width: "100%", padding: "12px 14px", borderRadius: 14, textAlign: "left",
+                    border: reentryPattern === opt.id ? "2px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
+                    background: reentryPattern === opt.id ? "rgba(215,137,127,0.08)" : "rgba(255,255,255,.75)",
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <span style={{ fontSize: 22 }}>{opt.emoji}</span>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 800, margin: 0, color: "var(--text-1)" }}>{opt.label}</p>
+                    <p style={{ fontSize: 11.5, margin: 0, color: "var(--text-3)", lineHeight: 1.4 }}>{opt.sub}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Nota opcional */}
+            {reentryPattern && (
+              <div style={{ marginBottom: 18 }}>
+                <textarea
+                  value={reentryNote}
+                  onChange={(e) => setReentryNote(e.target.value)}
+                  placeholder="Algum acontecimento marcante? (opcional)"
+                  rows={2}
+                  style={{
+                    width: "100%", padding: "10px 12px", borderRadius: 12,
+                    border: "1.5px solid var(--warm-border-2)", background: "rgba(255,255,255,.85)",
+                    fontSize: 13, color: "var(--text-1)", resize: "none", outline: "none",
+                    boxSizing: "border-box", lineHeight: 1.5,
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                />
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setReentryDone(true)}
+                style={{
+                  flex: "none", padding: "12px 18px", borderRadius: 14,
+                  border: "1.5px solid var(--warm-border)", background: "transparent",
+                  fontSize: 13, fontWeight: 700, color: "var(--text-3)", cursor: "pointer",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                }}
+              >
+                Pular
+              </button>
+              <button
+                type="button"
+                onClick={submitReentry}
+                disabled={!reentryPattern || reentrySubmitting}
+                style={{
+                  flex: 1, padding: "13px", borderRadius: 14,
+                  border: "none", background: reentryPattern ? "var(--accent-peach)" : "var(--warm-border-2)",
+                  fontSize: 14, fontWeight: 800, color: reentryPattern ? "#fff" : "var(--text-3)",
+                  cursor: reentryPattern ? "pointer" : "not-allowed",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all 0.2s",
+                }}
+              >
+                {reentrySubmitting ? "Salvando..." : "Confirmar e fazer check-in de hoje"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── MODO EXPRESSO — emoção primeiro ─────────────────────── */}
-        {mode === "express" && (
+        {mode === "express" && (!isReentry || reentryDone) && (
           <div className="checkin-step-enter-fwd">
 
             {/* ── Fase: selecionar emoção ── */}
@@ -535,6 +790,48 @@ export function CheckinPage() {
                 >
                   Prefiro usar números →
                 </button>
+
+                {/* Botão de voz */}
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={startVoiceCheckin}
+                    disabled={voiceLoading}
+                    style={{
+                      width: "100%",
+                      padding: "13px 16px",
+                      borderRadius: 14,
+                      border: isListening ? "2px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
+                      background: isListening ? "rgba(215,137,127,0.08)" : "rgba(255,255,255,.70)",
+                      cursor: voiceLoading ? "wait" : "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    {voiceLoading ? (
+                      <Loader size={18} style={{ color: "var(--accent-peach)", animation: "aura-spin 1s linear infinite" }} />
+                    ) : isListening ? (
+                      <MicOff size={18} style={{ color: "var(--accent-peach)" }} />
+                    ) : (
+                      <Mic size={18} style={{ color: "var(--text-2)" }} />
+                    )}
+                    <span style={{ fontSize: 13, fontWeight: 700, color: isListening ? "var(--accent-peach)" : "var(--text-2)" }}>
+                      {voiceLoading ? "Processando..." : isListening ? "Ouvindo... toque para parar" : "Falar como estou me sentindo"}
+                    </span>
+                  </button>
+
+                  {voiceTranscript && !voiceLoading && (
+                    <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "8px 4px 0", lineHeight: 1.5, fontStyle: "italic" }}>
+                      "{voiceTranscript.slice(0, 100)}{voiceTranscript.length > 100 ? "..." : ""}"
+                    </p>
+                  )}
+                  {voiceError && (
+                    <p style={{ fontSize: 11.5, color: "var(--accent-peach-ink)", margin: "8px 4px 0", lineHeight: 1.5 }}>
+                      {voiceError}
+                    </p>
+                  )}
+                </div>
               </>
             )}
 
@@ -738,7 +1035,7 @@ export function CheckinPage() {
           </div>
         )}
 
-        {mode === "wizard" && (<>
+        {mode === "wizard" && (!isReentry || reentryDone) && (<>
 
         {/* ── Progress dots ──────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>

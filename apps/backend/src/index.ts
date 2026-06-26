@@ -5845,400 +5845,182 @@ JSON APENAS: {"profileSummary":"..."}`,
     }
   });
 
-  return app;
-}
-
-export const app = createApp();
-
-async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
-  const subs = await defaultPrisma.pushSubscription.findMany({ where: { userId } });
-
-  const expoMessages: ExpoPushMessage[] = [];
-
-  await Promise.allSettled(
-    subs.map(async sub => {
-      if (Expo.isExpoPushToken(sub.endpoint)) {
-        expoMessages.push({
-          to: sub.endpoint,
-          title: payload.title,
-          body: payload.body,
-          data: { url: payload.url || '/' },
-          sound: 'default',
-        });
-        return;
+  /**
+   * POST /api/ai/voice-checkin
+   * Recebe transcrição de voz e extrai dados estruturados do check-in.
+   */
+  app.post('/api/ai/voice-checkin', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { transcript } = req.body as { transcript?: string };
+      if (!transcript || transcript.trim().length < 3) {
+        return res.status(400).json({ error: 'transcript_required' });
       }
 
-      if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
-      const data = JSON.stringify(payload);
-      return webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dhKey, auth: sub.authKey } },
-        data
-      ).catch(async (err: any) => {
-        // subscription expired — remove to avoid future sends
-        if (err.statusCode === 410) {
-          await defaultPrisma.pushSubscription.delete({ where: { endpoint: sub.endpoint } }).catch(() => {});
-        }
-      });
-    })
-  );
+      const EMOTION_OPTIONS = [
+        'radiant','calm','happy','anxious','tired','focused',
+        'sad','angry','stressed','sensitive','exhausted','agitated',
+      ];
+      const FACTOR_OPTIONS = [
+        'Dormi bem (7h+)','Dormi pouco (<6h)','Acordei no meio da noite',
+        'Tomei minha medicação','Esqueci a medicação',
+        'Consegui me concentrar','Hyperfoco travado — não consigo parar',
+        'Dissociada / no piloto automático','Nada parece interessante',
+        'Paralisada — não consegui começar','Ansiedade alta hoje',
+        'Irritabilidade fácil','Me senti sobrecarregada','Sintomas de TPM',
+        'Ciclo intenso hoje','Dor física hoje','Pouca fome','Fome demais',
+        'Tive um momento bom','Me conectei com alguém','Isolamento social',
+        'Exercitei hoje','Saí de casa','Passei o dia em casa',
+        'Trabalho pesado hoje','Reunião difícil','Conflito interpessoal',
+        'Boa notícia hoje','Crise de ansiedade','Choro sem motivo claro',
+        'Fiquei no celular demais','Não consegui dormir direito','Cansaço físico',
+        'Clareza mental boa','Senti gratidão hoje',
+      ];
 
-  if (expoMessages.length > 0) {
-    const chunks = expo.chunkPushNotifications(expoMessages);
-    for (const chunk of chunks) {
+      const emotionList = EMOTION_OPTIONS.join(', ');
+      const factorList = FACTOR_OPTIONS.join(', ');
+
+      const systemPrompt = [
+        'Você é um extrator de dados de check-in emocional.',
+        'Analise o relato da usuária e extraia as seguintes informações em JSON:',
+        '{',
+        '  "humor": <número 1-10, sendo 1=muito ruim e 10=excelente>,',
+        '  "energia": <número 1-10, sendo 1=sem energia e 10=energia máxima>,',
+        '  "emotions": <array com 1-3 emoções da lista: ' + emotionList + '>,',
+        '  "factors": <array com os fatores relevantes da lista abaixo>,',
+        '  "note": <frase curta resumindo o que a pessoa disse, ou null>',
+        '}',
+        '',
+        'Lista de fatores: ' + factorList + '.',
+        '',
+        'Regras:',
+        '- Humor e energia são independentes.',
+        '- Escolha apenas emotions claramente presentes no relato.',
+        '- Escolha apenas factors claramente mencionados ou fortemente implícitos.',
+        '- Se mencionar medicação tomada → "Tomei minha medicação"; se esqueceu → "Esqueci a medicação".',
+        '- note deve soar natural, como a própria pessoa escreveria.',
+        '- Responda APENAS com o JSON, sem markdown, sem explicação.',
+      ].join('\n');
+
+      const openai = new (await import('openai')).default({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: 'Relato: "' + transcript.slice(0, 1200) + '"' },
+        ],
+        temperature: 0.2,
+        max_tokens: 300,
+      });
+
+      const raw = completion.choices[0]?.message?.content?.trim() ?? '{}';
+      let parsed: Record<string, unknown>;
       try {
-        await expo.sendPushNotificationsAsync(chunk);
-      } catch (e) {
-        console.error('[expo-push] send error:', e);
+        parsed = JSON.parse(raw);
+      } catch {
+        return res.status(422).json({ error: 'parse_failed', raw });
       }
-    }
-  }
-}
 
-function getSaoPauloHHMM(date: Date): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Sao_Paulo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
-  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
-  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
-  return `${hour}:${minute}`;
-}
+      const humor = Math.max(1, Math.min(10, Math.round(Number(parsed.humor) || 5)));
+      const energia = Math.max(1, Math.min(10, Math.round(Number(parsed.energia) || 5)));
+      const emotions = (Array.isArray(parsed.emotions) ? parsed.emotions : [])
+        .filter((e: unknown) => typeof e === 'string' && EMOTION_OPTIONS.includes(e as string))
+        .slice(0, 3);
+      const factors = (Array.isArray(parsed.factors) ? parsed.factors : [])
+        .filter((f: unknown) => typeof f === 'string' && FACTOR_OPTIONS.includes(f as string))
+        .slice(0, 8);
+      const note = typeof parsed.note === 'string' && parsed.note.trim() ? parsed.note.trim() : null;
 
-// ─── Nudge único diário — suporte ────────────────────────────────────────────
-// Horário do nudge por usuária é recalculado 1x por dia (cache em memória).
-const checkinNudgeTimeCache = new Map<string, { dateKey: string; time: string }>();
-
-async function resolveUserCheckinNudgeTime(userId: string, preferredTime: string | null, dateKey: string): Promise<string> {
-  const cached = checkinNudgeTimeCache.get(userId);
-  if (cached && cached.dateKey === dateKey) return cached.time;
-
-  let recentTimes: string[] = [];
-  try {
-    const recent = await defaultPrisma.dailyCheckin.findMany({
-      where: { userId },
-      orderBy: [{ localDate: 'desc' }, { recordedAt: 'desc' }],
-      take: 10,
-      select: { recordedAt: true },
-    });
-    recentTimes = recent.map((row) => getSaoPauloHHMM(row.recordedAt));
-  } catch (e) {
-    console.warn('[push-cron] falha ao ler padrão de check-in, usando horário preferido:', e);
-  }
-
-  const time = resolveCheckinNudgeTime({ preferredTime, recentCheckinTimes: recentTimes });
-  checkinNudgeTimeCache.set(userId, { dateKey, time });
-  return time;
-}
-
-async function countNudgesSentToday(userId: string, spDayStartUtc: Date): Promise<number> {
-  try {
-    return await defaultPrisma.eventLog.count({
-      where: { userId, eventName: NUDGE_EVENT_NAME, createdAt: { gte: spDayStartUtc } },
-    });
-  } catch {
-    // Sem leitura confiável, melhor não enviar do que arriscar spam
-    return Number.MAX_SAFE_INTEGER;
-  }
-}
-
-async function logNudgeSent(userId: string, kind: 'checkin' | 'journal', time: string): Promise<void> {
-  try {
-    await defaultPrisma.eventLog.create({
-      data: { userId, eventName: NUDGE_EVENT_NAME, properties: { kind, time } },
-    });
-  } catch (e) {
-    console.warn('[push-cron] falha ao registrar nudge enviado:', e);
-  }
-}
-
-if (require.main === module) {
-  // Knowledge Graph backfill — roda a cada hora, processa incrementalmente
-  // qualquer usuário com diário ativo nas últimas 24h. Usuário NUNCA precisa
-  // apertar nada — Aura aprende sozinha conforme escreve.
-  cron.schedule('17 * * * *', async () => {
-    try {
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const recentUsers = await defaultPrisma.profile.findMany({
-        where: {
-          OR: [
-            { journalSessions: { some: { updatedAt: { gte: since } } } },
-            { checkins: { some: { recordedAt: { gte: since } } } },
-          ],
-        },
-        select: { id: true },
-        take: 50,
-      }).catch(() => []);
-
-      if (recentUsers.length === 0) return;
-      console.log(`[cron/kg-backfill] processando ${recentUsers.length} usuários`);
-
-      for (const u of recentUsers) {
-        try {
-          const result = await KnowledgeGraphBackfillService.runForUser(u.id, { limit: 30 });
-          if (result.extractionsSucceeded > 0) {
-            console.log(`[cron/kg-backfill] user=${u.id} extracted=${result.extractionsSucceeded}`);
-          }
-        } catch (err) {
-          console.warn(`[cron/kg-backfill] user=${u.id} falhou:`, err);
-        }
-      }
-    } catch (err) {
-      console.warn('[cron/kg-backfill] erro geral:', err);
+      return res.json({ humor, energia, emotions, factors, note });
+    } catch (err: unknown) {
+      console.error('[voice-checkin] Error:', err);
+      return res.status(500).json({ error: 'voice_checkin_failed' });
     }
   });
 
-  // Push notification cron — runs every minute
-  cron.schedule('* * * * *', async () => {
-    try {
-      const now = new Date();
-      const currentTimeStr = getSaoPauloHHMM(now);
-      const saoPauloToday = getSaoPauloDateContext(now);
 
-      // 1. Habit reminders — adaptive pause em fase baixa/instável
-      const habitsNow = await defaultPrisma.habit.findMany({
-        where: {
-          archived: false,
-          reminderEnabled: true,
-          reminderTime: currentTimeStr,
-        },
-        include: {
-          completions: {
-            where: { date: saoPauloToday.dbDate },
-            select: { completionCount: true },
-          },
-        },
+  /**
+   * POST /api/checkins/backfill
+   * Cria entradas sintéticas para dias sem check-in, baseadas na sondagem de retorno.
+   * pattern: 'stable' | 'good' | 'mixed' | 'hard' | 'crisis'
+   */
+  app.post('/api/checkins/backfill', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const { periodStart, periodEnd, pattern, note } = req.body as {
+        periodStart?: string;
+        periodEnd?: string;
+        pattern?: string;
+        note?: string;
+      };
+
+      if (!periodStart || !periodEnd || !pattern) {
+        return res.status(400).json({ error: 'periodStart, periodEnd e pattern são obrigatórios' });
+      }
+
+      const PATTERN_DELTAS: Record<string, { humor: number; energia: number }> = {
+        stable: { humor: 0, energia: 0 },
+        good:   { humor: 2, energia: 2 },
+        mixed:  { humor: 0, energia: 0 },
+        hard:   { humor: -2, energia: -2 },
+        crisis: { humor: -4, energia: -3 },
+      };
+      const delta = PATTERN_DELTAS[pattern] ?? { humor: 0, energia: 0 };
+
+      // Busca último check-in do usuário antes do período
+      const lastCheckin = await prisma.checkin.findFirst({
+        where: { userId, date: { lt: new Date(periodStart) } },
+        orderBy: { date: 'desc' },
       });
-      const habitPrefsByUser = habitsNow.length > 0
-        ? new Map(
-            (await defaultPrisma.userPreference.findMany({
-              where: {
-                userId: { in: [...new Set(habitsNow.map((habit) => habit.userId))] },
-              },
-              select: { userId: true, notificationsOn: true, notificationPreferences: true },
-            })).map((pref) => [pref.userId, pref]),
-          )
-        : new Map<string, { notificationsOn: boolean; notificationPreferences: any }>();
-      // Cache de adaptive context por usuário pra não recomputar a cada hábito
-      const adaptiveCacheByUser = new Map<string, { pauseHabits: boolean; pauseReason: string | null }>();
-      for (const habit of habitsNow) {
-        if (!allowsHabitNotifications(habitPrefsByUser.get(habit.userId))) continue;
-        if (!shouldSendHabitReminderToday(habit, saoPauloToday.weekday, saoPauloToday.dayOfMonth)) continue;
-        try {
-          let cached = adaptiveCacheByUser.get(habit.userId);
-          if (!cached) {
-            const recentCheckins = await defaultPrisma.dailyCheckin.findMany({
-              where: { userId: habit.userId },
-              orderBy: { localDate: 'desc' },
-              take: 7,
-              select: { moodScore: true, energyScore: true },
-            });
-            const { phase, warningFlags } = inferPhaseFromRecentCheckins(
-              recentCheckins.map((c) => ({ moodScore: c.moodScore, energyScore: c.energyScore })),
-            );
-            const ctx = deriveAdaptiveContextFromPhase({ phase, warningFlags });
-            cached = { pauseHabits: ctx.pauseHabits, pauseReason: ctx.pauseReason };
-            adaptiveCacheByUser.set(habit.userId, cached);
-          }
-          if (cached.pauseHabits) {
-            console.log(`[push-cron] habit paused for ${habit.userId} (${habit.id}): ${cached.pauseReason}`);
-            continue;
-          }
-        } catch (e) {
-          // Falha ao calcular adaptive — segue com lembrete normal pra não bloquear
-          console.warn('[push-cron] adaptive check failed:', e);
-        }
-        await sendPushToUser(habit.userId, {
-          title: `⏰ ${habit.title}`,
-          body: 'Hora do seu hábito!',
-          url: '/home',
-          tag: `habit-${habit.id}`,
+
+      const baseHumor = lastCheckin ? (lastCheckin as any).humor ?? 6 : 6;
+      const baseEnergia = lastCheckin ? (lastCheckin as any).energia ?? 6 : 6;
+
+      // Gera datas entre periodStart e periodEnd (exclusive today)
+      const dates: string[] = [];
+      const cursor = new Date(periodStart + 'T12:00:00.000Z');
+      const end = new Date(periodEnd + 'T12:00:00.000Z');
+      while (cursor < end) {
+        dates.push(cursor.toISOString().slice(0, 10));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+
+      let created = 0;
+      for (let i = 0; i < dates.length; i++) {
+        const dateKey = dates[i];
+        // Evita duplicata
+        const existing = await prisma.checkin.findFirst({
+          where: { userId, date: { gte: new Date(dateKey + 'T00:00:00.000Z'), lt: new Date(dateKey + 'T23:59:59.999Z') } },
         });
-      }
+        if (existing) continue;
 
-      // 2. Task/planner reminders — tasks starting in the current UTC minute
-      const windowStart = new Date(now);
-      windowStart.setUTCSeconds(0, 0);
-      const windowEnd = new Date(windowStart.getTime() + 60000);
-      const tasksNow = await defaultPrisma.timelineBlock.findMany({
-        where: {
-          startAt: { gte: windowStart, lt: windowEnd },
-          status: 'planned',
-          OR: [
-            { isAiSuggested: false },
-            { persistentReminderEnabled: true },
-            { alarmEnabled: true },
-            { vibrateEnabled: true },
-            { recurringNotificationEnabled: true },
-          ],
-        },
-      });
-      const plannerPrefsByUser = tasksNow.length > 0
-        ? new Map(
-            (await defaultPrisma.userPreference.findMany({
-              where: {
-                userId: { in: [...new Set(tasksNow.map((task) => task.userId))] },
-                notificationsOn: true,
-              },
-              select: { userId: true, notificationPreferences: true },
-            })).map((pref) => [pref.userId, pref.notificationPreferences as any]),
-          )
-        : new Map<string, any>();
-      for (const task of tasksNow) {
-        const notifPrefs = plannerPrefsByUser.get(task.userId);
-        if (!notifPrefs || notifPrefs.planner === false) continue;
-        await sendPushToUser(task.userId, {
-          title: `📅 ${task.title}`,
-          body: `Começa agora — ${currentTimeStr}`,
-          url: '/planner',
-          tag: `task-${task.id}`,
+        // Para 'mixed', alterna positivo/negativo
+        const mixedSign = pattern === 'mixed' ? (i % 2 === 0 ? 1 : -1) : 1;
+        const humor = Math.max(1, Math.min(10, baseHumor + delta.humor * mixedSign));
+        const energia = Math.max(1, Math.min(10, baseEnergia + delta.energia * mixedSign));
+
+        await prisma.checkin.create({
+          data: {
+            userId,
+            date: new Date(dateKey + 'T12:00:00.000Z'),
+            humor,
+            energia,
+            emotion: pattern === 'good' ? 'calm' : pattern === 'hard' ? 'tired' : pattern === 'crisis' ? 'sad' : 'calm',
+            stateLabel: 'Período retroativo',
+            stateLabelType: 'backfill',
+            note: note || null,
+            checkinSlot: 'midday-backfill',
+          } as any,
         });
+        created++;
       }
 
-      // 3. Nudges de engajamento (check-in / diário) — máx. 1/dia por usuária,
-      // no horário do padrão real de check-in, e nunca se o check-in já foi feito.
-      const prefsCheckin = await defaultPrisma.userPreference.findMany({
-        where: { notificationsOn: true },
-      });
-      const spDayStartUtc = getSaoPauloDayStartUtc(saoPauloToday.dateKey);
-      for (const pref of prefsCheckin) {
-        const notifPrefs = (pref.notificationPreferences as any) || {};
-        const journalTimes = notifPrefs.journal
-          ? [notifPrefs.journalMorningTime || '10:00', notifPrefs.journalEveningTime || '21:00']
-          : [];
-
-        if (notifPrefs.checkin) {
-          const nudgeTime = await resolveUserCheckinNudgeTime(pref.userId, pref.morningCheckinTime, saoPauloToday.dateKey);
-          if (nudgeTime === currentTimeStr) {
-            const [todayCheckin, nudgesSentToday] = await Promise.all([
-              defaultPrisma.dailyCheckin.findFirst({
-                where: { userId: pref.userId, localDate: saoPauloToday.dbDate },
-                select: { id: true },
-              }),
-              countNudgesSentToday(pref.userId, spDayStartUtc),
-            ]);
-            const decision = shouldSendCheckinNudge({
-              currentTime: currentTimeStr,
-              nudgeTime,
-              hasCheckinToday: Boolean(todayCheckin),
-              nudgesSentToday,
-            });
-            if (decision.send) {
-              await sendPushToUser(pref.userId, {
-                title: '✨ Como você tá agora?',
-                body: '1 toque e pronto — a Airia calibra seu dia.',
-                url: '/checkin',
-                tag: 'checkin-reminder',
-              });
-              await logNudgeSent(pref.userId, 'checkin', nudgeTime);
-            } else {
-              console.log(`[push-cron] checkin nudge skipped for ${pref.userId}: ${decision.reason}`);
-            }
-          }
-        }
-
-        if (journalTimes.includes(currentTimeStr)) {
-          const nudgesSentToday = await countNudgesSentToday(pref.userId, spDayStartUtc);
-          const decision = shouldSendJournalNudge({
-            currentTime: currentTimeStr,
-            journalTimes,
-            nudgesSentToday,
-          });
-          if (decision.send) {
-            await sendPushToUser(pref.userId, {
-              title: 'Diário da Airia',
-              body: 'Dois minutos para registrar o que mudou por dentro.',
-              url: '/journal',
-              tag: `journal-reminder-${currentTimeStr}`,
-            });
-            await logNudgeSent(pref.userId, 'journal', currentTimeStr);
-          } else {
-            console.log(`[push-cron] journal nudge skipped for ${pref.userId}: ${decision.reason}`);
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[push-cron] error:', e);
+      return res.json({ created, dates: dates.length });
+    } catch (err: unknown) {
+      console.error('[checkins/backfill] Error:', err);
+      return res.status(500).json({ error: 'backfill_failed' });
     }
   });
 
-  // Auto-reschedule cron — diário às 06:00 UTC (03:00 BRT) — migra tarefas atrasadas
-  // com critério: respeita pre-queda (não força demanda nova), preserva categoria.
-  cron.schedule('0 6 * * *', async () => {
-    try {
-      const now = new Date();
-      const overdueTasks = await defaultPrisma.timelineBlock.findMany({
-        where: { status: 'planned', startAt: { lt: now } },
-        take: 200,
-      });
-      if (overdueTasks.length === 0) return;
 
-      // Agrupar por usuário pra calcular adaptive 1x por usuário
-      const byUser = new Map<string, typeof overdueTasks>();
-      for (const t of overdueTasks) {
-        const arr = byUser.get(t.userId) || [];
-        arr.push(t);
-        byUser.set(t.userId, arr);
-      }
-
-      let migrated = 0;
-      let paused = 0;
-      for (const [userId, tasks] of byUser.entries()) {
-        const recent = await defaultPrisma.dailyCheckin.findMany({
-          where: { userId },
-          orderBy: { localDate: 'desc' },
-          take: 7,
-          select: { moodScore: true, energyScore: true },
-        });
-        const { phase, warningFlags } = inferPhaseFromRecentCheckins(
-          recent.map((c) => ({ moodScore: c.moodScore, energyScore: c.energyScore })),
-        );
-        const ctx = deriveAdaptiveContextFromPhase({ phase, warningFlags });
-
-        for (const task of tasks) {
-          if (ctx.preFallActive || ctx.pauseHabits) {
-            // Pausa: não migra, marca como pendente sem horário
-            await defaultPrisma.timelineBlock
-              .update({ where: { id: task.id }, data: { status: 'paused' } })
-              .catch(() => null);
-            paused++;
-          } else {
-            // Migra pra hoje no mesmo horário (preserva intenção, atualiza só a data)
-            const newStart = new Date(now);
-            newStart.setHours(task.startAt.getHours(), task.startAt.getMinutes(), 0, 0);
-            const duration = task.endAt.getTime() - task.startAt.getTime();
-            await defaultPrisma.timelineBlock
-              .update({
-                where: { id: task.id },
-                data: { startAt: newStart, endAt: new Date(newStart.getTime() + duration) },
-              })
-              .catch(() => null);
-            migrated++;
-          }
-        }
-      }
-      console.log(`[auto-reschedule] migrated=${migrated} paused=${paused}`);
-    } catch (e) {
-      console.error('[auto-reschedule] error:', e);
-    }
-  });
-
-  const FIFTEEN_MINUTES = 15 * 60 * 1000;
-  setInterval(async () => {
-    console.log('[AI Background] Processing pending jobs...');
-    try {
-      const { AiBackgroundService } = await import('./services/ai-background.service');
-      const result = await AiBackgroundService.processPendingJobs();
-      if (result.processed > 0) {
-        console.log(`[AI Background] Processed ${result.processed} jobs, ${result.errors} errors`);
-      }
-    } catch (err) {
-      console.error('[AI Background] Error:', err);
-    }
-  }, FIFTEEN_MINUTES);
-
-  app.listen(port, () => {
-    console.log(`[Airia Backend] Server running on port ${port}`);
-  });
+  return app;
 }

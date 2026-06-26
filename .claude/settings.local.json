@@ -93,7 +93,14 @@
       "Bash(git check-ignore *)",
       "Bash(cmd //c \"del /Q /S C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\* 2>nul & rd /S /Q C:\\\\Users\\\\allin\\\\AppData\\\\Local\\\\Temp\\\\claude 2>nul & echo done\")",
       "Bash(npx tsx *)",
-      "mcp__67a82d94-d27d-4df2-933c-a256070e9b4e__apply_migration"
+      "mcp__67a82d94-d27d-4df2-933c-a256070e9b4e__apply_migration",
+      "Bash(python3)",
+      "Bash(npm test *)",
+      "Bash(git -c http.sslVerify=false push)",
+      "Bash(npx ts-node-transpile-only *)",
+      "Bash(git -c http.sslVerify=false push origin feat/navigation-planner-ui-backend)",
+      "Bash(awk -F: '$1 >= 1718 && $1 <= 2080 {print}')",
+      "PowerShell(\\(Get-Content \"apps\\\\web\\\\src\\\\features\\\\aura\\\\store.ts\" | Measure-Object -Line\\).Lines; \\(Get-Content \"apps\\\\web\\\\src\\\\routes\\\\home-page.tsx\" | Measure-Object -Line\\).Lines; \\(Get-Content \"apps\\\\backend\\\\src\\\\services\\\\context-grounding.service.ts\" | Measure-Object -Line\\).Lines)"
     ]
   },
   "enabledMcpjsonServers": [

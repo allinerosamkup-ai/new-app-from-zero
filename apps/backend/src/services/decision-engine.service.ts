@@ -407,6 +407,85 @@ function dedupeCandidates(candidates: DecisionCandidate[]): DecisionCandidate[] 
   return out;
 }
 
+
+/**
+ * Quando não há agenda, hábitos nem metas: gera sugestões contextuais baseadas em
+ * horário do dia e fase de ciclo para que a usuária nunca veja tela vazia.
+ */
+function buildFreshStartSuggestions(
+  nowMinutes: number,
+  phaseKey: string | null,
+  lowCapacity: boolean,
+  highCapacity: boolean,
+): DecisionCandidate[] {
+  const hour = Math.floor(nowMinutes / 60);
+  const suggestions: Array<{ id: string; title: string; bioReason: string; duration: number }> = [];
+
+  if (hour >= 5 && hour < 10) {
+    // Manhã
+    if (lowCapacity) {
+      suggestions.push({ id: 'fresh:morning-gentle', title: 'Revisão leve do dia — o que é essencial hoje?', bioReason: 'Manhã com energia baixa: uma olhada rápida no que realmente importa hoje reduz a sobrecarga mental.', duration: 10 });
+      suggestions.push({ id: 'fresh:morning-coffee', title: 'Momento de pausa ativa (café, respiração, luz natural)', bioReason: 'Rituais matinais simples ajudam o sistema nervoso a calibrar antes de qualquer demanda.', duration: 15 });
+    } else if (highCapacity) {
+      suggestions.push({ id: 'fresh:morning-plan', title: 'Planejar o dia — definir os 3 focos principais', bioReason: 'Manhã com boa energia: definir 3 intenções concretas agora evita deriva e indecisão ao longo do dia.', duration: 15 });
+      suggestions.push({ id: 'fresh:morning-start', title: 'Começar com a tarefa mais importante (janela de foco)', bioReason: 'Alta capacidade matinal é a janela de ouro para trabalho profundo. Usar agora tem alto retorno.', duration: 45 });
+    } else {
+      suggestions.push({ id: 'fresh:morning-review', title: 'Revisão matinal — o que precisa acontecer hoje?', bioReason: 'Começar o dia com clareza sobre o que importa reduz a paralisia por indefinição.', duration: 15 });
+      suggestions.push({ id: 'fresh:morning-task', title: 'Uma tarefa pequena para começar com tração', bioReason: 'Iniciar com algo concreto e pequeno ativa o ciclo de progresso e reduz a resistência de início.', duration: 20 });
+    }
+  } else if (hour >= 10 && hour < 13) {
+    // Meio da manhã
+    if (lowCapacity) {
+      suggestions.push({ id: 'fresh:midmorn-light', title: 'Uma tarefa de 15 min — mínimo viável do dia', bioReason: 'Energia baixa não significa dia perdido. Um movimento mínimo mantém o ritmo sem exaurir.', duration: 15 });
+    } else {
+      suggestions.push({ id: 'fresh:midmorn-focus', title: 'Bloco de foco — escolher uma frente e trabalhar nela', bioReason: 'Meio da manhã é ótimo para entregas concretas. Escolher uma frente e sustentar por 30-40 min.', duration: 40 });
+      suggestions.push({ id: 'fresh:midmorn-admin', title: 'Resolver pendências rápidas (< 5 min cada)', bioReason: 'Acumular pequenas pendências cria carga cognitiva invisível. Resolver em bloco libera atenção.', duration: 20 });
+    }
+  } else if (hour >= 13 && hour < 15) {
+    // Após almoço
+    suggestions.push({ id: 'fresh:post-lunch-review', title: 'Revisão do que foi feito — ajustar plano da tarde', bioReason: 'Pausa pós-almoço para revisar o dia evita a deriva da tarde e dá clareza sobre o que ainda importa.', duration: 10 });
+    if (!lowCapacity) {
+      suggestions.push({ id: 'fresh:post-lunch-admin', title: 'Tarefas administrativas e e-mails', bioReason: 'Energia levemente mais baixa após almoço é boa para tarefas menos cognitivas: e-mails, organização, retornos.', duration: 30 });
+    }
+  } else if (hour >= 15 && hour < 18) {
+    // Tarde
+    if (highCapacity) {
+      suggestions.push({ id: 'fresh:afternoon-focus', title: 'Segunda janela de foco — projeto ou meta ativa', bioReason: 'Tarde produtiva: segunda chance de entrega real. Ideal para avançar em projetos que ficaram parados.', duration: 45 });
+    } else {
+      suggestions.push({ id: 'fresh:afternoon-light', title: 'Tarefas leves ou criativas da tarde', bioReason: 'A tarde pede trabalho mais fluido. Criatividade, comunicação ou organização funcionam bem agora.', duration: 30 });
+    }
+    suggestions.push({ id: 'fresh:afternoon-plan-next', title: 'Preparar amanhã — anotar o que não terminou hoje', bioReason: 'Fechar o loop do dia antes do fim da tarde reduz o carrego mental noturno.', duration: 10 });
+  } else if (hour >= 18 && hour < 21) {
+    // Noite
+    suggestions.push({ id: 'fresh:evening-review', title: 'Revisão do dia — o que aconteceu, o que ficou', bioReason: 'Revisão noturna de 10 min cria continuidade entre os dias e evita que pendências se acumulem.', duration: 10 });
+    if (!lowCapacity) {
+      suggestions.push({ id: 'fresh:evening-prep', title: 'Preparar a manhã de amanhã (roupa, lista, intenção)', bioReason: 'Preparação noturna remove fricção matinal — especialmente importante para dias com TDAH ou energia variável.', duration: 15 });
+    }
+  } else {
+    // Noite tarde / madrugada
+    suggestions.push({ id: 'fresh:night-wind', title: 'Desaceleração — sem telas, preparo para dormir', bioReason: 'Noite pede recuo, não produção. Proteger o sono é o investimento mais rentável para o dia seguinte.', duration: 20 });
+  }
+
+  return suggestions.slice(0, highCapacity ? 3 : 2).map((s, i) => ({
+    id: s.id,
+    title: s.title,
+    kind: 'suggested_commitment' as const,
+    source: 'system' as const,
+    targetType: 'system' as const,
+    action: 'suggest' as const,
+    score: 55 - i * 5,
+    confidence: 0.72,
+    reason: 'Sem agenda, hábito ou meta ativos — sugestão contextual baseada em horário e fase.',
+    bioReason: s.bioReason,
+    impactLabel: lowCapacity ? 'reduz carga' as const : 'mantém ritmo' as const,
+    notificationAllowed: false,
+    requiresConfirmation: true,
+    suggestedDate: null,
+    suggestedStartTime: null,
+    suggestedEndTime: null,
+  }));
+}
+
 export class DecisionEngine {
   static evaluate(input: {
     dailyContext: DailyContext;
@@ -602,7 +681,7 @@ export class DecisionEngine {
 
     const hasRealAgenda = input.dailyContext.pendingTaskTitles.length > 0;
     // structureHyperfocus: use existing agenda items instead of opening new goal fronts
-    const maxSuggestionSlots = forceHard ? 1 : structureHyperfocus ? 0 : (highCapacity ? 5 : 3);
+    const maxSuggestionSlots = forceHard ? 1 : structureHyperfocus ? 1 : (highCapacity ? 5 : 3);
     const openSuggestionSlots = allowed.filter((item) => item.kind !== 'blocked').length < maxSuggestionSlots;
 
     for (const goalTitle of input.dailyContext.activeGoalTitles) {
@@ -690,21 +769,28 @@ export class DecisionEngine {
     }
 
     if (allowed.length === 0) {
-      allowed.push({
-        id: 'insight:empty',
-        title: 'Sem ação útil agora',
-        kind: 'insight_only',
-        source: 'system',
-        targetType: 'system',
-        action: 'insight',
-        score: 10,
-        confidence: 0.7,
-        reason: 'Não há ação suficientemente ancorada no dia real.',
-        bioReason: 'Sem agenda, hábito ou meta suficiente para ajustar com segurança.',
-        impactLabel: 'mantém ritmo',
-        notificationAllowed: false,
-        requiresConfirmation: false,
-      });
+      // Agenda vazia + sem metas/hábitos: gera sugestão de ancoragem baseada em horário e fase
+      const freshStartSuggestions = buildFreshStartSuggestions(now, currentPhaseKey, lowCapacity, highCapacity);
+      for (const s of freshStartSuggestions) {
+        allowed.push(s);
+      }
+      if (allowed.length === 0) {
+        allowed.push({
+          id: 'insight:empty',
+          title: 'Sem ação útil agora',
+          kind: 'insight_only',
+          source: 'system',
+          targetType: 'system',
+          action: 'insight',
+          score: 10,
+          confidence: 0.7,
+          reason: 'Não há ação suficientemente ancorada no dia real.',
+          bioReason: 'Sem agenda, hábito ou meta suficiente para ajustar com segurança.',
+          impactLabel: 'mantém ritmo',
+          notificationAllowed: false,
+          requiresConfirmation: false,
+        });
+      }
     }
 
     const allowedActions = dedupeCandidates(allowed)
