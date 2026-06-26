@@ -5967,7 +5967,7 @@ JSON APENAS: {"profileSummary":"..."}`,
       const delta = PATTERN_DELTAS[pattern] ?? { humor: 0, energia: 0 };
 
       // Busca último check-in do usuário antes do período
-      const lastCheckin = await prisma.checkin.findFirst({
+      const lastCheckin = await prisma.dailyCheckin.findFirst({
         where: { userId, date: { lt: new Date(periodStart) } },
         orderBy: { date: 'desc' },
       });
@@ -5988,7 +5988,7 @@ JSON APENAS: {"profileSummary":"..."}`,
       for (let i = 0; i < dates.length; i++) {
         const dateKey = dates[i];
         // Evita duplicata
-        const existing = await prisma.checkin.findFirst({
+        const existing = await prisma.dailyCheckin.findFirst({
           where: { userId, date: { gte: new Date(dateKey + 'T00:00:00.000Z'), lt: new Date(dateKey + 'T23:59:59.999Z') } },
         });
         if (existing) continue;
