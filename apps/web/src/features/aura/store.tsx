@@ -599,12 +599,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           console.error("Failed to persist checkin; kept local copy.", err);
           // Salva na fila offline para sincronizar quando a conexão voltar
           if (!navigator.onLine) {
-            queueCheckin({
+queueCheckin({
               date: today,
               humor: entry.humor,
               energia: entry.energia,
-              irritabilidade: entry.irritabilidade,
-              clareza: entry.clareza,
               sono: entry.sono,
               checkinSlot,
             });

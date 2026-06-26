@@ -29,10 +29,7 @@ export function GoalNudgeCard({ goals, tasks, onAddTask }: GoalNudgeCardProps) {
 
   if (dismissed) return null;
 
-  const todayKey = new Date().toISOString().split("T")[0];
-  const pendingTasks = tasks.filter(
-    (t) => !t.done && (!t.date || t.date === todayKey)
-  );
+  const pendingTasks = tasks.filter((t) => !t.done);
 
   // Só mostra se agenda vazia e há meta ativa com progresso < 100%
   const activeGoals = goals.filter((g) => g.completedPct < 100);

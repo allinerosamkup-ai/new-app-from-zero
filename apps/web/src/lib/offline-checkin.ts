@@ -10,8 +10,6 @@ export type OfflineCheckin = {
   date: string;
   humor: number;
   energia: number;
-  irritabilidade?: number;
-  clareza?: number;
   sono?: number;
   emotion?: string;
   checkinSlot?: string;

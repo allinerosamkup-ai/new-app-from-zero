@@ -121,31 +121,47 @@ function getEnergyEmoji(value: number) {
 
 // ─── Dados ───────────────────────────────────────────────────────────────────
 const FACTORS = [
-  // Positivos
-  { id: "good_sleep",           label: "Sono bom",                icon: "😴", category: "saúde"     },
-  { id: "exercise",             label: "Exercício",               icon: "🏋️", category: "saúde"     },
-  { id: "healthy_meal",         label: "Alimentação",             icon: "🥗", category: "saúde"     },
-  { id: "fresh_air",            label: "Ar fresco",               icon: "🌿", category: "saúde"     },
-  { id: "good_talk",            label: "Boa conversa",            icon: "💬", category: "social"    },
-  { id: "kind_words",           label: "Palavras gentis",         icon: "❤️", category: "social"    },
-  { id: "support",              label: "Apoio recebido",          icon: "🤝", category: "social"    },
-  { id: "small_win",            label: "Pequena vitória",         icon: "⭐", category: "trabalho"  },
-  { id: "finished_task",        label: "Tarefa concluída",        icon: "✅", category: "trabalho"  },
-  { id: "feeling_valued",       label: "Me senti valorizada",     icon: "🏆", category: "trabalho"  },
-  { id: "music",                label: "Música",                  icon: "🎵", category: "lazer"     },
-  { id: "time_outside",         label: "Tempo ao ar livre",       icon: "🌳", category: "lazer"     },
-  { id: "hobby",                label: "Hobby",                   icon: "🎨", category: "lazer"     },
-  { id: "self_trust",           label: "Confiança em mim",        icon: "💪", category: "pessoal"   },
-  { id: "rest",                 label: "Descanso",                icon: "🛋️", category: "pessoal"   },
-  // Negativos
-  { id: "stuck",                label: "Travada/o",               icon: "🪨", category: "negativo"  },
-  { id: "relationship_conflict",label: "Briga no relacionamento", icon: "💔", category: "negativo"  },
-  { id: "overwhelmed",          label: "Sobrecarga mental",       icon: "🌊", category: "negativo"  },
-  { id: "loneliness",           label: "Solidão",                 icon: "🫥", category: "negativo"  },
-  { id: "bad_sleep",            label: "Sono ruim",               icon: "😵", category: "negativo"  },
-  { id: "work_pressure",        label: "Pressão no trabalho",     icon: "⚙️", category: "negativo"  },
-  { id: "financial_stress",     label: "Estresse financeiro",     icon: "💸", category: "negativo"  },
-  { id: "bad_news",             label: "Má notícia",              icon: "📰", category: "negativo"  },
+  // Saúde & corpo
+  { id: "slept_well",           label: "Dormi bem (7h+)",                  icon: "😴", category: "saúde"     },
+  { id: "slept_little",         label: "Dormi pouco (<6h)",                icon: "🪫", category: "negativo"  },
+  { id: "woke_up_night",        label: "Acordei no meio da noite",         icon: "🌑", category: "negativo"  },
+  { id: "exercise",             label: "Mexi o corpo",                     icon: "🏃", category: "saúde"     },
+  { id: "no_exercise",          label: "Fiquei parada o dia todo",         icon: "🪑", category: "negativo"  },
+  { id: "healthy_meal",         label: "Me alimentei bem",                 icon: "🥗", category: "saúde"     },
+  { id: "skipped_meals",        label: "Pular refeições",                  icon: "😶", category: "negativo"  },
+  { id: "took_meds",            label: "Tomei minha medicação",            icon: "💊", category: "saúde"     },
+  { id: "forgot_meds",          label: "Esqueci a medicação",              icon: "🔴", category: "negativo"  },
+  { id: "fresh_air",            label: "Ar fresco / saí de casa",          icon: "🌿", category: "saúde"     },
+  // Social
+  { id: "good_talk",            label: "Boa conversa",                     icon: "💬", category: "social"    },
+  { id: "kind_words",           label: "Recebi palavras gentis",           icon: "❤️", category: "social"    },
+  { id: "support",              label: "Me senti apoiada",                 icon: "🤝", category: "social"    },
+  { id: "social_drain",         label: "Interação social me drenou",       icon: "😮‍💨", category: "negativo" },
+  { id: "loneliness",           label: "Solidão",                          icon: "🫥", category: "negativo"  },
+  { id: "relationship_conflict",label: "Conflito no relacionamento",       icon: "💔", category: "negativo"  },
+  // Trabalho & foco
+  { id: "focused_session",      label: "Consegui me concentrar",           icon: "🔥", category: "trabalho"  },
+  { id: "hyperfocus_stuck",     label: "Hyperfoco travado — não consigo parar", icon: "🌀", category: "negativo" },
+  { id: "small_win",            label: "Pequena vitória",                  icon: "⭐", category: "trabalho"  },
+  { id: "finished_task",        label: "Tarefa concluída",                 icon: "✅", category: "trabalho"  },
+  { id: "feeling_valued",       label: "Me senti valorizada",              icon: "🏆", category: "trabalho"  },
+  { id: "work_pressure",        label: "Pressão / prazo apertado",         icon: "⚙️", category: "negativo"  },
+  { id: "plan_changed",         label: "Planos mudaram de última hora",    icon: "🔄", category: "negativo"  },
+  { id: "hard_decision",        label: "Decisão difícil pendente",         icon: "⚖️", category: "negativo"  },
+  // Mental & emocional
+  { id: "dissociated",          label: "Dissociada / no piloto automático",icon: "🌫️", category: "negativo"  },
+  { id: "low_dopamine",         label: "Nada parece interessante",         icon: "🩶", category: "negativo"  },
+  { id: "stuck",                label: "Paralisada — não consegui começar",icon: "🪨", category: "negativo"  },
+  { id: "overwhelmed",          label: "Sobrecarga mental",                icon: "🌊", category: "negativo"  },
+  { id: "self_trust",           label: "Confiança em mim",                 icon: "💪", category: "pessoal"   },
+  { id: "rest",                 label: "Descanso intencional",             icon: "🛋️", category: "pessoal"   },
+  { id: "fiz_algo_gosto",       label: "Fiz algo que gosto",               icon: "🎨", category: "pessoal"   },
+  // Financeiro & externo
+  { id: "financial_stress",     label: "Estresse financeiro",              icon: "💸", category: "negativo"  },
+  { id: "bad_news",             label: "Notícia ruim",                     icon: "📰", category: "negativo"  },
+  // Ciclo
+  { id: "pms_symptoms",         label: "Sintomas de TPM",                  icon: "🌸", category: "negativo"  },
+  { id: "heavy_period",         label: "Ciclo intenso hoje",               icon: "🩸", category: "negativo"  },
 ];
 
 const emotionToMood: Record<string, MoodOption> = {
@@ -161,6 +177,22 @@ const emotionToMood: Record<string, MoodOption> = {
   sensitive: "sensivel",
   exhausted: "cansada",
   agitated:  "sobrecarregada",
+};
+
+// Emoção → valores automáticos de humor e energia
+const emotionToValues: Record<string, { humor: number; energia: number }> = {
+  radiant:   { humor: 9, energia: 8 },
+  calm:      { humor: 7, energia: 6 },
+  happy:     { humor: 8, energia: 7 },
+  anxious:   { humor: 4, energia: 6 },
+  tired:     { humor: 5, energia: 3 },
+  focused:   { humor: 7, energia: 8 },
+  sad:       { humor: 3, energia: 3 },
+  angry:     { humor: 3, energia: 7 },
+  stressed:  { humor: 4, energia: 5 },
+  sensitive: { humor: 5, energia: 4 },
+  exhausted: { humor: 4, energia: 2 },
+  agitated:  { humor: 4, energia: 7 },
 };
 
 const emotions = [
@@ -274,6 +306,13 @@ export function CheckinPage() {
   // ── mode: expresso (default) ou wizard completo
   const [mode, setMode] = useState<"express" | "wizard">("express");
 
+  // ── express: fase atual (emoção → confirmação → sliders opcionais)
+  const [expressPhase, setExpressPhase] = useState<"emotion" | "confirm" | "sliders">("emotion");
+  const [showAdjust, setShowAdjust] = useState(false);
+
+  // ── sono em horas (para o wizard detalhado)
+  const [sonoHoras, setSonoHoras] = useState(7);
+
   // ── wizard state
   const [wizardStep, setWizardStep] = useState(1);
   const [slideDir, setSlideDir] = useState<1 | -1>(1);
@@ -290,7 +329,6 @@ export function CheckinPage() {
   const [selectedFactors, setSelectedFactors] = useState<string[]>([]);
 
   // ── step 4: detalhes + nota
-  const [sono, setSono] = useState(6);
   const [fisico, setFisico] = useState(6);
   const [social, setSocial] = useState(6);
   const [activeDetail, setActiveDetail] = useState<DetailCardKey | null>(null);
@@ -377,7 +415,7 @@ export function CheckinPage() {
         energia,
         emotion: primaryEmotion,
         emotions: emotionsSelected,
-        sono: detailEnabled.sono ? sono : undefined,
+        sono: detailEnabled.sono ? Math.min(10, sonoHoras) : undefined,
         fisico: detailEnabled.fisico ? fisico : undefined,
         social: detailEnabled.social ? social : undefined,
         factors: selectedFactors.length > 0 ? selectedFactors : undefined,
@@ -444,117 +482,259 @@ export function CheckinPage() {
           </p>
         </div>
 
-        {/* ── MODO EXPRESSO — 1 tela, pré-marcado pelo padrão ─────────── */}
+        {/* ── MODO EXPRESSO — emoção primeiro ─────────────────────── */}
         {mode === "express" && (
           <div className="checkin-step-enter-fwd">
-            <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
-                Como você tá agora?
-              </h2>
-              <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>
-                Confirma e pronto — detalhar é opcional.
-              </p>
-            </div>
 
-            {isReentry && (
-              <div style={{
-                borderRadius: 14,
-                border: "1.5px solid rgba(150,199,179,0.45)",
-                background: "rgba(150,199,179,0.10)",
-                padding: "12px 14px",
-                marginBottom: 18,
-              }}>
-                <p style={{ margin: 0, fontSize: 13, color: "var(--text-1)", fontWeight: 600, lineHeight: 1.5 }}>
-                  Que bom te ver 🤍
-                </p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
-                  Sem repor nada dos dias anteriores — me conta só como você tá agora.
-                </p>
-              </div>
-            )}
-
-            {([
-              { key: "humor" as const, title: "Humor", icon: "😊", value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: ["Pesado", "Baixo", "Ok", "Bem", "Ótimo"] },
-              { key: "energia" as const, title: "Energia", icon: "⚡", value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: ["Zerada", "Baixa", "Média", "Boa", "Alta"] },
-            ]).map((row) => (
-              <div key={row.key} style={{ marginBottom: 18 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>
-                  {row.icon} {row.title}
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
-                  {QUICK_LEVELS.map((level, i) => {
-                    const active = row.value === level;
-                    return (
-                      <button
-                        key={level}
-                        type="button"
-                        onClick={() => row.onSelect(level)}
-                        aria-pressed={active}
-                        style={{
-                          minHeight: 64,
-                          borderRadius: 14,
-                          border: `1.5px solid ${active ? row.color : "var(--warm-border-2)"}`,
-                          background: active ? `${row.color}1f` : "rgba(255,255,255,.72)",
-                          cursor: "pointer",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 4,
-                          padding: "8px 2px",
-                          transform: active ? "scale(1.04)" : "none",
-                          transition: "all 0.15s ease",
-                          fontFamily: "'Plus Jakarta Sans', sans-serif",
-                        }}
-                      >
-                        <span style={{ fontSize: 22, lineHeight: 1 }}>{row.emojiOf(level)}</span>
-                        <span style={{ fontSize: 10, fontWeight: active ? 800 : 600, color: active ? "var(--text-1)" : "var(--text-3)" }}>
-                          {row.labels[i]}
-                        </span>
-                      </button>
-                    );
-                  })}
+            {/* ── Fase: selecionar emoção ── */}
+            {expressPhase === "emotion" && (
+              <>
+                <div style={{ marginBottom: 22 }}>
+                  <h2 style={{ fontSize: 23, fontWeight: 900, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
+                    Como você tá agora?
+                  </h2>
+                  {isReentry && (
+                    <p style={{ fontSize: 13, color: "var(--text-3)", margin: "6px 0 0", lineHeight: 1.5 }}>
+                      Que bom te ver 🤍 Conta só o momento atual, sem repor dias anteriores.
+                    </p>
+                  )}
                 </div>
-              </div>
-            ))}
 
-            {!isReentry && prediction.source !== "neutral" && (
-              <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
-                ✦ Pré-marcado pelo seu padrão — ajusta se não bater.
-              </p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 18 }}>
+                  {emotions.map((em) => (
+                    <button
+                      key={em.id}
+                      type="button"
+                      onClick={() => {
+                        setEmotionsSelected([em.id]);
+                        const vals = emotionToValues[em.id];
+                        if (vals) { setHumor(vals.humor); setEnergia(vals.energia); }
+                        setExpressPhase("confirm");
+                      }}
+                      style={{
+                        borderRadius: 16,
+                        border: "1.5px solid var(--warm-border-2)",
+                        background: "rgba(255,255,255,.80)",
+                        padding: "14px 8px",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                        cursor: "pointer",
+                        transition: "all 0.13s ease",
+                        fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      }}
+                    >
+                      <span style={{ fontSize: 28, lineHeight: 1 }}>{em.emoji}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", textAlign: "center", lineHeight: 1.2 }}>{em.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setExpressPhase("sliders")}
+                  style={{ width: "100%", background: "none", border: "none", cursor: "pointer", fontSize: 12.5, color: "var(--text-3)", padding: "8px 0", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
+                  Prefiro usar números →
+                </button>
+              </>
             )}
 
-            <AuraButtonV2
-              variant="primary"
-              onClick={handleExpressFinish}
-              disabled={isSaving}
-              style={{ width: "100%", height: 52, fontSize: 15, fontWeight: 800, borderRadius: 14 }}
-            >
-              {isSaving ? "Salvando..." : (
-                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  Confirmar check-in <Check size={16} />
-                </span>
-              )}
-            </AuraButtonV2>
+            {/* ── Fase: confirmação com emoção selecionada ── */}
+            {expressPhase === "confirm" && (
+              <>
+                  <div style={{ marginBottom: 22, display: "flex", alignItems: "center", gap: 14 }}>
+                    <span style={{ fontSize: 48, lineHeight: 1 }}>{emotions.find((e) => e.id === emotionsSelected[0])?.emoji}</span>
+                    <div>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)" }}>Você está</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-1)" }}>{emotions.find((e) => e.id === emotionsSelected[0])?.label}</p>
+                    </div>
+                  </div>
 
-            <button
-              type="button"
-              onClick={() => { setMode("wizard"); setSlideDir(1); setWizardStep(2); }}
-              style={{
-                width: "100%",
-                marginTop: 12,
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: 700,
-                color: "var(--text-2)",
-                padding: 10,
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-              }}
-            >
-              Quero detalhar (emoções, sono, ciclo…)
-            </button>
+                  {/* Humor + Energia preenchidos pela emoção */}
+                  <div style={{
+                    display: "flex", gap: 10, marginBottom: 14,
+                    padding: "14px 16px", borderRadius: 16,
+                    background: "rgba(255,255,255,.8)", border: "1px solid var(--warm-border)",
+                  }}>
+                    {[
+                      { label: "Humor", value: humor, color: "var(--accent-peach)", emoji: getMoodEmoji(humor) },
+                      { label: "Energia", value: energia, color: "var(--accent-sky)", emoji: getEnergyEmoji(energia) },
+                    ].map(({ label, value, color, emoji }) => (
+                      <div key={label} style={{ flex: 1, textAlign: "center" }}>
+                        <p style={{ margin: 0, fontSize: 9, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>{label}</p>
+                        <p style={{ margin: "4px 0 0", fontSize: 26, lineHeight: 1 }}>{emoji}</p>
+                        <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 900, color }}>{value}<span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-3)" }}>/10</span></p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdjust(!showAdjust)}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", padding: "0 0 12px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    {showAdjust ? "▲ Fechar ajuste" : "Ajustar números"}
+                  </button>
+
+                  {showAdjust && (
+                    <div style={{ marginBottom: 14 }}>
+                      {[
+                        { key: "humor" as const, title: "Humor", value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: ["Pesado", "Baixo", "Ok", "Bem", "Ótimo"] },
+                        { key: "energia" as const, title: "Energia", value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: ["Zerada", "Baixa", "Média", "Boa", "Alta"] },
+                      ].map((row) => (
+                        <div key={row.key} style={{ marginBottom: 14 }}>
+                          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>{row.title}</p>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 7 }}>
+                            {QUICK_LEVELS.map((level, i) => {
+                              const active = row.value === level;
+                              return (
+                                <button key={level} type="button" onClick={() => row.onSelect(level)} aria-pressed={active}
+                                  style={{
+                                    minHeight: 52, borderRadius: 12,
+                                    border: `1.5px solid ${active ? row.color : "var(--warm-border-2)"}`,
+                                    background: active ? `${row.color}1f` : "rgba(255,255,255,.72)",
+                                    cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3,
+                                    padding: "6px 2px", transform: active ? "scale(1.04)" : "none", transition: "all 0.15s ease",
+                                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                                  }}
+                                >
+                                  <span style={{ fontSize: 18, lineHeight: 1 }}>{row.emojiOf(level)}</span>
+                                  <span style={{ fontSize: 9, fontWeight: active ? 800 : 600, color: active ? "var(--text-1)" : "var(--text-3)" }}>{row.labels[i]}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <AuraButtonV2
+                    variant="primary"
+                    onClick={handleExpressFinish}
+                    disabled={isSaving}
+                    style={{ width: "100%", height: 52, fontSize: 15, fontWeight: 800, borderRadius: 14 }}
+                  >
+                    {isSaving ? "Salvando..." : (
+                      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                        Registrar <Check size={16} />
+                      </span>
+                    )}
+                  </AuraButtonV2>
+
+                  {/* Modo detalhado — visível e atraente */}
+                  <button
+                    type="button"
+                    onClick={() => { setMode("wizard"); setSlideDir(1); setWizardStep(3); }}
+                    style={{
+                      width: "100%", marginTop: 10, padding: "14px 16px", borderRadius: 14,
+                      border: "1.5px solid var(--warm-border-2)", background: "rgba(255,255,255,.8)",
+                      cursor: "pointer", textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "var(--text-1)" }}>Adicionar contexto</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>Fatores, sono, ciclo, nota…</p>
+                    </div>
+                    <span style={{ fontSize: 18, color: "var(--text-3)" }}>›</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setExpressPhase("emotion")}
+                    style={{ width: "100%", marginTop: 6, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", padding: "6px 0", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    ← Mudar emoção
+                  </button>
+              </>
+            )}
+
+            {/* ── Fase: sliders numéricos (para quem prefere) ── */}
+            {expressPhase === "sliders" && (
+              <>
+                <div style={{ marginBottom: 20 }}>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
+                    Humor & Energia
+                  </h2>
+                  <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>Ajusta e confirma.</p>
+                </div>
+
+                {([
+                  { key: "humor" as const, title: "Humor", icon: "😊", value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: ["Pesado", "Baixo", "Ok", "Bem", "Ótimo"] },
+                  { key: "energia" as const, title: "Energia", icon: "⚡", value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: ["Zerada", "Baixa", "Média", "Boa", "Alta"] },
+                ]).map((row) => (
+                  <div key={row.key} style={{ marginBottom: 18 }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>
+                      {row.icon} {row.title}
+                    </p>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8 }}>
+                      {QUICK_LEVELS.map((level, i) => {
+                        const active = row.value === level;
+                        return (
+                          <button key={level} type="button" onClick={() => row.onSelect(level)} aria-pressed={active}
+                            style={{
+                              minHeight: 64, borderRadius: 14,
+                              border: `1.5px solid ${active ? row.color : "var(--warm-border-2)"}`,
+                              background: active ? `${row.color}1f` : "rgba(255,255,255,.72)",
+                              cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                              padding: "8px 2px", transform: active ? "scale(1.04)" : "none", transition: "all 0.15s ease",
+                              fontFamily: "'Plus Jakarta Sans', sans-serif",
+                            }}
+                          >
+                            <span style={{ fontSize: 22, lineHeight: 1 }}>{row.emojiOf(level)}</span>
+                            <span style={{ fontSize: 10, fontWeight: active ? 800 : 600, color: active ? "var(--text-1)" : "var(--text-3)" }}>{row.labels[i]}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+                {!isReentry && prediction.source !== "neutral" && (
+                  <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
+                    ✦ Pré-marcado pelo seu padrão — ajusta se não bater.
+                  </p>
+                )}
+
+                <AuraButtonV2
+                  variant="primary"
+                  onClick={handleExpressFinish}
+                  disabled={isSaving}
+                  style={{ width: "100%", height: 52, fontSize: 15, fontWeight: 800, borderRadius: 14 }}
+                >
+                  {isSaving ? "Salvando..." : (
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                      Confirmar check-in <Check size={16} />
+                    </span>
+                  )}
+                </AuraButtonV2>
+
+                <button
+                  type="button"
+                  onClick={() => { setMode("wizard"); setSlideDir(1); setWizardStep(3); }}
+                  style={{
+                    width: "100%", marginTop: 10, padding: "14px 16px", borderRadius: 14,
+                    border: "1.5px solid var(--warm-border-2)", background: "rgba(255,255,255,.8)",
+                    cursor: "pointer", textAlign: "left", fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}
+                >
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "var(--text-1)" }}>Adicionar contexto</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>Fatores, sono, ciclo, nota…</p>
+                  </div>
+                  <span style={{ fontSize: 18, color: "var(--text-3)" }}>›</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExpressPhase("emotion")}
+                  style={{ width: "100%", marginTop: 6, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", padding: "6px 0", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
+                  ← Voltar para emoções
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -845,7 +1025,7 @@ export function CheckinPage() {
                 </p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
                   <DetailCard emoji="🌙" title="Sono"
-                    summary={detailEnabled.sono ? `${sono}/10 registrado` : "Toque para registrar"}
+                    summary={detailEnabled.sono ? `${sonoHoras}h de sono` : "Quantas horas você dormiu?"}
                     active={activeDetail === "sono"} onClick={() => toggleDetailCard("sono")} />
                   <DetailCard emoji="💪" title="Corpo"
                     summary={detailEnabled.fisico ? `${fisico}/10 registrado` : "Toque para registrar"}
@@ -859,10 +1039,40 @@ export function CheckinPage() {
                 </div>
 
                 {activeDetail === "sono" && (
-                  <div style={{ marginTop: "12px" }}>
-                    <OptionalSlider label="Como foi seu sono?" emoji="🌙" value={sono}
-                      onChange={(v) => { setSono(v); setDetailEnabled((c) => ({ ...c, sono: true })); }}
-                      color="var(--accent-sky)" />
+                  <div style={{ marginTop: 12 }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "0 0 10px", letterSpacing: ".1em", textTransform: "uppercase" }}>
+                      🌙 Quantas horas você dormiu?
+                    </p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {[3, 4, 5, 6, 7, 8, 9, 10].map((h) => {
+                        const isActive = sonoHoras === h && detailEnabled.sono;
+                        const isLow = h <= 4;
+                        const activeColor = isLow ? "var(--accent-peach)" : "var(--accent-sky)";
+                        return (
+                          <button
+                            key={h}
+                            type="button"
+                            onClick={() => { setSonoHoras(h); setDetailEnabled((c) => ({ ...c, sono: true })); }}
+                            style={{
+                              width: 54, height: 54, borderRadius: 14,
+                              border: `1.5px solid ${isActive ? activeColor : "var(--warm-border-2)"}`,
+                              background: isActive ? `${activeColor}18` : "rgba(255,255,255,.8)",
+                              cursor: "pointer", fontSize: 13, fontWeight: 800,
+                              color: isActive ? activeColor : "var(--text-2)",
+                              fontFamily: "'Plus Jakarta Sans', sans-serif",
+                              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+                              transition: "all .15s",
+                            }}
+                          >
+                            <span>{h}h</span>
+                            {h === 3 && <span style={{ fontSize: 9, fontWeight: 600, color: isActive ? activeColor : "var(--text-3)" }}>ou menos</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--text-3)" }}>
+                      {!detailEnabled.sono ? "Toque para registrar" : sonoHoras <= 5 ? "Sono curto — impacta humor e foco." : sonoHoras >= 8 ? "Ótimo sono 🌙" : "Sono razoável."}
+                    </p>
                   </div>
                 )}
                 {activeDetail === "fisico" && (

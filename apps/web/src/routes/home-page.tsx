@@ -2818,7 +2818,7 @@ export function HomePage() {
         <GoalNudgeCard
           goals={state.goals || []}
           tasks={state.tasks || []}
-          onAddTask={(title) => addTask({ title, date: new Date().toISOString().split("T")[0] })}
+          onAddTask={(title) => addTask(title, "09:00", "geral")}
         />
 
         {/* ── Referral ── */}
