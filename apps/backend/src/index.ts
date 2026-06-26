@@ -6025,6 +6025,8 @@ JSON APENAS: {"profileSummary":"..."}`,
   return app;
 }
 
+export const app = createApp();
+
 async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
   const subs = await defaultPrisma.pushSubscription.findMany({ where: { userId } });
 
@@ -6066,4 +6068,324 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
       }
     }
   }
+}
+
+function getSaoPauloHHMM(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
+const checkinNudgeTimeCache = new Map<string, { dateKey: string; time: string }>();
+
+async function resolveUserCheckinNudgeTime(userId: string, preferredTime: string | null, dateKey: string): Promise<string> {
+  const cached = checkinNudgeTimeCache.get(userId);
+  if (cached && cached.dateKey === dateKey) return cached.time;
+
+  let recentTimes: string[] = [];
+  try {
+    const recent = await defaultPrisma.dailyCheckin.findMany({
+      where: { userId },
+      orderBy: [{ localDate: 'desc' }, { recordedAt: 'desc' }],
+      take: 10,
+      select: { recordedAt: true },
+    });
+    recentTimes = recent.map((row) => getSaoPauloHHMM(row.recordedAt));
+  } catch (e) {
+    console.warn('[push-cron] falha ao ler padrão de check-in, usando horário preferido:', e);
+  }
+
+  const time = resolveCheckinNudgeTime({ preferredTime, recentCheckinTimes: recentTimes });
+  checkinNudgeTimeCache.set(userId, { dateKey, time });
+  return time;
+}
+
+async function countNudgesSentToday(userId: string, spDayStartUtc: Date): Promise<number> {
+  try {
+    return await defaultPrisma.eventLog.count({
+      where: { userId, eventName: NUDGE_EVENT_NAME, createdAt: { gte: spDayStartUtc } },
+    });
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+async function logNudgeSent(userId: string, kind: 'checkin' | 'journal', time: string): Promise<void> {
+  try {
+    await defaultPrisma.eventLog.create({
+      data: { userId, eventName: NUDGE_EVENT_NAME, properties: { kind, time } },
+    });
+  } catch (e) {
+    console.warn('[push-cron] falha ao registrar nudge enviado:', e);
+  }
+}
+
+if (require.main === module) {
+  cron.schedule('17 * * * *', async () => {
+    try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentUsers = await defaultPrisma.profile.findMany({
+        where: {
+          OR: [
+            { journalSessions: { some: { updatedAt: { gte: since } } } },
+            { checkins: { some: { recordedAt: { gte: since } } } },
+          ],
+        },
+        select: { id: true },
+        take: 50,
+      }).catch(() => []);
+
+      if (recentUsers.length === 0) return;
+      console.log(`[cron/kg-backfill] processando ${recentUsers.length} usuários`);
+
+      for (const u of recentUsers) {
+        try {
+          const result = await KnowledgeGraphBackfillService.runForUser(u.id, { limit: 30 });
+          if (result.extractionsSucceeded > 0) {
+            console.log(`[cron/kg-backfill] user=${u.id} extracted=${result.extractionsSucceeded}`);
+          }
+        } catch (err) {
+          console.warn(`[cron/kg-backfill] user=${u.id} falhou:`, err);
+        }
+      }
+    } catch (err) {
+      console.warn('[cron/kg-backfill] erro geral:', err);
+    }
+  });
+
+  cron.schedule('* * * * *', async () => {
+    try {
+      const now = new Date();
+      const currentTimeStr = getSaoPauloHHMM(now);
+      const saoPauloToday = getSaoPauloDateContext(now);
+
+      const habitsNow = await defaultPrisma.habit.findMany({
+        where: { archived: false, reminderEnabled: true, reminderTime: currentTimeStr },
+        include: {
+          completions: {
+            where: { date: saoPauloToday.dbDate },
+            select: { completionCount: true },
+          },
+        },
+      });
+      const habitPrefsByUser = habitsNow.length > 0
+        ? new Map(
+            (await defaultPrisma.userPreference.findMany({
+              where: { userId: { in: [...new Set(habitsNow.map((habit) => habit.userId))] } },
+              select: { userId: true, notificationsOn: true, notificationPreferences: true },
+            })).map((pref) => [pref.userId, pref]),
+          )
+        : new Map<string, { notificationsOn: boolean; notificationPreferences: any }>();
+      const adaptiveCacheByUser = new Map<string, { pauseHabits: boolean; pauseReason: string | null }>();
+      for (const habit of habitsNow) {
+        if (!allowsHabitNotifications(habitPrefsByUser.get(habit.userId))) continue;
+        if (!shouldSendHabitReminderToday(habit, saoPauloToday.weekday, saoPauloToday.dayOfMonth)) continue;
+        try {
+          let cached = adaptiveCacheByUser.get(habit.userId);
+          if (!cached) {
+            const recentCheckins = await defaultPrisma.dailyCheckin.findMany({
+              where: { userId: habit.userId },
+              orderBy: { localDate: 'desc' },
+              take: 7,
+              select: { moodScore: true, energyScore: true },
+            });
+            const { phase, warningFlags } = inferPhaseFromRecentCheckins(
+              recentCheckins.map((c) => ({ moodScore: c.moodScore, energyScore: c.energyScore })),
+            );
+            const ctx = deriveAdaptiveContextFromPhase({ phase, warningFlags });
+            cached = { pauseHabits: ctx.pauseHabits, pauseReason: ctx.pauseReason };
+            adaptiveCacheByUser.set(habit.userId, cached);
+          }
+          if (cached.pauseHabits) {
+            console.log(`[push-cron] habit paused for ${habit.userId} (${habit.id}): ${cached.pauseReason}`);
+            continue;
+          }
+        } catch (e) {
+          console.warn('[push-cron] adaptive check failed:', e);
+        }
+        await sendPushToUser(habit.userId, {
+          title: `⏰ ${habit.title}`,
+          body: 'Hora do seu hábito!',
+          url: '/home',
+          tag: `habit-${habit.id}`,
+        });
+      }
+
+      const windowStart = new Date(now);
+      windowStart.setUTCSeconds(0, 0);
+      const windowEnd = new Date(windowStart.getTime() + 60000);
+      const tasksNow = await defaultPrisma.timelineBlock.findMany({
+        where: {
+          startAt: { gte: windowStart, lt: windowEnd },
+          status: 'planned',
+          OR: [
+            { isAiSuggested: false },
+            { persistentReminderEnabled: true },
+            { alarmEnabled: true },
+            { vibrateEnabled: true },
+            { recurringNotificationEnabled: true },
+          ],
+        },
+      });
+      const plannerPrefsByUser = tasksNow.length > 0
+        ? new Map(
+            (await defaultPrisma.userPreference.findMany({
+              where: { userId: { in: [...new Set(tasksNow.map((task) => task.userId))] }, notificationsOn: true },
+              select: { userId: true, notificationPreferences: true },
+            })).map((pref) => [pref.userId, pref.notificationPreferences as any]),
+          )
+        : new Map<string, any>();
+      for (const task of tasksNow) {
+        const notifPrefs = plannerPrefsByUser.get(task.userId);
+        if (!notifPrefs || notifPrefs.planner === false) continue;
+        await sendPushToUser(task.userId, {
+          title: `📅 ${task.title}`,
+          body: `Começa agora — ${currentTimeStr}`,
+          url: '/planner',
+          tag: `task-${task.id}`,
+        });
+      }
+
+      const prefsCheckin = await defaultPrisma.userPreference.findMany({ where: { notificationsOn: true } });
+      const spDayStartUtc = getSaoPauloDayStartUtc(saoPauloToday.dateKey);
+      for (const pref of prefsCheckin) {
+        const notifPrefs = (pref.notificationPreferences as any) || {};
+        const journalTimes = notifPrefs.journal
+          ? [notifPrefs.journalMorningTime || '10:00', notifPrefs.journalEveningTime || '21:00']
+          : [];
+
+        if (notifPrefs.checkin) {
+          const nudgeTime = await resolveUserCheckinNudgeTime(pref.userId, pref.morningCheckinTime, saoPauloToday.dateKey);
+          if (nudgeTime === currentTimeStr) {
+            const [todayCheckin, nudgesSentToday] = await Promise.all([
+              defaultPrisma.dailyCheckin.findFirst({
+                where: { userId: pref.userId, localDate: saoPauloToday.dbDate },
+                select: { id: true },
+              }),
+              countNudgesSentToday(pref.userId, spDayStartUtc),
+            ]);
+            const decision = shouldSendCheckinNudge({
+              currentTime: currentTimeStr,
+              nudgeTime,
+              hasCheckinToday: Boolean(todayCheckin),
+              nudgesSentToday,
+            });
+            if (decision.send) {
+              await sendPushToUser(pref.userId, {
+                title: '✨ Como você tá agora?',
+                body: '1 toque e pronto — a Airia calibra seu dia.',
+                url: '/checkin',
+                tag: 'checkin-reminder',
+              });
+              await logNudgeSent(pref.userId, 'checkin', nudgeTime);
+            } else {
+              console.log(`[push-cron] checkin nudge skipped for ${pref.userId}: ${decision.reason}`);
+            }
+          }
+        }
+
+        if (journalTimes.includes(currentTimeStr)) {
+          const nudgesSentToday = await countNudgesSentToday(pref.userId, spDayStartUtc);
+          const decision = shouldSendJournalNudge({
+            currentTime: currentTimeStr,
+            journalTimes,
+            nudgesSentToday,
+          });
+          if (decision.send) {
+            await sendPushToUser(pref.userId, {
+              title: 'Diário da Airia',
+              body: 'Dois minutos para registrar o que mudou por dentro.',
+              url: '/journal',
+              tag: `journal-reminder-${currentTimeStr}`,
+            });
+            await logNudgeSent(pref.userId, 'journal', currentTimeStr);
+          } else {
+            console.log(`[push-cron] journal nudge skipped for ${pref.userId}: ${decision.reason}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[push-cron] error:', e);
+    }
+  });
+
+  cron.schedule('0 6 * * *', async () => {
+    try {
+      const now = new Date();
+      const overdueTasks = await defaultPrisma.timelineBlock.findMany({
+        where: { status: 'planned', startAt: { lt: now } },
+        take: 200,
+      });
+      if (overdueTasks.length === 0) return;
+
+      const byUser = new Map<string, typeof overdueTasks>();
+      for (const t of overdueTasks) {
+        const arr = byUser.get(t.userId) || [];
+        arr.push(t);
+        byUser.set(t.userId, arr);
+      }
+
+      let migrated = 0;
+      let paused = 0;
+      for (const [userId, tasks] of byUser.entries()) {
+        const recent = await defaultPrisma.dailyCheckin.findMany({
+          where: { userId },
+          orderBy: { localDate: 'desc' },
+          take: 7,
+          select: { moodScore: true, energyScore: true },
+        });
+        const { phase, warningFlags } = inferPhaseFromRecentCheckins(
+          recent.map((c) => ({ moodScore: c.moodScore, energyScore: c.energyScore })),
+        );
+        const ctx = deriveAdaptiveContextFromPhase({ phase, warningFlags });
+
+        for (const task of tasks) {
+          if (ctx.preFallActive || ctx.pauseHabits) {
+            await defaultPrisma.timelineBlock
+              .update({ where: { id: task.id }, data: { status: 'paused' } })
+              .catch(() => null);
+            paused++;
+          } else {
+            const newStart = new Date(now);
+            newStart.setHours(task.startAt.getHours(), task.startAt.getMinutes(), 0, 0);
+            const duration = task.endAt.getTime() - task.startAt.getTime();
+            await defaultPrisma.timelineBlock
+              .update({
+                where: { id: task.id },
+                data: { startAt: newStart, endAt: new Date(newStart.getTime() + duration) },
+              })
+              .catch(() => null);
+            migrated++;
+          }
+        }
+      }
+      console.log(`[auto-reschedule] migrated=${migrated} paused=${paused}`);
+    } catch (e) {
+      console.error('[auto-reschedule] error:', e);
+    }
+  });
+
+  const FIFTEEN_MINUTES = 15 * 60 * 1000;
+  setInterval(async () => {
+    console.log('[AI Background] Processing pending jobs...');
+    try {
+      const { AiBackgroundService } = await import('./services/ai-background.service');
+      const result = await AiBackgroundService.processPendingJobs();
+      if (result.processed > 0) {
+        console.log(`[AI Background] Processed ${result.processed} jobs, ${result.errors} errors`);
+      }
+    } catch (err) {
+      console.error('[AI Background] Error:', err);
+    }
+  }, FIFTEEN_MINUTES);
+
+  app.listen(port, () => {
+    console.log(`[Airia Backend] Server running on port ${port}`);
+  });
 }
