@@ -3536,4 +3536,32 @@ export function HomePage() {
                       </svg>
                     </button>
                   </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
+        </>)}
+
+      </div>
+      {showHabitIdeasModal && (
+        <HabitIdeasModal
+          onClose={() => setShowHabitIdeasModal(false)}
+          onSave={handleHabitSave}
+          onViewAll={() => {
+            setShowHabitIdeasModal(false);
+            navigate("/habits");
+          }}
+        />
+      )}
+      <PhaseLegendSheet
+        open={phaseLegendOpen}
+        onClose={() => setPhaseLegendOpen(false)}
+        currentPhase={cycleReport.phase}
+      />
+    </div>
+    </>
+  );
+}
      
