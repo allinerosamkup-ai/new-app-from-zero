@@ -435,9 +435,10 @@ export function CheckinPage() {
       if (!transcript.trim()) return;
       setVoiceLoading(true);
       try {
-        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number; energia: number; emotions: string[]; factors: string[]; note: string | null };
+        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number; energia: number; sono: number | null; emotions: string[]; factors: string[]; note: string | null };
         if (result.humor) setHumor(result.humor);
         if (result.energia) setEnergia(result.energia);
+        if (result.sono) { setSonoHoras(result.sono); setDetailEnabled(c => ({ ...c, sono: true })); }
         if (result.emotions?.length) setEmotionsSelected(result.emotions.slice(0, 1));
         if (result.factors?.length) setSelectedFactors(result.factors);
         if (result.note) setNote(result.note);
@@ -754,7 +755,7 @@ export function CheckinPage() {
             {/* ── Fase: selecionar emoção ── */}
             {expressPhase === "emotion" && (
               <>
-                <div style={{ marginBottom: 22 }}>
+                <div style={{ marginBottom: 16 }}>
                   <h2 style={{ fontSize: 23, fontWeight: 900, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
                     Como você tá agora?
                   </h2>
@@ -764,6 +765,58 @@ export function CheckinPage() {
                     </p>
                   )}
                 </div>
+
+                {/* ── Voz como entrada principal ── */}
+                <button
+                  type="button"
+                  onClick={startVoiceCheckin}
+                  disabled={voiceLoading}
+                  style={{
+                    width: "100%",
+                    padding: "15px 18px",
+                    borderRadius: 18,
+                    border: isListening ? "2px solid var(--accent-peach)" : "1.5px solid var(--accent-salmon, #f4a896)",
+                    background: isListening ? "rgba(215,137,127,0.08)" : "rgba(244,168,150,0.08)",
+                    cursor: voiceLoading ? "wait" : "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    marginBottom: 14,
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {voiceLoading ? (
+                    <Loader size={20} style={{ color: "var(--accent-peach)", animation: "aura-spin 1s linear infinite" }} />
+                  ) : isListening ? (
+                    <MicOff size={20} style={{ color: "var(--accent-peach)" }} />
+                  ) : (
+                    <Mic size={20} style={{ color: "var(--accent-salmon, #f4a896)" }} />
+                  )}
+                  <div style={{ textAlign: "left" }}>
+                    <span style={{ display: "block", fontSize: 14, fontWeight: 800, color: isListening ? "var(--accent-peach)" : "var(--accent-salmon, #e07060)" }}>
+                      {voiceLoading ? "Processando..." : isListening ? "Ouvindo... toque para parar" : "Falar como estou"}
+                    </span>
+                    {!isListening && !voiceLoading && (
+                      <span style={{ display: "block", fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>
+                        A Aura preenche tudo automaticamente
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                {voiceTranscript && !voiceLoading && (
+                  <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "-6px 0 12px", lineHeight: 1.5, fontStyle: "italic", padding: "0 4px" }}>
+                    "{voiceTranscript.slice(0, 120)}{voiceTranscript.length > 120 ? "..." : ""}"
+                  </p>
+                )}
+                {voiceError && (
+                  <p style={{ fontSize: 11.5, color: "var(--accent-peach-ink)", margin: "-6px 0 12px", lineHeight: 1.5, padding: "0 4px" }}>
+                    {voiceError}
+                  </p>
+                )}
+
+                <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 10px", textAlign: "center" }}>
+                  ou escolha uma emoção
+                </p>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 18 }}>
                   {emotions.map((em) => (
@@ -801,47 +854,7 @@ export function CheckinPage() {
                   Prefiro usar números →
                 </button>
 
-                {/* Botão de voz */}
-                <div style={{ marginTop: 8 }}>
-                  <button
-                    type="button"
-                    onClick={startVoiceCheckin}
-                    disabled={voiceLoading}
-                    style={{
-                      width: "100%",
-                      padding: "13px 16px",
-                      borderRadius: 14,
-                      border: isListening ? "2px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
-                      background: isListening ? "rgba(215,137,127,0.08)" : "rgba(255,255,255,.70)",
-                      cursor: voiceLoading ? "wait" : "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      fontFamily: "'Plus Jakarta Sans', sans-serif",
-                      transition: "all 0.2s",
-                    }}
-                  >
-                    {voiceLoading ? (
-                      <Loader size={18} style={{ color: "var(--accent-peach)", animation: "aura-spin 1s linear infinite" }} />
-                    ) : isListening ? (
-                      <MicOff size={18} style={{ color: "var(--accent-peach)" }} />
-                    ) : (
-                      <Mic size={18} style={{ color: "var(--text-2)" }} />
-                    )}
-                    <span style={{ fontSize: 13, fontWeight: 700, color: isListening ? "var(--accent-peach)" : "var(--text-2)" }}>
-                      {voiceLoading ? "Processando..." : isListening ? "Ouvindo... toque para parar" : "Falar como estou me sentindo"}
-                    </span>
-                  </button>
 
-                  {voiceTranscript && !voiceLoading && (
-                    <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "8px 4px 0", lineHeight: 1.5, fontStyle: "italic" }}>
-                      "{voiceTranscript.slice(0, 100)}{voiceTranscript.length > 100 ? "..." : ""}"
-                    </p>
-                  )}
-                  {voiceError && (
-                    <p style={{ fontSize: 11.5, color: "var(--accent-peach-ink)", margin: "8px 4px 0", lineHeight: 1.5 }}>
-                      {voiceError}
-                    </p>
-                  )}
-                </div>
               </>
             )}
 

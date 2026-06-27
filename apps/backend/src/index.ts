@@ -5886,6 +5886,7 @@ JSON APENAS: {"profileSummary":"..."}`,
         '{',
         '  "humor": <número 1-10, sendo 1=muito ruim e 10=excelente>,',
         '  "energia": <número 1-10, sendo 1=sem energia e 10=energia máxima>,',
+        '  "sono": <horas de sono como número inteiro 3-12, ou null se não mencionado>,',
         '  "emotions": <array com 1-3 emoções da lista: ' + emotionList + '>,',
         '  "factors": <array com os fatores relevantes da lista abaixo>,',
         '  "note": <frase curta resumindo o que a pessoa disse, ou null>',
@@ -5930,8 +5931,9 @@ JSON APENAS: {"profileSummary":"..."}`,
         .filter((f: unknown) => typeof f === 'string' && FACTOR_OPTIONS.includes(f as string))
         .slice(0, 8);
       const note = typeof parsed.note === 'string' && parsed.note.trim() ? parsed.note.trim() : null;
+      const sono = typeof parsed.sono === 'number' && parsed.sono >= 3 && parsed.sono <= 12 ? Math.round(parsed.sono) : null;
 
-      return res.json({ humor, energia, emotions, factors, note });
+      return res.json({ humor, energia, sono, emotions, factors, note });
     } catch (err: unknown) {
       console.error('[voice-checkin] Error:', err);
       return res.status(500).json({ error: 'voice_checkin_failed' });
