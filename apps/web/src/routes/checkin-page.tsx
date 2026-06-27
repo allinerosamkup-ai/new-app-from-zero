@@ -527,19 +527,25 @@ export function CheckinPage() {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      const emotion = deriveExpressEmotion(humor, energia);
-      setMood(emotionToMood[emotion] ?? "equilibrada");
+      // Usa emoção da voz se disponível, senão deriva dos números
+      const primaryEmotion = emotionsSelected[0] ?? deriveExpressEmotion(humor, energia);
+      setMood(emotionToMood[primaryEmotion] ?? "equilibrada");
       const checkinAI = await addCheckin({
         humor,
         energia,
-        emotion,
-        emotions: [emotion],
+        emotion: primaryEmotion,
+        emotions: emotionsSelected.length > 0 ? emotionsSelected : [primaryEmotion],
+        // Inclui dados capturados pela voz (ou preenchidos manualmente)
+        sono: detailEnabled.sono ? Math.min(10, sonoHoras) : undefined,
+        factors: selectedFactors.length > 0 ? selectedFactors : undefined,
+        note: note.trim() || undefined,
       });
       trackEvent("checkin_completed", {
         mode: "express",
         prediction_source: prediction.source,
         prediction_kept: humor === prediction.humor && energia === prediction.energia,
         days_since_last: daysSinceLastCheckin ?? -1,
+        has_voice_extras: detailEnabled.sono || selectedFactors.length > 0 || Boolean(note.trim()),
       });
       navigate("/checkin-result", { state: checkinAI ?? undefined });
     } catch (err) {
@@ -886,6 +892,31 @@ export function CheckinPage() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Preview do que a voz capturou */}
+                  {(detailEnabled.sono || selectedFactors.length > 0 || note.trim()) && (
+                    <div style={{
+                      padding: "10px 14px", borderRadius: 12, marginBottom: 12,
+                      background: "rgba(150,199,179,0.10)", border: "1px solid rgba(150,199,179,0.25)",
+                    }}>
+                      <p style={{ margin: "0 0 5px", fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sage)" }}>Capturado pela voz</p>
+                      {detailEnabled.sono && (
+                        <p style={{ margin: "2px 0", fontSize: 12, color: "var(--text-2)" }}>
+                          🌙 {sonoHoras}h de sono
+                        </p>
+                      )}
+                      {selectedFactors.length > 0 && (
+                        <p style={{ margin: "2px 0", fontSize: 12, color: "var(--text-2)" }}>
+                          ✨ {selectedFactors.length} fator{selectedFactors.length > 1 ? "es" : ""} registrado{selectedFactors.length > 1 ? "s" : ""}
+                        </p>
+                      )}
+                      {note.trim() && (
+                        <p style={{ margin: "2px 0", fontSize: 11, color: "var(--text-3)", fontStyle: "italic" }}>
+                          "{note.trim().slice(0, 70)}{note.trim().length > 70 ? "…" : ""}"
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <button
                     type="button"
@@ -1364,7 +1395,7 @@ export function CheckinPage() {
                       🌙 Quantas horas você dormiu?
                     </p>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {[3, 4, 5, 6, 7, 8, 9, 10].map((h) => {
+                      {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => {
                         const isActive = sonoHoras === h && detailEnabled.sono;
                         const isLow = h <= 4;
                         const activeColor = isLow ? "var(--accent-peach)" : "var(--accent-sky)";
