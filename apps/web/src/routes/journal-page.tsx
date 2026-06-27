@@ -169,6 +169,8 @@ export function JournalPage() {
   const [addingToPlanner, setAddingToPlanner] = useState<string | null>(null);
   const [addedToPlanner, setAddedToPlanner] = useState<Set<string>>(new Set());
   const [dayChoice, setDayChoice] = useState<{ key: string; task: SuggestedTask; isCommitment?: boolean; text?: string } | null>(null);
+  const [liveReplyPending, setLiveReplyPending] = useState(false);
+  const liveReplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAutoOpenedRef = useRef(false);
@@ -198,6 +200,32 @@ export function JournalPage() {
       has_active_session: Boolean(sessions.some((session) => session.status === "active")),
     });
   }, [isSessionsLoading, sessions]);
+
+  // Diário ao vivo: depois de 4s sem digitar + mínimo 50 chars, Airia responde automaticamente
+  useEffect(() => {
+    if (liveReplyTimerRef.current) {
+      clearTimeout(liveReplyTimerRef.current);
+      liveReplyTimerRef.current = null;
+    }
+    setLiveReplyPending(false);
+
+    const trimmed = input.trim();
+    if (trimmed.length < 50 || isTyping || isFinalizing || !sessionId) return;
+
+    // Só ativa se já houve pelo menos uma mensagem do assistente (sessão em andamento)
+    if (messages.length < 2) return;
+
+    setLiveReplyPending(true);
+    liveReplyTimerRef.current = setTimeout(() => {
+      setLiveReplyPending(false);
+      void sendMessage();
+    }, 4000);
+
+    return () => {
+      if (liveReplyTimerRef.current) clearTimeout(liveReplyTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input]);
 
   async function loadSessions() {
     setIsSessionsLoading(true);
@@ -1173,6 +1201,30 @@ export function JournalPage() {
                 lineHeight: 1.45,
               }}
             />
+            {liveReplyPending && (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "6px 4px 2px",
+                gap: 8,
+              }}>
+                <span style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent-sage, #96c7b3)", animation: "voicePulse 1.4s ease-in-out infinite" }} />
+                  Airia vai responder em instantes…
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (liveReplyTimerRef.current) clearTimeout(liveReplyTimerRef.current);
+                    setLiveReplyPending(false);
+                  }}
+                  style={{ fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", padding: "0 2px", textDecoration: "underline" }}
+                >
+                  cancelar
+                </button>
+              </div>
+            )}
             <div style={{ display: "flex", gap: "6px" }}>
               {voiceSupported && (
               <button

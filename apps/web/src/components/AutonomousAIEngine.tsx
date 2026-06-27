@@ -305,12 +305,48 @@ export function AutonomousAIEngine() {
       return age < 6 * 3600_000;
     };
 
+    // Priority 1a: smart timing — notifica no horário histórico da usuária (sem check-in hoje)
+    const todayCheckin = history.find(h => h.date === todayKey);
+    if (!todayCheckin && history.length >= 5 && !shouldThrottleSameNudge("checkin_missing")) {
+      // Descobrir a hora mais frequente de check-in nos últimos 30 registros
+      const hourCounts: Record<number, number> = {};
+      history.slice(-30).forEach(h => {
+        if (h.recordedAt) {
+          const hr = new Date(h.recordedAt).getHours();
+          hourCounts[hr] = (hourCounts[hr] ?? 0) + 1;
+        }
+      });
+      const sortedHours = Object.entries(hourCounts).sort(([, a], [, b]) => b - a);
+      if (sortedHours.length > 0) {
+        const preferredHour = Number(sortedHours[0][0]);
+        const currentHour = new Date(now).getHours();
+        // Dispara quando estiver dentro de ±1h do horário preferido
+        if (Math.abs(currentHour - preferredHour) <= 1) {
+          const timeLabel =
+            preferredHour < 12 ? "manhã" :
+            preferredHour < 18 ? "tarde" : "noite";
+          const smartNudge: ProactiveNudge = {
+            type: "checkin_missing",
+            title: "Hora do check-in 🌿",
+            message: `Costuma fazer seu registro de ${timeLabel} por volta desta hora. Leva 30 segundos.`,
+            action: { label: "Fazer check-in", path: "/checkin" },
+            priority: "medium",
+            generatedAt: new Date().toISOString(),
+          };
+          if (!isProactiveNudgeDismissedToday(smartNudge)) {
+            setProactiveNudge(smartNudge);
+            return;
+          }
+        }
+      }
+    }
+
     if (daysSince >= 2) {
       const days = Math.floor(daysSince);
       if (shouldThrottleSameNudge("checkin_missing")) return;
       const nudge: ProactiveNudge = {
         type: "checkin_missing",
-        title: days >= 3 ? "Aura com saudade 💛" : "Check-in em falta",
+        title: days >= 3 ? "Airia com saudade 💛" : "Check-in em falta",
         message: days >= 3
           ? `Faz ${days} dias sem check-in. Pequenos registros fazem toda a diferença no seu padrão.`
           : "Ontem não teve check-in. 2 minutos bastam para manter o padrão.",

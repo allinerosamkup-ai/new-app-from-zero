@@ -115,7 +115,7 @@ const DEV_SCREENS = [
   { path: "insights", label: "Insights" },
   { path: "daily-summary", label: "Resumo" },
   { path: "preferences", label: "Config" },
-  { path: "aura", label: "Aura IA" },
+  { path: "aura", label: "Airia" },
   { path: "ui-kit", label: "UI Kit" },
 ];
 

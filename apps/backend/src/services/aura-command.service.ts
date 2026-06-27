@@ -248,7 +248,7 @@ export class AuraCommandService {
     );
     const historyBlock = (input.history ?? [])
       .slice(-8)
-      .map((message) => `${message.role === 'user' ? 'Usuário' : 'Aura'}: ${message.content}`)
+      .map((message) => `${message.role === 'user' ? 'Usuário' : 'Airia'}: ${message.content}`)
       .join('\n');
 
     // Usa a data local do cliente se disponível; fallback para UTC do servidor
@@ -286,16 +286,20 @@ export class AuraCommandService {
       '  - Hábitos pendentes',
       '  - Necessidades básicas (alimentação, movimento, descanso)',
       '→ NÃO pergunte "qual é sua prioridade". Monte a rotina, apresente, deixe a pessoa ajustar.',
-      '→ Blocos devem ter: title, date (hoje = ' + todayKey + '), startTime (HH:MM), category.',
       '→ assistantMessage: confirme o que foi criado de forma breve e animada. Máx 2 frases.',
+      '',
+      '== FORMATO OBRIGATÓRIO PARA CREATE_AGENDA ==',
+      'Quando action = "create_agenda", o payload DEVE ter uma chave "blocks" com array de blocos:',
+      '{"action":"create_agenda","intent":"agenda_plan","needsConfirmation":false,"assistantMessage":"Pronto! Montei seu dia.","payload":{"blocks":[{"title":"Café + planejamento","date":"' + todayKey + '","startTime":"08:00","category":"pessoal"},{"title":"Foco profundo","date":"' + todayKey + '","startTime":"09:30","category":"trabalho"},{"title":"Almoço e pausa","date":"' + todayKey + '","startTime":"12:00","category":"autocuidado"},{"title":"Projetos da tarde","date":"' + todayKey + '","startTime":"14:00","category":"trabalho"},{"title":"Encerrar o dia","date":"' + todayKey + '","startTime":"17:30","category":"pessoal"}]}}',
+      'Categorias válidas: "trabalho", "pessoal", "autocuidado", "social", "outro".',
+      'NUNCA retorne create_agenda sem o campo "blocks" dentro de "payload".',
       '',
       '== MODO ZERO CONTEXTO ==',
       'Se NÃO houver metas, hábitos, planner, nem estado de humor disponível:',
-      '→ MESMO ASSIM use create_agenda — nunca retorne só texto quando pedirem rotina.',
-      '→ Crie 5-6 blocos para um dia equilibrado começando ~1h depois da hora atual (' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ').',
-      '→ Estrutura base: manhã ativa (café + movimento leve), foco profundo, pausa/alimentação, trabalho/projetos, encerramento.',
-      '→ Use category: "routine" para manhã/encerramento, "focus" para trabalho, "break" para pausa.',
-      '→ Títulos em português natural. Ex: "Café + planejamento do dia", "Foco profundo", "Almoço e pausa", "Projetos / tarefas", "Encerrar o dia".',
+      '→ MESMO ASSIM use create_agenda com o formato acima — nunca retorne só texto quando pedirem rotina.',
+      '→ Crie 5-6 blocos para um dia equilibrado começando ~1h depois da hora atual.',
+      '→ Estrutura base: Café + planejamento (pessoal), Foco profundo (trabalho), Almoço e pausa (autocuidado), Projetos / tarefas (trabalho), Encerrar o dia (pessoal).',
+      '→ Títulos em português natural. Datas: todas com ' + todayKey + '.',
       '',
       '== REGRAS DE NEEDSCONFIRMATION ==',
       '- FALSE (executa direto): tarefa de HOJE, rotina do dia, tarefas sem data específica',

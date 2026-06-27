@@ -442,6 +442,14 @@ export function HomePage() {
     setHasLocalJournalEntry(window.localStorage.getItem("airia.journal.hasEntry") === "true");
   }, []);
 
+  // Força re-render quando o relatório semanal é dispensado
+  const [weeklyReportDismissed, setWeeklyReportDismissed] = useState(false);
+  useEffect(() => {
+    const handler = () => setWeeklyReportDismissed(prev => !prev);
+    window.addEventListener("airia-weekly-dismissed", handler);
+    return () => window.removeEventListener("airia-weekly-dismissed", handler);
+  }, []);
+
   // Refresh on mount to pick up any check-ins done since the app loaded
   useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const homeOpenedRef = useRef(false);
@@ -499,6 +507,65 @@ export function HomePage() {
     () => aggregateCheckinsByDay(state.checkinHistory || []),
     [state.checkinHistory]
   );
+
+  // ── Relatório semanal (domingo) ──────────────────────────
+  const weeklyReport = useMemo(() => {
+    const today = new Date();
+    const weekday = today.getDay(); // 0 = domingo
+    // Mostrar domingo (0) e segunda (1) até meio-dia
+    const showOnMonday = weekday === 1 && today.getHours() < 13;
+    if (weekday !== 0 && !showOnMonday) return null;
+
+    const history = state.checkinHistory || [];
+    const sevenDaysAgo = Date.now() - 7 * 86_400_000;
+    const weekEntries = history.filter(h => {
+      const ts = h.recordedAt ? new Date(h.recordedAt).getTime() : new Date(`${h.date}T12:00`).getTime();
+      return ts >= sevenDaysAgo;
+    });
+    if (weekEntries.length < 3) return null;
+
+    // Gerar chave da semana para dismissal
+    const yr = today.getFullYear();
+    const weekNum = Math.ceil((Math.floor((today.getTime() - new Date(yr, 0, 1).getTime()) / 86_400_000) + new Date(yr, 0, 1).getDay() + 1) / 7);
+    const weekKey = `${yr}-W${weekNum}`;
+    const dismissed = localStorage.getItem(`airia_weekly_report_dismissed_${weekKey}`) === "1";
+    if (dismissed) return null;
+
+    const avgMood = weekEntries.reduce((s, h) => s + h.humor, 0) / weekEntries.length;
+    const avgEnergy = weekEntries.reduce((s, h) => s + h.energia, 0) / weekEntries.length;
+    const sleepEntries = weekEntries.filter(h => (h as any).horasSono > 0);
+    const avgSleep = sleepEntries.length > 0
+      ? sleepEntries.reduce((s, h) => s + (h as any).horasSono, 0) / sleepEntries.length
+      : null;
+
+    // Fase dominante
+    const phaseCounts: Record<string, number> = {};
+    weekEntries.forEach(h => {
+      if (h.phase) phaseCounts[h.phase] = (phaseCounts[h.phase] ?? 0) + 1;
+    });
+    const dominantPhase = Object.entries(phaseCounts).sort(([,a],[,b]) => b-a)[0]?.[0] ?? null;
+
+    // Fator mais frequente
+    const factorCounts: Record<string, number> = {};
+    weekEntries.forEach(h => {
+      ((h as any).factors ?? []).forEach((f: string) => {
+        factorCounts[f] = (factorCounts[f] ?? 0) + 1;
+      });
+    });
+    const topFactor = Object.entries(factorCounts).sort(([,a],[,b]) => b-a)[0]?.[0] ?? null;
+
+    // Tendência: comparar primeira metade vs segunda metade da semana
+    const half = Math.floor(weekEntries.length / 2);
+    const sorted = [...weekEntries].sort((a,b) => a.date.localeCompare(b.date));
+    const firstHalfAvg = sorted.slice(0, half).reduce((s,h) => s+h.humor, 0) / Math.max(half, 1);
+    const secondHalfAvg = sorted.slice(half).reduce((s,h) => s+h.humor, 0) / Math.max(sorted.length - half, 1);
+    const moodTrend: "up" | "down" | "stable" =
+      secondHalfAvg - firstHalfAvg > 0.5 ? "up" :
+      firstHalfAvg - secondHalfAvg > 0.5 ? "down" : "stable";
+
+    return { weekKey, avgMood, avgEnergy, avgSleep, dominantPhase, topFactor, moodTrend, count: weekEntries.length };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.checkinHistory, weeklyReportDismissed]);
 
   // ── Motor de Ciclagem de Humor ────────────────────────────
   const cycleReport = useMemo(
@@ -3108,6 +3175,102 @@ export function HomePage() {
                   </div>
                 )}
               </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Relatório semanal (domingo / segunda cedo) ────────── */}
+        {weeklyReport && (() => {
+          const { weekKey, avgMood, avgEnergy, avgSleep, dominantPhase, topFactor, moodTrend, count } = weeklyReport;
+          const PHASE_LABEL: Record<string, string> = {
+            "voo-alto": "Voo Alto", "fluindo": "Fluindo", "estavel": "Estável",
+            "desacelerando": "Desacelerando", "recolhimento": "Recolhimento",
+            "pausa": "Pausa", "retomada": "Retomada", "turbulencia": "Turbulência",
+          };
+          const FACTOR_LABEL: Record<string, string> = {
+            exercicio: "Exercício", sono_bom: "Sono bom", meditacao: "Meditação",
+            alimentacao: "Alimentação", social: "Convívio social", trabalho_intenso: "Trabalho intenso",
+            conflito: "Conflito", ciclo: "Ciclo", cansaco: "Cansaço", ansiedade: "Ansiedade",
+          };
+          const trendIcon = moodTrend === "up" ? "📈" : moodTrend === "down" ? "📉" : "➡️";
+          const trendText = moodTrend === "up" ? "humor subiu" : moodTrend === "down" ? "humor caiu" : "humor estável";
+          return (
+            <div style={{
+              background: "linear-gradient(135deg, rgba(150,199,179,0.12) 0%, rgba(200,180,210,0.08) 100%)",
+              border: "1.5px solid rgba(150,199,179,0.35)",
+              borderLeft: "4px solid var(--accent-sage, #96c7b3)",
+              borderRadius: 16, padding: "14px 16px", marginBottom: 12,
+              boxShadow: "0 4px 16px rgba(150,199,179,0.1)",
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 13, color: "var(--text-1)", margin: "0 0 2px" }}>
+                    🌿 Sua semana em resumo
+                  </p>
+                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>
+                    {count} check-ins registrados
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    localStorage.setItem(`airia_weekly_report_dismissed_${weekKey}`, "1");
+                    // force re-render via state trick — navigate then back would work, but simpler:
+                    window.dispatchEvent(new Event("airia-weekly-dismissed"));
+                  }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 2 }}
+                >✕</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
+                <div>
+                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Humor médio</p>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                    {avgMood.toFixed(1)}<span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 400 }}>/10</span>
+                    {" "}{trendIcon}
+                  </p>
+                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{trendText}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Energia média</p>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                    {avgEnergy.toFixed(1)}<span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 400 }}>/10</span>
+                  </p>
+                </div>
+                {dominantPhase && (
+                  <div>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Fase dominante</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>
+                      {PHASE_LABEL[dominantPhase] ?? dominantPhase}
+                    </p>
+                  </div>
+                )}
+                {avgSleep !== null && (
+                  <div>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Sono médio</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>
+                      {avgSleep.toFixed(1)}h
+                    </p>
+                  </div>
+                )}
+              </div>
+              {topFactor && (
+                <div style={{ marginTop: 10, padding: "8px 10px", background: "rgba(150,199,179,0.1)", borderRadius: 10 }}>
+                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Fator mais presente</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>
+                    {FACTOR_LABEL[topFactor] ?? topFactor}
+                  </p>
+                </div>
+              )}
+              <button
+                onClick={() => navigate("/insights")}
+                style={{
+                  marginTop: 12, display: "block", width: "100%", padding: "8px 0",
+                  background: "rgba(150,199,179,0.2)", border: "1px solid rgba(150,199,179,0.3)",
+                  borderRadius: 10, fontSize: 12, fontWeight: 600, color: "var(--accent-sage, #96c7b3)",
+                  cursor: "pointer",
+                }}
+              >
+                Ver padrões completos →
+              </button>
             </div>
           );
         })()}

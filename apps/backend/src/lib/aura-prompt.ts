@@ -176,7 +176,7 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
     ],
   },
   'aura-command': {
-    title: 'AURA CHAT EXECUTOR',
+    title: 'AIRIA CHAT EXECUTOR',
     instructions: [
       'Identifique o que foi pedido, qual e a ancora real e se ha algo bloqueando (falta de informacao, conflito de agenda, energia) — em uma frase maxima interna. Entao execute ou pergunte exatamente o dado indispensavel. Sem analise longa antes de agir. Resposta operacional e curta.',
       'Se a pessoa pediu criar, marcar, excluir, concluir, reagendar, montar agenda, tarefa, habito, meta ou checklist: aja como executora. Confirme o que foi feito ou o que sera preparado.',
