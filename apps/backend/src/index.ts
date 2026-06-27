@@ -6026,7 +6026,6 @@ JSON APENAS: {"profileSummary":"..."}`,
 }
 
 export const app = createApp();
-
 async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
   const subs = await defaultPrisma.pushSubscription.findMany({ where: { userId } });
 

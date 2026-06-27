@@ -64,6 +64,7 @@ type AuraRouteState = {
   initialPrompt?: string;
   contextLabel?: string;
   mode?: "conversation" | "executor";
+  autoSend?: boolean;
 };
 
 const QUICK_ACTIONS: Array<{ labelKey: string; fallback: string; prompt: string }> = [
@@ -158,6 +159,7 @@ export function AuraChatPage() {
   const initialPrompt = typeof routeState?.initialPrompt === "string" ? routeState.initialPrompt : "";
   const contextLabel = typeof routeState?.contextLabel === "string" ? routeState.contextLabel : "";
   const routeMode = routeState?.mode === "conversation" ? "conversation" : "executor";
+  const autoSend = routeState?.autoSend === true;
 
   // Persistência: sessão da Aura central sobrevive a navegações dentro do app
   const STORAGE_KEY_MESSAGES = "airia-aura-central-messages";
@@ -237,6 +239,15 @@ export function AuraChatPage() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-send quando a rotina automática é acionada da Home
+  const autoSendFiredRef = useRef(false);
+  useEffect(() => {
+    if (!autoSend || !initialPrompt || !sessionId || isTyping || autoSendFiredRef.current) return;
+    autoSendFiredRef.current = true;
+    send(initialPrompt);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSend, initialPrompt, sessionId]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
