@@ -306,6 +306,7 @@ export function AutonomousAIEngine() {
     };
 
     // Priority 1a: smart timing — notifica no horário histórico da usuária (sem check-in hoje)
+    const today = getLocalDateKey();
     const todayCheckin = history.find(h => h.date === today);
     if (!todayCheckin && history.length >= 5 && !shouldThrottleSameNudge("checkin_missing")) {
       // Descobrir a hora mais frequente de check-in nos últimos 30 registros
