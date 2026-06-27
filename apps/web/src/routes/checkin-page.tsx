@@ -17,6 +17,7 @@ import {
 } from "./checkin-page.helpers";
 import { ChevronLeft, Check, Mic, MicOff, Loader } from "lucide-react";
 import { api } from "../lib/api";
+import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -286,6 +287,15 @@ const STEPS: Array<{ labelKey: string; hintKey: string; label: string; hint: str
 export function CheckinPage() {
   const { t } = useTranslation();
   const { state, setMood, addCheckin } = useAuraStore();
+
+  // Previsão menstrual automática
+  const menstrualPrediction = useMemo(() => computeMenstrualPhase({
+    cycleStart: state.cycleStart ?? null,
+    cycleLength: state.cycleLength ?? null,
+    lutealLength: state.lutealLength ?? null,
+  }), [state.cycleStart, state.cycleLength, state.lutealLength]);
+  // true = usuária confirmou a previsão; false = corrigiu; null = ainda não respondeu
+  const [cycleConfirmed, setCycleConfirmed] = useState<boolean | null>(null);
   const navigate = useNavigate();
 
   const dayContext = useMemo(() => getClientDayContext(), []);
@@ -1389,7 +1399,50 @@ export function CheckinPage() {
                 {showCiclo && (
                   <div style={{ marginTop: "12px" }}>
                     <div style={{ background: "var(--accent-peach-a1)", borderRadius: "10px", border: "1px solid rgba(215,137,127,.2)", padding: "14px" }}>
-                      <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Está menstruada hoje?</p>
+                      {/* Previsão automática quando há dados de ciclo */}
+                      {menstrualPrediction && cycleConfirmed === null && (
+                        <div style={{ marginBottom: "14px" }}>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "4px" }}>
+                            {menstrualPrediction.emoji} Dia {menstrualPrediction.dayOfCycle} do ciclo — fase {menstrualPrediction.label}
+                          </p>
+                          <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "10px" }}>
+                            Isso bateu com como você está se sentindo?
+                          </p>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <button type="button" onClick={() => {
+                              setCycleConfirmed(true);
+                              if (menstrualPrediction.phase === "menstrual") {
+                                setIsFlowing(true);
+                                setFlowDay(menstrualPrediction.dayOfCycle);
+                              } else {
+                                setIsFlowing(false);
+                                setFlowDay(null);
+                              }
+                            }} style={{
+                              flex: 1, height: "36px", borderRadius: "999px",
+                              border: "1.5px solid var(--accent-peach)",
+                              background: "var(--accent-peach-a3)",
+                              color: "var(--accent-peach-ink)", fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                            }}>Sim, bateu</button>
+                            <button type="button" onClick={() => setCycleConfirmed(false)} style={{
+                              flex: 1, height: "36px", borderRadius: "999px",
+                              border: "1.5px solid var(--warm-border-2)",
+                              background: "transparent",
+                              color: "var(--text-3)", fontWeight: 700, fontSize: "13px", cursor: "pointer",
+                            }}>Corrigir</button>
+                          </div>
+                        </div>
+                      )}
+                      {menstrualPrediction && cycleConfirmed === true && (
+                        <p style={{ fontSize: "12px", color: "var(--accent-peach-ink)", fontWeight: 600, marginBottom: "10px" }}>
+                          {menstrualPrediction.emoji} Dia {menstrualPrediction.dayOfCycle} confirmado.
+                          {menstrualPrediction.phase !== "menstrual" && " Se estiver no fluxo agora, registre abaixo."}
+                        </p>
+                      )}
+                      {/* Pergunta manual quando sem dados ou usuária quer corrigir */}
+                      {(!menstrualPrediction || cycleConfirmed === false) && (
+                        <>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Está menstruada hoje?</p>
                       <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
                         {[{ label: "Sim", value: true }, { label: "Não", value: false }].map(opt => (
                           <button type="button" key={String(opt.value)}
@@ -1470,6 +1523,8 @@ export function CheckinPage() {
                               >{s.label}</button>
                             ))}
                           </div>
+                        </>
+                      )}
                         </>
                       )}
                     </div>
