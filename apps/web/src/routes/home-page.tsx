@@ -2317,38 +2317,71 @@ export function HomePage() {
             }}>
               {homeAgendaPreview.tasks.length === 0 && !homeAgendaPreview.habit && homeGoalActions.length === 0 ? (
                 <div style={{ padding: "14px 13px" }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
-                    Seu dia ainda está em branco
-                  </p>
-                  <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
-                    A Airia pode montar sua rotina agora — baseado no seu humor, energia e metas ativas.
-                  </p>
-                  <button
-                    onClick={() => navigate("/aura", {
-                      state: {
-                        initialPrompt: "Monta meu dia. Não sei por onde começar.",
-                        mode: "executor",
-                        autoSend: true,
-                      }
-                    })}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 7,
-                      padding: "8px 14px",
-                      background: "var(--accent-salmon, #f4a896)",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 20,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      letterSpacing: 0.1,
-                    }}
-                  >
-                    <span style={{ fontSize: 16 }}>✦</span>
-                    Airia monta meu dia
-                  </button>
+                  {activationState.checkinCount === 0 ? (
+                    <>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
+                        Seu dia ainda está em branco
+                      </p>
+                      <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
+                        Faça um check-in rápido — a Airia usa seu humor e energia de hoje para montar uma rotina real.
+                      </p>
+                      <button
+                        onClick={() => navigate("/checkin")}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 7,
+                          padding: "8px 14px",
+                          background: "var(--accent-sage, #96c7b3)",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 20,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          letterSpacing: 0.1,
+                        }}
+                      >
+                        <span style={{ fontSize: 16 }}>🌿</span>
+                        Fazer check-in
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
+                        Seu dia ainda está em branco
+                      </p>
+                      <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
+                        A Airia pode montar sua rotina agora — baseado no seu humor, energia e metas ativas.
+                      </p>
+                      <button
+                        onClick={() => navigate("/aura", {
+                          state: {
+                            initialPrompt: "Monta meu dia. Não sei por onde começar.",
+                            mode: "executor",
+                            autoSend: true,
+                          }
+                        })}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 7,
+                          padding: "8px 14px",
+                          background: "var(--accent-salmon, #f4a896)",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: 20,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          letterSpacing: 0.1,
+                        }}
+                      >
+                        <span style={{ fontSize: 16 }}>✦</span>
+                        Airia monta meu dia
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>

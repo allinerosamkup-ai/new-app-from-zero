@@ -1029,6 +1029,125 @@ export function InsightsPage() {
           );
         })()}
 
+        {/* ── Fatores: o que influencia seu humor ── */}
+        {insightTab === "padroes" && history.length >= 5 && (() => {
+          const withFactors = history.filter(h => (h as any).factors?.length > 0);
+          if (withFactors.length < 3) return null;
+
+          const FACTOR_LABELS: Record<string, { label: string; icon: string }> = {
+            good_sleep:     { label: "Sono bom",          icon: "😴" },
+            exercise:       { label: "Exercício",          icon: "🏋️" },
+            healthy_meal:   { label: "Alimentação saudável", icon: "🥗" },
+            fresh_air:      { label: "Ar fresco",          icon: "🌿" },
+            good_talk:      { label: "Boa conversa",       icon: "💬" },
+            kind_words:     { label: "Palavras gentis",    icon: "❤️" },
+            support:        { label: "Apoio",              icon: "🤝" },
+            small_win:      { label: "Pequena vitória",    icon: "⭐" },
+            finished_task:  { label: "Tarefa concluída",   icon: "✅" },
+            feeling_valued: { label: "Me senti valorizada", icon: "🏆" },
+            music:          { label: "Música",             icon: "🎵" },
+            time_outside:   { label: "Ao ar livre",        icon: "🌳" },
+            hobby:          { label: "Hobby",              icon: "🎨" },
+            self_trust:     { label: "Confiança em mim",   icon: "💪" },
+            rest:           { label: "Descanso",           icon: "🛋️" },
+          };
+
+          // Calcular delta numérico por fator: humor médio COM vs SEM
+          const allFactorIds = Array.from(
+            new Set(withFactors.flatMap(h => (h as any).factors as string[]))
+          );
+
+          const factorDeltas = allFactorIds.map(fid => {
+            const withFactor = history.filter(h => ((h as any).factors ?? []).includes(fid));
+            const withoutFactor = history.filter(h => !((h as any).factors ?? []).includes(fid));
+            const avgWith = withFactor.length > 0 ? withFactor.reduce((s, h) => s + h.humor, 0) / withFactor.length : null;
+            const avgWithout = withoutFactor.length > 0 ? withoutFactor.reduce((s, h) => s + h.humor, 0) / withoutFactor.length : null;
+            const delta = (avgWith !== null && avgWithout !== null) ? avgWith - avgWithout : null;
+            return { fid, avgWith, avgWithout, delta, count: withFactor.length };
+          }).filter(x => x.delta !== null && x.count >= 2) as Array<{
+            fid: string; avgWith: number; avgWithout: number; delta: number; count: number;
+          }>;
+
+          const positive = factorDeltas.filter(x => x.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 5);
+          const negative = factorDeltas.filter(x => x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 3);
+
+          if (positive.length === 0 && negative.length === 0) return null;
+
+          return (
+            <div style={{
+              borderRadius: 18, border: "1.5px solid var(--warm-border)",
+              background: "rgba(255,255,255,.62)", backdropFilter: "blur(16px)",
+              padding: "14px", marginBottom: "calc(var(--a))",
+            }}>
+              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 14px" }}>
+                🧠 O que influencia seu humor
+              </p>
+
+              {positive.length > 0 && (
+                <>
+                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-sage)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 10px" }}>
+                    ✨ Nos seus dias de bom humor
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: negative.length > 0 ? 16 : 0 }}>
+                    {positive.map(item => {
+                      const meta = FACTOR_LABELS[item.fid] ?? { label: item.fid, icon: "•" };
+                      return (
+                        <div key={item.fid}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", display: "flex", alignItems: "center", gap: 6 }}>
+                              {meta.icon} {meta.label}
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-sage)", whiteSpace: "nowrap" }}>
+                              +{item.delta.toFixed(1)} pts
+                            </span>
+                          </div>
+                          <div style={{ height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                            <div style={{ width: `${Math.min(100, (item.delta / 10) * 100 * 3)}%`, height: "100%", borderRadius: 999, background: "var(--accent-sage)", transition: "width .5s ease" }} />
+                          </div>
+                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
+                            Com esse fator: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {negative.length > 0 && (
+                <>
+                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 10px" }}>
+                    😔 O que tende a pesar
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {negative.map(item => {
+                      const meta = FACTOR_LABELS[item.fid] ?? { label: item.fid, icon: "•" };
+                      return (
+                        <div key={item.fid}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", display: "flex", alignItems: "center", gap: 6 }}>
+                              {meta.icon} {meta.label}
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach)", whiteSpace: "nowrap" }}>
+                              {item.delta.toFixed(1)} pts
+                            </span>
+                          </div>
+                          <div style={{ height: 5, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                            <div style={{ width: `${Math.min(100, (Math.abs(item.delta) / 10) * 100 * 3)}%`, height: "100%", borderRadius: 999, background: "var(--accent-peach)", transition: "width .5s ease" }} />
+                          </div>
+                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
+                            Com esse fator: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── #4: Ciclo de Humor — card com phase + cycleEstimate ── */}
         {insightTab === "agora" && cycleReport.phase !== "insufficient_data" && (
           <div style={{
@@ -1229,36 +1348,6 @@ export function InsightsPage() {
           const totalToday = habits.filter(h => h.frequency === 'daily').length;
           const bestHabit = habits.reduce((best, h) => h.bestStreak > (best?.bestStreak ?? 0) ? h : best, habits[0]);
 
-          // Fatores que aparecem nos dias de bom humor (humor >= 4)
-          const goodMoodCheckins = history.filter(h => h.humor >= 8 && (h as any).factors?.length > 0);
-          const factorFrequency: Record<string, number> = {};
-          goodMoodCheckins.forEach(h => {
-            ((h as any).factors as string[]).forEach((f: string) => {
-              factorFrequency[f] = (factorFrequency[f] ?? 0) + 1;
-            });
-          });
-          const topFactors = Object.entries(factorFrequency)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5);
-
-          const FACTOR_LABELS: Record<string, { label: string; icon: string }> = {
-            good_sleep: { label: "Sono bom", icon: "😴" },
-            exercise: { label: "Exercício", icon: "🏋️" },
-            healthy_meal: { label: "Alimentação", icon: "🥗" },
-            fresh_air: { label: "Ar fresco", icon: "🌿" },
-            good_talk: { label: "Boa conversa", icon: "💬" },
-            kind_words: { label: "Palavras gentis", icon: "❤️" },
-            support: { label: "Apoio", icon: "🤝" },
-            small_win: { label: "Pequena vitória", icon: "⭐" },
-            finished_task: { label: "Tarefa concluída", icon: "✅" },
-            feeling_valued: { label: "Me senti valorizada", icon: "🏆" },
-            music: { label: "Música", icon: "🎵" },
-            time_outside: { label: "Ao ar livre", icon: "🌳" },
-            hobby: { label: "Hobby", icon: "🎨" },
-            self_trust: { label: "Confiança em mim", icon: "💪" },
-            rest: { label: "Descanso", icon: "🛋️" },
-          };
-
           return (
             <div style={{
               borderRadius: 18, border: "1.5px solid var(--warm-border)",
@@ -1318,7 +1407,7 @@ export function InsightsPage() {
                 <div style={{
                   padding: "8px 10px", borderRadius: 10,
                   background: "rgba(215,137,127,0.08)", border: "1px solid rgba(215,137,127,0.20)",
-                  display: "flex", alignItems: "center", gap: 10, marginBottom: topFactors.length > 0 ? 12 : 0,
+                  display: "flex", alignItems: "center", gap: 10, marginBottom: 0,
                 }}>
                   <span style={{ fontSize: 18 }}>🏆</span>
                   <div>
@@ -1332,31 +1421,6 @@ export function InsightsPage() {
                 </div>
               )}
 
-              {/* Factors correlation (only if enough data) */}
-              {topFactors.length > 0 && (
-                <div>
-                  <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage)", margin: "12px 0 8px" }}>
-                    ✨ Fatores nos seus dias de bom humor
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {topFactors.map(([factorId, count]) => {
-                      const meta = FACTOR_LABELS[factorId] ?? { label: factorId, icon: "•" };
-                      return (
-                        <div key={factorId} style={{
-                          display: "flex", alignItems: "center", gap: 5,
-                          padding: "5px 10px", borderRadius: 20,
-                          background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)",
-                          fontSize: 12, fontWeight: 600, color: "var(--accent-sage)",
-                        }}>
-                          <span>{meta.icon}</span>
-                          <span>{meta.label}</span>
-                          <span style={{ fontSize: 10, opacity: 0.7 }}>×{count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
           );
         })()}
