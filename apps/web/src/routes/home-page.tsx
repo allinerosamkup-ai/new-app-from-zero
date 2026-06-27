@@ -2321,7 +2321,7 @@ export function HomePage() {
                     Seu dia ainda está em branco
                   </p>
                   <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
-                    A Aura pode montar sua rotina agora — baseado no seu humor, energia e metas ativas.
+                    A Airia pode montar sua rotina agora — baseado no seu humor, energia e metas ativas.
                   </p>
                   <button
                     onClick={() => navigate("/aura", {
@@ -2347,7 +2347,7 @@ export function HomePage() {
                     }}
                   >
                     <span style={{ fontSize: 16 }}>✦</span>
-                    Aura monta meu dia
+                    Airia monta meu dia
                   </button>
                 </div>
               ) : (
@@ -3340,31 +3340,4 @@ export function HomePage() {
                       </svg>
                     </button>
                   </div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
-
-        </>)}
-
-      </div>
-      {showHabitIdeasModal && (
-        <HabitIdeasModal
-          onClose={() => setShowHabitIdeasModal(false)}
-          onSave={handleHabitSave}
-          onViewAll={() => {
-            setShowHabitIdeasModal(false);
-            navigate("/habits");
-          }}
-        />
-      )}
-      <PhaseLegendSheet
-        open={phaseLegendOpen}
-        onClose={() => setPhaseLegendOpen(false)}
-        currentPhase={cycleReport.phase}
-      />
-    </div>
-    </>
-  );
-}
+     

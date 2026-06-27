@@ -27,7 +27,7 @@
     "checkin": "Check-in",
     "insights": "Padrões",
     "journal": "Diário",
-    "aura": "Aura",
+    "aura": "Airia",
     "start": "Início"
   },
   "phases": {
@@ -100,7 +100,7 @@
     "alertsTitle": "Alertas Importantes",
     "caresTitle": "Cuidados para agora",
     "caresSubtitle": "Leituras suaves para este momento:",
-    "auraSays": "Aura diz",
+    "auraSays": "Airia diz",
     "consistencyWeek": "Consistência semanal",
     "moodEnergyKicker": "Humor e Energia",
     "moodEnergyAvg": "Média diária dos últimos 7 dias",
@@ -137,7 +137,7 @@
     "auraReady": "pronta"
   },
   "aura": {
-    "title": "Aura",
+    "title": "Airia",
     "ready": "pronta",
     "starting": "iniciando",
     "kicker": "Comando central",
@@ -226,7 +226,7 @@
       "checkinTitle": "Check-in",
       "checkinDescription": "Cada check-in registra humor, energia, sono, corpo, social, emoção e nota livre. Check-ins mais recentes pesam mais na leitura do dia.",
       "contextTitle": "Agenda, metas e ações",
-      "contextDescription": "Planner, metas, hábitos, diário e sugestões recentes entram no contexto. A Aura usa isso para evitar repetição e sugerir passos possíveis para o estado atual."
+      "contextDescription": "Planner, metas, hábitos, diário e sugestões recentes entram no contexto. A Airia usa isso para evitar repetição e sugerir passos possíveis para o estado atual."
     }
   }
 }

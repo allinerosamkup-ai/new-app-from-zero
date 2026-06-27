@@ -636,7 +636,7 @@ export function CheckinPage() {
                 Você ficou {daysSinceLastCheckin} {(daysSinceLastCheckin ?? 0) === 1 ? "dia" : "dias"} sem check-in
               </h2>
               <p style={{ fontSize: 14, color: "var(--text-3)", margin: 0, lineHeight: 1.6 }}>
-                Como foram esses dias? Uma resposta rápida ajuda a Aura entender seu padrão.
+                Como foram esses dias? Uma resposta rápida ajuda a Airia entender seu padrão.
               </p>
             </div>
 
@@ -797,7 +797,7 @@ export function CheckinPage() {
                     </span>
                     {!isListening && !voiceLoading && (
                       <span style={{ display: "block", fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>
-                        A Aura preenche tudo automaticamente
+                        A Airia preenche tudo automaticamente
                       </span>
                     )}
                   </div>

@@ -20,7 +20,7 @@ const FEATURES_FREE = [
 ];
 
 const FEATURES_PRO = [
-  "IA Airia ilimitada (Aura, Planner, Check-in)",
+  "IA Airia ilimitada (Airia, Planner, Check-in)",
   "Memoria de longo prazo e knowledge graph",
   "Insights e padroes avancados",
   "Previsao de fase (7 dias)",

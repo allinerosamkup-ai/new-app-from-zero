@@ -27,7 +27,7 @@
     "checkin": "Check-in",
     "insights": "Patterns",
     "journal": "Journal",
-    "aura": "Aura",
+    "aura": "Airia",
     "start": "Home"
   },
   "phases": {
@@ -100,7 +100,7 @@
     "alertsTitle": "Important Alerts",
     "caresTitle": "Care for now",
     "caresSubtitle": "Gentle suggestions for this moment:",
-    "auraSays": "Aura says",
+    "auraSays": "Airia says",
     "consistencyWeek": "Weekly consistency",
     "moodEnergyKicker": "Mood and Energy",
     "moodEnergyAvg": "Daily average — last 7 days",
@@ -117,7 +117,7 @@
     "step3Title": "Influences",
     "step3Subtitle": "What contributed to your state?",
     "step4Title": "Details",
-    "step4Subtitle": "Optional — but very helpful for Aura.",
+    "step4Subtitle": "Optional — but very helpful for Airia.",
     "humorLabel": "Mood",
     "energyLabel": "Energy",
     "registered": "CHECK-IN REGISTERED",
@@ -137,7 +137,7 @@
     "auraReady": "ready"
   },
   "aura": {
-    "title": "Aura",
+    "title": "Airia",
     "ready": "ready",
     "starting": "starting",
     "kicker": "Command center",
@@ -176,7 +176,7 @@
   },
   "alerts": {
     "phaseTransition": "Phase change",
-    "auraAsks": "Aura asks",
+    "auraAsks": "Airia asks",
     "doneButton": "Yes, I did! 🎉",
     "skipButton": "Not this time",
     "moodFalling": "Your mood has been dropping for several days",
@@ -226,7 +226,7 @@
       "checkinTitle": "Check-in",
       "checkinDescription": "Each check-in records mood, energy, sleep, body, social load, emotion, and a free note. Recent check-ins weigh more in the daily reading.",
       "contextTitle": "Agenda, goals, and actions",
-      "contextDescription": "Planner, goals, habits, journal, and recent suggestions enter the context. Aura uses this to avoid repetition and suggest steps that fit the current state."
+      "contextDescription": "Planner, goals, habits, journal, and recent suggestions enter the context. Airia uses this to avoid repetition and suggest steps that fit the current state."
     }
   }
 }

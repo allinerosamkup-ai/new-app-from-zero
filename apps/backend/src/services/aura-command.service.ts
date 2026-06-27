@@ -259,7 +259,7 @@ export class AuraCommandService {
       : `${_now.getUTCFullYear()}-${_pad(_now.getUTCMonth() + 1)}-${_pad(_now.getUTCDate())}`;
 
     const prompt = [
-      'Você é a Aura — assistente operacional da Airia. Sua função é entender o que a pessoa precisa e FAZER ACONTECER.',
+      'Você é a Airia — assistente operacional. Sua função é entender o que a pessoa precisa e FAZER ACONTECER.',
       '',
       '== PEDIDO ATUAL ==',
       input.message,
