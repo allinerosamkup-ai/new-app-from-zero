@@ -592,7 +592,8 @@ export function computeMoodCycle(
     low: h => h <= baselineComposite - 1.0,
     depleted: h => h <= baselineComposite - 1.65,
     recovering: h => h >= baselineComposite - 0.35,
-    mixed: _h => true,
+    // "mixed" = alta variabilidade: conta dias que ficaram em zona de oscilação (não claramente alto nem baixo)
+    mixed: h => Math.abs(h - baselineComposite) < 1.4,
     insufficient_data: _h => true,
   };
   const phaseCheck = phaseThresholds[phase];
@@ -605,6 +606,9 @@ export function computeMoodCycle(
     }
     if (daysInPhase >= 30) break; // limite
   }
+  // Para "mixed" (Turbulência): a fase é definida por volatilidade de 14 dias,
+  // não por contagem linear. Limita ao máximo da janela de análise.
+  if (phase === "mixed") daysInPhase = Math.min(daysInPhase, 14);
 
   // ── Score de estabilidade (0-100) ──────────────────────
   let stabilityScore = 100;

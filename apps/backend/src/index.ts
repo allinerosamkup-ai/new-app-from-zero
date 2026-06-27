@@ -4396,6 +4396,7 @@ REGRAS:
 - Se houver energia boa e poucas tarefas, puxe para movimento e ação.
 - Se houver sinais recorrentes no diário ou na memória recente, aproveite isso com discrição para deixar as ações mais pessoais.
 - Se houver pendências abertas ou metas ativas, conecte pelo menos 1 movimento a algo real que já exista no app.
+- CRÍTICO: Se a ação mencionar uma tarefa, SEMPRE use o título exato da lista de pendências. Nunca escreva "a próxima tarefa", "uma tarefa", "sua tarefa" — escreva o nome real. Ex: se a pendência é "Revisar proposta", escreva "Revisar proposta" no autocuidado.
 - Autocuidado aqui significa reduzir atrito, proteger energia ou apoiar a execução real. Não invente objetos, sujeira, café, luvas, pano, limpeza ou abas se isso não apareceu literalmente no check-in, agenda, meta ou memória.
 - Se a âncora for mudança/caixas/organização, transforme em limite claro de execução: qual caixa, por quanto tempo, quando parar. Não sugira limpar superfície, mexer em poeira ou separar luvas.
 - Se a âncora for ansiedade, a ação deve diminuir decisão aberta: escolher uma frente, limitar tempo, fechar um bloco ou escrever a próxima decisão.

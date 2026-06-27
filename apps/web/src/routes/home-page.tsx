@@ -2895,6 +2895,14 @@ export function HomePage() {
                             ? `${cycleReport.daysInPhase} dia${cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase`
                             : "Ainda calibrando"}
                         </p>
+                        {/* Quando check-in de hoje difere da fase de ciclo, mostra contexto */}
+                        {hasCycleData && latestTodayCheckin && (
+                          <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0", lineHeight: 1.4 }}>
+                            {cycleReport.phase === "mixed"
+                              ? `Check-in hoje: ${mood.emoji} ${mood.label} · padrão reflete 14 dias`
+                              : `Check-in hoje: ${mood.emoji} ${mood.label}`}
+                          </p>
+                        )}
                         {!hasCycleData && (
                           <p className="home-cycle-subtitle">
                             A Home fica mais precisa depois do primeiro check-in
