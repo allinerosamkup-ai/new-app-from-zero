@@ -227,6 +227,7 @@ export class AuraCommandService {
       plannerContext?: string | null;
       reasoningTraceContext?: string | null;
       dayPlanContext?: string | null;
+      localDate?: string | null;
       priorDiagnoses?: string[] | null;
       interactionMode?: 'conversation' | 'executor';
       currentHour?: number;
@@ -250,11 +251,12 @@ export class AuraCommandService {
       .map((message) => `${message.role === 'user' ? 'Usuário' : 'Aura'}: ${message.content}`)
       .join('\n');
 
-    const todayKey = [
-      String(new Date().getUTCFullYear()),
-      String(new Date().getUTCMonth() + 1).padStart(2, '0'),
-      String(new Date().getUTCDate()).padStart(2, '0'),
-    ].join('-');
+    // Usa a data local do cliente se disponível; fallback para UTC do servidor
+    const _now = new Date();
+    const _pad = (n: number) => String(n).padStart(2, '0');
+    const todayKey = (typeof input.localDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.localDate))
+      ? input.localDate
+      : `${_now.getUTCFullYear()}-${_pad(_now.getUTCMonth() + 1)}-${_pad(_now.getUTCDate())}`;
 
     const prompt = [
       'Você é a Aura — assistente operacional da Airia. Sua função é entender o que a pessoa precisa e FAZER ACONTECER.',

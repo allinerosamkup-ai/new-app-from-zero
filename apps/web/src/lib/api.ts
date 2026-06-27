@@ -8,9 +8,11 @@ const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' :
  * Auto-injetado em todo POST/PATCH/PUT pelo helper api. Pra chamadas com fetch direto (SSE),
  * importe e adicione manualmente ao body.
  */
-export function getClientTimeContext(): { currentHour: number; currentMinute: number } {
+export function getClientTimeContext(): { currentHour: number; currentMinute: number; localDate: string } {
   const now = new Date();
-  return { currentHour: now.getHours(), currentMinute: now.getMinutes() };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const localDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return { currentHour: now.getHours(), currentMinute: now.getMinutes(), localDate };
 }
 
 /**

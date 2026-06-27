@@ -2667,6 +2667,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
         plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
         interactionMode: data.mode,
+        localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
         priorDiagnoses: runtimeContext.priorDiagnoses,
         ...extractAdaptiveFromRequest(req.body),
       });

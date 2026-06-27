@@ -207,7 +207,7 @@ export function AuraChatPage() {
       if (sessionId) sessionStorage.setItem(STORAGE_KEY_SESSION, sessionId);
     } catch { /* ignore */ }
   }, [sessionId]);
-  const [input, setInput] = useState(initialPrompt);
+  const [input, setInput] = useState(autoSend ? "" : initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
   const [actionCard, setActionCard] = useState<ActionCard | null>(null);
   const [lastRiskSafety, setLastRiskSafety] = useState<RiskSafety | null>(null);
