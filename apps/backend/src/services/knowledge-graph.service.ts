@@ -253,12 +253,23 @@ export class KnowledgeGraphService {
           occurredAt: f.occurredAt,
         }));
 
-    // 3. Padrões com força > 0.5
-    const patternsRelevant = (await prisma.userPattern.findMany({
-      where: { userId, strength: { gt: 0.5 } },
+    // 3. Padrões com força > 0.35, com decaimento temporal (padrões antigos pesam menos)
+    const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+    const nowMs = Date.now();
+    const rawPatterns = await prisma.userPattern.findMany({
+      where: { userId, strength: { gt: 0.35 } },
       orderBy: { strength: 'desc' },
-      take: 4,
-    })).map((p) => ({ pattern: p.pattern, strength: p.strength }));
+      take: 8,
+    });
+    const patternsRelevant = rawPatterns
+      .map((p) => {
+        const ageMs = nowMs - p.lastConfirmedAt.getTime();
+        const decayFactor = Math.max(0.1, 1 - ageMs / ninetyDaysMs); // Mínimo 10% após 90 dias
+        return { pattern: p.pattern, strength: p.strength * decayFactor };
+      })
+      .filter(p => p.strength > 0.3)
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, 4);
 
     // 4. Decisões em aberto. Prioriza ANTIGAS (>= 7d) — sinal de que precisa
     //    cutucar a usuária pra resolver. Mistura 2 antigas + 2 recentes.

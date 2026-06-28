@@ -2212,6 +2212,51 @@ export function createApp(dependencies: AppDependencies = {}) {
        resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
       ]);
 
+      // Contexto de abertura: só para sessões novas (created = true)
+      let openingContext: string | null = null;
+      if (created) {
+        try {
+          const [recentSessions, topPatterns] = await Promise.all([
+            prisma.journalSession.findMany({
+              where: { userId: data.userId, status: 'finalized' },
+              orderBy: { startedAt: 'desc' },
+              take: 1,
+              select: { startedAt: true, themes: true },
+            }),
+            prisma.userPattern.findMany({
+              where: { userId: data.userId, strength: { gt: 0.55 } },
+              orderBy: { lastConfirmedAt: 'desc' },
+              take: 1,
+              select: { pattern: true, lastConfirmedAt: true },
+            }),
+          ]);
+
+          const parts: string[] = [];
+
+          const lastSession = recentSessions[0];
+          if (lastSession) {
+            const daysAgo = Math.floor((Date.now() - new Date(lastSession.startedAt).getTime()) / 86400000);
+            const dayLabel = daysAgo === 0 ? 'hoje cedo' : daysAgo === 1 ? 'ontem' : `há ${daysAgo} dias`;
+            const themes = Array.isArray(lastSession.themes) && lastSession.themes.length > 0
+              ? ` — você escreveu sobre ${(lastSession.themes as string[]).slice(0, 2).join(' e ')}`
+              : '';
+            parts.push(`A última sessão foi ${dayLabel}${themes}.`);
+          }
+
+          const topPattern = topPatterns[0];
+          if (topPattern) {
+            const daysSince = Math.floor((Date.now() - new Date(topPattern.lastConfirmedAt).getTime()) / 86400000);
+            if (daysSince <= 14) {
+              parts.push(`Tenho percebido: ${topPattern.pattern.toLowerCase()}.`);
+            }
+          }
+
+          if (parts.length > 0) openingContext = parts.join(' ');
+        } catch {
+          // silencioso — abertura sem contexto é aceitável
+        }
+      }
+
       // Se sessão recém-criada e sem mensagens, injeta nota do check-in como primeira mensagem
       if (created && messages.length === 0 && context.checkinToday?.note) {
        await prisma.journalMessage.create({
@@ -2228,6 +2273,7 @@ export function createApp(dependencies: AppDependencies = {}) {
        return res.json({
          sessionId: session.id,
          created,
+         openingContext,
          messages: updatedMessages.map((message) => ({
            id: message.id,
            role: message.role,
@@ -2242,9 +2288,9 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
 
       return res.json({
-
         sessionId: session.id,
         created,
+        openingContext,
         messages: messages.map((message) => ({
           id: message.id,
           role: message.role,
@@ -2992,6 +3038,18 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       for (const b of savedBlocks) await GCalService.syncBlockToGcal(prisma, userId, b, date);
     } catch (e) {}
+
+    // Memory: registra tarefas concluídas (fire-and-forget)
+    const completedBlocks = savedBlocks.filter(b => b.status === 'completed');
+    for (const b of completedBlocks) {
+      void memoryService.store({
+        userId,
+        contentType: 'checkin_note',
+        contentId: `task-done-${b.id}`,
+        content: `Tarefa concluída: "${b.title}"${b.category ? ` [${b.category}]` : ''}`,
+        metadata: { source: 'task_completed', taskId: b.id, date, category: b.category },
+      }).catch(() => {});
+    }
 
     return res.json({
       savedBlocks,
@@ -5389,6 +5447,19 @@ JSON APENAS: {"profileSummary":"..."}`,
         localDate: originalDate,
       }).catch(() => null);
 
+      // Memory: registra padrão de adiamento (fire-and-forget)
+      const pCount = postponeCount + 1;
+      const postponeMemory = pCount >= 3
+        ? `Tarefa "${block.title}" adiada pela ${pCount}ª vez — padrão de resistência recorrente a essa atividade.`
+        : `Tarefa "${block.title}" foi adiada de ${originalDate} para ${targetDate}.`;
+      void memoryService.store({
+        userId,
+        contentType: 'checkin_note',
+        contentId: `postpone-${block.id}-${pCount}`,
+        content: postponeMemory,
+        metadata: { source: 'task_postponed', taskId: block.id, postponeCount: pCount, category: block.category },
+      }).catch(() => {});
+
       try {
         await GCalService.syncBlockToGcal(prisma, userId, updated, targetDate);
       } catch (e) {}
@@ -5672,8 +5743,34 @@ JSON APENAS: {"profileSummary":"..."}`,
     const { date, notes } = req.body;
     try {
       const targetDate = date ? new Date(String(date)) : new Date();
+      const localDate = startOfDay(targetDate);
+
+      // Pre-check: saber se já existia completion pra detectar nova conclusão
+      const prevCompletion = await prisma.habitCompletion.findFirst({
+        where: { habitId: id, date: localDate },
+      }).catch(() => null);
+      const wasAlreadyCompleted = Boolean(prevCompletion);
+
       const { HabitService } = await import('./services/habit.service');
       const habit = await HabitService.toggleCompletion(id, targetDate, userId, notes);
+
+      // Memory: registra quando hábito é concluído pela primeira vez no dia (fire-and-forget)
+      if (!wasAlreadyCompleted) {
+        const habitInfo = await prisma.habit.findUnique({
+          where: { id },
+          select: { title: true, category: true },
+        }).catch(() => null);
+        if (habitInfo) {
+          void memoryService.store({
+            userId,
+            contentType: 'checkin_note',
+            contentId: `habit-done-${id}-${format(localDate, 'yyyy-MM-dd')}`,
+            content: `Hábito concluído: "${habitInfo.title}"${habitInfo.category ? ` [${habitInfo.category}]` : ''}`,
+            metadata: { source: 'habit_completed', habitId: id, date: format(localDate, 'yyyy-MM-dd'), category: habitInfo.category },
+          }).catch(() => {});
+        }
+      }
+
       return res.json(habit);
     } catch (error: any) {
       console.error('[habits/toggle]', error);

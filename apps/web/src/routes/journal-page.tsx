@@ -250,6 +250,8 @@ export function JournalPage() {
         moodCycleContext: cycleReport.aiContext,
       }) as {
         sessionId: string;
+        created?: boolean;
+        openingContext?: string | null;
         messages?: Message[];
       };
 
@@ -257,14 +259,28 @@ export function JournalPage() {
       setView("chat");
 
       if (Array.isArray(response.messages) && response.messages.length > 0) {
-        setMessages(response.messages);
+        // Se tem openingContext e a sessão é nova, injeta como primeira mensagem da Airia
+        if (response.created && response.openingContext) {
+          const hasAssistantMsg = response.messages.some(m => m.role === "assistant");
+          if (!hasAssistantMsg) {
+            setMessages([
+              { role: "assistant", content: response.openingContext },
+              ...response.messages,
+            ]);
+          } else {
+            setMessages(response.messages);
+          }
+        } else {
+          setMessages(response.messages);
+        }
       } else {
-        setMessages([{
-          role: "assistant",
-          content: initialDraft
-            ? "Trouxe sua nota do check-in para iniciar o diário. Complete do seu jeito e me envie quando quiser organizar isso."
-            : INITIAL_ASSISTANT_MESSAGE,
-        }]);
+        // Sessão nova sem mensagens: usa openingContext se disponível
+        const openingMsg = response.created && response.openingContext
+          ? response.openingContext
+          : (initialDraft
+              ? "Trouxe sua nota do check-in para iniciar o diário. Complete do seu jeito e me envie quando quiser organizar isso."
+              : INITIAL_ASSISTANT_MESSAGE);
+        setMessages([{ role: "assistant", content: openingMsg }]);
       }
 
       void loadSessions();
