@@ -1507,6 +1507,88 @@ function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
   );
 }
 
+function ViewTaskSheetContent({ task, viewSplitting, onSplit }: { task: PlannerTask | null; viewSplitting: boolean; onSplit: () => void }) {
+  if (!task) return null;
+  const cat = getCategoryStyles(task.category || "");
+  const lvl = normalizeEnergyLevel(task.energyLevel ?? 3);
+  const energyLabel =
+    lvl === 1 ? "Leve" :
+    lvl === 2 ? "Medio-leve" :
+    lvl === 3 ? "Medio" :
+    lvl === 4 ? "Alto" : "Intenso";
+  const checklist = normalizeChecklist(task.checklist);
+  const note = typeof task.note === "string" ? task.note.trim() : "";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingBottom: 8 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 10, background: cat.bg, color: cat.textColor, border: `1px solid ${cat.cor}22` }}>
+          {cat.shortLabel || task.category}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 10, background: "rgba(244,190,168,.1)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.2)" }}>
+          {energyLabel}
+        </span>
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500 }}>
+        {task.time} {task.endTime ? `- ${task.endTime}` : ""}
+      </div>
+
+      {note.length > 0 && (
+        <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55, padding: "10px 12px", background: "var(--surface-variant)", borderRadius: 12 }}>
+          {note}
+        </div>
+      )}
+
+      {checklist.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".04em", textTransform: "uppercase" }}>
+            Passos
+          </div>
+          {checklist.map((item, idx) => (
+            <div
+              key={item.id || idx}
+              style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: item.done ? "var(--text-3)" : "var(--text-1)", textDecoration: item.done ? "line-through" : "none" }}
+            >
+              <span style={{ width: 14, height: 14, borderRadius: 4, border: `1.5px solid ${item.done ? "var(--accent-sage)" : "var(--warm-border-2)"}`, background: item.done ? "var(--accent-sage)" : "transparent", flexShrink: 0, display: "inline-block" }} />
+              {item.text}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={onSplit}
+            disabled={viewSplitting}
+            style={{ alignSelf: "flex-start", marginTop: 4, background: "none", border: "none", fontSize: 11, color: "var(--text-3)", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+          >
+            {viewSplitting ? "Gerando..." : "Regenerar passos"}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onSplit}
+          disabled={viewSplitting}
+          style={{
+            width: "100%", padding: "13px 0", borderRadius: 14,
+            border: "1.5px dashed rgba(244,190,168,.5)", background: "rgba(244,190,168,.06)",
+            fontSize: 13, fontWeight: 600, color: "var(--accent-peach-ink)",
+            cursor: viewSplitting ? "wait" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+          }}
+        >
+          {viewSplitting ? "Dividindo em passos..." : "Dividir em passos"}
+        </button>
+      )}
+
+      {task.aiReasoning && (
+        <div style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic", padding: "8px 12px", background: "rgba(244,190,168,.05)", borderRadius: 10, border: "1px solid rgba(244,190,168,.15)" }}>
+          {task.aiReasoning}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone, onConvertToTask }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -1822,6 +1904,8 @@ export function PlannerPage() {
   const [newForm, setNewForm] = useState<FormState>({ ...EMPTY_FORM });
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FormState>({ ...EMPTY_FORM });
+  const [viewingTask, setViewingTask] = useState<PlannerTask | null>(null);
+  const [viewSplitting, setViewSplitting] = useState(false);
   const [recurringDeleteTask, setRecurringDeleteTask] = useState<PlannerTask | null>(null);
   const [recurringDeleteLoading, setRecurringDeleteLoading] = useState(false);
   const [adaptationOpen, setAdaptationOpen] = useState(false);
@@ -2110,7 +2194,7 @@ export function PlannerPage() {
     if (!task) return;
 
     openedTaskFromLocationRef.current = normalizedTaskId;
-    openEditForm(task);
+    openViewTask(task);
   }, [location.state, plannerTasks]);
 
   // Sprint Frente 3 — busca conflitos do dia sempre que mudam blocos
@@ -2499,6 +2583,58 @@ export function PlannerPage() {
   function openEditForm(task: PlannerTask) {
     setEditingTaskId(task.id);
     setEditForm({ ...buildFormStateFromTask(task), date: selectedDateKey });
+  }
+
+  function openViewTask(task: PlannerTask) {
+    setViewingTask(task);
+  }
+
+  function closeViewTask() {
+    setViewingTask(null);
+  }
+
+  async function handleSplitFromView(task: PlannerTask) {
+    setViewSplitting(true);
+    try {
+      const res = await api.post("/ai/suggest", {
+        type: "task-content",
+        context: {
+          title: task.title,
+          category: task.category || "outro",
+          energyLevel: task.energyLevel || 3,
+          currentNote: `[SYSTEM: Ignore notes. Use OBRIGATORIAMENTE o título "${task.title}" como base. Split em 3 a 5 sub-tarefas altamente acionáveis e específicas. JSON items array.]`,
+          currentChecklist: [],
+        },
+      });
+      if (!res.suggestion) return;
+      const parsed = parseAiSuggestion<{ items?: string[] }>(res.suggestion);
+      const items: ChecklistItem[] = (parsed.items || []).map((text: string, i: number) => ({ id: `split-${Date.now()}-${i}`, text, done: false }));
+      if (!items.length) return;
+
+      const form = buildFormStateFromTask(task);
+      await api.post("/timeline", {
+        date: selectedDateKey,
+        forceSave: true,
+        blocks: [
+          buildTimelineBlockInput(
+            { ...form, checklist: items, noteMode: "checklist" as const },
+            {
+              id: task.id,
+              durationMinutes: diffMinutes(task.time, task.endTime),
+              fallbackIntensity: ((task.intensity ?? "M").toUpperCase() as TimelineBlockIntensity),
+              fallbackStatus: ((task.status ?? (task.done ? "completed" : "planned")) as TimelineBlockStatus),
+            },
+          ),
+        ],
+      });
+      await reloadPlannerTasks();
+      setViewingTask((prev) => prev ? { ...prev, checklist: items, noteMode: "checklist" } : null);
+      showSuccess("Passos gerados e salvos!");
+    } catch (error: any) {
+      showError((error as Error).message || "Erro ao gerar passos.");
+    } finally {
+      setViewSplitting(false);
+    }
   }
 
   function getGoogleCalendarEventEndpoint(task: PlannerTask) {
@@ -3061,9 +3197,9 @@ export function PlannerPage() {
             gap: 10 
           }}>
             {allDayTasks.map(task => (
-              <div 
+              <div
                 key={task.id}
-                onClick={() => openEditForm(task)}
+                onClick={() => openViewTask(task)}
                 className="glass-card"
                 style={{
                   padding: "10px 12px",
@@ -3353,7 +3489,7 @@ export function PlannerPage() {
                 <SwipeableTaskCard
                    slot={slot}
                    categoryOption={categoryOption}
-                   onClick={() => openEditForm(slot.task)}
+                   onClick={() => openViewTask(slot.task)}
                    onComplete={handleCompleteTaskDirect}
                    onDelete={handleDeleteTaskDirect}
                    onChat={openTaskChat}
@@ -3497,6 +3633,58 @@ export function PlannerPage() {
         maxHeight="92vh"
       >
         <PlannerSheetBody form={newForm} setForm={setNewForm} onSave={handleAddBlock} onCancel={closeNewForm} saveLabel="Criar tarefa" />
+      </AiriaBottomSheet>
+
+      {/* ── View card de tarefa ── */}
+      <AiriaBottomSheet
+        open={Boolean(viewingTask)}
+        title={viewingTask?.title ?? ""}
+        description=""
+        onClose={closeViewTask}
+        maxHeight="88vh"
+        footer={(
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (!viewingTask) return;
+                closeViewTask();
+                openEditForm(viewingTask);
+              }}
+              style={{
+                flex: 1, padding: "12px 0", borderRadius: 14,
+                border: "1.5px solid var(--warm-border)", background: "transparent",
+                fontSize: 13, fontWeight: 600, color: "var(--text-2)", cursor: "pointer",
+              }}
+            >
+              Editar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!viewingTask) return;
+                handleCompleteTaskDirect(viewingTask);
+                closeViewTask();
+              }}
+              style={{
+                flex: 1, padding: "12px 0", borderRadius: 14,
+                border: "none",
+                background: viewingTask?.done ? "rgba(0,0,0,.06)" : "var(--accent-sage)",
+                fontSize: 13, fontWeight: 600,
+                color: viewingTask?.done ? "var(--text-2)" : "#fff",
+                cursor: "pointer",
+              }}
+            >
+              {viewingTask?.done ? "Reabrir" : "Concluir ✓"}
+            </button>
+          </div>
+        )}
+      >
+        <ViewTaskSheetContent
+          task={viewingTask}
+          viewSplitting={viewSplitting}
+          onSplit={() => viewingTask && void handleSplitFromView(viewingTask)}
+        />
       </AiriaBottomSheet>
 
       <AiriaBottomSheet

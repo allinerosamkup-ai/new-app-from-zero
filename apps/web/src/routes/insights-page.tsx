@@ -1310,24 +1310,28 @@ export function InsightsPage() {
                   <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 6px" }}>
                     Histórico recente de fases
                   </p>
-                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
                     {phaseHistory.slice(-6).map((item) => {
                       const color = getPhaseColor(item.phase);
+                      const label = PHASE_CONFIG[item.phase]?.label ?? item.phase;
                       return (
                         <span
                           key={`${item.phase}-${item.startDate}-${item.endDate}`}
                           style={{
                             flexShrink: 0,
-                            borderRadius: 999,
-                            border: `1px solid ${color}33`,
-                            background: `${color}12`,
-                            color,
-                            padding: "5px 9px",
-                            fontSize: 10,
-                            fontWeight: 800,
+                            display: "inline-flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 2,
+                            borderRadius: 12,
+                            border: `1px solid ${color}25`,
+                            background: `${color}0e`,
+                            padding: "6px 10px",
                           }}
                         >
-                          {PHASE_CONFIG[item.phase]?.emoji ?? "•"} {formatPhaseHistoryRange(item.startDate, item.endDate)}
+                          <span style={{ fontSize: 14 }}>{PHASE_CONFIG[item.phase]?.emoji ?? "•"}</span>
+                          <span style={{ color, fontWeight: 600, fontSize: 9, letterSpacing: ".02em" }}>{label}</span>
+                          <span style={{ color: "var(--text-3)", fontSize: 9, fontWeight: 400 }}>{formatPhaseHistoryRange(item.startDate, item.endDate)}</span>
                         </span>
                       );
                     })}

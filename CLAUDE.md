@@ -54,7 +54,7 @@ packages/
 - Cérebro operacional: `apps/backend/src/services/decision-engine.service.ts`.
 - Agenda adaptativa: `apps/backend/src/services/adaptive-agenda-engine.service.ts`, exposta por `AgendaAdaptationService`.
 - Toda sugestão operacional precisa ter âncora em algo real de hoje: agenda pendente, hábito devido, meta ativa ou ação explicitamente aceita.
-- Memória RAG serve para explicar padrão, não para inventar tarefa.
+- Memória RAG serve para explicar padrão, compreender o usuario,seus compromiisos, suas questoes emocinais, tudo que o usuario compartilhar com o app
 - Feedback de ações fica em `AiActionFeedbackService` e bloqueia repetição de ações feitas, excluídas, rejeitadas, puladas ou agendadas.
 - O Decision Brain separa `real_commitment`, `suggested_commitment`, `insight_only`, `blocked` e autorização de notificação.
 - Sugestão de compromisso pode existir com horário/bloco sugerido, mas só vira compromisso real depois de confirmação. Sugestão não confirmada não notifica.

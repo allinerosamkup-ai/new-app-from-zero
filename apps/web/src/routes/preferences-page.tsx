@@ -11,6 +11,8 @@ import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { isNativeShell, requestNativeHealthConnectSync } from "../utils/native-shell";
+import { supabase } from "../lib/supabase";
+import { ReferralCard } from "../components/ReferralCard";
 import "../styles/aura.css";
 
 type GCalCalendar = {
@@ -581,6 +583,12 @@ export function PreferencesPage() {
   } = useAuraStore();
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [prefUserId, setPrefUserId] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setPrefUserId(session?.user?.id ?? null);
+    });
+  }, []);
   const [notificationsOpen, setNotificationsOpen] = useState(true);
   const [aboutAppOpen, setAboutAppOpen] = useState(false);
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
@@ -1287,6 +1295,11 @@ export function PreferencesPage() {
             </svg>
           </div>
         </div>
+
+        {/* Referral */}
+        {prefUserId && (state.checkinHistory || []).length >= 7 && (
+          <ReferralCard userId={prefUserId} />
+        )}
 
         {/* Link onboarding */}
         <AuraButtonV2

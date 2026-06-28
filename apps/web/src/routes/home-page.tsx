@@ -2947,11 +2947,6 @@ export function HomePage() {
           onAddTask={(title) => addTask(title, "09:00", "geral")}
         />
 
-        {/* ── Referral ── */}
-        {pushUserId && (state.checkinHistory || []).length >= 7 && (
-          <ReferralCard userId={pushUserId} />
-        )}
-
         {quickAccessSection}
 
         {/* ── Banner de notificação contextual ── */}

@@ -468,6 +468,19 @@ export function JournalPage() {
     };
   }, []);
 
+  // Auto-encerra sessão ativa à meia-noite
+  useEffect(() => {
+    if (!sessionId) return;
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const msUntilMidnight = midnight.getTime() - now.getTime();
+    const midnightTimer = setTimeout(() => {
+      void finalizeSession();
+    }, msUntilMidnight);
+    return () => clearTimeout(midnightTimer);
+  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function addTaskToPlanner(key: string, task: SuggestedTask, dayOffset: number) {
     setAddingToPlanner(key);
     try {
@@ -1289,25 +1302,30 @@ export function JournalPage() {
           )}
           <style>{`@keyframes voicePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }`}</style>
 
-          <AuraButtonV2
+          <button
+            type="button"
             onClick={() => void finalizeSession()}
             disabled={!sessionId || isFinalizing}
             style={{
-              width: "100%",
-              marginTop: "12px",
-              background: "transparent",
+              display: "block",
+              width: "auto",
+              margin: "10px auto 0",
+              background: "none",
               border: "none",
+              padding: "4px 0",
               color: "var(--text-3)",
               fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: ".08em",
-              textTransform: "uppercase",
+              fontWeight: 500,
+              letterSpacing: ".03em",
               cursor: !sessionId || isFinalizing ? "default" : "pointer",
-              opacity: !sessionId || isFinalizing ? 0.5 : 1,
+              opacity: !sessionId || isFinalizing ? 0.4 : 0.7,
+              textDecoration: "underline",
+              textDecorationStyle: "dotted",
+              textUnderlineOffset: "3px",
             }}
           >
-            {isFinalizing ? "Salvando resumo..." : "Encerrar sessão e salvar resumo"}
-          </AuraButtonV2>
+            {isFinalizing ? "Salvando..." : "encerrar e salvar sessão"}
+          </button>
         </div>
       </div>
       {finalizationModal}
