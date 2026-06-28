@@ -3034,9 +3034,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       );
     });
 
-    // Sync
+    // Sync — re-fetch from DB to garantir gcalEventId atualizado (evita criar evento duplicado no GCal)
     try {
-      for (const b of savedBlocks) await GCalService.syncBlockToGcal(prisma, userId, b, date);
+      const savedIds = savedBlocks.map(b => b.id);
+      const freshBlocks = await prisma.timelineBlock.findMany({ where: { id: { in: savedIds } } });
+      for (const b of freshBlocks) await GCalService.syncBlockToGcal(prisma, userId, b, date);
     } catch (e) {}
 
     // Memory: registra tarefas concluídas (fire-and-forget)

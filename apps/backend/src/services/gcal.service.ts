@@ -107,8 +107,9 @@ export class GCalService {
       const data = await res.json() as any;
       
       // Update local block with event ID if it was created
+      // NOTE: uses DB table name "timeline_blocks" (@@map), NOT the Prisma model name "TimelineBlock"
       if (!block.gcalEventId && data.id) {
-        await prisma.$executeRaw`UPDATE "TimelineBlock" SET "gcal_event_id" = ${data.id} WHERE id = ${block.id}::uuid`;
+        await prisma.$executeRaw`UPDATE "timeline_blocks" SET "gcal_event_id" = ${data.id} WHERE id = ${block.id}::uuid`;
       }
 
       return data.id;
