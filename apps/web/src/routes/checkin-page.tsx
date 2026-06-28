@@ -374,15 +374,26 @@ export function CheckinPage() {
     setVoiceError(null);
     const recognition = new SpeechRecognition();
     recognition.lang = "pt-BR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognitionRef.current = recognition;
+    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+    let finalTranscript = "";
     recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
     recognition.onerror = () => { setIsListening(false); setVoiceError("Não ouvi bem. Tente de novo."); };
-    recognition.onresult = async (event: any) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      if (!transcript.trim()) return;
+    recognition.onresult = (event: any) => {
+      if (silenceTimer) clearTimeout(silenceTimer);
+      finalTranscript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        finalTranscript += event.results[i][0]?.transcript ?? "";
+      }
+      silenceTimer = setTimeout(() => recognition.stop(), 2500);
+    };
+    recognition.onend = async () => {
+      if (silenceTimer) clearTimeout(silenceTimer);
+      setIsListening(false);
+      const transcript = finalTranscript.trim();
+      if (!transcript) return;
       setVoiceLoading(true);
       try {
         // Usa o mesmo endpoint de voz para extrair padrão dos dias
@@ -419,20 +430,32 @@ export function CheckinPage() {
     setVoiceTranscript("");
     const recognition = new SpeechRecognition();
     recognition.lang = "pt-BR";
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognitionRef.current = recognition;
 
+    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+    let finalTranscript = "";
+
     recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
     recognition.onerror = () => {
       setIsListening(false);
       setVoiceError("Não consegui ouvir. Tente de novo.");
     };
-    recognition.onresult = async (event: any) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? "";
-      setVoiceTranscript(transcript);
-      if (!transcript.trim()) return;
+    recognition.onresult = (event: any) => {
+      if (silenceTimer) clearTimeout(silenceTimer);
+      finalTranscript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        finalTranscript += event.results[i][0]?.transcript ?? "";
+      }
+      setVoiceTranscript(finalTranscript);
+      silenceTimer = setTimeout(() => recognition.stop(), 2500);
+    };
+    recognition.onend = async () => {
+      if (silenceTimer) clearTimeout(silenceTimer);
+      setIsListening(false);
+      const transcript = finalTranscript.trim();
+      if (!transcript) return;
       setVoiceLoading(true);
       try {
         const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number; energia: number; sono: number | null; emotions: string[]; factors: string[]; note: string | null };
