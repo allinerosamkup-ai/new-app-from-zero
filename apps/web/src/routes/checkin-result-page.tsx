@@ -234,7 +234,6 @@ export function CheckinResultPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  console.log('[DEBUG] location.state in checkin-result-page:', location.state);
   const checkinAI = (location.state as {
     stateLabel?: string | null;
     analysis?: string | null;
@@ -332,16 +331,11 @@ export function CheckinResultPage() {
     if (auraMsgRan.current) return;
     auraMsgRan.current = true;
 
-    // DEBUG: Log router state
-    console.log('[DEBUG] checkin-result-page received checkinAI from router state:', checkinAI);
-
     // Se o backend já retornou análise via router state, usar diretamente
     if (checkinAI?.analysis) {
-      console.log('[DEBUG] Using backend analysis directly');
       setAuraMsgLoading(false);
       return;
     }
-    console.log('[DEBUG] checkinAI?.analysis is falsy, falling back to generic /ai/suggest call');
     api.post("/ai/suggest", {
       type: "checkin-response",
       context: {
@@ -1195,3 +1189,4 @@ export function CheckinResultPage() {
     </div>
   );
 }
+                                                                                                                                                                                                                                                                                                                                                                                         

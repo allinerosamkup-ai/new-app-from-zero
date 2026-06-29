@@ -227,6 +227,7 @@ function buildTimelineMetadataData(block: TimelineBlockInput) {
   if (block.alarmEnabled !== undefined) metadata.alarmEnabled = block.alarmEnabled;
   if (block.recurringNotificationEnabled !== undefined) metadata.recurringNotificationEnabled = block.recurringNotificationEnabled;
   if (block.visualRepeatEnabled !== undefined) metadata.visualRepeatEnabled = block.visualRepeatEnabled;
+  if ((block as any).taskMode !== undefined) metadata.taskMode = (block as any).taskMode ?? 'standard';
 
   return metadata;
 }
@@ -1951,14 +1952,6 @@ export function createApp(dependencies: AppDependencies = {}) {
       ...extractAdaptiveFromRequest(req.body),
     });
 
-    // DEBUG: Log the aiState response from CheckinService
-    console.log('[DEBUG] aiState from CheckinService:', {
-      stateLabel: aiState.stateLabel,
-      analysis: aiState.analysis?.substring?.(0, 50),
-      recommendations: aiState.recommendations,
-      suggestedIntensity: aiState.suggestedIntensity,
-    });
-
     // 3. Atualizar com Resultado da IA
     const updatedCheckin = await prisma.dailyCheckin.update({
       where: { id: checkin.id },
@@ -1975,17 +1968,6 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
     });
 
-    // DEBUG: Log what was stored and what will be returned
-    console.log('[DEBUG] updatedCheckin being returned:', {
-      id: updatedCheckin.id,
-      stateLabel: updatedCheckin.stateLabel,
-      stateSummary: updatedCheckin.stateSummary?.substring?.(0, 50),
-      aiState: {
-        analysis: (updatedCheckin.aiState as any)?.analysis?.substring?.(0, 50),
-        recommendations: (updatedCheckin.aiState as any)?.recommendations,
-        suggestedIntensity: (updatedCheckin.aiState as any)?.suggestedIntensity,
-      }
-    });
 
     // 4. Vetorizar nota do check-in (assíncrono — não bloqueia resposta)
     if (data.note && data.note.trim().length >= 10) {
@@ -3041,6 +3023,40 @@ export function createApp(dependencies: AppDependencies = {}) {
       for (const b of freshBlocks) await GCalService.syncBlockToGcal(prisma, userId, b, date);
     } catch (e) {}
 
+    // Auto micro-step: gera primeiro passo via AI para blocos novos sem note (fire-and-forget)
+    const newBlocksWithoutNote = savedBlocks.filter(b => !b.note?.trim() && b.status === 'planned');
+    if (newBlocksWithoutNote.length > 0) {
+      void (async () => {
+        try {
+          const { default: OpenAI } = await import('openai');
+          const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+          for (const b of newBlocksWithoutNote) {
+            const completion = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              max_tokens: 60,
+              temperature: 0.7,
+              messages: [
+                {
+                  role: 'system',
+                  content: 'Você é um assistente especialista em produtividade para pessoas com TDAH. Gere UM único micro-primeiro-passo concreto e muito pequeno (máx 12 palavras) para a tarefa dada. Só o micro-passo, sem explicação, sem aspas.',
+                },
+                { role: 'user', content: `Tarefa: "${b.title}"${b.category ? ` [${b.category}]` : ''}` },
+              ],
+            });
+            const microStep = completion.choices[0]?.message?.content?.trim();
+            if (microStep && microStep.length > 3) {
+              await prisma.timelineBlock.update({
+                where: { id: b.id },
+                data: { note: microStep },
+              }).catch(() => {});
+            }
+          }
+        } catch (e) {
+          console.warn('[micro-step] AI generation failed:', e);
+        }
+      })();
+    }
+
     // Memory: registra tarefas concluídas (fire-and-forget)
     const completedBlocks = savedBlocks.filter(b => b.status === 'completed');
     for (const b of completedBlocks) {
@@ -3494,6 +3510,8 @@ export function createApp(dependencies: AppDependencies = {}) {
           recurringNotificationEnabled: (block as any).recurringNotificationEnabled ?? false,
           visualRepeatEnabled: (block as any).visualRepeatEnabled ?? false,
           gcalEventId: block.gcalEventId ?? null,
+          taskMode: (block as any).taskMode ?? 'standard',
+          snoozedUntil: (block as any).snoozedUntil ? (block as any).snoozedUntil.toISOString() : null,
         }))
       );
     } catch (error: any) {
@@ -5483,6 +5501,85 @@ JSON APENAS: {"profileSummary":"..."}`,
   });
 
   /**
+   * POST /api/timeline/:id/started
+   * Registra que a pessoa INICIOU a tarefa (sem concluí-la).
+   * Vira memória RAG e para os persistent reminders por 1 hora.
+   */
+  app.post('/api/timeline/:id/started', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+
+    try {
+      const block = await defaultPrisma.timelineBlock.findFirst({ where: { id, userId } });
+      if (!block) return res.status(404).json({ error: 'Block not found' });
+
+      const now = new Date();
+
+      // Loga o evento de início
+      await defaultPrisma.eventLog.create({
+        data: {
+          userId,
+          eventName: 'timeline.block_started',
+          properties: { blockId: id, title: block.title, startedAt: now.toISOString() },
+        },
+      }).catch(() => {});
+
+      // Salva na memória RAG como vitória de presença
+      const startMemory = `Hoje iniciou a tarefa "${block.title}" às ${now.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}. Começar já é uma vitória — mesmo sem terminar.`;
+      void new MemoryService(defaultPrisma).store({
+        userId,
+        contentType: 'checkin_note',
+        contentId: `started-${id}-${now.toDateString()}`,
+        content: startMemory,
+        metadata: { source: 'task_started', taskId: id, category: block.category },
+      }).catch(() => {});
+
+      return res.json({ started: true, blockId: id });
+    } catch (error) {
+      console.error('[timeline/started] Error:', error);
+      return res.status(500).json({ error: 'Failed to register task start' });
+    }
+  });
+
+  /**
+   * POST /api/timeline/:id/snooze
+   * "Deriva com prazo" — aceita a evitação com deadline.
+   * Body: { until: ISO string } — horário em que os persistent reminders voltam a disparar.
+   */
+  app.post('/api/timeline/:id/snooze', requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const { id } = req.params;
+    const { until } = req.body as { until?: string };
+
+    if (!until) return res.status(400).json({ error: 'until is required' });
+    const snoozedUntil = new Date(until);
+    if (Number.isNaN(snoozedUntil.getTime())) return res.status(400).json({ error: 'Invalid date' });
+
+    try {
+      const block = await defaultPrisma.timelineBlock.findFirst({ where: { id, userId } });
+      if (!block) return res.status(404).json({ error: 'Block not found' });
+
+      await (defaultPrisma.timelineBlock as any).update({
+        where: { id },
+        data: { snoozedUntil },
+      });
+
+      await defaultPrisma.eventLog.create({
+        data: {
+          userId,
+          eventName: 'timeline.block_snoozed',
+          properties: { blockId: id, title: block.title, snoozedUntil: snoozedUntil.toISOString() },
+        },
+      }).catch(() => {});
+
+      return res.json({ snoozed: true, blockId: id, until: snoozedUntil.toISOString() });
+    } catch (error) {
+      console.error('[timeline/snooze] Error:', error);
+      return res.status(500).json({ error: 'Failed to snooze block' });
+    }
+  });
+
+  /**
    * DELETE /api/timeline/:id
    * Remove um bloco do planner (hard delete, pois blocos não têm valor histórico crítico).
    */
@@ -6129,7 +6226,64 @@ JSON APENAS: {"profileSummary":"..."}`,
 }
 
 export const app = createApp();
-async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string }) {
+function buildPersistentReminderMessage(
+  taskTitle: string,
+  note: string | null,
+  fireCount: number,
+  postponeCount: number,
+  isAppearMode = false,
+): { title: string; body: string } {
+  const microStep = note?.trim() || null;
+
+  // Modo "Só aparecer" — lembrete é sempre gentil e curtíssimo
+  if (isAppearMode) {
+    const appearMessages = [
+      { title: `🌀 ${taskTitle}`, body: 'Só 2 minutos. Aparece e pronto.' },
+      { title: `🌀 ${taskTitle}`, body: 'Não precisa terminar. Só aparecer já é uma vitória.' },
+      { title: `🌀 ${taskTitle}`, body: 'Dois minutinhos. Você decide o que acontece depois.' },
+    ];
+    return appearMessages[fireCount % appearMessages.length];
+  }
+
+  // Avoidance memory: 3+ adiamentos = abordagem diferente
+  if (postponeCount >= 3) {
+    const strategies = [
+      { title: `💬 ${taskTitle}`, body: 'Você adiou isso algumas vezes. O que está travando? Abre o chat.' },
+      { title: `🌀 ${taskTitle}`, body: 'Tudo bem não querer. Mas vamos entender juntas o que trava. Toca aqui.' },
+      { title: `🤝 ${taskTitle}`, body: 'Sem pressão. Só 2 minutos pra aparecer. Depois você decide.' },
+    ];
+    return strategies[fireCount % strategies.length];
+  }
+
+  // Rotação padrão por número de disparos
+  if (fireCount === 1) {
+    return {
+      title: `📍 ${taskTitle}`,
+      body: microStep ? `Primeiro passo: ${microStep}` : 'Ainda dá tempo. Como está indo?',
+    };
+  }
+  if (fireCount === 2) {
+    return {
+      title: `⏳ ${taskTitle}`,
+      body: 'Só 5 minutos agora. Não precisa terminar — só começar.',
+    };
+  }
+  if (fireCount === 3) {
+    return {
+      title: `🎯 ${taskTitle}`,
+      body: 'Qual é o menor pedaço que dá pra fazer agora mesmo?',
+    };
+  }
+  // 4+: alterna entre ajuda e presença
+  const lateMessages = [
+    { title: `💬 ${taskTitle}`, body: 'Ainda aqui. Quer ajuda pra quebrar isso em partes?' },
+    { title: `🌿 ${taskTitle}`, body: 'Sem cobrança. Só aparecer já conta. Toca aqui.' },
+    { title: `⚡ ${taskTitle}`, body: microStep ? `Só isso: ${microStep}` : 'Uma coisa. Dois minutos. É isso.' },
+  ];
+  return lateMessages[(fireCount - 4) % lateMessages.length];
+}
+
+async function sendPushToUser(userId: string, payload: { title: string; body: string; url?: string; tag?: string; blockId?: string; actions?: Array<{ action: string; title: string }> }) {
   const subs = await defaultPrisma.pushSubscription.findMany({ where: { userId } });
 
   const expoMessages: ExpoPushMessage[] = [];
@@ -6141,7 +6295,7 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
           to: sub.endpoint,
           title: payload.title,
           body: payload.body,
-          data: { url: payload.url || '/' },
+          data: { url: payload.url || '/', blockId: payload.blockId },
           sound: 'default',
         });
         return;
@@ -6346,12 +6500,78 @@ if (require.main === module) {
       for (const task of tasksNow) {
         const notifPrefs = plannerPrefsByUser.get(task.userId);
         if (!notifPrefs || notifPrefs.planner === false) continue;
+        const isAppearMode = (task as any).taskMode === 'appear';
+        const body = isAppearMode
+          ? 'Só aparecer por 2 minutos. É tudo que precisa.'
+          : (task.note?.trim() ? `Primeiro passo: ${task.note.trim()}` : `Começa agora — ${currentTimeStr}`);
         await sendPushToUser(task.userId, {
-          title: `📅 ${task.title}`,
-          body: `Começa agora — ${currentTimeStr}`,
+          title: isAppearMode ? `🌀 ${task.title}` : `📅 ${task.title}`,
+          body,
           url: '/planner',
           tag: `task-${task.id}`,
+          blockId: task.id,
+          actions: [
+            { action: 'done', title: '✅ Concluí' },
+            { action: 'started', title: '🟡 Comecei' },
+          ],
         });
+      }
+
+      // ─── Persistent reminders ────────────────────────────────────────────
+      const persistentTasks = await defaultPrisma.timelineBlock.findMany({
+        where: {
+          persistentReminderEnabled: true,
+          status: 'planned',
+          startAt: { lt: new Date(now.getTime() - 60000) }, // mais de 1 min atrás
+          localDate: saoPauloToday.dbDate,
+          OR: [
+            { snoozedUntil: null },
+            { snoozedUntil: { lt: now } }, // snooze expirado
+          ],
+        } as any,
+      });
+      if (persistentTasks.length > 0) {
+        const persistentUserIds = [...new Set(persistentTasks.map((t) => t.userId))];
+        const persistentPrefsByUser = new Map(
+          (await defaultPrisma.userPreference.findMany({
+            where: { userId: { in: persistentUserIds }, notificationsOn: true },
+            select: { userId: true, notificationPreferences: true },
+          })).map((p) => [p.userId, p.notificationPreferences as any]),
+        );
+        const postponeEvents = await defaultPrisma.eventLog.findMany({
+          where: { eventName: 'timeline.block_postponed', userId: { in: persistentUserIds } },
+          select: { properties: true },
+        });
+        const postponeCountMap = new Map<string, number>();
+        for (const ev of postponeEvents) {
+          const blockId = (ev.properties as any)?.blockId;
+          if (blockId) postponeCountMap.set(blockId, (postponeCountMap.get(blockId) ?? 0) + 1);
+        }
+        for (const task of persistentTasks) {
+          const prefs = persistentPrefsByUser.get(task.userId);
+          if (!prefs || (prefs as any).planner === false) continue;
+          const intervalMin = task.persistentReminderIntervalMinutes ?? 30;
+          const minutesPast = Math.floor((now.getTime() - task.startAt.getTime()) / 60000);
+          if (minutesPast <= 0 || minutesPast % intervalMin !== 0) continue;
+          const fireCount = Math.floor(minutesPast / intervalMin);
+          const postponeCount = postponeCountMap.get(task.id) ?? 0;
+          const isAppear = (task as any).taskMode === 'appear';
+          const { title: pushTitle, body: pushBody } = buildPersistentReminderMessage(
+            task.title, task.note ?? null, fireCount, postponeCount, isAppear,
+          );
+          await sendPushToUser(task.userId, {
+            title: pushTitle,
+            body: pushBody,
+            url: '/planner',
+            tag: `persistent-${task.id}`,
+            blockId: task.id,
+            actions: [
+              { action: 'done', title: '✅ Concluí' },
+              { action: 'started', title: '🟡 Comecei' },
+              { action: 'help', title: '💬 Preciso de ajuda' },
+            ],
+          });
+        }
       }
 
       const prefsCheckin = await defaultPrisma.userPreference.findMany({ where: { notificationsOn: true } });
@@ -6491,3 +6711,4 @@ if (require.main === module) {
     console.log(`[Airia Backend] Server running on port ${port}`);
   });
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
