@@ -560,17 +560,6 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             dayType: entry.dayType,
           }) as any;
 
-          // DEBUG: Log response structure to diagnose data flow
-          console.log('[DEBUG] checkinResponse structure:', {
-            hasStateSummary: !!checkinResponse?.stateSummary,
-            stateSummary: checkinResponse?.stateSummary?.substring?.(0, 50),
-            hasAiState: !!checkinResponse?.aiState,
-            aiStateAnalysis: (checkinResponse?.aiState as any)?.analysis?.substring?.(0, 50),
-            aiStateRecommendations: (checkinResponse?.aiState as any)?.recommendations,
-            aiStateSuggestedIntensity: (checkinResponse?.aiState as any)?.suggestedIntensity,
-            stateLabel: checkinResponse?.stateLabel,
-          });
-
           await refreshData();
 
           // Sincronizar nota com o Diário (Journal)
@@ -593,7 +582,6 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             suggestedIntensity: (checkinResponse?.aiState as any)?.suggestedIntensity ?? null,
             riskSafety: checkinResponse?.riskSafety ?? (checkinResponse?.aiState as any)?.riskSafety,
           };
-          console.log('[DEBUG] extracted for router state:', extracted);
           return extracted;
         } catch (err) {
           console.error("Failed to persist checkin; kept local copy.", err);

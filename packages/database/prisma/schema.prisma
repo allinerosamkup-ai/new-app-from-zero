@@ -242,6 +242,8 @@ model TimelineBlock {
   lastResetDate DateTime? @map("last_reset_date") @db.Date
   persistentReminderEnabled Boolean @default(false) @map("persistent_reminder_enabled")
   persistentReminderIntervalMinutes Int? @map("persistent_reminder_interval_minutes")
+  snoozedUntil  DateTime? @map("snoozed_until") @db.Timestamptz(6)
+  taskMode      String    @default("standard") @map("task_mode")
   alarmEnabled                 Boolean  @default(false) @map("alarm_enabled")
   vibrateEnabled               Boolean  @default(false) @map("vibrate_enabled")
   recurringNotificationEnabled Boolean  @default(false) @map("recurring_notification_enabled")

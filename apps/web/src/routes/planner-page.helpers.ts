@@ -36,6 +36,7 @@ export type FormStateLike = {
   visualRepeatEnabled?: boolean;
   icon?: string;
   color?: string;
+  taskMode?: string;
 };
 
 export type PlannerTaskLike = {
@@ -280,6 +281,7 @@ export function buildTimelineBlockInput(
     visualRepeatEnabled: form.visualRepeatEnabled,
     icon: form.icon,
     color: form.color,
+    taskMode: form.taskMode ?? 'standard',
   };
 }
 

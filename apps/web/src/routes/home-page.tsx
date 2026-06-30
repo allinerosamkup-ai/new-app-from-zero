@@ -66,7 +66,7 @@ import { getActivationState } from "../features/aura/activation";
 import { NotificationPromptBanner } from "../components/NotificationPromptBanner";
 import { PresenceCard } from "../components/PresenceCard";
 import { GoalNudgeCard } from "../components/GoalNudgeCard";
-import { ReferralCard } from "../components/ReferralCard";
+// import { ReferralCard } from "../components/ReferralCard"; // reserved for referral section
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -541,7 +541,8 @@ export function HomePage() {
     // Fase dominante
     const phaseCounts: Record<string, number> = {};
     weekEntries.forEach(h => {
-      if (h.phase) phaseCounts[h.phase] = (phaseCounts[h.phase] ?? 0) + 1;
+      const hp = (h as any).phase as string | undefined;
+      if (hp) phaseCounts[hp] = (phaseCounts[hp] ?? 0) + 1;
     });
     const dominantPhase = Object.entries(phaseCounts).sort(([,a],[,b]) => b-a)[0]?.[0] ?? null;
 
@@ -832,8 +833,8 @@ export function HomePage() {
   const [homeAiMsg, setHomeAiMsg] = useState<HomeAiMsg | null>(null);
   const [homeAiLoading, setHomeAiLoading] = useState(true);
   const [autonomyExpanded, setAutonomyExpanded] = useState(true);
-  const [completedAutocuidadoIdx, setCompletedAutocuidadoIdx] = useState<Set<number>>(new Set());
-  const [skippedAutocuidadoIdx, setSkippedAutocuidadoIdx] = useState<Set<number>>(new Set());
+  const [_completedAutocuidadoIdx, setCompletedAutocuidadoIdx] = useState<Set<number>>(new Set());
+  const [_skippedAutocuidadoIdx, setSkippedAutocuidadoIdx] = useState<Set<number>>(new Set());
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [homeAutonomyFeedbackTick, setHomeAutonomyFeedbackTick] = useState(0);
   const previousHomeAiMsgRef = useRef<HomeAiMsg | null>(null);
@@ -1054,7 +1055,7 @@ export function HomePage() {
       state.energia,
     ],
   );
-  const autocuidadoFinal = groundedCare.actions.length > 0 ? groundedCare.actions : null;
+  const _autocuidadoFinal = groundedCare.actions.length > 0 ? groundedCare.actions : null;
 
   // Task stats
   const totalTasks = state.tasks.length;
@@ -3469,4 +3470,3 @@ export function HomePage() {
     </>
   );
 }
-     

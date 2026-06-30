@@ -174,6 +174,7 @@ type FormState = {
   icon?: string;
   color?: string;
   alerts: string[];
+  taskMode: 'standard' | 'appear';
 };
 
 type PlannerTask = {
@@ -205,6 +206,8 @@ type PlannerTask = {
   icon?: string | null;
   color?: string | null;
   gcalEventId?: string | null;
+  taskMode?: string | null;
+  snoozedUntil?: string | null;
 };
 
 type RecurringDeleteScope = "this" | "future" | "this-and-future" | "all";
@@ -274,8 +277,8 @@ const EMPTY_FORM: FormState = {
   checklistInput: "",
   recurring: { ...DEFAULT_RECURRING },
   energyLevel: 3,
-  persistentReminderEnabled: false,
-  persistentReminderIntervalMinutes: 60,
+  persistentReminderEnabled: true,
+  persistentReminderIntervalMinutes: 30,
   vibrateEnabled: true,
   alarmEnabled: false,
   recurringNotificationEnabled: false,
@@ -283,6 +286,7 @@ const EMPTY_FORM: FormState = {
   icon: "✅",
   color: "var(--accent-peach)",
   alerts: ["start", "end", "before-15"],
+  taskMode: "standard",
 };
 
 function buildChecklistItems(items: string[]): ChecklistItem[] {
@@ -369,6 +373,8 @@ function mapTaskFromApi(task: any): PlannerTask {
     isAiSuggested: Boolean(task.isAiSuggested),
     aiReasoning: typeof task.aiReasoning === "string" ? task.aiReasoning : null,
     gcalEventId: typeof task.gcalEventId === "string" ? task.gcalEventId : null,
+    taskMode: typeof task.taskMode === "string" ? task.taskMode : 'standard',
+    snoozedUntil: typeof task.snoozedUntil === "string" ? task.snoozedUntil : null,
   };
 }
 
@@ -554,6 +560,7 @@ function buildFormStateFromTask(task: PlannerTask): FormState {
     icon: (useApiMetadata ? task.icon : meta.icon) || "",
     color: (useApiMetadata ? task.color : meta.color) || "var(--accent-peach)",
     alerts: [],
+    taskMode: (useApiMetadata ? (task.taskMode as 'standard' | 'appear') : undefined) ?? 'standard',
   };
 }
 
@@ -1242,6 +1249,23 @@ function PlannerSheetBody({
             )}
 
             <div style={{ height: 1, background: "var(--outline-variant)", opacity: 0.5 }} />
+
+          {/* Modo "Só aparecer" */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 18 }}>🌀</span>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Só aparecer (2 min)</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Meta é presença, não conclusão</span>
+              </div>
+            </div>
+            <AuraToggle
+              checked={form.taskMode === 'appear'}
+              onCheckChange={(v) => setForm(c => ({ ...c, taskMode: v ? 'appear' : 'standard' }))}
+            />
+          </div>
+
+            <div style={{ height: 1, background: "var(--outline-variant)", opacity: 0.5 }} />
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Mic size={18} color="var(--accent-sage)" />
@@ -1250,9 +1274,9 @@ function PlannerSheetBody({
                 <span style={{ fontSize: 11, color: "var(--text-3)" }}>Feedback tátil</span>
               </div>
             </div>
-            <AuraToggle 
-              checked={form.vibrateEnabled} 
-              onCheckChange={(v) => setForm(c => ({ ...c, vibrateEnabled: v }))} 
+            <AuraToggle
+              checked={form.vibrateEnabled}
+              onCheckChange={(v) => setForm(c => ({ ...c, vibrateEnabled: v }))}
             />
           </div>
 
@@ -1589,7 +1613,7 @@ function ViewTaskSheetContent({ task, viewSplitting, onSplit }: { task: PlannerT
   );
 }
 
-function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone, onConvertToTask }: any) {
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone, onConvertToTask, onStarted, onSnooze }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -1726,6 +1750,13 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             lineHeight: 1.25,
           }}>{slot.task.title}</div>
 
+          {slot.task.note?.trim() && !slot.task.done && (
+            <div style={{ fontSize: 9.5, color: "var(--accent-peach-ink)", fontWeight: 600, marginBottom: 2, opacity: 0.85, display: "flex", alignItems: "center", gap: 3 }}>
+              <span style={{ fontSize: 9 }}>→</span>
+              <span style={{ lineHeight: 1.3 }}>{slot.task.note.trim()}</span>
+            </div>
+          )}
+
           <div className="block-meta" style={{ fontSize: 9.5, opacity: 0.56, fontWeight: 560, marginBottom: 5, color: "var(--text-2)" }}>
             {slot.time} — {slot.endTime} · {slot.durationLabel}
           </div>
@@ -1752,7 +1783,23 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
               {categoryOption.shortLabel}
             </div>
 
-            {slot.task.persistentReminderEnabled && (
+            {slot.task.taskMode === 'appear' && (
+              <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(110,182,200,0.10)", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(110,182,200,0.25)", minHeight: 20 }}>
+                <span style={{ fontSize: 9 }}>🌀</span>
+                <span style={{ fontSize: 8.5, fontWeight: 800, color: "var(--accent-sky-ink, #2a7a9a)" }}>Só aparecer</span>
+              </div>
+            )}
+
+            {slot.task.snoozedUntil && new Date(slot.task.snoozedUntil) > new Date() && (
+              <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(150,130,200,0.10)", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(150,130,200,0.25)", minHeight: 20 }}>
+                <span style={{ fontSize: 9 }}>⏸</span>
+                <span style={{ fontSize: 8.5, fontWeight: 800, color: "var(--accent-purple-ink, #6b4f9a)" }}>
+                  Volta às {new Date(slot.task.snoozedUntil).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+
+            {slot.task.persistentReminderEnabled && slot.task.taskMode !== 'appear' && (
               <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(244,190,168,0.1)", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(244,190,168,0.2)", minHeight: 20 }}>
                 <Bell size={9} color="var(--accent-peach)" />
                 <span style={{ fontSize: 8.5, fontWeight: 800, color: "var(--accent-peach-ink)" }}>{slot.task.persistentReminderIntervalMinutes}m</span>
@@ -1839,6 +1886,33 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
                 Tarefa
               </button>
             )}
+            {!slot.task.done && onStarted && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onStarted(slot.task);
+                }}
+                style={{
+                  border: "1px solid rgba(110,182,130,.30)",
+                  background: "rgba(110,182,130,.10)",
+                  color: "var(--accent-sage-ink)",
+                  borderRadius: 999,
+                  minHeight: 22,
+                  padding: "3px 7px",
+                  fontSize: 8.5,
+                  fontWeight: 850,
+                  letterSpacing: ".02em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                🟡 Comecei
+              </button>
+            )}
             {!slot.task.done && (
               <button
                 type="button"
@@ -1865,6 +1939,30 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
               >
                 <CalendarClock size={10} />
                 Adiar
+              </button>
+            )}
+            {!slot.task.done && onSnooze && slot.task.persistentReminderEnabled && (
+              <button
+                type="button"
+                onClick={(event) => { event.stopPropagation(); onSnooze(slot.task); }}
+                style={{
+                  border: "1px solid rgba(150,130,200,.30)",
+                  background: "rgba(150,130,200,.10)",
+                  color: "var(--accent-purple-ink, #6b4f9a)",
+                  borderRadius: 999,
+                  minHeight: 22,
+                  padding: "3px 7px",
+                  fontSize: 8.5,
+                  fontWeight: 850,
+                  letterSpacing: ".02em",
+                  textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+              >
+                ⏸ Deriva
               </button>
             )}
           </div>
@@ -2297,6 +2395,32 @@ export function PlannerPage() {
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     void openPlannerAISuggestions("proactive-replan");
   }, [location.state, aiSuggestionSheetOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Notification actions via SW postMessage ────────────────────────────
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handler = async (event: MessageEvent) => {
+      const { type, action, blockId } = event.data ?? {};
+      if (type !== 'NOTIFICATION_ACTION' || !blockId) return;
+      if (action === 'done') {
+        try {
+          await api.patch(`/timeline/${blockId}`, { status: 'completed' });
+          showSuccess('Tarefa concluída! ✅');
+          void reloadPlannerTasks();
+        } catch { /* silent */ }
+      } else if (action === 'started') {
+        try {
+          await api.post(`/timeline/${blockId}/started`, {});
+          showSuccess('Registrado. Começar já é uma vitória. 🟡');
+          void reloadPlannerTasks();
+        } catch { /* silent */ }
+      } else if (action === 'help') {
+        navigate('/planner', { state: { openChat: blockId } });
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reloadPlannerTasks() {
     try {
@@ -2874,6 +2998,37 @@ export function PlannerPage() {
       showSuccess("Bloco adiado para amanhã.");
     } catch (error: any) {
       showError(error.message);
+    }
+  }
+
+  async function handleStartedTask(task: PlannerTask) {
+    try {
+      await api.post(`/timeline/${task.id}/started`, {});
+      const isAppear = task.taskMode === 'appear';
+      showSuccess(isAppear ? "Você apareceu. Isso já é uma vitória. 🌀" : "Registrado. Começar já é uma vitória. 🟡");
+    } catch {
+      // silent
+    }
+  }
+
+  // ─── Deriva com prazo — seletor de horário ───────────────────────────────
+  const [snoozeTarget, setSnoozeTarget] = React.useState<PlannerTask | null>(null);
+
+  async function handleSnooze(task: PlannerTask) {
+    setSnoozeTarget(task);
+  }
+
+  async function confirmSnooze(minutesFromNow: number) {
+    if (!snoozeTarget) return;
+    const until = new Date(Date.now() + minutesFromNow * 60000).toISOString();
+    try {
+      await api.post(`/timeline/${snoozeTarget.id}/snooze`, { until });
+      showSuccess(`Lembretes pausados por ${minutesFromNow >= 60 ? `${minutesFromNow / 60}h` : `${minutesFromNow}min`}. Volta às ${new Date(until).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`);
+      await reloadPlannerTasks();
+    } catch {
+      showError("Não foi possível pausar os lembretes.");
+    } finally {
+      setSnoozeTarget(null);
     }
   }
 
@@ -3477,7 +3632,6 @@ export function PlannerPage() {
                 key={slot.key}
                 className="timeline-slot"
                 style={{
-                  borderRadius: 12, background: "transparent", paddingLeft: 78,
                   marginBottom: 16, minHeight: 80, display: "flex", alignItems: "center"
                 }}
               >
@@ -3495,6 +3649,8 @@ export function PlannerPage() {
                    onChat={openTaskChat}
                    onPostpone={handlePostponeTaskDirect}
                    onConvertToTask={handleConvertCommitmentToTask}
+                   onStarted={handleStartedTask}
+                   onSnooze={handleSnooze}
                 />
               </div>
             );
@@ -3822,6 +3978,84 @@ export function PlannerPage() {
         onAcceptAdjust={(item) => handleAcceptAdjustItem(item)}
         onRejectAdjust={(item) => handleRejectAdjustItem(item)}
       />
+
+      {/* Modal de Deriva com Prazo */}
+      {snoozeTarget && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "flex-end", justifyContent: "center",
+          }}
+          onClick={() => setSnoozeTarget(null)}
+        >
+          <div
+            style={{
+              background: "var(--surface-1, #fff)",
+              borderRadius: "20px 20px 0 0",
+              padding: "24px 20px 40px",
+              width: "100%",
+              maxWidth: 480,
+              boxShadow: "0 -4px 32px rgba(0,0,0,0.12)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>⏸</div>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
+                Deriva com prazo
+              </p>
+              <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>
+                Pausar os lembretes de <strong>{snoozeTarget.title}</strong> por quanto tempo?
+              </p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { label: "30 minutos", minutes: 30 },
+                { label: "1 hora", minutes: 60 },
+                { label: "2 horas", minutes: 120 },
+                { label: "3 horas", minutes: 180 },
+              ].map(({ label, minutes }) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  onClick={() => void confirmSnooze(minutes)}
+                  style={{
+                    padding: "12px 0",
+                    borderRadius: 12,
+                    border: "1px solid rgba(150,130,200,.25)",
+                    background: "rgba(150,130,200,.07)",
+                    color: "var(--text-1)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSnoozeTarget(null)}
+              style={{
+                marginTop: 16,
+                width: "100%",
+                padding: "12px 0",
+                borderRadius: 12,
+                border: "1px solid var(--outline-variant)",
+                background: "transparent",
+                color: "var(--text-3)",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

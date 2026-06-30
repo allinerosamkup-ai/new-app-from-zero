@@ -1,0 +1,60 @@
+name: CI
+
+# Espelha o build que a VPS roda no deploy + os testes do repo.
+# Gate bloqueante = exatamente o que quebra produção: backend tsc, db build, web vite build.
+# O typecheck estrito do web (tsc --noEmit) roda como AVISO (não bloqueia), porque o
+# deploy usa vite build (esbuild) e a base tem ruído legado de unused-vars.
+
+on:
+  push:
+    branches:
+      - feat/navigation-planner-ui-backend
+      - master
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ---- Build bloqueante (mesma ordem do Dockerfile.backend da VPS) ----
+      - name: Prisma generate
+        run: npm run generate -w packages/database
+
+      - name: Build database package
+        run: npm run build -w packages/database
+
+      - name: Build backend (tsc)
+        run: npm run build -w apps/backend
+
+      - name: Build web (vite)
+        run: npm run build -w apps/web
+
+      # ---- Typecheck estrito do web: AVISO, não bloqueia ----
+      - name: Typecheck web (aviso)
+        run: npm run typecheck -w apps/web
+        continue-on-error: true
+
+      # ---- Testes ----
+      - name: Test web (vitest)
+        run: npm run test -w apps/web
+
+      - name: Test backend (contract + unit)
+        run: npm run test -w apps/backend
