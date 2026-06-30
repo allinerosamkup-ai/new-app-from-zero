@@ -112,6 +112,29 @@ export type MoodCycleReport = {
   baselineDeltaComposite: number;
   // Para o prompt da IA
   aiContext: string;
+  // Modulador biológico do ciclo menstrual
+  menstrualModulator: MenstrualModulator;
+};
+
+// ── Modulador do ciclo menstrual ───────────────────────────
+
+export type MenstrualCyclePhase =
+  | 'menstrual'       // D1-D5 (fluxo ativo)
+  | 'follicular'      // D6-D13 (estrogênio crescente)
+  | 'ovulatory'       // D14-D16 (pico de LH/estrogênio)
+  | 'luteal_early'    // D17-D22 (progesterona alta, estável)
+  | 'luteal_late'     // D23-D28 (queda hormonal, TPM)
+  | 'unknown';
+
+export type MenstrualModulator = {
+  detected: boolean;
+  cyclePhase: MenstrualCyclePhase;
+  cyclePhaseLabel: string;
+  estimatedCycleDay: number | null;   // D1, D2 ... D28
+  daysSinceLastFlow: number | null;
+  energyModifier: number;             // -1 a +1
+  moodModifier: number;               // -1 a +1
+  contextNote: string;                // injetado no aiContext
 };
 
 // ── Config de fase ─────────────────────────────────────────
@@ -452,6 +475,98 @@ export function aggregateCheckinsByDay(history: CheckinEntry[]): CheckinEntry[] 
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// ── Detecção de fase do ciclo menstrual ────────────────────
+
+function computeMenstrualModulator(sorted: CheckinEntry[]): MenstrualModulator {
+  const UNKNOWN: MenstrualModulator = {
+    detected: false,
+    cyclePhase: 'unknown',
+    cyclePhaseLabel: 'Não informado',
+    estimatedCycleDay: null,
+    daysSinceLastFlow: null,
+    energyModifier: 0,
+    moodModifier: 0,
+    contextNote: '',
+  };
+
+  // Encontrar a entrada mais recente com isFlowing = true
+  const lastFlowingEntry = [...sorted].reverse().find(e => e.isFlowing === true);
+  if (!lastFlowingEntry) return UNKNOWN;
+
+  // Encontrar o INÍCIO desse episódio de fluxo (primeiro dia consecutivo)
+  const lastFlowingIdx = sorted.findIndex(e => e.date === lastFlowingEntry.date);
+  let flowStartIdx = lastFlowingIdx;
+  for (let i = lastFlowingIdx - 1; i >= 0; i--) {
+    if (sorted[i].isFlowing === true) {
+      flowStartIdx = i;
+    } else {
+      break;
+    }
+  }
+  const flowStartDate = sorted[flowStartIdx].date;
+
+  // Dias desde o início do último fluxo (= dia do ciclo - 1)
+  const todayStr = getLocalDateKey(new Date());
+  const msPerDay = 86_400_000;
+  const daysSince = Math.round(
+    (new Date(todayStr).getTime() - new Date(flowStartDate).getTime()) / msPerDay,
+  );
+
+  // Ciclo inválido ou muito antigo
+  if (daysSince < 0 || daysSince > 34) return UNKNOWN;
+
+  const cycleDay = daysSince + 1; // D1 = primeiro dia de fluxo
+
+  let cyclePhase: MenstrualCyclePhase;
+  let cyclePhaseLabel: string;
+  let energyModifier: number;
+  let moodModifier: number;
+  let contextNote: string;
+
+  if (cycleDay <= 5) {
+    cyclePhase = 'menstrual';
+    cyclePhaseLabel = 'Menstrual';
+    energyModifier = -0.5;
+    moodModifier = -0.3;
+    contextNote = `Fase menstrual (D${cycleDay}) — energia tipicamente reduzida e sensibilidade aumentada. Respeitar o ritmo natural é estratégico.`;
+  } else if (cycleDay <= 13) {
+    cyclePhase = 'follicular';
+    cyclePhaseLabel = 'Folicular';
+    energyModifier = 0.3;
+    moodModifier = 0.2;
+    contextNote = `Fase folicular (D${cycleDay}) — estrogênio crescente favorece clareza mental, motivação e aprendizado.`;
+  } else if (cycleDay <= 16) {
+    cyclePhase = 'ovulatory';
+    cyclePhaseLabel = 'Ovulatória';
+    energyModifier = 0.5;
+    moodModifier = 0.3;
+    contextNote = `Fase ovulatória (D${cycleDay}) — pico hormonal: energia social, comunicação e foco tendem ao ápice.`;
+  } else if (cycleDay <= 22) {
+    cyclePhase = 'luteal_early';
+    cyclePhaseLabel = 'Lútea inicial';
+    energyModifier = 0;
+    moodModifier = 0;
+    contextNote = `Fase lútea inicial (D${cycleDay}) — progesterona alta induz ritmo mais introspectivo e focado.`;
+  } else {
+    cyclePhase = 'luteal_late';
+    cyclePhaseLabel = 'Lútea tardia';
+    energyModifier = -0.3;
+    moodModifier = -0.4;
+    contextNote = `Fase lútea tardia / pré-menstrual (D${cycleDay}) — queda hormonal tende a elevar sensibilidade emocional e reduzir energia. Não confundir com piora de humor permanente.`;
+  }
+
+  return {
+    detected: true,
+    cyclePhase,
+    cyclePhaseLabel,
+    estimatedCycleDay: cycleDay,
+    daysSinceLastFlow: daysSince,
+    energyModifier,
+    moodModifier,
+    contextNote,
+  };
+}
+
 // ── Motor principal ────────────────────────────────────────
 
 export function computeMoodCycle(
@@ -522,6 +637,7 @@ export function computeMoodCycle(
       baselineDeltaEnergy: 0,
       baselineDeltaComposite: 0,
       aiContext: "Poucos dados para análise — usuária está começando a rastrear o ciclo.",
+      menstrualModulator: computeMenstrualModulator(sorted),
     };
   }
 
@@ -701,6 +817,23 @@ export function computeMoodCycle(
 
   // ── Contexto para IA ───────────────────────────────────
   const cfg = PHASE_CONFIG[phase];
+
+  // Modulador biológico: ciclo menstrual
+  const menstrualModulator = computeMenstrualModulator(sorted);
+
+  // Ajusta energyForecast se o ciclo menstrual indica fase de baixa energia
+  let energyForecast = cfg.energyForecast;
+  if (menstrualModulator.detected) {
+    if (menstrualModulator.energyModifier <= -0.4) {
+      // menstrual ou lútea tardia forte: rebaixa uma casa
+      if (energyForecast === 'high') energyForecast = 'moderate';
+      else if (energyForecast === 'moderate') energyForecast = 'low';
+    } else if (menstrualModulator.energyModifier >= 0.4 && energyForecast === 'low') {
+      // folicular / ovulatória: eleva uma casa se estava baixo
+      energyForecast = 'moderate';
+    }
+  }
+
   const aiContext = [
     `Padrão pessoal: ${cfg.label} (${phase}) — ${daysInPhase} dia(s) nesta faixa.`,
     `Baseline pessoal: humor ${baselineMood.toFixed(1)}/10 | energia ${baselineEnergy.toFixed(1)}/10 | combinado ${baselineComposite.toFixed(1)}/10.`,
@@ -710,7 +843,8 @@ export function computeMoodCycle(
     `Estabilidade: ${stabilityScore}/100 | Volatilidade: ${volatility14d.toFixed(2)} | faixa pessoal: ${trendProfile.trendBandLabel}.`,
     avgSleep7d ? `Sono médio: ${avgSleep7d.toFixed(1)}/10.` : "",
     warningFlags.length > 0 ? `Alertas: ${warningFlags.join(", ")}.` : "",
-    `Previsão de energia hoje: ${ENERGY_LABELS[cfg.energyForecast]}.`,
+    `Previsão de energia hoje: ${ENERGY_LABELS[energyForecast]}.`,
+    menstrualModulator.detected ? `Modulador menstrual: ${menstrualModulator.contextNote}` : "",
   ].filter(Boolean).join(" ");
 
   return {
@@ -726,8 +860,8 @@ export function computeMoodCycle(
     avgMood7d,
     avgEnergy7d,
     avgSleep7d,
-    energyForecast: cfg.energyForecast,
-    energyForecastLabel: ENERGY_LABELS[cfg.energyForecast],
+    energyForecast,
+    energyForecastLabel: ENERGY_LABELS[energyForecast],
     warningFlags,
     cycleEstimate: {
       hasEnoughData,
@@ -749,6 +883,7 @@ export function computeMoodCycle(
     baselineDeltaEnergy,
     baselineDeltaComposite,
     aiContext,
+    menstrualModulator,
   };
 }
 
@@ -847,146 +982,4 @@ export function computeConsistencyScore(
 // ── Histórico de fases (timeline) ─────────────────────────
 // Roda computeMoodCycle em janelas deslizantes para reconstituir as fases
 // que o usuário atravessou nos últimos `windowDays` dias.
-// Retorna segmentos consecutivos da mesma fase (ex: [stable 5d][falling 2d][depleted 3d]).
-export type PhaseHistorySegment = {
-  phase: MoodPhase;
-  startDate: string; // YYYY-MM-DD
-  endDate: string;   // YYYY-MM-DD
-  daysCount: number;
-};
-
-export function computePhaseHistory(
-  history: CheckinEntry[],
-  windowDays = 30,
-): PhaseHistorySegment[] {
-  const aggregated = aggregateCheckinsByDay(history);
-  if (aggregated.length === 0) return [];
-
-  // Limitar à janela desejada
-  const sliced = aggregated.slice(-windowDays);
-  if (sliced.length < 3) return [];
-
-  // Para cada dia, computa fase usando todos os dados ATÉ aquele dia
-  const dailyPhases: Array<{ date: string; phase: MoodPhase }> = [];
-  for (let i = 2; i < sliced.length; i++) {
-    const upTo = sliced.slice(0, i + 1);
-    const report = computeMoodCycle(upTo);
-    dailyPhases.push({ date: sliced[i].date, phase: report.phase });
-  }
-
-  if (dailyPhases.length === 0) return [];
-
-  // Agrupar dias consecutivos da mesma fase
-  const segments: PhaseHistorySegment[] = [];
-  let current: PhaseHistorySegment = {
-    phase: dailyPhases[0].phase,
-    startDate: dailyPhases[0].date,
-    endDate: dailyPhases[0].date,
-    daysCount: 1,
-  };
-  for (let i = 1; i < dailyPhases.length; i++) {
-    const day = dailyPhases[i];
-    if (day.phase === current.phase) {
-      current.endDate = day.date;
-      current.daysCount += 1;
-    } else {
-      segments.push(current);
-      current = { phase: day.phase, startDate: day.date, endDate: day.date, daysCount: 1 };
-    }
-  }
-  segments.push(current);
-  return segments;
-}
-
-// ── Mapa diário de fases ─────────────────────────────────
-// Para cada dia do histórico, devolve a fase computada por sliding window.
-// Útil para colorir pontos de gráficos (mensal/forecast) com a fase real do dia.
-export function computeDailyPhaseMap(
-  history: CheckinEntry[],
-  windowDays = 30,
-): Record<string, MoodPhase> {
-  const aggregated = aggregateCheckinsByDay(history);
-  if (aggregated.length === 0) return {};
-
-  const sliced = aggregated.slice(-windowDays);
-  if (sliced.length < 3) return {};
-
-  const out: Record<string, MoodPhase> = {};
-  for (let i = 2; i < sliced.length; i++) {
-    const upTo = sliced.slice(0, i + 1);
-    const report = computeMoodCycle(upTo);
-    out[sliced[i].date] = report.phase;
-  }
-  return out;
-}
-
-// ── Fase a partir de um valor de humor único (sem janela) ──
-// Usado para colorir pontos do FORECAST onde só temos a previsão pontual.
-// Aplica thresholds simplificados (não considera volatility/trend).
-export function phaseFromMoodValue(humor: number): MoodPhase {
-  if (humor >= 8.4) return "elevated";
-  if (humor >= 7.2) return "flowing";
-  if (humor < 3.0) return "depleted";
-  if (humor < 5.0) return "low";
-  if (humor >= 5.6) return "stable";
-  return "falling";
-}
-
-// ── Agregar histórico por granularidade (day/week/month) ──
-// Usado pelo chart drill-down (mensal/trimestral/semestral/anual).
-export function aggregateByGranularity(
-  history: CheckinEntry[],
-  granularity: "day" | "week" | "month",
-): CheckinEntry[] {
-  const daily = aggregateCheckinsByDay(history);
-  if (granularity === "day" || daily.length === 0) return daily;
-
-  // Helper: chave de bucket
-  const bucketKey = (dateIso: string): string => {
-    const d = new Date(dateIso + "T12:00:00");
-    if (granularity === "month") {
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-    }
-    // week: ancorar em domingo
-    const day = d.getDay();
-    const sunday = new Date(d);
-    sunday.setDate(d.getDate() - day);
-    return sunday.toISOString().slice(0, 10);
-  };
-
-  const buckets = new Map<string, CheckinEntry[]>();
-  for (const entry of daily) {
-    const key = bucketKey(entry.date);
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key)!.push(entry);
-  }
-
-  return Array.from(buckets.entries())
-    .map(([date, entries]) => ({
-      date,
-      humor: Number(mean(entries.map(e => e.humor)).toFixed(2)),
-      energia: Number(mean(entries.map(e => e.energia)).toFixed(2)),
-      emotion: entries[entries.length - 1]?.emotion ?? "calm",
-      sono: averageDefined(entries.map(e => e.sono)),
-      fisico: averageDefined(entries.map(e => e.fisico)),
-      social: averageDefined(entries.map(e => e.social)),
-    } satisfies CheckinEntry))
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
-// ── Streak — dias consecutivos com check-in ─────────────────
-// Conta de hoje para trás quantos dias seguidos têm entrada no histórico.
-export function computeStreak(history: CheckinEntry[]): number {
-  if (history.length === 0) return 0;
-  const dateSet = new Set(history.map(h => h.date));
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const iso = getLocalDateKey(d);
-    if (dateSet.has(iso)) streak++;
-    else break;
-  }
-  return streak;
-}
+// Retorna segmentos consecuti
