@@ -10,7 +10,6 @@ on:
     branches:
       - feat/navigation-planner-ui-backend
       - master
-      - claude/mystifying-robinson-a17135
   pull_request:
 
 concurrency:
