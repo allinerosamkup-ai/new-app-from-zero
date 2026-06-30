@@ -21,6 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Valores dummy só para os guards de import não lançarem nos testes.
+    # NÃO são segredos reais — apenas presença de variável.
+    env:
+      VITE_SUPABASE_URL: https://example.supabase.co
+      VITE_SUPABASE_ANON_KEY: dummy-anon-key-for-ci
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
