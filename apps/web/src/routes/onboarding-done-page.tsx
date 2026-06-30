@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { buildOnboardingProcessPayload } from "../features/aura/onboarding";
 import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
 import { AuraIcon } from "../components/AuraIcon";
 import "../styles/aura.css";
 
@@ -47,6 +48,11 @@ export function OnboardingDonePage() {
 
     try {
       await api.post("/onboarding/process", buildOnboardingProcessPayload(state.onboardingDraft));
+      trackEvent("onboarding_completed", {
+        has_cycle: !!state.onboardingDraft.cycleStart,
+        focus_score: state.onboardingDraft.focusScore,
+        sleep_hours: state.onboardingDraft.sleepHours,
+      });
       await refreshData();
       navigate("/home");
     } catch (err) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { trackInstallConversion } from "../lib/meta-pixel";
+import { trackEvent } from "../lib/track";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -82,6 +83,7 @@ export function InstallPWA() {
         setInstallEvent(null);
         if (outcome === "accepted") {
           trackInstallConversion("pwa_prompt");
+          trackEvent("app_installed_pwa", { platform });
           setShow(false);
         }
         return;

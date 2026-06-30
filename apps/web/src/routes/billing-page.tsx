@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Sparkles, CheckCircle2, ExternalLink, Zap, Check } from "lucide-react";
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
+import { trackEvent } from "../lib/track";
 
 type SubscriptionStatus = {
   status: string | null;
@@ -41,6 +42,9 @@ export default function BillingPage() {
   const statusParam = searchParams.get("status");
 
   useEffect(() => {
+    if (statusParam === "success") {
+      trackEvent("subscription_started", { plan: selectedPlan });
+    }
     (api.get("/api/billing/status") as Promise<SubscriptionStatus>)
       .then((data) => setSub(data))
       .catch(() => setSub({ status: null, plan: null, periodEnd: null }))
@@ -57,6 +61,7 @@ export default function BillingPage() {
 
   async function handleCheckout() {
     setCheckoutLoading(true);
+    trackEvent("upgrade_clicked", { plan: selectedPlan });
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await api.post("/api/billing/checkout", {
