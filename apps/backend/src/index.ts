@@ -2811,6 +2811,114 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * POST /api/aura/complete-report
+   * Usuária relata o que já fez no dia. A Airia marca como concluído (ou cria já concluído)
+   * e devolve uma avaliação de padrão baseada no que ficou pendente + fase de humor.
+   */
+  app.post('/api/aura/complete-report', requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const { items, localDate, moodCycleContext } = req.body as {
+        items: Array<{ title: string; type: 'task' | 'habit' }>;
+        localDate?: string;
+        moodCycleContext?: string | null;
+      };
+
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'items obrigatório e não pode ser vazio' });
+      }
+
+      const todayKey = typeof localDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(localDate)
+        ? localDate
+        : new Date().toISOString().slice(0, 10);
+
+      const dayStart = new Date(`${todayKey}T00:00:00Z`);
+      const dayEnd = new Date(`${todayKey}T23:59:59Z`);
+
+      // Busca blocos pendentes do dia
+      const pendingBlocks = await prisma.timelineBlock.findMany({
+        where: { userId, localDate: { gte: dayStart, lte: dayEnd }, status: { not: 'completed' } },
+        select: { id: true, title: true, category: true },
+      });
+
+      function normalize(s: string): string {
+        return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+      }
+
+      const matched: string[] = [];
+      const created: string[] = [];
+      const now = new Date();
+
+      for (const item of items) {
+        const normItem = normalize(item.title);
+        const found = pendingBlocks.find((b) => normalize(b.title ?? '').includes(normItem) || normItem.includes(normalize(b.title ?? '')));
+
+        if (found) {
+          await prisma.timelineBlock.update({ where: { id: found.id }, data: { status: 'completed' } });
+          matched.push(item.title);
+        } else {
+          await prisma.timelineBlock.create({
+            data: {
+              userId,
+              title: item.title,
+              category: item.type === 'habit' ? 'autocuidado' : 'pessoal',
+              intensity: 'media',
+              status: 'completed',
+              localDate: dayStart,
+              startAt: now,
+              endAt: now,
+              isAiSuggested: false,
+            },
+          });
+          created.push(item.title);
+        }
+
+        await AiActionFeedbackService.append(prisma, userId, {
+          title: item.title,
+          status: 'done',
+          surface: 'aura-command',
+          localDate: todayKey,
+        });
+      }
+
+      // Recarrega pendentes após as atualizações para a avaliação
+      const stillPending = await prisma.timelineBlock.findMany({
+        where: { userId, localDate: { gte: dayStart, lte: dayEnd }, status: { not: 'completed' } },
+        select: { title: true, category: true },
+      });
+
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+      const evaluationPrompt = [
+        'Você é a Airia. A usuária acabou de reportar o que já fez hoje.',
+        '',
+        `Feito agora: ${[...matched, ...created].map((t) => `"${t}"`).join(', ')}`,
+        stillPending.length > 0
+          ? `Ainda pendente: ${stillPending.map((b) => `"${b.title}"`).join(', ')}`
+          : 'Nada mais pendente hoje.',
+        moodCycleContext ? `Estado atual: ${moodCycleContext}` : '',
+        '',
+        'Devolva uma avaliação de padrão em 2-4 frases seguindo a estrutura: FATO (o que foi feito) → LEITURA (o que isso revela no padrão) → MOVIMENTO (próximo passo concreto se houver).',
+        'Sem elogios excessivos. Se houver padrão de evitação (só fez as fáceis, a importante ficou), nomeie com cuidado e firmeza. Se fez tudo, confirme.',
+        'Responda apenas o texto da avaliação, sem JSON.',
+      ].filter(Boolean).join('\n');
+
+      const evalResponse = await openai.chat.completions.create({
+        model: getOpenAiModel(),
+        messages: [{ role: 'user', content: evaluationPrompt }],
+        max_completion_tokens: getOpenAiMaxCompletionTokens(300),
+      } as any);
+
+      const evaluation = evalResponse.choices?.[0]?.message?.content?.trim() ?? '';
+
+      return res.json({ matched, created, evaluation });
+    } catch (err: any) {
+      console.error('[aura/complete-report] error:', err);
+      return res.status(500).json({ error: 'Falha ao registrar conclusões' });
+    }
+  });
+
+  /**
    * GET /api/insights/weekly
   ...
 

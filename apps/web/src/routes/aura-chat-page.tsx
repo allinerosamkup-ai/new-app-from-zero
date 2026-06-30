@@ -35,7 +35,10 @@ type AuraCommandAction =
   | "create_goal"
   | "create_agenda"
   | "ask_clarification"
-  | "handoff_to_journal";
+  | "handoff_to_journal"
+  | "update_task"
+  | "delete_task"
+  | "complete_items";
 
 type AuraCommandResponse = {
   assistantMessage: string;
@@ -345,6 +348,35 @@ export function AuraChatPage() {
         });
         showSuccess("Resumo salvo no diário.");
         return null;
+      }
+
+      if (response.action === "complete_items") {
+        const items = Array.isArray(response.payload.items) ? response.payload.items as Array<{ title: string; type: string }> : [];
+        if (items.length === 0) return null;
+
+        const result = await api.post("/aura/complete-report", {
+          items,
+          localDate: new Date().toISOString().slice(0, 10),
+          moodCycleContext: response.payload.moodCycleContext ?? null,
+        }) as { matched: string[]; created: string[]; evaluation: string };
+
+        const matched: string[] = Array.isArray(result.matched) ? result.matched : [];
+        const created: string[] = Array.isArray(result.created) ? result.created : [];
+        const evaluation: string = typeof result.evaluation === "string" ? result.evaluation : "";
+        const confirmationLines = [
+          ...matched.map((t: string) => `✓ ${t}`),
+          ...created.map((t: string) => `+ ${t} (criada como concluída)`),
+        ];
+
+        setActionCard({
+          eyebrow: "Registrado",
+          title: `${matched.length + created.length} item${matched.length + created.length !== 1 ? "s" : ""} marcado${matched.length + created.length !== 1 ? "s" : ""} como feito`,
+          items: confirmationLines.slice(0, 4),
+          ctaLabel: "Ver planner",
+          ctaPath: "/planner",
+        });
+
+        return evaluation ?? null;
       }
 
       return null;

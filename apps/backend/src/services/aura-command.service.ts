@@ -71,6 +71,8 @@ function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandInt
       return 'reschedule';
     case 'delete_task':
       return 'delete_task';
+    case 'complete_items':
+      return 'complete_items';
     default:
       return null;
   }
@@ -94,6 +96,8 @@ function inferActionFromIntent(intent: AuraCommandIntent | null): AuraCommandAct
       return 'update_task';
     case 'delete_task':
       return 'delete_task';
+    case 'complete_items':
+      return 'complete_items';
     default:
       return null;
   }
@@ -321,6 +325,14 @@ export class AuraCommandService {
         : isPlannerConversation
           ? 'Explique a tarefa/meta em linguagem natural. Por que ajuda, como fazer, ideia concreta. Sem triagem.'
           : 'Conversa estratégica: abra direto no ponto, leia o nó real, proponha manobra pequena e concreta.',
+      '',
+      '== RELATO DE CONCLUSÃO (complete_items) ==',
+      'Se a pessoa relatar o que JÁ FEZ no dia (palavras-chave: "já fiz", "terminei", "fiz hoje", "acabei de", "concluí", "já tomei", "já mandei", "já fui"):',
+      '→ action: "complete_items", intent: "complete_items"',
+      '→ payload: { items: [ { title: "<o que foi feito>", type: "task" | "habit" } ] }',
+      '→ Para cada coisa mencionada, criar um item na lista. type "habit" se for hábito recorrente (remédio, exercício, água, sono); "task" para todo o resto.',
+      '→ assistantMessage: confirmar o registro de forma breve (1 frase). Sem elogios excessivos.',
+      '→ needsConfirmation: false — se ela disse que fez, registra direto.',
       '',
       '== ANTI-PADRÕES (NUNCA FAÇA) ==',
       '- Não pergunte "qual é sua prioridade?" quando a agenda está vazia — crie a rotina.',
