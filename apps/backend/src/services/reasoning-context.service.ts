@@ -92,8 +92,12 @@ function confidenceFromDecision(decisionBrain: DecisionResult, action: DecisionC
   return 'baixa';
 }
 
-function chooseAction(decisionBrain: DecisionResult, capacity: ReasoningCapacity): DecisionCandidate | null {
-  const actionable = decisionBrain.allowedActions.filter((item) => item.kind !== 'insight_only');
+function chooseAction(decisionBrain: DecisionResult, capacity: ReasoningCapacity, hasRealAnchor: boolean): DecisionCandidate | null {
+  // System-generated suggestions (source==='system') require a real anchor to be actionable.
+  // Without a real anchor (task/habit/goal today), they don't justify skipping the "ask" step.
+  const actionable = decisionBrain.allowedActions.filter(
+    (item) => item.kind !== 'insight_only' && (hasRealAnchor || item.source !== 'system'),
+  );
   const changing = actionable.find((item) => item.action !== 'keep');
   if (changing) return changing;
   if (capacity === 'protecao') {
@@ -166,7 +170,13 @@ export class ReasoningContextService {
       requestContext,
     });
     const capacity = inferCapacity(input.dailyContext, requestContext);
-    const action = chooseAction(decisionBrain, capacity);
+    // "Real anchor" = at least one non-system, actionable candidate from DecisionEngine.
+    // System-generated suggestions (source==='system') are contextual fallbacks and don't
+    // count as real anchors for the purpose of skipping the "ask first" step.
+    const hasRealAnchor = decisionBrain.allowedActions.some(
+      (a) => a.source !== 'system' && a.kind !== 'insight_only',
+    );
+    const action = chooseAction(decisionBrain, capacity, hasRealAnchor);
     const hasCurrentFact = Boolean(cleanText(input.currentMessage) || cleanText(input.situationSummary));
     const hasAnchor = input.dailyContext.todayAnchorTitles.length > 0 || Boolean(action && action.kind !== 'insight_only');
     const confidence = confidenceFromDecision(decisionBrain, action, hasCurrentFact || hasAnchor);

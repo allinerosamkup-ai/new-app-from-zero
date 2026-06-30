@@ -26,6 +26,7 @@ jobs:
     env:
       VITE_SUPABASE_URL: https://example.supabase.co
       VITE_SUPABASE_ANON_KEY: dummy-anon-key-for-ci
+      OPENAI_API_KEY: dummy-openai-key-for-ci
 
     steps:
       - name: Checkout
@@ -62,9 +63,5 @@ jobs:
       - name: Test web (vitest)
         run: npm run test -w apps/web
 
-      # AVISO por enquanto: a suíte de backend tem testes dessincronizados do código
-      # (ex.: aura-prompt.test espera "AURA CHAT EXECUTOR" pré-rename Aura→Airia).
-      # Nunca gatearam (deploy só roda tsc). Pagar a dívida e então tornar bloqueante.
-      - name: Test backend (contract + unit) (aviso)
+      - name: Test backend (contract + unit)
         run: npm run test -w apps/backend
-        continue-on-error: true

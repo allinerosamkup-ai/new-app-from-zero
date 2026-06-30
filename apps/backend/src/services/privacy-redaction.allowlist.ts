@@ -211,6 +211,8 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'visualRepeatEnabled',
       'icon',
       'color',
+      'snoozedUntil',
+      'taskMode',
       'createdAt',
       'updatedAt',
     ],

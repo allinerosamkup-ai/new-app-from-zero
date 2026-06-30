@@ -68,7 +68,7 @@ async function run() {
     userName: 'Ana',
     domain: 'aura-command',
   });
-  assert.match(commandPrompt, /AURA CHAT EXECUTOR/i);
+  assert.match(commandPrompt, /AIRIA CHAT EXECUTOR/i);
   assert.match(commandPrompt, /criar, marcar, excluir, concluir, reagendar/i);
   assert.match(commandPrompt, /aja como executora/i);
   assert.match(commandPrompt, /dado indispensavel/i);

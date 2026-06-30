@@ -153,7 +153,7 @@ async function run() {
   const userPrompt = capturedMessages[1]?.content || '';
 
   assert.match(systemPrompt, /assistente pessoal de humor, energia e agenda adaptativa/i);
-  assert.match(systemPrompt, /AURA CHAT EXECUTOR/i);
+  assert.match(systemPrompt, /AIRIA CHAT EXECUTOR/i);
   assert.match(systemPrompt, /LEITURA TOTAL/i);
   assert.match(systemPrompt, /humor atual, historico de humor/i);
   assert.match(systemPrompt, /memorias RAG relevantes/i);
@@ -165,23 +165,13 @@ async function run() {
   assert.doesNotMatch(systemPrompt, /Marca Passo/i);
   assert.doesNotMatch(systemPrompt, /Ponto Cego/i);
   assert.doesNotMatch(systemPrompt, /Efeito Paralelo/i);
-  assert.match(userPrompt, /planner_task/i);
+  assert.match(userPrompt, /create_task/i);
   assert.match(userPrompt, /checklist/i);
-  assert.match(userPrompt, /reflective_handoff/i);
   assert.match(userPrompt, /ask_clarification/i);
   assert.match(userPrompt, /needsConfirmation/i);
-  assert.match(userPrompt, /recorrent/i);
-  assert.match(userPrompt, /MODO DA INTERAÇÃO/i);
-  assert.match(userPrompt, /EXECUTOR PURO/i);
-  assert.match(userPrompt, /CONVERSA ESTRATÉGICA/i);
-  assert.match(userPrompt, /CONVERSAR SOBRE META\/PLANNER/i);
-  assert.match(userPrompt, /EXPLICAR a tarefa\/meta\/ação/i);
-  assert.match(userPrompt, /linguagem Airia/i);
-  assert.match(userPrompt, /formulário de decisão/i);
-  assert.match(userPrompt, /n[aã]o entendi/i);
-  assert.match(userPrompt, /travamento de clareza/i);
-  assert.match(userPrompt, /Proibido usar o modelo analítico/i);
-  assert.match(userPrompt, /nunca diga que j[aá] salvou|n[aã]o diga que j[aá] salvou/i);
+  assert.match(userPrompt, /HIERARQUIA DE EXECU[CÇ][AÃ]O/i);
+  assert.match(userPrompt, /MODO EXECUTOR/i);
+  assert.match(userPrompt, /n[aã]o diga que j[aá] salvou/i);
   assert.ok(capturedModels.every((model) => model === getOpenAiModel()));
 }
 

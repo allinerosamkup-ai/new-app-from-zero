@@ -48,8 +48,12 @@ const context: DailyContext = {
     requestContext: { phase: 'Estável' },
   });
 
-  assert.equal(result.allowedActions[0]?.kind, 'insight_only');
-  assert.equal(result.emptyReason, 'Sem candidato operacional confiável; manter como insight.');
+  // Sem anchor operacional: engine agora preenche com sugestões contextuais de horário (fresh start).
+  // A fonte é 'system' (não agenda/hábito/meta real), o que preserva a distinção de "sem âncora real".
+  assert.ok(
+    result.allowedActions[0]?.source === 'system',
+    'sem anchor real, sugestões devem vir de source=system',
+  );
 }
 
 {

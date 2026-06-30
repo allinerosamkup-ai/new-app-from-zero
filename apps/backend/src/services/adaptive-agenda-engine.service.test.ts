@@ -57,8 +57,12 @@ const emptyAgendaWithGoal: DailyContext = {
     surface: 'home',
   });
 
-  assert.deepEqual(plan.decisions, []);
-  assert.match(plan.summary, /não encontrou ajuste confiável/);
+  // Sem anchor real, o DecisionEngine preenche com sugestões contextuais de horário (fresh start).
+  // Mantém a invariante: nenhuma delas vem de agenda/hábito/meta real (source='system').
+  assert.ok(plan.decisions.length > 0);
+  assert.ok(plan.decisions.every((decision) => decision.id?.startsWith('fresh:')));
+  assert.ok(plan.decisions.every((decision) => decision.kind === 'suggested_commitment'));
+  assert.match(plan.summary, /sugestão opcional/);
 }
 
 console.log('adaptive-agenda-engine.service tests passed');
