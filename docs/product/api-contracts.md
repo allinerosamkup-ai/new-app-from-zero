@@ -1,7 +1,11 @@
 # API Contracts
 
-**Last updated:** 2026-03-13
+**Last updated:** 2026-04-30
 **Status:** Working contract
+
+Planner metadata fields updated and applied to Supabase on 2026-04-12.
+Daily context and agenda adaptation endpoints added on 2026-04-30.
+Decision Brain and Adaptive Agenda response metadata added on 2026-04-30.
 
 ## Journal
 
@@ -165,6 +169,289 @@ Processes the 8 fixed onboarding answers and returns the initial AI profile used
 }
 ```
 
+## Daily Context and AI Feedback
+
+## Risk Safety
+
+AI surfaces can return a `riskSafety` object. This is not a diagnosis. It is a safety routing layer used to keep Airia positioned as an adaptive support product, not a clinical replacement.
+
+Canonical shape shared by Check-in, Journal and Aura completed responses:
+
+```json
+{
+  "riskLevel": "none | low | moderate | high | crisis",
+  "signals": ["humor e energia muito baixos"],
+  "route": "self_support | adapt_day | human_support | crisis_protocol",
+  "message": "A Airia deve sugerir apoio humano e reduzir carga do dia, sem diagnosticar."
+}
+```
+
+Current surfaces:
+
+- `POST /api/checkins`: response includes top-level `riskSafety` and stores it under `aiState.riskSafety`.
+- `POST /api/journal/message/stream`: `assistant.completed` SSE includes `riskSafety`.
+- `POST /api/aura/command/stream`: `assistant.completed.response` includes `riskSafety`.
+
+Client behavior:
+
+- Check-in Result, Journal, and Aura Chat render the shared safety protocol card when route is not `self_support`.
+- `human_support` and `crisis_protocol` record `risk_protocol_triggered`.
+- `crisis_protocol` shows Brazil-ready emergency resources: CVV 188, SAMU 192, and 190, plus the instruction to use local emergency services outside Brazil.
+- The assistant must not diagnose, promise treatment/cure, or position itself as a therapist, psychologist, psychiatrist or emergency service.
+
+### `GET /api/context/day?date=YYYY-MM-DD`
+
+Returns the backend-grounded day package used by AI surfaces. This is the canonical source for operational suggestions.
+
+**Response 200**
+
+```json
+{
+  "source": "ContextGroundingService",
+  "date": "2026-04-30",
+  "pendingTaskTitles": ["Responder cliente"],
+  "completedTaskTitles": ["Treino"],
+  "pendingHabitTitles": ["Diário"],
+  "completedHabitTitles": ["Ginástica"],
+  "activeGoalTitles": ["Preparar proposta da Airia"],
+  "completedGoalTitles": [],
+  "completedSubgoalTitles": ["Separar prints"],
+  "recentSuggestionTitles": ["Separar roupa de treino"],
+  "blockedActionTitles": ["Kit do treino"],
+  "todayAnchorTitles": ["Responder cliente", "Diário", "Preparar proposta da Airia"],
+  "decisionBrain": {
+    "surface": "agenda",
+    "date": "2026-04-30",
+    "allowedActions": [
+      {
+        "title": "Responder cliente",
+        "kind": "real_commitment",
+        "action": "keep",
+        "notificationAllowed": true,
+        "requiresConfirmation": false
+      },
+      {
+        "title": "Preparar proposta da Airia",
+        "kind": "suggested_commitment",
+        "action": "suggest",
+        "notificationAllowed": false,
+        "requiresConfirmation": true
+      }
+    ],
+    "blockedActions": [
+      {
+        "title": "Treino",
+        "kind": "blocked",
+        "reason": "Tarefa já concluída hoje."
+      }
+    ]
+  },
+  "adaptiveAgenda": {
+    "date": "2026-04-30",
+    "trigger": "context-day",
+    "applied": false,
+    "decisions": [],
+    "blocked": []
+  },
+  "actionFeedback": [
+    {
+      "key": "separar roupa de treino",
+      "title": "Separar roupa de treino",
+      "status": "dismissed",
+      "surface": "home",
+      "sourceType": "stability-analysis",
+      "localDate": "2026-04-30",
+      "createdAt": "2026-04-30T10:00:00.000Z"
+    }
+  ],
+  "operationalRule": "Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual."
+}
+```
+
+### `POST /api/ai/action-feedback`
+
+Stores feedback about an AI-suggested action. Feedback is used by `DailyContext` to block repetition.
+
+**Request**
+
+```json
+{
+  "title": "Separar roupa de treino",
+  "status": "dismissed",
+  "surface": "home",
+  "sourceType": "stability-analysis",
+  "localDate": "2026-04-30"
+}
+```
+
+Allowed `status`: `shown`, `accepted`, `done`, `dismissed`, `deleted`, `scheduled`, `rejected`.
+
+Blocking statuses: `done`, `dismissed`, `deleted`, `scheduled`, `rejected`.
+
+**Response 200**
+
+```json
+{
+  "stored": true,
+  "item": {
+    "key": "separar roupa de treino",
+    "title": "Separar roupa de treino",
+    "status": "dismissed",
+    "surface": "home",
+    "sourceType": "stability-analysis",
+    "localDate": "2026-04-30",
+    "createdAt": "2026-04-30T10:00:00.000Z"
+  }
+}
+```
+
+### `POST /api/agenda/adapt`
+
+Returns an adaptation preview or applies selected confirmed decisions for the day. V1 never silently changes the agenda; `mode = "apply"` only runs decisions listed in `selectedDecisionIds`.
+
+Important rules:
+
+- `real_commitment`: saved agenda item, real habit or saved task.
+- `suggested_commitment`: optional suggestion that may include a suggested block/time, but cannot be saved or notified without user confirmation.
+- `insight_only`: pattern reading with no operational action.
+- `blocked`: completed, rejected, repeated, expired, generic or ungrounded action.
+- `notificationAllowed: false` means the app must not create a notification from that item.
+
+**Request**
+
+```json
+{
+  "date": "2026-04-30",
+  "mode": "preview",
+  "trigger": "checkin",
+  "selectedDecisionIds": [],
+  "context": {
+    "phase": "Turbulência",
+    "currentHour": 11,
+    "currentMinute": 20
+  }
+}
+```
+
+**Response 200**
+
+```json
+{
+  "date": "2026-04-30",
+  "mode": "preview",
+  "trigger": "checkin",
+  "summary": "Agenda adaptativa encontrou 1 decisão(ões) possíveis, sem aplicar nada automaticamente.",
+  "changes": [
+    {
+      "id": "task:responder-cliente",
+      "type": "pause",
+      "title": "Responder cliente",
+      "targetId": "550e8400-e29b-41d4-a716-446655440000",
+      "targetType": "timeline",
+      "from": "11:00",
+      "to": null,
+      "suggestedDate": "2026-05-01",
+      "suggestedStartTime": "11:00",
+      "suggestedEndTime": "12:00",
+      "reason": "Compromisso real pesado em fase de baixa capacidade; melhor pausar ou revisar escopo.",
+      "bioReason": "A fase atual sinaliza menor capacidade; pausar evita transformar uma tarefa pesada em sobrecarga.",
+      "impactLabel": "protege energia",
+      "confidence": 0.82,
+      "kind": "real_commitment",
+      "requiresConfirmation": true,
+      "notificationAllowed": true
+    }
+  ],
+  "blockedSuggestions": ["Treino", "Separar roupa de treino"],
+  "blockedDecisions": [
+    {
+      "type": "block",
+      "title": "Treino",
+      "kind": "blocked",
+      "reason": "Tarefa já concluída hoje.",
+      "notificationAllowed": false
+    }
+  ],
+  "adaptiveAgenda": {
+    "date": "2026-04-30",
+    "trigger": "checkin",
+    "surface": "agenda",
+    "applied": false
+  },
+  "applied": false
+}
+```
+
+Allowed change `type`: `keep`, `move`, `shrink`, `pause`, `suggest`, `convert`, `notify`, `block`, `skip`.
+
+Apply response adds:
+
+```json
+{
+  "mode": "apply",
+  "applied": true,
+  "appliedChanges": [{ "id": "task:responder-cliente", "type": "move", "applied": true }],
+  "skippedChanges": [],
+  "timelineRefreshNeeded": true
+}
+```
+
+Scheduling rules:
+
+- The backend receives local client time through `currentHour/currentMinute`.
+- Suggestions use the current time and existing timeline blocks to find a viable free window.
+- If no safe window remains today, suggested blocks can target the next day.
+- `keep`, `block` and `notify` are never applied as structural agenda changes.
+- When a Health Connect snapshot exists, measured sleep becomes the strongest sleep signal; steps, heart rate and exercise complement `bioReason`.
+
+### Health Connect
+
+Android native integration. The web app requests sync through the React Native shell, the native layer asks Health Connect permissions, reads today's local signals and stores a snapshot through the backend.
+
+#### `GET /api/health-connect/latest`
+
+Returns the latest Health Connect snapshot saved for the authenticated user.
+
+```json
+{
+  "connected": true,
+  "snapshot": {
+    "source": "health_connect",
+    "localDate": "2026-05-06",
+    "sleepMinutes": 435,
+    "sleepScore": 8,
+    "steps": 6420,
+    "avgHeartRate": 72,
+    "exerciseMinutes": 25,
+    "syncedAt": "2026-05-06T12:30:00.000Z"
+  },
+  "createdAt": "2026-05-06T12:30:01.000Z"
+}
+```
+
+#### `POST /api/health-connect/sync`
+
+Stores a Health Connect snapshot as `event_logs.event_name = "health_connect.synced"`.
+
+```json
+{
+  "source": "health_connect",
+  "localDate": "2026-05-06",
+  "sleepMinutes": 435,
+  "sleepScore": 8,
+  "steps": 6420,
+  "avgHeartRate": 72,
+  "exerciseMinutes": 25,
+  "syncedAt": "2026-05-06T12:30:00.000Z"
+}
+```
+
+Usage in the decision engine:
+
+- sleep from Health Connect replaces subjective sleep as the primary sleep signal when present;
+- poor measured sleep can lower capacity even if the phase label is not low;
+- steps, heart rate and exercise are explanatory body signals, not automatic task generators.
+
 ## Planner
 
 ### `GET /timeline/:date`
@@ -186,7 +473,20 @@ Returns the timeline blocks for a single day plus derived statistics for the cur
       "intensity": "M",
       "status": "planned",
       "isAiSuggested": false,
-      "aiReasoning": null
+      "aiReasoning": null,
+      "noteMode": "checklist",
+      "note": "Separar documentos antes de sair.",
+      "checklist": [
+        { "id": "item_1", "text": "Pegar documento", "done": false }
+      ],
+      "recurring": {
+        "enabled": false,
+        "frequency": "daily",
+        "days": [],
+        "everyNDays": 1
+      },
+      "energyLevel": "media",
+      "lastResetDate": null
     }
   ],
   "stats": {
@@ -208,6 +508,48 @@ Returns the timeline blocks for a single day plus derived statistics for the cur
 - `blocks[].endTime` maps from `timeline_blocks.end_at`
 - `blocks[].isAiSuggested` maps from `timeline_blocks.is_ai_suggested`
 - `blocks[].aiReasoning` maps from `timeline_blocks.ai_reasoning`
+- `blocks[].noteMode` maps from `timeline_blocks.note_mode`
+- `blocks[].checklist` maps from `timeline_blocks.checklist`
+- `blocks[].recurring` maps from `timeline_blocks.recurring`
+- `blocks[].energyLevel` maps from `timeline_blocks.energy_level`
+- `blocks[].lastResetDate` maps from `timeline_blocks.last_reset_date`
+
+### `POST /timeline`
+
+Saves one or more blocks for a day. Planner metadata is optional, so partial updates such as completing or dragging a block do not erase notes, checklist or recurrence.
+
+**Request**
+
+```json
+{
+  "date": "2026-03-13",
+  "forceSave": true,
+  "blocks": [
+    {
+      "id": "block_123",
+      "startTime": "09:00",
+      "endTime": "10:30",
+      "title": "Planejamento da semana",
+      "category": "trabalho",
+      "intensity": "M",
+      "status": "planned",
+      "noteMode": "checklist",
+      "note": "Separar contexto antes de comecar.",
+      "checklist": [
+        { "id": "item_1", "text": "Abrir pauta", "done": false }
+      ],
+      "recurring": {
+        "enabled": true,
+        "frequency": "weekly",
+        "days": [0, 2, 4],
+        "everyNDays": 1
+      },
+      "energyLevel": "media",
+      "lastResetDate": "2026-03-12"
+    }
+  ]
+}
+```
 
 ### Stats Rules
 
@@ -227,3 +569,40 @@ To avoid divergence while multiple agents work in parallel, the MVP uses a conse
 - all other categories still contribute to `totalHours`
 
 This rule can be expanded later, but it should not be inferred differently by different parts of the system.
+
+### `POST /timeline/:id/postpone`
+
+Moves a Planner block to the next day, preserving its time, metadata and planned status. The action is recorded as analytics context so Airia can detect repeated postponement patterns.
+
+**Request**
+
+```json
+{
+  "targetDate": "2026-05-01",
+  "reason": "manual_planner_button"
+}
+```
+
+`targetDate` is optional. If omitted, the backend moves the block to the day after its current `localDate`.
+
+**Response 200**
+
+```json
+{
+  "postponed": true,
+  "originalDate": "2026-04-30",
+  "targetDate": "2026-05-01",
+  "postponeCount": 2,
+  "block": {
+    "id": "block_123",
+    "title": "Responder cliente",
+    "status": "planned"
+  }
+}
+```
+
+Side effects:
+
+- Creates `event_logs.event_name = "timeline.block_postponed"`.
+- Stores AI action feedback with `status = "scheduled"`, `surface = "planner"` and `sourceType = "timeline-postpone"`.
+- Recent postponements are included in `DailyContext.postponedActions` and in the AI grounding text.

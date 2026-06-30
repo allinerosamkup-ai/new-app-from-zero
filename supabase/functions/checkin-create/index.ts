@@ -129,6 +129,15 @@ HISTÓRICO (últimos 30 dias):
 - Temas recorrentes: ${JSON.stringify(tccCtx?.recurringThemes ?? [])}
 - Crashes recentes: ${JSON.stringify(tccCtx?.crashHistory ?? [])}
 
+RACIOCÍNIO INTERNO OBRIGATÓRIO:
+- Separe fato concreto de interpretação.
+- Identifique movimento em curso, obstáculo, utilidade de curto prazo do obstáculo e custo oculto de obedecer a ele.
+- Em queda/depressão: priorize ativação comportamental mínima e ação física pequena.
+- Em agitação/mania: priorize contenção, redução de estímulo e decisão reversível.
+- Exposição gradual: quando houver evitação, proponha só a menor aproximação segura.
+- Somática é suporte, não eixo principal; não repita "respire", "mão no peito" ou "sinta o corpo" sem sinal concreto.
+- Não repita técnica recente. Se a mesma linha for inevitável, escreva como retomada explícita de uma sugestão anterior com ajuste concreto.
+
 Retorne APENAS este JSON:
 {
   "stateLabelType": "leve|estavel|sensivel|sobrecarregado",

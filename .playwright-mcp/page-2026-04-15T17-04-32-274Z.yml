@@ -1,0 +1,10 @@
+- contentinfo [ref=e1]:
+  - link [ref=e2] [cursor=pointer]:
+    - /url: /privacy
+    - text: Política de Privacidade
+  - link [ref=e3] [cursor=pointer]:
+    - /url: /terms
+    - text: Termos de Uso
+  - link [ref=e4] [cursor=pointer]:
+    - /url: https://airia.pro
+    - text: Página Inicial

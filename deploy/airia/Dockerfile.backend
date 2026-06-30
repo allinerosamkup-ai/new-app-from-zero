@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install workspace dependencies first for better caching.
+COPY package*.json ./
+COPY apps/backend/package*.json apps/backend/
+COPY packages/database/package*.json packages/database/
+RUN npm ci
+
+# Copy sources and build backend + shared database package.
+COPY apps/backend apps/backend
+COPY packages/database packages/database
+RUN npm run generate --workspace=@app/database \
+  && npm run build --workspace=@app/database \
+  && npm run build --workspace=@app/backend
+
+WORKDIR /app/apps/backend
+
+ENV NODE_ENV=production
+ENV PORT=3001
+
+CMD ["npm", "run", "start"]

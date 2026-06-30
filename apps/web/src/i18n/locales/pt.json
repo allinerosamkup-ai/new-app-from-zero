@@ -1,0 +1,232 @@
+{
+  "common": {
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "next": "Próximo",
+    "back": "Voltar",
+    "continue": "Continuar",
+    "close": "Fechar",
+    "loading": "Carregando...",
+    "tryAgain": "Tentar de novo",
+    "yes": "Sim",
+    "no": "Não",
+    "got_it": "Entendi",
+    "seeAll": "Ver tudo",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "add": "Adicionar",
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "tomorrow": "Amanhã"
+  },
+  "nav": {
+    "home": "Hoje",
+    "planner": "Planner",
+    "metas": "Metas",
+    "config": "Config",
+    "checkin": "Check-in",
+    "insights": "Padrões",
+    "journal": "Diário",
+    "aura": "Airia",
+    "start": "Início"
+  },
+  "phases": {
+    "kicker": "Seu humor e energia",
+    "title": "Suas 8 fases de humor e energia",
+    "subtitle": "Seu humor não é linear — ele tem fases. O Airia detecta automaticamente em qual fase você está hoje e adapta o app a isso.",
+    "youAreHere": "Você está aqui",
+    "tipPrefix": "💡",
+    "viewAll": "ver todas as 8 fases →",
+    "viewAllShort": "ver as 8",
+    "yourPhaseKicker": "Sua fase agora",
+    "dayInPhase": "{{count}}º dia",
+    "daysInPhase_one": "{{count}} dia nesta fase",
+    "daysInPhase_other": "{{count}} dias nesta fase",
+    "elevated": {
+      "label": "Voo Alto",
+      "description": "Humor e energia acima do seu basal habitual. Ótimo para projetos que exigem criatividade e iniciativa.",
+      "tip": "Aproveite a energia, mas mantenha o ritmo sustentável. Evite decisões impulsivas."
+    },
+    "flowing": {
+      "label": "Fluindo",
+      "description": "Você está no seu melhor ritmo. Clareza mental, motivação e energia alinhadas.",
+      "tip": "Pico de produtividade. Priorize suas tarefas mais importantes agora."
+    },
+    "stable": {
+      "label": "Estável",
+      "description": "Estado basal equilibrado — eutimia. Ritmo constante e previsível.",
+      "tip": "Bom momento para construir hábitos e avançar consistentemente."
+    },
+    "falling": {
+      "label": "Desacelerando",
+      "description": "Tendência de queda detectada. Seu humor está abaixo do padrão recente.",
+      "tip": "Reduza o ritmo. Priorize sono, alimentação e autocuidado agora."
+    },
+    "low": {
+      "label": "Recolhimento",
+      "description": "Você está numa fase de menor energia e humor. É um padrão natural do seu ritmo.",
+      "tip": "Este é o momento de restaurar — não de produzir. Gentileza consigo mesma é a prioridade."
+    },
+    "depleted": {
+      "label": "Pausa",
+      "description": "Energia e humor muito baixos. Seu sistema precisa de recuperação ativa.",
+      "tip": "Cancele o que puder. Descanso não é fraqueza — é necessidade biológica agora."
+    },
+    "recovering": {
+      "label": "Retomada",
+      "description": "Você está saindo de uma fase baixa. Energia retornando gradualmente.",
+      "tip": "Retome devagar. Comemore cada pequeno avanço — você está no caminho certo."
+    },
+    "mixed": {
+      "label": "Turbulência",
+      "description": "Alta variabilidade detectada. Altos e baixos frequentes sem padrão claro.",
+      "tip": "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam seu ritmo."
+    },
+    "insufficient_data": {
+      "label": "Começando a calibrar",
+      "description": "Faça check-ins por pelo menos 3 dias para começar a rastrear seu ritmo.",
+      "tip": "Quanto mais consistente o check-in, mais precisa a análise do seu ritmo."
+    }
+  },
+  "home": {
+    "greetingNight": "Boa noite",
+    "greetingMorning": "Bom dia",
+    "greetingAfternoon": "Boa tarde",
+    "checkin": "Check-in",
+    "agendaTitle": "Agenda do dia",
+    "agendaWithAi": "Montar com IA",
+    "nextOnAgenda": "Próximo na agenda",
+    "noPendingTasks": "Nenhuma tarefa pendente para hoje.",
+    "alertsTitle": "Alertas Importantes",
+    "caresTitle": "Cuidados para agora",
+    "caresSubtitle": "Leituras suaves para este momento:",
+    "auraSays": "Airia diz",
+    "consistencyWeek": "Consistência semanal",
+    "moodEnergyKicker": "Humor e Energia",
+    "moodEnergyAvg": "Média diária dos últimos 7 dias",
+    "todayTab": "Hoje",
+    "weekTab": "Semana",
+    "openJournal": "Abrir diário"
+  },
+  "checkin": {
+    "stepOf": "Passo {{current}} de {{total}}",
+    "humorEnergyTitle": "Humor & Energia",
+    "humorEnergySubtitle": "Como seu corpo se sente agora?",
+    "step2Title": "Emoção",
+    "step2Subtitle": "Que emoção domina o momento?",
+    "step3Title": "Influências",
+    "step3Subtitle": "O que contribuiu pro seu estado?",
+    "step4Title": "Detalhes",
+    "step4Subtitle": "Opcional — mas muito útil pra Airia.",
+    "humorLabel": "Humor",
+    "energyLabel": "Energia",
+    "registered": "CHECK-IN REGISTRADO",
+    "yourPhase": "Sua fase agora",
+    "goHome": "Ir para o início"
+  },
+  "planner": {
+    "title": "Planner",
+    "energyHigh": "alta",
+    "energyMedium": "média",
+    "energyLight": "leve",
+    "addTask": "Adicionar tarefa"
+  },
+  "journal": {
+    "title": "Diário",
+    "placeholder": "O que vamos organizar agora?",
+    "auraReady": "pronta"
+  },
+  "aura": {
+    "title": "Airia",
+    "ready": "pronta",
+    "starting": "iniciando",
+    "kicker": "Comando central",
+    "placeholder": "O que vamos organizar agora?",
+    "initialIdle": "Me diga o que precisa sair da cabeça e virar próximo passo.",
+    "initialExecutor": "Me diga a ação e eu executo direto.",
+    "initialNextAction": "Essa ação veio da sua meta. Posso te explicar o que ela quer dizer e te dar ideias simples para começar.",
+    "initialPlanner": "Essa tarefa já veio com contexto. Posso te explicar o que ela significa e como fazer de um jeito simples.",
+    "initialContext": "O contexto já está aqui. Qual parte você quer destravar primeiro?",
+    "suggestions": {
+      "organizeDay": "Organizar meu dia",
+      "createChecklist": "Criar checklist",
+      "transformGoal": "Transformar em meta",
+      "reflective": "Abrir conversa reflexiva"
+    }
+  },
+  "goals": {
+    "title": "Metas",
+    "stuckGoal": "Uma meta está parada",
+    "viewGoals": "Ver metas →"
+  },
+  "insights": {
+    "kicker": "Padrões",
+    "title": "Padrões e Harmonia",
+    "csvExport": "↓ CSV",
+    "weekVsLastWeek": "Esta semana vs semana passada",
+    "checkins": "Check-ins",
+    "phaseHistory": {
+      "kicker": "Histórico de fases",
+      "title": "Por onde você passou",
+      "description": "As fases que você atravessou nos últimos 30 dias. Cada bloco representa um período consecutivo na mesma fase."
+    },
+    "harmonyKicker": "Leitura integrada",
+    "harmonyTitle": "Harmonia do período",
+    "harmonySubtitle": "O mesmo recorte acima alimenta o radar abaixo, então os dois blocos contam a mesma história."
+  },
+  "alerts": {
+    "phaseTransition": "Mudança de fase",
+    "auraAsks": "Airia pergunta",
+    "doneButton": "Sim, fiz! 🎉",
+    "skipButton": "Não dessa vez",
+    "moodFalling": "Seu humor está caindo há vários dias",
+    "rapidDrop": "Houve uma queda brusca no humor",
+    "lowStability": "Sua estabilidade ficou baixa"
+  },
+  "privacy": "POLÍTICA DE PRIVACIDADE",
+  "config": {
+    "kicker": "Ajustes",
+    "title": "Configurações",
+    "subtitle": "Notificações, conta e preferências do seu ritmo em um único padrão visual.",
+    "user": "Usuário",
+    "profile": "Perfil",
+    "name": "Nome",
+    "language": {
+      "label": "Idioma",
+      "description": "Escolha o idioma do aplicativo.",
+      "pt": "Português",
+      "en": "English"
+    },
+    "aboutApp": {
+      "label": "Saiba sobre o app",
+      "description": "Como a IA da Airia funciona, o que ela calcula e por que sugere cada próximo passo.",
+      "openPhases": "Ver guia das 8 fases",
+      "aiTitle": "Como a Airia foi desenvolvida",
+      "aiDescription": "A Airia combina IA generativa com um motor próprio de fases de humor e energia. Ela não responde do zero: cruza check-ins, diário, planner, metas, hábitos, histórico e memórias recentes para entender o contexto real do dia.",
+      "purposeTitle": "Função da Airia",
+      "purposeDescription": "A função dela é ser um copiloto emocional e operacional para mentes não-lineares. Ela separa fato de interpretação, reconhece padrões, aponta decisões pendentes e transforma o estado atual em um próximo passo possível.",
+      "phaseTitle": "8 fases de humor e energia",
+      "phaseDescription": "A fase vem da média recente de humor e energia, tendência dos últimos dias, variação/estabilidade, sono e tempo na fase. Com poucos dados, a leitura fica conservadora.",
+      "chartTitle": "Gráficos de humor e energia",
+      "chartDescription": "Semana e Hoje usam os check-ins reais. Mensal usa os últimos 30 dias. A linha cheia é humor, a tracejada é energia. As carinhas indicam intensidade do humor e os emojis abaixo das datas indicam a fase calculada naquele ponto.",
+      "forecastTitle": "Previsão de 7 dias",
+      "forecastDescription": "A previsão projeta humor e energia a partir do histórico recente, suavizando picos para não transformar um dia isolado em tendência. Ela muda quando novos check-ins entram.",
+      "autonomyTitle": "Análise e autonomia",
+      "autonomyDescription": "O score começa em 100 e perde pontos por variação alta, tendência brusca, dias baixos, poucos check-ins e sinais críticos. A fase atual calibra se a sugestão deve avançar, conter, simplificar ou recuperar.",
+      "alertsTitle": "Alertas importantes",
+      "alertsDescription": "Alertas só aparecem quando há evidência: compromisso vencido, meta parada, queda rápida, baixa estabilidade, muitos dias em baixa, impulso citado na IA ou sono com impacto forte.",
+      "patternsTitle": "Padrões e fases",
+      "patternsDescription": "Padrões vêm da repetição no histórico: melhores/piores dias, distribuição de humor, sequência de check-ins, transições de fase e relação entre sono, energia, social e humor.",
+      "patternCardsTitle": "Cards da página Padrões",
+      "patternCardsDescription": "Os filtros de 7, 30, 90 dias, semestral e anual recortam o histórico. Melhor dia e dia difícil vêm da média de humor por dia da semana. A distribuição separa registros altos, estáveis e baixos. A sequência conta check-ins consecutivos sem quebra.",
+      "harmonyTitle": "Radar de harmonia",
+      "harmonyDescription": "O radar compara seis dimensões na mesma escala: humor, energia, metas, social, corpo e sono. Cada eixo usa a média do período selecionado; metas usam progresso das metas ativas. O equilíbrio geral é a média dos eixos com dados.",
+      "weeklyCompareTitle": "Semana vs. semana passada",
+      "weeklyCompareDescription": "A comparação calcula médias da semana atual e da semana anterior para humor, energia e número de check-ins. A seta mostra se houve alta, queda ou estabilidade em relação ao período anterior.",
+      "checkinTitle": "Check-in",
+      "checkinDescription": "Cada check-in registra humor, energia, sono, corpo, social, emoção e nota livre. Check-ins mais recentes pesam mais na leitura do dia.",
+      "contextTitle": "Agenda, metas e ações",
+      "contextDescription": "Planner, metas, hábitos, diário e sugestões recentes entram no contexto. A Airia usa isso para evitar repetição e sugerir passos possíveis para o estado atual."
+    }
+  }
+}

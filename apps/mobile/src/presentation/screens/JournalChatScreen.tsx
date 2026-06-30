@@ -1,13 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, SafeAreaView } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform, Alert, SafeAreaView } from 'react-native';
+import { 
+  Appbar, 
+  Text, 
+  TextInput, 
+  IconButton, 
+  ActivityIndicator, 
+  Surface,
+  Avatar,
+  Card,
+  MD3Colors,
+  Button
+} from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useJournalStore } from '../providers/journal_store';
 import { useAuthStore } from '../providers/auth_store';
-import { LucideSend, LucideMic, LucideArrowLeft } from 'lucide-react-native';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
 
 /**
- * JournalChatScreen: Tela de chat de diário com IA.
- * Tradução do Flutter para React Native (Expo).
+ * JournalChatScreen: Tela de chat de diário com IA e UI do Paper.
  */
 export default function JournalChatScreen() {
   const {
@@ -32,7 +43,6 @@ export default function JournalChatScreen() {
     }
   }, [sessionId, startSession, userId]);
 
-  // Efeito para rolar para o final do chat quando novas mensagens chegarem
   useEffect(() => {
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
@@ -66,39 +76,36 @@ export default function JournalChatScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      {/* Custom Header (AppBar) */}
-      <View className="flex-row items-center justify-between p-4 bg-white border-b border-gray-200">
-        <TouchableOpacity className="p-2">
-          <LucideArrowLeft size={24} color="#374151" />
-        </TouchableOpacity>
-        <Text className="text-lg font-bold text-gray-800">Diário com IA</Text>
-        <TouchableOpacity onPress={handleEndSession}>
-          <Text className="text-blue-600 font-semibold">Encerrar</Text>
-        </TouchableOpacity>
-      </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: appColors.background }}>
+      <Appbar.Header mode="center-aligned" style={{ backgroundColor: 'transparent' }}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} />
+        <Appbar.Content title="Diário com IA" titleStyle={{ fontWeight: '700' }} />
+        <Button mode="text" onPress={handleEndSession} textColor={appColors.primary}>
+          Encerrar
+        </Button>
+      </Appbar.Header>
 
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        className="flex-1"
+        style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {/* Messages List */}
         <ScrollView 
           ref={scrollRef}
-          className="flex-1 p-4"
-          contentContainerStyle={{ paddingBottom: 20 }}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: appSpacing.lg, paddingTop: appSpacing.md, paddingBottom: 40 }}
         >
           {messages.length === 0 && context && (
-            <View className="mb-4 bg-white border border-gray-200 rounded-3xl p-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-1">Boas-vindas</Text>
-              <Text className="text-gray-600">
-                {context.checkinToday?.stateLabel
-                  ? `Estou vendo que hoje parece um ${context.checkinToday.stateLabel.toLowerCase()}. `
-                  : ''}
-                {context.promptSummary}
-              </Text>
-            </View>
+            <Card style={{ marginBottom: appSpacing.md, backgroundColor: appColors.surface, borderStyle: 'dashed' }} mode="outlined">
+              <Card.Content>
+                <Text variant="labelSmall" style={{ letterSpacing: 2, color: appColors.primary, marginBottom: 12, opacity: 0.7 }}>
+                  AURA • PRESENÇA
+                </Text>
+                <Text variant="bodyLarge" style={{ color: appColors.textPrimary, lineHeight: 26, fontStyle: 'italic' }}>
+                  {context.promptSummary}
+                </Text>
+              </Card.Content>
+            </Card>
           )}
 
           {messages.map((msg) => (
@@ -109,70 +116,73 @@ export default function JournalChatScreen() {
             />
           ))}
 
-          {/* Typing Indicator */}
           {(isLoading || isStreaming) && (
-            <View className="flex-row items-center p-2">
-              <ActivityIndicator size="small" color="#9CA3AF" />
-              <Text className="text-gray-400 ml-2 italic">
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: appSpacing.sm }}>
+              <ActivityIndicator animating size="small" color={appColors.textSecondary} />
+              <Text variant="bodySmall" style={{ color: appColors.textSecondary, marginLeft: appSpacing.sm, fontStyle: 'italic' }}>
                 {userId ? (sessionId ? 'IA está respondendo...' : 'Iniciando sessão...') : 'Sessão indisponível sem login'}
               </Text>
             </View>
           )}
 
           {error && (
-            <Text className="text-red-500 text-center mt-4">{error}</Text>
+            <Text variant="bodySmall" style={{ color: appColors.danger, textAlign: 'center', marginTop: appSpacing.md }}>
+              {error}
+            </Text>
           )}
         </ScrollView>
 
         {/* Input Area */}
-        <View className="p-4 bg-white border-t border-gray-200 shadow-sm flex-row items-center">
-          <TouchableOpacity className="p-2 mr-2">
-            <LucideMic size={24} color="#9CA3AF" />
-          </TouchableOpacity>
-
-          <View className="flex-1 bg-gray-100 rounded-2xl px-4 py-2">
+        <Surface style={{ padding: appSpacing.md, backgroundColor: appColors.surface, elevation: 4 }} mode="flat">
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+            <IconButton icon="microphone" size={24} iconColor={appColors.textSecondary} onPress={() => {}} />
+            
             <TextInput
-              className="text-gray-800 text-base"
+              mode="flat"
               placeholder="Conta o que está acontecendo hoje..."
               multiline
               value={inputText}
               onChangeText={setInputText}
               editable={!!userId}
+              style={{ flex: 1, backgroundColor: 'transparent', maxHeight: 120 }}
+              underlineColor="transparent"
+              activeUnderlineColor="transparent"
+            />
+
+            <IconButton 
+              icon="send" 
+              mode="contained"
+              containerColor={inputText.trim() === '' || !sessionId || isStreaming || !userId ? MD3Colors.neutralVariant90 : appColors.primary}
+              iconColor="white"
+              disabled={inputText.trim() === '' || !sessionId || isStreaming || !userId}
+              onPress={handleSend}
+              size={24}
             />
           </View>
-
-          <TouchableOpacity 
-            onPress={handleSend}
-            disabled={inputText.trim() === '' || !sessionId || isStreaming || !userId}
-            className={`p-3 ml-2 rounded-full ${
-              inputText.trim() === '' || !sessionId || isStreaming || !userId ? 'bg-gray-200' : 'bg-blue-600'
-            }`}
-          >
-            <LucideSend size={20} color="white" />
-          </TouchableOpacity>
-        </View>
+        </Surface>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-/**
- * ChatBubble: Balão de mensagem traduzido do Flutter.
- */
 function ChatBubble({ content, isUser }: { content: string; isUser: boolean }) {
   return (
-    <View className={`flex-row mb-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <View 
-        className={`max-w-[80%] p-4 rounded-3xl ${
-          isUser 
-            ? 'bg-blue-600 rounded-tr-sm' 
-            : 'bg-gray-200 rounded-tl-sm'
-        }`}
+    <View style={{ flexDirection: 'row', marginBottom: appSpacing.md, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+      <Surface
+        style={{
+          maxWidth: '85%',
+          padding: appSpacing.md,
+          borderRadius: 20,
+          borderBottomRightRadius: isUser ? 4 : 20,
+          borderBottomLeftRadius: isUser ? 20 : 4,
+          backgroundColor: isUser ? appColors.primary : appColors.surface,
+          elevation: 1
+        }}
       >
-        <Text className={`text-base ${isUser ? 'text-white' : 'text-gray-800'}`}>
+        <Text variant="bodyLarge" style={{ color: isUser ? '#0b1120' : appColors.textPrimary }}>
           {content}
         </Text>
-      </View>
+      </Surface>
     </View>
   );
 }

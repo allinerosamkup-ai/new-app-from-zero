@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(EXPO_TOKEN=\"3Ssr-a_fx0OUfQwxdBeZ0cqkHnWsYL5GoqCdpkWn\" npx eas-cli@latest build:view 707d3115-9202-4edd-b172-45deec27e94e --json)",
+      "Bash(EXPO_TOKEN=\"3Ssr-a_fx0OUfQwxdBeZ0cqkHnWsYL5GoqCdpkWn\" npx eas-cli@latest build:view 707d3115-9202-4edd-b172-45deec27e94e)",
+      "Bash(grep -oE \"https?://[^\\\\\"'\\\\\\\\\\)\\\\\\\\s]*\\\\\\\\.apk|airia\\\\\\\\.pro/airia\\\\\\\\.apk|/airia\\\\\\\\.apk\")"
+    ]
+  }
+}

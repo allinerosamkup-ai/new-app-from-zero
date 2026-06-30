@@ -1,63 +1,65 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, View } from 'react-native';
-import MainTabNavigator from './MainTabNavigator';
+import { View } from 'react-native';
+import { ActivityIndicator } from 'react-native-paper';
 import DailySummaryScreen from '../screens/DailySummaryScreen';
 import CheckinScreen from '../screens/CheckinScreen';
 import CheckInResultScreen from '../screens/CheckInResultScreen';
 import AuthScreen from '../screens/AuthScreen';
-import OnboardingChatScreen from '../screens/OnboardingChatScreen';
+import WebAppScreen from '../screens/WebAppScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import HrvTestScreen from '../screens/HrvTestScreen';
+import HrvResultScreen from '../screens/HrvResultScreen';
+import CycleCalendarScreen from '../screens/CycleCalendarScreen';
+import DailyAgendaScreen from '../screens/DailyAgendaScreen';
+import EnergyMapScreen from '../screens/EnergyMapScreen';
+import PlansScreen from '../screens/PlansScreen';
+import PaymentSuccessScreen from '../screens/PaymentSuccessScreen';
+import GoogleCalendarScreen from '../screens/GoogleCalendarScreen';
+import JournalChatScreen from '../screens/JournalChatScreen';
+import HabitsScreen from '../screens/HabitsScreen';
 import { useAuthStore } from '../providers/auth_store';
+import { appColors } from '../theme/appTheme';
 
 const Stack = createNativeStackNavigator();
 
 /**
  * RootStackNavigator: Gerencia a navegação global do App.
- * Permite alternar entre o fluxo de abas e telas de resumo/onboarding.
+ * Focado no WebShell para paridade total com o Web App.
  */
 export default function RootStackNavigator() {
-  const { initialized, isLoading, userId, onboardingDone } = useAuthStore();
+  const { initialized, isLoading } = useAuthStore();
 
   if (!initialized && isLoading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#1f3b32" />
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: appColors.background,
+        }}
+      >
+        <ActivityIndicator animating size="large" color={appColors.primary} />
       </View>
     );
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!userId ? (
-        <Stack.Screen name="Auth" component={AuthScreen} />
-      ) : !onboardingDone ? (
-        <Stack.Screen name="Onboarding" component={OnboardingChatScreen} />
-      ) : (
-        <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-      )}
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: appColors.background,
+        },
+      }}
+    >
+      <Stack.Screen name="WebShell" component={WebAppScreen} />
       <Stack.Screen
-        name="DailySummary"
-        component={DailySummaryScreen}
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
         options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom'
-        }}
-      />
-      <Stack.Screen
-        name="Checkin"
-        component={CheckinScreen}
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-        }}
-      />
-      <Stack.Screen
-        name="CheckInResult"
-        component={CheckInResultScreen}
-        options={{
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
-          gestureEnabled: false,
+          animation: 'slide_from_right',
         }}
       />
     </Stack.Navigator>

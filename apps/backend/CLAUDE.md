@@ -1,0 +1,67 @@
+# Mood Cycling — Backend API
+
+## Stack
+- Node.js + Express
+- TypeScript
+- Prisma ORM
+- OpenAI SDK (GPT-4o-mini)
+- Supabase Auth (JWT)
+
+## Core Functions
+### `buildAuraSystemPrompt({ userName?, profileSummary?, moodCycleContext?, domain?, extraInstructions? })`
+Arquivo: `src/lib/aura-prompt.ts`
+Gera o prompt de sistema unificado para a Aura. O `domain` define a policy da superfície (`journal-live`, `journal-finalize`, `aura-command`, `checkin`, `planning`, `home`, `insight`, `summary`, etc.) e o `moodCycleContext` deve ser injetado quando houver contexto de fase.
+
+**Aliança Divergente — estrutura de output obrigatória (injetada em todo prompt):**
+Todo output substantivo deve conter 4 elementos: **FATO AGORA** (o que está acontecendo de verdade, nomeado com detalhe concreto) → **LEITURA** (o que esse fato revela no padrão, cruzando fase + histórico + RAG) → **TRAVA OU JANELA** (capacidade / disposição / permissão, ou a janela disponível) → **MOVIMENTO** (próximo passo com verbo + objeto concreto + âncora do dia real). Definido em `ALIANCA_DIVERGENTE_STRUCTURE` em `airia-method.ts`. Cada domínio tem mapeamento explícito desses 4 elementos para seu formato de saída.
+
+### `ContextGroundingService.buildDailyContext(...)`
+Arquivo: `src/services/context-grounding.service.ts`
+Monta o pacote operacional único do dia (`DailyContext`): agenda pendente/concluída, hábitos pendentes/concluídos, metas ativas/concluídas, subtarefas feitas, sugestões recentes, feedback de ações e memória RAG como contexto de padrão.
+
+Regra: memória antiga explica padrão; ação operacional precisa nascer de agenda, hábito, meta ou aceite real do dia.
+
+### `AiActionFeedbackService`
+Arquivo: `src/services/ai-action-feedback.service.ts`
+Persiste no `aiProfilePayload` o histórico leve de ações sugeridas pela IA e marcadas como `shown`, `accepted`, `done`, `dismissed`, `deleted`, `scheduled` ou `rejected`. Status bloqueadores entram no grounding para não ressuscitar sugestões.
+
+### `DecisionEngine`
+Arquivo: `src/services/decision-engine.service.ts`
+Cérebro operacional da Airia. Recebe `DailyContext` e a superfície (`home`, `planner`, `checkin`, `journal`, `aura-chat`, `insights`, `notification`, `agenda`) e classifica candidatos como `real_commitment`, `suggested_commitment`, `insight_only` ou `blocked`.
+
+Regras principais:
+- compromisso real pode ser mantido, movido, reduzido, pausado ou notificado;
+- sugestão opcional pode virar proposta de bloco, mas não salva nem notifica sem confirmação;
+- memória antiga e RAG explicam padrão, mas não criam ação sozinhos;
+- concluído, rejeitado, repetido, vencido, genérico ou sem âncora vira bloqueio.
+
+### `AdaptiveAgendaEngine`
+Arquivo: `src/services/adaptive-agenda-engine.service.ts`
+Transforma o resultado do `DecisionEngine` em decisões de agenda: `keep`, `move`, `shrink`, `pause`, `suggest`, `convert`, `notify` ou `block`. Sempre retorna preview; `applied` permanece `false` na versão atual.
+
+### `POST /api/timeline/:id/postpone`
+Move um bloco do Planner para o dia seguinte mantendo horário e metadados. Registra `timeline.block_postponed` em `EventLog`, grava feedback `scheduled` e expõe adiamentos recentes em `DailyContext.postponedActions`.
+
+### `AgendaAdaptationService`
+Arquivo: `src/services/agenda-adaptation.service.ts`
+Wrapper HTTP/serviço do `AdaptiveAgendaEngine`. A versão atual não move tarefas sozinha; retorna mudanças propostas com motivo, confiança, tipo de decisão, necessidade de confirmação e permissão de notificação.
+
+### `AIService.streamJournalReply({ context, history, message, onDelta })`
+Arquivo: `src/services/ai.service.ts`
+Gerencia a resposta em tempo real do diário usando Server-Sent Events (SSE). O `context` agora inclui `moodCycleContext`.
+
+## Endpoints Principais
+- `POST /api/checkins`: Salva check-in e avalia estado via IA. Agora persiste campos de ciclo menstrual.
+- `POST /api/ai/suggest`: Endpoint genérico para sugestões IA (notas, checklist, tarefas do dia).
+- `GET /api/context/day?date=YYYY-MM-DD`: Retorna o `DailyContext` central do dia.
+- `POST /api/agenda/adapt`: Retorna preview de adaptação da agenda com mudanças propostas.
+- `POST /api/ai/action-feedback`: Registra feedback sobre ação sugerida pela IA.
+- `POST /api/timeline/:id/postpone`: Adia bloco para o próximo dia e registra padrão de adiamento.
+- `POST /api/journal/message/stream`: Endpoint SSE para chat do diário.
+
+## Regras de Banco (Prisma)
+- Schema: `packages/database/prisma/schema.prisma`
+- Model `DailyCheckin`: Centraliza dados de humor, energia e ciclo biológico.
+- `EventLog`: registra eventos leves, incluindo feedback de ações IA quando disponível.
+- `OnboardingResponse.aiProfilePayload`: guarda memória leve de sugestões recentes e feedback de ações sem nova migração.
+- Todas as queries devem filtrar por `userId` (extraído do token JWT).

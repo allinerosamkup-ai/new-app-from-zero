@@ -1,11 +1,39 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { View, ScrollView, Image, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import {
+  Text,
+  Card,
+  Button,
+  TextInput,
+  Surface,
+  TouchableRipple
+} from 'react-native-paper';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withTiming,
+  withRepeat,
+} from 'react-native-reanimated';
 import { useCheckinStore } from '../providers/checkin_store';
 import { useAuthStore } from '../providers/auth_store';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { MenstrualCycleWidget } from '../components/MenstrualCycleWidget';
+import { MenstrualPhase, PhysicalSymptom } from '../../domain/entities/checkin';
+
+// Fluent Emoji 3D — Microsoft open source (MIT)
+const FLUENT_EMOJI_3D: Record<number, string> = {
+  1: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Crying%20face/3D/crying_face_3d.png',
+  2: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20frowning%20face/3D/slightly_frowning_face_3d.png',
+  3: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Neutral%20face/3D/neutral_face_3d.png',
+  4: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20smiling%20face/3D/slightly_smiling_face_3d.png',
+  5: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Beaming%20face%20with%20smiling%20eyes/3D/beaming_face_with_smiling_eyes_3d.png',
+};
 
 /**
- * CheckinScreen: Formulário de estado diário.
+ * CheckinScreen: Formulário de estado diário com UI do Paper.
  */
 export default function CheckinScreen() {
   const navigation = useNavigation<any>();
@@ -18,6 +46,27 @@ export default function CheckinScreen() {
   const [irritability, setIrritability] = useState(3);
   const [note, setNote] = useState('');
 
+  // Estados Saúde Feminina
+  const [menstrualPhase, setMenstrualPhase] = useState<MenstrualPhase | undefined>();
+  const [selectedSymptoms, setSelectedSymptoms] = useState<PhysicalSymptom[]>([]);
+  // Fluxo
+  const [isFlowing, setIsFlowing] = useState<boolean | undefined>();
+  const [flowDay, setFlowDay] = useState<number | undefined>();
+  const [flowIntensity, setFlowIntensity] = useState<import('../../domain/entities/checkin').FlowIntensity | undefined>();
+  const [symptomLevels, setSymptomLevels] = useState<Partial<Record<import('../../domain/entities/checkin').GradedSymptom, import('../../domain/entities/checkin').SymptomLevel>>>({});
+
+  function handleSymptomLevel(symptom: import('../../domain/entities/checkin').GradedSymptom, level: import('../../domain/entities/checkin').SymptomLevel) {
+    setSymptomLevels(prev => ({ ...prev, [symptom]: level }));
+  }
+
+  const toggleSymptom = (symptom: PhysicalSymptom) => {
+    setSelectedSymptoms(prev =>
+      prev.includes(symptom)
+        ? prev.filter(s => s !== symptom)
+        : [...prev, symptom]
+    );
+  };
+
   const handleSubmit = async () => {
     if (!userId) return;
 
@@ -29,138 +78,252 @@ export default function CheckinScreen() {
       clarityScore: clarity,
       irritabilityScore: irritability,
       note,
+      // Novos campos
+      menstrualPhase,
+      physicalSymptoms: selectedSymptoms,
+      isFlowing,
+      flowDay,
+      flowIntensity,
+      symptomLevels,
     });
 
-    // Navega para o resultado da IA se deu certo (sem erro no store)
     if (!useCheckinStore.getState().error) {
       navigation.navigate('CheckInResult');
     }
   };
 
   return (
-    <ScrollView className="flex-1 bg-white p-4">
-      <Text className="text-xl font-bold mb-6 text-center">
+    <ScrollView style={{ flex: 1, backgroundColor: appColors.background }} contentContainerStyle={{ padding: appSpacing.lg, paddingBottom: 40 }}>
+      <Text variant="headlineSmall" style={{ fontWeight: '700', textAlign: 'center', marginBottom: appSpacing.xl, color: appColors.textPrimary }}>
         Como você está hoje?
       </Text>
 
-      {/* Mood Selector (Substituto do _MoodSlider) */}
       <MoodSelector value={mood} onSelect={setMood} />
 
-      {/* Energy Selector (Substituto do _EnergySelector) */}
-      <ScoreSelector 
-        label="Como está seu nível de energia?" 
-        value={energy} 
-        onSelect={setEnergy} 
+      <MenstrualCycleWidget
+        phase={menstrualPhase}
+        onPhaseSelect={setMenstrualPhase}
+        selectedSymptoms={selectedSymptoms}
+        onToggleSymptom={toggleSymptom}
+        isFlowing={isFlowing}
+        onFlowingChange={setIsFlowing}
+        flowDay={flowDay}
+        onFlowDayChange={setFlowDay}
+        flowIntensity={flowIntensity}
+        onFlowIntensityChange={setFlowIntensity}
+        symptomLevels={symptomLevels}
+        onSymptomLevelChange={handleSymptomLevel}
       />
 
-      {/* Clarity Selector */}
-      <ScoreSelector 
-        label="Como está sua clareza mental?" 
-        value={clarity} 
-        onSelect={setClarity} 
-      />
+      <Card style={{ marginBottom: appSpacing.lg, backgroundColor: appColors.surface }} mode="outlined">
+        <Card.Content>
+          <ScoreSelector 
+            label="Como está seu nível de energia?" 
+            value={energy} 
+            onSelect={setEnergy} 
+          />
+          
+          <View style={{ height: 1, backgroundColor: appColors.borderSubtle, marginVertical: appSpacing.md, opacity: 0.5 }} />
 
-      {/* Irritability Selector */}
-      <ScoreSelector 
-        label="Nível de irritabilidade" 
-        value={irritability} 
-        onSelect={setIrritability} 
-      />
+          <ScoreSelector 
+            label="Como está sua clareza mental?" 
+            value={clarity} 
+            onSelect={setClarity} 
+          />
 
-      {/* Note Field */}
-      <View className="mt-6">
-        <Text className="text-gray-700 mb-2">Quer comentar algo sobre o momento?</Text>
+          <View style={{ height: 1, backgroundColor: appColors.borderSubtle, marginVertical: appSpacing.md, opacity: 0.5 }} />
+
+          <ScoreSelector 
+            label="Nível de irritabilidade" 
+            value={irritability} 
+            onSelect={setIrritability} 
+          />
+        </Card.Content>
+      </Card>
+
+      <View style={{ marginTop: appSpacing.md }}>
+        <Text variant="labelLarge" style={{ color: appColors.textSecondary, marginBottom: appSpacing.xs }}>
+          Quer comentar algo sobre o momento?
+        </Text>
         <TextInput
-          className="border border-gray-300 rounded-lg p-3 h-24 text-base"
+          mode="outlined"
           multiline
           placeholder="Ex: Dormi pouco, mas me sinto bem..."
           value={note}
           onChangeText={setNote}
-          textAlignVertical="top"
+          style={{ height: 120, backgroundColor: appColors.surface }}
         />
       </View>
 
-      {/* Submit Button */}
-      <TouchableOpacity
+      <Button
+        mode="contained"
         onPress={handleSubmit}
+        loading={isLoading}
         disabled={isLoading || !userId}
-        className={`mt-8 mb-10 p-4 rounded-xl flex-row justify-center items-center ${
-          isLoading || !userId ? 'bg-blue-300' : 'bg-blue-600'
-        }`}
+        style={{ marginTop: appSpacing.xl, borderRadius: appRadius.md }}
+        contentStyle={{ paddingVertical: 8 }}
       >
-        {isLoading ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text className="text-white font-bold text-lg">
-            {userId ? 'Confirmar check-in' : 'Entre para fazer check-in'}
-          </Text>
-        )}
-      </TouchableOpacity>
+        {userId ? 'Confirmar check-in' : 'Entre para fazer check-in'}
+      </Button>
 
       {error && (
-        <Text className="text-red-500 text-center mt-2">{error}</Text>
+        <Text variant="bodySmall" style={{ color: appColors.danger, textAlign: 'center', marginTop: appSpacing.md }}>
+          {error}
+        </Text>
       )}
     </ScrollView>
   );
 }
 
-/**
- * Seletor de Humor com Emojis (Tradução do _MoodSlider)
- */
-function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
-  const emojis = ['😢', '😕', '😐', '🙂', '😄'];
+function Emoji3D({ score, isSelected, onSelect }: { score: number; isSelected: boolean; onSelect: () => void }) {
   const labels = ['Muito mal', 'Mal', 'Neutro', 'Bem', 'Muito bem'];
 
+  const scale     = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const rotateY   = useSharedValue(0);   // 3D horizontal spin
+  const rotateX   = useSharedValue(0);   // 3D vertical tilt
+  const shadowR   = useSharedValue(3);
+
+  React.useEffect(() => {
+    if (isSelected) {
+      // Coin-flip reveal when selected
+      rotateY.value = withSequence(
+        withTiming(360, { duration: 600 }),
+        withRepeat(
+          withSequence(withTiming(15, { duration: 1200 }), withTiming(-15, { duration: 1200 })),
+          -1, true
+        )
+      );
+      rotateX.value = withRepeat(
+        withSequence(withTiming(12, { duration: 900 }), withTiming(-8, { duration: 900 })),
+        -1, true
+      );
+      translateY.value = withRepeat(
+        withSequence(withTiming(-8, { duration: 700 }), withTiming(0, { duration: 700 })),
+        -1, true
+      );
+      scale.value = withSpring(1.15, { damping: 6, stiffness: 180 });
+      shadowR.value = withSpring(18);
+    } else {
+      rotateY.value  = withSpring(0, { damping: 8 });
+      rotateX.value  = withSpring(0, { damping: 8 });
+      translateY.value = withSpring(0);
+      scale.value    = withSpring(1.0);
+      shadowR.value  = withSpring(3);
+    }
+  }, [isSelected]);
+
+  const handlePress = () => {
+    // Quick 3D pop on tap
+    scale.value = withSequence(
+      withSpring(1.4, { damping: 3, stiffness: 400 }),
+      withSpring(isSelected ? 1.15 : 1.0, { damping: 6 })
+    );
+    rotateY.value = withSequence(
+      withTiming(180, { duration: 300 }),
+      withTiming(360, { duration: 300 })
+    );
+    onSelect();
+  };
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 500 },
+      { scale: scale.value },
+      { translateY: translateY.value },
+      { rotateY: `${rotateY.value}deg` },
+      { rotateX: `${rotateX.value}deg` },
+    ],
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    shadowRadius: shadowR.value,
+    elevation: shadowR.value,
+  }));
+
   return (
-    <View className="mb-6">
-      <Text className="text-lg font-semibold mb-4">Como está seu humor agora?</Text>
-      <View className="flex-row justify-between">
-        {emojis.map((emoji, index) => {
-          const score = index + 1;
-          const isSelected = value === score;
-          return (
-            <TouchableOpacity
-              key={score}
-              onPress={() => onSelect(score)}
-              className={`items-center p-3 rounded-2xl border-2 ${
-                isSelected ? 'bg-blue-50 border-blue-500' : 'border-transparent'
-              }`}
-            >
-              <Text style={{ fontSize: 32 }}>{emoji}</Text>
-              {isSelected && (
-                <Text className="text-blue-600 text-xs font-bold mt-1">
-                  {labels[index]}
-                </Text>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+    <Pressable onPress={handlePress} style={{ alignItems: 'center', flex: 1, paddingVertical: 8 }}>
+      <Animated.View style={[
+        animStyle,
+        glowStyle,
+        {
+          width: 62,
+          height: 62,
+          borderRadius: 31,
+          backgroundColor: isSelected ? appColors.primarySoft : 'rgba(0,0,0,0.04)',
+          borderWidth: 2,
+          borderColor: isSelected ? appColors.primary : 'transparent',
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: isSelected ? appColors.primary : '#000',
+          shadowOffset: { width: 0, height: isSelected ? 6 : 1 },
+          shadowOpacity: isSelected ? 0.4 : 0.1,
+        }
+      ]}>
+        <Image
+          source={{ uri: FLUENT_EMOJI_3D[score] }}
+          style={{ width: 46, height: 46 }}
+          resizeMode="contain"
+        />
+      </Animated.View>
+      {isSelected && (
+        <Text variant="labelSmall" style={{ color: appColors.primary, fontWeight: '700', marginTop: 6 }}>
+          {labels[score - 1]}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number) => void }) {
+  return (
+    <View style={{ marginBottom: appSpacing.xl }}>
+      <Text variant="titleMedium" style={{ fontWeight: '700', marginBottom: appSpacing.md }}>
+        Como está seu humor agora?
+      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: appSpacing.sm }}>
+        {[1, 2, 3, 4, 5].map((score) => (
+          <Emoji3D
+            key={score}
+            score={score}
+            isSelected={value === score}
+            onSelect={() => onSelect(score)}
+          />
+        ))}
       </View>
     </View>
   );
 }
 
-/**
- * Componente genérico para seletores de 1 a 5 (Substituto de Energy, Clarity, etc)
- */
 function ScoreSelector({ label, value, onSelect }: { label: string; value: number; onSelect: (v: number) => void }) {
   return (
-    <View className="mb-6">
-      <Text className="text-gray-800 font-medium mb-3">{label}</Text>
-      <View className="flex-row justify-between bg-gray-100 p-1 rounded-xl">
-        {[1, 2, 3, 4, 5].map((score) => (
-          <TouchableOpacity
-            key={score}
-            onPress={() => onSelect(score)}
-            className={`flex-1 py-3 rounded-lg items-center ${
-              value === score ? 'bg-white shadow-sm' : ''
-            }`}
-          >
-            <Text className={`font-bold ${value === score ? 'text-blue-600' : 'text-gray-500'}`}>
-              {score}
-            </Text>
-          </TouchableOpacity>
-        ))}
+    <View>
+      <Text variant="labelLarge" style={{ color: appColors.textPrimary, fontWeight: '600', marginBottom: appSpacing.sm }}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: appColors.background, borderRadius: appRadius.md, padding: 4 }}>
+        {[1, 2, 3, 4, 5].map((score) => {
+          const isSelected = value === score;
+          return (
+            <TouchableRipple
+              key={score}
+              onPress={() => onSelect(score)}
+              style={{
+                flex: 1,
+                paddingVertical: 10,
+                borderRadius: appRadius.sm,
+                backgroundColor: isSelected ? appColors.surface : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              borderless
+            >
+              <Text style={{ fontWeight: '700', color: isSelected ? appColors.primary : appColors.textSecondary }}>
+                {score}
+              </Text>
+            </TouchableRipple>
+          );
+        })}
       </View>
     </View>
   );

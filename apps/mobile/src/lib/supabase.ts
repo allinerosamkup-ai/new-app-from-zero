@@ -1,71 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-let AsyncStorage: any;
-
-try {
-  AsyncStorage = require('@react-native-async-storage/async-storage').default;
-} catch {
-  AsyncStorage = undefined;
-}
-
-function missingEnvError(): Error {
-  return new Error('Supabase mobile env vars are missing: EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
-}
-
-const client =
-  supabaseUrl && supabaseAnonKey
-      ? createClient(supabaseUrl, supabaseAnonKey, {
-          auth: {
-            storage: AsyncStorage,
-          autoRefreshToken: true,
-          persistSession: true,
-          detectSessionInUrl: false,
-        },
-      })
-    : null;
-
-export const supabase: any =
-  client ??
-  ({
-    auth: {
-      getSession: async () => {
-        throw missingEnvError();
+// Inicialização segura para evitar crash fatal no APK caso as env vars faltem no build
+export const supabase = (supabaseUrl && supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
       },
-      onAuthStateChange: () => ({
-        data: {
-          subscription: {
-            unsubscribe() {},
-          },
-        },
-      }),
-      signOut: async () => {
-        throw missingEnvError();
-      },
-    },
-    functions: {
-      invoke: async () => {
-        throw missingEnvError();
-      },
-    },
-    channel: () => ({
-      on: () => ({
-        subscribe: () => ({
-          unsubscribe() {},
-        }),
-      }),
-    }),
-    from: () => ({
-      select: () => ({
-        gte: () => ({
-          order: () => ({
-            order: async () => {
-              throw missingEnvError();
-            },
-          }),
-        }),
-      }),
-    }),
-  } as const);
+    })
+  : new Proxy({} as any, {
+      get: (target, prop) => {
+        console.warn(`Supabase: Tentativa de acessar "${String(prop)}" sem env vars configuradas.`);
+        // Retorna mocks mínimos para não quebrar o fluxo de renderização inicial
+        if (prop === 'auth') {
+          return {
+            getSession: async () => ({ data: { session: null }, error: null }),
+            onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+            signOut: async () => ({ error: null }),
+          };
+        }
+        return () => ({
+          from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }),
+        });
+      }
+    });

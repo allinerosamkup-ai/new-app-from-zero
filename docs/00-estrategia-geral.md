@@ -27,6 +27,21 @@ O app deve operar em um ciclo simples de quatro passos:
 
 A inteligência deve sempre responder três perguntas: “como ela está agora?”, “o que isso provavelmente significa?” e “como o dia precisa ser adaptado?”.
 
+Regra atual de produto: **contexto antigo explica padrão; contexto de hoje decide ação**. A Airia pode usar memória longitudinal para entender recorrência, mas só deve sugerir uma tarefa quando houver âncora operacional atual: agenda pendente, hábito devido, meta ativa ou ação aceita pela usuária.
+
+Agenda vazia não significa silêncio absoluto: a Airia pode sugerir um compromisso opcional ligado a uma meta ou intenção atual. O que ela não pode fazer é tratar sugestão como compromisso real, salvar sozinha ou notificar algo não confirmado.
+
+Se não houver boa ação ancorada ou boa sugestão opcional, a resposta correta é explicar o padrão e não inventar tarefa.
+
+O algoritmo operacional é o **Airia Decision Brain**:
+
+1. **Truth Layer:** fatos reais do dia, horário local, agenda, hábitos, metas, concluídos e pendências.
+2. **Memory Layer:** RAG, diário, padrões e feedback; memória explica padrão, não cria tarefa sozinha.
+3. **Candidate Layer:** manter, mover, reduzir, pausar, converter, sugerir, notificar ou apenas explicar.
+4. **Decision Layer:** pontua por âncora, urgência, fase, horário viável, repetição, carga e impacto em meta.
+5. **Critic Layer:** bloqueia vencido, feito, rejeitado, genérico, repetido, sem base ou notificação inventada.
+6. **Narrative Layer:** transforma decisão permitida em linguagem natural, script, manobra ou pedido de confirmação.
+
 ## 4. O que clonar (Estratégia de Produto)
 
 Dos apps de referência, os três blocos valiosos:
@@ -49,9 +64,27 @@ Dos apps de referência, os três blocos valiosos:
 2. **Prezar pela Ação:** Sugerir ações concretas, não apenas diagnósticos bonitos.
 3. **Privacidade como Valor:** Consentimento granular, minimização de dados e mapa de uso, visto como benefício do app.
 4. **Suporte Comportamental:** Posicionar como organização, não como clínico/tratamento ou farmacológico. Limitando o conselho a intervenções de tempo, pausas, cognição.
+5. **Não ressuscitar ação:** se a pessoa fez, excluiu, rejeitou, pulou ou agendou uma sugestão, a IA deve tratar isso como memória operacional.
 
 ## 7. Roadmap Sugerido
 
 - **Onda 1:** Check-in + Journal + Planner manual e adaptativo por sugestão.
-- **Onda 2:** Insights semanais + Replanjamento automatizado.
+- **Onda 1.5:** DailyContext + feedback de ações + Decision Brain + AdaptiveAgendaEngine.
+- **Onda 2:** Expansão do replanejamento adaptativo para todos os cards, notificações e diário com observabilidade.
 - **Onda 3:** Wearable, previsão de ciclo e automações profundas.
+
+## 8. Robustez do Produto Final
+
+Para a Airia ser um produto forte, a experiência precisa provar dentro do app a tese central: humor e energia viram decisão prática de agenda.
+
+Implementações de robustez adicionadas:
+
+- `riskSafety` foi adicionado a check-in, diário e Aura Chat para separar suporte funcional de risco humano/clínico.
+- Protocolo de segurança aparece no app quando há rota `human_support` ou `crisis_protocol`, registra `risk_protocol_triggered` e mostra recursos humanos/emergenciais.
+- Home permanece como superfície de uso da consumidora, sem pitch, demo visível ou copy comercial.
+- Planner registra eventos de preview e aplicação da agenda adaptativa.
+- Insights registra geração de relatório semanal e reforça a prova de valor: padrões conectados à execução real.
+
+Regra de produto: não existe modo demo no app final. Qualquer conversa com investidor deve mostrar o produto real funcionando como a usuária usaria.
+
+Regra de posicionamento: Airia não é médica, terapeuta nem promessa de cura. Airia é assistente de ciclagem de humor, energia e agenda adaptativa.

@@ -1,3 +1,5 @@
+import { humanizeScore } from '../lib/aura-prompt';
+
 type JournalSessionRecord = {
   id: string;
   userId: string;
@@ -27,6 +29,7 @@ type CheckinSnapshot = {
   stateLabel?: string | null;
   stateLabelType?: string | null;
   recordedAt?: Date;
+  note?: string | null;
 };
 
 export type RoutineContext = {
@@ -36,6 +39,9 @@ export type RoutineContext = {
   checkinToday?: CheckinSnapshot | null;
   topThemes: string[];
   topPlannerCategories: string[];
+  activeGoals: string[];
+  recentSummaries: string[];
+  recentSessionHistory: string;
 };
 
 function startOfUtcDay(date: Date): Date {
@@ -65,35 +71,45 @@ function buildPromptSummary(input: {
   checkinToday?: CheckinSnapshot | null;
   topThemes: string[];
   topPlannerCategories: string[];
+  activeGoals?: string[];
+  recentSummaries: string[];
 }): string {
   const parts: string[] = [];
 
   if (input.routineSummary) {
-    parts.push(`Rotina percebida: ${input.routineSummary}`);
+    parts.push(`${input.routineSummary}`);
   }
 
   if (input.preferences?.wakeTime || input.preferences?.sleepTime) {
     parts.push(
-      `Horários declarados: acorda ${input.preferences?.wakeTime ?? 'sem dado'} e dorme ${input.preferences?.sleepTime ?? 'sem dado'}.`,
+      `Sua jornada costuma começar às ${input.preferences?.wakeTime ?? '...'} e silenciar por volta de ${input.preferences?.sleepTime ?? '...'}.`,
     );
   }
 
   if (input.checkinToday?.stateLabel) {
     parts.push(
-      `Estado atual: ${input.checkinToday.stateLabel} (humor ${input.checkinToday.moodScore}/5, energia ${input.checkinToday.energyScore}/5).`,
+      `Hoje você habita um estado ${input.checkinToday.stateLabel.toLowerCase()}, com um humor ${humanizeScore(input.checkinToday.moodScore, 'mood')} e uma energia ${humanizeScore(input.checkinToday.energyScore, 'energy')}.`,
     );
   }
 
   if (input.topThemes.length > 0) {
-    parts.push(`Temas recentes do diário: ${input.topThemes.join(', ')}.`);
+    parts.push(`Recentemente, seus pensamentos têm orbitado em torno de ${input.topThemes.join(', ')}.`);
+  }
+
+  if (input.recentSummaries.length > 0) {
+    parts.push(`Nos últimos registros do diário, apareceram passagens como: ${input.recentSummaries.join(' | ')}.`);
   }
 
   if (input.topPlannerCategories.length > 0) {
-    parts.push(`Categorias frequentes no planner: ${input.topPlannerCategories.join(', ')}.`);
+    parts.push(`No seu planner, o foco tem sido em ${input.topPlannerCategories.join(', ')}.`);
+  }
+
+  if (input.activeGoals?.length) {
+    parts.push(`Metas ativas que podem estar puxando decisões: ${input.activeGoals.join(', ')}.`);
   }
 
   if (parts.length === 0) {
-    return 'Sem rotina consolidada ainda. Use apenas a mensagem atual e o histórico recente.';
+    return 'Ainda estamos começando a nos conhecer. Sinta-se à vontade para compartilhar o que vier à mente.';
   }
 
   return parts.join(' ');
@@ -146,7 +162,7 @@ export class JournalService {
     const recentWindowStart = new Date(today);
     recentWindowStart.setUTCDate(recentWindowStart.getUTCDate() - 7);
 
-    const [onboarding, preferences, checkinToday, recentSessions, recentBlocks] = await Promise.all([
+    const [onboarding, preferences, checkinToday, recentSessions, recentBlocks, pastSessionsHistory, activeObjectives] = await Promise.all([
       prisma.onboardingResponse.findUnique({
         where: { userId },
       }),
@@ -174,6 +190,20 @@ export class JournalService {
         orderBy: { localDate: 'desc' },
         take: 20,
       }),
+      prisma.journalSession.findMany({
+        where: { userId, status: 'completed', summary: { not: null } },
+        orderBy: { finalizedAt: 'desc' },
+        take: 4,
+        select: { summary: true, themes: true, finalizedAt: true },
+      }),
+      prisma.objective?.findMany
+        ? prisma.objective.findMany({
+            where: { userId, archived: false, progress: { lt: 100 } },
+            orderBy: { updatedAt: 'desc' },
+            take: 5,
+            select: { title: true },
+          }).catch(() => [])
+        : Promise.resolve([]),
     ]);
 
     const derivedRoutineSummary = [
@@ -189,17 +219,48 @@ export class JournalService {
     const topThemes = countTopValues(
       recentSessions.flatMap((session: { themes?: string[] | null }) => session.themes ?? []),
     );
+    const recentSummaries = recentSessions
+      .map((session: { summary?: string | null }) => session.summary?.trim() ?? '')
+      .filter(Boolean)
+      .slice(0, 3);
 
     const topPlannerCategories = countTopValues(
       recentBlocks.map((block: { category?: string | null }) => block.category ?? ''),
     );
+    const activeGoals = (activeObjectives as Array<{ title?: string | null }>)
+      .map((goal) => goal.title?.trim() ?? '')
+      .filter(Boolean)
+      .slice(0, 5);
+
+    const recentSessionHistory = pastSessionsHistory.length > 0
+      ? pastSessionsHistory
+          .map((s: { summary?: string | null; themes?: string[] | null; finalizedAt?: Date | null }) => {
+            const daysAgo = s.finalizedAt
+              ? Math.round((Date.now() - new Date(s.finalizedAt).getTime()) / 86_400_000)
+              : null;
+            const label = daysAgo === null ? 'anteriormente' : daysAgo === 0 ? 'hoje' : daysAgo === 1 ? 'ontem' : `${daysAgo} dias atrás`;
+            const themePart = s.themes?.length ? ` (temas: ${s.themes.join(', ')})` : '';
+            return `[${label}] ${s.summary?.trim() ?? ''}${themePart}`;
+          })
+          .join('\n')
+      : '';
 
     const context = {
       routineSummary,
       preferences: preferences ?? undefined,
-      checkinToday: (checkinToday as CheckinSnapshot | null) ?? null,
+      checkinToday: checkinToday ? {
+        moodScore: checkinToday.moodScore,
+        energyScore: checkinToday.energyScore,
+        stateLabel: checkinToday.stateLabel,
+        stateLabelType: checkinToday.stateLabelType,
+        recordedAt: checkinToday.recordedAt,
+        note: checkinToday.note,
+      } : null,
       topThemes,
       topPlannerCategories,
+      activeGoals,
+      recentSummaries,
+      recentSessionHistory,
     };
 
     return {

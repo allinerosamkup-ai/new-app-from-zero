@@ -4,6 +4,24 @@
 export type CheckinPeriod = 'manha' | 'tarde' | 'noite';
 export type BackendCheckinSlot = 'morning' | 'midday' | 'evening';
 
+export type MenstrualPhase = 'folicular' | 'ovulatoria' | 'lutea' | 'menstrual';
+
+export type FlowIntensity = 'leve' | 'moderado' | 'intenso';
+
+export type PhysicalSymptom =
+  | 'dor_cabeca'
+  | 'colica'
+  | 'sensibilidade_seios'
+  | 'inchaco'
+  | 'acne'
+  | 'fadiga'
+  | 'lombalgia';
+
+export type SymptomLevel = 1 | 2 | 3; // 1=leve, 2=moderado, 3=intenso
+
+// Sintomas com nível de intensidade graduável
+export type GradedSymptom = 'colica' | 'dor_cabeca';
+
 export type DayStateLabel =
   | 'leve'
   | 'estavel'
@@ -39,6 +57,16 @@ export interface Checkin {
   irritabilityScore: number; // 1-5
   physicalScore: number;  // 1-5
   socialScore: number;    // 1-5
+  
+  // Saúde Feminina
+  menstrualPhase?: MenstrualPhase;
+  cycleDay?: number;
+  physicalSymptoms?: PhysicalSymptom[];
+  symptomLevels?: Partial<Record<GradedSymptom, SymptomLevel>>;
+  // Fluxo menstrual
+  isFlowing?: boolean;
+  flowDay?: number;
+  flowIntensity?: FlowIntensity;
   note?: string;
   // Estado calculado pela IA
   stateLabel?: string;           // "Dia sensível" — display
@@ -58,6 +86,16 @@ export interface CheckinCreateInput {
   irritabilityScore: number;
   physicalScore: number;
   socialScore: number;
+  
+  // Saúde Feminina (Opcional)
+  menstrualPhase?: MenstrualPhase;
+  cycleDay?: number;
+  physicalSymptoms?: PhysicalSymptom[];
+  // Fluxo menstrual
+  isFlowing?: boolean;
+  flowDay?: number;
+  flowIntensity?: FlowIntensity;
+  
   note?: string;
 }
 

@@ -1,26 +1,49 @@
 {
   "expo": {
-    "name": "Mood Energy",
-    "slug": "mood-energy",
-    "version": "1.0.0",
+    "name": "Airia",
+    "slug": "airia",
+    "version": "1.0.15",
+    "scheme": "airia",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FAF8F5"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/27c441ce-76c7-4508-b0fd-4f431cdd04d0"
+    },
+    "plugins": [
+      "./plugins/withAiriaAndroidWorkspace",
+      "./plugins/withAiriaTodayWidget",
+      [
+        "expo-updates",
+        {
+          "username": "allinerosamkup"
+        }
+      ]
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "pro.airia.app"
     },
     "android": {
+      "package": "pro.airia.app",
+      "versionCode": 16,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#FAF8F5"
       }
     },
     "web": {
@@ -28,8 +51,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "mood-energy-project"
+        "projectId": "27c441ce-76c7-4508-b0fd-4f431cdd04d0"
       }
-    }
+    },
+    "owner": "allinerosamkup"
   }
 }

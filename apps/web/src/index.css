@@ -3,36 +3,41 @@
 @tailwind utilities;
 
 :root {
-  --bg-base: #f6f3ed;
-  --bg-surface: rgba(255, 255, 255, 0.65);
-  --bg-surface-solid: #ffffff;
-  --bg-glass: rgba(255, 255, 255, 0.45);
-  --bg-glass-strong: rgba(255, 255, 255, 0.7);
-  --bg-dark: #1f3b32;
-  --bg-dark-hover: #2a4d40;
+  --accent-peach: #F4BEA8;
+  --accent-butter: #F7E7A6;
+  --accent-sage:    #BFDCCB;
+  --accent-sky:    #BEE6F3;
 
-  --text-primary: #1f1b16;
-  --text-secondary: #6e675d;
-  --text-muted: #9b9489;
-  --text-on-dark: #fff7eb;
-  --text-on-dark-muted: #d8e5dc;
+  --bg-base: #FFFFFF;
+  --bg-surface: rgba(255, 255, 255, 0.92);
+  --bg-surface-solid: #FFFFFF;
+  --bg-glass: rgba(255, 255, 255, 0.76);
+  --bg-glass-strong: rgba(255, 255, 255, 0.96);
+  --bg-dark: #5A7A64;
+  --bg-dark-hover: #486451;
 
-  --accent-green: #1f3b32;
-  --accent-blue: #3b82f6;
-  --accent-teal: #2dd4bf;
-  --accent-orange: #f59e0b;
-  --accent-purple: #8b5cf6;
-  --accent-rose: #f43f5e;
+  --text-primary: #181A1F;
+  --text-secondary: #5F6673;
+  --text-muted: #98A0AE;
+  --text-on-dark: #FFFFFF;
+  --text-on-dark-muted: #DDE7E1;
 
-  --cat-trabalho: #3b82f6;
-  --cat-saude: #10b981;
-  --cat-lazer: #8b5cf6;
-  --cat-rotina: #9ca3af;
+  --accent-green:  #BFDCCB;
+  --accent-blue:   #BEE6F3;
+  --accent-teal:   #BFDCCB;
+  --accent-orange: #F4BEA8;
+  --accent-purple: #E5DBF7;
+  --accent-rose:   #F5C9C1;
 
-  --state-leve: #9AD7B4;
-  --state-moderado: #FFBE7A;
-  --state-sensivel: #D8C8FF;
-  --state-critico: #FF9BA5;
+  --cat-trabalho: #BEE6F3;
+  --cat-saude:    #BFDCCB;
+  --cat-lazer:    #F7E7A6;
+  --cat-rotina:   #F4BEA8;
+
+  --state-leve:     #BFDCCB;
+  --state-moderado: #F7E7A6;
+  --state-sensivel: #F4BEA8;
+  --state-critico:  #F3A7A7;
 
   --radius-sm: 12px;
   --radius-md: 16px;
@@ -43,13 +48,31 @@
   --blur-glass: 20px;
   --blur-glass-strong: 30px;
 
-  --shadow-sm: 0 1px 3px rgba(31, 59, 50, 0.06);
-  --shadow-md: 0 4px 12px rgba(31, 59, 50, 0.08);
-  --shadow-lg: 0 8px 30px rgba(31, 59, 50, 0.12);
-  --shadow-glow: 0 0 30px rgba(45, 212, 191, 0.15);
+  --shadow-sm: 0 1px 3px rgba(17, 24, 39, 0.05);
+  --shadow-md: 0 8px 20px rgba(17, 24, 39, 0.06);
+  --shadow-lg: 0 18px 40px rgba(17, 24, 39, 0.08);
+  --shadow-glow: 0 0 30px rgba(191, 220, 203, 0.28);
 
   --font-heading: 'Poppins', sans-serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* ── Accent peach ── */
+  --accent-9:        #F4BEA8;
+  --accent-10:       #E8A98F;
+  --accent-11:       #A86855;
+  --accent-surface:  rgba(244, 190, 168, .10);
+
+  /* ── Bordas tonais ── */
+  --border-subtle:      rgba(17, 24, 39, .06);
+  --border-interactive: rgba(90, 122, 100, .18);
+  --border-card:        rgba(17, 24, 39, .05);
+
+  /* ── Categorias Planner ── */
+  --cat-trabalho:    #BEE6F3;
+  --cat-pessoal:     #E5DBF7;
+  --cat-autocuidado: #BFDCCB;
+  --cat-social:      #F7E7A6;
+  --cat-outro:       #CDD2DA;
 }
 
 * {
@@ -62,7 +85,8 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #e8e4de;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAFBFB 100%);
+  color: var(--text-primary);
 }
 
 h1, h2, h3 {
@@ -87,8 +111,8 @@ h1, h2, h3 {
   background: var(--bg-surface);
   backdrop-filter: blur(var(--blur-glass));
   -webkit-backdrop-filter: blur(var(--blur-glass));
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-card);
+  box-shadow: var(--shadow-md);
 }
 
 @keyframes fadeInUp {
@@ -157,6 +181,35 @@ h1, h2, h3 {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(31, 59, 50, 0.15);
+  background: rgba(99, 152, 169, 0.18);
   border-radius: 999px;
 }
+
+/* ── Aura: interação opt-in ── */
+.interactive-card {
+  transition: transform 250ms cubic-bezier(0.4, 0, 0.6, 1),
+              box-shadow 250ms cubic-bezier(0.4, 0, 0.6, 1);
+}
+.interactive-card:hover  { transform: scale(1.015); }
+.interactive-card:active { transform: scale(0.985); }
+
+.btn-aura {
+  transition: transform 250ms cubic-bezier(0.4, 0, 0.6, 1),
+              background-color 250ms cubic-bezier(0.4, 0, 0.6, 1);
+}
+.btn-aura:hover:not(:disabled)  { transform: scale(1.03); }
+.btn-aura:active:not(:disabled) { transform: scale(0.97); }
+
+hr, .divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive-card,
+  .btn-aura {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+

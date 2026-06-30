@@ -5,6 +5,9 @@ import api, { apiBaseUrl } from './api_service';
  */
 export interface CheckinResponse {
   id: string;
+  localDate?: string;
+  date?: string;
+  menstrualPhase?: 'menstrual' | 'folicular' | 'ovulatoria' | 'lutea' | null;
   stateLabel: string;
   stateLabelType: 'leve' | 'moderado' | 'sensível' | 'crítico';
   stateSummary: string;
@@ -114,6 +117,18 @@ export class AIService {
     energyScore: number;
     clarityScore: number;
     irritabilityScore: number;
+    physicalScore?: number;
+    socialScore?: number;
+    menstrualPhase?: string;
+    cycleDay?: number;
+    physicalSymptoms?: string[];
+    isFlowing?: boolean;
+    flowDay?: number;
+    flowIntensity?: 'leve' | 'moderado' | 'intenso';
+    symptomLevels?: {
+      colica?: 1 | 2 | 3;
+      dorCabeca?: 1 | 2 | 3;
+    };
     note?: string;
   }): Promise<CheckinResponse> {
     const response = await api.post<CheckinResponse>('/api/checkins', data);

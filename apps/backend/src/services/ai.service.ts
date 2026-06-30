@@ -1,16 +1,20 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
-import dotenv from 'dotenv';
 import { OnboardingAiOutputSchema, type OnboardingAiOutput } from '../contracts/onboarding-ai.contract';
-
-dotenv.config();
+import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { buildAuraSystemPrompt } from '../lib/aura-prompt';
+import {
+  validateJournalReply,
+  buildRevisionInstruction,
+  type JournalValidationContext,
+} from '../lib/journal-reply-validator';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || 'missing',
-    });
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) throw new Error('OPENAI_API_KEY is not set in environment variables');
+    _openai = new OpenAI({ apiKey: key });
   }
   return _openai;
 }
@@ -36,15 +40,42 @@ export type JournalStreamHistoryMessage = {
 };
 
 export type JournalPromptContext = {
+  userName?: string;
+  userProfileSummary?: string | null;
+  longTermMemory?: string | null;
+  recentSessionHistory?: string | null;
+  journalContext?: string | null;
   routineSummary?: string;
   promptSummary: string;
   topThemes: string[];
   topPlannerCategories: string[];
+  moodCycleContext?: string | null;
+  recentSuggestionMemory?: string | null;
+  activeGoalsContext?: string | null;
+  ragContext?: string;
+  plannerContext?: string | null;
+  reasoningTraceContext?: string | null;
   checkinToday?: {
     moodScore: number;
     energyScore: number;
     stateLabel?: string | null;
   } | null;
+  /** Hora local do usuário (0-23). Frontend deve enviar pra calibrar sugestões. */
+  currentHour?: number;
+  /** Minuto local do usuário (0-59). Frontend deve enviar pra calibrar sugestões. */
+  currentMinute?: number;
+  /** Fase atual de humor (ativa engine adaptativa no prompt). */
+  phase?: string | null;
+  /** Warning flags (sustained_low, rapid_drop, etc) — pre-queda. */
+  warningFlags?: string[] | null;
+  /** Resumo da previsão 7d. */
+  forecast7dSummary?: string | null;
+  /** Tarefas pesadas concluídas nos últimos 7 dias. */
+  taskMomentum7d?: number | null;
+  /** Diagnósticos auto-relatados no onboarding (ex: adhd, bipolar_ii). */
+  priorDiagnoses?: string[] | null;
+  /** Knowledge graph compacto (entidades+fatos+padrões+decisões em aberto). */
+  knowledgeGraphContext?: string | null;
 };
 
 export type OnboardingProfileInput = {
@@ -61,31 +92,13 @@ export type OnboardingProfileInput = {
 };
 
 export class AIService {
-  private static readonly MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  private static readonly MODEL = getOpenAiModel();
   private static readonly CONTEXT_LIMIT = 50;
 
-  private static buildJournalPrompt(context: JournalPromptContext): string {
-    return `
-      Você é um assistente de diário emocional com foco em acolhimento, autorregulação e organização prática da rotina.
-
-      CONTEXTO DA PESSOA:
-      ${context.promptSummary}
-
-      REGRAS:
-      - Responda em português do Brasil.
-      - Use tom acolhedor, claro e não clínico.
-      - Nunca faça diagnósticos médicos ou psiquiátricos.
-      - Não invente memórias; use apenas o contexto e o histórico fornecidos.
-      - Quando fizer sentido, conecte a conversa com rotina, energia e organização do dia.
-      - Prefira respostas concisas, naturais e úteis.
-    `.trim();
-  }
 
   private static buildOnboardingPrompt(input: OnboardingProfileInput): string {
     return `
-      Você é um assistente de onboarding de um app de humor, energia e rotina.
-
-      Sua tarefa é ler as respostas iniciais do usuário e devolver um resumo estruturado e útil para iniciar a personalização do app.
+      Leia as respostas iniciais do usuário e devolva um resumo estruturado e útil para iniciar a personalização do app.
 
       DADOS DO USUÁRIO:
       - Nome de uso: ${input.fullName}
@@ -119,23 +132,97 @@ export class AIService {
     `.trim();
   }
 
+  /**
+   * Janela de mensagens da sessão atual mantida em INTEIRO no prompt.
+   * Mensagens anteriores a essa janela são preservadas em uma síntese curta
+   * (system message), pra que a Aura não perca fatos ditos no início de uma
+   * conversa longa (raiz reportada: Alline disse "fui na rua, pintei",
+   * "anunciei em 3 redes" e a Aura ignorou — porque slice(-10) cortou).
+   */
+  static readonly JOURNAL_HISTORY_WINDOW = 30;
+
   static async streamJournalReply(
     input: {
       context: JournalPromptContext;
       history: JournalStreamHistoryMessage[];
       message: string;
+      closingMode?: boolean;
       onDelta?: (chunk: string) => void;
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<string> {
-    const recentHistory = input.history.slice(-10);
-    const systemPrompt = this.buildJournalPrompt(input.context);
+    const window = AIService.JOURNAL_HISTORY_WINDOW;
+    let recentHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    if (input.history.length <= window) {
+      recentHistory = input.history.map((m) => ({ role: m.role, content: m.content }));
+    } else {
+      // Comprime as primeiras mensagens em uma síntese pra não perder contexto
+      const overflowCount = input.history.length - window + 5;
+      const olderMessages = input.history.slice(0, overflowCount);
+      const synthesis = olderMessages
+        .map((m) => `${m.role === 'user' ? 'Usuária' : 'Airia'}: ${m.content.replace(/\s+/g, ' ').slice(0, 220)}`)
+        .join(' || ');
+      recentHistory = [
+        {
+          role: 'system' as const,
+          content: `[CONTEXTO COMPRIMIDO da sessão atual — ${overflowCount} mensagens anteriores a esta janela. NÃO IGNORE estes fatos, use pra cruzar padrão]: ${synthesis}`,
+        },
+        ...input.history.slice(-window + 5).map((m) => ({ role: m.role, content: m.content })),
+      ];
+    }
 
     const stream = await client.chat.completions.create({
       model: this.MODEL,
       stream: true,
       messages: [
-        { role: 'system', content: systemPrompt },
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: input.context.userName,
+            profileSummary: input.context.userProfileSummary || input.context.promptSummary,
+            moodCycleContext: input.context.moodCycleContext,
+            longTermMemory: input.context.longTermMemory,
+            contextualMemory: input.context.ragContext,
+            journalContext: input.context.journalContext,
+            recentSessionHistory: input.context.recentSessionHistory,
+            recentSuggestionMemory: input.context.recentSuggestionMemory,
+            activeGoalsContext: input.context.activeGoalsContext,
+            plannerContext: input.context.plannerContext,
+            reasoningTraceContext: input.context.reasoningTraceContext,
+            currentHour: input.context.currentHour,
+            currentMinute: input.context.currentMinute,
+            phase: input.context.phase,
+            warningFlags: input.context.warningFlags,
+            forecast7dSummary: input.context.forecast7dSummary,
+            taskMomentum7d: input.context.taskMomentum7d,
+            priorDiagnoses: input.context.priorDiagnoses,
+            knowledgeGraphContext: input.context.knowledgeGraphContext,
+            domain: 'journal-live',
+            extraInstructions: [
+              'Seja uma presença lenta. Use frases que respirem.',
+              'ENTRADA ATUAL MANDA: antes de usar planner, meta ou memória, entenda a mensagem atual. Preserve datas, sequência e correções da pessoa. Se ela disser "ontem", não transforme em hoje. Se ela disser que não foi adiado, não use a hipótese de adiamento.',
+              'NÃO ECOE: repetir a fala da pessoa com sinônimos não é análise. A resposta precisa cruzar contexto, memória ou padrão; se não houver memória útil, diga algo verdadeiro sobre o fato atual e faça uma pergunta específica.',
+              'PROVA DE CONTEXTO: se o CONTEXTO REFLEXIVO DO DIÁRIO trouxer memórias, check-ins, metas ou sessões recentes relevantes, use pelo menos um elemento concreto na leitura. Se nada conectar, não force continuidade.',
+              'FREQUÊNCIA DE PERGUNTAS: máximo 1 pergunta a cada 3 respostas. Na maioria das trocas, valide, nomeie ou reflita o que foi dito. Reserve perguntas para quando expandir for genuinamente necessário.',
+              'PRESENÇA ATIVA: aplique a leitura interna antes de cada resposta: separe fato de interpretação, identifique o movimento em curso, a utilidade possível do problema, o custo oculto e o menor movimento que cabe. Não verbalize a técnica; deixe que ela molde o que você diz.',
+              'TRIPÉ CENTRAL: antes de responder, cruze padrões, decisões e ciclos de humor. A resposta deve mostrar o que está se repetindo, qual decisão está em jogo ou qual ação cabe no estado atual — sem transformar isso em relatório.',
+              'BASE DOCUMENTADA, NÃO IMPROVISO: leituras sobre travas, sinais antes de queda, problema útil, efeito indireto ou movimento interrompido precisam estar ancoradas em evidência concreta da conversa, histórico, check-in, planner, metas ou memória. Sem evidência, trate como hipótese leve ou faça uma pergunta curta.',
+              'MEMÓRIA OBRIGATÓRIA: use histórico, memórias recuperadas, diários anteriores, metas e planner quando vierem no contexto. Se não houver memória relevante, não diga "lembro"; diga apenas o que dá para ler agora.',
+              'LENTE ANALÍTICA INTERNA (nunca explicite ao usuário): Ao ouvir um problema, trave, revés ou padrão repetitivo — pergunte-se internamente: (1) O que estava prestes a acontecer de positivo antes desse obstáculo surgir? (2) Que função esse problema pode estar cumprindo no curto prazo? (3) Que conforto, pertencimento, permissão ou preferência ele pode estar preservando? (4) Como esse mesmo efeito pode ser usado a favor da pessoa agora? Quando tiver hipótese clara, traga como pergunta curiosa suave ou como proposta pequena — nunca como afirmação absoluta.',
+              'RESPOSTA EXCELENTE: quando houver evidência forte, separe o evento real da história criada, nomeie o que está repetindo sem jargão técnico, mostre o custo concreto de continuar nesse caminho e feche com UMA ação concreta (verbo + objeto que a pessoa citou) OU UMA pergunta provocativa curta. Nunca as duas. Não use as palavras manobra, âncora, trava, padrão. Não copie exemplos externos; use o contexto real da pessoa.',
+              'MEMÓRIA ANTES DE PADRÃO: só diga que algo "é o mesmo ciclo" ou "tem a mesma forma de antes" se o histórico, a conversa atual ou as memórias recuperadas trouxerem evidência. Sem evidência, apresente como hipótese leve.',
+              'SINAIS ANTES DA QUEDA: só leia risco de queda ou sobrecarga quando houver pistas como sono ruim, rotina escorregando, irritação crescente, aceleração, isolamento, evitação repetida, excesso de estímulo, perda de plano ou decisão impulsiva. Não invente alerta para parecer profunda.',
+              'ORDEM INTERNA DAS LENTES: a leitura funcional profunda vem primeiro; depois TCC prática; depois exposição gradual; depois propósito; por último somática. Nunca cite nomes de teorias ou metodologia na resposta.',
+              'EXPOSIÇÃO GRADUAL: quando a pessoa evitar algo ou demonstrar resistência, nomeie com gentileza e ofereça apenas o primeiro passo ridiculamente pequeno. Nunca pressione.',
+              'PROPOSTA CONTEXTUAL (apenas quando genuíno): Não proponha por propor. Proponha quando: (a) a pessoa pedir diretamente ajuda ou direção, ou (b) você identificar com clareza um padrão específico. Quando propor: nomeie o que você vê e ofereça 1 ação concreta e pequena baseada no contexto real da pessoa. Pergunte se isso faz sentido, se ela quer testar por esse caminho ou se prefere ajustar. Nunca faça enxurrada — 1 proposta quando servir; presença acolhedora quando não.',
+              'COMPROMISSOS PRÁTICOS: se a pessoa mencionar planos concretos (encontro, reunião, tarefa, ligação), ao final do fluxo emocional natural ofereça com leveza: "Você mencionou [X] — quer que eu marque isso no seu dia?" Não interrompa o fluxo.',
+              'FRAME COGNITIVO TEM PRIORIDADE: quando o contexto trouxer FRAME COGNITIVO DA AIRIA e PLANO DE RESPOSTA, obedeça esse plano. Use as memórias aceitas, ignore as rejeitadas, cite no máximo 2 elementos reais (pessoa, projeto, evento ou objeto que ela mencionou) e não invente ação fora do movimento final permitido.',
+              input.closingMode
+                ? 'A pessoa está saindo. Apenas valide e deixe a porta aberta para amanhã. Sem tarefas.'
+                : '',
+            ].filter(Boolean),
+          }),
+        },
         ...recentHistory.map((message) => ({
           role: message.role,
           content: message.content,
@@ -161,7 +248,74 @@ export class AIService {
       throw new Error('Falha ao gerar resposta do diário');
     }
 
+    // ─── Fix I — Validador server-side anti-loop / anti-eco / prova de âncora ───
+    // Se a resposta cair em padrão crítico, faz UMA reescrita silenciosa.
+    // Não loop infinito — máximo 1 retentativa.
+    const validationContext = AIService.buildValidationContext(input);
+    const validation = validateJournalReply(finalContent, validationContext);
+    if (!validation.ok) {
+      console.warn(`[journal/validator] resposta rejeitada: ${validation.reason} — ${validation.details}`);
+      try {
+        const revisionInstruction = buildRevisionInstruction(validation.reason, validation.details);
+        const revisionResponse = await client.chat.completions.create({
+          model: this.MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: `Você é a Airia. Sua resposta anterior foi rejeitada por um validador interno: ${revisionInstruction}\n\nResposta original (rejeitada):\n"""${finalContent}"""\n\nRELATO ORIGINAL DA USUÁRIA:\n"""${input.message}"""\n\nReescreva agora. Mesmo tom e voz, mesmas regras do diário, mas corrigindo o problema apontado. Devolva APENAS a nova resposta, sem comentários.`,
+            },
+          ],
+        } as any);
+        const revised = revisionResponse.choices?.[0]?.message?.content?.trim();
+        if (revised) {
+          // Emite a versão revisada como bloco final (frontend exibe a nova).
+          input.onDelta?.(`\n\n${revised}`);
+          return revised;
+        }
+      } catch (revisionError) {
+        console.warn('[journal/validator] reescrita falhou, mantendo resposta original:', revisionError);
+      }
+    }
+
     return finalContent;
+  }
+
+  /** Constrói o contexto pro validador a partir do input do streamJournalReply. */
+  private static buildValidationContext(input: {
+    context: JournalPromptContext;
+    history: JournalStreamHistoryMessage[];
+    message: string;
+  }): JournalValidationContext {
+    const lastAssistantReplies = input.history
+      .filter((m) => m.role === 'assistant')
+      .slice(-3)
+      .map((m) => m.content);
+    const lastUserMessages = input.history
+      .filter((m) => m.role === 'user')
+      .slice(-3)
+      .map((m) => m.content)
+      .concat(input.message);
+
+    // Coleta âncoras concretas: planner + metas + RAG + journalContext + recentSessionHistory.
+    // Extrai linhas significativas (>= 5 chars) e pega até 12 — suficiente pra validar
+    // se a Aura citou pelo menos 1 elemento concreto.
+    const collectAnchors = (text: string | null | undefined): string[] => {
+      if (!text) return [];
+      return text
+        .split(/[\n\|]/g)
+        .map((line) => line.replace(/^[\-\*•·:\s]+/, '').trim())
+        .filter((line) => line.length >= 5 && line.length <= 200);
+    };
+
+    const anchorTitles = [
+      ...collectAnchors(input.context.plannerContext),
+      ...collectAnchors(input.context.activeGoalsContext),
+      ...collectAnchors(input.context.ragContext),
+      ...collectAnchors(input.context.journalContext),
+      ...collectAnchors(input.context.recentSessionHistory),
+    ].slice(0, 12);
+
+    return { lastAssistantReplies, lastUserMessages, anchorTitles };
   }
 
   static async generateOnboardingProfile(
@@ -172,8 +326,18 @@ export class AIService {
 
     const response = await client.chat.completions.create({
       model: this.MODEL,
-      messages: [{ role: 'system', content: prompt }],
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: input.fullName,
+            domain: 'onboarding',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
       response_format: { type: 'json_object' },
+      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
     } as any);
 
     const content = response.choices?.[0]?.message?.content;
@@ -185,7 +349,22 @@ export class AIService {
     return OnboardingAiOutputSchema.parse(JSON.parse(content));
   }
 
-  static async summarizeJournalSession(messages: { role: string; content: string }[]): Promise<JournalSummary> {
+  static async summarizeJournalSession(
+    messages: { role: string; content: string }[],
+    client: Pick<OpenAI, 'chat'> = openai,
+    context?: {
+      userName?: string | null;
+      profileSummary?: string | null;
+      moodCycleContext?: string | null;
+      longTermMemory?: string | null;
+      activeGoalsContext?: string | null;
+      recentSessionHistory?: string | null;
+      reasoningTraceContext?: string | null;
+      currentHour?: number;
+      currentMinute?: number;
+      priorDiagnoses?: string[] | null;
+    },
+  ): Promise<JournalSummary> {
     const recentMessages = messages.slice(-this.CONTEXT_LIMIT);
 
     const chatContent = recentMessages
@@ -193,21 +372,29 @@ export class AIService {
       .join('\n');
 
     const prompt = `
-      Você é um assistente especializado em acolhimento emocional.
       Analise a sessão de diário fornecida e extraia um resumo estruturado.
 
       CONVERSA:
       ${chatContent}
 
       DIRETRIZES:
-      1. RESUMO: 2-5 frases sintetizando o conteúdo principal de forma acolhedora.
+      1. RESUMO: 2-5 frases sintetizando o conteúdo principal de forma acolhedora, contemplativa e humana.
       2. EMOÇÕES: Lista de 2-5 emoções predominantes (em português, minúsculas).
       3. TEMAS: Lista de 1-3 temas recorrentes (ex: trabalho, relacionamentos, saúde).
-      4. SUGESTÕES: Opcional, 1-2 sugestões suaves baseadas no conteúdo.
+      4. SUGESTÕES: extraia até 3 caminhos/sugestões que foram conversados e validados pela pessoa. Validação inclui concordância explícita, escolha, pedido de aprofundamento, "faz sentido", "quero", "vamos", ou sinal claro de interesse. Se a pessoa rejeitou, hesitou contra ou recusou uma proposta, não inclua.
 
       IMPORTANTE:
-      - Mantenha um tom acolhedor e não instrucional.
-      - Não dê ordens, apenas ofereça perspectivas gentis.
+      - A síntese deve cruzar, quando houver evidência: padrão que apareceu, decisão concreta em jogo e como o ciclo de humor calibrava a manobra possível.
+      - Use memórias e histórico fornecidos pelo sistema para reconhecer recorrência, mas nunca invente lembrança ausente.
+      - Preserve, quando existir, a estrutura real da sessão: evento real vs história criada, padrão recorrente, decisão em jogo, custo concreto e manobra conversada.
+      - Baseie qualquer leitura de utilidade do problema, sinal de queda, movimento interrompido ou efeito indireto apenas em evidência concreta da conversa. Não invente profundidade.
+      - Se a sessão mostrou um problema com função útil de curto prazo, registre isso em linguagem comum, sem rótulos internos.
+      - Mantenha um tom acolhedor, contemplativo e não instrucional.
+      - Não faça perguntas no fechamento.
+      - Não escreva como relatório, checklist, avaliação clínica ou diagnóstico.
+      - Não dê ordens. Se houver sugestão, ela deve soar como caminho combinado, concreto e leve.
+      - Não invente sugestão final se a conversa não validou nenhuma. Nesse caso, retorne "suggestions": [].
+      - Nunca cite nomes de teorias, metodologias ou rótulos internos.
       - Retorne APENAS um JSON puro no formato esperado.
 
       FORMATO JSON:
@@ -219,10 +406,29 @@ export class AIService {
       }
     `;
 
-    const response = await openai.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: this.MODEL,
-      messages: [{ role: 'system', content: prompt }],
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: context?.userName,
+            profileSummary: context?.profileSummary,
+            moodCycleContext: context?.moodCycleContext,
+            longTermMemory: context?.longTermMemory,
+            recentSessionHistory: context?.recentSessionHistory,
+            activeGoalsContext: context?.activeGoalsContext,
+            reasoningTraceContext: context?.reasoningTraceContext,
+            currentHour: context?.currentHour,
+            currentMinute: context?.currentMinute,
+            priorDiagnoses: context?.priorDiagnoses,
+            domain: 'summary',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
       response_format: { type: 'json_object' },
+      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
     });
 
     const content = response.choices[0].message.content;
@@ -230,5 +436,70 @@ export class AIService {
 
     const parsed = JSON.parse(content);
     return JournalSummarySchema.parse(parsed);
+  }
+
+  /**
+   * Gera sugestões de hábitos baseadas no estado atual do usuário.
+   */
+  static async generateHabitSuggestions(input: {
+    userName: string;
+    profileSummary?: string | null;
+    moodCycleContext?: string | null;
+    recentSuggestionMemory?: string | null;
+    currentMoodLabel?: string;
+    timeOfDay: string;
+    currentHour?: number;
+    currentMinute?: number;
+    priorDiagnoses?: string[] | null;
+  }): Promise<Array<{ title: string; category: string; reason: string; icon: string }>> {
+    const prompt = `
+      Com base no estado atual de ${input.userName}, sugira 3 hábitos ou micro-ações para este momento do dia (${input.timeOfDay}).
+      
+      CONTEXTO:
+      - Estado percebido: ${input.currentMoodLabel || 'não informado'}
+      - Ciclo/Histórico: ${input.moodCycleContext || 'iniciando agora'}
+      ${input.recentSuggestionMemory || ''}
+      
+      REGRAS:
+      0. Faça leitura total antes de sugerir: estado atual + histórico de humor + memória/RAG + metas/hábitos/tarefas + sugestões recentes.
+      1. Use micro-passos (5-15 min).
+      2. Foque em regulação emocional, ativação mínima, exposição gradual ou proteção de energia conforme a fase.
+      3. Categorias: saúde, produtividade, mindfulness, social, lazer.
+      4. Não repita nem parafraseie sugestões recentes; se retomar uma ideia for inevitável, marque como retomada e mude a execução concreta.
+      5. Somática só entra se houver sinal corporal ou necessidade real de aterramento; não use como padrão.
+      6. Cada hábito precisa estar ancorado em algo real do contexto. Se só houver memória antiga sem fato atual, retorne menos itens em vez de inventar hábito genérico.
+      7. Retorne APENAS um array JSON.
+
+      FORMATO:
+      [{"title": "string", "category": "string", "reason": "1 frase curta", "icon": "emoji"}]
+    `;
+
+    const response = await openai.chat.completions.create({
+      model: this.MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: buildAuraSystemPrompt({
+            userName: input.userName,
+            profileSummary: input.profileSummary,
+            moodCycleContext: input.moodCycleContext,
+            recentSuggestionMemory: input.recentSuggestionMemory,
+            currentHour: input.currentHour,
+            currentMinute: input.currentMinute,
+            priorDiagnoses: input.priorDiagnoses,
+            domain: 'planning',
+          }),
+        },
+        { role: 'user', content: prompt },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
+    } as any);
+
+    const content = response.choices[0].message.content;
+    if (!content) return [];
+
+    const parsed = JSON.parse(content);
+    return Array.isArray(parsed) ? parsed : (parsed.suggestions || parsed.habits || []);
   }
 }

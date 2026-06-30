@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  JournalAssistantCompletedSchema,
   JournalMessageStreamSchema,
   JournalStartSchema,
 } from './journal.contract';
@@ -27,6 +28,25 @@ const validSessionId = '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11';
     userId: validUserId,
     sessionId: validSessionId,
     message: 'Hoje eu acordei meio travada para começar o dia.',
+    localDate: '2026-05-01',
+    currentHour: 10,
+    currentMinute: 42,
+    phase: 'Turbulência',
+    warningFlags: ['rapid_drop'],
+    forecast7dSummary: 'Amanhã pede carga menor.',
+    taskMomentum7d: 2,
+  });
+
+  assert.equal(result.success, true);
+  assert.equal((result as any).data?.localDate, '2026-05-01');
+  assert.equal((result as any).data?.currentHour, 10);
+}
+
+{
+  const result = JournalMessageStreamSchema.safeParse({
+    userId: validUserId,
+    sessionId: validSessionId,
+    message: 'texto longo do diário '.repeat(650),
   });
 
   assert.equal(result.success, true);
@@ -49,6 +69,21 @@ const validSessionId = '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11';
   });
 
   assert.equal(result.success, false);
+}
+
+{
+  const result = JournalAssistantCompletedSchema.safeParse({
+    type: 'assistant.completed',
+    message: 'O foco agora é diminuir a carga e pedir apoio se piorar.',
+    riskSafety: {
+      riskLevel: 'high',
+      signals: ['sofrimento intenso ou risco contextual'],
+      route: 'human_support',
+      message: 'A Airia deve sugerir apoio humano e reduzir carga do dia, sem diagnosticar.',
+    },
+  });
+
+  assert.equal(result.success, true);
 }
 
 console.log('journal.contract tests passed');

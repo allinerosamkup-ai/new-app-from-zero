@@ -1,0 +1,48 @@
+services:
+  airia_backend:
+    container_name: airia_backend
+    build:
+      context: ../..
+      dockerfile: deploy/airia/Dockerfile.backend
+    restart: unless-stopped
+    env_file:
+      - .env.backend
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      FRONTEND_URL: https://airia.pro
+      API_URL: https://airia.pro
+    networks:
+      - easypanel
+    labels:
+      - managed-by=vps-ops
+      - deployed-at=${DEPLOYED_AT}
+
+  airia_web:
+    container_name: airia_web
+    build:
+      context: ../..
+      dockerfile: deploy/airia/Dockerfile.web
+      args:
+        VITE_API_URL: /api
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_APK_URL: ${VITE_APK_URL}
+    restart: unless-stopped
+    depends_on:
+      - airia_backend
+    networks:
+      - easypanel
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=easypanel
+      - traefik.http.routers.airia-web-https.entrypoints=https
+      - traefik.http.routers.airia-web-https.rule=Host(`airia.pro`) || Host(`www.airia.pro`)
+      - traefik.http.routers.airia-web-https.tls.certresolver=letsencrypt
+      - traefik.http.services.airia-web.loadbalancer.server.port=80
+      - managed-by=vps-ops
+      - deployed-at=${DEPLOYED_AT}
+
+networks:
+  easypanel:
+    external: true

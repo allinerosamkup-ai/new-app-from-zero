@@ -1,7 +1,19 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, ScrollView, SafeAreaView } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { 
+  Text, 
+  Card, 
+  Button, 
+  Surface, 
+  Avatar, 
+  Chip,
+  MD3Colors 
+} from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useCheckinStore } from '../providers/checkin_store';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { resolveAdaptiveGuidance } from '../../domain/adaptive-guidance';
 
 type StateType = 'leve' | 'moderado' | 'sensível' | 'crítico';
 
@@ -12,6 +24,7 @@ const STATE_CONFIG: Record<StateType, {
   textColor: string;
   bgColor: string;
   focus: string;
+  icon: string;
 }> = {
   leve: {
     label: 'Energia Leve',
@@ -20,6 +33,7 @@ const STATE_CONFIG: Record<StateType, {
     textColor: '#166534',
     bgColor: '#F0FDF4',
     focus: 'Foco balanceado',
+    icon: 'leaf-outline',
   },
   moderado: {
     label: 'Energia Radiante',
@@ -28,6 +42,7 @@ const STATE_CONFIG: Record<StateType, {
     textColor: '#92400E',
     bgColor: '#FFFBEB',
     focus: 'Foco profundo',
+    icon: 'sparkles',
   },
   sensível: {
     label: 'Dia Sensível',
@@ -36,6 +51,7 @@ const STATE_CONFIG: Record<StateType, {
     textColor: '#5B21B6',
     bgColor: '#FAF5FF',
     focus: 'Foco leve',
+    icon: 'moon-waning-crescent',
   },
   crítico: {
     label: 'Modo Recuperação',
@@ -44,177 +60,215 @@ const STATE_CONFIG: Record<StateType, {
     textColor: '#9F1239',
     bgColor: '#FFF1F2',
     focus: 'Descanso',
+    icon: 'waves',
   },
 };
 
 /**
- * CheckInResultScreen: Tela de revelação do estado do dia.
- * O "momento de valor" do app — mostra o diagnóstico da IA com cor + texto.
+ * CheckInResultScreen: Tela de revelação do estado do dia com UI do Paper.
  */
 export default function CheckInResultScreen() {
   const navigation = useNavigation<any>();
   const { todayCheckin } = useCheckinStore();
 
+  // Vibração de conclusão ao abrir o resultado
+  useEffect(() => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
+
   const stateType = (todayCheckin?.stateLabelType ?? 'leve') as StateType;
   const config = STATE_CONFIG[stateType] ?? STATE_CONFIG.leve;
   const summary = todayCheckin?.stateSummary ?? 'Seu estado de hoje foi registrado.';
   const recommendations: string[] = (todayCheckin as any)?.aiState?.recommendations ?? [];
+  const support = resolveAdaptiveGuidance({
+    moodLabelType: todayCheckin?.stateLabelType ?? null,
+    energyScore:
+      todayCheckin?.aiState?.suggestedIntensity === 'L'
+        ? 2
+        : todayCheckin?.aiState?.suggestedIntensity === 'P'
+          ? 4
+          : 3,
+  });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: config.bgColor }}>
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 24 }}
+        contentContainerStyle={{ flexGrow: 1, padding: appSpacing.lg }}
         showsVerticalScrollIndicator={false}
       >
         {/* Blob + Emoji */}
-        <View style={{ alignItems: 'center', marginTop: 32, marginBottom: 28 }}>
-          <View
+        <View style={{ alignItems: 'center', marginTop: appSpacing.xl, marginBottom: appSpacing.lg }}>
+          <Surface
+            elevation={4}
             style={{
-              width: 128,
-              height: 128,
-              borderRadius: 64,
+              width: 120,
+              height: 120,
+              borderRadius: 60,
               backgroundColor: config.color,
               alignItems: 'center',
               justifyContent: 'center',
-              shadowColor: config.color,
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.45,
-              shadowRadius: 18,
-              elevation: 10,
             }}
           >
             <Text style={{ fontSize: 56 }}>{config.emoji}</Text>
-          </View>
+          </Surface>
         </View>
 
         {/* Label de estado */}
         <Text
+          variant="headlineMedium"
           style={{
-            fontSize: 28,
-            fontWeight: '700',
+            fontWeight: '800',
             color: config.textColor,
             textAlign: 'center',
-            marginBottom: 10,
+            marginBottom: appSpacing.xs,
           }}
         >
           {config.label}
         </Text>
 
         {/* Badge de foco */}
-        <View style={{ alignItems: 'center', marginBottom: 20 }}>
-          <View
-            style={{
-              backgroundColor: config.color + '55',
-              paddingHorizontal: 18,
-              paddingVertical: 7,
-              borderRadius: 999,
-            }}
+        <View style={{ alignItems: 'center', marginBottom: appSpacing.xl }}>
+          <Chip 
+            style={{ backgroundColor: config.color + '66' }} 
+            textStyle={{ color: config.textColor, fontWeight: '700' }}
           >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: '600',
-                color: config.textColor,
-                letterSpacing: 0.3,
-              }}
-            >
-              {config.focus}
-            </Text>
-          </View>
+            {config.focus}
+          </Chip>
         </View>
 
         {/* Análise da IA */}
-        <View
-          style={{
-            backgroundColor: 'rgba(255,255,255,0.65)',
-            borderRadius: 20,
-            padding: 20,
-            marginBottom: 20,
-          }}
+        <Card 
+          style={{ 
+            backgroundColor: 'rgba(255,255,255,0.6)', 
+            marginBottom: appSpacing.lg,
+            borderWidth: 0
+          }} 
+          mode="contained"
         >
-          <Text
-            style={{
-              fontSize: 16,
-              color: config.textColor,
-              lineHeight: 26,
-              textAlign: 'center',
-              opacity: 0.9,
-            }}
-          >
-            {summary}
-          </Text>
-        </View>
+          <Card.Content>
+            <Text
+              variant="titleMedium"
+              style={{
+                color: config.textColor,
+                lineHeight: 28,
+                textAlign: 'center',
+                fontStyle: 'italic'
+              }}
+            >
+              {summary}
+            </Text>
+          </Card.Content>
+        </Card>
+
+        <Card
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.72)',
+            marginBottom: appSpacing.lg,
+            borderWidth: 0,
+          }}
+          mode="contained"
+        >
+          <Card.Content>
+            <Text
+              variant="labelLarge"
+              style={{
+                color: config.textColor,
+                textTransform: 'uppercase',
+                fontWeight: '700',
+                opacity: 0.72,
+                letterSpacing: 1.1,
+              }}
+            >
+              Modo do dia
+            </Text>
+            <Text variant="titleMedium" style={{ color: config.textColor, fontWeight: '700', marginTop: 8 }}>
+              {support.title}
+            </Text>
+            <Text variant="bodyMedium" style={{ color: config.textColor, marginTop: 8, lineHeight: 22 }}>
+              {support.summary}
+            </Text>
+
+            <Surface
+              style={{
+                marginTop: appSpacing.md,
+                padding: appSpacing.md,
+                borderRadius: appRadius.md,
+                backgroundColor: 'rgba(255,255,255,0.82)',
+              }}
+            >
+              <Text variant="labelMedium" style={{ color: config.textColor, fontWeight: '700' }}>
+                Proximo passo sugerido
+              </Text>
+              <Text variant="bodyMedium" style={{ color: config.textColor, marginTop: 6 }}>
+                {support.primaryAction}
+              </Text>
+            </Surface>
+          </Card.Content>
+        </Card>
 
         {/* Recomendações da IA */}
         {recommendations.length > 0 && (
-          <View style={{ marginBottom: 28 }}>
+          <View style={{ marginBottom: appSpacing.xl }}>
             <Text
+              variant="labelLarge"
               style={{
-                fontSize: 13,
-                fontWeight: '600',
                 color: config.textColor,
-                letterSpacing: 0.4,
-                marginBottom: 10,
+                marginBottom: appSpacing.sm,
                 textTransform: 'uppercase',
+                fontWeight: '700',
                 opacity: 0.7,
+                letterSpacing: 1.2
               }}
             >
               Sugestões para hoje
             </Text>
             {recommendations.slice(0, 3).map((rec, i) => (
-              <View
+              <Surface
                 key={i}
+                elevation={1}
                 style={{
                   flexDirection: 'row',
-                  alignItems: 'flex-start',
-                  backgroundColor: 'rgba(255,255,255,0.65)',
-                  borderRadius: 14,
-                  padding: 14,
-                  marginBottom: 8,
+                  alignItems: 'center',
+                  backgroundColor: 'rgba(255,255,255,0.7)',
+                  borderRadius: appRadius.md,
+                  padding: appSpacing.md,
+                  marginBottom: appSpacing.sm,
                 }}
               >
-                <Text style={{ fontSize: 14, marginRight: 10, marginTop: 1 }}>💡</Text>
+                <Avatar.Icon size={32} icon="lightbulb-outline" style={{ backgroundColor: config.color + '44' }} color={config.textColor} />
                 <Text
+                  variant="bodyMedium"
                   style={{
-                    fontSize: 14,
                     color: config.textColor,
                     flex: 1,
-                    lineHeight: 21,
+                    marginLeft: appSpacing.md,
+                    lineHeight: 20,
                   }}
                 >
                   {rec}
                 </Text>
-              </View>
+              </Surface>
             ))}
           </View>
         )}
 
+        <View style={{ flex: 1 }} />
+
         {/* CTA */}
-        <TouchableOpacity
+        <Button
+          mode="contained"
           onPress={() => navigation.navigate('MainTabs')}
-          style={{
-            backgroundColor: config.color,
-            paddingVertical: 18,
-            borderRadius: 16,
-            alignItems: 'center',
-            shadowColor: config.color,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.35,
-            shadowRadius: 10,
-            elevation: 6,
-            marginBottom: 16,
+          style={{ 
+            backgroundColor: config.textColor, 
+            borderRadius: appRadius.md,
+            paddingVertical: 6
           }}
+          labelStyle={{ fontWeight: '700', fontSize: 16 }}
+          icon="arrow-right"
+          contentStyle={{ flexDirection: 'row-reverse' }}
         >
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: '700',
-              color: config.textColor,
-            }}
-          >
-            Ver meu dia →
-          </Text>
-        </TouchableOpacity>
+          {support.mode === 'recovery' || support.mode === 'protection' ? 'Ver meu plano leve de hoje' : 'Ver meu dia'}
+        </Button>
       </ScrollView>
     </SafeAreaView>
   );

@@ -1,0 +1,14 @@
+
+> @app/backend@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/index.ts
+
+[INFO] 12:41:44 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[backend]: Server is running at http://localhost:3001
+[INFO] 17:00:52 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\services\planner.service.ts has been modified
+[backend]: Server is running at http://localhost:3001
+[INFO] 17:01:00 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
+[backend]: Server is running at http://localhost:3001
+[INFO] 17:28:43 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\contracts\preferences.contract.ts has been modified
+[backend]: Server is running at http://localhost:3001
+[INFO] 17:30:04 Restarting: C:\Users\allin\Projetos\Apps\new-app-fron-zero\apps\backend\src\index.ts has been modified
+[backend]: Server is running at http://localhost:3001

@@ -11,17 +11,30 @@ model Profile {
   id             String   @id @db.Uuid
   fullName       String?  @map("full_name")
   onboardingDone Boolean  @default(false) @map("onboarding_done")
+  cycleStart     DateTime? @map("cycle_start") @db.Date
+  cycleLength    Int?      @map("cycle_length")
+  lutealLength   Int?      @map("luteal_length")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  onboarding      OnboardingResponse?
-  preferences     UserPreference?
-  consents        Consent[]
-  checkins        DailyCheckin[]
-  journalSessions JournalSession[]
-  journalMessages JournalMessage[]
-  timelineBlocks  TimelineBlock[]
-  weeklyInsights  WeeklyInsight[]
+  onboarding       OnboardingResponse?
+  preferences      UserPreference?
+  consents         Consent[]
+  checkins         DailyCheckin[]
+  journalSessions  JournalSession[]
+  journalMessages  JournalMessage[]
+  timelineBlocks   TimelineBlock[]
+  habits           Habit[]
+  eventLogs        EventLog[]
+  weeklyInsights   WeeklyInsight[]
+  objectives       Objective[]
+  memoryEmbeddings  MemoryEmbedding[]
+  aiBackgroundJobs  AiBackgroundJob[]
+  pushSubscriptions PushSubscription[]
+  userEntities      UserEntity[]
+  userFacts         UserFact[]
+  userPatterns      UserPattern[]
+  userOpenDecisions UserOpenDecision[]
 
   @@map("profiles")
 }
@@ -44,6 +57,16 @@ model OnboardingResponse {
   aiTopThemes           String[] @default([]) @map("ai_top_themes")
   aiInitialSuggestions  String[] @default([]) @map("ai_initial_suggestions")
   aiProfilePayload      Json?    @map("ai_profile_payload")
+  // Self-reported prior diagnoses (autorrelato, nao diagnostico clinico).
+  // Valores aceitos: bipolar_ii, cyclothymia, adhd, cyclical_depression, prefer_not_to_say.
+  priorDiagnoses           String[] @default([]) @map("prior_diagnoses")
+  medicationCurrentlyUsing Boolean? @map("medication_currently_using")
+  medicationNotes          String?  @map("medication_notes") @db.Text
+  // Stripe billing
+  stripeCustomerId         String?  @map("stripe_customer_id")
+  subscriptionStatus       String?  @map("subscription_status") // active | canceled | past_due | trialing | null
+  subscriptionPlan         String?  @map("subscription_plan")   // monthly | annual | null
+  subscriptionPeriodEnd    DateTime? @map("subscription_period_end") @db.Timestamptz(6)
   version               String   @default("v1")
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -51,6 +74,22 @@ model OnboardingResponse {
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("onboarding_responses")
+}
+
+/// Memórias vetorizadas da Aura (RAG)
+model MemoryEmbedding {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  contentType String   @map("content_type") // journal | checkin_note | goal | insight
+  contentId   String?  @map("content_id")
+  content     String   @db.Text
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("memory_embeddings")
 }
 
 model UserPreference {
@@ -62,7 +101,11 @@ model UserPreference {
   morningCheckinTime String?  @map("morning_checkin_time")
   eveningReviewTime  String?  @map("evening_review_time")
   notificationsOn    Boolean  @default(true) @map("notifications_on")
+  notificationPreferences Json @default("{\"checkin\":true,\"journal\":true,\"planner\":true,\"habits\":true,\"persistent\":true,\"aiSuggestions\":true,\"journalMorningTime\":\"11:00\",\"journalEveningTime\":\"19:00\"}") @map("notification_preferences")
   aiTone             String   @default("warm") @map("ai_tone")
+  gcalAccessToken    String?  @map("gcal_access_token") @db.Text
+  gcalRefreshToken   String?  @map("gcal_refresh_token") @db.Text
+  gcalSelectedCalendars Json? @map("gcal_selected_calendars")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -101,7 +144,28 @@ model DailyCheckin {
   irritabilityScore Int      @map("irritability_score")
   physicalScore     Int      @map("physical_score")
   socialScore       Int      @map("social_score")
+  sleepScore        Int?     @map("sleep_score")
+  
+  // Módulo de Saúde Feminina (Plus)
+  menstrualPhase    String?  @map("menstrual_phase")
+  cycleDay          Int?     @map("cycle_day")
+  physicalSymptoms  String[] @default([]) @map("physical_symptoms")
+  
+  isFlowing         Boolean? @map("is_flowing")
+  flowDay           Int?     @map("flow_day")
+  flowIntensity     String?  @map("flow_intensity")
+  symptomColica     Int?     @map("symptom_colica")
+  symptomDorCabeca  Int?     @map("symptom_dor_cabeca")
+  
+  factors           String[] @default([])
+  emotions          String[] @default([])
   note              String?  @db.Text
+  // Diagnostic-aware optional signals (bipolar / TDAH / ciclotimia)
+  medicationTakenToday Boolean? @map("medication_taken_today")
+  focusScore           Int?     @map("focus_score")
+  hyperfocusOccurred   Boolean? @map("hyperfocus_occurred")
+  mixedEpisodeNote     String?  @map("mixed_episode_note") @db.Text
+  dayType              String?  @map("day_type") // up | down | mixed | stable
   stateLabel        String?  @map("state_label")
   stateLabelType    String?  @map("state_label_type")
   stateSummary      String?  @map("state_summary") @db.Text
@@ -168,14 +232,115 @@ model TimelineBlock {
   intensity     String
   status        String   @default("planned")
   isAiSuggested Boolean  @default(false) @map("is_ai_suggested")
+  gcalEventId   String?  @map("gcal_event_id")
   aiReasoning   String?  @map("ai_reasoning") @db.Text
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  noteMode      String   @default("text") @map("note_mode")
+  note          String?  @db.Text
+  checklist     Json     @default("[]")
+  recurring     Json     @default("{\"enabled\":false,\"frequency\":\"daily\",\"days\":[],\"everyNDays\":1}")
+  energyLevel   String?  @default("media") @map("energy_level")
+  lastResetDate DateTime? @map("last_reset_date") @db.Date
+  persistentReminderEnabled Boolean @default(false) @map("persistent_reminder_enabled")
+  persistentReminderIntervalMinutes Int? @map("persistent_reminder_interval_minutes")
+  snoozedUntil  DateTime? @map("snoozed_until") @db.Timestamptz(6)
+  taskMode      String    @default("standard") @map("task_mode")
+  alarmEnabled                 Boolean  @default(false) @map("alarm_enabled")
+  vibrateEnabled               Boolean  @default(false) @map("vibrate_enabled")
+  recurringNotificationEnabled Boolean  @default(false) @map("recurring_notification_enabled")
+  visualRepeatEnabled          Boolean  @default(false) @map("visual_repeat_enabled")
+  icon                         String?
+  color                        String?
+  createdAt                    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, localDate, startAt], name: "idx_timeline_user_date_time")
   @@map("timeline_blocks")
+}
+
+model Objective {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  title       String
+  description String?  @db.Text
+  category    String   @default("geral")
+  progress    Int      @default(0)
+  subgoals    Json     @default("[]")
+  aiInsight   String?  @map("ai_insight") @db.Text
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, archived, createdAt(sort: Desc)], name: "idx_objectives_user")
+  @@map("objectives")
+}
+
+model Habit {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  title            String
+  description      String?  @db.Text
+  category         String   @default("geral") // health | productivity | mindfulness | social | learning | leisure
+  icon             String?  // emoji
+  frequency        String   @default("daily") // daily | weekly | monthly
+  targetDays       Int[]    @default([]) @map("target_days") // 0-6 (dom-sab) para weekly
+  targetCount      Int      @default(1) @map("target_count")
+  timeOfDay        String?  @map("time_of_day") // morning | afternoon | evening | anytime
+  durationMinutes  Int?     @map("duration_minutes")
+  reminderEnabled  Boolean  @default(false) @map("reminder_enabled")
+  reminderTime     String?  @map("reminder_time") // HH:mm
+  persistentReminderEnabled Boolean @default(false) @map("persistent_reminder_enabled")
+  persistentReminderIntervalMinutes Int? @map("persistent_reminder_interval_minutes")
+  streakCount      Int      @default(0) @map("streak_count")
+  bestStreak       Int      @default(0) @map("best_streak")
+  totalCompletions Int      @default(0) @map("total_completions")
+  archived         Boolean  @default(false)
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        Profile           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completions HabitCompletion[]
+
+  @@index([userId, archived])
+  @@map("habits")
+}
+
+model HabitCompletion {
+  id          String    @id @default(uuid()) @db.Uuid
+  habitId     String    @map("habit_id") @db.Uuid
+  date        DateTime  @db.Date
+  completedAt DateTime? @default(now()) @map("completed_at") @db.Timestamptz(6)
+  completionCount Int    @default(1) @map("completion_count")
+  notes       String?   @db.Text
+  moodBefore  Int?      @map("mood_before")
+  moodAfter   Int?      @map("mood_after")
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([habitId, date])
+  @@map("habit_completions")
+}
+
+model EventLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  eventName  String   @map("event_name")
+  properties Json     @default("{}")
+  path       String?  @db.Text
+  userAgent  String?  @map("user_agent") @db.Text
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], name: "idx_event_logs_user_created")
+  @@index([userId, eventName], name: "idx_event_logs_user_event")
+  @@map("event_logs")
 }
 
 model WeeklyInsight {
@@ -194,4 +359,114 @@ model WeeklyInsight {
   @@unique([userId, weekStart])
   @@index([userId, weekStart])
   @@map("weekly_insights")
+}
+
+model AiBackgroundJob {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  jobType     String    @map("job_type")
+  status      String    @default("pending")
+  runAt       DateTime  @map("run_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  error       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobType], name: "userId_jobType")
+  @@index([status, runAt], name: "idx_ai_jobs_pending")
+  @@map("ai_background_jobs")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id") @db.Uuid
+  endpoint  String   @unique
+  p256dhKey String   @map("p256dh_key")
+  authKey   String   @map("auth_key")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER KNOWLEDGE GRAPH — "mini Obsidian por usuário"
+// Estrutura que persiste entidades, fatos, padrões e decisões em aberto
+// extraídos das conversas. Permite que a Aura RACIOCINE em cima de contexto
+// estruturado (8-12 elementos cirúrgicos) em vez de pilha de texto bruto.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserEntity {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  canonicalName  String   @map("canonical_name") // ex: "venda das camas", "Julia", "pintor"
+  aliases        String[] @default([])           // ex: ["camas", "as camas", "anuncio das camas"]
+  type           String                          // person | project | event | object | place | habit
+  status         String?                         // active | resolved | paused | abandoned
+  firstMentionAt DateTime @map("first_mention_at") @db.Timestamptz(6)
+  lastMentionAt  DateTime @map("last_mention_at")  @db.Timestamptz(6)
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user  Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  facts UserFact[]
+
+  @@unique([userId, canonicalName], name: "userId_canonicalName")
+  @@index([userId, lastMentionAt], name: "idx_user_entities_recent")
+  @@map("user_entities")
+}
+
+model UserFact {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  entityId   String?  @map("entity_id") @db.Uuid
+  statement  String   @db.Text                    // ex: "Anuncio postado em Olx/FB/IG em 12/05, 0 respostas em 24h"
+  source     String                               // journal | checkin | manual | derived
+  occurredAt DateTime @map("occurred_at") @db.Timestamptz(6)
+  confidence Float    @default(0.8)
+  supersedes String?  @map("supersedes") @db.Uuid // id de fato anterior atualizado por este
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user   Profile     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity UserEntity? @relation(fields: [entityId], references: [id], onDelete: SetNull)
+
+  @@index([userId, entityId, occurredAt], name: "idx_user_facts_lookup")
+  @@map("user_facts")
+}
+
+model UserPattern {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  pattern         String   @db.Text                       // ex: "Vende rápido pelo Olx quando preço alinhado"
+  evidenceFactIds String[] @default([]) @map("evidence_fact_ids") @db.Uuid
+  strength        Float    @default(0.5)                  // ganha/perde peso conforme aceitação
+  lastConfirmedAt DateTime @default(now()) @map("last_confirmed_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, strength], name: "idx_user_patterns_strong")
+  @@map("user_patterns")
+}
+
+model UserOpenDecision {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  question   String    @db.Text                          // ex: "Qual preço usar para as camas?"
+  context    String?   @db.Text                          // breve contexto pra Aura
+  raisedAt   DateTime  @map("raised_at") @db.Timestamptz(6)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(6)
+  resolution String?   @db.Text
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, resolvedAt], name: "idx_user_open_decisions")
+  @@map("user_open_decisions")
 }

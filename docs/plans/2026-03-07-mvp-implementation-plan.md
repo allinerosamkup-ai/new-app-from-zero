@@ -77,7 +77,7 @@ This plan is written for someone who is starting from zero and wants to build wi
    - `timeline_blocks`
    - `weekly_insights`
 4. Add RLS so one user only sees their own data.
-5. Add seed data for one demo account.
+5. Prepare realistic QA fixtures outside the consumer app when needed.
 6. Write down the deletion flow before storing sensitive data.
 
 ### Phase 3: Create The Mobile Base

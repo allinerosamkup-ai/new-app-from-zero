@@ -1,0 +1,816 @@
+import type { DailyContext, GroundedTask } from './context-grounding.service';
+import { getPhaseWindow, slotTier, bestAvailableStart, phaseHasPeakOrFlow } from '../lib/phase-time-windows';
+
+export type DecisionSurface = 'home' | 'planner' | 'checkin' | 'journal' | 'aura-chat' | 'insights' | 'notification' | 'agenda';
+
+export type DecisionKind =
+  | 'real_commitment'
+  | 'suggested_commitment'
+  | 'insight_only'
+  | 'blocked'
+  | 'notification_allowed'
+  | 'notification_blocked';
+
+/**
+ * Classifies WHY an item is blocked or hard to act on.
+ * Used internally to craft richer bioReason and front-end tone.
+ *   capacidade  — no energy or time window for it (phase/health signals)
+ *   disposicao  — energy exists but the same item has been skipped 2+ times (partial Regra do 3)
+ *   permissao   — energy exists, item keeps reappearing without acceptance (3+ rejections)
+ */
+export type TravaType = 'capacidade' | 'disposicao' | 'permissao';
+
+export type DecisionCandidateSource = 'timeline' | 'habit' | 'goal' | 'memory' | 'feedback' | 'system';
+
+export type DecisionCandidate = {
+  id: string;
+  title: string;
+  kind: DecisionKind;
+  source: DecisionCandidateSource;
+  targetId?: string | null;
+  targetType?: 'timeline' | 'habit' | 'goal' | 'system';
+  action: 'keep' | 'move' | 'shrink' | 'pause' | 'suggest' | 'convert' | 'notify' | 'block' | 'insight';
+  score: number;
+  confidence: number;
+  reason: string;
+  anchor?: string | null;
+  from?: string | null;
+  to?: string | null;
+  suggestedStartTime?: string | null;
+  suggestedEndTime?: string | null;
+  suggestedDate?: string | null;
+  bioReason?: string;
+  impactLabel?: 'reduz carga' | 'protege energia' | 'aproveita janela' | 'mantém ritmo';
+  notificationAllowed: boolean;
+  requiresConfirmation: boolean;
+  travaType?: TravaType;
+};
+
+export type DecisionResult = {
+  surface: DecisionSurface;
+  date: string;
+  allowedActions: DecisionCandidate[];
+  blockedActions: DecisionCandidate[];
+  dayPriorities: string[];
+  reasoning: string;
+  confidence: number;
+  emptyReason: string | null;
+};
+
+const STOPWORDS = new Set([
+  'a', 'o', 'as', 'os', 'um', 'uma', 'de', 'do', 'da', 'dos', 'das', 'e', 'em',
+  'para', 'pra', 'por', 'com', 'sem', 'que', 'se', 'sua', 'seu', 'suas', 'seus',
+  'voce', 'você', 'hoje', 'agora', 'fazer', 'abrir', 'ver', 'revisar', 'criar',
+  'marcar', 'organizar', 'definir', 'separar', 'colocar', 'pegar', 'min', 'minutos',
+]);
+
+const GENERIC_PATTERNS = [
+  /\brespir(ar|e|acao|ação)\b/,
+  /\bbeb(er|a)\s+(agua|água)\b/,
+  /\borganizar\s+(o\s+)?dia\b/,
+  /\bplanejar\s+(o\s+)?dia\b/,
+  /\bproximo\s+passo\b/,
+  /\bpróximo\s+passo\b/,
+  /\btarefa\s+pequena\b/,
+  /\banot(e|ar)\s+(uma\s+)?pend[eê]ncia\b/,
+  /\bkit(s)?\s+(do\s+)?treino\b/,
+  /\bsepar(ar|e)\s+(a\s+)?roupa\s+(de\s+)?treino\b/,
+];
+
+function cleanText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+}
+
+function normalize(value: unknown): string {
+  return cleanText(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenSet(value: unknown): Set<string> {
+  return new Set(normalize(value).split(' ').filter((token) => token.length >= 3 && !STOPWORDS.has(token)));
+}
+
+function tokenOverlap(a: unknown, b: unknown): number {
+  const left = tokenSet(a);
+  const right = tokenSet(b);
+  if (left.size === 0 || right.size === 0) return 0;
+  let common = 0;
+  for (const token of left) {
+    if (right.has(token)) common += 1;
+  }
+  return common / Math.min(left.size, right.size);
+}
+
+function isSimilar(a: unknown, b: unknown): boolean {
+  const left = normalize(a);
+  const right = normalize(b);
+  if (!left || !right) return false;
+  if (left === right || left.includes(right) || right.includes(left)) return true;
+  return tokenOverlap(left, right) >= 0.58;
+}
+
+function isGeneric(value: string): boolean {
+  const key = normalize(value);
+  if (!key) return true;
+  return GENERIC_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+function timeToMinutes(value: unknown): number | null {
+  if (typeof value === 'string' && /^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) {
+    const [h, m] = value.split(':').map(Number);
+    return h * 60 + m;
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.getUTCHours() * 60 + value.getUTCMinutes();
+  }
+  return null;
+}
+
+function formatTime(value: unknown): string | null {
+  const minutes = timeToMinutes(value);
+  if (minutes === null) return null;
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function formatMinutesAsTime(total: number): string {
+  const clamped = Math.max(7 * 60, Math.min(20 * 60, total));
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}:${String(clamped % 60).padStart(2, '0')}`;
+}
+
+function roundUpToStep(minutes: number, step = 15): number {
+  return Math.ceil(minutes / step) * step;
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const date = new Date(`${dateKey}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Returns the broadest usable window for the day given the current phase.
+ * Phase-aware: uses PHASE_WINDOWS to find the outer bounds of all tiers.
+ * Falls back to sensible defaults when no phase is known.
+ */
+function dayWindowFor(input: {
+  lowCapacity: boolean;
+  highCapacity: boolean;
+  targetType: 'timeline' | 'habit' | 'goal';
+  phaseKey?: string;
+}): { start: number; end: number } {
+  if (input.phaseKey) {
+    const pw = getPhaseWindow(input.phaseKey);
+    const allRanges = [...pw.peak, ...pw.flow, ...pw.maintenance];
+    if (allRanges.length > 0) {
+      const start = Math.min(...allRanges.map(([s]) => s));
+      const end = Math.max(...allRanges.map(([, e]) => e));
+      return { start, end };
+    }
+  }
+  // Fallback (no phase context)
+  if (input.targetType === 'habit') return input.lowCapacity ? { start: 11 * 60, end: 18 * 60 } : { start: 8 * 60, end: 19 * 60 };
+  if (input.targetType === 'goal') return input.highCapacity ? { start: 9 * 60, end: 16 * 60 } : { start: 10 * 60, end: 18 * 60 };
+  return input.lowCapacity ? { start: 10 * 60, end: 17 * 60 } : { start: 8 * 60, end: 19 * 60 };
+}
+
+function findAvailableSlot(input: {
+  dateKey: string;
+  tasks: GroundedTask[];
+  now: number;
+  duration: number;
+  lowCapacity: boolean;
+  highCapacity: boolean;
+  targetType: 'timeline' | 'habit' | 'goal';
+  phaseKey?: string;
+  heavy?: boolean;
+}): { date: string; start: string; end: string; isNextDay: boolean; tier: 'peak' | 'flow' | 'maintenance' | 'rest' } {
+  const window = dayWindowFor({ ...input });
+  const busy = input.tasks
+    .filter((task) => task.status !== 'completed')
+    .map((task) => ({
+      start: timeToMinutes(task.startAt),
+      end: timeToMinutes(task.endAt),
+    }))
+    .filter((slot): slot is { start: number; end: number } => slot.start !== null && slot.end !== null && slot.end > slot.start);
+
+  function trySlot(cursor: number): { date: string; start: string; end: string; isNextDay: boolean; tier: 'peak' | 'flow' | 'maintenance' | 'rest' } | null {
+    const end = cursor + input.duration;
+    if (end > window.end) return null;
+    const conflict = busy.some((slot) => cursor < slot.end && end > slot.start);
+    if (conflict) return null;
+    const pw = input.phaseKey ? getPhaseWindow(input.phaseKey) : null;
+    const tier = pw ? slotTier(cursor, pw) : 'maintenance';
+    return { date: input.dateKey, start: formatMinutesAsTime(cursor), end: formatMinutesAsTime(end), isNextDay: false, tier };
+  }
+
+  // Phase-aware: for heavy tasks, try peak/flow windows first
+  if (input.phaseKey && input.heavy) {
+    const pw = getPhaseWindow(input.phaseKey);
+    const preferredRanges = [...pw.peak, ...pw.flow];
+    for (const [rangeStart, rangeEnd] of preferredRanges) {
+      const earliest = Math.max(rangeStart, roundUpToStep(input.now + 15, 15));
+      for (let cursor = earliest; cursor + input.duration <= rangeEnd; cursor += 15) {
+        const result = trySlot(cursor);
+        if (result) return result;
+      }
+    }
+  }
+
+  // Fallback: iterate full day window
+  const earliestToday = Math.max(window.start, roundUpToStep(input.now + 15, 15));
+  for (let cursor = earliestToday; cursor + input.duration <= window.end; cursor += 15) {
+    const result = trySlot(cursor);
+    if (result) return result;
+  }
+
+  // Tomorrow fallback
+  const pw = input.phaseKey ? getPhaseWindow(input.phaseKey) : null;
+  const tomorrowStart = pw && (pw.peak.length > 0 || pw.flow.length > 0)
+    ? Math.min(...[...pw.peak, ...pw.flow].map(([s]) => s))
+    : input.lowCapacity ? 10 * 60 : 9 * 60;
+  return {
+    date: addDaysToDateKey(input.dateKey, 1),
+    start: formatMinutesAsTime(tomorrowStart),
+    end: formatMinutesAsTime(tomorrowStart + input.duration),
+    isNextDay: true,
+    tier: 'peak',
+  };
+}
+
+function currentMinutes(context: Record<string, unknown>): number {
+  const hour = Number(context.currentHour ?? context.hour ?? 9);
+  const minute = Number(context.currentMinute ?? context.minute ?? 0);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return 9 * 60;
+  return Math.max(0, Math.min(23 * 60 + 59, Math.round(hour) * 60 + Math.round(minute)));
+}
+
+function phaseKey(context: Record<string, unknown>): string {
+  return normalize(context.phase ?? context.phaseLabel ?? context.moodPhase);
+}
+
+function isLowCapacityPhase(context: Record<string, unknown>): boolean {
+  return /\b(turbulencia|pausa|recolhimento|desacelerando)\b/.test(phaseKey(context));
+}
+
+function healthSleepScore(context: DailyContext): number | null {
+  const score = Number(context.healthSignals?.sleepScore);
+  return Number.isFinite(score) ? score : null;
+}
+
+function hasPoorMeasuredSleep(context: DailyContext): boolean {
+  const score = healthSleepScore(context);
+  if (score !== null) return score <= 4;
+  const minutes = Number(context.healthSignals?.sleepMinutes);
+  return Number.isFinite(minutes) && minutes > 0 && minutes < 360;
+}
+
+function healthReasonSuffix(context: DailyContext): string {
+  const signals = context.healthSignals;
+  if (!signals) return '';
+  const parts: string[] = [];
+  if (signals.sleepMinutes != null) {
+    const hours = Math.round((signals.sleepMinutes / 60) * 10) / 10;
+    parts.push(`sono medido de ${hours}h`);
+  }
+  if (signals.steps != null) parts.push(`${Math.round(signals.steps)} passos`);
+  if (signals.avgHeartRate != null) parts.push(`batimento medio ${Math.round(signals.avgHeartRate)} bpm`);
+  if (signals.exerciseMinutes != null && signals.exerciseMinutes > 0) parts.push(`${Math.round(signals.exerciseMinutes)} min de exercicio`);
+  return parts.length ? ` Sinal do Health Connect: ${parts.join(', ')}.` : '';
+}
+
+function isHighCapacityPhase(context: Record<string, unknown>): boolean {
+  return /\b(voo alto|fluindo)\b/.test(phaseKey(context));
+}
+
+/**
+ * Counts how many times a title appears in recentSuggestionTitles (proxy for rejection count).
+ * If a title is suggested repeatedly without acceptance it's likely a Regra do 3 pattern.
+ */
+function rejectionCount(title: string, context: DailyContext): number {
+  return context.recentSuggestionTitles.filter((t) => isSimilar(t, title)).length;
+}
+
+/**
+ * Classifies the type of block (trava) for a candidate.
+ *   permissao  — 3+ rejections; energy is not the issue
+ *   disposicao — 1–2 rejections; tentative avoidance
+ *   capacidade — phase/health is the limiting factor
+ */
+function classifyTrava(
+  title: string,
+  context: DailyContext,
+  lowCapacity: boolean,
+): TravaType {
+  const count = rejectionCount(title, context);
+  if (count >= 3) return 'permissao';
+  if (count >= 1) return 'disposicao';
+  return lowCapacity ? 'capacidade' : 'capacidade';
+}
+
+/**
+ * Builds a bioReason string that identifies the trava type, following
+ * the Aliança Divergente principle of naming the smallest concrete obstacle.
+ */
+function buildTravaReason(
+  title: string,
+  travaType: TravaType,
+  context: DailyContext,
+  phaseNote: string,
+  healthSuffix: string,
+): string {
+  const count = rejectionCount(title, context);
+  switch (travaType) {
+    case 'permissao':
+      return `Você passou por ${title} ${count} vezes esta semana sem avançar. Sem julgamento — se quiser, posso sugerir uma versão de 10 minutos para hoje.${healthSuffix}`;
+    case 'disposicao':
+      return `${title} apareceu mais de uma vez na lista sem ser aceito. Pode não ser a hora certa — ou pode ser que o tamanho ainda está grande demais.${healthSuffix}`;
+    default:
+      return phaseNote
+        ? `${phaseNote}${healthSuffix}`
+        : `A fase atual pede menos carga; deixar este item para uma janela melhor protege o ritmo.${healthSuffix}`;
+  }
+}
+
+function isHeavy(task: GroundedTask): boolean {
+  return task.intensity === 'P' || task.category === 'trabalho';
+}
+
+function blockedTitles(context: DailyContext): string[] {
+  return [
+    ...context.completedTaskTitles,
+    ...context.completedHabitTitles,
+    ...context.completedGoalTitles,
+    ...context.completedSubgoalTitles,
+    ...context.blockedActionTitles,
+    ...context.recentSuggestionTitles,
+  ];
+}
+
+function uniqueBlockedTitles(context: DailyContext): Array<{ title: string; source: DecisionCandidateSource; reason: string }> {
+  const items = [
+    ...context.completedTaskTitles.map((title) => ({ title, source: 'timeline' as const, reason: 'Tarefa já concluída hoje.' })),
+    ...context.completedHabitTitles.map((title) => ({ title, source: 'habit' as const, reason: 'Hábito já concluído hoje.' })),
+    ...context.completedGoalTitles.map((title) => ({ title, source: 'goal' as const, reason: 'Meta já concluída.' })),
+    ...context.completedSubgoalTitles.map((title) => ({ title, source: 'goal' as const, reason: 'Subtarefa já concluída.' })),
+    ...context.blockedActionTitles.map((title) => ({ title, source: 'feedback' as const, reason: 'Ação rejeitada, excluída ou marcada como feita no card.' })),
+    ...context.recentSuggestionTitles.map((title) => ({ title, source: 'feedback' as const, reason: 'Sugestão recente; não deve voltar agora.' })),
+  ];
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = normalize(item.title);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isBlockedByHistory(title: string, context: DailyContext): boolean {
+  return blockedTitles(context).some((blocked) => isSimilar(title, blocked));
+}
+
+function makeBlocked(input: {
+  id: string;
+  title: string;
+  source: DecisionCandidateSource;
+  reason: string;
+  action?: DecisionCandidate['action'];
+}): DecisionCandidate {
+  return {
+    id: input.id,
+    title: input.title,
+    kind: 'blocked',
+    source: input.source,
+    targetType: input.source === 'timeline' ? 'timeline' : input.source === 'habit' ? 'habit' : input.source === 'goal' ? 'goal' : 'system',
+    action: input.action ?? 'block',
+    score: 0,
+    confidence: 0.9,
+    reason: input.reason,
+    notificationAllowed: false,
+    requiresConfirmation: false,
+  };
+}
+
+function dedupeCandidates(candidates: DecisionCandidate[]): DecisionCandidate[] {
+  const seen = new Set<string>();
+  const out: DecisionCandidate[] = [];
+  for (const candidate of candidates.sort((a, b) => b.score - a.score)) {
+    const key = `${candidate.kind}:${normalize(candidate.title)}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(candidate);
+  }
+  return out;
+}
+
+
+/**
+ * Quando não há agenda, hábitos nem metas: gera sugestões contextuais baseadas em
+ * horário do dia e fase de ciclo para que a usuária nunca veja tela vazia.
+ */
+function buildFreshStartSuggestions(
+  nowMinutes: number,
+  phaseKey: string | null,
+  lowCapacity: boolean,
+  highCapacity: boolean,
+): DecisionCandidate[] {
+  const hour = Math.floor(nowMinutes / 60);
+  const suggestions: Array<{ id: string; title: string; bioReason: string; duration: number }> = [];
+
+  if (hour >= 5 && hour < 10) {
+    // Manhã
+    if (lowCapacity) {
+      suggestions.push({ id: 'fresh:morning-gentle', title: 'Revisão leve do dia — o que é essencial hoje?', bioReason: 'Manhã com energia baixa: uma olhada rápida no que realmente importa hoje reduz a sobrecarga mental.', duration: 10 });
+      suggestions.push({ id: 'fresh:morning-coffee', title: 'Momento de pausa ativa (café, respiração, luz natural)', bioReason: 'Rituais matinais simples ajudam o sistema nervoso a calibrar antes de qualquer demanda.', duration: 15 });
+    } else if (highCapacity) {
+      suggestions.push({ id: 'fresh:morning-plan', title: 'Planejar o dia — definir os 3 focos principais', bioReason: 'Manhã com boa energia: definir 3 intenções concretas agora evita deriva e indecisão ao longo do dia.', duration: 15 });
+      suggestions.push({ id: 'fresh:morning-start', title: 'Começar com a tarefa mais importante (janela de foco)', bioReason: 'Alta capacidade matinal é a janela de ouro para trabalho profundo. Usar agora tem alto retorno.', duration: 45 });
+    } else {
+      suggestions.push({ id: 'fresh:morning-review', title: 'Revisão matinal — o que precisa acontecer hoje?', bioReason: 'Começar o dia com clareza sobre o que importa reduz a paralisia por indefinição.', duration: 15 });
+      suggestions.push({ id: 'fresh:morning-task', title: 'Uma tarefa pequena para começar com tração', bioReason: 'Iniciar com algo concreto e pequeno ativa o ciclo de progresso e reduz a resistência de início.', duration: 20 });
+    }
+  } else if (hour >= 10 && hour < 13) {
+    // Meio da manhã
+    if (lowCapacity) {
+      suggestions.push({ id: 'fresh:midmorn-light', title: 'Uma tarefa de 15 min — mínimo viável do dia', bioReason: 'Energia baixa não significa dia perdido. Um movimento mínimo mantém o ritmo sem exaurir.', duration: 15 });
+    } else {
+      suggestions.push({ id: 'fresh:midmorn-focus', title: 'Bloco de foco — escolher uma frente e trabalhar nela', bioReason: 'Meio da manhã é ótimo para entregas concretas. Escolher uma frente e sustentar por 30-40 min.', duration: 40 });
+      suggestions.push({ id: 'fresh:midmorn-admin', title: 'Resolver pendências rápidas (< 5 min cada)', bioReason: 'Acumular pequenas pendências cria carga cognitiva invisível. Resolver em bloco libera atenção.', duration: 20 });
+    }
+  } else if (hour >= 13 && hour < 15) {
+    // Após almoço
+    suggestions.push({ id: 'fresh:post-lunch-review', title: 'Revisão do que foi feito — ajustar plano da tarde', bioReason: 'Pausa pós-almoço para revisar o dia evita a deriva da tarde e dá clareza sobre o que ainda importa.', duration: 10 });
+    if (!lowCapacity) {
+      suggestions.push({ id: 'fresh:post-lunch-admin', title: 'Tarefas administrativas e e-mails', bioReason: 'Energia levemente mais baixa após almoço é boa para tarefas menos cognitivas: e-mails, organização, retornos.', duration: 30 });
+    }
+  } else if (hour >= 15 && hour < 18) {
+    // Tarde
+    if (highCapacity) {
+      suggestions.push({ id: 'fresh:afternoon-focus', title: 'Segunda janela de foco — projeto ou meta ativa', bioReason: 'Tarde produtiva: segunda chance de entrega real. Ideal para avançar em projetos que ficaram parados.', duration: 45 });
+    } else {
+      suggestions.push({ id: 'fresh:afternoon-light', title: 'Tarefas leves ou criativas da tarde', bioReason: 'A tarde pede trabalho mais fluido. Criatividade, comunicação ou organização funcionam bem agora.', duration: 30 });
+    }
+    suggestions.push({ id: 'fresh:afternoon-plan-next', title: 'Preparar amanhã — anotar o que não terminou hoje', bioReason: 'Fechar o loop do dia antes do fim da tarde reduz o carrego mental noturno.', duration: 10 });
+  } else if (hour >= 18 && hour < 21) {
+    // Noite
+    suggestions.push({ id: 'fresh:evening-review', title: 'Revisão do dia — o que aconteceu, o que ficou', bioReason: 'Revisão noturna de 10 min cria continuidade entre os dias e evita que pendências se acumulem.', duration: 10 });
+    if (!lowCapacity) {
+      suggestions.push({ id: 'fresh:evening-prep', title: 'Preparar a manhã de amanhã (roupa, lista, intenção)', bioReason: 'Preparação noturna remove fricção matinal — especialmente importante para dias com TDAH ou energia variável.', duration: 15 });
+    }
+  } else {
+    // Noite tarde / madrugada
+    suggestions.push({ id: 'fresh:night-wind', title: 'Desaceleração — sem telas, preparo para dormir', bioReason: 'Noite pede recuo, não produção. Proteger o sono é o investimento mais rentável para o dia seguinte.', duration: 20 });
+  }
+
+  return suggestions.slice(0, highCapacity ? 3 : 2).map((s, i) => ({
+    id: s.id,
+    title: s.title,
+    kind: 'suggested_commitment' as const,
+    source: 'system' as const,
+    targetType: 'system' as const,
+    action: 'suggest' as const,
+    score: 55 - i * 5,
+    confidence: 0.72,
+    reason: 'Sem agenda, hábito ou meta ativos — sugestão contextual baseada em horário e fase.',
+    bioReason: s.bioReason,
+    impactLabel: lowCapacity ? 'reduz carga' as const : 'mantém ritmo' as const,
+    notificationAllowed: false,
+    requiresConfirmation: true,
+    suggestedDate: null,
+    suggestedStartTime: null,
+    suggestedEndTime: null,
+  }));
+}
+
+export class DecisionEngine {
+  static evaluate(input: {
+    dailyContext: DailyContext;
+    surface: DecisionSurface;
+    requestContext?: Record<string, unknown>;
+  }): DecisionResult {
+    const requestContext = input.requestContext ?? {};
+    const now = currentMinutes(requestContext);
+    const currentPhaseKey = phaseKey(requestContext);
+
+    // Recalibration signal support (from /api/agenda/recalibrate)
+    const recalibSignal = typeof requestContext.recalibrationSignal === 'string'
+      ? requestContext.recalibrationSignal as string
+      : null;
+    const forceHard = recalibSignal === 'day_hard' || recalibSignal === 'energy_crash';
+    const forceGreat = recalibSignal === 'day_great' || recalibSignal === 'hyperfocus';
+    // TDAH + hyperfocus: profile reports ADHD and today's checkin has hyperfocusOccurred
+    const adhdHyperfocusActive =
+      requestContext.adhdProfile === true && requestContext.hyperfocusOccurred === true;
+    const structureHyperfocus = recalibSignal === 'hyperfocus' || adhdHyperfocusActive;
+
+    const lowCapacity = forceHard || (!forceGreat && (isLowCapacityPhase(requestContext) || hasPoorMeasuredSleep(input.dailyContext)));
+    const highCapacity = forceGreat || (!forceHard && isHighCapacityPhase(requestContext));
+
+    const allowed: DecisionCandidate[] = [];
+    const blocked: DecisionCandidate[] = [];
+
+    for (const item of uniqueBlockedTitles(input.dailyContext)) {
+      blocked.push(makeBlocked({
+        id: `history:${normalize(item.title)}`,
+        title: item.title,
+        source: item.source,
+        reason: item.reason,
+      }));
+    }
+
+    for (const task of input.dailyContext.tasks) {
+      const title = cleanText(task.title);
+      if (!title) continue;
+      const from = formatTime(task.startAt);
+      const taskMinutes = timeToMinutes(task.startAt);
+      if (task.status === 'completed') {
+        blocked.push(makeBlocked({ id: `task:${normalize(title)}`, title, source: 'timeline', reason: 'Já está concluído hoje.' }));
+        continue;
+      }
+
+      if (isBlockedByHistory(title, input.dailyContext)) {
+        blocked.push(makeBlocked({ id: `task:${normalize(title)}`, title, source: 'timeline', reason: 'Já foi rejeitado, concluído ou sugerido recentemente.' }));
+        continue;
+      }
+
+      const past = taskMinutes !== null && taskMinutes < now;
+      const hardLowCapacity = /\b(pausa|recolhimento|turbulencia)\b/.test(currentPhaseKey);
+
+      // Phase-aware action: check if the task's slot falls in a 'rest' tier
+      const pw = currentPhaseKey ? getPhaseWindow(currentPhaseKey) : null;
+      const taskTier = pw && taskMinutes !== null ? slotTier(taskMinutes, pw) : null;
+      const outOfWindow = taskTier === 'rest' && isHeavy(task);
+
+      const action = past ? 'move'
+        : outOfWindow && hardLowCapacity ? 'pause'   // outside window in Turbulência/Pausa/Recolhimento → pause
+        : outOfWindow && lowCapacity ? 'shrink'       // outside window with health-signal lowCapacity → shrink
+        : outOfWindow ? 'move'                         // outside window otherwise → move to right window
+        : lowCapacity && isHeavy(task) ? 'shrink'     // in window but low capacity + heavy → reduce scope
+        : 'keep';
+
+      const originalDuration = taskMinutes !== null && timeToMinutes(task.endAt) !== null
+        ? Math.max(30, Math.min(90, (timeToMinutes(task.endAt) as number) - taskMinutes))
+        : 45;
+      const slot = findAvailableSlot({
+        dateKey: input.dailyContext.date,
+        tasks: input.dailyContext.tasks,
+        now,
+        duration: action === 'shrink' ? 30 : originalDuration,
+        lowCapacity,
+        highCapacity,
+        targetType: 'timeline',
+        phaseKey: currentPhaseKey || undefined,
+        heavy: isHeavy(task),
+      });
+
+      // Phase-specific bioReason referencing the actual window
+      const phaseNote = pw
+        ? outOfWindow
+          ? `A fase ${currentPhaseKey || 'atual'} tem janela melhor em ${slot.isNextDay ? 'amanhã às ' + slot.start : slot.start} — este bloco está fora da janela de energia do dia.`
+          : action === 'pause' || action === 'shrink'
+            ? `A fase ${currentPhaseKey || 'atual'} pede menor carga; ${action === 'shrink' ? 'reduzir duração mantém avanço' : 'pausar evita sobrecarga'}.`
+            : ''
+        : '';
+
+      const score = 70 + (isHeavy(task) ? 8 : 4) + (past ? 10 : 0)
+        - (lowCapacity && isHeavy(task) ? 5 : 0)
+        - (outOfWindow ? 8 : 0)
+        + (taskTier === 'peak' ? 15 : taskTier === 'flow' ? 8 : 0);
+
+      allowed.push({
+        id: `task:${normalize(title)}`,
+        title,
+        kind: 'real_commitment',
+        source: 'timeline',
+        targetId: task.id ?? null,
+        targetType: 'timeline',
+        action,
+        score,
+        confidence: past ? 0.82 : 0.88,
+        reason: past
+          ? 'Compromisso real pendente com horário já passado; precisa de revisão antes de continuar no dia.'
+          : action === 'pause'
+            ? 'Compromisso real pesado em fase de baixa capacidade; melhor pausar ou revisar escopo.'
+            : action === 'shrink'
+              ? 'Compromisso real pesado em fase de baixa capacidade; melhor reduzir escopo.'
+            : action === 'move' && outOfWindow
+              ? 'Compromisso real pesado fora da janela de energia da fase atual; mover para o melhor horário disponível.'
+            : 'Compromisso real do dia.',
+        anchor: title,
+        from,
+        to: action === 'move' ? null : from,
+        suggestedDate: action === 'move' ? slot.date : input.dailyContext.date,
+        suggestedStartTime: action === 'move' ? slot.start : action === 'shrink' ? from : null,
+        suggestedEndTime: action === 'move' ? slot.end : action === 'shrink' && from ? formatMinutesAsTime((taskMinutes ?? now) + 30) : null,
+        bioReason: (action === 'move'
+          ? slot.isNextDay
+            ? 'O horário já passou e não há janela limpa hoje; mover para amanhã protege o dia sem forçar encaixe ruim.'
+            : phaseNote || 'O horário já passou; a Airia escolheu a próxima janela livre para manter continuidade sem fingir que ainda dá para cumprir no tempo antigo.'
+          : phaseNote || (action === 'pause'
+            ? 'A fase atual sinaliza menor capacidade; pausar evita transformar uma tarefa pesada em sobrecarga.'
+            : action === 'shrink'
+              ? 'A fase atual pede menos carga; reduzir duração mantém avanço sem forçar o dia.'
+            : 'O bloco já combina com o ritmo atual e pode permanecer como está.')) + healthReasonSuffix(input.dailyContext),
+        impactLabel: action === 'move' ? 'mantém ritmo' : action === 'pause' ? 'protege energia' : action === 'shrink' ? 'reduz carga' : 'mantém ritmo',
+        notificationAllowed: !past,
+        requiresConfirmation: action !== 'keep',
+        travaType: action !== 'keep' ? 'capacidade' : undefined,
+      });
+    }
+
+    for (const title of input.dailyContext.pendingHabitTitles) {
+      if (isBlockedByHistory(title, input.dailyContext) || isGeneric(title)) {
+        blocked.push(makeBlocked({ id: `habit:${normalize(title)}`, title, source: 'habit', reason: 'Hábito já concluído/rejeitado recentemente ou genérico demais.' }));
+        continue;
+      }
+      const trava = classifyTrava(title, input.dailyContext, lowCapacity);
+      const slot = findAvailableSlot({
+        dateKey: input.dailyContext.date,
+        tasks: input.dailyContext.tasks,
+        now,
+        duration: lowCapacity ? 15 : 25,
+        lowCapacity,
+        highCapacity,
+        targetType: 'habit',
+        phaseKey: currentPhaseKey || undefined,
+        heavy: false,
+      });
+      // Efeito paralelo boost: if all timeline candidates are blocked/paused in a low-capacity phase,
+      // boost autocuidado habits as a displacement suggestion
+      const isAutocuidado = /\b(exerc|caminh|medit|descanso|pausa|respir|alongar|beber|agua|sono|dormir)\b/i.test(title);
+      const timelineAllPaused = allowed.filter((c) => c.source === 'timeline').every((c) => c.action === 'pause' || c.action === 'move');
+      const efeitoParaleloBoost = lowCapacity && isAutocuidado && timelineAllPaused ? 20 : 0;
+      const efeitoParaleloNote = efeitoParaleloBoost > 0
+        ? ' Trabalho pesado está fora da janela de hoje — mas há espaço para este hábito agora, que costuma destravar o ritmo.'
+        : '';
+
+      allowed.push({
+        id: `habit:${normalize(title)}`,
+        title,
+        kind: 'real_commitment',
+        source: 'habit',
+        targetId: input.dailyContext.habits.find((habit) => habit.title === title)?.id ?? null,
+        targetType: 'habit',
+        action: lowCapacity ? 'pause' : 'convert',
+        score: (lowCapacity ? 42 : 68) + efeitoParaleloBoost,
+        confidence: 0.76,
+        reason: lowCapacity ? 'Hábito real devido hoje, mas fase pede reduzir atrito.' : 'Hábito real devido hoje; pode virar bloco opcional.',
+        anchor: title,
+        suggestedDate: lowCapacity ? null : slot.date,
+        suggestedStartTime: lowCapacity ? null : slot.start,
+        suggestedEndTime: lowCapacity ? null : slot.end,
+        bioReason: buildTravaReason(
+          title,
+          trava,
+          input.dailyContext,
+          lowCapacity
+            ? 'O hábito existe, mas o ritmo de hoje pede versão reduzida ou pausa consciente.'
+            : 'O hábito está devido hoje e pode entrar como bloco leve, sem virar cobrança solta.',
+          healthReasonSuffix(input.dailyContext) + efeitoParaleloNote,
+        ),
+        impactLabel: lowCapacity ? 'protege energia' : 'mantém ritmo',
+        notificationAllowed: !lowCapacity,
+        requiresConfirmation: true,
+        travaType: trava,
+      });
+    }
+
+    const hasRealAgenda = input.dailyContext.pendingTaskTitles.length > 0;
+    // structureHyperfocus: use existing agenda items instead of opening new goal fronts
+    const maxSuggestionSlots = forceHard ? 1 : structureHyperfocus ? 1 : (highCapacity ? 5 : 3);
+    const openSuggestionSlots = allowed.filter((item) => item.kind !== 'blocked').length < maxSuggestionSlots;
+
+    for (const goalTitle of input.dailyContext.activeGoalTitles) {
+      if (!openSuggestionSlots) break;
+      if (isBlockedByHistory(goalTitle, input.dailyContext)) {
+        blocked.push(makeBlocked({ id: `goal:${normalize(goalTitle)}`, title: goalTitle, source: 'goal', reason: 'Meta ou ação parecida já foi bloqueada recentemente.' }));
+        continue;
+      }
+
+      const trava = classifyTrava(goalTitle, input.dailyContext, lowCapacity);
+      const isMicroQuebra = trava === 'permissao';
+      // Micro-quebra: goal rejected 3+ times → suggest the smallest possible version (15 min)
+      const microTitle = isMicroQuebra ? `10 min em: ${goalTitle}` : goalTitle;
+      const duration = isMicroQuebra ? 15 : (lowCapacity ? 25 : highCapacity ? 60 : 40);
+
+      const slot = findAvailableSlot({
+        dateKey: input.dailyContext.date,
+        tasks: input.dailyContext.tasks,
+        now,
+        duration,
+        lowCapacity,
+        highCapacity,
+        targetType: 'goal',
+        phaseKey: currentPhaseKey || undefined,
+        heavy: !isMicroQuebra && !lowCapacity,
+      });
+
+      const score = (hasRealAgenda ? 52 : 62) + (highCapacity ? 12 : 0) - (lowCapacity ? 10 : 0)
+        + (isMicroQuebra ? 6 : 0); // slight boost: micro-quebra is realistic
+
+      allowed.push({
+        id: `goal:${normalize(microTitle)}`,
+        title: microTitle,
+        kind: 'suggested_commitment',
+        source: 'goal',
+        targetId: input.dailyContext.goals.find((goal) => goal.title === goalTitle)?.id ?? null,
+        targetType: 'goal',
+        action: 'suggest',
+        score,
+        confidence: isMicroQuebra ? 0.72 : 0.68,
+        reason: isMicroQuebra
+          ? 'Meta evitada 3+ vezes — sugerindo versão mínima de 15 minutos para baixar a barreira de entrada.'
+          : hasRealAgenda
+            ? 'Meta ativa pode gerar bloco opcional se couber depois dos compromissos reais.'
+            : 'Agenda sem pendências reais pode receber uma sugestão opcional ligada à meta ativa.',
+        anchor: goalTitle,
+        suggestedDate: slot.date,
+        suggestedStartTime: slot.start,
+        suggestedEndTime: slot.end,
+        bioReason: buildTravaReason(
+          goalTitle,
+          trava,
+          input.dailyContext,
+          lowCapacity
+            ? 'A meta continua ativa, mas o bloco precisa ser mínimo para respeitar a energia de hoje.'
+            : highCapacity
+              ? 'A fase atual abre uma janela boa para avanço concreto sem criar uma frente nova.'
+              : 'Há meta ativa e espaço para um avanço pequeno conectado ao dia real.',
+          healthReasonSuffix(input.dailyContext),
+        ),
+        impactLabel: lowCapacity ? 'reduz carga' : highCapacity ? 'aproveita janela' : 'mantém ritmo',
+        notificationAllowed: false,
+        requiresConfirmation: true,
+        travaType: trava,
+      });
+    }
+
+    // TDAH+hyperfocus guard: prevent new tasks, suggest closing what's open
+    if (adhdHyperfocusActive) {
+      allowed.push({
+        id: 'insight:adhd-hyperfocus-close',
+        title: 'Encerrar com limite — hiperfoco ativo',
+        kind: 'insight_only',
+        source: 'system',
+        targetType: 'system',
+        action: 'insight',
+        score: 90,
+        confidence: 0.9,
+        reason: 'Hiperfoco detectado com perfil TDAH: não é hora de abrir nova frente, mas de fechar o que está aberto.',
+        bioReason: 'Hiperfoco é janela de entrega — não de expansão. O que está em andamento merece atenção total; tarefa nova agora dilui o ganho real.',
+        impactLabel: 'protege energia',
+        notificationAllowed: false,
+        requiresConfirmation: false,
+      });
+    }
+
+    if (allowed.length === 0) {
+      // Agenda vazia + sem metas/hábitos: gera sugestão de ancoragem baseada em horário e fase
+      const freshStartSuggestions = buildFreshStartSuggestions(now, currentPhaseKey, lowCapacity, highCapacity);
+      for (const s of freshStartSuggestions) {
+        allowed.push(s);
+      }
+      if (allowed.length === 0) {
+        allowed.push({
+          id: 'insight:empty',
+          title: 'Sem ação útil agora',
+          kind: 'insight_only',
+          source: 'system',
+          targetType: 'system',
+          action: 'insight',
+          score: 10,
+          confidence: 0.7,
+          reason: 'Não há ação suficientemente ancorada no dia real.',
+          bioReason: 'Sem agenda, hábito ou meta suficiente para ajustar com segurança.',
+          impactLabel: 'mantém ritmo',
+          notificationAllowed: false,
+          requiresConfirmation: false,
+        });
+      }
+    }
+
+    const allowedActions = dedupeCandidates(allowed)
+      .filter((candidate) => candidate.kind !== 'blocked')
+      .slice(0, input.surface === 'home' ? 3 : 8);
+    const blockedActions = dedupeCandidates(blocked);
+    const actionable = allowedActions.filter((candidate) => candidate.kind !== 'insight_only');
+    const dayPriorities = actionable.slice(0, 3).map((candidate) => candidate.title);
+
+    return {
+      surface: input.surface,
+      date: input.dailyContext.date,
+      allowedActions,
+      blockedActions,
+      dayPriorities,
+      reasoning: actionable.length
+        ? `Decisão baseada em compromissos reais, hábitos/metas ativos, fase, horário local${input.dailyContext.healthSignals ? ', sinais corporais do Health Connect' : ''} e bloqueios de repetição.`
+        : 'Nenhuma ação passou pelos critérios de âncora, horário e repetição.',
+      confidence: actionable.length ? Math.round((actionable.reduce((sum, item) => sum + item.confidence, 0) / actionable.length) * 100) / 100 : 0.7,
+      emptyReason: actionable.length ? null : 'Sem candidato operacional confiável; manter como insight.',
+    };
+  }
+}

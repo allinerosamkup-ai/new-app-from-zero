@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { CheckinCreateSchema } from './checkin.contract';
+import { CheckinCreateSchema, CheckinResponseSchema } from './checkin.contract';
 
 const validCheckin = {
   userId: '550e8400-e29b-41d4-a716-446655440000',
@@ -32,7 +32,7 @@ const validCheckin = {
 {
   const result = CheckinCreateSchema.safeParse({
     ...validCheckin,
-    energyScore: 6,
+    energyScore: 11,
   });
 
   assert.equal(result.success, false);
@@ -41,7 +41,7 @@ const validCheckin = {
 {
   const result = CheckinCreateSchema.safeParse({
     ...validCheckin,
-    physicalScore: 6,
+    physicalScore: 11,
   });
 
   assert.equal(result.success, false);
@@ -50,9 +50,53 @@ const validCheckin = {
 {
   const result = CheckinCreateSchema.safeParse({
     ...validCheckin,
-    socialScore: 6,
+    socialScore: 11,
   });
 
+  assert.equal(result.success, false);
+}
+
+{
+  const result = CheckinResponseSchema.safeParse({
+    id: validCheckin.userId,
+    stateLabel: 'queda de energia',
+    riskSafety: {
+      riskLevel: 'low',
+      signals: ['sono muito baixo'],
+      route: 'adapt_day',
+      message: 'A Airia pode oferecer autoapoio pratico e adaptacao leve do dia.',
+    },
+  });
+
+  assert.equal(result.success, true);
+}
+
+// Diagnostic-aware optional fields
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    medicationTakenToday: true,
+    focusScore: 4,
+    hyperfocusOccurred: false,
+    mixedEpisodeNote: 'energia alta mas humor baixo',
+    dayType: 'mixed',
+  });
+  assert.equal(result.success, true);
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    focusScore: 11,
+  });
+  assert.equal(result.success, false);
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    dayType: 'whatever',
+  });
   assert.equal(result.success, false);
 }
 

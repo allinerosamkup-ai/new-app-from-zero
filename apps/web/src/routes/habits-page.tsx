@@ -1,0 +1,1177 @@
+import { useMemo, useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuraStore } from "../features/aura/store";
+import type { Habit } from "../features/aura/types";
+import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
+import { getHabitCompletionCount, getHabitProgressLabel, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from "../features/aura/habit-helpers";
+import { SmartEmptyState } from "../components/activation/SmartEmptyState";
+import { useToast } from "../components/Toast";
+import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil, Sparkles } from "lucide-react";
+import { api } from "../lib/api";
+import { trackEvent } from "../lib/track";
+import { getLocalDateKey } from "../utils/day-context";
+
+// ─── Confetti burst (CSS-only, no dependency) ────────────────────────────────
+const CONFETTI_COLORS = ["#D7897F","#96C7B3","#6398A9","#B5A4C8","#F9C784","#fff"];
+const CONFETTI_COUNT = 42;
+
+function ConfettiBurst({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999, overflow: "hidden" }}>
+      <style>{`
+        @keyframes confetti-fall {
+          0%   { transform: translateY(-10px) rotate(0deg) scale(1); opacity: 1; }
+          80%  { opacity: 1; }
+          100% { transform: translateY(100vh) rotate(720deg) scale(0.4); opacity: 0; }
+        }
+        @keyframes confetti-drift {
+          0%   { margin-left: 0; }
+          25%  { margin-left: 20px; }
+          75%  { margin-left: -20px; }
+          100% { margin-left: 0; }
+        }
+      `}</style>
+      {Array.from({ length: CONFETTI_COUNT }, (_, i) => {
+        const color = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+        const left = `${Math.random() * 100}%`;
+        const delay = `${Math.random() * 0.6}s`;
+        const duration = `${1.2 + Math.random() * 1.4}s`;
+        const size = 6 + Math.floor(Math.random() * 8);
+        const shape = i % 3 === 0 ? "50%" : i % 3 === 1 ? "2px" : "0%";
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              top: 0,
+              left,
+              width: size,
+              height: size * (i % 3 === 1 ? 2.5 : 1),
+              borderRadius: shape,
+              background: color,
+              animation: `confetti-fall ${duration} ${delay} ease-in forwards, confetti-drift ${duration} ${delay} ease-in-out infinite`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Achievements ────────────────────────────────────────────────────────────
+type AchievementDef = {
+  id: string;
+  icon: string;
+  title: string;
+  desc: string;
+  color: string;
+  check: (habits: any[], history: any[]) => boolean;
+};
+
+const ACHIEVEMENTS: AchievementDef[] = [
+  {
+    id: "first_habit",
+    icon: "🌱", title: "Primeiro passo", color: "var(--accent-sage)",
+    desc: "Criou seu primeiro hábito",
+    check: (h) => h.length >= 1,
+  },
+  {
+    id: "habit_trio",
+    icon: "🎯", title: "Trifeta", color: "var(--accent-sky)",
+    desc: "Tem 3 ou mais hábitos ativos",
+    check: (h) => h.length >= 3,
+  },
+  {
+    id: "streak_7",
+    icon: "🔥", title: "Semana de fogo", color: "var(--accent-peach)",
+    desc: "7 dias seguidos em algum hábito",
+    check: (h) => h.some((x: any) => x.bestStreak >= 7),
+  },
+  {
+    id: "streak_14",
+    icon: "🦁", title: "Maratona", color: "var(--accent-peach)",
+    desc: "14 dias seguidos em algum hábito",
+    check: (h) => h.some((x: any) => x.bestStreak >= 14),
+  },
+  {
+    id: "streak_30",
+    icon: "💎", title: "Compromisso real", color: "#B5A4C8",
+    desc: "30 dias seguidos em algum hábito",
+    check: (h) => h.some((x: any) => x.bestStreak >= 30),
+  },
+  {
+    id: "completions_50",
+    icon: "💪", title: "50 completudes", color: "var(--accent-sage)",
+    desc: "50 conclusões acumuladas entre todos os hábitos",
+    check: (h) => h.reduce((s: number, x: any) => s + x.totalCompletions, 0) >= 50,
+  },
+  {
+    id: "completions_100",
+    icon: "💯", title: "Centenário", color: "var(--accent-peach)",
+    desc: "100 conclusões acumuladas",
+    check: (h) => h.reduce((s: number, x: any) => s + x.totalCompletions, 0) >= 100,
+  },
+  {
+    id: "checkin_7",
+    icon: "📅", title: "Uma semana registrada", color: "var(--accent-sky)",
+    desc: "7 check-ins registrados",
+    check: (_h, history) => history.length >= 7,
+  },
+  {
+    id: "checkin_30",
+    icon: "🗓️", title: "Mês de registros", color: "var(--accent-sky)",
+    desc: "30 check-ins registrados",
+    check: (_h, history) => history.length >= 30,
+  },
+  {
+    id: "good_mood_5",
+    icon: "☀️", title: "Semana radiante", color: "#F9C784",
+    desc: "5 ou mais dias com humor ≥ 4",
+    check: (_h, history) => history.filter((x: any) => x.humor >= 4).length >= 5,
+  },
+];
+
+// ─── Category config ─────────────────────────────────────────────────────────
+const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  health:       { label: "Saúde",         color: "var(--accent-sage)",    bg: "rgba(150,199,179,0.14)" },
+  productivity: { label: "Produtividade", color: "var(--accent-sky)",    bg: "rgba(99,152,169,0.14)"  },
+  mindfulness:  { label: "Mindfulness",   color: "var(--accent-peach)", bg: "rgba(215,137,127,0.14)" },
+  social:       { label: "Social",        color: "#B5A4C8",          bg: "rgba(181,164,200,0.14)" },
+  learning:     { label: "Aprendizado",   color: "var(--accent-sky)",    bg: "rgba(99,152,169,0.14)"  },
+  leisure:      { label: "Lazer",         color: "var(--accent-peach)", bg: "rgba(215,137,127,0.14)" },
+  geral:        { label: "Geral",         color: "var(--text-3)",    bg: "rgba(150,150,150,0.10)" },
+};
+
+// ─── Streak dots visualization ─────────────────────────────────────────────
+function StreakDots({ streakCount, completedToday }: { streakCount: number; completedToday: boolean }) {
+  const totalDots = 7;
+  const filledFromRight = completedToday ? Math.min(streakCount, totalDots) : Math.min(streakCount, totalDots - 1);
+
+  return (
+    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+      {Array.from({ length: totalDots }, (_, i) => {
+        const pos = totalDots - 1 - i; // 0 = today (rightmost)
+        const isFilled = pos < filledFromRight;
+        const isToday = pos === 0;
+        return (
+          <div
+            key={i}
+            style={{
+              width: isToday ? 10 : 7,
+              height: isToday ? 10 : 7,
+              borderRadius: "50%",
+              background: isFilled
+                ? "var(--accent-peach)"
+                : isToday
+                  ? "rgba(215,137,127,0.25)"
+                  : "var(--warm-border)",
+              border: isToday ? "1.5px solid rgba(215,137,127,0.5)" : "none",
+              transition: "all 0.2s ease",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Habit card (today view) ──────────────────────────────────────────────
+function HabitCard({
+  habit,
+  dateKey,
+  onToggle,
+  onEdit,
+  onArchive,
+  isToggling,
+}: {
+  habit: Habit;
+  dateKey: string;
+  onToggle: () => void;
+  onEdit: () => void;
+  onArchive: () => void;
+  isToggling: boolean;
+}) {
+  const completedToday = isHabitCompleteForDate(habit, dateKey);
+  const progressLabel = getHabitProgressLabel(habit, dateKey);
+  const targetCount = getHabitTargetCount(habit);
+  const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
+  const [archiving, setArchiving] = useState(false);
+
+  return (
+    <div
+      style={{
+        background: completedToday
+          ? "rgba(150,199,179,0.06)"
+          : "var(--card-bg, rgba(255,255,255,0.04))",
+        border: `1.5px solid ${completedToday ? "rgba(150,199,179,0.22)" : "var(--warm-border)"}`,
+        borderRadius: 18, // Ligeiramente maior para respiro
+        padding: "12px 12px 12px 16px",
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        transition: "all 0.25s ease",
+        opacity: completedToday ? 0.72 : 1,
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      {/* Icon Area */}
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 12,
+          background: cat.bg,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 20,
+          flexShrink: 0,
+          border: "1px solid rgba(255,255,255,0.05)", // Polimento na borda do ícone
+        }}
+      >
+        {habit.icon || "✨"}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p
+          style={{
+            fontSize: 14,
+            fontWeight: 700,
+            margin: 0,
+            color: "var(--text-1)",
+            textDecoration: completedToday ? "line-through" : "none",
+            opacity: completedToday ? 0.6 : 1,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {habit.title}
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+          <StreakDots streakCount={habit.streakCount} completedToday={completedToday} />
+          <span style={{ fontSize: 10, color: "var(--accent-peach)", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
+            <Flame size={10} /> {habit.streakCount}
+          </span>
+          {targetCount > 1 && (
+            <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700 }}>
+              {progressLabel}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Actions (Surgem quando não completado para facilitar edição) */}
+      {!completedToday && (
+        <div style={{ display: "flex", gap: 4, marginRight: 4 }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "1.5px solid rgba(99,152,169,0.2)",
+              background: "rgba(99,152,169,0.06)",
+              color: "var(--accent-sky)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (archiving) return;
+              // Sem modal de confirmação: a ação executa na hora e o toast oferece "Desfazer"
+              setArchiving(true);
+              await onArchive();
+              setArchiving(false);
+            }}
+            disabled={archiving}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "1.5px solid rgba(215,137,127,0.2)",
+              background: "rgba(215,137,127,0.04)",
+              color: archiving ? "var(--text-3)" : "var(--accent-peach)",
+              cursor: archiving ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Archive size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* Toggle button */}
+      <button
+        onClick={onToggle}
+        disabled={isToggling}
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: "50%",
+          border: `2px solid ${completedToday ? "var(--accent-sage)" : "var(--warm-border)"}`,
+          background: completedToday ? "var(--accent-sage)" : "transparent",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          transition: "all 0.2s ease",
+          opacity: isToggling ? 0.5 : 1,
+        }}
+      >
+        {completedToday ? <Check size={20} color="#fff" strokeWidth={3} /> : targetCount > 1 ? (
+          <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 900 }}>
+            {Math.min(getHabitCompletionCount(habit, dateKey), targetCount)}
+          </span>
+        ) : null}
+      </button>
+    </div>
+  );
+}
+
+// ─── Habit completion calendar (4 weeks × 7 days) ────────────────────────
+function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
+  const [completedDates, setCompletedDates] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    api.get(`/habits/${habitId}/history?weeks=4`)
+      .then((data: { dates: string[] }) => {
+        setCompletedDates(new Set(data.dates));
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [habitId]);
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const days = Array.from({ length: 28 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (27 - i));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+
+  const DAY_LABELS = ["D", "S", "T", "Q", "Q", "S", "S"];
+  // Align to calendar: figure out what weekday the first day falls on
+  const firstDayOfWeek = new Date(days[0] + 'T12:00:00').getDay(); // 0=Sun
+  const gridDays: (string | null)[] = [
+    ...Array(firstDayOfWeek).fill(null),
+    ...days,
+  ];
+  // Pad to complete last row
+  while (gridDays.length % 7 !== 0) gridDays.push(null);
+  const weeks: (string | null)[][] = [];
+  for (let i = 0; i < gridDays.length; i += 7) weeks.push(gridDays.slice(i, i + 7));
+
+  if (!loaded) {
+    return (
+      <div style={{ padding: "8px 0", display: "flex", justifyContent: "center" }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)" }}>carregando...</span>
+      </div>
+    );
+  }
+
+  const filledCount = Array.from(completedDates).filter(d => days.includes(d)).length;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      {/* Day-of-week headers */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 4 }}>
+        {DAY_LABELS.map((l, i) => (
+          <div key={i} style={{ textAlign: "center", fontSize: 8, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase" }}>
+            {l}
+          </div>
+        ))}
+      </div>
+      {/* Week rows */}
+      {weeks.map((week, wi) => (
+        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 3 }}>
+          {week.map((dateStr, di) => {
+            if (!dateStr) return <div key={di} />;
+            const isCompleted = completedDates.has(dateStr);
+            const isToday = dateStr === todayStr;
+            return (
+              <div
+                key={di}
+                title={dateStr}
+                style={{
+                  aspectRatio: "1",
+                  borderRadius: 4,
+                  background: isCompleted ? color : "var(--warm-border)",
+                  border: isToday ? `1.5px solid ${color}` : "1.5px solid transparent",
+                  opacity: isCompleted ? 0.9 : isToday ? 0.6 : 0.35,
+                  transition: "all 0.15s",
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
+      {/* Summary */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+        <span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 600 }}>Últimas 4 semanas</span>
+        <span style={{ fontSize: 10, color, fontWeight: 700 }}>{filledCount}/28 dias</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── All habits card (expandable with calendar) ───────────────────────────
+function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dateKey: string; onArchive: () => void; onEdit: () => void }) {
+  const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
+  const completedToday = isHabitCompleteForDate(habit, dateKey);
+  const [expanded, setExpanded] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
+  return (
+    <div
+      style={{
+        background: "var(--card-bg, rgba(255,255,255,0.04))",
+        border: "1.5px solid var(--warm-border)",
+        borderRadius: 14,
+        overflow: "hidden",
+        position: "relative",
+        transition: "all 0.2s ease",
+      }}
+    >
+      {/* Main row */}
+      <div
+        style={{
+          width: "100%",
+          padding: "12px 14px",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          background: "none",
+          textAlign: "left",
+          boxSizing: "border-box",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            padding: 0,
+          }}
+        >
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 8,
+              background: cat.bg,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+              flexShrink: 0,
+            }}
+          >
+            {habit.icon || "✨"}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{habit.title}</p>
+            <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  background: cat.bg,
+                  color: cat.color,
+                  borderRadius: 6,
+                  padding: "2px 7px",
+                  fontWeight: 700,
+                }}
+              >
+                {cat.label}
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
+                <Flame size={10} /> {habit.streakCount}d
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
+                {habit.totalCompletions} total
+              </span>
+              {getHabitTargetCount(habit) > 1 && (
+                <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
+                  {getHabitProgressLabel(habit, dateKey)}
+                </span>
+              )}
+            </div>
+          </div>
+          {completedToday && (
+            <div
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                background: "var(--accent-sage)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Check size={12} color="#fff" strokeWidth={3} />
+            </div>
+          )}
+          <ChevronDown
+            size={16}
+            color="var(--text-3)"
+            style={{
+              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease",
+              flexShrink: 0,
+            }}
+          />
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label={`Editar ${habit.title}`}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              border: "1.5px solid rgba(99,152,169,0.25)",
+              background: "rgba(99,152,169,0.08)",
+              color: "var(--accent-sky)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              if (archiving) return;
+              setArchiving(true);
+              await onArchive();
+            }}
+            disabled={archiving}
+            aria-label={`Excluir ${habit.title}`}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              border: "1.5px solid rgba(215,137,127,0.25)",
+              background: "rgba(215,137,127,0.06)",
+              color: archiving ? "var(--text-3)" : "var(--accent-peach)",
+              cursor: archiving ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Archive size={13} />
+          </button>
+        </div>
+      </div>
+
+      {/* Calendar + archive expand */}
+      {expanded && (
+        <div
+          style={{
+            padding: "0 14px 14px",
+            borderTop: "1px solid var(--warm-border)",
+          }}
+        >
+          <HabitCalendar habitId={habit.id} color={cat.color} />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            style={{
+              marginTop: 14,
+              width: "100%",
+              padding: "9px 0",
+              borderRadius: 10,
+              border: "1.5px solid rgba(99,152,169,0.25)",
+              background: "rgba(99,152,169,0.08)",
+              color: "var(--accent-sky)",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            <Pencil size={13} />
+            Editar hábito
+          </button>
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (archiving) return;
+              setArchiving(true);
+              await onArchive();
+            }}
+            disabled={archiving}
+            style={{
+              marginTop: 14,
+              width: "100%",
+              padding: "9px 0",
+              borderRadius: 10,
+              border: "1.5px solid rgba(215,137,127,0.25)",
+              background: "rgba(215,137,127,0.06)",
+              color: archiving ? "var(--text-3)" : "var(--accent-peach)",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: archiving ? "default" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              transition: "all 0.15s",
+            }}
+          >
+            <Archive size={13} />
+            {archiving ? "Excluindo..." : "Excluir hábito"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────
+export function HabitsPage() {
+  const { state, addHabit, updateHabit, toggleHabit, archiveHabit, unarchiveHabit } = useAuraStore();
+  const navigate = useNavigate();
+  const { showSuccess, showError, showUndo } = useToast();
+
+  async function handleArchiveHabit(habit: Habit) {
+    try {
+      await archiveHabit(habit.id);
+      showUndo(`"${habit.title}" excluído`, () => {
+        unarchiveHabit(habit.id).catch(() => showError("Não consegui restaurar o hábito"));
+      });
+    } catch {
+      showError("Não consegui excluir o hábito");
+    }
+  }
+  const [tab, setTab] = useState<"today" | "all" | "badges">("today");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const habitsOpenedRef = useRef(false);
+
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  const habits = state.habits || [];
+  const todayKey = getLocalDateKey();
+  const todayWeekday = new Date(`${todayKey}T12:00:00`).getDay();
+  const todayHabits = habits.filter((h) => isHabitDueOnWeekday(h, todayWeekday));
+  const completedToday = todayHabits.filter((h) => isHabitCompleteForDate(h, todayKey)).length;
+  const bestStreak = habits.reduce((max, h) => Math.max(max, h.streakCount), 0);
+  const pendingToday = todayHabits.filter((h) => !isHabitCompleteForDate(h, todayKey));
+  const doneToday = todayHabits.filter((h) => isHabitCompleteForDate(h, todayKey));
+  const editingHabitDraft = useMemo(
+    () => (editingHabit ? buildHabitEditDraft(editingHabit) : undefined),
+    [editingHabit],
+  );
+
+  useEffect(() => {
+    if (habitsOpenedRef.current) return;
+    habitsOpenedRef.current = true;
+    trackEvent("habits_opened", {
+      habits_count: habits.length,
+      today_count: todayHabits.length,
+    });
+  }, [habits.length, todayHabits.length]);
+
+  async function handleToggle(habitId: string) {
+    if (togglingIds.has(habitId)) return;
+    const habit = habits.find(h => h.id === habitId);
+    const wasCompleted = habit ? isHabitCompleteForDate(habit, todayKey) : false;
+    const willComplete = habit
+      ? !wasCompleted && getHabitCompletionCount(habit, todayKey) + 1 >= getHabitTargetCount(habit)
+      : false;
+    setTogglingIds((prev) => new Set([...prev, habitId]));
+    try {
+      await toggleHabit(habitId);
+      // Disparar confetti se acabou de completar o último hábito pendente
+      if (willComplete && pendingToday.length === 1 && todayHabits.length > 0) {
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 3000);
+      }
+    } catch {
+      showError("Erro ao atualizar hábito.");
+    } finally {
+      setTogglingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(habitId);
+        return next;
+      });
+    }
+  }
+
+  async function handleAddHabit(data: HabitModalPayload) {
+    try {
+      await addHabit(data);
+      setShowAddModal(false);
+      showSuccess("Hábito criado.");
+      return true;
+    } catch {
+      showError("Erro ao criar hábito.");
+      return false;
+    }
+  }
+
+  async function handleEditHabit(data: HabitModalPayload) {
+    if (!editingHabit) return false;
+    try {
+      await updateHabit(editingHabit.id, data);
+      setEditingHabit(null);
+      showSuccess("Hábito salvo.");
+      return true;
+    } catch {
+      showError("Erro ao salvar hábito.");
+      return false;
+    }
+  }
+
+  function buildHabitEditDraft(habit: Habit) {
+    return {
+      title: habit.title,
+      category: habit.category,
+      frequency: habit.frequency,
+      targetDays: habit.targetDays ?? [],
+      targetCount: habit.targetCount ?? 1,
+      icon: habit.icon ?? "✨",
+      timeOfDay: habit.timeOfDay ?? "anytime",
+      description: habit.description ?? "",
+      durationMinutes: habit.durationMinutes ?? undefined,
+      reminderEnabled: habit.reminderEnabled,
+      reminderTime: habit.reminderTime ?? "09:00",
+      persistentReminderEnabled: habit.persistentReminderEnabled ?? false,
+      persistentReminderIntervalMinutes: habit.persistentReminderIntervalMinutes ?? 60,
+    };
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", paddingBottom: 100 }}>
+      <ConfettiBurst active={showConfetti} />
+      <div className="screen-content">
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, marginTop: 12 }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-1)", padding: 4 }}
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <div style={{ flex: 1 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Meus Hábitos</h1>
+            <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.35 }}>
+              Hábitos pequenos do tamanho da sua fase.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "var(--accent-peach)",
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Plus size={18} color="#fff" />
+          </button>
+        </div>
+
+        {/* Stats row */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: 16,
+              border: "1.5px solid rgba(150,199,179,0.2)",
+              background: "rgba(150,199,179,0.07)",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div style={{ fontSize: 22 }}>✅</div>
+            <div>
+              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "var(--accent-sage)" }}>
+                {completedToday}/{todayHabits.length}
+              </p>
+              <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0, fontWeight: 600, textTransform: "uppercase" }}>
+                Hoje
+              </p>
+            </div>
+          </div>
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: 16,
+              border: "1.5px solid rgba(215,137,127,0.2)",
+              background: "rgba(215,137,127,0.07)",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <Flame size={22} color="var(--accent-peach)" />
+            <div>
+              <p style={{ fontSize: 22, fontWeight: 800, margin: 0, color: "var(--accent-peach)" }}>
+                {bestStreak}
+              </p>
+              <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0, fontWeight: 600, textTransform: "uppercase" }}>
+                Melhor streak
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div
+          style={{
+            display: "flex",
+            gap: 0,
+            marginBottom: 20,
+            borderRadius: 12,
+            border: "1.5px solid var(--warm-border)",
+            overflow: "hidden",
+          }}
+        >
+          {(["today", "all", "badges"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                flex: 1,
+                padding: "10px 0",
+                border: "none",
+                background: tab === t ? "var(--accent-peach)" : "transparent",
+                color: tab === t ? "#fff" : "var(--text-3)",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.18s",
+              }}
+            >
+              {t === "today" ? "Hoje" : t === "all" ? "Todos" : "🏆"}
+            </button>
+          ))}
+        </div>
+
+        {/* ── TODAY TAB ────────────────────────────────────────── */}
+        {tab === "today" && (
+          <div>
+            {todayHabits.length === 0 ? (
+              <SmartEmptyState
+                icon={Sparkles}
+                title="Crie um habito pequeno"
+                description="Habito aqui nao e cobrança. É uma repetição leve que combina com seu humor e energia."
+                ctaLabel="Criar habito"
+                onAction={() => setShowAddModal(true)}
+                examples={[
+                  { title: "Abrir o planner de manha", description: "Para orientar o dia antes de começar." },
+                  { title: "Revisar uma pendencia as 16h", description: "Para evitar peso acumulado no fim do dia." },
+                  { title: "Registrar uma linha no diario", description: "Para dar contexto quando o dia oscilar." },
+                ]}
+              />
+            ) : (
+              <>
+                {/* Pending */}
+                {pendingToday.length > 0 && (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", margin: "0 0 10px" }}>
+                      Para fazer ({pendingToday.length})
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {pendingToday.map((h) => (
+                        <HabitCard
+                          key={h.id}
+                          habit={h}
+                          dateKey={todayKey}
+                          onToggle={() => handleToggle(h.id)}
+                          onEdit={() => setEditingHabit(h)}
+                          onArchive={() => handleArchiveHabit(h)}
+                          isToggling={togglingIds.has(h.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Done */}
+                {doneToday.length > 0 && (
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-sage)", textTransform: "uppercase", margin: "0 0 10px" }}>
+                      Concluídos hoje ({doneToday.length})
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {doneToday.map((h) => (
+                        <HabitCard
+                          key={h.id}
+                          habit={h}
+                          dateKey={todayKey}
+                          onToggle={() => handleToggle(h.id)}
+                          onEdit={() => setEditingHabit(h)}
+                          onArchive={() => handleArchiveHabit(h)}
+                          isToggling={togglingIds.has(h.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Motivational if all done */}
+                {pendingToday.length === 0 && doneToday.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: 20,
+                      padding: 20,
+                      borderRadius: 16,
+                      background: "rgba(150,199,179,0.10)",
+                      border: "1.5px solid rgba(150,199,179,0.22)",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
+                    <p style={{ fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 4px", fontSize: 15 }}>
+                      Todos os hábitos do dia!
+                    </p>
+                    <p style={{ color: "var(--text-3)", fontSize: 12, margin: 0 }}>
+                      Consistência é o caminho.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── ALL TAB ──────────────────────────────────────────── */}
+        {tab === "all" && (
+          <div>
+            {habits.length === 0 ? (
+              <SmartEmptyState
+                icon={Sparkles}
+                title="Nenhum habito cadastrado"
+                description="Comece com algo que ajude a Airia a sustentar seu ritmo, sem virar lista pesada."
+                ctaLabel="Criar primeiro habito"
+                onAction={() => setShowAddModal(true)}
+                examples={[
+                  { title: "Check-in da manha", description: "Humor e energia antes da agenda." },
+                  { title: "Fechamento do dia", description: "Olhar o que ficou pendente." },
+                  { title: "Planejar uma janela leve", description: "Proteger energia em dias sensiveis." },
+                ]}
+              />
+            ) : (
+              (() => {
+                const grouped = habits.reduce<Record<string, Habit[]>>((acc, h) => {
+                  const cat = h.category || "geral";
+                  if (!acc[cat]) acc[cat] = [];
+                  acc[cat].push(h);
+                  return acc;
+                }, {});
+
+                return Object.entries(grouped).map(([cat, catHabits]) => {
+                  const cfg = CATEGORY_CONFIG[cat] ?? CATEGORY_CONFIG.geral;
+                  return (
+                    <div key={cat} style={{ marginBottom: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color }} />
+                        <p style={{ fontSize: 11, fontWeight: 700, color: cfg.color, textTransform: "uppercase", margin: 0 }}>
+                          {cfg.label}
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {catHabits.map((h) => (
+                          <AllHabitCard
+                            key={h.id}
+                            habit={h}
+                            dateKey={todayKey}
+                            onArchive={() => handleArchiveHabit(h)}
+                            onEdit={() => setEditingHabit(h)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })()
+            )}
+          </div>
+        )}
+        {/* ── BADGES TAB ───────────────────────────────────────── */}
+        {tab === "badges" && (() => {
+          const unlockedIds = new Set(
+            ACHIEVEMENTS.filter(a => a.check(habits, state.checkinHistory || [])).map(a => a.id)
+          );
+          const unlockedCount = unlockedIds.size;
+
+          return (
+            <div>
+              {/* Progress header */}
+              <div style={{
+                padding: "14px 16px",
+                borderRadius: 16,
+                background: "rgba(215,137,127,0.07)",
+                border: "1.5px solid rgba(215,137,127,0.18)",
+                marginBottom: 20,
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+              }}>
+                <div style={{ fontSize: 32 }}>🏆</div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 16, fontWeight: 800, margin: "0 0 2px", color: "var(--text-1)" }}>
+                    {unlockedCount}/{ACHIEVEMENTS.length} conquistas
+                  </p>
+                  <div style={{ height: 5, borderRadius: 999, background: "rgba(0,0,0,.08)", overflow: "hidden", marginTop: 6 }}>
+                    <div style={{
+                      width: `${(unlockedCount / ACHIEVEMENTS.length) * 100}%`,
+                      height: "100%", borderRadius: 999,
+                      background: "linear-gradient(90deg, var(--accent-peach), var(--accent-sage))",
+                      transition: "width 0.6s ease",
+                    }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Achievement grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {ACHIEVEMENTS.map(achievement => {
+                  const unlocked = unlockedIds.has(achievement.id);
+                  return (
+                    <div
+                      key={achievement.id}
+                      style={{
+                        padding: "14px 12px",
+                        borderRadius: 16,
+                        border: unlocked
+                          ? `1.5px solid ${achievement.color}44`
+                          : "1.5px solid var(--warm-border)",
+                        background: unlocked
+                          ? `${achievement.color}10`
+                          : "rgba(150,150,150,0.04)",
+                        opacity: unlocked ? 1 : 0.5,
+                        transition: "all 0.2s ease",
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {unlocked && (
+                        <div style={{
+                          position: "absolute", top: 8, right: 8,
+                          width: 18, height: 18, borderRadius: "50%",
+                          background: achievement.color,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          <span style={{ fontSize: 9, color: "#fff", fontWeight: 900 }}>✓</span>
+                        </div>
+                      )}
+                      <div style={{ fontSize: 28, marginBottom: 8, filter: unlocked ? "none" : "grayscale(100%)" }}>
+                        {achievement.icon}
+                      </div>
+                      <p style={{
+                        fontSize: 12, fontWeight: 800, margin: "0 0 3px",
+                        color: unlocked ? "var(--text-1)" : "var(--text-3)",
+                      }}>
+                        {achievement.title}
+                      </p>
+                      <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0, lineHeight: 1.4 }}>
+                        {achievement.desc}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {unlockedCount === 0 && (
+                <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-3)", fontSize: 13 }}>
+                  Comece a usar o app para desbloquear conquistas!
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* FAB — quick add fixo no bottom */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        style={{
+          position: "fixed",
+          bottom: 88,
+          right: 20,
+          width: 52,
+          height: 52,
+          borderRadius: "50%",
+          background: "var(--accent-peach)",
+          border: "none",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 20px rgba(215,137,127,0.45)",
+          zIndex: 100,
+          transition: "transform 0.15s ease",
+        }}
+        onPointerDown={(e) => (e.currentTarget.style.transform = "scale(0.92)")}
+        onPointerUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      >
+        <Plus size={22} color="#fff" strokeWidth={2.5} />
+      </button>
+
+      {/* Add modal */}
+      {showAddModal && (
+        <HabitIdeasModal
+          onClose={() => setShowAddModal(false)}
+          onSave={handleAddHabit}
+        />
+      )}
+
+      {editingHabit && (
+        <HabitIdeasModal
+          onClose={() => setEditingHabit(null)}
+          onSave={handleEditHabit}
+          initialDraft={editingHabitDraft}
+          title="Editar hábito"
+          subtitle="Ajuste frequência, metas, dias e lembretes desse hábito."
+          saveLabel="Salvar alterações"
+        />
+      )}
+    </div>
+  );
+}

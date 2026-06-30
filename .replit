@@ -31,7 +31,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd apps/web && npx vite --host 0.0.0.0 --port 5000"
+args = "cd apps/web && npm install && npx vite --host 0.0.0.0 --port 5000"
 waitForPort = 5000
 
 [[workflows.workflow]]
@@ -40,7 +40,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd apps/backend && PORT=3000 npx ts-node-dev --respawn --transpile-only src/index.ts"
+args = "npm install && cd apps/backend && npx ts-node-dev --respawn --transpile-only src/index.ts"
 waitForPort = 3000
 
 [workflows.workflow.metadata]
@@ -54,12 +54,7 @@ externalPort = 3001
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 5001
-externalPort = 3000
-
 [deployment]
 deploymentTarget = "static"
-run = ["bash", "-c", "cd apps/backend && PORT=5000 node dist/index.js"]
-build = ["bash", "-c", "cd apps/web && npx vite build"]
+build = ["bash", "-c", "npm install && cd apps/web && npx vite build"]
 publicDir = "apps/web/dist"

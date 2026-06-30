@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1080, initial-scale=1">
+  <title>airia post fixado</title>
+  <style>
+    :root {
+      --off: #FAF6F2;
+      --graphite: #2A2A2A;
+      --salmon: #E8A598;
+      --peach: #F2C9B3;
+      --sage: #B8C9B0;
+      --blue: #A9C4D6;
+      --lilac: #C9B8D6;
+      --gray-lilac: #B5A8C4;
+      --green: #D4E2C4;
+      --beige: #E4D6C2;
+      --serif: Fraunces, Georgia, "Times New Roman", serif;
+      --sans: Inter, "Segoe UI", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 1080px;
+      height: 1350px;
+      margin: 0;
+      overflow: hidden;
+      background: var(--off);
+    }
+
+    body {
+      color: var(--graphite);
+      font-family: var(--sans);
+    }
+
+    .post {
+      position: relative;
+      width: 1080px;
+      height: 1350px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 22%, rgba(42,42,42,0.020) 0 1px, transparent 1.35px),
+        radial-gradient(circle at 69% 58%, rgba(42,42,42,0.016) 0 1px, transparent 1.45px),
+        radial-gradient(circle at 42% 78%, rgba(42,42,42,0.012) 0 1px, transparent 1.5px),
+        linear-gradient(var(--off), var(--off));
+      background-size: 13px 13px, 19px 19px, 23px 23px, 100% 100%;
+    }
+
+    .header {
+      position: absolute;
+      left: 60px;
+      top: 52px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      z-index: 3;
+    }
+
+    .logo {
+      font: italic 500 38px/1 var(--serif);
+      letter-spacing: 0;
+      color: var(--graphite);
+    }
+
+    .tag-new {
+      height: 32px;
+      min-width: 114px;
+      padding: 0 14px;
+      border-radius: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--salmon);
+      font: 500 18px/1 var(--sans);
+      color: var(--graphite);
+    }
+
+    .manifesto {
+      position: absolute;
+      left: 80px;
+      top: 146px;
+      width: 835px;
+      font: 700 96px/1.05 var(--serif);
+      letter-spacing: 0;
+      color: var(--graphite);
+      z-index: 2;
+    }
+
+    .manifesto .salmon {
+      color: var(--salmon);
+    }
+
+    .saber {
+      position: relative;
+      display: inline-block;
+    }
+
+    .saber svg {
+      position: absolute;
+      left: -6px;
+      right: -10px;
+      bottom: 3px;
+      width: calc(100% + 18px);
+      height: 18px;
+      overflow: visible;
+      z-index: -1;
+    }
+
+    .phase-strip {
+      position: absolute;
+      left: 0;
+      top: 675px;
+      width: 1080px;
+      height: 100px;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      z-index: 2;
+    }
+
+    .phase {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 8px;
+      font: 500 16px/1.15 var(--sans);
+      color: var(--graphite);
+      white-space: normal;
+    }
+
+    .mockups {
+      position: absolute;
+      left: 0;
+      top: 775px;
+      width: 1080px;
+      height: 480px;
+      z-index: 1;
+    }
+
+    .phone-wrap {
+      position: absolute;
+      filter: drop-shadow(0 28px 38px rgba(42,42,42,0.15));
+      transform-origin: center center;
+    }
+
+    .phone {
+      width: 100%;
+      height: 100%;
+      padding: 8px;
+      border-radius: 40px;
+      background: #151515;
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.12),
+        inset 0 -12px 22px rgba(0,0,0,0.18);
+    }
+
+    .screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 34px;
+      background: #fff;
+    }
+
+    .screen img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .mock-checkin {
+      left: 72px;
+      top: 105px;
+      width: 305px;
+      height: 430px;
+      transform: rotate(-6deg);
+      z-index: 1;
+    }
+
+    .mock-home {
+      left: 360px;
+      top: 18px;
+      width: 360px;
+      height: 492px;
+      transform: rotate(0deg);
+      z-index: 3;
+      filter: drop-shadow(0 32px 44px rgba(42,42,42,0.18));
+    }
+
+    .mock-insights {
+      right: 72px;
+      top: 105px;
+      width: 305px;
+      height: 430px;
+      transform: rotate(6deg);
+      z-index: 2;
+    }
+
+    .crop-small img {
+      transform: translateY(-70px);
+    }
+
+    .crop-home img {
+      transform: translateY(-86px);
+    }
+
+    .footer-bg {
+      position: absolute;
+      left: 0;
+      top: 1242px;
+      width: 1080px;
+      height: 108px;
+      background: var(--off);
+      z-index: 20;
+    }
+
+    .footer-svg {
+      position: absolute;
+      left: 0;
+      top: 1242px;
+      width: 1080px;
+      height: 108px;
+      z-index: 40;
+      overflow: visible;
+    }
+  </style>
+</head>
+<body>
+  <main class="post" aria-label="Post fixado airia">
+    <header class="header">
+      <div class="logo">airia. mood energy</div>
+      <div class="tag-new">novo · 2026</div>
+    </header>
+
+    <section class="manifesto">
+      <div>Seu humor</div>
+      <div>tem <span class="salmon">fases</span>.</div>
+      <div>Seu app</div>
+      <div>devia</div>
+      <div><span class="saber">saber<svg viewBox="0 0 240 20" aria-hidden="true"><path d="M3 12 C48 4, 87 17, 132 10 S207 4, 237 12" fill="none" stroke="#B8C9B0" stroke-width="7" stroke-linecap="round"/></svg></span> disso.</div>
+    </section>
+
+    <section class="phase-strip" aria-label="Fases de humor">
+      <div class="phase" style="background:#E8A598">elevada ⚡</div>
+      <div class="phase" style="background:#F2C9B3">fluindo 🌊</div>
+      <div class="phase" style="background:#B8C9B0">estável 🍃</div>
+      <div class="phase" style="background:#A9C4D6">em queda 🍂</div>
+      <div class="phase" style="background:#C9B8D6">baixa 🌧</div>
+      <div class="phase" style="background:#B5A8C4">esgotada 🌙</div>
+      <div class="phase" style="background:#D4E2C4">recuperando 🌱</div>
+      <div class="phase" style="background:#E4D6C2">mista 🌓</div>
+    </section>
+
+    <section class="mockups" aria-label="Telas do aplicativo airia">
+      <div class="phone-wrap mock-checkin">
+        <div class="phone">
+          <div class="screen crop-small">
+            <img src="file:///C:/Users/allin/Downloads/Phone%20Link/1000042853.png" alt="Tela de check-in do airia">
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap mock-home">
+        <div class="phone">
+          <div class="screen crop-home">
+            <img src="file:///C:/Users/allin/Downloads/Phone%20Link/1000042837.png" alt="Tela inicial do airia">
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap mock-insights">
+        <div class="phone">
+          <div class="screen crop-small">
+            <img src="file:///C:/Users/allin/Downloads/Phone%20Link/1000042844.png" alt="Tela de insights do airia">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-bg"></div>
+    <svg class="footer-svg" viewBox="0 0 1080 108" aria-hidden="true">
+      <text x="40" y="63" fill="#2A2A2A" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="26" font-weight="500">assistente pessoal de ciclagem de humor</text>
+      <rect x="791" y="18" width="249" height="72" rx="36" fill="#E8A598"/>
+      <text x="831" y="63" fill="#2A2A2A" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="700">airia.pro →</text>
+    </svg>
+  </main>
+</body>
+</html>

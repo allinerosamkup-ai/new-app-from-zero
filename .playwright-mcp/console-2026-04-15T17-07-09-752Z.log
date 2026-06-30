@@ -1,0 +1,8 @@
+[      78ms] Error: supabaseUrl is required.
+    at rn (https://airia.pro/assets/vendor-supabase-BC9sqCa0.js:43:39774)
+    at new nn (https://airia.pro/assets/vendor-supabase-BC9sqCa0.js:43:40144)
+    at ln (https://airia.pro/assets/vendor-supabase-BC9sqCa0.js:43:43474)
+    at https://airia.pro/assets/main-D2mBI-u4.js:2:5650
+[      76ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://airia.pro/:0
+[   29395ms] [WARNING] <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes"> @ https://airia.pro/:0
+[   29460ms] [INFO] Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner. @ https://airia.pro/splash:0
