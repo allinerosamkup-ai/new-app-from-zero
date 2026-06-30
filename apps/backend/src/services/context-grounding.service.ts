@@ -35,10 +35,18 @@ export type DailyContext = GroundingLists & {
   healthSignals?: GroundedHealthSignals | null;
   actionFeedback: AiActionFeedbackItem[];
   postponedActions?: GroundedPostponement[];
+  repeatedSnoozes?: GroundedRepeatedSnooze[];
   // null = nunca fez check-in; 0 = hoje; N = dias desde o último (sempre preenchido pelo serviço)
   daysSinceLastCheckin?: number | null;
   patternMemoryContext: string;
   operationalRule: string;
+};
+
+export type GroundedRepeatedSnooze = {
+  blockId: string;
+  title: string;
+  snoozeCount: number;
+  lastSnoozedAt: string;
 };
 
 export type GroundedTask = {
@@ -189,7 +197,7 @@ function formatCheckinAbsenceLine(daysSinceLastCheckin: number | null | undefine
   return `Sinal de ausência: ${daysSinceLastCheckin} dias sem check-in. Para este público, ausência é dado provável de fase baixa ou sobrecarga — nunca falha. Proibido cobrar, mencionar sequência perdida ou pedir registro retroativo. Acolher a volta em no máximo 1 frase curta e reduzir a carga sugerida para hoje.`;
 }
 
-function formatGroundingBlock(lists: GroundingLists & { postponedActions?: GroundedPostponement[]; daysSinceLastCheckin?: number | null }, dateKey: string, ragContext: string): string {
+function formatGroundingBlock(lists: GroundingLists & { postponedActions?: GroundedPostponement[]; repeatedSnoozes?: GroundedRepeatedSnooze[]; daysSinceLastCheckin?: number | null }, dateKey: string, ragContext: string): string {
   const postponementLines = (lists.postponedActions ?? [])
     .slice(0, 5)
     .map((item) => {
@@ -208,6 +216,9 @@ function formatGroundingBlock(lists: GroundingLists & { postponedActions?: Groun
     lists.recentSuggestionTitles.length ? `Sugestões recentes para não reciclar: ${lists.recentSuggestionTitles.join(' | ')}` : '',
     lists.blockedActionTitles.length ? `Ações rejeitadas/concluídas pelo card: ${lists.blockedActionTitles.join(' | ')}` : '',
     postponementLines.length ? `Adiamentos recentes para análise de padrão: ${postponementLines.join(' | ')}` : '',
+    (lists.repeatedSnoozes ?? []).length > 0
+      ? `Padrão de Deriva detectado (mesma tarefa pausada 3+ vezes): ${(lists.repeatedSnoozes ?? []).map(s => `${s.title} (${s.snoozeCount}x)`).join(' | ')} — Airia pode propor renegociar o horário desta tarefa de forma definitiva.`
+      : '',
     formatCheckinAbsenceLine(lists.daysSinceLastCheckin),
     'Regra de grounding: memórias e histórico explicam padrão; ação nova só pode nascer de agenda pendente, hábito pendente ou meta ativa de hoje.',
     'Regra de compromisso: sugestão opcional pode ser proposta, mas só compromisso real salvo/confirmado pode virar pendência ou notificação.',
@@ -269,7 +280,7 @@ export class ContextGroundingService {
 
     const prismaAny = this.prisma as any;
 
-    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals, rawLastCheckin] = await Promise.all([
+    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals, rawLastCheckin, rawSnoozeEvents] = await Promise.all([
       prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
         where: { userId: input.userId, localDate: { gte: start, lte: end } },
         orderBy: { startAt: 'asc' },
@@ -335,6 +346,17 @@ export class ContextGroundingService {
         orderBy: { localDate: 'desc' },
         select: { localDate: true },
       }).catch(() => null) : Promise.resolve(null),
+      // Eventos de Deriva (snooze) dos últimos 14 dias — para detectar padrão recorrente
+      prismaAny.eventLog?.findMany ? prismaAny.eventLog.findMany({
+        where: {
+          userId: input.userId,
+          eventName: 'timeline.block_snoozed',
+          createdAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 60,
+        select: { properties: true, createdAt: true },
+      }).catch(() => []) : Promise.resolve([]),
     ]);
 
     const lastCheckinKey = normalizeDateKey((rawLastCheckin as { localDate?: Date } | null)?.localDate);
@@ -348,6 +370,27 @@ export class ContextGroundingService {
     const habits = rawHabits as GroundedHabit[];
     const goals = rawGoals as GroundedGoal[];
     const postponedActions = rawPostponements as GroundedPostponement[];
+
+    // Agrupar eventos de snooze por blockId e detectar padrão recorrente (3+)
+    const snoozeCountMap = new Map<string, { title: string; count: number; lastAt: string }>();
+    for (const row of (rawSnoozeEvents as Array<{ properties: unknown; createdAt: Date }>)) {
+      const props = row.properties as Record<string, unknown>;
+      const blockId = cleanText(props?.blockId);
+      const title = cleanText(props?.title);
+      if (!blockId || !title) continue;
+      const existing = snoozeCountMap.get(blockId);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        snoozeCountMap.set(blockId, { title, count: 1, lastAt: row.createdAt.toISOString() });
+      }
+    }
+    const repeatedSnoozes: GroundedRepeatedSnooze[] = [];
+    for (const [blockId, info] of snoozeCountMap.entries()) {
+      if (info.count >= 3) {
+        repeatedSnoozes.push({ blockId, title: info.title, snoozeCount: info.count, lastSnoozedAt: info.lastAt });
+      }
+    }
 
     const pendingTaskTitles = unique(tasks.filter((task) => task.status !== 'completed').map((task) => task.title));
     const completedTaskTitles = unique(tasks.filter((task) => task.status === 'completed').map((task) => task.title));
@@ -401,6 +444,7 @@ export class ContextGroundingService {
       healthSignals: rawHealthSignals as GroundedHealthSignals | null,
       actionFeedback,
       postponedActions,
+      repeatedSnoozes,
       daysSinceLastCheckin,
       patternMemoryContext: cleanText(input.ragContext),
       operationalRule: 'Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual.',

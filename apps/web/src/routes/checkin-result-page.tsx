@@ -331,40 +331,27 @@ export function CheckinResultPage() {
     if (auraMsgRan.current) return;
     auraMsgRan.current = true;
 
-    // Se o backend já retornou análise via router state, usar diretamente
+    // Se o backend já retornou análise via router state, usar diretamente (caminho normal)
     if (checkinAI?.analysis) {
       setAuraMsgLoading(false);
       return;
     }
-    api.post("/ai/suggest", {
-      type: "checkin-response",
-      context: {
-        mood: state.mood,
-        moodLabel: v.label,
-        moodCycleContext: cycleReport.aiContext,
-        checkinHistory: recentHistory,
-        nota: todayNote || state.journal,
-        streak,
-        hour: dayContext.hour,
-        minute: dayContext.minute,
-        partOfDay: dayContext.partOfDay,
-        weekday: dayContext.weekday,
-        localDate: dayContext.localDate,
-        previousSuggestion: previousCheckinSuggestion,
-      },
-    }).then((res: any) => {
-      try {
-        const parsed = parseAiSuggestion<AuraMsg>(res.suggestion);
-        if (parsed?.message) {
-          setAuraMsg(parsed);
-          if (parsed.suggestion?.trim()) {
-            localStorage.setItem("aura_last_checkin_suggestion", parsed.suggestion.trim());
-          }
-        }
-      } catch { /* mantém null */ }
-    }).catch((error) => {
-      console.warn("Aura check-in auto-response failed:", error);
-    }).finally(() => setAuraMsgLoading(false));
+
+    // Caminho de fallback (refresh de página / navegação direta sem router state):
+    // gera mensagem local com base no ciclo — sem custo de API.
+    const phaseMessages: Record<string, string> = {
+      elevated:  `Você está em ${cycleReport.phaseLabel}. Energia alta — bom momento para o que exige mais de você.`,
+      flowing:   `Fluindo bem hoje. Aproveite esse ritmo sem forçar além do necessário.`,
+      stable:    `Estado equilibrado — terreno confiável para avançar em pequenos passos.`,
+      falling:   `Queda detectada no padrão. Menos compromissos, mais reposição.`,
+      low:       `Fase de baixa energia. O mínimo com gentileza já é muito hoje.`,
+      depleted:  `Sinal de esgotamento. Uma coisa só, devagar. Isso basta.`,
+      recovering:`Retomada em andamento. Cada passo conta — sem pressa.`,
+      mixed:     `Oscilação no padrão. Ritmo variável pede flexibilidade no planejamento.`,
+    };
+    const localMsg = phaseMessages[cycleReport.phase] ?? cycleReport.phaseDescription ?? v.tip;
+    setAuraMsg({ message: localMsg, suggestion: '', suggestionEmoji: cycleReport.phaseEmoji });
+    setAuraMsgLoading(false);
   }, []);
 
   useEffect(() => {
@@ -1189,4 +1176,3 @@ export function CheckinResultPage() {
     </div>
   );
 }
-                                                                                                                                                                                                                                                                                                                                                                                         

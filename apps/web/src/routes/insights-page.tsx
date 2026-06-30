@@ -193,6 +193,14 @@ export function InsightsPage() {
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+  // Sparkline: últimos 7 dias ordenados por data
+  const sparklineData = useMemo(() => {
+    const sorted = [...allHistory]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-7);
+    return sorted.map(h => ({ date: h.date, humor: h.humor, energia: h.energia }));
+  }, [allHistory]);
+
   // Map history to chart data (last 7 entries, pad with zeros)
   const chartData = DAYS.map((_, dayIndex) => {
     const entry = history.find(h => {
@@ -1191,6 +1199,94 @@ export function InsightsPage() {
                 {cycleReport.phaseDescription}
               </p>
 
+              {/* ── Sparkline 7 dias ── */}
+              {sparklineData.length >= 2 && (() => {
+                const W = 280, H = 56, PAD = 6;
+                const n = sparklineData.length;
+                const xStep = (W - PAD * 2) / Math.max(n - 1, 1);
+                // normaliza 1-10 → 0-H (invertido porque SVG y cresce para baixo)
+                const toY = (v: number) => PAD + (H - PAD * 2) * (1 - (Math.max(1, Math.min(10, v)) - 1) / 9);
+                const toX = (i: number) => PAD + i * xStep;
+                const pts = (key: 'humor' | 'energia') =>
+                  sparklineData.map((d, i) => `${toX(i).toFixed(1)},${toY(d[key]).toFixed(1)}`).join(' ');
+                // smooth path via cubic bezier (catmull-rom approx)
+                const smoothPath = (key: 'humor' | 'energia') => {
+                  if (sparklineData.length < 2) return '';
+                  const points = sparklineData.map((d, i) => [toX(i), toY(d[key])] as [number, number]);
+                  let d = `M ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
+                  for (let i = 1; i < points.length; i++) {
+                    const prev = points[i - 1];
+                    const curr = points[i];
+                    const cpX = (prev[0] + curr[0]) / 2;
+                    d += ` C ${cpX.toFixed(1)} ${prev[1].toFixed(1)}, ${cpX.toFixed(1)} ${curr[1].toFixed(1)}, ${curr[0].toFixed(1)} ${curr[1].toFixed(1)}`;
+                  }
+                  return d;
+                };
+                const lastI = n - 1;
+                // dia da semana abreviado
+                const dayLabel = (dateStr: string) => {
+                  const d = new Date(`${dateStr}T12:00:00Z`);
+                  return ["D","S","T","Q","Q","S","S"][d.getUTCDay()];
+                };
+                return (
+                  <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 12, background: `${phaseColor}08`, border: `1px solid ${phaseColor}18` }}>
+                    <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 6px" }}>
+                      Curva da semana
+                    </p>
+                    <svg viewBox={`0 0 ${W} ${H + 16}`} width="100%" style={{ display: "block", overflow: "visible" }}>
+                      {/* linhas de grade sutis */}
+                      {[3, 5, 7].map(v => (
+                        <line key={v}
+                          x1={PAD} y1={toY(v).toFixed(1)}
+                          x2={W - PAD} y2={toY(v).toFixed(1)}
+                          stroke="rgba(0,0,0,.06)" strokeWidth="1"
+                        />
+                      ))}
+                      {/* linha energia */}
+                      <path d={smoothPath('energia')} fill="none"
+                        stroke="var(--accent-sky, #5bb8d4)" strokeWidth="1.8"
+                        strokeLinecap="round" strokeLinejoin="round" opacity="0.7"
+                      />
+                      {/* linha humor */}
+                      <path d={smoothPath('humor')} fill="none"
+                        stroke={phaseColor} strokeWidth="2.2"
+                        strokeLinecap="round" strokeLinejoin="round"
+                      />
+                      {/* ponto hoje (último) */}
+                      <circle
+                        cx={toX(lastI).toFixed(1)} cy={toY(sparklineData[lastI].humor).toFixed(1)}
+                        r="3.5" fill={phaseColor} stroke="#fff" strokeWidth="1.5"
+                      />
+                      <circle
+                        cx={toX(lastI).toFixed(1)} cy={toY(sparklineData[lastI].energia).toFixed(1)}
+                        r="2.5" fill="var(--accent-sky, #5bb8d4)" stroke="#fff" strokeWidth="1"
+                        opacity="0.85"
+                      />
+                      {/* labels de dia */}
+                      {sparklineData.map((d, i) => (
+                        <text key={d.date} x={toX(i).toFixed(1)} y={H + 13}
+                          textAnchor="middle" fontSize="8"
+                          fill={i === lastI ? phaseColor : "var(--text-3)"}
+                          fontWeight={i === lastI ? "800" : "400"}
+                        >
+                          {dayLabel(d.date)}
+                        </text>
+                      ))}
+                    </svg>
+                    <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <div style={{ width: 14, height: 2.5, borderRadius: 2, background: phaseColor }} />
+                        <span style={{ fontSize: 9, color: "var(--text-3)" }}>Humor</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <div style={{ width: 14, height: 2.5, borderRadius: 2, background: "var(--accent-sky, #5bb8d4)", opacity: .7 }} />
+                        <span style={{ fontSize: 9, color: "var(--text-3)" }}>Energia</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Barra de progresso do ciclo estimado */}
               {cycleReport.cycleEstimate.hasEnoughData && cycleReport.cycleEstimate.estimatedLengthDays && cycleReport.cycleEstimate.currentDayInCycle !== null && (
                 <div style={{ marginBottom: 12 }}>
@@ -1580,6 +1676,13 @@ export function InsightsPage() {
               {patterns.bestDay && (
                 <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)", textAlign: "center" }}>
                   <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-sage)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Melhor dia</p>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 1px" }}>{patterns.bestDay.day}</p>
+                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.bestDay.mood.toFixed(1)}/10</p>
+                </div>
+              )}
+              {patterns.worstDay && patterns.worstDay.day !== patterns.bestDay?.day && (
+                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(215,137,127,0.08)", border: "1px solid rgba(215,137,127,0.25)", textAlign: "center" }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-peach)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>Dia difícil</p>
                   <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 1px" }}>{patterns.bestDay.day}</p>
                   <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>humor {patterns.bestDay.mood.toFixed(1)}/10</p>
                 </div>
