@@ -1709,7 +1709,9 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
           boxShadow: slot.task.done ? 'none' : '0 4px 14px rgba(43,31,24,0.028)',
           display: "flex",
           gap: 8,
-          alignItems: "flex-start"
+          alignItems: "flex-start",
+          maxHeight: 88,
+          overflow: "hidden",
         }}
       >
         {/* Energy Icon em destaque à esquerda */}
@@ -3632,7 +3634,7 @@ export function PlannerPage() {
                 key={slot.key}
                 className="timeline-slot"
                 style={{
-                  marginBottom: 16, minHeight: 80, display: "flex", alignItems: "center"
+                  marginBottom: 8, minHeight: 64, display: "flex", alignItems: "center"
                 }}
               >
               <span className="timeline-time" style={{ 
