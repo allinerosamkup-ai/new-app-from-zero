@@ -518,8 +518,8 @@ export function AuraChatPage() {
         inputRef.current?.focus();
       }
     };
-    recognition.onend = () => setIsRecording(false);
-    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => { recognitionRef.current = null; setIsRecording(false); };
+    recognition.onerror = () => { recognitionRef.current = null; setIsRecording(false); };
     recognition.start();
     recognitionRef.current = recognition;
     setIsRecording(true);
