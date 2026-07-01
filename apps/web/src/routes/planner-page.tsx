@@ -1709,9 +1709,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
           boxShadow: slot.task.done ? 'none' : '0 4px 14px rgba(43,31,24,0.028)',
           display: "flex",
           gap: 8,
-          alignItems: "flex-start",
-          maxHeight: 88,
-          overflow: "hidden",
+          alignItems: "center",
         }}
       >
         {/* Energy Icon em destaque à esquerda */}
@@ -1737,33 +1735,23 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          {isGcal && (
-            <div style={{ fontSize: 8, color: categoryOption.cor, display: "flex", alignItems: "center", gap: 3, fontWeight: 800, marginBottom: 2, textTransform: "uppercase", letterSpacing: "0.04em" }}>
-              <img src="https://www.google.com/favicon.ico" width={8} height={8} alt="GCal" style={{ filter: 'grayscale(0.2)' }} /> Google Agenda
-            </div>
-          )}
           <div className="block-title" style={{
-            fontSize: 11.5,
-            fontWeight: 720,
-            marginBottom: 1,
-            color: 'var(--text-1)',
+            fontSize: 12,
+            fontWeight: 700,
+            marginBottom: 2,
+            color: slot.task.done ? "var(--text-3)" : 'var(--text-1)',
             textDecoration: slot.task.done ? "line-through" : "none",
-            letterSpacing: 0,
-            lineHeight: 1.25,
+            lineHeight: 1.2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}>{slot.task.title}</div>
 
-          {slot.task.note?.trim() && !slot.task.done && (
-            <div style={{ fontSize: 9.5, color: "var(--accent-peach-ink)", fontWeight: 600, marginBottom: 2, opacity: 0.85, display: "flex", alignItems: "center", gap: 3 }}>
-              <span style={{ fontSize: 9 }}>→</span>
-              <span style={{ lineHeight: 1.3 }}>{slot.task.note.trim()}</span>
-            </div>
-          )}
-
-          <div className="block-meta" style={{ fontSize: 9.5, opacity: 0.56, fontWeight: 560, marginBottom: 5, color: "var(--text-2)" }}>
-            {slot.time} — {slot.endTime} · {slot.durationLabel}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 500, color: "var(--text-2)", flexShrink: 0 }}>
+              {slot.time}{slot.endTime ? ` — ${slot.endTime}` : ""}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
             <div className="block-chip" style={{ 
               padding: '2px 7px',
               fontSize: 8.5,
@@ -1775,198 +1763,22 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
               display: "flex", alignItems: "center", gap: 4,
               textTransform: "uppercase",
               letterSpacing: "0.02em",
-              minHeight: 20,
+              minHeight: 18,
+              padding: "1px 6px",
+              fontSize: 8,
+              fontWeight: 800,
+              borderRadius: 999,
+              background: categoryOption.bg,
+              color: categoryOption.textColor,
             }}>
-              {slot.task.icon && !/^lucide/i.test(slot.task.icon) ? (
-                <span style={{ fontSize: 9 }}>{slot.task.icon}</span>
-              ) : (
-                <span style={{ width: 4, height: 4, borderRadius: "50%", background: categoryOption.cor }} />
-              )}
+              <span style={{ width: 4, height: 4, borderRadius: "50%", background: categoryOption.cor, flexShrink: 0 }} />
               {categoryOption.shortLabel}
             </div>
-
-            {slot.task.taskMode === 'appear' && (
-              <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(110,182,200,0.10)", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(110,182,200,0.25)", minHeight: 20 }}>
-                <span style={{ fontSize: 9 }}>🌀</span>
-                <span style={{ fontSize: 8.5, fontWeight: 800, color: "var(--accent-sky-ink, #2a7a9a)" }}>Só aparecer</span>
-              </div>
-            )}
-
-            {slot.task.snoozedUntil && new Date(slot.task.snoozedUntil) > new Date() && (
-              <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(150,130,200,0.10)", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(150,130,200,0.25)", minHeight: 20 }}>
-                <span style={{ fontSize: 9 }}>⏸</span>
-                <span style={{ fontSize: 8.5, fontWeight: 800, color: "var(--accent-purple-ink, #6b4f9a)" }}>
-                  Volta às {new Date(slot.task.snoozedUntil).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            )}
-
-            {slot.task.persistentReminderEnabled && slot.task.taskMode !== 'appear' && (
-              <div style={{ display: "flex", alignItems: "center", gap: 3, background: "rgba(244,190,168,0.1)", padding: "2px 6px", borderRadius: 999, border: "1px solid rgba(244,190,168,0.2)", minHeight: 20 }}>
-                <Bell size={9} color="var(--accent-peach)" />
-                <span style={{ fontSize: 8.5, fontWeight: 800, color: "var(--accent-peach-ink)" }}>{slot.task.persistentReminderIntervalMinutes}m</span>
-              </div>
-            )}
-
-            {(slot.task.alarmEnabled || slot.task.vibrateEnabled) && (
-               <div style={{ display: "flex", gap: 4, opacity: 0.7 }}>
-                  {slot.task.alarmEnabled && <span style={{ fontSize: 10 }}>⏰</span>}
-                  {slot.task.vibrateEnabled && <span style={{ fontSize: 10 }}>📳</span>}
-               </div>
-            )}
-
             {slot.task.isAiSuggested && (
-              <div
-                className="block-chip"
-                title={slot.task.aiReasoning ? `Por que a Airia sugeriu: ${slot.task.aiReasoning}` : "Sugerido pela Airia"}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                  background: "rgba(244,190,168,.12)",
-                  color: "var(--accent-peach-ink)",
-                  border: "1px solid rgba(244,190,168,.30)",
-                  fontWeight: 800,
-                  fontSize: 8.5,
-                  minHeight: 20,
-                  padding: "2px 7px",
-                  borderRadius: 999,
-                  cursor: slot.task.aiReasoning ? "help" : "default",
-                }}
-              >
-                <Sparkles size={9} />
-                AIRIA
-              </div>
+              <span style={{ fontSize: 9 }} title="Sugerido pela Airia">✨</span>
             )}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onChat(slot.task);
-              }}
-              style={{
-                border: "1px solid rgba(99,152,169,.28)",
-                background: "rgba(99,152,169,.10)",
-                color: "var(--accent-sky)",
-                borderRadius: 999,
-                minHeight: 22,
-                padding: "3px 7px",
-                fontSize: 8.5,
-                fontWeight: 850,
-                letterSpacing: ".02em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-              }}
-            >
-              Falar
-            </button>
-            {isGcal && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onConvertToTask(slot.task);
-                }}
-                style={{
-                  border: "1px solid rgba(80,112,91,.28)",
-                  background: "rgba(80,112,91,.08)",
-                  color: "var(--accent-sage-ink)",
-                  borderRadius: 999,
-                  minHeight: 22,
-                  padding: "3px 7px",
-                  fontSize: 8.5,
-                  fontWeight: 850,
-                  letterSpacing: ".02em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                }}
-              >
-                <ClipboardCheck size={10} />
-                Tarefa
-              </button>
-            )}
-            {!slot.task.done && onStarted && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onStarted(slot.task);
-                }}
-                style={{
-                  border: "1px solid rgba(110,182,130,.30)",
-                  background: "rgba(110,182,130,.10)",
-                  color: "var(--accent-sage-ink)",
-                  borderRadius: 999,
-                  minHeight: 22,
-                  padding: "3px 7px",
-                  fontSize: 8.5,
-                  fontWeight: 850,
-                  letterSpacing: ".02em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                }}
-              >
-                🟡 Comecei
-              </button>
-            )}
-            {!slot.task.done && (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onPostpone(slot.task);
-                }}
-                style={{
-                  border: "1px solid rgba(215,137,127,.30)",
-                  background: "rgba(215,137,127,.10)",
-                  color: "var(--accent-peach-ink)",
-                  borderRadius: 999,
-                  minHeight: 22,
-                  padding: "3px 7px",
-                  fontSize: 8.5,
-                  fontWeight: 850,
-                  letterSpacing: ".02em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                }}
-              >
-                <CalendarClock size={10} />
-                Adiar
-              </button>
-            )}
-            {!slot.task.done && onSnooze && slot.task.persistentReminderEnabled && (
-              <button
-                type="button"
-                onClick={(event) => { event.stopPropagation(); onSnooze(slot.task); }}
-                style={{
-                  border: "1px solid rgba(150,130,200,.30)",
-                  background: "rgba(150,130,200,.10)",
-                  color: "var(--accent-purple-ink, #6b4f9a)",
-                  borderRadius: 999,
-                  minHeight: 22,
-                  padding: "3px 7px",
-                  fontSize: 8.5,
-                  fontWeight: 850,
-                  letterSpacing: ".02em",
-                  textTransform: "uppercase",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 3,
-                }}
-              >
-                ⏸ Deriva
-              </button>
-            )}
+            {slot.task.alarmEnabled && <span style={{ fontSize: 9 }}>⏰</span>}
+            </div>
           </div>
         </div>
       </div>
@@ -3634,12 +3446,13 @@ export function PlannerPage() {
                 key={slot.key}
                 className="timeline-slot"
                 style={{
-                  marginBottom: 8, minHeight: 64, display: "flex", alignItems: "center"
+                  marginBottom: 6, minHeight: 56, display: "flex", alignItems: "center",
+                  paddingLeft: 68, position: "relative",
                 }}
               >
-              <span className="timeline-time" style={{ 
+              <span className="timeline-time" style={{
                   position: "absolute", left: 10, width: 44, textAlign: "center",
-                  fontWeight: 800, fontSize: 13, color: "var(--planner-time-color, #4A3B37)", zIndex: 1
+                  fontWeight: 800, fontSize: 11, color: "var(--planner-time-color, #4A3B37)", zIndex: 1
                 }}>{slot.time}</span>
                 <div className="timeline-line" style={{ left: 62, width: 2, background: "var(--planner-timeline-line, rgba(184,109,76,0.08))" }} />
                 <SwipeableTaskCard
