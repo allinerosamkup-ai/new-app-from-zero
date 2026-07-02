@@ -133,7 +133,7 @@ export default function LivroPage() {
           Você se cobra por tudo.<br />Menos por <span style={{ color: C.peachInk }}>se entender.</span>
         </h1>
         <p style={{ fontSize: 16, lineHeight: 1.6, color: C.ink2, margin: "0 0 28px" }}>
-          <strong>{BOOK_NAME}</strong> é autoconhecimento pra mentes intensas que querem se conectar de verdade — consigo e com os outros. Exercícios práticos, um passo por vez, sem cobrança.
+          Não é preguiça. Não é falta de disciplina. <strong>{BOOK_NAME}</strong> é autoconhecimento pra mentes intensas — que sentem tudo forte e se cobram por isso. Exercícios práticos, um passo por vez, sem culpa.
         </p>
 
         {/* capa real do livro */}
@@ -214,6 +214,9 @@ export default function LivroPage() {
           </h2>
           <p style={{ fontSize: 15, lineHeight: 1.6, color: C.ink2, margin: "0 0 16px" }}>
             Aqui mora a diferença. Você não leva só um livro — leva uma companheira diária. A <strong>Airia</strong> transforma cada capítulo em ação, adaptada ao seu humor e energia. Num dia difícil, ela pede só um passo mínimo. Num dia bom, ela aprofunda. Ela não te deixa parar.
+          </p>
+          <p style={{ fontSize: 15, lineHeight: 1.6, color: C.ink2, margin: "0 0 16px" }}>
+            Já largou vários apps de rotina no meio do caminho? O problema nunca foi disciplina — eles eram lineares demais pra quem oscila. A <strong>Airia</strong> se adapta ao seu dia, não o contrário.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[
