@@ -1613,7 +1613,7 @@ function ViewTaskSheetContent({ task, viewSplitting, onSplit }: { task: PlannerT
   );
 }
 
-function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone, onConvertToTask, onStarted, onSnooze }: any) {
+function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone, onConvertToTask, onStarted, onSnooze, onSplit }: any) {
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -1779,6 +1779,13 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             )}
             {slot.task.alarmEnabled && <span style={{ fontSize: 9 }}>⏰</span>}
             </div>
+          </div>
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 4, marginTop: 6 }} onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => onChat(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Falar</button>
+            {!slot.task.done && <button type="button" onClick={() => onStarted(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Comecei</button>}
+            {!isGcal && <button type="button" onClick={() => onPostpone(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Adiar</button>}
+            <button type="button" onClick={() => onSplit && onSplit(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Dividir</button>
           </div>
         </div>
       </div>
@@ -3466,6 +3473,7 @@ export function PlannerPage() {
                    onConvertToTask={handleConvertCommitmentToTask}
                    onStarted={handleStartedTask}
                    onSnooze={handleSnooze}
+                   onSplit={(task: any) => handleSplitFromView(task)}
                 />
               </div>
             );
