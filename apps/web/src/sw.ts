@@ -4,7 +4,7 @@ import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope;
 
-const AIRIA_SW_BUILD = '20260628-tdah-notification-actions';
+const AIRIA_SW_BUILD = '20260702-livro-checkout-hotmart';
 
 self.skipWaiting();
 clientsClaim();
