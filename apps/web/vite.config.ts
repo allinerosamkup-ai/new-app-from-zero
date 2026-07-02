@@ -211,7 +211,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5051,
+    port: Number(process.env.PORT) || 5051,
     strictPort: false,
   }
 });
