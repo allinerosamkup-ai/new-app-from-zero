@@ -1,15 +1,20 @@
 import { useState, useEffect } from "react";
+import { trackMetaPixelEvent } from "../lib/meta-pixel";
 
 /**
- * Página de vendas do livro "Além da Solidão" — servida em airia.pro/livro.
+ * Página de vendas do e-book "Antes de se Cobrar" — servida em airia.pro/livro.
  * Pública (sem auth). Mobile-first. Estrutura PAS + AIDA.
  * Identidade visual: Aura Editorial Clean (off-white + salmão/sálvia/azul).
  *
- * CONFIG: troque CHECKOUT_URL pela URL real da Kiwify/Hotmart quando o produto
- * estiver criado. Enquanto for "#", o botão rola até a oferta.
+ * Message-match com os anúncios ativos da campanha "Livro | Tráfego":
+ * mesmo título, mesma capa e mesma headline do criativo.
+ *
+ * CONFIG: troque CHECKOUT_URL pela URL real do checkout da Hotmart quando o
+ * produto estiver criado. Enquanto for "#", o botão rola até a oferta.
  */
-const CHECKOUT_URL = "#"; // TODO: colar link da Kiwify/Hotmart aqui
+const CHECKOUT_URL = "https://pay.hotmart.com/E106541869F?checkoutMode=2";
 const PRICE = "R$9,90";
+const BOOK_NAME = "Antes de se Cobrar";
 
 const C = {
   bg: "#FBF8F4",
@@ -50,17 +55,26 @@ const FAQ = [
   { q: "E se não for pra mim?", a: "Você tem 7 dias de garantia. Se sentir que não é o seu momento, devolvemos cada centavo, sem perguntas." },
 ];
 
+function goToCheckout(e: React.MouseEvent) {
+  if (CHECKOUT_URL === "#") {
+    e.preventDefault();
+    document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+  trackMetaPixelEvent("InitiateCheckout", {
+    content_name: BOOK_NAME,
+    content_category: "ebook",
+    currency: "BRL",
+    value: 9.9,
+  });
+}
+
 function BuyButton({ children, big }: { children: React.ReactNode; big?: boolean }) {
-  const onClick = (e: React.MouseEvent) => {
-    if (CHECKOUT_URL === "#") {
-      e.preventDefault();
-      document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" });
-    }
-  };
   return (
     <a
       href={CHECKOUT_URL}
-      onClick={onClick}
+      onClick={goToCheckout}
+      className="hotmart-fb hotmart__button-checkout"
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
         width: "100%", maxWidth: 420, textDecoration: "none",
@@ -94,50 +108,75 @@ export default function LivroPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    document.title = "Antes de se Cobrar — e-book por R$9,90";
+    trackMetaPixelEvent("ViewContent", {
+      content_name: BOOK_NAME,
+      content_category: "ebook",
+      currency: "BRL",
+      value: 9.9,
+    });
+  }, []);
+
+  // Widget de checkout da Hotmart (checkoutMode=2 → overlay sem sair da página).
+  // Só carrega quando há link real configurado.
+  useEffect(() => {
+    if (CHECKOUT_URL === "#") return;
+    if (document.getElementById("hotmart-widget-script")) return;
+
+    const script = document.createElement("script");
+    script.id = "hotmart-widget-script";
+    script.src = "https://static.hotmart.com/checkout/widget.min.js";
+    document.head.appendChild(script);
+
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.type = "text/css";
+    link.href = "https://static.hotmart.com/css/hotmart-fb.min.css";
+    document.head.appendChild(link);
+  }, []);
+
   return (
     <div style={{ background: C.bg, color: C.ink, minHeight: "100dvh", fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif", overflowX: "hidden", paddingBottom: 80 }}>
 
       {/* HERO */}
       <Section style={{ paddingTop: 44, paddingBottom: 36, textAlign: "center" }}>
         <span style={{ display: "inline-block", fontSize: 11, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase", color: C.peachInk, background: C.softPeach, borderRadius: 999, padding: "6px 14px", marginBottom: 22 }}>
-          Livro digital + companhia diária
+          ✦ antes de se cobrar, se entenda
         </span>
         <h1 style={{ fontSize: 31, lineHeight: 1.18, fontWeight: 800, margin: "0 0 16px", letterSpacing: "-.02em" }}>
-          A solidão não é o fim.<br />É o começo de te encontrar.
+          Você se cobra por tudo.<br />Menos por <span style={{ color: C.peachInk }}>se entender.</span>
         </h1>
         <p style={{ fontSize: 16, lineHeight: 1.6, color: C.ink2, margin: "0 0 28px" }}>
-          <strong>Além da Solidão</strong> é a jornada de voltar pra você mesma — e, a partir daí, construir relações de verdade. 13 passos práticos pra sair do vazio e se reconectar.
+          <strong>{BOOK_NAME}</strong> é autoconhecimento pra mentes intensas que querem se conectar de verdade — consigo e com os outros. Exercícios práticos, um passo por vez, sem cobrança.
         </p>
 
-        {/* "capa" / mockup do livro */}
-        <div style={{
-          width: 200, height: 270, margin: "0 auto 28px", borderRadius: 14,
-          background: `linear-gradient(150deg, ${C.peach}, ${C.lilac})`,
-          boxShadow: "0 24px 50px rgba(43,38,34,.22)",
-          display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center",
-          padding: 24, color: "#fff", position: "relative",
-        }}>
-          <span style={{ fontSize: 10, letterSpacing: ".2em", textTransform: "uppercase", opacity: .85, marginBottom: 14 }}>Alline Izabel da Rosa</span>
-          <span style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.1, textAlign: "center" }}>Além da Solidão</span>
-          <span style={{ fontSize: 11, opacity: .9, marginTop: 14, textAlign: "center", lineHeight: 1.4 }}>A jornada de desvendar sua essência e redescobrir as relações</span>
-        </div>
+        {/* capa real do livro */}
+        <img
+          src="/livro/capa-antes-de-se-cobrar.png"
+          alt={`Capa do e-book ${BOOK_NAME} — Autoconhecimento para mentes intensas, que desejam se conectar, por Alinê Roza`}
+          style={{
+            width: 210, height: "auto", margin: "0 auto 28px", display: "block",
+            borderRadius: 14, boxShadow: "0 24px 50px rgba(43,38,34,.22)",
+          }}
+        />
 
-        <BuyButton big>Quero começar por {PRICE}</BuyButton>
-        <p style={{ fontSize: 12, color: C.ink3, marginTop: 12 }}>Acesso imediato · Garantia de 7 dias</p>
+        <BuyButton big>Quero o meu por {PRICE}</BuyButton>
+        <p style={{ fontSize: 12, color: C.ink3, marginTop: 12 }}>Acesso imediato, no seu e-mail · Garantia de 7 dias</p>
       </Section>
 
       {/* PROBLEMA + AGITAÇÃO */}
       <div style={{ background: C.card, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: "40px 0" }}>
         <Section>
           <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 18px", lineHeight: 1.3 }}>
-            Você não está cansada de estar sozinha. Você está cansada de se sentir sozinha — até no meio das pessoas.
+            Você não é preguiçosa. Você não é "demais". Você só nunca teve um mapa de quem você é.
           </h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[
-              "Você se conecta com todo mundo, mas sente que ninguém te conhece de verdade.",
+              "Você sente tudo intensamente — e depois se cobra por ter sentido.",
+              "Se conecta com todo mundo, mas acha que ninguém te conhece de verdade.",
               "Já tentou se abrir, e travou com medo de incomodar, de ser demais, de ser rejeitada.",
-              "Os dias passam num automático que parece adiar a sua própria vida.",
-              "No fundo, você sabe que o problema não são os outros — é a distância que criou de si mesma.",
+              "No fundo, você sabe: antes de cobrar tanto de si, faltou se entender.",
             ].map((t) => (
               <div key={t} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                 <span style={{ color: C.peach, fontWeight: 800, flexShrink: 0 }}>—</span>
@@ -146,7 +185,7 @@ export default function LivroPage() {
             ))}
           </div>
           <p style={{ fontSize: 15.5, lineHeight: 1.6, color: C.ink, marginTop: 22, fontWeight: 600 }}>
-            A boa notícia: a solidão pode ser o ponto de partida da sua virada. Não pra te isolar — pra te devolver pra você.
+            A boa notícia: se entender é uma habilidade. E habilidade se aprende com prática — não com mais cobrança.
           </p>
         </Section>
       </div>
@@ -161,7 +200,7 @@ export default function LivroPage() {
           Este não é um livro pra ser só lido. É pra ser <strong>vivido</strong>, um exercício por vez. Cada capítulo te tira da teoria e te coloca em movimento — porque autoconhecimento que fica na cabeça não muda nada. Muda quem pratica.
         </p>
         <p style={{ fontSize: 15.5, lineHeight: 1.62, color: C.ink2, margin: 0 }}>
-          Em 13 passos suaves, você sai do vazio, reconstrói a relação consigo mesma e aprende a criar conexões que não dependem de máscara.
+          Em 13 passos suaves, você transforma suas paixões e valores em alicerces e aprende a criar conexões que não dependem de máscara — com você mesma e com o outro.
         </p>
       </Section>
 
@@ -212,7 +251,7 @@ export default function LivroPage() {
         <Section>
           <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>De quem viveu isso, pra você</h2>
           <p style={{ fontSize: 15, lineHeight: 1.62, color: C.ink2, margin: "0 0 14px" }}>
-            Sou a Alline. Escrevi <strong>Além da Solidão</strong> porque conheço de perto o peso de se sentir sozinha mesmo cercada de gente — e o caminho de volta pra mim mesma. Este livro é o mapa que eu queria ter tido: prático, gentil e firme na ação.
+            Sou a Alinê. Escrevi <strong>{BOOK_NAME}</strong> porque conheço de perto o peso de sentir tudo intensamente, se cobrar por tudo — e mesmo assim se sentir sozinha no meio de todo mundo. Este livro é o mapa que eu queria ter tido: prático, gentil e firme na ação.
           </p>
           <p style={{ fontSize: 15, lineHeight: 1.62, color: C.ink2, margin: 0 }}>
             Ele foi o embrião de tudo. Hoje, virou também a Airia — pra que ninguém faça essa jornada sozinha.
@@ -224,7 +263,7 @@ export default function LivroPage() {
       <Section style={{ padding: "44px 22px", textAlign: "center" }} >
         <div id="oferta" style={{ scrollMarginTop: 20 }} />
         <div style={{ borderRadius: 24, background: `linear-gradient(160deg, ${C.softPeach}, ${C.softSage})`, border: `1.5px solid ${C.border}`, padding: 30 }}>
-          <h2 style={{ fontSize: 23, fontWeight: 800, margin: "0 0 8px" }}>Comece sua jornada hoje</h2>
+          <h2 style={{ fontSize: 23, fontWeight: 800, margin: "0 0 8px" }}>Comece a se entender hoje</h2>
           <p style={{ fontSize: 14.5, color: C.ink2, margin: "0 0 20px", lineHeight: 1.5 }}>
             O livro completo (13 passos) <strong>+ a Airia inclusa</strong> pra praticar todo dia.
           </p>
@@ -256,13 +295,13 @@ export default function LivroPage() {
       {/* CTA FINAL */}
       <Section style={{ textAlign: "center", paddingBottom: 50 }}>
         <p style={{ fontSize: 17, lineHeight: 1.5, fontWeight: 700, color: C.ink, margin: "0 0 20px" }}>
-          A solidão pode ser o lugar onde você se reencontra. Dá o primeiro passo.
+          Antes de se cobrar mais uma vez, se dá a chance de se entender. Dá o primeiro passo.
         </p>
         <div style={{ display: "flex", justifyContent: "center" }}><BuyButton big>Começar por {PRICE}</BuyButton></div>
       </Section>
 
       <footer style={{ textAlign: "center", padding: "20px", fontSize: 11.5, color: C.ink3 }}>
-        © Alline Izabel da Rosa · Além da Solidão · airia.pro
+        © Alinê Roza · {BOOK_NAME} · airia.pro
       </footer>
 
       {/* Barra fixa de compra (aparece ao rolar) */}
@@ -279,7 +318,8 @@ export default function LivroPage() {
           </div>
           <a
             href={CHECKOUT_URL}
-            onClick={(e) => { if (CHECKOUT_URL === "#") { e.preventDefault(); document.getElementById("oferta")?.scrollIntoView({ behavior: "smooth" }); } }}
+            onClick={goToCheckout}
+            className="hotmart-fb hotmart__button-checkout"
             style={{ flexShrink: 0, textDecoration: "none", background: C.peach, color: "#fff", fontWeight: 800, fontSize: 14, padding: "12px 22px", borderRadius: 999, boxShadow: "0 6px 16px rgba(215,137,127,.4)" }}
           >
             Quero agora

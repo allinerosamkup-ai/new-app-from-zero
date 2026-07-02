@@ -54,6 +54,8 @@ export function InstallPWA() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (isStandalonePwa()) return;
+    // Página de venda do livro: visitante frio veio comprar, não instalar — sem banner
+    if (window.location.pathname.startsWith("/livro")) return;
 
     const isSplash = window.location.pathname === "/";
     // Na splash, ignora dismiss anterior (queremos máxima exposição na entrada)
