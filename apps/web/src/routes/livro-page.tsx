@@ -12,7 +12,7 @@ import { trackMetaPixelEvent } from "../lib/meta-pixel";
  * CONFIG: troque CHECKOUT_URL pela URL real do checkout da Hotmart quando o
  * produto estiver criado. Enquanto for "#", o botão rola até a oferta.
  */
-const CHECKOUT_URL = "https://pay.hotmart.com/E106541869F?checkoutMode=2";
+const CHECKOUT_URL = "https://pay.hotmart.com/E106541869F";
 const PRICE = "R$9,90";
 const BOOK_NAME = "Antes de se Cobrar";
 
@@ -67,6 +67,10 @@ function goToCheckout(e: React.MouseEvent) {
     currency: "BRL",
     value: 9.9,
   });
+  // Navegação explícita: garante que o checkout abre mesmo se algo
+  // interceptar o comportamento padrão do link (PWA standalone, etc.).
+  e.preventDefault();
+  window.location.assign(CHECKOUT_URL);
 }
 
 function BuyButton({ children, big }: { children: React.ReactNode; big?: boolean }) {
@@ -74,7 +78,6 @@ function BuyButton({ children, big }: { children: React.ReactNode; big?: boolean
     <a
       href={CHECKOUT_URL}
       onClick={goToCheckout}
-      className="hotmart-fb hotmart__button-checkout"
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
         width: "100%", maxWidth: 420, textDecoration: "none",
@@ -116,24 +119,6 @@ export default function LivroPage() {
       currency: "BRL",
       value: 9.9,
     });
-  }, []);
-
-  // Widget de checkout da Hotmart (checkoutMode=2 → overlay sem sair da página).
-  // Só carrega quando há link real configurado.
-  useEffect(() => {
-    if (CHECKOUT_URL === "#") return;
-    if (document.getElementById("hotmart-widget-script")) return;
-
-    const script = document.createElement("script");
-    script.id = "hotmart-widget-script";
-    script.src = "https://static.hotmart.com/checkout/widget.min.js";
-    document.head.appendChild(script);
-
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.type = "text/css";
-    link.href = "https://static.hotmart.com/css/hotmart-fb.min.css";
-    document.head.appendChild(link);
   }, []);
 
   return (
@@ -319,7 +304,6 @@ export default function LivroPage() {
           <a
             href={CHECKOUT_URL}
             onClick={goToCheckout}
-            className="hotmart-fb hotmart__button-checkout"
             style={{ flexShrink: 0, textDecoration: "none", background: C.peach, color: "#fff", fontWeight: 800, fontSize: 14, padding: "12px 22px", borderRadius: 999, boxShadow: "0 6px 16px rgba(215,137,127,.4)" }}
           >
             Quero agora
