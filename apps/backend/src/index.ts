@@ -43,6 +43,8 @@ import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
+import { getSalesHistory as getHotmartSalesHistory } from './services/hotmart.service';
+import { sendPurchaseEvent as sendMetaPurchaseEvent } from './services/meta-capi.service';
 import { buildPrivacyExport, type PrivacyExportPrisma } from './services/privacy-export.service';
 import {
   DeletionConfirmError,
@@ -1519,6 +1521,75 @@ export function createApp(dependencies: AppDependencies = {}) {
       return res.json({ ok: true, sent, total: userIds.length });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/admin/hotmart/sales — vendas do livro na Hotmart (x-admin-key, antes do requireAuth)
+  // Query opcional: product_id, max_results, start_date/end_date (epoch ms)
+  app.get('/api/admin/hotmart/sales', async (req: Request, res: Response) => {
+    const adminKey = req.headers['x-admin-key'];
+    if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const productId = req.query.product_id ? Number(req.query.product_id) : undefined;
+      const maxResults = req.query.max_results ? Number(req.query.max_results) : undefined;
+      const startDate = req.query.start_date ? Number(req.query.start_date) : undefined;
+      const endDate = req.query.end_date ? Number(req.query.end_date) : undefined;
+      const result = await getHotmartSalesHistory({ productId, maxResults, startDate, endDate });
+      const approved = result.sales.filter((s) => s.status === 'APPROVED');
+      const revenue = approved.reduce((sum, s) => sum + s.price, 0);
+      return res.json({
+        ok: true,
+        totalResults: result.totalResults,
+        approvedCount: approved.length,
+        approvedRevenue: Number(revenue.toFixed(2)),
+        sales: result.sales,
+      });
+    } catch (e: any) {
+      return res.status(502).json({ error: e.message });
+    }
+  });
+
+  // POST /api/hotmart/webhook — recebe eventos da Hotmart (rota pública, validada por Hottok)
+  // Ao aprovar a compra do livro, dispara Purchase server-side no Meta CAPI (fecha o funil).
+  app.post('/api/hotmart/webhook', async (req: Request, res: Response) => {
+    const expected = process.env.HOTMART_WEBHOOK_HOTTOK;
+    const received =
+      (req.headers['x-hotmart-hottok'] as string | undefined) ??
+      (req.body?.hottok as string | undefined);
+    if (!expected || received !== expected) {
+      return res.status(401).json({ error: 'Invalid hottok' });
+    }
+
+    // Sempre responder 200 rápido para a Hotmart não reenfileirar; processa best-effort.
+    const event: string = req.body?.event ?? '';
+    const data = req.body?.data ?? {};
+    res.json({ ok: true });
+
+    try {
+      const APPROVED_EVENTS = ['PURCHASE_APPROVED', 'PURCHASE_COMPLETE'];
+      if (!APPROVED_EVENTS.includes(event)) return;
+
+      const purchase = data.purchase ?? {};
+      const buyer = data.buyer ?? {};
+      const price = purchase.price ?? {};
+      const transaction: string = purchase.transaction ?? data.transaction ?? '';
+      const value = typeof price.value === 'number' ? price.value : Number(price.value) || 0;
+      const currency = price.currency_value ?? price.currency_code ?? 'BRL';
+
+      const result = await sendMetaPurchaseEvent({
+        email: buyer.email,
+        firstName: buyer.first_name ?? buyer.name,
+        value,
+        currency,
+        eventId: transaction || `hotmart_${Date.now()}`,
+        eventTime: purchase.approved_date ? Math.floor(purchase.approved_date / 1000) : undefined,
+        eventSourceUrl: 'https://airia.pro/livro',
+      });
+      console.log(`[hotmart/webhook] ${event} tx=${transaction} → CAPI`, JSON.stringify(result));
+    } catch (e: any) {
+      console.error('[hotmart/webhook] erro ao processar:', e?.message);
     }
   });
 
