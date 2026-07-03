@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { PrismaClient } from '@app/database';
+import { sendSubscribeEvent } from './meta-capi.service';
 
 const prisma = new PrismaClient();
 
@@ -105,6 +106,41 @@ export class StripeService {
           subscriptionPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
         },
       });
+
+      // Nova assinatura paga → dispara Subscribe no Meta CAPI (server-side, dedup por sub.id).
+      // Só na criação e com status pago, para não contar incompleto/atualização/cancelamento.
+      if (
+        event.type === 'customer.subscription.created' &&
+        (sub.status === 'active' || sub.status === 'trialing')
+      ) {
+        try {
+          let email: string | undefined;
+          try {
+            const customer = await stripe.customers.retrieve(customerId);
+            if (customer && !(customer as any).deleted) {
+              email = (customer as any).email ?? undefined;
+            }
+          } catch {
+            /* segue sem email — o CAPI ainda registra o evento */
+          }
+          const value = (item?.price?.unit_amount ?? 0) / 100;
+          const currency = (item?.price?.currency ?? 'brl').toUpperCase();
+          const result = await sendSubscribeEvent({
+            email,
+            value,
+            currency,
+            eventId: sub.id,
+            eventTime: typeof sub.created === 'number' ? sub.created : undefined,
+            eventSourceUrl: `${APP_URL}/billing`,
+          });
+          console.log(
+            `[stripe/webhook] Subscribe sub=${sub.id} status=${sub.status} → CAPI`,
+            JSON.stringify(result),
+          );
+        } catch (e: any) {
+          console.error('[stripe/webhook] erro ao enviar Subscribe ao CAPI:', e?.message);
+        }
+      }
     }
   }
 }

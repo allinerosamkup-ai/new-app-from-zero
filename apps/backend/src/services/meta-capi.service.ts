@@ -19,7 +19,7 @@ function hash(value: string | undefined | null): string | undefined {
   return crypto.createHash('sha256').update(normalized).digest('hex');
 }
 
-export interface CapiPurchaseInput {
+export interface CapiEventInput {
   email?: string;
   firstName?: string;
   value: number;
@@ -31,6 +31,9 @@ export interface CapiPurchaseInput {
   clientUserAgent?: string;
 }
 
+/** @deprecated use CapiEventInput */
+export type CapiPurchaseInput = CapiEventInput;
+
 export interface CapiResult {
   sent: boolean;
   skipped?: string;
@@ -39,10 +42,13 @@ export interface CapiResult {
 }
 
 /**
- * Envia um evento Purchase para a Conversions API.
+ * Envia um evento de conversão para a Conversions API.
  * Se META_CAPI_ACCESS_TOKEN não estiver setado, não quebra — retorna { sent:false, skipped }.
  */
-export async function sendPurchaseEvent(input: CapiPurchaseInput): Promise<CapiResult> {
+export async function sendConversionEvent(
+  eventName: 'Purchase' | 'Subscribe',
+  input: CapiEventInput,
+): Promise<CapiResult> {
   const pixelId = process.env.META_CAPI_PIXEL_ID;
   const accessToken = process.env.META_CAPI_ACCESS_TOKEN;
   const testEventCode = process.env.META_CAPI_TEST_EVENT_CODE;
@@ -62,7 +68,7 @@ export async function sendPurchaseEvent(input: CapiPurchaseInput): Promise<CapiR
   const body: Record<string, unknown> = {
     data: [
       {
-        event_name: 'Purchase',
+        event_name: eventName,
         event_time: input.eventTime ?? Math.floor(Date.now() / 1000),
         event_id: input.eventId,
         action_source: 'website',
@@ -86,4 +92,14 @@ export async function sendPurchaseEvent(input: CapiPurchaseInput): Promise<CapiR
     return { sent: false, status: res.status, response };
   }
   return { sent: true, status: res.status, response };
+}
+
+/** Purchase (compra do livro via Hotmart). */
+export function sendPurchaseEvent(input: CapiEventInput): Promise<CapiResult> {
+  return sendConversionEvent('Purchase', input);
+}
+
+/** Subscribe (assinatura Airia Pro via Stripe). */
+export function sendSubscribeEvent(input: CapiEventInput): Promise<CapiResult> {
+  return sendConversionEvent('Subscribe', input);
 }
