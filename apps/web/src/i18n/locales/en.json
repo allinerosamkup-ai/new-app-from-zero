@@ -383,6 +383,7 @@
     "done": {
       "ready": "All set, {{name}}!",
       "subtitle": "Your profile was created successfully. Airia already knows how to support you better.",
+      "learningStarts": "From now on, your rhythm starts being learned.",
       "profile": "YOUR PROFILE",
       "cycle": "Cycle",
       "energy": "Energy",

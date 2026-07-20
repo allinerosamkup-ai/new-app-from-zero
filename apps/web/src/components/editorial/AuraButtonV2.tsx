@@ -1,6 +1,7 @@
 import React from "react";
 import clsx from "clsx";
 import { AuraIcon } from "../AuraIcon";
+import { tapHaptic } from "../../utils/haptics";
 
 /**
  * AuraButtonV2 — Design System v5.0 (Spring Meadow Edition)
@@ -23,9 +24,16 @@ export function AuraButtonV2({
   useAuraIcon,
   className,
   children,
+  onClick,
   ...props
 }: AuraButtonProps) {
   const baseClasses = "btn-aura";
+
+  // Design emocional P1: todo botão primário responde ao toque (háptico leve).
+  const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+    if (!props.disabled) tapHaptic();
+    onClick?.(event);
+  };
   
   const iconSize = size === "sm" ? 12 : size === "md" ? 14 : 16;
   const finalLeftIcon = useAuraIcon ? <AuraIcon size={iconSize} /> : leftIcon;
@@ -51,6 +59,7 @@ export function AuraButtonV2({
         sizeClasses[size],
         className
       )}
+      onClick={handleClick}
       {...props}
     >
       {finalLeftIcon && <span className="btn-aura__icon" aria-hidden="true">{finalLeftIcon}</span>}

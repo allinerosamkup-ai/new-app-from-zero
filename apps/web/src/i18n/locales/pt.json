@@ -383,6 +383,7 @@
     "done": {
       "ready": "Tudo pronto, {{name}}!",
       "subtitle": "Seu perfil foi criado com sucesso. A Airia já sabe como te ajudar melhor.",
+      "learningStarts": "A partir de agora, seu ritmo começa a ser aprendido.",
       "profile": "SEU PERFIL",
       "cycle": "Ciclo",
       "energy": "Energia",

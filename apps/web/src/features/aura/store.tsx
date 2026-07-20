@@ -16,6 +16,7 @@ import { api } from "../../lib/api";
 import { queueCheckin } from "../../lib/offline-checkin";
 import { supabase } from "../../lib/supabase";
 import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
+import { successHaptic, tapHaptic } from "../../utils/haptics";
 import { postNativeShellMessage } from "../../utils/native-shell";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
@@ -358,6 +359,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (!task) return;
         
         const newStatus = !task.done ? 'completed' : 'planned';
+        // Pequena vitória sentida na hora; desfazer é neutro (sem "punição").
+        if (newStatus === 'completed') successHaptic(); else tapHaptic();
         const today = getLocalDateKey();
         await api.post('/timeline', {
           date: today,
@@ -754,6 +757,12 @@ queueCheckin({
       },
       toggleHabit: async (habitId) => {
         const today = getLocalDateKey();
+        // Feedback tátil imediato — o refresh chega depois, a sensação chega já.
+        const habit = state.habits.find((h) => h.id === habitId);
+        const alreadyDoneToday = habit?.completions?.some(
+          (completion: { date?: string }) => normalizeDateKey(completion.date ?? "") === today,
+        );
+        if (alreadyDoneToday) tapHaptic(); else successHaptic();
         await api.post(`/habits/${habitId}/toggle`, { date: today });
         await refreshData();
       },

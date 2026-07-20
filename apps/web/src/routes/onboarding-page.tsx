@@ -83,7 +83,8 @@ export function OnboardingPage() {
         </div>
 
         <div
-          className="aura-card"
+          key={step.field}
+          className="aura-card animate-fade-in"
           style={{
             marginBottom: 16,
             padding: 18,

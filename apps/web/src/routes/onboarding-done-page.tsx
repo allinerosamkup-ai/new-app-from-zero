@@ -111,10 +111,18 @@ export function OnboardingDonePage() {
           {t("onboarding.done.ready", { name })}
         </h1>
         <p style={{
-          fontSize: 14, color: "var(--text-2)", lineHeight: 1.65, marginBottom: 32, maxWidth: 280,
+          fontSize: 14, color: "var(--text-2)", lineHeight: 1.65, marginBottom: 10, maxWidth: 280,
           animation: "fade-up 0.6s ease 0.35s both",
         }}>
           {t("onboarding.done.subtitle")}
+        </p>
+        {/* Fechamento do ritual (design emocional P2): o app começa a aprender você */}
+        <p style={{
+          fontSize: 12.5, color: "var(--accent-peach-ink)", fontWeight: 700, lineHeight: 1.5,
+          marginBottom: 32, maxWidth: 280,
+          animation: "fade-up 0.6s ease 0.45s both",
+        }}>
+          {t("onboarding.done.learningStarts", "A partir de agora, seu ritmo começa a ser aprendido.")}
         </p>
 
         {/* Resumo do perfil */}

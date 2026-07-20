@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from "../lib/api";
 import { tryParseAiSuggestion } from "../lib/ai";
 import { trackEvent } from "../lib/track";
+import { successHaptic } from "../utils/haptics";
 import { useToast } from "../components/Toast";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import type { MoodOption } from "../features/aura/types";
@@ -259,6 +260,9 @@ export function CheckinResultPage() {
   } | null) ?? null;
   const { state, addTask, prepareJournalFromMood, refreshData, hydrated } = useAuraStore();
   const { showError, showSuccess } = useToast();
+
+  // Check-in salvo = pequena vitória: confirmação tátil única na chegada.
+  useEffect(() => { successHaptic(); }, []);
 
   const rawVariant = variants[state.mood] ?? variants.equilibrada;
   const englishVariant = VARIANT_EN[state.mood] ?? VARIANT_EN.equilibrada;
@@ -715,16 +719,16 @@ export function CheckinResultPage() {
     <div className="result-shell" style={{ background: v.bg }}>
       <div className="screen-content result-screen">
 
-        {/* Ícone checkmark */}
+        {/* Ícone checkmark — entra com peso (pequena vitória, design emocional P1) */}
         <div
-          className="result-hero-icon"
+          className="result-hero-icon animate-pop-in"
           style={{ background: isMenuthe ? "rgba(180,185,169,.18)" : "rgba(197,165,147,.15)" }}
         >
           {v.emoji}
         </div>
 
         {/* Título */}
-        <div className="result-header">
+        <div className="result-header animate-fade-in delay-100">
           <p className="result-header-kicker" style={{ color: v.accent }}>
             CHECK-IN REGISTRADO
           </p>

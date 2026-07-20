@@ -402,6 +402,21 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
   },
 };
 
+// Ritmo de respiração do hero por fase (design emocional P1).
+// Fases altas respiram mais vivas; baixas e turbulência, mais lentas —
+// a Aura co-regula, não acompanha a aceleração.
+const BREATHE_DURATION: Record<string, string> = {
+  elevated: "3.6s",
+  flowing: "3.8s",
+  stable: "4.4s",
+  recovering: "4.4s",
+  falling: "5s",
+  low: "5.6s",
+  depleted: "6s",
+  mixed: "6s",
+  insufficient_data: "4.4s",
+};
+
 function LiveClock() {
   const [now, setNow] = useState(() => new Date());
 
@@ -459,6 +474,9 @@ export function HomePage() {
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
   const [doneTaskIds, setDoneTaskIds] = useState<Set<string | number>>(new Set());
   const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
+  // Gráfico tátil (design emocional P3): dedo/cursor sobre o gráfico acende o ponto.
+  const [chartFocusIdx, setChartFocusIdx] = useState<number | null>(null);
+  useEffect(() => { setChartFocusIdx(null); }, [homeChartMode]);
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
   const [expandedAgendaRows, setExpandedAgendaRows] = useState<Set<string>>(new Set());
 
@@ -1600,16 +1618,23 @@ export function HomePage() {
               </div>
             </div>
           </div>
-          {/* Hero de fase — o centro da today view */}
+          {/* Hero de fase — o centro da today view. Respira no ritmo da fase:
+              fases altas = respiração mais viva; fases baixas/turbulência =
+              respiração lenta (co-regulação, nunca excitação). */}
           <div style={{ textAlign: "center", marginTop: 18 }}>
-            <div style={{
-              width: 76, height: 76, borderRadius: "50%",
-              background: "rgba(255,255,255,.80)",
-              border: `2px solid ${phaseColor}`,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              fontSize: 32, marginBottom: 12,
-              boxShadow: "0 10px 22px rgba(17,24,39,.05)",
-            }}>
+            <div
+              className="aura-breathe"
+              style={{
+                width: 76, height: 76, borderRadius: "50%",
+                background: "rgba(255,255,255,.80)",
+                border: `2px solid ${phaseColor}`,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                fontSize: 32, marginBottom: 12,
+                boxShadow: "0 10px 22px rgba(17,24,39,.05)",
+                ["--breathe-dur" as string]: BREATHE_DURATION[cycleReport.phase] ?? "4.4s",
+                ["--breathe-glow" as string]: `${phaseColor}38`,
+              }}
+            >
               {cycleReport.phaseEmoji}
             </div>
             <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.2 }}>
@@ -1636,6 +1661,47 @@ export function HomePage() {
             )}
           </div>
         </div>
+
+        {/* ── Momentum sem cobrança (design emocional P2): 14 dias, dias com
+            registro acendem na cor da fase; dias vazios ficam neutros —
+            ausência é dado, nunca dívida. ── */}
+        {(() => {
+          const registered = new Set(aggregatedCheckinHistory.map((entry) => entry.date));
+          const days = Array.from({ length: 14 }, (_, i) => shiftDateKey(todayDateKey, i - 13));
+          const count = days.filter((d) => registered.has(d)).length;
+          if (count === 0) return null;
+          return (
+            <div style={{ margin: "14px 2px 4px", textAlign: "center" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                {days.map((d) => {
+                  const has = registered.has(d);
+                  const isToday = d === todayDateKey;
+                  return (
+                    <span
+                      key={d}
+                      title={d}
+                      style={{
+                        width: isToday ? 8 : 6,
+                        height: isToday ? 8 : 6,
+                        borderRadius: "50%",
+                        background: has ? phaseColor : "transparent",
+                        border: has ? "none" : "1.5px solid rgba(17,24,39,.12)",
+                        opacity: has ? 0.9 : 1,
+                        transition: "background .3s",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <p style={{ margin: "6px 0 0", fontSize: 10.5, color: "var(--text-3)", fontWeight: 600, letterSpacing: ".02em" }}>
+                {l(
+                  `Seu ritmo se construindo — ${count} ${count === 1 ? "registro" : "registros"} em 14 dias`,
+                  `Your rhythm taking shape — ${count} ${count === 1 ? "entry" : "entries"} in 14 days`,
+                )}
+              </p>
+            </div>
+          );
+        })()}
 
         <JornadaHomeCard />
 
@@ -1923,7 +1989,24 @@ export function HomePage() {
               </div>
             ) : (
               <>
-                <svg width="100%" viewBox="0 0 280 72" style={{ overflow: "visible" }}>
+                <svg
+                  width="100%"
+                  viewBox="0 0 280 72"
+                  style={{ overflow: "visible", touchAction: "pan-y" }}
+                  onPointerMove={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const xView = ((event.clientX - rect.left) / rect.width) * 280;
+                    let best: number | null = null;
+                    let bestDist = Infinity;
+                    activeChartData.forEach((point, index) => {
+                      if (point.humorY === null) return;
+                      const dist = Math.abs(point.x - xView);
+                      if (dist < bestDist) { bestDist = dist; best = index; }
+                    });
+                    setChartFocusIdx(best);
+                  }}
+                  onPointerLeave={() => setChartFocusIdx(null)}
+                >
                   <defs>
                     <linearGradient id="moodLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                       <stop offset="0%" stopColor="var(--horizon)" />
@@ -1992,12 +2075,26 @@ export function HomePage() {
                       <circle key={index} cx={point.x} cy={point.humorY} r="3.5" fill="var(--horizon)" stroke="white" strokeWidth="1.5" opacity={0.75} />
                     );
                   })}
+
+                  {/* Brilho tátil no ponto sob o dedo (Revolut-style, discreto) */}
+                  {chartFocusIdx !== null && activeChartData[chartFocusIdx]?.humorY != null && (() => {
+                    const focusPoint = activeChartData[chartFocusIdx];
+                    return (
+                      <g pointerEvents="none">
+                        <circle cx={focusPoint.x} cy={focusPoint.humorY!} r="11" fill={phaseColor} opacity={0.16} />
+                        <circle cx={focusPoint.x} cy={focusPoint.humorY!} r="5" fill="white" stroke={phaseColor} strokeWidth="2" />
+                        {focusPoint.energiaY !== null && (
+                          <circle cx={focusPoint.x} cy={focusPoint.energiaY} r="4" fill="var(--olive)" opacity={0.55} />
+                        )}
+                      </g>
+                    );
+                  })()}
                 </svg>
 
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 8, paddingInline: 6 }}>
                   {activeChartData.map((point, index) => (
                     <div key={`${point.label}-${index}`} style={{ flex: 1, textAlign: "center" }}>
-                      <span style={{ fontSize: 10, fontWeight: point.isHighlight ? 700 : 500, color: point.isHighlight ? "var(--text-1)" : "var(--text-3)" }}>
+                      <span style={{ fontSize: 10, fontWeight: point.isHighlight || chartFocusIdx === index ? 700 : 500, color: chartFocusIdx === index ? phaseColor : point.isHighlight ? "var(--text-1)" : "var(--text-3)", transition: "color .15s" }}>
                         {point.label}
                       </span>
                       {point.phase && (
