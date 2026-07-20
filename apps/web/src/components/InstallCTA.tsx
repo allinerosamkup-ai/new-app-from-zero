@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, Download, Smartphone, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { trackInstallConversion } from "../lib/meta-pixel";
+import { useLocalizedCopy } from "../i18n";
 
 type Platform = "ios" | "android" | "desktop";
 
@@ -31,6 +32,7 @@ function isIosSafari(): boolean {
 }
 
 export function InstallCTA({ variant = "card" }: { variant?: "card" | "compact" }) {
+  const l = useLocalizedCopy();
   const [platform, setPlatform] = useState<Platform>("desktop");
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -76,22 +78,22 @@ export function InstallCTA({ variant = "card" }: { variant?: "card" | "compact" 
   };
 
   const isIos = platform === "ios";
-  const title = isInstalled ? "Aplicativo instalado" : "Baixar aplicativo";
+  const title = isInstalled ? l("Aplicativo instalado", "App installed") : l("Baixar aplicativo", "Download app");
   
   const description = isInstalled
-    ? "A Airia já está salva neste celular. Toque para abrir."
+    ? l("A Airia já está salva neste celular. Toque para abrir.", "Airia is already saved on this phone. Tap to open it.")
     : isIos
-    ? "Instale a Airia na tela inicial e acesse direto pelo ícone."
-    : "Instale a Airia no celular e abra direto pela tela inicial.";
+    ? l("Instale a Airia na tela inicial e acesse direto pelo ícone.", "Install Airia on your Home Screen and open it directly from the icon.")
+    : l("Instale a Airia no celular e abra direto pela tela inicial.", "Install Airia on your phone and open it directly from the Home Screen.");
 
   return (
     <>
       <InstallCard
         variant={variant}
-        eyebrow="Instalação rápida"
+        eyebrow={l("Instalação rápida", "Quick install")}
         title={title}
         description={description}
-        primaryLabel={isInstalled ? "Abrir app" : "Baixar aplicativo"}
+        primaryLabel={isInstalled ? l("Abrir app", "Open app") : l("Baixar aplicativo", "Download app")}
         primaryIcon={
           isInstalled
             ? <CheckCircle2 size={18} />
@@ -102,7 +104,7 @@ export function InstallCTA({ variant = "card" }: { variant?: "card" | "compact" 
             : <Smartphone size={18} />
         }
         onPrimary={handleInstall}
-        secondaryLabel="Usar no navegador"
+        secondaryLabel={l("Usar no navegador", "Use in browser")}
         onSecondary={() => window.location.assign("/login?tab=criar")}
       />
 
@@ -114,6 +116,7 @@ export function InstallCTA({ variant = "card" }: { variant?: "card" | "compact" 
 }
 
 function IosInstallSheet({ inSafari, onClose }: { inSafari: boolean; onClose: () => void }) {
+  const l = useLocalizedCopy();
   return (
     <>
       <div
@@ -124,15 +127,15 @@ function IosInstallSheet({ inSafari, onClose }: { inSafari: boolean; onClose: ()
         }}
       />
       <div style={sheetStyle}>
-        <button type="button" onClick={onClose} style={closeButtonStyle} aria-label="Fechar">
+        <button type="button" onClick={onClose} style={closeButtonStyle} aria-label={l("Fechar", "Close")}>
           <X size={18} />
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <img src="/icons/icon-192.png" alt="Airia" style={{ width: 36, height: 36, borderRadius: 8 }} />
           <div>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#4A3B37" }}>Instalar Airia</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#7C6D68" }}>Adicionar à tela inicial</p>
+            <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#4A3B37" }}>{l("Instalar Airia", "Install Airia")}</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#7C6D68" }}>{l("Adicionar à tela inicial", "Add to Home Screen")}</p>
           </div>
         </div>
 
@@ -140,27 +143,27 @@ function IosInstallSheet({ inSafari, onClose }: { inSafari: boolean; onClose: ()
           <ol style={stepsListStyle}>
             <li style={stepItemStyle}>
               <span style={stepNumStyle}>1</span>
-              <span>Toque no ícone de compartilhar
+              <span>{l("Toque no ícone de compartilhar", "Tap the Share icon")}
                 <span style={{ display: "inline-block", margin: "0 4px", fontSize: 16 }}>⎙</span>
-                na barra inferior do Safari
+                {l("na barra inferior do Safari", "in Safari's bottom toolbar")}
               </span>
             </li>
             <li style={stepItemStyle}>
               <span style={stepNumStyle}>2</span>
-              <span>Role para baixo e toque <strong>"Adicionar à Tela de Início"</strong></span>
+              <span>{l("Role para baixo e toque", "Scroll down and tap")} <strong>{l('"Adicionar à Tela de Início"', '"Add to Home Screen"')}</strong></span>
             </li>
             <li style={stepItemStyle}>
               <span style={stepNumStyle}>3</span>
-              <span>Toque <strong>"Adicionar"</strong> no canto superior direito</span>
+              <span>{l("Toque", "Tap")} <strong>{l('"Adicionar"', '"Add"')}</strong> {l("no canto superior direito", "in the upper-right corner")}</span>
             </li>
           </ol>
         ) : (
           <div style={{ padding: "12px 0 4px" }}>
             <p style={{ margin: 0, fontSize: 14, color: "#4A3B37", lineHeight: 1.5 }}>
-              Para instalar no iPhone, abra este link no <strong>Safari</strong>.
+              {l("Para instalar no iPhone, abra este link no", "To install on iPhone, open this link in")} <strong>Safari</strong>.
             </p>
             <p style={{ margin: "8px 0 0", fontSize: 12, color: "#7C6D68" }}>
-              Outros navegadores não permitem instalar PWA no iOS.
+              {l("Outros navegadores não permitem instalar PWA no iOS.", "Other browsers do not allow PWA installation on iOS.")}
             </p>
           </div>
         )}
@@ -251,6 +254,7 @@ function InstallCard({
   secondaryLabel?: string;
   onSecondary?: () => void;
 }) {
+  const l = useLocalizedCopy();
   if (variant === "compact") {
     return (
       <section style={compactCardStyle}>
@@ -265,7 +269,7 @@ function InstallCard({
           </button>
           {secondaryLabel && onSecondary ? (
             <button type="button" onClick={onSecondary} style={compactSecondaryButtonStyle}>
-              Navegador
+              {l("Navegador", "Browser")}
             </button>
           ) : null}
         </div>

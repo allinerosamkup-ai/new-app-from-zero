@@ -4,6 +4,8 @@ import { AiActionFeedbackService } from './ai-action-feedback.service';
 
 async function run() {
   let payload: Record<string, unknown> = {};
+  const canonicalMemories: any[] = [];
+  const canonicalEvidence: any[] = [];
   const prisma = {
     onboardingResponse: {
       findUnique: async () => ({ aiProfilePayload: payload }),
@@ -11,6 +13,16 @@ async function run() {
         payload = args.update.aiProfilePayload;
         return { aiProfilePayload: payload };
       },
+    },
+    userMemory: {
+      findFirst: async ({ where }: any) => canonicalMemories.find((item) => item.canonicalKey === where.canonicalKey && item.lifecycle === 'active') ?? null,
+      create: async ({ data }: any) => { const item = { id: `m-${canonicalMemories.length + 1}`, ...data }; canonicalMemories.push(item); return item; },
+      update: async ({ where, data }: any) => { const item = canonicalMemories.find((row) => row.id === where.id); Object.assign(item, data); return item; },
+    },
+    userMemoryEvidence: {
+      findFirst: async () => null,
+      create: async ({ data }: any) => { canonicalEvidence.push(data); return data; },
+      findMany: async () => canonicalEvidence,
     },
   };
 
@@ -34,7 +46,12 @@ async function run() {
     title: 'Separar roupa de treino',
     status: 'done',
     surface: 'home',
+    targetType: 'timeline',
+    targetId: 'task-1',
   });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(canonicalMemories[0]?.negativeState, 'completed');
+  assert.equal(canonicalMemories[0]?.targetId, 'task-1');
 
   const deduped = await AiActionFeedbackService.getRecent(prisma, 'user-1');
   assert.equal(deduped.length, 1);

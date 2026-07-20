@@ -75,19 +75,41 @@ const baseContext: DailyContext = {
   assert.match(result.summary, /sugestão opcional/);
 }
 
-function makeMockPrisma(blocks: any[] = []) {
+function makeMockPrisma(blocks: any[] = [], options: { protectAfterRead?: boolean; feedbackFails?: boolean } = {}) {
   const calls = {
     updates: [] as any[],
+    updateManyCalls: [] as any[],
     creates: [] as any[],
     feedbackPayload: null as any,
     events: [] as any[],
   };
   const prisma = {
     timelineBlock: {
-      findFirst: async ({ where }: any) => blocks.find((block) => block.id === where.id && block.userId === where.userId) ?? null,
+      findFirst: async ({ where }: any) => {
+        const block = blocks.find((candidate) => candidate.id === where.id && candidate.userId === where.userId) ?? null;
+        if (!block) return null;
+        const snapshot = { ...block };
+        if (options.protectAfterRead) {
+          block.temporalPolicy = 'fixed';
+          block.adaptationPermission = 'protected';
+        }
+        return snapshot;
+      },
       update: async ({ where, data }: any) => {
         calls.updates.push({ where, data });
         return { ...blocks.find((block) => block.id === where.id), ...data };
+      },
+      updateMany: async ({ where, data }: any) => {
+        calls.updateManyCalls.push({ where, data });
+        const block = blocks.find((candidate) => candidate.id === where.id && candidate.userId === where.userId);
+        const matchesProtectionPredicate = Boolean(block)
+          && (where.gcalEventId !== null || block.gcalEventId == null)
+          && (!where.temporalPolicy?.not || (block.temporalPolicy ?? 'flexible') !== where.temporalPolicy.not)
+          && (!where.adaptationPermission?.not || (block.adaptationPermission ?? 'eligible') !== where.adaptationPermission.not);
+        if (!block || !matchesProtectionPredicate) return { count: 0 };
+        Object.assign(block, data);
+        calls.updates.push({ where, data });
+        return { count: 1 };
       },
       create: async ({ data }: any) => {
         calls.creates.push(data);
@@ -97,6 +119,7 @@ function makeMockPrisma(blocks: any[] = []) {
     onboardingResponse: {
       findUnique: async () => ({ aiProfilePayload: {} }),
       upsert: async (payload: any) => {
+        if (options.feedbackFails) throw new Error('feedback unavailable');
         calls.feedbackPayload = payload;
         return payload;
       },
@@ -215,7 +238,115 @@ function makeMockPrisma(blocks: any[] = []) {
 }
 
 {
-  const { prisma, calls } = makeMockPrisma([]);
+  const protectedBlock = {
+    id: '77777777-7777-4777-8777-777777777777',
+    userId: '550e8400-e29b-41d4-a716-446655440000',
+    title: 'Reunião externa',
+    localDate: new Date('2026-04-30T00:00:00.000Z'),
+    startAt: new Date('2026-04-30T09:00:00.000Z'),
+    endAt: new Date('2026-04-30T10:00:00.000Z'),
+    category: 'trabalho',
+    intensity: 'P',
+    status: 'planned',
+    gcalEventId: 'legacy-google-event',
+    temporalPolicy: 'flexible',
+    adaptationPermission: 'eligible',
+  };
+  const staleContext: DailyContext = {
+    ...baseContext,
+    pendingTaskTitles: [protectedBlock.title],
+    tasks: [{
+      id: protectedBlock.id,
+      title: protectedBlock.title,
+      status: protectedBlock.status,
+      category: protectedBlock.category,
+      intensity: protectedBlock.intensity,
+      startAt: protectedBlock.startAt,
+      endAt: protectedBlock.endAt,
+      temporalPolicy: 'flexible',
+      adaptationPermission: 'eligible',
+    }],
+  };
+  const preview = AgendaAdaptationService.buildPreview({
+    dailyContext: staleContext,
+    requestContext: { phase: 'Estável', currentHour: 10, currentMinute: 10 },
+  });
+  assert.equal(preview.changes[0]?.type, 'move');
+
+  const { prisma, calls } = makeMockPrisma([protectedBlock]);
+  const result = await AgendaAdaptationService.apply({
+    prisma,
+    userId: protectedBlock.userId,
+    dailyContext: staleContext,
+    requestContext: { phase: 'Estável', currentHour: 10, currentMinute: 10 },
+    selectedDecisionIds: [preview.changes[0].id],
+  });
+
+  assert.equal(calls.updates.length, 0);
+  assert.equal(result.appliedChanges.length, 0);
+  assert.match(result.skippedChanges[0]?.reason ?? '', /protegido|fixo/i);
+}
+
+{
+  const block = {
+    id: '99999999-9999-4999-8999-999999999999',
+    userId: '550e8400-e29b-41d4-a716-446655440000',
+    title: 'Bloco que ficou protegido durante o apply',
+    localDate: new Date('2026-04-30T00:00:00.000Z'),
+    startAt: new Date('2026-04-30T09:00:00.000Z'),
+    endAt: new Date('2026-04-30T10:00:00.000Z'),
+    category: 'trabalho',
+    intensity: 'P',
+    status: 'planned',
+    gcalEventId: null,
+    temporalPolicy: 'flexible',
+    adaptationPermission: 'eligible',
+  };
+  const context: DailyContext = {
+    ...baseContext,
+    pendingTaskTitles: [block.title],
+    tasks: [{
+      id: block.id,
+      title: block.title,
+      status: block.status,
+      category: block.category,
+      intensity: block.intensity,
+      startAt: block.startAt,
+      endAt: block.endAt,
+      temporalPolicy: 'flexible',
+      adaptationPermission: 'eligible',
+    }],
+  };
+  const preview = AgendaAdaptationService.buildPreview({
+    dailyContext: context,
+    requestContext: { phase: 'Estável', currentHour: 10, currentMinute: 10 },
+  });
+  assert.equal(preview.changes[0]?.type, 'move');
+
+  const { prisma, calls } = makeMockPrisma([block], { protectAfterRead: true });
+  const result = await AgendaAdaptationService.apply({
+    prisma,
+    userId: block.userId,
+    dailyContext: context,
+    requestContext: { phase: 'Estável', currentHour: 10, currentMinute: 10 },
+    selectedDecisionIds: [preview.changes[0].id],
+  });
+
+  assert.equal(calls.updates.length, 0);
+  assert.equal(calls.updateManyCalls.length, 1);
+  assert.deepEqual(calls.updateManyCalls[0].where, {
+    id: block.id,
+    userId: block.userId,
+    gcalEventId: null,
+    temporalPolicy: { not: 'fixed' },
+    adaptationPermission: { not: 'protected' },
+  });
+  assert.equal(result.appliedChanges.length, 0);
+  assert.match(result.skippedChanges[0]?.reason ?? '', /protegido|fixo/i);
+}
+
+{
+  const { prisma, calls } = makeMockPrisma([], { feedbackFails: true });
   const contextWithHabit: DailyContext = {
     ...baseContext,
     tasks: [],
@@ -237,7 +368,7 @@ function makeMockPrisma(blocks: any[] = []) {
   });
   assert.equal(preview.changes[0]?.type, 'convert');
 
-  await AgendaAdaptationService.apply({
+  const applied = await AgendaAdaptationService.apply({
     prisma,
     userId: '550e8400-e29b-41d4-a716-446655440000',
     dailyContext: contextWithHabit,
@@ -249,6 +380,12 @@ function makeMockPrisma(blocks: any[] = []) {
   assert.equal(calls.creates[0].title, 'Diário');
   assert.equal(calls.creates[0].category, 'autocuidado');
   assert.equal(calls.creates[0].isAiSuggested, true);
+  assert.equal(calls.creates[0].temporalPolicy, 'flexible');
+  assert.equal(calls.creates[0].adaptationPermission, 'eligible');
+  assert.equal(calls.creates[0].adaptabilitySource, 'ai');
+  assert.equal(calls.creates[0].adaptabilityConfidence, 0.9);
+  assert.equal(applied.appliedChanges.length, 1);
+  assert.equal(applied.skippedChanges.length, 0, 'feedback failure does not undo a confirmed mutation');
 }
 
 console.log('agenda-adaptation.service tests passed');

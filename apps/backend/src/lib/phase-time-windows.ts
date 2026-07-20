@@ -69,16 +69,34 @@ export const PHASE_WINDOWS: Record<string, PhaseWindow> = {
   },
 };
 
+export const CANONICAL_PHASE_WINDOW_KEYS = {
+  elevated: 'voo alto',
+  flowing: 'fluindo',
+  stable: 'estavel',
+  falling: 'desacelerando',
+  low: 'recolhimento',
+  depleted: 'pausa',
+  recovering: 'retomada',
+  mixed: 'turbulencia',
+} as const;
+
+export type CanonicalMoodPhaseId = keyof typeof CANONICAL_PHASE_WINDOW_KEYS;
+
+export function normalizePhaseWindowKey(phaseKey: string): string {
+  const normalized = phaseKey
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return CANONICAL_PHASE_WINDOW_KEYS[normalized as CanonicalMoodPhaseId] ?? normalized;
+}
+
 /**
  * Returns the PhaseWindow for a given phase key (normalized).
  * Falls back to 'estavel' if the phase is unknown.
  */
 export function getPhaseWindow(phaseKey: string): PhaseWindow {
-  const normalized = phaseKey
-    .trim()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase();
+  const normalized = normalizePhaseWindowKey(phaseKey);
   return PHASE_WINDOWS[normalized] ?? PHASE_WINDOWS['estavel'];
 }
 

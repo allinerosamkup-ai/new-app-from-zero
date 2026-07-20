@@ -2,6 +2,26 @@ export type TimelineBlockStatus = "planned" | "completed" | "postponed";
 export type TimelineBlockIntensity = "L" | "M" | "P";
 export type PlannerCategory = "trabalho" | "autocuidado" | "social" | "pessoal" | "casa";
 export type TimelineBlockNoteMode = "text" | "checklist";
+export type TimelineTemporalPolicy = "fixed" | "windowed" | "flexible";
+export type TimelineAdaptationPermission = "protected" | "preview" | "eligible";
+export type TimelineAdaptabilitySource = "default" | "manual" | "gcal" | "recurrence" | "language" | "behavior" | "memory" | "ai";
+
+export type DayStructureProfile = {
+  mode: "open" | "mixed" | "structured";
+  initiativeLevel: "lead" | "collaborate" | "protect";
+  freedomScore: number;
+  scheduledMinutes: number;
+  protectedMinutes: number;
+  flexibleMinutes: number;
+  freeMinutes: number;
+  protectedAnchors: Array<{
+    id: string;
+    title: string;
+    startTime: string;
+    endTime: string;
+    source: "google_calendar" | "planner";
+  }>;
+};
 
 export type TimelineChecklistItem = {
   id: string;
@@ -37,7 +57,65 @@ export type FormStateLike = {
   icon?: string;
   color?: string;
   taskMode?: string;
+  temporalPolicy?: TimelineTemporalPolicy;
+  adaptabilitySource?: TimelineAdaptabilitySource;
+  adaptabilityConfidence?: number;
 };
+
+export function resolveTimelinePolicySelection(temporalPolicy: TimelineTemporalPolicy): {
+  temporalPolicy: TimelineTemporalPolicy;
+  adaptationPermission: TimelineAdaptationPermission;
+} {
+  if (temporalPolicy === "fixed") {
+    return { temporalPolicy: "fixed", adaptationPermission: "protected" };
+  }
+  if (temporalPolicy === "windowed") {
+    return { temporalPolicy: "windowed", adaptationPermission: "preview" };
+  }
+  return { temporalPolicy: "flexible", adaptationPermission: "eligible" };
+}
+
+export function buildDefaultSelectedAdaptationIds(
+  changes: Array<{
+    id: string;
+    targetId?: string | null;
+    type: string;
+    requiresConfirmation?: boolean;
+  }>,
+  protectedAnchors: Array<{ id: string }>,
+): Set<string> {
+  const protectedIds = new Set(protectedAnchors.map((anchor) => anchor.id));
+  return new Set(
+    changes
+      .filter((change) => change.requiresConfirmation
+        && !["keep", "block", "notify"].includes(change.type)
+        && (!change.targetId || !protectedIds.has(change.targetId)))
+      .map((change) => change.id),
+  );
+}
+
+function formatFreeMinutes(minutes: number): string {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safeMinutes / 60);
+  const remainder = safeMinutes % 60;
+  if (hours > 0 && remainder > 0) return `${hours}h${String(remainder).padStart(2, "0")} livres`;
+  if (hours > 0) return `${hours}h livres`;
+  return `${remainder} min livres`;
+}
+
+export function getDayStructurePresentation(profile: DayStructureProfile): {
+  title: "Dia livre" | "Dia misto" | "Dia com âncoras";
+  explanation: string;
+  freeTimeLabel: string;
+} {
+  const title = profile.mode === "open" ? "Dia livre" : profile.mode === "structured" ? "Dia com âncoras" : "Dia misto";
+  const explanation = profile.initiativeLevel === "lead"
+    ? "Pela leitura deste dia, há espaço real e a Airia toma mais iniciativa com poucos próximos passos."
+    : profile.initiativeLevel === "protect"
+      ? "Pela leitura deste dia, a Airia protege as âncoras visíveis e adapta somente o restante."
+      : "Pela leitura deste dia, a Airia protege o que está fixo e adapta os espaços livres com você.";
+  return { title, explanation, freeTimeLabel: formatFreeMinutes(profile.freeMinutes) };
+}
 
 export type PlannerTaskLike = {
   id: string;
@@ -61,7 +139,69 @@ export type PlannerTaskLike = {
   isAiSuggested?: boolean | null;
   aiReasoning?: string | null;
   gcalEventId?: string | null;
+  temporalPolicy?: TimelineTemporalPolicy | null;
+  adaptationPermission?: TimelineAdaptationPermission | null;
 };
+
+export function resolvePlannerTaskAdaptability(input: {
+  source?: string | null;
+  gcalEventId?: string | null;
+  temporalPolicy?: string | null;
+  adaptationPermission?: string | null;
+}): {
+  temporalPolicy: TimelineTemporalPolicy;
+  adaptationPermission: TimelineAdaptationPermission;
+} {
+  const isGoogleCalendarEvent = input.source === "gcal" || Boolean(input.gcalEventId);
+  const temporalPolicy: TimelineTemporalPolicy = input.temporalPolicy === "fixed"
+    || input.temporalPolicy === "windowed"
+    || input.temporalPolicy === "flexible"
+    ? input.temporalPolicy
+    : "flexible";
+  const adaptationPermission: TimelineAdaptationPermission = input.adaptationPermission === "protected"
+    || input.adaptationPermission === "preview"
+    || input.adaptationPermission === "eligible"
+    ? input.adaptationPermission
+    : "eligible";
+
+  if (isGoogleCalendarEvent || temporalPolicy === "fixed") {
+    return { temporalPolicy: "fixed", adaptationPermission: "protected" };
+  }
+
+  return { temporalPolicy, adaptationPermission };
+}
+
+export function canApplyPlannerAIAdjustment(input: {
+  source?: string | null;
+  gcalEventId?: string | null;
+  temporalPolicy?: string | null;
+  adaptationPermission?: string | null;
+}): boolean {
+  const adaptability = resolvePlannerTaskAdaptability(input);
+  return adaptability.temporalPolicy !== "fixed"
+    && adaptability.adaptationPermission !== "protected";
+}
+
+export function buildPlannerAISuggestionExistingBlocks(tasks: PlannerTaskLike[]) {
+  return tasks
+    .filter((task) => !task.done)
+    .slice(0, 30)
+    .map((task) => {
+      const adaptability = resolvePlannerTaskAdaptability(task);
+      const intensity = task.intensity?.trim().toUpperCase().slice(0, 1);
+      return {
+        id: String(task.id),
+        title: task.title,
+        startTime: task.time,
+        endTime: task.endTime ?? task.time,
+        category: normalizePlannerCategory(task.category) || "outro",
+        intensity: intensity === "L" || intensity === "P" ? intensity : "M",
+        status: task.done ? "completed" as const : "planned" as const,
+        gcalEventId: task.gcalEventId ?? null,
+        ...adaptability,
+      };
+    });
+}
 
 export type PlannerAgendaSlot =
   | {
@@ -85,6 +225,20 @@ export type SwipeGestureInput = {
   deltaX: number;
   deltaY: number;
 };
+
+export function resolveTaskCardSecondaryActions(
+  task: Pick<PlannerTaskLike, "source" | "done" | "persistentReminderEnabled">,
+): { canConvertToTask: boolean; canSnooze: boolean } {
+  if (task.done) {
+    return { canConvertToTask: false, canSnooze: false };
+  }
+
+  const isGoogleCalendarEvent = task.source === "gcal";
+  return {
+    canConvertToTask: isGoogleCalendarEvent,
+    canSnooze: !isGoogleCalendarEvent && task.persistentReminderEnabled === true,
+  };
+}
 
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -248,6 +402,9 @@ export function buildTimelineBlockInput(
     status: options?.fallbackStatus ?? "planned",
     ...(options?.isAiSuggested !== undefined ? { isAiSuggested: options.isAiSuggested } : {}),
     ...(options?.aiReasoning !== undefined ? { aiReasoning: options.aiReasoning } : {}),
+    ...(form.temporalPolicy ? resolveTimelinePolicySelection(form.temporalPolicy) : {}),
+    ...(form.adaptabilitySource ? { adaptabilitySource: form.adaptabilitySource } : {}),
+    ...(typeof form.adaptabilityConfidence === "number" ? { adaptabilityConfidence: form.adaptabilityConfidence } : {}),
   };
 
   const hasMetadata =

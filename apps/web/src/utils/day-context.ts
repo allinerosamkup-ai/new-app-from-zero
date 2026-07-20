@@ -40,12 +40,12 @@ export function getLocalNoonDate(referenceDate = new Date()): Date {
   return date;
 }
 
-export function getClientDayContext(referenceDate = new Date()): ClientDayContext {
+export function getClientDayContext(referenceDate = new Date(), locale = "pt-BR"): ClientDayContext {
   const hour = referenceDate.getHours();
   const minute = referenceDate.getMinutes();
   const partOfDay = hour < 12 ? "manhã" : hour < 18 ? "tarde" : "noite";
-  const weekday = capitalize(referenceDate.toLocaleDateString("pt-BR", { weekday: "long" }));
-  const dateLabel = referenceDate.toLocaleDateString("pt-BR", { day: "numeric", month: "long" });
+  const weekday = capitalize(referenceDate.toLocaleDateString(locale, { weekday: "long" }));
+  const dateLabel = referenceDate.toLocaleDateString(locale, { day: "numeric", month: "long" });
   const localDate = getLocalDateKey(referenceDate);
 
   return {

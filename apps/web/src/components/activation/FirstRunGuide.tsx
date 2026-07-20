@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import type { ActivationState } from "../../features/aura/activation";
 import { ActivationChecklist } from "./ActivationChecklist";
 import { AiriaButton, AiriaIconButton } from "../airia";
+import { useLocalizedCopy } from "../../i18n";
 
 type Props = {
   activation: ActivationState;
@@ -16,6 +17,7 @@ function storageKey(userId?: string | null) {
 }
 
 export function FirstRunGuide({ activation, userId }: Props) {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
 
@@ -66,7 +68,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
         <div>
           <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
-            Primeiro caminho Airia
+            {l("Primeiro caminho Airia", "Your first Airia path")}
           </p>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.25 }}>
             {activation.nextAction.title}
@@ -74,7 +76,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
         </div>
         <AiriaIconButton
           onClick={dismiss}
-          aria-label="Fechar guia inicial"
+          aria-label={l("Fechar guia inicial", "Close initial guide")}
           icon={<X size={15} />}
           variant="outline"
           style={{ flexShrink: 0 }}
@@ -95,7 +97,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
           size="md"
           style={{ flex: 1 }}
         >
-          Depois
+          {l("Depois", "Later")}
         </AiriaButton>
         <AiriaButton
           variant="primary"

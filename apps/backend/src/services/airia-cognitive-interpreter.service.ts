@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { DailyContext } from './context-grounding.service';
 import type { DecisionSurface } from './decision-engine.service';
 import type { AiriaActionPlan } from './airia-operational-reasoning.service';
+import type { AuraCommandAction } from '../contracts/aura-command.contract';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
 
 let _openai: OpenAI | null = null;
@@ -49,6 +50,29 @@ export type AiriaMemoryJudgment = {
   reason: string;
 };
 
+export type AiriaCaptureKind =
+  | 'conversation'
+  | 'memory_fact'
+  | 'decision'
+  | 'task'
+  | 'calendar_commitment'
+  | 'reflection'
+  | 'clarification';
+
+export type AiriaMutationAction = Exclude<AuraCommandAction, 'ask_clarification'>;
+
+export type AiriaCaptureJudgment = {
+  captureAs: AiriaCaptureKind;
+  allowedMutationActions: AiriaMutationAction[];
+  mutationTargetText?: string | null;
+  allowTaskCreation: boolean;
+  allowDecisionMemory: boolean;
+  allowMemoryCapture: boolean;
+  explicitness: 'explicit' | 'implicit' | 'ambiguous';
+  confidence: 'alta' | 'media' | 'baixa';
+  reason: string;
+};
+
 export type AiriaCognitiveFrame = {
   surface: DecisionSurface;
   currentFact: string;
@@ -76,6 +100,7 @@ export type AiriaResponsePlan = {
 export type AiriaCognitiveResult = {
   frame: AiriaCognitiveFrame;
   responsePlan: AiriaResponsePlan;
+  captureJudgment: AiriaCaptureJudgment;
 };
 
 export type AiriaCognitiveInput = {
@@ -160,6 +185,19 @@ const CognitiveModelSchema = z.object({
       z.enum(['agenda','habit','goal','user_report','memory_pattern','none']).default('none'),
     ),
   }),
+  captureJudgment: z.object({
+    captureAs: z.enum(['conversation', 'memory_fact', 'decision', 'task', 'calendar_commitment', 'reflection', 'clarification']),
+    allowedMutationActions: z.array(z.enum([
+      'create_task', 'create_checklist', 'create_goal', 'create_agenda',
+      'handoff_to_journal', 'update_task', 'delete_task', 'complete_items',
+    ])).optional().default([]),
+    allowTaskCreation: z.boolean(),
+    allowDecisionMemory: z.boolean(),
+    allowMemoryCapture: z.boolean().optional().default(false),
+    explicitness: z.enum(['explicit', 'implicit', 'ambiguous']),
+    confidence: z.enum(['alta', 'media', 'baixa']),
+    reason: z.string(),
+  }).optional(),
 });
 
 function cleanText(value: unknown): string {
@@ -178,17 +216,250 @@ function splitMemoryLines(value: string | null | undefined): string[] {
     .slice(0, 8);
 }
 
-function inferIntent(surface: DecisionSurface, message: string): AiriaCognitiveIntent {
+function normalizeForClassification(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’]/g, "'")
+    .toLowerCase();
+}
+
+const MUTATION_VERBS = [
+  'crie', 'cria', 'criar', 'adicione', 'adiciona', 'adicionar', 'inclua', 'inclui', 'incluir',
+  'agende', 'agenda', 'agendar', 'marque', 'marcar', 'registre', 'registra', 'registrar',
+  'transforme', 'transformar', 'mova', 'mover', 'atualize', 'atualizar', 'altere', 'alterar',
+  'mude', 'mudar', 'reagende', 'reagendar', 'remarque', 'remarcar', 'ajuste', 'ajustar',
+  'adie', 'adiar', 'apague', 'apagar', 'exclua', 'excluir', 'remova', 'remover',
+  'conclua', 'concluir', 'finalize', 'finalizar', 'termine', 'terminar', 'salve', 'salvar',
+  'leve', 'levar', 'coloque', 'colocar', 'complete', 'create', 'add', 'schedule', 'save',
+  'move', 'change', 'update', 'delete', 'remove', 'finish', 'mark', 'record', 'log',
+  'take', 'put', 'turn', 'reschedule', 'postpone', 'build', 'make',
+] as const;
+
+const MUTATION_VERB_PATTERN = MUTATION_VERBS.join('|');
+
+function containsNegatedMutationRequest(text: string): boolean {
+  const directPt = new RegExp(`\\b(?:nao|nunca|nem)\\s+(?:(?:quero|preciso|estou|estava|vou|pedi|pedindo)\\s+(?:que\\s+)?(?:voce\\s+)?|(?:quero|preciso)\\s+que\\s+(?:voce\\s+)?|(?:estou\\s+)?pedindo\\s+(?:para\\s+|que\\s+)?(?:voce\\s+)?)?(?:${MUTATION_VERB_PATTERN})\\b`);
+  const directEn = new RegExp(`\\b(?:(?:do\\s+not|don't|never)\\s+(?:(?:want|need|ask|asking)\\s+(?:you\\s+)?to\\s+)?|(?:i\\s+am|i'm)\\s+not\\s+(?:asking\\s+(?:you\\s+)?to|trying\\s+to)\\s+)(?:${MUTATION_VERB_PATTERN})\\b`);
+  return directPt.test(text) || directEn.test(text);
+}
+
+function isReportedMutation(text: string): boolean {
+  const reportPrefix = /\b(?:the (?:note|text|message|instructions?|document) (?:reads?|says?|states?|is written)|it (?:reads?|says?|states?)|(?:no|na|em um|em uma|a|o) (?:nota|texto|mensagem|instrucao|instrucoes|documento) (?:esta |estava |foi )?(?:escrit[oa]|diz|dizia|fala|manda|consta)|(?:ela|ele|alguem|a pessoa|she|he|someone) (?:me )?(?:disse|falou|pediu|mandou|said|told|asked|wrote)|me disseram|foi dito|i was told|they told me|they said)\b/;
+  const languageTransformation = /\b(?:traduza|traduz|traduzir|translate|parafraseie|paraphrase|reescreva|rewrite|cite|quote)\b/;
+  const markerMatch = reportPrefix.exec(text) ?? languageTransformation.exec(text);
+  return !!markerMatch
+    && new RegExp(`\\b(?:${MUTATION_VERB_PATTERN})\\b`).test(text.slice((markerMatch.index ?? 0) + markerMatch[0].length));
+}
+
+function extractMutationTargetText(message: string, action: AiriaMutationAction): string | null {
+  if (!['update_task', 'delete_task', 'complete_items'].includes(action)) return null;
+  let text = normalizeForClassification(message)
+    .replace(/[.,!?;:"'()[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  text = text.replace(/\b(?:por favor|please|pra mim|para mim|for me)\b\s*$/g, '').trim();
+
+  const firstVerb = new RegExp(`\\b(?:${MUTATION_VERB_PATTERN}|fiz|terminei|conclui|finished|completed|did)\\b`).exec(text);
+  if (firstVerb) text = text.slice((firstVerb.index ?? 0) + firstVerb[0].length).trim();
+
+  if (action === 'update_task') {
+    text = text.split(/\b(?:para|to)\s+(?:hoje|amanha|today|tomorrow|segunda|terca|quarta|quinta|sexta|sabado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/)[0] ?? text;
+    text = text.split(/\b(?:as|at)\s+\d{1,2}(?::\d{2})?\s*(?:h|am|pm)?\b/)[0] ?? text;
+  }
+
+  const ignored = new Set([
+    'a', 'o', 'as', 'os', 'um', 'uma', 'the', 'my', 'this', 'that', 'it',
+    'tarefa', 'tarefas', 'task', 'tasks', 'item', 'items', 'lembrete', 'reminder',
+    'bloco', 'block', 'evento', 'event', 'consulta', 'appointment', 'reuniao', 'meeting',
+    'da', 'do', 'das', 'dos', 'de', 'of', 'como', 'as', 'feito', 'feita', 'done', 'complete',
+    'ja', 'already', 'just',
+  ]);
+  const tokens = text.split(/\s+/).filter((token) => token && !ignored.has(token) && !MUTATION_VERBS.includes(token as any));
+  return tokens.length > 0 && tokens.length <= 10 ? tokens.join(' ') : null;
+}
+
+function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
+  const text = normalizeForClassification(message);
+  if (!text) {
+    return {
+      captureAs: 'clarification', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'ambiguous', confidence: 'baixa',
+      reason: 'Não há fala atual suficiente para autorizar captura ou ação.',
+    };
+  }
+
+  const listenOnly = /\b(so|apenas) (estou )?(desabafando|falando)|\b(preciso|quero) (so |apenas )?desabafar|\bnao (quero|preciso de) (conselho|conselhos|solucao|solucoes|tarefa|tarefas)|\b(so|apenas) (me )?(escuta|ouve)|\bjust listen\b|\b(only|just) venting\b|\bi (?:need|want) (?:to |just to |only to )?vent\b|\bi (?:do not|don't) want (?:any )?(advice|solutions?|tasks?)\b|\bno advice\b/.test(text);
+  if (listenOnly) {
+    return {
+      captureAs: 'conversation', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual pede escuta sem ação, conselho ou decisão.',
+    };
+  }
+
+  if (containsNegatedMutationRequest(text)) {
+    return {
+      captureAs: 'conversation', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual nega uma ação mutante; a negação prevalece sobre qualquer verbo operacional.',
+    };
+  }
+
+  if (isReportedMutation(text)) {
+    return {
+      captureAs: 'conversation', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'implicit', confidence: 'alta',
+      reason: 'A ação aparece como citação ou relato de outro texto, não como autorização atual.',
+    };
+  }
+
+  const explicitNoAction = /\bnao (?:quero|preciso) que (?:voce )?(?:crie|cria|adicione|adiciona|agende|agenda|registre|transforme|mova|apague|exclua|salve)\b|\bnao (?:estou )?pedindo (?:para |que )?(?:voce )?(?:faca|crie|mude|apague|registre|agende)\b|\bnao (?:crie|cria|adicione|adiciona|agende|agenda|registre|transforme|mova|apague|exclua|salve)\b|\b(?:i (?:do not|don't) want you to|do not|don't|please don't) (?:create|add|schedule|save|move|delete|turn this into)\b|\bi am not asking you to (?:do it|create|add|schedule|save|move|delete|change|complete)\b|\bi(?:'m| am) not asking (?:you )?to (?:do it|create|add|schedule|save|move|delete|change|complete)\b/.test(text);
+  if (explicitNoAction) {
+    return {
+      captureAs: 'conversation', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual proíbe explicitamente transformar a conversa em ação.',
+    };
+  }
+
+  const contextualOperationMention = /\b(?:i was told|they told me|they said|the message says|the instructions say)\b.{0,100}\b(?:create|add|schedule|save|move|change|update|delete|complete)\b|\bi (?:have|need) to (?:create|add|schedule|save)\b|\bi (?:have|need) to (?:move|change|update|delete|complete) .{0,50}\b(?:task|appointment|meeting|block|event|item)\b|\b(?:me disseram|foi dito|a mensagem diz|as instrucoes dizem)\b.{0,100}\b(?:crie|adicione|agende|salve|mova|altere|exclua|conclua)\b/.test(text);
+  if (contextualOperationMention) {
+    return {
+      captureAs: 'conversation', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'implicit', confidence: 'alta',
+      reason: 'A fala apenas menciona uma ação em contexto; não contém um pedido atual para executá-la.',
+    };
+  }
+
+  const explicitJournal = /\b(registre|registra|leve|leva|coloque|coloca|salve|salva) (?:isto|isso|o que .{0,40})?\s*(?:no|para(?: o)?|pro) diario\b|\b(?:save|take|put|move|register|record|log) (?:this|that|it|what .{0,40})?\s*(?:to|in|into) (?:my |the )?journal\b/.test(text);
+  if (explicitJournal) {
+    return {
+      captureAs: 'reflection', allowedMutationActions: ['handoff_to_journal'],
+      allowTaskCreation: false, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual pede explicitamente levar o conteúdo para o Diário.',
+    };
+  }
+
+  const explicitDelete = /\b(apague|exclua|remova) .{0,50}\b(tarefa|lembrete|bloco|evento)\b|\b(?:delete|remove) .{0,50}\b(task|reminder|block|event)\b/.test(text);
+  const explicitComplete = /\b(conclua|finalize|termine) .{0,50}\b(tarefa|item|itens|lembrete|bloco)\b|\bmarque .{0,50}\b(?:como )?(?:concluid[oa]|feito)\b|\b(?:complete|finish) .{0,50}\b(task|item|items|reminder|block)\b|\bmark .{0,50}\b(?:as )?(?:done|complete)\b|\b(ja fiz|terminei|conclui|acabei de|i finished|i completed|i already did|i just finished)\b/.test(text);
+  const explicitUpdate = /\b(atualize|altere|mude|mova|reagende|remarque|ajuste|adie) .{0,60}\b(tarefa|consulta|reuniao|compromisso|bloco|evento)\b|\b(?:update|change|move|reschedule|postpone) .{0,60}\b(task|appointment|meeting|commitment|block|event)\b/.test(text);
+  if (explicitDelete || explicitComplete || explicitUpdate) {
+    const allowedMutationActions: AiriaMutationAction[] = explicitDelete
+      ? ['delete_task']
+      : explicitComplete
+        ? ['complete_items']
+        : ['update_task'];
+    return {
+      captureAs: 'task', allowedMutationActions,
+      mutationTargetText: extractMutationTargetText(message, allowedMutationActions[0]),
+      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual contém uma mutação explícita sobre item existente.',
+    };
+  }
+
+  const explicitChecklist = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|monte) (?:uma? )?(?:checklist|lista)\b|\b(?:quebra|quebre|divida) .{1,80}\bem (?:passos|etapas)\b|\b(?:create|add|make|build) (?:a )?(?:checklist|list)\b|\bbreak .{1,80}\binto (?:steps|stages)\b/.test(text);
+  const explicitGoal = /\b(?:crie|cria|adicione|adiciona|inclua|inclui) (?:uma? )?meta\b|\b(?:quero|preciso|vamos) criar (?:uma? )?meta\b|\b(?:create|add|make) (?:a )?goal\b/.test(text);
+  const explicitAgendaAction = /\b(?:agende|marque|marcar) .{0,60}\b(?:consulta|dentista|reuniao|compromisso|sessao|bloco|evento)\b|\b(?:monte|organize) (?:meu|minha|o|a) (?:dia|agenda|rotina)\b|\b(?:schedule) .{0,60}\b(?:appointment|meeting|commitment|block|event)\b|\b(?:plan|organize) (?:my|the) (?:day|agenda|schedule)\b/.test(text);
+  const explicitTask = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|registre) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:quero|preciso|vamos) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:pode|consegue) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:transforme|coloque) (?:isto|isso) (?:em|como) (?:uma? )?tarefa\b|\b(?:please |can you |could you |i want you to |i need you to )?(?:create|add|make) (?:a )?(?:task|reminder)\b|\b(?:turn|put) (?:this|that|it) (?:down )?(?:into|as) (?:a )?(?:task|reminder)\b/.test(text);
+  if (explicitChecklist || explicitGoal || explicitAgendaAction || explicitTask) {
+    const allowedMutationActions: AiriaMutationAction[] = explicitChecklist
+      ? ['create_checklist']
+      : explicitGoal
+        ? ['create_goal']
+        : explicitAgendaAction
+          ? ['create_agenda']
+          : ['create_task'];
+    return {
+      captureAs: explicitAgendaAction ? 'calendar_commitment' : 'task',
+      allowedMutationActions, allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual contém um pedido operacional explícito e tipado.',
+    };
+  }
+
+  const explicitlyUndecided = /\b(nao|ainda nao) (decidi|escolhi|resolvi)\b|\b(i have not|i haven't|i did not|i didn't) decided\b|\bnot decided yet\b/.test(text);
+  if (explicitlyUndecided) {
+    return {
+      captureAs: 'reflection', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual declara que ainda não existe uma decisão concluída.',
+    };
+  }
+
+  const explicitDecision = /\b(eu )?(decidi|escolhi|resolvi)\b|\b(minha decisao|a decisao) (e|foi)\b|\b(i |i've |i have )(decided|chosen)\b|\bmy decision is\b/.test(text);
+  if (explicitDecision) {
+    return {
+      captureAs: 'decision', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: true,
+      allowMemoryCapture: true, explicitness: 'explicit', confidence: 'alta',
+      reason: 'A usuária declarou uma decisão atual de forma explícita.',
+    };
+  }
+
+  const explicitMemory = /\b(anote|anota|guarde|lembre|registre) (que|isto|isso)\b|\b(remember|note|keep in mind) (that|this)\b/.test(text);
+  if (explicitMemory) {
+    return {
+      captureAs: 'memory_fact', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: true, explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual pede explicitamente que um fato seja lembrado, sem convertê-lo em ação.',
+    };
+  }
+
+  const calendarNoun = /\b(consulta|reuniao|compromisso|sessao|aula|voo|viagem|appointment|meeting|session|class|flight|trip)\b/.test(text);
+  const firstPersonCommitment = /\b(tenho|vou ter|estarei|marquei|i have|i've got|i am meeting|i'm meeting|i will be|i'll be)\b/.test(text);
+  const timeAnchor = /\b(hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|\b(?:[01]?\d|2[0-3])[:h][0-5]\d\b|\b(?:1[0-2]|0?[1-9])(?::[0-5]\d)?\s?(?:am|pm)\b/.test(text);
+  if (calendarNoun && firstPersonCommitment && timeAnchor) {
+    return {
+      captureAs: 'calendar_commitment', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: true, explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual relata um compromisso com âncora temporal, mas não pede alteração da agenda.',
+    };
+  }
+
+  const reflection = /\b(percebi|notei|reparei|acho que|sinto que|me dei conta|i realized|i realised|i noticed|i think|i feel like|it seems to me)\b/.test(text);
+  if (reflection) {
+    return {
+      captureAs: 'reflection', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+      allowMemoryCapture: false, explicitness: 'implicit', confidence: 'media',
+      reason: 'A fala atual é uma elaboração reflexiva, não uma ordem nem uma decisão confirmada.',
+    };
+  }
+
+  return {
+    captureAs: 'conversation', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
+    allowMemoryCapture: false, explicitness: 'ambiguous', confidence: 'media',
+    reason: 'Não há pedido operacional, decisão ou fato para memória suficientemente explícito.',
+  };
+}
+
+function inferSurfaceIntent(surface: DecisionSurface): AiriaCognitiveIntent {
   if (surface === 'journal') return 'journal_reflection';
   if (surface === 'checkin') return 'checkin_reading';
   if (surface === 'home') return 'home_guidance';
   if (surface === 'insights') return 'insight_reading';
   if (surface === 'planner' || surface === 'agenda') return 'agenda_adaptation';
-  if (/\b(crie|criar|marca|marcar|exclu|apaga|conclu|agenda|reagenda|adiar|mover)\b/i.test(message)) return 'execution';
-  if (/\b(mensagem|responder|mandar|whatsapp|email|e-mail)\b/i.test(message)) return 'message_draft';
-  if (/\b(decidir|escolher|não sei|nao sei|dúvida|duvida)\b/i.test(message)) return 'decision';
-  if (!message) return 'clarification';
   return 'conversation';
+}
+
+function inferIntent(surface: DecisionSurface, message: string, judgment: AiriaCaptureJudgment): AiriaCognitiveIntent {
+  if (!message) {
+    const surfaceIntent = inferSurfaceIntent(surface);
+    return surfaceIntent === 'conversation' ? 'clarification' : surfaceIntent;
+  }
+  if (judgment.captureAs === 'conversation') {
+    return surface === 'aura-chat' || surface === 'planner' || surface === 'agenda'
+      ? 'conversation'
+      : inferSurfaceIntent(surface);
+  }
+  if (judgment.captureAs === 'task' || (judgment.captureAs === 'calendar_commitment' && judgment.allowTaskCreation)) return 'execution';
+  if (judgment.captureAs === 'decision') return 'decision';
+  if (judgment.captureAs === 'reflection') return surface === 'journal' ? 'journal_reflection' : 'conversation';
+  if (judgment.captureAs === 'memory_fact' || judgment.explicitness === 'explicit') return 'conversation';
+  if (/\b(mensagem|responder|mandar|whatsapp|email|e-mail|draft|reply|send)\b/i.test(message)) return 'message_draft';
+  return inferSurfaceIntent(surface);
 }
 
 function inferMode(intent: AiriaCognitiveIntent, actionPlan?: AiriaActionPlan | null): AiriaResponseMode {
@@ -202,6 +473,7 @@ function inferMode(intent: AiriaCognitiveIntent, actionPlan?: AiriaActionPlan | 
 }
 
 function actionSource(actionPlan?: AiriaActionPlan | null): AiriaResponsePlan['allowedActionSource'] {
+  if (!actionPlan) return 'none';
   const target = actionPlan?.action?.targetType;
   if (target === 'timeline') return 'agenda';
   if (target === 'habit') return 'habit';
@@ -212,13 +484,15 @@ function actionSource(actionPlan?: AiriaActionPlan | null): AiriaResponsePlan['a
 
 function heuristicBuild(input: AiriaCognitiveInput): AiriaCognitiveResult {
   const message = cleanText(input.currentMessage);
-  const intent = inferIntent(input.surface, message);
+  const captureJudgment = classifyCurrentMessage(message);
+  const effectiveActionPlan = captureJudgment.allowTaskCreation ? input.actionPlan : null;
+  const intent = inferIntent(input.surface, message, captureJudgment);
   const evidence = [
     message ? `Relato atual: ${message.slice(0, 180)}` : '',
     input.dailyContext.pendingTaskTitles.length ? `Agenda: ${listPreview(input.dailyContext.pendingTaskTitles)}` : '',
     input.dailyContext.pendingHabitTitles.length ? `Hábitos: ${listPreview(input.dailyContext.pendingHabitTitles)}` : '',
     input.dailyContext.activeGoalTitles.length ? `Metas: ${listPreview(input.dailyContext.activeGoalTitles)}` : '',
-    input.actionPlan?.action?.displayText ? `Plano operacional: ${input.actionPlan.action.displayText}` : '',
+    effectiveActionPlan?.action?.displayText ? `Plano operacional: ${effectiveActionPlan.action.displayText}` : '',
   ].filter(Boolean);
   const memoryJudgments = splitMemoryLines(input.ragContext).map((memory) => ({
     memory: memory.slice(0, 220),
@@ -227,9 +501,13 @@ function heuristicBuild(input: AiriaCognitiveInput): AiriaCognitiveResult {
       : 'rejected' as const,
     reason: message ? 'Comparada com o relato atual antes de aparecer na resposta.' : 'Sem relato atual suficiente para usar como ação.',
   }));
-  const confidence = input.actionPlan?.decision.confidence ?? (message ? 'media' : 'baixa');
-  const responseMode = inferMode(intent, input.actionPlan);
-  const finalMove = input.actionPlan?.action?.displayText
+  const confidence = effectiveActionPlan?.decision.confidence ?? (message ? 'media' : 'baixa');
+  const responseMode = captureJudgment.captureAs === 'conversation' && captureJudgment.explicitness === 'explicit'
+    ? 'acolher'
+    : captureJudgment.captureAs === 'memory_fact'
+      ? 'fechar_sem_tarefa'
+      : inferMode(intent, effectiveActionPlan);
+  const finalMove = effectiveActionPlan?.action?.displayText
     ?? (responseMode === 'perguntar_ancora' ? 'Perguntar qual fato atual precisa de direção agora.' : 'Responder com leitura curta e sem criar tarefa.');
 
   return {
@@ -239,8 +517,8 @@ function heuristicBuild(input: AiriaCognitiveInput): AiriaCognitiveResult {
       userInterpretation: /acho|parece|sinto que|medo de/i.test(message) ? 'Há interpretação misturada ao fato.' : 'Interpretação não explicitada.',
       emotionalSignal: /ansios|trist|raiva|medo|culpa|cansad|exaust|irritad/i.test(message) ? 'Há emoção nomeada ou sugerida no relato.' : 'Sinal emocional leve ou não nomeado.',
       intent,
-      decisionInPlay: input.actionPlan?.reading.pattern ?? 'Definir a próxima decisão possível com base no contexto real.',
-      moodCycleReading: input.actionPlan?.reading.moodCyclePhase ?? (cleanText(input.moodCycleContext) || 'Ritmo atual não informado.'),
+      decisionInPlay: effectiveActionPlan?.reading.pattern ?? 'Definir a próxima decisão possível com base no contexto real.',
+      moodCycleReading: effectiveActionPlan?.reading.moodCyclePhase ?? (cleanText(input.moodCycleContext) || 'Ritmo atual não informado.'),
       relevantEvidence: evidence,
       memoryJudgments,
       riskOfBadResponse: [
@@ -262,8 +540,9 @@ function heuristicBuild(input: AiriaCognitiveInput): AiriaCognitiveResult {
         'Não criar tarefa sem âncora real.',
         'Não sugerir escrever/anotar/registrar fora do Diário, mensagem pronta ou pedido explícito.',
       ],
-      allowedActionSource: actionSource(input.actionPlan),
+      allowedActionSource: captureJudgment.allowTaskCreation ? actionSource(effectiveActionPlan) : 'none',
     },
+    captureJudgment,
   };
 }
 
@@ -304,9 +583,15 @@ ${signals || 'sem sinais adicionais'}
 
 OBJETIVO:
 - Separar fato, emoção, interpretação e decisão em jogo.
+- Ler o subtexto para calibrar acolhimento, tom e possíveis ambiguidades, sem apresentar inferência como fato.
+- Tratar somente o RELATO/PEDIDO ATUAL como fonte de autorização. Histórico e memória explicam padrões, mas nunca autorizam tarefa, execução ou decisão.
+- Distinguir conversa/desabafo, fato para memória, decisão explícita, tarefa pedida, compromisso relatado e reflexão.
 - Julgar quais memórias são úteis, parciais ou rejeitadas.
 - Definir como a resposta final deve ser escrita.
 - Não criar tarefa a partir de memória antiga.
+- Se a pessoa pedir apenas escuta ou disser que não quer conselho, escolher conversation/acolher e bloquear qualquer ação.
+- Só permitir tarefa ou decisão persistida quando a fala atual for explícita. Dúvida, hipótese, desejo vago e reflexão não bastam.
+- Em allowedMutationActions, listar apenas os nomes exatos das ações mutantes explicitamente pedidas agora; usar [] quando não houver autorização.
 - Não usar termos técnicos da metodologia.
 - Não sugerir escrever/anotar/registrar fora de Diário, mensagem pronta ou pedido explícito.
 
@@ -332,18 +617,66 @@ Retorne apenas JSON neste formato:
     "mustMention": ["até 2 fatos reais"],
     "mustAvoid": ["coisas que a resposta final não pode fazer"],
     "allowedActionSource": "agenda|habit|goal|user_report|memory_pattern|none"
+  },
+  "captureJudgment": {
+    "captureAs": "conversation|memory_fact|decision|task|calendar_commitment|reflection|clarification",
+    "allowedMutationActions": [],
+    "allowTaskCreation": false,
+    "allowDecisionMemory": false,
+    "allowMemoryCapture": false,
+    "explicitness": "explicit|implicit|ambiguous",
+    "confidence": "alta|media|baixa",
+    "reason": "razão ancorada somente na fala atual"
   }
 }`;
 }
 
 function normalizeParsed(input: AiriaCognitiveInput, parsed: z.infer<typeof CognitiveModelSchema>): AiriaCognitiveResult {
   const fallback = heuristicBuild(input);
+  const gate = fallback.captureJudgment;
+  const modelIntentRequiresExplicitCurrentSource = parsed.frame.intent === 'execution'
+    || parsed.frame.intent === 'decision'
+    || parsed.frame.intent === 'agenda_adaptation';
+  const modelIntentIsAuthorized = parsed.frame.intent === 'execution'
+    ? gate.allowTaskCreation
+    : parsed.frame.intent === 'agenda_adaptation'
+      ? gate.allowTaskCreation
+    : parsed.frame.intent === 'decision'
+      ? gate.allowDecisionMemory
+      : true;
+  const safeIntent = gate.captureAs === 'decision'
+    ? 'decision'
+    : gate.captureAs === 'task' || (gate.captureAs === 'calendar_commitment' && gate.allowTaskCreation)
+      ? 'execution'
+      : gate.captureAs === 'reflection'
+        ? (input.surface === 'journal' ? 'journal_reflection' : 'conversation')
+        : gate.explicitness === 'explicit'
+          ? 'conversation'
+          : modelIntentRequiresExplicitCurrentSource && !modelIntentIsAuthorized
+            ? fallback.frame.intent
+            : parsed.frame.intent;
+  const modelRequestsExecution = parsed.responsePlan.responseMode === 'executar' || parsed.responsePlan.responseMode === 'adaptar_agenda';
+  const canUseOperationalPlan = gate.allowTaskCreation;
+  const shouldSanitizeOperationalOutput = !canUseOperationalPlan
+    && (modelRequestsExecution || parsed.responsePlan.allowedActionSource !== 'none');
+  const safeMode = gate.captureAs === 'conversation' && gate.explicitness === 'explicit'
+    ? 'acolher'
+    : gate.captureAs === 'memory_fact'
+      ? 'fechar_sem_tarefa'
+      : gate.allowTaskCreation
+        ? parsed.responsePlan.responseMode
+        : modelRequestsExecution && !canUseOperationalPlan
+          ? fallback.responsePlan.responseMode
+          : parsed.responsePlan.responseMode;
   return {
     frame: {
       ...fallback.frame,
-      ...parsed.frame,
+      ...(shouldSanitizeOperationalOutput ? {} : parsed.frame),
       surface: input.surface,
-      relevantEvidence: parsed.frame.relevantEvidence.slice(0, 5),
+      intent: safeIntent,
+      relevantEvidence: shouldSanitizeOperationalOutput
+        ? fallback.frame.relevantEvidence
+        : parsed.frame.relevantEvidence.slice(0, 5),
       memoryJudgments: parsed.frame.memoryJudgments.slice(0, 8),
       riskOfBadResponse: parsed.frame.riskOfBadResponse.length
         ? parsed.frame.riskOfBadResponse.slice(0, 6)
@@ -351,14 +684,24 @@ function normalizeParsed(input: AiriaCognitiveInput, parsed: z.infer<typeof Cogn
     },
     responsePlan: {
       ...fallback.responsePlan,
-      ...parsed.responsePlan,
-      mustMention: parsed.responsePlan.mustMention.slice(0, 2),
+      ...(shouldSanitizeOperationalOutput ? {} : parsed.responsePlan),
+      responseMode: shouldSanitizeOperationalOutput ? fallback.responsePlan.responseMode : safeMode,
+      finalMove: canUseOperationalPlan && !shouldSanitizeOperationalOutput
+        ? parsed.responsePlan.finalMove
+        : fallback.responsePlan.finalMove,
+      allowedActionSource: canUseOperationalPlan ? parsed.responsePlan.allowedActionSource : 'none',
+      mustMention: shouldSanitizeOperationalOutput
+        ? fallback.responsePlan.mustMention
+        : parsed.responsePlan.mustMention.slice(0, 2),
       mustAvoid: [
         ...parsed.responsePlan.mustAvoid,
         'Não citar nomes técnicos da metodologia.',
         'Não inventar tarefa sem âncora real.',
       ].slice(0, 8),
     },
+    // O modelo ajuda a interpretar subtexto, mas a autorização é sempre decidida
+    // deterministicamente pela fala atual. Assim, memória antiga não vira ação.
+    captureJudgment: gate,
   };
 }
 
@@ -398,6 +741,10 @@ export class AiriaCognitiveInterpreterService {
     }
   }
 
+  static allowsMemoryDecisionExtraction(result: AiriaCognitiveResult): boolean {
+    return result.captureJudgment.allowDecisionMemory;
+  }
+
   static formatForPrompt(result: AiriaCognitiveResult): string {
     const memoryLines = result.frame.memoryJudgments
       .map((item) => `- ${item.status}: ${item.memory} (${item.reason})`)
@@ -408,6 +755,14 @@ Fato atual: ${result.frame.currentFact}
 Interpretacao da usuaria: ${result.frame.userInterpretation}
 Sinal emocional: ${result.frame.emotionalSignal}
 Intencao: ${result.frame.intent}
+Captura permitida: ${result.captureJudgment.captureAs}
+Explicitude da fala atual: ${result.captureJudgment.explicitness}
+Criar tarefa: ${result.captureJudgment.allowTaskCreation ? 'sim' : 'nao'}
+Acoes mutantes autorizadas: ${result.captureJudgment.allowedMutationActions.join(' | ') || 'nenhuma'}
+Alvo atual da mutacao: ${result.captureJudgment.mutationTargetText || 'nenhum alvo explicito'}
+Persistir decisao: ${result.captureJudgment.allowDecisionMemory ? 'sim' : 'nao'}
+Persistir fato: ${result.captureJudgment.allowMemoryCapture ? 'sim' : 'nao'}
+Motivo da captura: ${result.captureJudgment.reason}
 Decisao em jogo: ${result.frame.decisionInPlay}
 Leitura de humor/energia: ${result.frame.moodCycleReading}
 Confianca: ${result.frame.confidence}

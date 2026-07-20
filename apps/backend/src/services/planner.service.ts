@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { inferTimelineAdaptability, type AdaptabilityInferenceSource } from './timeline-adaptability-inference.service';
 
 const CATEGORY_ALIASES: Record<string, 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro'> = {
   trabalho: 'trabalho',
@@ -64,6 +65,89 @@ const RecurringConfigSchema = z.object({
   everyNDays: z.number().int().min(1).max(365),
 });
 
+export const TemporalPolicySchema = z.enum(['fixed', 'windowed', 'flexible']);
+export const AdaptationPermissionSchema = z.enum(['protected', 'preview', 'eligible']);
+export const AdaptabilitySourceSchema = z.enum(['default', 'manual', 'gcal', 'recurrence', 'language', 'behavior', 'memory', 'ai']);
+
+export type TemporalPolicy = z.infer<typeof TemporalPolicySchema>;
+export type AdaptationPermission = z.infer<typeof AdaptationPermissionSchema>;
+export type AdaptabilitySource = z.infer<typeof AdaptabilitySourceSchema>;
+
+export function resolveTimelineAdaptabilityProvenance(input: {
+  gcalEventId?: string | null;
+  adaptabilitySource?: string | null;
+  adaptabilityConfidence?: number | null;
+}): { adaptabilitySource: AdaptabilitySource; adaptabilityConfidence: number } {
+  if (input.gcalEventId) {
+    return { adaptabilitySource: 'gcal', adaptabilityConfidence: 1 };
+  }
+  const adaptabilitySource = AdaptabilitySourceSchema.safeParse(input.adaptabilitySource).success
+    ? input.adaptabilitySource as AdaptabilitySource
+    : 'default';
+  const adaptabilityConfidence = typeof input.adaptabilityConfidence === 'number'
+    ? Math.max(0, Math.min(1, input.adaptabilityConfidence))
+    : 0.5;
+  return { adaptabilitySource, adaptabilityConfidence };
+}
+
+function sourceFromInference(source: AdaptabilityInferenceSource): AdaptabilitySource {
+  if (source === 'google_calendar') return 'gcal';
+  if (source === 'recurring_schedule') return 'recurrence';
+  if (source === 'commitment_pattern') return 'language';
+  if (source === 'ai_suggestion') return 'ai';
+  if (source === 'postponed_task') return 'behavior';
+  if (source === 'manual_override') return 'manual';
+  return 'default';
+}
+
+export function resolveTimelineAdaptability(input: {
+  gcalEventId?: string | null;
+  temporalPolicy?: string | null;
+  adaptationPermission?: string | null;
+}): { temporalPolicy: TemporalPolicy; adaptationPermission: AdaptationPermission } {
+  const temporalPolicy: TemporalPolicy = TemporalPolicySchema.safeParse(input.temporalPolicy).success
+    ? input.temporalPolicy as TemporalPolicy
+    : 'flexible';
+  const adaptationPermission: AdaptationPermission = AdaptationPermissionSchema.safeParse(input.adaptationPermission).success
+    ? input.adaptationPermission as AdaptationPermission
+    : 'eligible';
+
+  if (input.gcalEventId || temporalPolicy === 'fixed') {
+    return { temporalPolicy: 'fixed', adaptationPermission: 'protected' };
+  }
+
+  return { temporalPolicy, adaptationPermission };
+}
+
+export function isTimelineBlockProtected(input: {
+  gcalEventId?: string | null;
+  temporalPolicy?: string | null;
+  adaptationPermission?: string | null;
+}): boolean {
+  return Boolean(
+    input.gcalEventId
+    || input.temporalPolicy === 'fixed'
+    || input.adaptationPermission === 'protected',
+  );
+}
+
+export function buildPostponeAdaptabilityUpdate(input: {
+  adaptabilitySource?: string | null;
+}): Partial<{
+  temporalPolicy: TemporalPolicy;
+  adaptationPermission: AdaptationPermission;
+  adaptabilitySource: AdaptabilitySource;
+  adaptabilityConfidence: number;
+}> {
+  if (input.adaptabilitySource === 'manual' || input.adaptabilitySource === 'gcal') return {};
+  return {
+    temporalPolicy: 'flexible',
+    adaptationPermission: 'eligible',
+    adaptabilitySource: 'behavior',
+    adaptabilityConfidence: 0.84,
+  };
+}
+
 export const TimelineBlockSchema = z.object({
   id: z.string().uuid().optional().nullable(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/), // HH:mm
@@ -89,9 +173,24 @@ export const TimelineBlockSchema = z.object({
   isAiSuggested: z.boolean().optional(),
   aiReasoning: z.string().optional().nullable(),
   gcalEventId: z.string().optional().nullable(),
+  temporalPolicy: TemporalPolicySchema.optional(),
+  adaptationPermission: AdaptationPermissionSchema.optional(),
+  adaptabilitySource: AdaptabilitySourceSchema.optional(),
+  adaptabilityConfidence: z.number().min(0).max(1).optional(),
+}).transform((block) => {
+  const inference = inferTimelineAdaptability(block);
+  return {
+    ...block,
+    temporalPolicy: inference.temporalPolicy,
+    adaptationPermission: inference.adaptationPermission,
+    adaptabilitySource: sourceFromInference(inference.inferenceSource),
+    adaptabilityConfidence: inference.inferenceConfidence,
+  };
 });
 
-export type TimelineBlockInput = z.infer<typeof TimelineBlockSchema>;
+type ParsedTimelineBlock = z.output<typeof TimelineBlockSchema>;
+export type TimelineBlockInput = Omit<ParsedTimelineBlock, 'temporalPolicy' | 'adaptationPermission' | 'adaptabilitySource' | 'adaptabilityConfidence'>
+  & Partial<Pick<ParsedTimelineBlock, 'temporalPolicy' | 'adaptationPermission' | 'adaptabilitySource' | 'adaptabilityConfidence'>>;
 
 export interface ConflictResolution {
   type: 'MOVE_BLOCK_LATER' | 'MOVE_BLOCK_EARLIER' | 'DOWNGRADE_INTENSITY' | 'POSTPONE_TOMORROW' | 'CANCEL';

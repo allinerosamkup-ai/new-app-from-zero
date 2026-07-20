@@ -48,6 +48,28 @@ test('handles accented phase keys', () => {
   assert.deepStrictEqual(w1, w2);
 });
 
+test('maps every canonical MoodCycleEngine id to its Portuguese phase window', () => {
+  const pairs = [
+    ['elevated', 'voo alto'],
+    ['flowing', 'fluindo'],
+    ['stable', 'estavel'],
+    ['falling', 'desacelerando'],
+    ['low', 'recolhimento'],
+    ['depleted', 'pausa'],
+    ['recovering', 'retomada'],
+    ['mixed', 'turbulencia'],
+  ] as const;
+
+  for (const [id, label] of pairs) {
+    assert.deepStrictEqual(getPhaseWindow(id), getPhaseWindow(label), `${id} must map to ${label}`);
+  }
+});
+
+test('canonical low and Recolhimento have identical capacity', () => {
+  assert.deepStrictEqual(getPhaseWindow('low'), getPhaseWindow('Recolhimento'));
+  assert.equal(phaseHasPeakOrFlow(getPhaseWindow('low')), false);
+});
+
 // ─── slotTier: phases with NO peak/flow ──────────────────────────────────────
 console.log('\nslotTier — low-capacity phases (Recolhimento, Pausa, Turbulência)');
 

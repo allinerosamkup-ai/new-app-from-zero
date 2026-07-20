@@ -8,9 +8,10 @@ import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import i18n from "../i18n";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
+import { getCurrentLanguage, resolveIntlLocale } from "../i18n";
 import { supabase } from "../lib/supabase";
 import { trackEvent } from "../lib/track";
-import { buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
+import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
@@ -70,11 +71,11 @@ type AuraRouteState = {
   autoSend?: boolean;
 };
 
-const QUICK_ACTIONS: Array<{ labelKey: string; fallback: string; prompt: string }> = [
-  { labelKey: "aura.suggestions.organizeDay", fallback: "Organizar pela energia", prompt: "Organize meu dia de acordo com minha energia atual e com o que já existe no planner." },
-  { labelKey: "aura.suggestions.transformGoal", fallback: "Meta em passos", prompt: "Transforme minha meta ativa mais importante em próximos passos possíveis para esta semana." },
-  { labelKey: "aura.suggestions.patterns", fallback: "Ler últimos dias", prompt: "O que meus últimos dias mostram sobre humor, energia, sono e execução?" },
-  { labelKey: "aura.suggestions.falling", fallback: "Estou caindo", prompt: "Estou caindo, com baixa energia e risco de travar. O que eu faço agora sem me violentar?" },
+const QUICK_ACTIONS: Array<{ labelKey: string; promptKey: string }> = [
+  { labelKey: "aura.suggestions.organizeDay", promptKey: "aura.quickPrompts.organizeDay" },
+  { labelKey: "aura.suggestions.transformGoal", promptKey: "aura.quickPrompts.transformGoal" },
+  { labelKey: "aura.suggestions.patterns", promptKey: "aura.quickPrompts.patterns" },
+  { labelKey: "aura.suggestions.falling", promptKey: "aura.quickPrompts.falling" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -113,23 +114,6 @@ function extractStringList(source: Record<string, unknown>, keys: string[]): str
   return [];
 }
 
-function buildObjectiveInput(payload: Record<string, unknown>, fallbackTitle: string) {
-  const title =
-    pickString(payload, ["title", "goalTitle", "name", "text"]) ??
-    fallbackTitle;
-  const items = extractStringList(payload, ["subtasks", "checklist", "items", "steps", "tasks", "subgoals"]);
-
-  return {
-    title,
-    subgoals: items.map((item, index) => ({
-      id: `aura-${Date.now()}-${index}`,
-      title: item,
-      done: false,
-      aiGenerated: true,
-    })),
-  };
-}
-
 function buildInitialAssistantMessage(initialPrompt: string, contextLabel: string, mode: "conversation" | "executor") {
   if (!initialPrompt) {
     return i18n.t("aura.initialIdle", "Me diga o que precisa sair da cabeça e virar próximo passo.");
@@ -152,7 +136,7 @@ function buildInitialAssistantMessage(initialPrompt: string, contextLabel: strin
 }
 
 export function AuraChatPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { state, refreshData } = useAuraStore();
@@ -234,7 +218,7 @@ export function AuraChatPage() {
       })
       .catch((error) => {
         if (!isMounted) return;
-        showError(error instanceof Error ? error.message : "Não foi possível iniciar a Airia agora.");
+        showError(error instanceof Error ? error.message : t("aura.errors.start"));
       });
 
     return () => {
@@ -266,9 +250,18 @@ export function AuraChatPage() {
 
   async function createObjectiveFromPayload(
     payload: Record<string, unknown>,
-    fallbackTitle: string,
   ) {
-    const objective = buildObjectiveInput(payload, fallbackTitle);
+    const parsed = buildAuraObjectiveInput(payload);
+    if (!parsed) return null;
+    const objective = {
+      title: parsed.title,
+      subgoals: parsed.itemTitles.map((item, index) => ({
+        id: `aura-${Date.now()}-${index}`,
+        title: item,
+        done: false,
+        aiGenerated: true,
+      })),
+    };
 
     await api.post("/objectives", {
       title: objective.title,
@@ -285,7 +278,7 @@ export function AuraChatPage() {
       if (response.action === "create_task" || response.action === "create_agenda") {
         const blocks = buildTimelineBlocks(response.payload);
         if (blocks.length === 0) {
-          return "Ainda não consegui transformar isso em datas reais no planner. Me diga os dias da semana e o horário, ou peça para eu revisar a recorrência.";
+          return t("aura.needDates");
         }
 
         if (response.needsConfirmation) {
@@ -296,57 +289,61 @@ export function AuraChatPage() {
         await syncTimelineBlocks(blocks);
         const isMultiple = blocks.length > 1 || response.action === "create_agenda";
         setActionCard({
-          eyebrow: isMultiple ? "Agenda criada" : "Planner atualizado",
-          title: isMultiple ? `${blocks.length} bloco${blocks.length > 1 ? "s" : ""} organizados` : "1 tarefa criada",
-          items: blocks.slice(0, 4).map(formatTimelineBlock),
-          ctaLabel: "Ver planner",
+          eyebrow: isMultiple ? t("aura.scheduleCreated") : t("aura.plannerUpdated"),
+          title: isMultiple ? t("aura.blocksOrganized", { count: blocks.length }) : t("aura.oneTaskCreated"),
+          items: blocks.slice(0, 4).map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
+          ctaLabel: t("aura.viewPlanner"),
           ctaPath: "/planner",
         });
-        showSuccess(isMultiple ? "Agenda enviada para o planner." : "Tarefa adicionada ao planner.");
+        showSuccess(isMultiple ? t("aura.agendaSent") : t("aura.taskAdded"));
         return null;
       }
 
       if (response.action === "create_goal") {
-        const objective = await createObjectiveFromPayload(response.payload, "Nova meta da Airia");
+        const objective = await createObjectiveFromPayload(response.payload);
+        if (!objective) return t("aura.needDetails", "Preciso do nome da meta antes de criar.");
         setActionCard({
-          eyebrow: "Meta criada",
+          eyebrow: t("aura.goalCreated"),
           title: objective.title,
           items: objective.subgoals.slice(0, 4).map((item) => item.title),
-          ctaLabel: "Abrir metas",
+          ctaLabel: t("aura.openGoals"),
           ctaPath: "/goals",
         });
-        showSuccess("Meta adicionada.");
+        showSuccess(t("aura.goalAdded"));
         return null;
       }
 
       if (response.action === "create_checklist") {
-        const checklist = await createObjectiveFromPayload(response.payload, "Checklist da Airia");
+        const checklist = await createObjectiveFromPayload(response.payload);
+        if (!checklist || checklist.subgoals.length === 0) {
+          return t("aura.needChecklistDetails", "Preciso do nome e dos itens da checklist antes de criar.");
+        }
         setActionCard({
-          eyebrow: "Checklist criado",
+          eyebrow: t("aura.checklistCreated"),
           title: checklist.title,
           items: checklist.subgoals.slice(0, 4).map((item) => item.title),
-          ctaLabel: "Abrir metas",
+          ctaLabel: t("aura.openGoals"),
           ctaPath: "/goals",
         });
-        showSuccess("Checklist criado.");
+        showSuccess(t("aura.checklistCreated"));
         return null;
       }
 
       if (response.action === "handoff_to_journal") {
         const summary =
           pickString(response.payload, ["journalSummary", "summary"]) ??
-          "Resumo salvo no diário a partir desta conversa.";
+          t("aura.journalSummary");
         const themes = extractStringList(response.payload, ["journalThemes", "themes"]).slice(0, 2);
 
         setActionCard({
-          eyebrow: "Resumo salvo no diário",
-          title: "Conversa registrada",
+          eyebrow: t("aura.journalSaved"),
+          title: t("aura.conversationSaved"),
           items: [
             summary,
-            ...themes.map((theme) => `Tema: ${theme}`),
+            ...themes.map((theme) => t("aura.theme", { theme })),
           ],
         });
-        showSuccess("Resumo salvo no diário.");
+        showSuccess(t("aura.journalSaved"));
         return null;
       }
 
@@ -369,10 +366,10 @@ export function AuraChatPage() {
         ];
 
         setActionCard({
-          eyebrow: "Registrado",
-          title: `${matched.length + created.length} item${matched.length + created.length !== 1 ? "s" : ""} marcado${matched.length + created.length !== 1 ? "s" : ""} como feito`,
+          eyebrow: t("aura.registered"),
+          title: t("aura.itemsDone", { count: matched.length + created.length }),
           items: confirmationLines.slice(0, 4),
-          ctaLabel: "Ver planner",
+          ctaLabel: t("aura.viewPlanner"),
           ctaPath: "/planner",
         });
 
@@ -381,9 +378,9 @@ export function AuraChatPage() {
 
       return null;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Não foi possível executar o pedido.";
+      const message = error instanceof Error ? error.message : t("aura.errors.execute");
       if (message.toLowerCase().includes("conflitos de horário")) {
-        return "Encontrei conflito de horário no planner. Se quiser, eu reorganizo isso em outro horário.";
+        return t("aura.conflict");
       }
 
       throw error;
@@ -409,11 +406,15 @@ export function AuraChatPage() {
 
     try {
       const { data: { session: auth } } = await supabase.auth.getSession();
+      const language = getCurrentLanguage();
+      const locale = resolveIntlLocale(language);
       const response = await fetch(`${API_URL}/aura/command/stream`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${auth?.access_token}`,
           "Content-Type": "application/json",
+          "Accept-Language": language,
+          "Content-Language": language,
         },
         body: JSON.stringify({
           sessionId,
@@ -421,13 +422,15 @@ export function AuraChatPage() {
           history,
           moodCycleContext: cycleReport.aiContext,
           mode: routeMode,
+          language,
+          locale,
           ...getClientTimeContext(),
           ...getAdaptiveSnapshot(),
         }),
       });
 
       if (!response.ok || !response.body) {
-        throw new Error("A Airia não conseguiu processar esse pedido agora.");
+        throw new Error(t("aura.errors.process"));
       }
 
       const reader = response.body.getReader();
@@ -454,13 +457,13 @@ export function AuraChatPage() {
           if (data.response) {
             completedResponse = data.response as AuraCommandResponse;
           } else if (data.error) {
-            throw new Error(typeof data.error === "string" ? data.error : "Falha no stream da Airia.");
+            throw new Error(typeof data.error === "string" ? data.error : t("aura.errors.stream"));
           }
         }
       }
 
       if (!completedResponse) {
-        throw new Error("A Airia não conseguiu interpretar esse pedido.");
+        throw new Error(t("aura.errors.interpret"));
       }
 
       setMessages((prev) => [
@@ -485,10 +488,10 @@ export function AuraChatPage() {
         setMessages((prev) => [...prev, { role: "assistant", content: executionFollowUp }]);
       }
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Não foi possível conversar com a Airia agora.");
+      showError(error instanceof Error ? error.message : t("aura.errors.chat"));
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Tive um problema para executar isso agora. Se quiser, tente me pedir de novo com um pouco mais de detalhe." },
+        { role: "assistant", content: t("aura.retry") },
       ]);
     } finally {
       setIsTyping(false);
@@ -505,7 +508,7 @@ export function AuraChatPage() {
     }
 
     const recognition = new SR();
-    recognition.lang = "pt-BR";
+    recognition.lang = resolveIntlLocale();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = (event: any) => {
@@ -533,10 +536,10 @@ export function AuraChatPage() {
       await syncTimelineBlocks(pendingTaskConfirmation.blocks);
       const total = pendingTaskConfirmation.blocks.length;
       setActionCard({
-        eyebrow: total > 1 ? "Agenda confirmada" : "Compromisso confirmado",
-        title: total > 1 ? `${total} compromissos salvos` : "1 compromisso salvo",
-        items: pendingTaskConfirmation.blocks.slice(0, 6).map(formatTimelineBlock),
-        ctaLabel: "Abrir planner",
+        eyebrow: total > 1 ? t("aura.scheduleConfirmed") : t("aura.commitmentConfirmed"),
+        title: total > 1 ? t("aura.commitmentsSaved", { count: total }) : t("aura.oneCommitmentSaved"),
+        items: pendingTaskConfirmation.blocks.slice(0, 6).map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
+        ctaLabel: t("aura.openPlanner"),
         ctaPath: "/planner",
       });
       setMessages((prev) => [
@@ -544,14 +547,14 @@ export function AuraChatPage() {
         {
           role: "assistant",
           content: total > 1
-            ? "Pronto. Deixei esses compromissos salvos no seu planner."
-            : "Pronto. Deixei esse compromisso salvo no seu planner.",
+            ? t("aura.savedMany")
+            : t("aura.savedOne"),
         },
       ]);
       setPendingTaskConfirmation(null);
-      showSuccess(total > 1 ? "Compromissos confirmados." : "Compromisso confirmado.");
+      showSuccess(total > 1 ? t("aura.confirmedMany") : t("aura.confirmedOne"));
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Não foi possível confirmar o compromisso.");
+      showError(error instanceof Error ? error.message : t("aura.errors.confirm"));
     } finally {
       setIsApplyingPendingAction(false);
     }
@@ -563,7 +566,7 @@ export function AuraChatPage() {
     setPendingTaskConfirmation(null);
     setMessages((prev) => [
       ...prev,
-      { role: "assistant", content: "Tudo bem, não salvei esse compromisso. Se quiser, eu ajusto horário ou detalhes." },
+      { role: "assistant", content: t("aura.cancelledCommitment") },
     ]);
   }
 
@@ -622,7 +625,7 @@ export function AuraChatPage() {
         {QUICK_ACTIONS.map((action) => (
           <AuraButtonV2
             key={action.labelKey}
-            onClick={() => send(action.prompt)}
+            onClick={() => send(t(action.promptKey))}
             disabled={isTyping || !sessionId}
             variant="glass"
             size="sm"
@@ -632,7 +635,7 @@ export function AuraChatPage() {
               color: "var(--accent-peach-ink)",
             }}
           >
-            {t(action.labelKey, action.fallback)}
+            {t(action.labelKey)}
           </AuraButtonV2>
         ))}
       </div>
@@ -827,7 +830,7 @@ export function AuraChatPage() {
                 fontFamily: "'Plus Jakarta Sans', sans-serif",
               }}
             >
-              Revise antes de salvar
+                {t("goals.reviewBeforeSave")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
               {pendingTaskConfirmation.blocks.map((block) => (
@@ -840,7 +843,7 @@ export function AuraChatPage() {
                     fontFamily: "'Plus Jakarta Sans', sans-serif",
                   }}
                 >
-                  {formatTimelineBlock(block)}
+                  {formatTimelineBlock(block, resolveIntlLocale(i18n.language))}
                 </p>
               ))}
             </div>
@@ -852,7 +855,7 @@ export function AuraChatPage() {
                 size="sm"
                 style={{ flex: 1 }}
               >
-                Cancelar
+                  {t("common.cancel")}
               </AuraButtonV2>
               <AuraButtonV2
                 onClick={confirmPendingTask}

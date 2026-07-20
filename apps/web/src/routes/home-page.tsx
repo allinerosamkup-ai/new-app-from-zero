@@ -26,6 +26,7 @@ import {
 } from "./phase-ux.helpers";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
+import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
 import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
@@ -44,7 +45,6 @@ import {
   isHomeAutonomyTitleBlocked,
   readHomeAutonomyFeedback,
   rememberHomeAutonomyActionFeedback,
-  resolveGroundedHomeCare,
   resolveHomeAgendaSuggestionDate,
 } from "./home-page.helpers";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
@@ -315,18 +315,22 @@ function getCheckinMoment(entry: { recordedAt?: string; checkinSlot?: string }) 
   return 99;
 }
 
-function formatCheckinMomentLabel(entry: { recordedAt?: string; checkinSlot?: string }) {
+function formatCheckinMomentLabel(
+  entry: { recordedAt?: string; checkinSlot?: string },
+  locale: string,
+  labels: { morning: string; afternoon: string; evening: string; now: string },
+) {
   if (entry.recordedAt) {
     const stamp = new Date(entry.recordedAt);
     if (!Number.isNaN(stamp.getTime())) {
-      return stamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      return stamp.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
     }
   }
 
-  if (entry.checkinSlot?.startsWith("morning")) return "Manhã";
-  if (entry.checkinSlot?.startsWith("midday")) return "Tarde";
-  if (entry.checkinSlot?.startsWith("evening")) return "Noite";
-  return "Agora";
+  if (entry.checkinSlot?.startsWith("morning")) return labels.morning;
+  if (entry.checkinSlot?.startsWith("midday")) return labels.afternoon;
+  if (entry.checkinSlot?.startsWith("evening")) return labels.evening;
+  return labels.now;
 }
 
 function evidenceExcerpt(value: string, fallback = "Sem trecho suficiente para exibir."): string {
@@ -346,13 +350,6 @@ function getGreetingEmoji(h: number) {
   if (h >= 5 && h < 12) return "🌅";
   if (h >= 12 && h < 18) return "☀️";
   return "🌙";
-}
-
-const DIAS_SEMANA = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
-const MESES_NOME = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-
-function getFormattedDate(d: Date) {
-  return `${DIAS_SEMANA[d.getDay()]}, ${d.getDate()} de ${MESES_NOME[d.getMonth()]}`;
 }
 
 function formatStabilityStatus(score: number) {
@@ -422,7 +419,8 @@ function LiveClock() {
 }
 
 export function HomePage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
   const { state, addTask, addHabit, refreshData, toggleTask, removeTask, toggleHabit, toggleSubGoal, archiveHabit, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
@@ -467,13 +465,14 @@ export function HomePage() {
   // Relógio e Contexto de Tempo (necessários para IDs e filtros)
   const [clockTime, setClockTime] = useState(() => new Date());
   const dayContext = useMemo(
-    () => getClientDayContext(clockTime),
+    () => getClientDayContext(clockTime, resolveIntlLocale(i18n.language)),
     [
       clockTime.getFullYear(),
       clockTime.getMonth(),
       clockTime.getDate(),
       clockTime.getHours(),
       clockTime.getMinutes(),
+      i18n.language,
     ],
   );
   const refreshBucket = useMemo(
@@ -496,7 +495,11 @@ export function HomePage() {
   const [goalActionTick, setGoalActionTick] = useState(0);
   const agendaRequestCountRef = useRef(0);
 
-  const mood = moodMap[state.mood] ?? moodMap.equilibrada;
+  const rawMood = moodMap[state.mood] ?? moodMap.equilibrada;
+  const moodLabelsEn: Record<string, string> = {
+    equilibrada: "Balanced", focada: "Focused", tensa: "Tense", cansada: "Tired", sensivel: "Sensitive", sobrecarregada: "Overloaded",
+  };
+  const mood = { ...rawMood, label: l(rawMood.label, moodLabelsEn[state.mood] ?? "Balanced") };
   const habits = state.habits || [];
   const activationState = useMemo(
     () => getActivationState(state, { hasLocalJournalEntry }),
@@ -672,19 +675,20 @@ export function HomePage() {
       const d = new Date(today);
       d.setDate(today.getDate() - (6 - i));
       const dateStr = getLocalDateKey(d);
+      const weekdayLabel = d.toLocaleDateString(resolveIntlLocale(i18n.language), { weekday: "short" }).replace(".", "");
       const entry = history.find(h => h.date === dateStr);
       const x = X_START + i * X_STEP;
-      if (!entry) return { x, humorY: null, energiaY: null, label: DIAS_SEMANA[d.getDay()].slice(0, 3), isHighlight: i === 6 };
+      if (!entry) return { x, humorY: null, energiaY: null, label: weekdayLabel, isHighlight: i === 6 };
       return {
         x,
         humorY: valueToChartY(entry.humor),
         energiaY: valueToChartY(entry.energia),
-        label: DIAS_SEMANA[d.getDay()].slice(0, 3),
+        label: weekdayLabel,
         phase: dailyPhaseMap[dateStr] ?? phaseFromMoodValue(entry.humor),
         isHighlight: i === 6,
       };
     });
-  }, [aggregatedCheckinHistory, dailyPhaseMap]);
+  }, [aggregatedCheckinHistory, dailyPhaseMap, i18n.language]);
 
   const todayCheckinData = useMemo<ChartPoint[]>(() => {
     const todayEntries = [...(state.checkinHistory || [])]
@@ -701,11 +705,16 @@ export function HomePage() {
       x: todayEntries.length === 1 ? 140 : X_START + step * index,
       humorY: valueToChartY(entry.humor),
       energiaY: valueToChartY(entry.energia),
-      label: formatCheckinMomentLabel(entry),
+      label: formatCheckinMomentLabel(entry, resolveIntlLocale(i18n.language), {
+        morning: t("home.momentMorning"),
+        afternoon: t("home.momentAfternoon"),
+        evening: t("home.momentEvening"),
+        now: t("home.momentNow"),
+      }),
       phase: cycleReport.phase !== "insufficient_data" ? cycleReport.phase : phaseFromMoodValue(entry.humor),
       isHighlight: index === todayEntries.length - 1,
     }));
-  }, [cycleReport.phase, dayContext.localDate, state.checkinHistory]);
+  }, [cycleReport.phase, dayContext.localDate, i18n.language, state.checkinHistory, t]);
 
   // ── 1 ação principal por momento do dia ────────────────────────────────────
   const hasEveningCheckinToday = useMemo(
@@ -833,8 +842,6 @@ export function HomePage() {
   const [homeAiMsg, setHomeAiMsg] = useState<HomeAiMsg | null>(null);
   const [homeAiLoading, setHomeAiLoading] = useState(true);
   const [autonomyExpanded, setAutonomyExpanded] = useState(true);
-  const [_completedAutocuidadoIdx, setCompletedAutocuidadoIdx] = useState<Set<number>>(new Set());
-  const [_skippedAutocuidadoIdx, setSkippedAutocuidadoIdx] = useState<Set<number>>(new Set());
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [homeAutonomyFeedbackTick, setHomeAutonomyFeedbackTick] = useState(0);
   const previousHomeAiMsgRef = useRef<HomeAiMsg | null>(null);
@@ -1023,40 +1030,6 @@ export function HomePage() {
 
   // Mensagem motivacional — apenas IA
   const motivacionalFinal = homeAiMsg?.motivacional ?? null;
-  const groundedCare = useMemo(
-    () => resolveGroundedHomeCare({
-      actions: homeAiMsg?.autocuidado ?? [],
-      hour: dayContext.hour,
-      partOfDay: dayContext.partOfDay,
-      moodLabel: mood.label,
-      energy: state.energia,
-      latestCheckin: latestTodayCheckin
-        ? {
-            humor: latestTodayCheckin.humor,
-            energia: latestTodayCheckin.energia,
-            emotions: latestTodayCheckin.emotions,
-            factors: latestTodayCheckin.factors,
-            note: latestTodayCheckin.note,
-          }
-        : null,
-      pendingTaskTitles,
-      goalTitles,
-      hasMoodCycle: cycleReport.phase !== "insufficient_data",
-    }),
-    [
-      cycleReport.phase,
-      dayContext.hour,
-      dayContext.partOfDay,
-      goalTitles,
-      homeAiMsg?.autocuidado,
-      latestTodayCheckin,
-      mood.label,
-      pendingTaskTitles,
-      state.energia,
-    ],
-  );
-  const _autocuidadoFinal = groundedCare.actions.length > 0 ? groundedCare.actions : null;
-
   // Task stats
   const totalTasks = state.tasks.length;
   const doneTasks = state.tasks.filter(t => t.done).length;
@@ -1414,56 +1387,56 @@ export function HomePage() {
     : "você";
   const quickAccessSection = (
     <>
-      <p className="aura-section-kicker">Acesso rapido</p>
+            <p className="aura-section-kicker">{t("home.quickAccess")}</p>
       <div className="shortcut-grid">
         <button className="shortcut-card" onClick={() => navigate("/journal")}>
           <div className="icon-badge shortcut-icon shortcut-icon-journal">
             <MessageSquareText size={18} color="var(--terracotta)" />
           </div>
-          <span className="shortcut-label">Diário</span>
-          <span className="shortcut-sub">Falar com IA</span>
+          <span className="shortcut-label">{t("nav.journal")}</span>
+          <span className="shortcut-sub">{t("home.talkToAi")}</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/planner")}>
           <div className="icon-badge shortcut-icon shortcut-icon-planner">
             <LayoutDashboard size={18} color="var(--horizon)" />
           </div>
           <span className="shortcut-label">Planner</span>
-          <span className="shortcut-sub">Organizar</span>
+          <span className="shortcut-sub">{t("home.organize")}</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/daily-summary")}>
           <div className="icon-badge" style={{ background: "rgba(197,165,147,.16)" }}>
             <ClipboardCheck size={18} color="var(--accent-peach)" />
           </div>
-          <span className="shortcut-label">Fechar</span>
-          <span className="shortcut-sub">Amanhã</span>
+          <span className="shortcut-label">{t("home.closeDay")}</span>
+                    <span className="shortcut-sub">{t("home.tomorrow")}</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/insights")}>
           <div className="icon-badge shortcut-icon shortcut-icon-insights">
             <Activity size={18} color="var(--atomic-tangerine)" />
           </div>
-          <span className="shortcut-label">Padrões</span>
-          <span className="shortcut-sub">Harmonia</span>
+                    <span className="shortcut-label">{t("nav.insights")}</span>
+          <span className="shortcut-sub">{t("home.harmony")}</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/goals")}>
           <div className="icon-badge shortcut-icon shortcut-icon-goals">
             <Target size={18} color="var(--sweet-mint)" />
           </div>
-          <span className="shortcut-label">Objetivos</span>
-          <span className="shortcut-sub">Suas metas</span>
+          <span className="shortcut-label">{t("home.objectives")}</span>
+                    <span className="shortcut-sub">{t("home.yourGoals")}</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
           <div className="icon-badge shortcut-icon shortcut-icon-pomodoro">
             <Timer size={18} color="var(--terracotta)" />
           </div>
           <span className="shortcut-label">Pomodoro</span>
-          <span className="shortcut-sub">Foco</span>
+          <span className="shortcut-sub">{t("home.focus")}</span>
         </button>
         <button className="shortcut-card" onClick={() => navigate("/habits")}>
           <div className="icon-badge" style={{ background: "rgba(150,199,179,.18)" }}>
             <Sparkles size={18} color="var(--accent-sage)" />
           </div>
-          <span className="shortcut-label">Hábitos</span>
-          <span className="shortcut-sub">Rituais</span>
+          <span className="shortcut-label">{t("home.habits")}</span>
+          <span className="shortcut-sub">{t("home.rituals")}</span>
         </button>
       </div>
     </>
@@ -1495,17 +1468,17 @@ export function HomePage() {
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
             <div>
               <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)" }}>
-                Agendar sugestão
+                {t("home.scheduleSuggestion")}
               </p>
               <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.35 }}>
-                Marcar para {scheduleModalAction.date === dayContext.localDate ? "hoje" : "esta data"} às {scheduleModalAction.time}?
+                {t("home.markFor", { when: scheduleModalAction.date === dayContext.localDate ? t("common.today").toLocaleLowerCase(i18n.language) : t("home.thisDate"), time: scheduleModalAction.time })}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setScheduleModalAction(null)}
               style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
-              aria-label="Fechar modal"
+              aria-label={t("home.closeModal")}
             >
               ×
             </button>
@@ -1533,7 +1506,7 @@ export function HomePage() {
               onClick={() => setScheduleModalAction(null)}
               style={{ flex: 1, height: 40, borderRadius: 12, border: "1px solid var(--warm-border-2)", background: "transparent", color: "var(--text-2)", fontSize: 12, fontWeight: 800, cursor: "pointer" }}
             >
-              Não
+              {t("common.no")}
             </button>
             <button
               type="button"
@@ -1541,7 +1514,7 @@ export function HomePage() {
               disabled={addingActionTitle === scheduleModalAction.title}
               style={{ flex: 1, height: 40, borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontSize: 12, fontWeight: 900, cursor: addingActionTitle === scheduleModalAction.title ? "default" : "pointer", opacity: addingActionTitle === scheduleModalAction.title ? 0.7 : 1 }}
             >
-              {addingActionTitle === scheduleModalAction.title ? "Salvando..." : "Sim"}
+              {addingActionTitle === scheduleModalAction.title ? t("home.saving") : t("common.yes")}
             </button>
           </div>
         </div>
@@ -1558,7 +1531,7 @@ export function HomePage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.54" />
           </svg>
-          {isRefreshing ? "Atualizando..." : isReady ? "Solte para atualizar" : "Puxe para atualizar"}
+          {isRefreshing ? t("home.updating") : isReady ? t("home.releaseRefresh") : t("home.pullRefresh")}
         </div>
       )}
       <div className="screen-content" style={{ position: "relative", zIndex: 1 }}>
@@ -1572,7 +1545,7 @@ export function HomePage() {
               </p>
               <h1 style={{ marginBottom: 4 }}>{displayName}</h1>
               <p style={{ fontSize: "11px", color: "var(--text-2)", margin: 0 }}>
-                {getFormattedDate(clockTime)}
+                {dayContext.dateWithWeekdayLabel}
               </p>
             </div>
             {/* Config (gear) + Relógio */}
@@ -1580,7 +1553,7 @@ export function HomePage() {
               <button
                 type="button"
                 onClick={() => navigate("/preferences")}
-                aria-label="Configurações"
+                    aria-label={t("home.settingsAria")}
                 style={{
                   width: 38,
                   height: 38,
@@ -1643,7 +1616,7 @@ export function HomePage() {
               {currentPhaseLabel}
             </p>
             <p style={{ margin: "8px auto 0", fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, maxWidth: 250 }}>
-              {PHASE_CONFIG[cycleReport.phase]?.tip ?? "Airia organiza seu dia respeitando seu humor e energia."}
+              {t(`phases.${cycleReport.phase}.tip`, PHASE_CONFIG[cycleReport.phase]?.tip ?? l("Airia organiza seu dia respeitando seu humor e energia.", "Airia organizes your day around your mood and energy."))}
             </p>
             {menstrualReport && (
               <div style={{
@@ -1712,7 +1685,7 @@ export function HomePage() {
         {firstInsight && (
           <Card accent="sage" style={{ marginBottom: "calc(var(--a) * 1.1)" }}>
             <SectionTitle
-              eyebrow="Primeiro padrão que a Airia notou"
+              eyebrow={l("Primeiro padrão que a Airia notou", "The first pattern Airia noticed")}
               accent="sage"
               icon="🔎"
               action={
@@ -1739,7 +1712,7 @@ export function HomePage() {
         {offerWeeklySummary && weeklySummary && (
           <Card accent="sky" style={{ marginBottom: "calc(var(--a) * 1.1)" }}>
             <SectionTitle
-              eyebrow="Sua semana, em 1 leitura"
+              eyebrow={l("Sua semana, em 1 leitura", "Your week in one reading")}
               accent="sky"
               icon="🗓️"
               action={
@@ -1853,7 +1826,7 @@ export function HomePage() {
                       padding: "2px 7px",
                       lineHeight: 1.2,
                     }}>
-                      Previsão
+                      {t("home.forecast")}
                     </span>
                   )}
                 </div>
@@ -1889,7 +1862,7 @@ export function HomePage() {
               <button
                 type="button"
                 onClick={advanceHomeChartMode}
-                aria-label="Próximo gráfico"
+                    aria-label={t("home.nextChartAria")}
                 style={{
                   width: 28,
                   height: 28,
@@ -1944,8 +1917,8 @@ export function HomePage() {
                 <span style={{ fontSize: 20 }}>{homeChartMode === "day" ? "🌅" : "📊"}</span>
                 <span style={{ fontStyle: "italic" }}>
                   {homeChartMode === "day"
-                    ? "Isso aparece depois do check-in de hoje."
-                    : "Isso aparece depois do seu primeiro check-in."}
+                    ? l("Isso aparece depois do check-in de hoje.", "This appears after today's check-in.")
+                    : l("Isso aparece depois do seu primeiro check-in.", "This appears after your first check-in.")}
                 </span>
               </div>
             ) : (
@@ -2201,7 +2174,7 @@ export function HomePage() {
                 <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
                   <span style={{ fontSize: 20 }}>📈</span>
                   <span style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic", textAlign: "center" }}>
-                    Faça mais check-ins para liberar a previsão de 7 dias.
+                    {t("home.forecastNeedsCheckins")}
                   </span>
                 </div>
               );
@@ -2320,7 +2293,7 @@ export function HomePage() {
                   );
                 })()}
                 <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
-                  Baseado no seu padrão de humor e energia. Quanto mais check-ins, mais preciso.
+                  {t("home.patternPrecision")}
                 </p>
               </>
             );
@@ -2388,10 +2361,10 @@ export function HomePage() {
                   {activationState.checkinCount === 0 ? (
                     <>
                       <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
-                        Seu dia ainda está em branco
+                        {t("home.blankDay")}
                       </p>
                       <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
-                        Faça um check-in rápido — a Airia usa seu humor e energia de hoje para montar uma rotina real.
+                        {t("home.blankCheckin")}
                       </p>
                       <button
                         onClick={() => navigate("/checkin")}
@@ -2417,15 +2390,15 @@ export function HomePage() {
                   ) : (
                     <>
                       <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
-                        Seu dia ainda está em branco
+                        {t("home.blankDay")}
                       </p>
                       <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
-                        A Airia pode montar sua rotina agora — baseado no seu humor, energia e metas ativas.
+                        {t("home.blankAi")}
                       </p>
                       <button
                         onClick={() => navigate("/aura", {
                           state: {
-                            initialPrompt: "Monta meu dia. Não sei por onde começar.",
+                            initialPrompt: l("Monta meu dia. Não sei por onde começar.", "Build my day. I don't know where to start."),
                             mode: "executor",
                             autoSend: true,
                           }
@@ -2486,7 +2459,7 @@ export function HomePage() {
                     >
                       <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
                         <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>{task.time}</p>
-                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hoje</p>
+                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>{t("common.today").toLocaleLowerCase(i18n.language)}</p>
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: isTaskDone ? "var(--accent-sage)" : "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28, transition: "background 0.2s" }} />
                       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
@@ -2506,7 +2479,7 @@ export function HomePage() {
                           </p>
                           {isExpanded && (
                             <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                              {isTaskDone ? "Concluído" : (task.category ? `Compromisso/tarefa · ${task.category}` : "Compromisso/tarefa")}
+                              {isTaskDone ? l("Concluído", "Completed") : (task.category ? l(`Compromisso/tarefa · ${task.category}`, `Commitment/task · ${task.category}`) : l("Compromisso/tarefa", "Commitment/task"))}
                             </p>
                           )}
                         </div>
@@ -2517,8 +2490,8 @@ export function HomePage() {
                             event.stopPropagation();
                             toggleAgendaRowExpanded(rowKey);
                           }}
-                          title={isExpanded ? "Recolher" : "Expandir"}
-                          aria-label={isExpanded ? "Recolher compromisso" : "Expandir compromisso"}
+                          title={isExpanded ? l("Recolher", "Collapse") : l("Expandir", "Expand")}
+                          aria-label={isExpanded ? l("Recolher compromisso", "Collapse commitment") : l("Expandir compromisso", "Expand commitment")}
                           style={{
                             width: 20, height: 20, borderRadius: "50%",
                             border: "1.5px solid rgba(244,168,150,.45)",
@@ -2538,7 +2511,7 @@ export function HomePage() {
                             event.stopPropagation();
                             if (!isTaskDone) void handleHomeTaskDone(task);
                           }}
-                          title={isTaskDone ? "Concluído" : "Marcar como feito"}
+                          title={isTaskDone ? l("Concluído", "Completed") : l("Marcar como feito", "Mark as done")}
                           style={{
                             width: 18, height: 18, borderRadius: "50%",
                             border: "1.5px solid var(--accent-sage)",
@@ -2560,7 +2533,7 @@ export function HomePage() {
                             event.stopPropagation();
                             void handleHomeTaskDelete(task);
                           }}
-                          title="Excluir"
+                                      title={t("home.deleteTitle")}
                           style={{
                             width: 18, height: 18, borderRadius: "50%",
                             border: "1.5px solid var(--accent-peach)",
@@ -2608,7 +2581,7 @@ export function HomePage() {
                         <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-sage)", margin: 0 }}>
                           {homeAgendaPreview.habit.reminderTime ?? "--:--"}
                         </p>
-                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>hábito</p>
+                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>{t("home.habit")}</p>
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: "var(--accent-sage)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
                       <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
@@ -2626,7 +2599,7 @@ export function HomePage() {
                           </p>
                           {isExpanded && (
                             <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                              Ritual pendente de hoje
+                              {t("home.pendingRitual")}
                             </p>
                           )}
                         </div>
@@ -2637,8 +2610,8 @@ export function HomePage() {
                             event.stopPropagation();
                             toggleAgendaRowExpanded(rowKey);
                           }}
-                          title={isExpanded ? "Recolher" : "Expandir"}
-                          aria-label={isExpanded ? "Recolher hábito" : "Expandir hábito"}
+                          title={isExpanded ? l("Recolher", "Collapse") : l("Expandir", "Expand")}
+                          aria-label={isExpanded ? l("Recolher hábito", "Collapse habit") : l("Expandir hábito", "Expand habit")}
                           style={{
                             width: 18, height: 18, borderRadius: "50%",
                             border: "1px solid var(--warm-border-2)",
@@ -2679,7 +2652,7 @@ export function HomePage() {
                             event.stopPropagation();
                             void handleHomeHabitDelete(homeAgendaPreview.habit!);
                           }}
-                          title="Excluir"
+                                            title={t("home.deleteTitle")}
                           style={{
                             width: 18, height: 18, borderRadius: "50%",
                             border: "1.5px solid var(--accent-peach)",
@@ -2728,7 +2701,7 @@ export function HomePage() {
                       }}
                     >
                       <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>ação</p>
+                                          <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>{t("home.action")}</p>
                         <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>meta</p>
                       </div>
                       <div style={{ width: 3, borderRadius: 999, background: "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
@@ -2747,7 +2720,7 @@ export function HomePage() {
                           </p>
                           {isExpanded && (
                             <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                              {action.source === "goal" && action.goalTitle ? `Próxima ação · ${action.goalTitle}` : "Próxima ação capturada"}
+                              {action.source === "goal" && action.goalTitle ? l(`Próxima ação · ${action.goalTitle}`, `Next action · ${action.goalTitle}`) : l("Próxima ação capturada", "Captured next action")}
                             </p>
                           )}
                         </div>
@@ -2758,8 +2731,8 @@ export function HomePage() {
                             event.stopPropagation();
                             toggleAgendaRowExpanded(rowKey);
                           }}
-                          title={isExpanded ? "Recolher" : "Expandir"}
-                          aria-label={isExpanded ? "Recolher ação" : "Expandir ação"}
+                          title={isExpanded ? l("Recolher", "Collapse") : l("Expandir", "Expand")}
+                          aria-label={isExpanded ? l("Recolher ação", "Collapse action") : l("Expandir ação", "Expand action")}
                           style={{
                             width: 18, height: 18, borderRadius: "50%",
                             border: "1px solid var(--warm-border-2)",
@@ -2779,7 +2752,7 @@ export function HomePage() {
                             event.stopPropagation();
                             void handleHomeGoalActionDone(action);
                           }}
-                          title="Marcar ação como feita"
+                                              title={t("home.markActionDone")}
                           style={{
                             width: 18, height: 18, borderRadius: "50%",
                             border: "1.5px solid var(--accent-sage)",
@@ -2809,7 +2782,7 @@ export function HomePage() {
             }}>
               <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
               <p style={{ fontSize: 12, color: "var(--text-2)", fontStyle: "italic" }}>
-                Analisando seu estado e montando blocos personalizados...
+                {t("home.analyzingBlocks")}
               </p>
             </div>
           )}
@@ -2914,13 +2887,13 @@ export function HomePage() {
                     }}
                     disabled={agendaSaving || selectableAgendaCount === 0}
                   >
-                    {selectedAgendaCount >= selectableAgendaCount ? "Limpar seleção" : "Marcar todas"}
+                    {selectedAgendaCount >= selectableAgendaCount ? l("Limpar seleção", "Clear selection") : l("Marcar todas", "Select all")}
                   </button>
                   <button
                     className="btn btn-ghost"
                     style={{ flex: 1 }}
                     onClick={() => { setAgendaPhase("idle"); setAgendaBlocks([]); setSelectedAgendaTaskKeys(new Set()); setSavedAgendaTaskKeys(new Set()); }}
-                  >Cancelar</button>
+                  >{t("common.cancel")}</button>
                   <button
                     className="btn btn-ghost"
                     style={{ flex: 1 }}
@@ -2973,8 +2946,8 @@ export function HomePage() {
           const rhythmCopy = hasInsight
             ? ins!.insight
             : hasCycleData
-              ? cycleReport.phaseTip
-              : "Faça um check-in para a Airia calibrar seu ritmo de hoje.";
+              ? t(`phases.${cycleReport.phase}.tip`, cycleReport.phaseTip)
+              : l("Faça um check-in para a Airia calibrar seu ritmo de hoje.", "Do a check-in so Airia can calibrate today's rhythm.");
 
           return (
             <div className="home-cycle-card" style={{ border: `1.5px solid ${isUrgent ? cfg.color : phaseColor}33`, marginBottom: "calc(var(--a) * 1.1)" }}>
@@ -2982,26 +2955,26 @@ export function HomePage() {
               <div className="home-cycle-content">
                 <div className="home-cycle-header" style={{ alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0 }}>
-                    <span className="home-cycle-kicker">RITMO DE HOJE</span>
+                    <span className="home-cycle-kicker">{t("home.rhythmToday")}</span>
                     <div className="home-cycle-phase" style={{ marginTop: 8, marginBottom: 0 }}>
                       <span className="home-cycle-emoji">{hasCycleData ? cycleReport.phaseEmoji : mood.emoji}</span>
                       <div style={{ minWidth: 0 }}>
                         <p className="home-cycle-title" style={{ margin: 0 }}>
                           {hasCycleData
-                            ? `${cycleReport.daysInPhase} dia${cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase`
-                            : "Ainda calibrando"}
+                            ? l(`${cycleReport.daysInPhase} dia${cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase`, `${cycleReport.daysInPhase} ${cycleReport.daysInPhase === 1 ? "day" : "days"} in this phase`)
+                            : l("Ainda calibrando", "Still calibrating")}
                         </p>
                         {/* Quando check-in de hoje difere da fase de ciclo, mostra contexto */}
                         {hasCycleData && latestTodayCheckin && (
                           <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0", lineHeight: 1.4 }}>
                             {cycleReport.phase === "mixed"
-                              ? `Check-in hoje: ${mood.emoji} ${mood.label} · padrão reflete 14 dias`
-                              : `Check-in hoje: ${mood.emoji} ${mood.label}`}
+                              ? l(`Check-in hoje: ${mood.emoji} ${mood.label} · padrão reflete 14 dias`, `Today's check-in: ${mood.emoji} ${mood.label} · pattern reflects 14 days`)
+                              : l(`Check-in hoje: ${mood.emoji} ${mood.label}`, `Today's check-in: ${mood.emoji} ${mood.label}`)}
                           </p>
                         )}
                         {!hasCycleData && (
                           <p className="home-cycle-subtitle">
-                            A Home fica mais precisa depois do primeiro check-in
+                            {l("A Home fica mais precisa depois do primeiro check-in", "Home becomes more accurate after your first check-in")}
                           </p>
                         )}
                       </div>
@@ -3009,14 +2982,14 @@ export function HomePage() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                     <span className="home-cycle-score" style={{ background: `${isUrgent ? cfg.color : phaseColor}18`, color: isUrgent ? cfg.color : phaseColor }}>
-                      {formatStabilityStatus(score)}
+                      {l(formatStabilityStatus(score), `Stability ${score >= 80 ? "very high" : score >= 60 ? "moderate" : score >= 40 ? "low" : score >= 20 ? "very low" : "critical"} · ${score}/100`)}
                     </span>
                     <button
                       type="button"
                       className="home-touch-button"
                       onClick={() => setAutonomyExpanded(!autonomyExpanded)}
-                      aria-label={autonomyExpanded ? "Recolher detalhes do ritmo" : "Ver detalhes do ritmo"}
-                      title={autonomyExpanded ? "Recolher detalhes" : "Ver detalhes"}
+                      aria-label={autonomyExpanded ? l("Recolher detalhes do ritmo", "Collapse rhythm details") : l("Ver detalhes do ritmo", "View rhythm details")}
+                      title={autonomyExpanded ? l("Recolher detalhes", "Collapse details") : l("Ver detalhes", "View details")}
                       style={{
                         width: 44,
                         height: 44,
@@ -3047,7 +3020,7 @@ export function HomePage() {
                 {isUrgent && (
                   <div className="home-cycle-warning">
                     <p className="home-cycle-warning-text">
-                      Atenção: a Airia detectou estabilidade baixa. Melhor reduzir carga e escolher uma ação pequena.
+                      {t("home.stabilityWarning")}
                     </p>
                   </div>
                 )}
@@ -3068,7 +3041,7 @@ export function HomePage() {
                     onClick={() => navigate(hasCycleData ? "/insights" : "/checkin")}
                     style={{ width: "100%", minHeight: 44, marginTop: 12 }}
                   >
-                    {hasCycleData ? "Ver padrões" : "Fazer check-in"}
+                    {hasCycleData ? l("Ver padrões", "View patterns") : l("Fazer check-in", "Do a check-in")}
                   </AuraButtonV2>
                 )}
 
@@ -3101,7 +3074,7 @@ export function HomePage() {
                     {visibleActions.length > 0 && (
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         <p style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-                          Próximos movimentos
+                          {t("home.nextMoves")}
                         </p>
                         {visibleActions.slice(0, 2).map((action) => {
                           const isAdding = addingActionTitle === action.title;
@@ -3127,8 +3100,8 @@ export function HomePage() {
                                   if (!isAdding) openHomeScheduleModal(action);
                                 }}
                                 disabled={isAdding}
-                                aria-label="Adicionar ao Planner"
-                                title="Adicionar ao Planner"
+              aria-label={t("home.addToPlanner")}
+              title={t("home.addToPlanner")}
                               >
                                 {isAdding ? "..." : "+"}
                               </button>
@@ -3158,8 +3131,8 @@ export function HomePage() {
                                     setSkippedActionTitles(prev => new Set([...prev, action.title]));
                                   }
                                 }}
-                                aria-label="Trocar sugestão"
-                                title="Trocar sugestão"
+              aria-label={t("home.replaceSuggestion")}
+              title={t("home.replaceSuggestion")}
                               >
                                 ↻
                               </button>
@@ -3201,7 +3174,7 @@ export function HomePage() {
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
                 <div>
                   <p style={{ fontWeight: 700, fontSize: 13, color: "var(--text-1)", margin: "0 0 2px" }}>
-                    🌿 Sua semana em resumo
+                    {t("home.weeklySummary")}
                   </p>
                   <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>
                     {count} check-ins registrados
@@ -3218,7 +3191,7 @@ export function HomePage() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px" }}>
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Humor médio</p>
+                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>{t("home.averageMood")}</p>
                   <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
                     {avgMood.toFixed(1)}<span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 400 }}>/10</span>
                     {" "}{trendIcon}
@@ -3226,7 +3199,7 @@ export function HomePage() {
                   <p style={{ fontSize: 10, color: "var(--text-3)", margin: "1px 0 0" }}>{trendText}</p>
                 </div>
                 <div>
-                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Energia média</p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>{t("home.averageEnergy")}</p>
                   <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
                     {avgEnergy.toFixed(1)}<span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 400 }}>/10</span>
                   </p>
@@ -3241,7 +3214,7 @@ export function HomePage() {
                 )}
                 {avgSleep !== null && (
                   <div>
-                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>Sono médio</p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 2px" }}>{t("home.averageSleep")}</p>
                     <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", margin: 0 }}>
                       {avgSleep.toFixed(1)}h
                     </p>
@@ -3265,7 +3238,7 @@ export function HomePage() {
                   cursor: "pointer",
                 }}
               >
-                Ver padrões completos →
+                {t("home.fullPatterns")}
               </button>
             </div>
           );
@@ -3336,12 +3309,12 @@ export function HomePage() {
         <div className="aura-card" style={{ marginBottom: "calc(var(--a))", padding: "14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
             <span style={{ fontSize: 15 }}>♡</span>
-            <p style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-peach-ink)", margin: 0 }}>Como está seu dia?</p>
+              <p style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-peach-ink)", margin: 0 }}>{t("home.howIsYourDay")}</p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            <Stat label="Tarefas de hoje" value={`${totalTasks} planejada${totalTasks !== 1 ? "s" : ""}`} accent="sky" />
+                <Stat label={t("home.todayTasks")} value={t("home.planned", { count: totalTasks })} accent="sky" />
             <div style={{ height: 1, background: "var(--warm-border)" }} />
-            <Stat label="Concluídas" value={`${doneTasks} ✓`} accent="sage" />
+                <Stat label={t("home.completed")} value={`${doneTasks} ✓`} accent="sage" />
             <div style={{ height: 1, background: "var(--warm-border)" }} />
             <Stat label="Em andamento" value={pendingTasks} accent="peach" />
           </div>
@@ -3355,14 +3328,14 @@ export function HomePage() {
             ) : motivacionalFinal ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)", margin: 0 }}>Airia diz</p>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-peach-ink)", margin: 0 }}>{t("home.auraSays")}</p>
                   <span style={{ fontSize: 9, background: "var(--accent-peach-a3)", color: "var(--accent-peach-ink)", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>IA</span>
                 </div>
                 <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.6, fontStyle: "italic" }}>{motivacionalFinal}</p>
               </>
             ) : (
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0, fontStyle: "italic", textAlign: "center" }}>
-                Faça um check-in para receber sua mensagem personalizada.
+                {t("home.personalizedAfterCheckin")}
               </p>
             )}
           </div>

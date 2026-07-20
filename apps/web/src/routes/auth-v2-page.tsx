@@ -1,8 +1,10 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useState } from 'react';
 import { Mail, Lock, Eye, User, LogIn, UserPlus } from 'lucide-react';
+import { useTranslation } from "react-i18next";
 
 export const AuthV2Page = () => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('entrar'); // 'entrar' ou 'criar'
 
   const colors = {
@@ -37,11 +39,11 @@ export const AuthV2Page = () => {
               <span className="text-[10px] tracking-widest font-bold uppercase">Mood Energy</span>
             </div>
             <h1 className="text-2xl font-black leading-tight mb-4">
-              Seu ritmo merece um ponto de partida mais gentil.
+              {t("auth.heroTitle")}
             </h1>
             {activeTab === 'entrar' && (
               <p className="text-xs opacity-90 leading-relaxed">
-                Acompanhe humor, energia e rotina em um fluxo que respeita seu humor e energia.
+                {t("auth.heroSubtitle")}
               </p>
             )}
           </div>
@@ -53,14 +55,14 @@ export const AuthV2Page = () => {
               className={`flex-1 py-3 rounded-full text-sm font-bold transition-all ${activeTab === 'entrar' ? 'text-white shadow-md' : 'text-gray-500'}`}
               style={{ backgroundColor: activeTab === 'entrar' ? colors.primary : 'transparent' }}
             >
-              Entrar
+              {t("auth.signIn")}
             </AuraButtonV2>
             <AuraButtonV2 
               onClick={() => setActiveTab('criar')}
               className={`flex-1 py-3 rounded-full text-sm font-bold transition-all ${activeTab === 'criar' ? 'text-white shadow-md' : 'text-gray-500'}`}
               style={{ backgroundColor: activeTab === 'criar' ? colors.primary : 'transparent' }}
             >
-              Criar conta
+              {t("auth.createAccount")}
             </AuraButtonV2>
           </div>
 
@@ -68,7 +70,7 @@ export const AuthV2Page = () => {
           <div className="space-y-5">
             {activeTab === 'criar' && (
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: colors.textLight }}>Seu Nome</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: colors.textLight }}>{t("auth.name")}</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input 
@@ -95,12 +97,12 @@ export const AuthV2Page = () => {
             </div>
 
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: colors.textLight }}>Senha</label>
+              <label className="block text-[10px] font-bold uppercase tracking-wider mb-2 ml-1" style={{ color: colors.textLight }}>{t("auth.password")}</label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input 
                   type="password" 
-                  placeholder={activeTab === 'entrar' ? "••••••••" : "Crie uma senha segura"}
+                  placeholder={activeTab === 'entrar' ? "••••••••" : t("auth.recovery.minimum")}
                   className="w-full bg-white border border-orange-100 rounded-xl py-4 pl-12 pr-12 focus:outline-none"
                   style={{ borderColor: 'rgba(17,24,39,0.08)' }}
                 />
@@ -116,11 +118,11 @@ export const AuthV2Page = () => {
           >
             {activeTab === 'entrar' ? (
               <>
-                <LogIn size={20} /> Entrar e continuar
+                <LogIn size={20} /> {t("auth.signInContinue")}
               </>
             ) : (
               <>
-                <UserPlus size={20} /> Criar conta e continuar
+                <UserPlus size={20} /> {t("auth.createContinue")}
               </>
             )}
           </AuraButtonV2>
@@ -128,7 +130,7 @@ export const AuthV2Page = () => {
           {/* Rodapé */}
           {activeTab === 'entrar' && (
             <p className="text-center text-[11px] mt-6 text-gray-400">
-              Depois do login, seguimos direto para seu dia.
+              {t("auth.afterLogin")}
             </p>
           )}
           

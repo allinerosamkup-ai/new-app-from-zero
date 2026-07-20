@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, BookOpen, X } from "lucide-react";
+import { useLocalizedCopy } from "../i18n";
 import "../styles/aura.css";
 
 type ContentCard = {
@@ -236,6 +237,140 @@ A distinção não é o tempo — é a consciência da ação.`,
   },
 ];
 
+const CARDS_EN: Record<string, Pick<ContentCard, "title" | "summary" | "body">> = {
+  "tdah-energia": {
+    title: "ADHD and energy fluctuations",
+    summary: "Why energy can shift within hours, and how to work with it.",
+    body: `Adult ADHD is not only about focus. It also involves inconsistent energy regulation: intense hyperfocus can alternate with paralysis even when a task matters.
+
+**What helps**
+- Use focus windows when they appear without guilt about resting afterward
+- Place demanding tasks early in the day or at the start of a good-energy window
+- Prefer short, frequent breaks to long forced sessions
+
+**In Airia**
+When your pattern shows hyperfocus, Airia protects what is already in progress instead of piling on new tasks.`,
+  },
+  "hiperfoco-recurso": {
+    title: "Hyperfocus as a resource",
+    summary: "How to recognize, use, and leave hyperfocus intelligently.",
+    body: `Hyperfocus is a state of deep neurological absorption in which hunger, fatigue, and time can temporarily fade from awareness.
+
+**Use it intelligently**
+1. Notice the state before starting something new
+2. Set a stopping point before you begin
+3. Apply hyperfocus to work already in progress
+4. Eat and drink before diving in
+
+**In Airia**
+When you record hyperfocus, Airia prioritizes what is underway and suggests a bounded exit.`,
+  },
+  "regulacao-emocional-tdah": {
+    title: "Emotional regulation in ADHD",
+    summary: "Intense reactions are not immaturity; they have a neurological basis.",
+    body: `One of ADHD's most impactful features is emotional dysregulation: reactions can be intense, fast, and difficult to modulate.
+
+**Strategies that help**
+- Name the state without judgment
+- Pause before responding during high frustration
+- Reduce stimulation before trying to regulate
+- Use a short walk or other brief movement
+
+**In Airia**
+When a check-in shows high irritability, Airia softens its tone and reduces the operational weight of suggestions.`,
+  },
+  "bipolar-ii-ciclos": {
+    title: "Bipolar II and longer cycles",
+    summary: "Cycles lasting days or weeks, and how to recognize them without dramatizing.",
+    body: `Bipolar II is not “mild bipolar.” It can involve subtle hypomanic periods followed by longer or more frequent lows.
+
+**Recognizing patterns**
+High: less sleep without fatigue, increased productivity, heightened optimism, or impulsive decisions.
+Low: cognitive slowing, difficulty starting, or emptiness without a clear event.
+
+**In Airia**
+Airia tracks changes over time and can surface an early warning after several elevated days so you can protect recovery.`,
+  },
+  "ciclotimia-explicada": {
+    title: "Cyclothymia explained",
+    summary: "More frequent, less intense shifts that can still affect daily life.",
+    body: `Cyclothymia involves frequent mood fluctuations that may be less intense than bipolar II but still meaningfully affect routine.
+
+**Living with shorter cycles**
+- Anchor important work to higher-capacity days, not only fixed dates
+- Keep a menu of possible tasks for low-capacity days
+- Do not treat the current state as permanent
+
+**In Airia**
+Airia reads the seven-day trend and adapts suggestions to your real state rather than an average state.`,
+  },
+  "dia-ruim-nao-e-fracasso": {
+    title: "A difficult day is not failure",
+    summary: "Why treating low capacity as failure adds burden without changing the cycle.",
+    body: `For people whose capacity fluctuates, low days are part of the pattern. Treating them as personal failure creates emotional debt and often drives overcompensation on better days.
+
+**What a difficult day communicates**
+- Accumulated load may exceed current capacity
+- Active recovery may be needed
+- This may be a window for minimum viable tasks, not normal output
+
+Try: “My system asked for a pause, and I responded.” That is intelligent resource management.`,
+  },
+  "gerenciar-energia": {
+    title: "Manage energy, not only time",
+    summary: "An alternative to rigid agendas for people with changing capacity.",
+    body: `Traditional productivity assumes steady capacity. A better question is: “What is my capacity now, and what fits within it?”
+
+**Capacity levels**
+- High: demanding work and important decisions
+- Medium: moderate tasks, meetings, and reviews
+- Low: maintenance, automatic tasks, and active rest
+- Retreat: essentials only; protect tomorrow
+
+**In Airia**
+Airia reads your current phase and suggests work that matches it.`,
+  },
+  "sono-humor": {
+    title: "Sleep and mood cycling",
+    summary: "The two-way relationship between sleep and mood fluctuations.",
+    body: `Sleep and mood affect each other. Poor sleep can intensify impulsivity, emotional dysregulation, and mood shifts.
+
+**What tends to help**
+- Keep a consistent wake time
+- Get natural light early in the day
+- Step away from screens well before sleep
+
+**In Airia**
+Reported sleep informs the cycle reading. A poor night automatically lowers the operational load of suggestions.`,
+  },
+  "ciclos-produtividade": {
+    title: "Productivity cycles",
+    summary: "Work in waves by using the whole cycle, not only its peaks.",
+    body: `Productivity is not always linear. Peaks of delivery are often followed by recovery periods that are just as necessary.
+
+During a high: prioritize high-impact work and important decisions.
+
+During a low: maintain routines and review what was produced.
+
+During recovery: reintroduce moderate tasks gradually.
+
+Comparing a low-capacity day with someone else's peak distorts reality. Compare your own complete cycles.`,
+  },
+  "quando-parar-e-avancar": {
+    title: "When stopping means moving forward",
+    summary: "Stopping at the right time protects the next advance.",
+    body: `Stopping is not the opposite of progress. In a cyclical system, stopping at the right time enables the next advance.
+
+**Signals that it may be time to stop**
+- Reading the same sentence repeatedly without understanding it
+- Making simple, unusual mistakes
+- Growing irritation with the process
+- Feeling that you are pushing against yourself
+
+A pause leaves the work in a defined state with an intention to return. Avoidance leaves it undefined and adds guilt.`,
+  },
+};
+
 const CATEGORY_LABELS: Record<ContentCard["category"], string> = {
   tdah: "TDAH",
   bipolar: "Bipolar II",
@@ -255,6 +390,7 @@ function renderBody(body: string): string[] {
 }
 
 function CardDetail({ card, onClose }: { card: ContentCard; onClose: () => void }) {
+  const l = useLocalizedCopy();
   const paragraphs = renderBody(card.body);
   const accentColor = CATEGORY_COLORS[card.category];
 
@@ -297,7 +433,7 @@ function CardDetail({ card, onClose }: { card: ContentCard; onClose: () => void 
                 color: accentColor,
               }}
             >
-              {CATEGORY_LABELS[card.category]}
+              {{ tdah: "ADHD", bipolar: "Bipolar II", ciclotimia: l("Ciclotimia", "Cyclothymia"), produtividade: l("Produtividade", "Productivity") }[card.category]}
             </span>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--text-primary, #1a1a1a)", lineHeight: 1.3 }}>
               {card.emoji} {card.title}
@@ -385,16 +521,29 @@ function renderInline(text: string): React.ReactNode {
 type FilterCategory = ContentCard["category"] | "all";
 
 export function ConteudoPage() {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const [selectedCard, setSelectedCard] = useState<ContentCard | null>(null);
   const [filter, setFilter] = useState<FilterCategory>("all");
 
-  const filtered = filter === "all" ? CARDS : CARDS.filter((c) => c.category === filter);
+  const localizedCards = CARDS.map((card) => {
+    const english = CARDS_EN[card.id];
+    return english ? {
+      ...card,
+      title: l(card.title, english.title),
+      summary: l(card.summary, english.summary),
+      body: l(card.body, english.body),
+    } : card;
+  });
+  const filtered = filter === "all" ? localizedCards : localizedCards.filter((c) => c.category === filter);
 
   const categories: FilterCategory[] = ["all", "tdah", "bipolar", "ciclotimia", "produtividade"];
   const categoryLabels: Record<FilterCategory, string> = {
-    all: "Todos",
-    ...CATEGORY_LABELS,
+    all: l("Todos", "All"),
+    tdah: "ADHD",
+    bipolar: "Bipolar II",
+    ciclotimia: l("Ciclotimia", "Cyclothymia"),
+    produtividade: l("Produtividade", "Productivity"),
   };
 
   return (
@@ -437,7 +586,7 @@ export function ConteudoPage() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <BookOpen size={18} style={{ color: "var(--nectarine, #D7897F)" }} />
           <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-primary, #1a1a1a)" }}>
-            Biblioteca
+            {l("Biblioteca", "Library")}
           </h1>
         </div>
       </div>

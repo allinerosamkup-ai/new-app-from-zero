@@ -1,5 +1,7 @@
 // Planner Page v4 — notas+checklist unificados, AI buttons, recorrente com dias
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { ChevronLeft, ChevronRight, Calendar, Bell, Clock, Sparkles, Mic, Plus, Trash2, CheckCircle2, CalendarClock, ClipboardCheck } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -28,17 +30,27 @@ import {
   addMinutesToTime,
   subtractMinutesFromTime,
   buildGoogleCalendarTaskId,
+  buildDefaultSelectedAdaptationIds,
   buildPlannerAgendaSlots,
+  buildPlannerAISuggestionExistingBlocks,
   buildTimelineBlockInput,
+  canApplyPlannerAIAdjustment,
   mapIntensityToEnergyLevel,
   normalizePlannerCategory,
+  getDayStructurePresentation,
   parseGoogleCalendarTaskId,
+  resolveTaskCardSecondaryActions,
+  resolvePlannerTaskAdaptability,
   resolveTaskCardSwipeAction,
   resolvePlannerBlockDate,
   shouldNavigateAgendaBySwipe,
   stripGoogleCalendarTaskTitle,
   type TimelineBlockIntensity,
   type TimelineBlockStatus,
+  type TimelineTemporalPolicy,
+  type TimelineAdaptationPermission,
+  type TimelineAdaptabilitySource,
+  type DayStructureProfile,
 } from "./planner-page.helpers";
 import {
   getTaskMeta,
@@ -175,6 +187,9 @@ type FormState = {
   color?: string;
   alerts: string[];
   taskMode: 'standard' | 'appear';
+  temporalPolicy?: TimelineTemporalPolicy;
+  adaptabilitySource?: TimelineAdaptabilitySource;
+  adaptabilityConfidence?: number;
 };
 
 type PlannerTask = {
@@ -206,6 +221,10 @@ type PlannerTask = {
   icon?: string | null;
   color?: string | null;
   gcalEventId?: string | null;
+  temporalPolicy?: TimelineTemporalPolicy | null;
+  adaptationPermission?: TimelineAdaptationPermission | null;
+  adaptabilitySource?: TimelineAdaptabilitySource | null;
+  adaptabilityConfidence?: number | null;
   taskMode?: string | null;
   snoozedUntil?: string | null;
 };
@@ -232,6 +251,7 @@ type AgendaAdaptationChange = {
 
 type AgendaAdaptationResponse = {
   summary: string;
+  dayStructure: DayStructureProfile;
   changes: AgendaAdaptationChange[];
   appliedChanges?: AgendaAdaptationChange[];
   skippedChanges?: AgendaAdaptationChange[];
@@ -264,6 +284,12 @@ const RECURRING_DELETE_OPTIONS: Array<{
     description: "Remove a série recorrente inteira.",
   },
 ];
+const RECURRING_DELETE_OPTIONS_EN: Record<RecurringDeleteScope, { title: string; description: string }> = {
+  this: { title: "Only this day", description: "Removes only this commitment on this date." },
+  future: { title: "Future occurrences only", description: "Keeps this commitment and removes the next occurrences." },
+  "this-and-future": { title: "This and future occurrences", description: "Removes this commitment and everything after it." },
+  all: { title: "All", description: "Removes the entire recurring series." },
+};
 
 const EMPTY_FORM: FormState = {
   date: "",
@@ -288,6 +314,7 @@ const EMPTY_FORM: FormState = {
   alerts: ["start", "end", "before-15"],
   taskMode: "standard",
 };
+const FOCUS_ITEM_TASK_KIND = "tarefa" as const;
 
 function buildChecklistItems(items: string[]): ChecklistItem[] {
   return items
@@ -347,6 +374,15 @@ function timeToMinutesValue(time: string) {
 }
 
 function mapTaskFromApi(task: any): PlannerTask {
+  const gcalEventId = typeof task.gcalEventId === "string" ? task.gcalEventId : null;
+  const source = typeof task.source === "string" ? task.source : "planner";
+  const adaptability = resolvePlannerTaskAdaptability({
+    source,
+    gcalEventId,
+    temporalPolicy: task.temporalPolicy,
+    adaptationPermission: task.adaptationPermission,
+  });
+
   return {
     id: String(task.id),
     title: task.title,
@@ -356,6 +392,7 @@ function mapTaskFromApi(task: any): PlannerTask {
     category: task.category,
     intensity: task.intensity,
     status: task.status,
+    source,
     noteMode: normalizeNoteMode(task.noteMode),
     note: typeof task.note === "string" ? task.note : null,
     checklist: normalizeChecklist(task.checklist),
@@ -372,17 +409,28 @@ function mapTaskFromApi(task: any): PlannerTask {
     color: typeof task.color === "string" ? task.color : null,
     isAiSuggested: Boolean(task.isAiSuggested),
     aiReasoning: typeof task.aiReasoning === "string" ? task.aiReasoning : null,
-    gcalEventId: typeof task.gcalEventId === "string" ? task.gcalEventId : null,
+    gcalEventId,
+    ...adaptability,
+    adaptabilitySource: task.adaptabilitySource === "manual"
+      || task.adaptabilitySource === "gcal"
+      || task.adaptabilitySource === "recurrence"
+      || task.adaptabilitySource === "language"
+      || task.adaptabilitySource === "behavior"
+      || task.adaptabilitySource === "memory"
+      || task.adaptabilitySource === "ai"
+      ? task.adaptabilitySource
+      : "default",
+    adaptabilityConfidence: typeof task.adaptabilityConfidence === "number" ? task.adaptabilityConfidence : 0.5,
     taskMode: typeof task.taskMode === "string" ? task.taskMode : 'standard',
     snoozedUntil: typeof task.snoozedUntil === "string" ? task.snoozedUntil : null,
   };
 }
 
-function mapGoogleCalendarEventFromApi(event: any, selectedDateKey: string): PlannerTask | null {
+function mapGoogleCalendarEventFromApi(event: any, selectedDateKey: string, locale: string): PlannerTask | null {
   const toLocalHHMM = (iso: string): string => {
     try {
       const d = new Date(iso);
-      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+      return d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
     } catch { return iso.slice(11, 16); }
   };
 
@@ -409,6 +457,11 @@ function mapGoogleCalendarEventFromApi(event: any, selectedDateKey: string): Pla
     status: event.airiaStatus === "completed" ? "completed" : "planned",
     done: event.airiaStatus === "completed",
     source: "gcal",
+    gcalEventId: String(event.id),
+    temporalPolicy: "fixed",
+    adaptationPermission: "protected",
+    adaptabilitySource: "gcal",
+    adaptabilityConfidence: 1,
     link: event.link,
     calendarId: event.calendarId ?? "primary",
     note: event.note || "",
@@ -561,6 +614,9 @@ function buildFormStateFromTask(task: PlannerTask): FormState {
     color: (useApiMetadata ? task.color : meta.color) || "var(--accent-peach)",
     alerts: [],
     taskMode: (useApiMetadata ? (task.taskMode as 'standard' | 'appear') : undefined) ?? 'standard',
+    temporalPolicy: resolvePlannerTaskAdaptability(task).temporalPolicy,
+    adaptabilitySource: task.adaptabilitySource ?? "default",
+    adaptabilityConfidence: task.adaptabilityConfidence ?? 0.5,
   };
 }
 
@@ -577,6 +633,8 @@ const NoteSection = React.memo(function NoteSection({
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   context: { title: string; category: string; energyLevel: FormState["energyLevel"] };
 }) {
+  const { t } = useTranslation();
+  const l = useLocalizedCopy();
   const [aiLoading, setAiLoading] = useState<null | "content" | "split">(null);
   const recognitionRef = useRef<any>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -654,7 +712,7 @@ const NoteSection = React.memo(function NoteSection({
     }
 
     const recognition = new SR();
-    recognition.lang = "pt-BR";
+    recognition.lang = resolveIntlLocale();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = (event: any) => {
@@ -680,13 +738,13 @@ const NoteSection = React.memo(function NoteSection({
   return (
     <div style={{ marginBottom: "12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={LABEL_STYLE}>Algum detalhe?</span>
+          <span style={LABEL_STYLE}>{t("planner.detailPrompt")}</span>
         <div style={{ display: "flex", gap: 6 }}>
           <AuraButtonV2 variant="outline" size="sm" onClick={letAuraOrganize} disabled={aiLoading !== null}>
-            {aiLoading === "content" ? "Lendo..." : "Airia"}
+            {aiLoading === "content" ? l("Lendo...", "Reading...") : "Airia"}
           </AuraButtonV2>
           <AuraButtonV2 variant="outline" size="sm" onClick={splitIntoSubtasks} disabled={aiLoading !== null}>
-            {aiLoading === "split" ? "Splitando..." : "Split Tarefa"}
+            {aiLoading === "split" ? l("Dividindo...", "Splitting...") : l("Dividir tarefa", "Split task")}
           </AuraButtonV2>
         </div>
       </div>
@@ -694,7 +752,7 @@ const NoteSection = React.memo(function NoteSection({
         <textarea
           value={form.note}
           onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
-          placeholder="Notas..."
+          placeholder={l("Notas...", "Notes...")}
           rows={3}
           style={{ ...INPUT_STYLE, width: "100%", height: "80px", padding: "10px" }}
         />
@@ -727,7 +785,7 @@ const NoteSection = React.memo(function NoteSection({
               }
             }
           }}
-          placeholder="Adicionar item..."
+                    placeholder={t("planner.addItemPlaceholder")}
           style={{ ...INPUT_STYLE, height: "38px" }}
         />
         <button
@@ -836,6 +894,8 @@ function PlannerSheetBody({
   saveLabel: string;
 }) {
   void _onCancel; // kept in contract for parent callers
+  const { t } = useTranslation();
+  const l = useLocalizedCopy();
   const [showConfig, setShowConfig] = useState(false);
   const [showAddAlert, setShowAddAlert] = useState(false);
   const [titleTouched, setTitleTouched] = useState(false);
@@ -956,7 +1016,7 @@ function PlannerSheetBody({
 
       {/* ── 2. Horário & Data ── */}
       <section>
-        <label style={STITLE}>Horário & Data</label>
+        <label style={STITLE}>{t("planner.dateTime")}</label>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "10px 0" }}>
           {contextBefore.map((t) => (
             <button key={t} type="button" onClick={() => { const d = currentDuration; setForm(c => ({ ...c, time: t, endTime: addMinutesToTime(t, d) })); }}
@@ -1094,13 +1154,55 @@ function PlannerSheetBody({
           color: "var(--text-2)", fontSize: 14, fontWeight: 700, cursor: "pointer",
         }}
       >
-        {showAdvanced ? "Menos opções ▴" : "Mais opções ▾"}
+        {showAdvanced ? l("Menos opções ▴", "Fewer options ▴") : l("Mais opções ▾", "More options ▾")}
       </button>
 
       {showAdvanced && (<>
+      {/* Correção manual; a classificação principal é inferida da agenda real. */}
+      <section>
+              <label style={STITLE}>{t("planner.timeTreatment")}</label>
+        <p style={{ margin: "-6px 0 12px", color: "var(--text-3)", fontSize: 11, lineHeight: 1.45 }}>
+          {t("planner.patternHelp")}
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+          {([
+            { value: "fixed", title: l("Fixo", "Fixed"), description: l("Não será movido pela Airia.", "Airia will not move it.") },
+            { value: "windowed", title: l("Janela", "Window"), description: l("A Airia sugere antes de ajustar.", "Airia suggests before adjusting.") },
+            { value: "flexible", title: l("Flexível", "Flexible"), description: l("A Airia pode propor ajustes.", "Airia can suggest adjustments.") },
+          ] as const).map((option) => {
+            const selected = form.temporalPolicy === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setForm((current) => ({
+                  ...current,
+                  temporalPolicy: option.value,
+                  adaptabilitySource: "manual",
+                  adaptabilityConfidence: 1,
+                }))}
+                aria-pressed={selected}
+                style={{
+                  minWidth: 0,
+                  padding: "12px 9px",
+                  borderRadius: 16,
+                  border: selected ? "2px solid var(--accent-sky)" : "1px solid var(--outline-variant)",
+                  background: selected ? "rgba(99,152,169,.10)" : "var(--surface-variant)",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <strong style={{ display: "block", color: "var(--text-1)", fontSize: 13, marginBottom: 4 }}>{option.title}</strong>
+                <span style={{ display: "block", color: "var(--text-3)", fontSize: 10, lineHeight: 1.35 }}>{option.description}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
       {/* ── 5. Categoria ── */}
       <section>
-        <label style={STITLE}>Categoria</label>
+            <label style={STITLE}>{t("planner.category")}</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {CATEGORY_OPTIONS.map(opt => {
             const isSel = form.category === opt.value;
@@ -1128,7 +1230,7 @@ function PlannerSheetBody({
 
       {/* ── 6. Cor Personalizada ── */}
       <section>
-        <label style={STITLE}>Cor do Bloco</label>
+          <label style={STITLE}>{t("planner.blockColor")}</label>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {COLOR_GRID.map(color => (
             <button
@@ -1148,7 +1250,7 @@ function PlannerSheetBody({
 
       {/* ── 6. Alertas ── */}
       <section>
-        <label style={STITLE}>Alertas</label>
+          <label style={STITLE}>{t("planner.alerts")}</label>
         
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
           {form.alerts.map((alertId) => {
@@ -1208,14 +1310,14 @@ function PlannerSheetBody({
 
       {/* ── 7. Notificações ── */}
       <section>
-        <label style={STITLE}>Notificações & Alertas</label>
+        <label style={STITLE}>{t("planner.notificationsAlerts")}</label>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, background: "var(--surface-variant)", padding: 16, borderRadius: 20, border: "1px solid var(--outline-variant)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Bell size={18} color="var(--accent-peach)" />
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Notificação persistente</span>
-                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Repete até você concluir</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>{t("planner.persistent")}</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("planner.persistentBody")}</span>
               </div>
             </div>
             <AuraToggle
@@ -1255,8 +1357,8 @@ function PlannerSheetBody({
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 18 }}>🌀</span>
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Só aparecer (2 min)</span>
-                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Meta é presença, não conclusão</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>{t("planner.visualReminder")}</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("planner.presenceBody")}</span>
               </div>
             </div>
             <AuraToggle
@@ -1271,7 +1373,7 @@ function PlannerSheetBody({
               <Mic size={18} color="var(--accent-sage)" />
               <div style={{ display: "flex", flexDirection: "column" }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Vibrar</span>
-                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Feedback tátil</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("planner.haptic")}</span>
               </div>
             </div>
             <AuraToggle
@@ -1286,8 +1388,8 @@ function PlannerSheetBody({
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Clock size={18} color="var(--accent-sky)" />
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Alarme sonoro</span>
-                <span style={{ fontSize: 11, color: "var(--text-3)" }}>Tocar som no início</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>{t("planner.soundAlarm")}</span>
+                <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("planner.soundStart")}</span>
               </div>
             </div>
             <AuraToggle 
@@ -1300,7 +1402,7 @@ function PlannerSheetBody({
 
       {/* ── 7. Recorrência ── */}
       <section>
-        <label style={STITLE}>Repetir compromisso</label>
+        <label style={STITLE}>{l("Repetir compromisso", "Repeat commitment")}</label>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {["once", "daily", "weekly", "monthly"].map(f => (
             <button key={f} type="button" onClick={() => setFrequency(f)}
@@ -1311,7 +1413,7 @@ function PlannerSheetBody({
                 border: "1px solid var(--outline-variant)"
               }}
             >
-              {f === "once" ? "Uma vez" : f === "daily" ? "Diária" : f === "weekly" ? "Semanal" : "Mensal"}
+              {f === "once" ? l("Uma vez", "Once") : f === "daily" ? l("Diária", "Daily") : f === "weekly" ? l("Semanal", "Weekly") : l("Mensal", "Monthly")}
             </button>
           ))}
         </div>
@@ -1369,14 +1471,54 @@ function PlannerSheetBody({
       </div>
       {titleTouched && titleEmpty && (
         <p style={{ fontSize: 12, color: "var(--accent-peach)", textAlign: "center", marginTop: -8 }}>
-          Dá um nome pra tarefa primeiro
+          {t("planner.nameFirst")}
         </p>
       )}
     </div>
   );
 }
 
+function DayStructureCard({ profile }: { profile: DayStructureProfile }) {
+  const { t } = useTranslation();
+  const presentation = getDayStructurePresentation(profile);
+  return (
+    <AiriaCard
+      style={{
+        padding: 16,
+        marginBottom: 12,
+        border: "1px solid rgba(99,152,169,.22)",
+        background: "linear-gradient(135deg, rgba(99,152,169,.10), rgba(253,250,247,.92))",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+        <div>
+          <p style={{ margin: 0, color: "var(--text-1)", fontSize: 15, fontWeight: 850 }}>{presentation.title}</p>
+          <p style={{ margin: "5px 0 0", color: "var(--text-2)", fontSize: 12, lineHeight: 1.45 }}>{presentation.explanation}</p>
+        </div>
+        <span style={{ whiteSpace: "nowrap", color: "var(--accent-sky)", fontSize: 12, fontWeight: 850 }}>
+          {presentation.freeTimeLabel}
+        </span>
+      </div>
+      {profile.protectedAnchors.length > 0 && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(99,152,169,.18)" }}>
+          <span style={{ display: "block", marginBottom: 6, color: "var(--text-3)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".06em" }}>
+            {t("planner.protectedAnchors")}
+          </span>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {profile.protectedAnchors.map((anchor) => (
+              <span key={anchor.id} style={{ padding: "6px 9px", borderRadius: 10, background: "rgba(255,255,255,.72)", color: "var(--text-2)", fontSize: 11, fontWeight: 700 }}>
+                {anchor.startTime}–{anchor.endTime} · {anchor.title}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </AiriaCard>
+  );
+}
+
 function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayAnchor: Date; offsetDias: number; setOffsetDias: (v: any) => void }) {
+  const { i18n } = useTranslation();
   const headerDateRef = useRef<HTMLInputElement>(null);
   const selectedDate = new Date(todayAnchor);
   selectedDate.setDate(selectedDate.getDate() + offsetDias);
@@ -1418,7 +1560,7 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
         
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, textTransform: 'capitalize', color: 'var(--text-1)', letterSpacing: "-0.01em" }}>
-            {selectedDate.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
+            {selectedDate.toLocaleString(resolveIntlLocale(i18n.language), { month: 'long', year: 'numeric' })}
           </h3>
           
           <button
@@ -1483,6 +1625,7 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
 }
 
 function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
+  const l = useLocalizedCopy();
   const percent = Math.min(100, Math.max(0, (used / capacity) * 100));
   const isOver = used > capacity;
   
@@ -1504,7 +1647,7 @@ function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
           </div>
           <div>
             <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: isOver ? "var(--accent-peach-ink)" : "var(--accent-sage-ink)" }}>
-              {isOver ? "Limite Excedido" : "Energia Disponível"}
+              {isOver ? l("Limite excedido", "Limit exceeded") : l("Energia disponível", "Available energy")}
             </span>
           </div>
         </div>
@@ -1524,8 +1667,8 @@ function EnergyBattery({ used, capacity }: { used: number; capacity: number }) {
       </div>
       <p style={{ margin: 0, fontSize: 11, color: "var(--text-2)", lineHeight: 1.5, fontWeight: 500 }}>
         {isOver 
-          ? "Você ultrapassou seu limite planejado. Tente delegar ou adiar blocos pesados."
-          : `Você ainda tem ${(capacity - used).toFixed(0)} UP para investir hoje sem esgotamento.`}
+          ? l("Você ultrapassou seu limite planejado. Tente delegar ou adiar blocos pesados.", "You exceeded your planned limit. Try delegating or postponing heavy blocks.")
+          : l(`Você ainda tem ${(capacity - used).toFixed(0)} UP para investir hoje sem esgotamento.`, `You still have ${(capacity - used).toFixed(0)} EP to use today without burning out.`)}
       </p>
     </div>
   );
@@ -1614,6 +1757,8 @@ function ViewTaskSheetContent({ task, viewSplitting, onSplit }: { task: PlannerT
 }
 
 function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete, onChat, onPostpone, onConvertToTask, onStarted, onSnooze, onSplit }: any) {
+  const { t } = useTranslation();
+  const l = useLocalizedCopy();
   const [offset, setOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startX = useRef<number | null>(null);
@@ -1621,6 +1766,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
   const lastDelta = useRef({ deltaX: 0, deltaY: 0 });
   
   const isGcal = slot.task.source === 'gcal';
+  const secondaryActions = resolveTaskCardSecondaryActions(slot.task);
 
   function handleTouchStart(e: React.TouchEvent) {
     e.stopPropagation();
@@ -1674,7 +1820,7 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
         background: offset === 0 ? 'transparent' : (offset < 0 ? 'var(--accent-sage)' : 'var(--accent-peach)'),
         opacity: Math.abs(offset) > 10 ? 1 : 0
       }}>
-         <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "0.05em", textTransform: "uppercase" }}>{offset < 0 ? 'Concluir' : 'Excluir'}</span>
+         <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "0.05em", textTransform: "uppercase" }}>{offset < 0 ? l("Concluir", "Complete") : l("Excluir", "Delete")}</span>
       </div>
       <div
         role="button"
@@ -1753,12 +1899,6 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
             <div className="block-chip" style={{ 
-              padding: '2px 7px',
-              fontSize: 8.5,
-              fontWeight: 800,
-              borderRadius: 999,
-              background: categoryOption.bg, 
-              color: categoryOption.textColor, 
               border: `1px solid ${categoryOption.cor}22`,
               display: "flex", alignItems: "center", gap: 4,
               textTransform: "uppercase",
@@ -1781,10 +1921,12 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
             </div>
           </div>
           {/* Action buttons */}
-          <div style={{ display: "flex", gap: 4, marginTop: 6 }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }} onClick={e => e.stopPropagation()}>
             <button type="button" onClick={() => onChat(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Falar</button>
-            {!slot.task.done && <button type="button" onClick={() => onStarted(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Comecei</button>}
-            {!isGcal && <button type="button" onClick={() => onPostpone(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Adiar</button>}
+            {!slot.task.done && <button type="button" onClick={() => onStarted(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>{t("planner.started")}</button>}
+            {secondaryActions.canConvertToTask && <button type="button" aria-label={t("planner.convertToTaskAria", { title: slot.task.title })} onClick={() => onConvertToTask(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>{t("planner.convertToTask")}</button>}
+            {secondaryActions.canSnooze && <button type="button" aria-label={t("planner.snoozeAria", { title: slot.task.title })} onClick={() => onSnooze(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>{t("planner.snooze")}</button>}
+            {!isGcal && <button type="button" onClick={() => onPostpone(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>{t("planner.postpone")}</button>}
             <button type="button" onClick={() => onSplit && onSplit(slot.task)} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--warm-border)", background: "transparent", color: "var(--text-2)", cursor: "pointer", fontWeight: 600 }}>Dividir</button>
           </div>
         </div>
@@ -1794,6 +1936,8 @@ function SwipeableTaskCard({ slot, categoryOption, onClick, onComplete, onDelete
 }
 
 export function PlannerPage() {
+  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
   const { refreshData, state, toggleSubGoal, toggleHabit } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
@@ -1998,7 +2142,7 @@ export function PlannerPage() {
       await toggleHabit(habitId);
     } catch (error) {
       console.error("[planner/habit-toggle]", error);
-      showError("Não foi possível atualizar o hábito.");
+      showError(t("planner.updateHabitError"));
     } finally {
       setAnimatingHabitIds((prev) => prev.filter((id) => id !== habitId));
     }
@@ -2055,7 +2199,7 @@ export function PlannerPage() {
                (event: any) => !localGcalEventIds.has(String(event.id))
              );
              const dayEvents = filteredRawEvents
-               .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
+               .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey, resolveIntlLocale(i18n.language)))
                .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
              merged = [...merged, ...dayEvents];
              merged.sort((a,b) => a.time.localeCompare(b.time));
@@ -2145,7 +2289,7 @@ export function PlannerPage() {
     try {
       const block = plannerTasks.find((t) => String(t.id) === resolution.targetBlockId);
       if (!block) {
-        showError("Bloco não encontrado.");
+        showError(t("planner.blockNotFound"));
         return;
       }
       if (resolution.type === "POSTPONE_TOMORROW") {
@@ -2193,7 +2337,7 @@ export function PlannerPage() {
       await reloadPlannerTasks();
     } catch (error) {
       console.error("[planner/resolve-conflict]", error);
-      showError("Não foi possível aplicar a resolução.");
+      showError(t("planner.resolutionError"));
     } finally {
       setBusyResolutionKey(null);
     }
@@ -2226,13 +2370,13 @@ export function PlannerPage() {
       if (action === 'done') {
         try {
           await api.patch(`/timeline/${blockId}`, { status: 'completed' });
-          showSuccess('Tarefa concluída! ✅');
+          showSuccess(t("planner.taskDone"));
           void reloadPlannerTasks();
         } catch { /* silent */ }
       } else if (action === 'started') {
         try {
           await api.post(`/timeline/${blockId}/started`, {});
-          showSuccess('Registrado. Começar já é uma vitória. 🟡');
+          showSuccess(t("planner.startedSuccess"));
           void reloadPlannerTasks();
         } catch { /* silent */ }
       } else if (action === 'help') {
@@ -2261,7 +2405,7 @@ export function PlannerPage() {
                (event: any) => !localGcalEventIds.has(String(event.id))
              );
              const dayEvents = filteredRawEvents
-               .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey))
+               .map((event: any) => mapGoogleCalendarEventFromApi(event, selectedDateKey, resolveIntlLocale(i18n.language)))
                .filter((event: PlannerTask | null): event is PlannerTask => event !== null);
              merged = [...merged, ...dayEvents];
              merged.sort((a,b) => a.time.localeCompare(b.time));
@@ -2270,7 +2414,7 @@ export function PlannerPage() {
         setPlannerTasks(merged);
     } catch (e) {
         console.error('[reloadPlannerTasks]', e);
-        showError("Erro ao carregar agenda. Tente novamente.");
+        showError(t("planner.loadError"));
     }
   }
 
@@ -2282,7 +2426,7 @@ export function PlannerPage() {
       moodCycleContext: cycleReport.aiContext,
       currentHour: now.getHours(),
       currentMinute: now.getMinutes(),
-      currentMomentLabel: now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      currentMomentLabel: now.toLocaleTimeString(resolveIntlLocale(i18n.language), { hour: "2-digit", minute: "2-digit" }),
       pendingTasks: plannerTasks.filter((task) => !task.done).map((task) => task.title),
       existingTasks: plannerTasks.map((task) => `${task.time}-${task.endTime} ${task.title}`),
     };
@@ -2300,18 +2444,7 @@ export function PlannerPage() {
     };
     return {
       date: selectedDateKey,
-      existingBlocks: plannerTasks
-        .filter((t) => !t.done)
-        .slice(0, 30)
-        .map((t) => ({
-          id: String(t.id),
-          title: t.title,
-          startTime: t.time,
-          endTime: t.endTime ?? t.time,
-          category: normalizePlannerCategory(t.category) || "outro",
-          intensity: ((t.intensity?.toUpperCase()?.[0] || "M") as "L" | "M" | "P"),
-          status: (t.done ? "completed" : "planned") as "completed" | "planned",
-        })),
+      existingBlocks: buildPlannerAISuggestionExistingBlocks(plannerTasks),
       energyState,
       currentHour: now.getHours(),
       currentMinute: now.getMinutes(),
@@ -2386,7 +2519,7 @@ export function PlannerPage() {
       await reloadPlannerTasks();
     } catch (error) {
       console.error("[planner-ai/accept-schedule]", error);
-      showError("Não foi possível adicionar o bloco.");
+      showError(t("planner.addBlockError"));
     }
   }
 
@@ -2396,12 +2529,17 @@ export function PlannerPage() {
 
   async function handleAcceptAdjustItem(item: PlannerAIAdjustItem) {
     try {
+      const block = plannerTasks.find((task) => String(task.id) === item.id);
+      if (!block) throw new Error("Bloco não encontrado");
+      if (item.action !== "KEEP" && !canApplyPlannerAIAdjustment(block)) {
+        showError(t("planner.anchorError"));
+        return;
+      }
+
       if (item.action === "MOVE_TOMORROW") {
         await api.post(`/timeline/${item.id}/postpone`, {});
         showSuccess(`"${item.blockTitle ?? "Bloco"}" movido pra amanhã.`);
       } else if (item.action === "DOWNGRADE_INTENSITY") {
-        const block = plannerTasks.find((t) => String(t.id) === item.id);
-        if (!block) throw new Error("Bloco não encontrado");
         const currentLevel = (block.intensity ?? "M").toUpperCase()[0];
         const nextLevel = currentLevel === "P" ? "M" : "L";
         const energyLevel = nextLevel === "M" ? "media" : "leve";
@@ -2427,7 +2565,7 @@ export function PlannerPage() {
       await reloadPlannerTasks();
     } catch (error) {
       console.error("[planner-ai/accept-adjust]", error);
-      showError("Não foi possível aplicar a mudança.");
+      showError(t("planner.changeError"));
     }
   }
 
@@ -2449,12 +2587,14 @@ export function PlannerPage() {
         trigger,
         changes_count: result.changes?.length ?? 0,
         blocked_count: (result as any).blockedDecisions?.length ?? 0,
+        mode: result.dayStructure?.mode,
+        freedom_score: result.dayStructure?.freedomScore,
+        initiative_level: result.dayStructure?.initiativeLevel,
       });
       setAdaptationPreview(result);
-      setSelectedAdaptationIds(new Set(
-        (result.changes || [])
-          .filter((change) => change.requiresConfirmation && !["keep", "block", "notify"].includes(change.type))
-          .map((change) => change.id),
+      setSelectedAdaptationIds(buildDefaultSelectedAdaptationIds(
+        result.changes || [],
+        result.dayStructure?.protectedAnchors || [],
       ));
     } catch (error: any) {
       showError(error.message || "Não foi possível ajustar a agenda agora.");
@@ -2479,6 +2619,9 @@ export function PlannerPage() {
         selected_count: selectedAdaptationIds.size,
         applied_count: result.appliedChanges?.length ?? 0,
         skipped_count: result.skippedChanges?.length ?? 0,
+        mode: result.dayStructure?.mode ?? adaptationPreview.dayStructure?.mode,
+        freedom_score: result.dayStructure?.freedomScore ?? adaptationPreview.dayStructure?.freedomScore,
+        initiative_level: result.dayStructure?.initiativeLevel ?? adaptationPreview.dayStructure?.initiativeLevel,
       });
       setAdaptationPreview(result);
       if (result.timelineRefreshNeeded) {
@@ -2610,7 +2753,7 @@ export function PlannerPage() {
 
       const savedBlock = Array.isArray(res.savedBlocks) ? res.savedBlocks[0] : null;
       if (!savedBlock) {
-        showError("Não foi possível salvar a tarefa. Tente novamente.");
+        showError(t("planner.saveTaskError"));
         return;
       }
 
@@ -2806,7 +2949,7 @@ export function PlannerPage() {
           localDate: selectedDateKey,
         }).catch(() => null);
         await reloadPlannerTasks();
-        showSuccess("Compromisso adiado para amanhã.");
+        showSuccess(t("planner.commitmentTomorrow"));
         return;
       }
 
@@ -2816,7 +2959,7 @@ export function PlannerPage() {
       });
       await reloadPlannerTasks();
       await refreshData();
-      showSuccess("Bloco adiado para amanhã.");
+      showSuccess(t("planner.blockTomorrow"));
     } catch (error: any) {
       showError(error.message);
     }
@@ -2844,10 +2987,13 @@ export function PlannerPage() {
     const until = new Date(Date.now() + minutesFromNow * 60000).toISOString();
     try {
       await api.post(`/timeline/${snoozeTarget.id}/snooze`, { until });
-      showSuccess(`Lembretes pausados por ${minutesFromNow >= 60 ? `${minutesFromNow / 60}h` : `${minutesFromNow}min`}. Volta às ${new Date(until).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}.`);
+      showSuccess(t("planner.remindersPaused", {
+        duration: minutesFromNow >= 60 ? `${minutesFromNow / 60}h` : `${minutesFromNow}min`,
+        time: new Date(until).toLocaleTimeString(resolveIntlLocale(i18n.language), { hour: '2-digit', minute: '2-digit' }),
+      }));
       await reloadPlannerTasks();
     } catch {
-      showError("Não foi possível pausar os lembretes.");
+      showError(t("planner.pauseError"));
     } finally {
       setSnoozeTarget(null);
     }
@@ -2897,7 +3043,7 @@ export function PlannerPage() {
 
       await reloadPlannerTasks();
       await refreshData();
-      showSuccess("Compromisso transformado em tarefa.");
+      showSuccess(t("planner.converted"));
     } catch (error: any) {
       showError(error.message || "Não foi possível transformar em tarefa.");
     }
@@ -2908,7 +3054,7 @@ export function PlannerPage() {
       if (task.source === "gcal") {
         await api.delete(getGoogleCalendarEventEndpoint(task));
         await reloadPlannerTasks();
-        showSuccess("Evento excluído no Google Agenda.");
+        showSuccess(t("planner.googleDeleted"));
         return;
       }
 
@@ -2994,12 +3140,12 @@ export function PlannerPage() {
                 color: "#4A3B37",
                 letterSpacing: "-0.01em"
               }}>
-                Modo Proteção Ativo — {cycleReport.phaseLabel}
+                {t("planner.protectionActive", { phase: cycleReport.phaseLabel })}
               </p>
               <p style={{ fontSize: 12, color: "#7C6D68", margin: 0, lineHeight: 1.4, fontWeight: 500 }}>
                 {cycleReport.phase === "depleted"
-                  ? "Você está em esgotamento. Considere adiar tarefas não urgentes e priorizar descanso."
-                  : "Fase de baixa energia. Otimize sua agenda para tarefas leves e evite pressões hoje."}
+                  ? t("planner.protectionDepleted")
+                  : t("planner.protectionLow")}
               </p>
             </div>
           </div>
@@ -3025,7 +3171,7 @@ export function PlannerPage() {
           }}
         >
           <ClipboardCheck size={15} strokeWidth={2.4} color="var(--accent-sky)" />
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-sky-ink)", letterSpacing: ".01em" }}>Fechar dia</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-sky-ink)", letterSpacing: ".01em" }}>{t("planner.closeDay")}</span>
         </button>
         <button
           onClick={() => navigate("/goals")}
@@ -3051,10 +3197,10 @@ export function PlannerPage() {
       <div style={{ marginTop: 24, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
           <div>
-            <span style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", fontSize: 11, marginBottom: 4 }}>AGENDA</span>
+                <span style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", fontSize: 11, marginBottom: 4 }}>{t("planner.agenda")}</span>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-1)", margin: 0, letterSpacing: "-0.02em" }}>Timeline do dia</h1>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
-              Blocos que respeitam sua energia.
+                {t("planner.respectsEnergy")}
             </p>
           </div>
           <span style={{
@@ -3101,7 +3247,7 @@ export function PlannerPage() {
                 Ajustar agenda
               </p>
               <p style={{ margin: 0, fontSize: 12, lineHeight: 1.55, color: "var(--text-2)" }}>
-                Sugestões com base na hora atual, energia e janelas livres.
+                {t("planner.suggestionsBody")}
               </p>
             </div>
             <AiriaButton
@@ -3146,8 +3292,8 @@ export function PlannerPage() {
           <SmartEmptyState
             icon={CalendarClock}
             title="Monte um dia possivel"
-            description="O Planner serve para adaptar tarefas ao seu humor e energia. Comece com um bloco pequeno ou deixe a Airia sugerir uma estrutura."
-            ctaLabel="Criar primeira tarefa"
+              description={t("planner.emptyDescription")}
+              ctaLabel={t("planner.firstTask")}
             onAction={() => openNewFormAt(getCurrentTimeRounded())}
             examples={[
               { title: "Responder uma pendencia importante", description: "Bom para tirar peso acumulado." },
@@ -3229,7 +3375,7 @@ export function PlannerPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12, paddingLeft: 4 }}>
             <span style={{ fontSize: 14 }}>🌿</span>
             <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage-ink, #50705B)" }}>
-              Hábitos de hoje
+              {t("planner.habitsToday")}
             </span>
             <span style={{
               background: "rgba(150,199,179,.18)",
@@ -3325,7 +3471,7 @@ export function PlannerPage() {
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
             <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
-              Foco Prioritário
+              {t("planner.priorityFocus")}
             </span>
             <span style={{
               background: "var(--accent-peach-a3)", color: "var(--accent-peach-ink)",
@@ -3372,7 +3518,7 @@ export function PlannerPage() {
                     <>
                       <div style={{ marginTop: 10, display: "flex", alignItems: "flex-start", gap: 12, paddingRight: 78 }}>
                         <button
-                          onClick={() => handleCompleteFocusItem(item, isGoalAction ? "meta" : "tarefa")}
+                          onClick={() => handleCompleteFocusItem(item, isGoalAction ? "meta" : FOCUS_ITEM_TASK_KIND)}
                           style={{
                             width: 22, height: 22, borderRadius: 6, flexShrink: 0, cursor: "pointer",
                             background: isAnimating ? (isGoalAction ? "var(--accent-peach)" : "var(--accent-sky)") : "transparent",
@@ -3557,7 +3703,7 @@ export function PlannerPage() {
 
       <AiriaBottomSheet
         open={Boolean(recurringDeleteTask)}
-        title="Excluir recorrência?"
+        title={t("planner.deleteRecurrence")}
         description={recurringDeleteTask ? `“${recurringDeleteTask.title}” é recorrente. Escolha o alcance da exclusão.` : undefined}
         icon={<Trash2 size={17} />}
         onClose={() => setRecurringDeleteTask(null)}
@@ -3569,7 +3715,7 @@ export function PlannerPage() {
             disabled={recurringDeleteLoading}
             onClick={() => setRecurringDeleteTask(null)}
           >
-            Cancelar
+            {t("common.cancel")}
           </AiriaButton>
         )}
       >
@@ -3592,10 +3738,10 @@ export function PlannerPage() {
                   }}
                 >
                   <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: option.scope === "all" ? "var(--accent-peach-ink)" : "var(--text-1)" }}>
-                    {option.title}
+                    {l(option.title, RECURRING_DELETE_OPTIONS_EN[option.scope].title)}
                   </span>
                   <span style={{ display: "block", fontSize: 11, color: "var(--text-3)", marginTop: 2, lineHeight: 1.4 }}>
-                    {option.description}
+                    {l(option.description, RECURRING_DELETE_OPTIONS_EN[option.scope].description)}
                   </span>
                 </button>
               ))}
@@ -3605,13 +3751,13 @@ export function PlannerPage() {
 
       <AiriaBottomSheet
         open={showNewForm}
-        title="Nova tarefa"
-        description="Crie um bloco possível para o seu dia."
+        title={t("planner.newTask")}
+        description={t("planner.newTaskDescription")}
         icon={<Plus size={18} />}
         onClose={closeNewForm}
         maxHeight="92vh"
       >
-        <PlannerSheetBody form={newForm} setForm={setNewForm} onSave={handleAddBlock} onCancel={closeNewForm} saveLabel="Criar tarefa" />
+          <PlannerSheetBody form={newForm} setForm={setNewForm} onSave={handleAddBlock} onCancel={closeNewForm} saveLabel={t("planner.createTask")} />
       </AiriaBottomSheet>
 
       {/* ── View card de tarefa ── */}
@@ -3668,8 +3814,8 @@ export function PlannerPage() {
 
       <AiriaBottomSheet
         open={Boolean(editingTaskId)}
-        title="Editar tarefa"
-        description="Ajuste horário, carga e detalhes do bloco."
+        title={t("planner.editTask")}
+        description={t("planner.editTaskDescription")}
         icon={<CalendarClock size={18} />}
         onClose={closeEditForm}
         maxHeight="92vh"
@@ -3679,14 +3825,14 @@ export function PlannerPage() {
           setForm={setEditForm}
           onSave={handleSaveEdit}
           onCancel={closeEditForm}
-          saveLabel="Salvar"
+            saveLabel={t("common.save")}
         />
       </AiriaBottomSheet>
 
       <AiriaBottomSheet
         open={adaptationOpen}
-        title="Ajustes sugeridos"
-        description={adaptationPreview?.summary ?? "Airia está lendo sua agenda, fase e horário atual."}
+        title={l("Ajustes sugeridos", "Suggested adjustments")}
+        description={adaptationPreview?.summary ?? l("Airia está lendo sua agenda, fase e horário atual.", "Airia is reading your agenda, phase, and current time.")}
         icon={<Sparkles size={18} />}
         onClose={closeAgendaAdaptationPreview}
         maxHeight="84vh"
@@ -3703,6 +3849,8 @@ export function PlannerPage() {
           </AiriaButton>
         )}
       >
+
+            {adaptationPreview?.dayStructure && <DayStructureCard profile={adaptationPreview.dayStructure} />}
 
             {adaptationLoading ? (
               <div style={{ display: "grid", gap: 8 }}>
@@ -3725,6 +3873,10 @@ export function PlannerPage() {
                       key={change.id}
                       type="button"
                       disabled={!actionable || adaptationApplying}
+                      aria-pressed={actionable ? selected : undefined}
+                      aria-label={actionable
+                        ? `${selected ? "Remover" : "Selecionar"} ajuste: ${change.title}`
+                        : `Informação não selecionável: ${change.title}`}
                       onClick={() => {
                         if (!actionable) return;
                         setSelectedAdaptationIds((prev) => {
@@ -3784,7 +3936,7 @@ export function PlannerPage() {
               </div>
             ) : (
               <p style={{ margin: "12px 0", fontSize: 13, lineHeight: 1.5, color: "var(--text-2)" }}>
-                Nenhum ajuste confiável agora. Melhor manter a agenda como está.
+                {t("planner.noAdjustment")}
               </p>
             )}
 
@@ -3874,7 +4026,7 @@ export function PlannerPage() {
                 cursor: "pointer",
               }}
             >
-              Cancelar
+              {t("common.cancel")}
             </button>
           </div>
         </div>

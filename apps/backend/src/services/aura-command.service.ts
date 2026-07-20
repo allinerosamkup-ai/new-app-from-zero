@@ -316,6 +316,7 @@ export class AuraCommandService {
       '- create_goal: title + subgoals[]',
       '- update_task: taskId + newDate + newStartTime',
       '- delete_task: taskId',
+      '- Para update_task/delete_task, use taskId somente quando o título do bloco corresponder ao alvo atual indicado no frame cognitivo; se não houver correspondência segura, use ask_clarification.',
       '- ask_clarification: só quando falta dado COMPLETAMENTE INDISPENSÁVEL',
       '- handoff_to_journal: APENAS quando a pessoa pedir EXPLICITAMENTE "salva no diário"',
       '',

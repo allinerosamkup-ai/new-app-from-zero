@@ -1,6 +1,7 @@
 // Checkin Page v6 — modo expresso (1 tela, predição) + wizard completo opcional
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { MoodOption } from "../features/aura/types";
@@ -285,7 +286,8 @@ const STEPS: Array<{ labelKey: string; hintKey: string; label: string; hint: str
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export function CheckinPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
   const { state, setMood, addCheckin } = useAuraStore();
 
   // Previsão menstrual automática
@@ -298,7 +300,10 @@ export function CheckinPage() {
   const [cycleConfirmed, setCycleConfirmed] = useState<boolean | null>(null);
   const navigate = useNavigate();
 
-  const dayContext = useMemo(() => getClientDayContext(), []);
+  const dayContext = useMemo(
+    () => getClientDayContext(new Date(), resolveIntlLocale(i18n.language)),
+    [i18n.language],
+  );
 
   // ── express: predição a partir do padrão + ausência como dado
   const prediction = useMemo(
@@ -370,17 +375,17 @@ export function CheckinPage() {
 
   function startReentryVoice() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { setVoiceError("Seu navegador não suporta voz."); return; }
+    if (!SpeechRecognition) { setVoiceError(t("checkin.voiceUnsupported")); return; }
     setVoiceError(null);
     const recognition = new SpeechRecognition();
-    recognition.lang = "pt-BR";
+    recognition.lang = resolveIntlLocale();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognitionRef.current = recognition;
     let silenceTimer: ReturnType<typeof setTimeout> | null = null;
     let finalTranscript = "";
     recognition.onstart = () => setIsListening(true);
-    recognition.onerror = () => { setIsListening(false); setVoiceError("Não ouvi bem. Tente de novo."); };
+    recognition.onerror = () => { setIsListening(false); setVoiceError(t("checkin.voiceRetry")); };
     recognition.onresult = (event: any) => {
       if (silenceTimer) clearTimeout(silenceTimer);
       finalTranscript = "";
@@ -407,7 +412,7 @@ export function CheckinPage() {
         await new Promise(r => setTimeout(r, 400));
         await submitReentry();
       } catch {
-        setVoiceError("Não consegui processar. Escolha uma opção abaixo.");
+        setVoiceError(t("checkin.voiceChoose"));
       } finally {
         setVoiceLoading(false);
       }
@@ -419,7 +424,7 @@ export function CheckinPage() {
   function startVoiceCheckin() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setVoiceError("Seu navegador não suporta reconhecimento de voz.");
+      setVoiceError(t("checkin.voiceRecognitionUnsupported"));
       return;
     }
     if (isListening) {
@@ -429,7 +434,7 @@ export function CheckinPage() {
     setVoiceError(null);
     setVoiceTranscript("");
     const recognition = new SpeechRecognition();
-    recognition.lang = "pt-BR";
+    recognition.lang = resolveIntlLocale();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognitionRef.current = recognition;
@@ -440,7 +445,7 @@ export function CheckinPage() {
     recognition.onstart = () => setIsListening(true);
     recognition.onerror = () => {
       setIsListening(false);
-      setVoiceError("Não consegui ouvir. Tente de novo.");
+      setVoiceError(t("checkin.voiceHearRetry"));
     };
     recognition.onresult = (event: any) => {
       if (silenceTimer) clearTimeout(silenceTimer);
@@ -471,7 +476,7 @@ export function CheckinPage() {
         }
         setExpressPhase("confirm");
       } catch {
-        setVoiceError("Não consegui processar. Tente de novo ou escolha a emoção manualmente.");
+        setVoiceError(t("checkin.voiceEmotionRetry"));
       } finally {
         setVoiceLoading(false);
       }
@@ -662,10 +667,10 @@ export function CheckinPage() {
           <div className="checkin-step-enter-fwd">
             <div style={{ marginBottom: 24 }}>
               <h2 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", color: "var(--text-1)", lineHeight: 1.25 }}>
-                Você ficou {daysSinceLastCheckin} {(daysSinceLastCheckin ?? 0) === 1 ? "dia" : "dias"} sem check-in
+                {t("checkin.missedTitle", { count: daysSinceLastCheckin ?? 0 })}
               </h2>
               <p style={{ fontSize: 14, color: "var(--text-3)", margin: 0, lineHeight: 1.6 }}>
-                Como foram esses dias? Uma resposta rápida ajuda a Airia entender seu padrão.
+                {t("checkin.missedBody")}
               </p>
             </div>
 
@@ -687,7 +692,7 @@ export function CheckinPage() {
                isListening ? <MicOff size={16} style={{ color: "var(--accent-peach)" }} /> :
                <Mic size={16} style={{ color: "var(--text-2)" }} />}
               <span style={{ fontSize: 13, fontWeight: 700, color: isListening ? "var(--accent-peach)" : "var(--text-2)" }}>
-                {voiceLoading ? "Processando..." : isListening ? "Ouvindo..." : "Falar sobre esses dias"}
+                {voiceLoading ? t("checkin.processing") : isListening ? t("checkin.listening") : t("checkin.talkAboutDays")}
               </span>
             </button>
 
@@ -695,15 +700,15 @@ export function CheckinPage() {
 
             {/* Cards de padrão */}
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 10px" }}>
-              Como esses dias foram no geral?
+              {t("checkin.daysOverall")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
               {[
-                { id: "good",   emoji: "✨", label: "Bons dias", sub: "Me senti bem, produtiva, com energia" },
-                { id: "stable", emoji: "🌤", label: "Estável",   sub: "Sem altos ou baixos marcantes" },
-                { id: "mixed",  emoji: "🌊", label: "Misturado", sub: "Alternei entre dias bons e difíceis" },
-                { id: "hard",   emoji: "🌧", label: "Dias difíceis", sub: "Cansada, humor baixo, pouca energia" },
-                { id: "crisis", emoji: "⛈", label: "Muito pesado", sub: "Crise, paralisia ou dias muito ruins" },
+                { id: "good", emoji: "✨" },
+                { id: "stable", emoji: "🌤" },
+                { id: "mixed", emoji: "🌊" },
+                { id: "hard", emoji: "🌧" },
+                { id: "crisis", emoji: "⛈" },
               ].map((opt) => (
                 <button
                   key={opt.id}
@@ -720,8 +725,8 @@ export function CheckinPage() {
                 >
                   <span style={{ fontSize: 22 }}>{opt.emoji}</span>
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 800, margin: 0, color: "var(--text-1)" }}>{opt.label}</p>
-                    <p style={{ fontSize: 11.5, margin: 0, color: "var(--text-3)", lineHeight: 1.4 }}>{opt.sub}</p>
+                    <p style={{ fontSize: 13, fontWeight: 800, margin: 0, color: "var(--text-1)" }}>{t(`checkin.reentry.${opt.id}.label`)}</p>
+                    <p style={{ fontSize: 11.5, margin: 0, color: "var(--text-3)", lineHeight: 1.4 }}>{t(`checkin.reentry.${opt.id}.sub`)}</p>
                   </div>
                 </button>
               ))}
@@ -733,7 +738,7 @@ export function CheckinPage() {
                 <textarea
                   value={reentryNote}
                   onChange={(e) => setReentryNote(e.target.value)}
-                  placeholder="Algum acontecimento marcante? (opcional)"
+                  placeholder={t("checkin.reentryNote")}
                   rows={2}
                   style={{
                     width: "100%", padding: "10px 12px", borderRadius: 12,
@@ -757,7 +762,7 @@ export function CheckinPage() {
                   fontFamily: "'Plus Jakarta Sans', sans-serif",
                 }}
               >
-                Pular
+                {t("checkin.skip")}
               </button>
               <button
                 type="button"
@@ -771,7 +776,7 @@ export function CheckinPage() {
                   fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all 0.2s",
                 }}
               >
-                {reentrySubmitting ? "Salvando..." : "Confirmar e fazer check-in de hoje"}
+                {reentrySubmitting ? t("checkin.saving") : t("checkin.confirmToday")}
               </button>
             </div>
           </div>
@@ -786,11 +791,11 @@ export function CheckinPage() {
               <>
                 <div style={{ marginBottom: 16 }}>
                   <h2 style={{ fontSize: 23, fontWeight: 900, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
-                    Como você tá agora?
+                    {t("checkin.howNow")}
                   </h2>
                   {isReentry && (
                     <p style={{ fontSize: 13, color: "var(--text-3)", margin: "6px 0 0", lineHeight: 1.5 }}>
-                      Que bom te ver 🤍 Conta só o momento atual, sem repor dias anteriores.
+                      {t("checkin.welcomeBack")}
                     </p>
                   )}
                 </div>
@@ -822,11 +827,11 @@ export function CheckinPage() {
                   )}
                   <div style={{ textAlign: "left" }}>
                     <span style={{ display: "block", fontSize: 14, fontWeight: 800, color: isListening ? "var(--accent-peach)" : "var(--accent-salmon, #e07060)" }}>
-                      {voiceLoading ? "Processando..." : isListening ? "Ouvindo... toque para parar" : "Falar como estou"}
+                      {voiceLoading ? t("checkin.processing") : isListening ? t("checkin.listeningStop") : t("checkin.speakHow")}
                     </span>
                     {!isListening && !voiceLoading && (
                       <span style={{ display: "block", fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>
-                        A Airia preenche tudo automaticamente
+                        {t("checkin.voiceAutoFill")}
                       </span>
                     )}
                   </div>
@@ -844,7 +849,7 @@ export function CheckinPage() {
                 )}
 
                 <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 10px", textAlign: "center" }}>
-                  ou escolha uma emoção
+                  {t("checkin.orChooseEmotion")}
                 </p>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 18 }}>
@@ -870,7 +875,7 @@ export function CheckinPage() {
                       }}
                     >
                       <span style={{ fontSize: 28, lineHeight: 1 }}>{em.emoji}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", textAlign: "center", lineHeight: 1.2 }}>{em.label}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", textAlign: "center", lineHeight: 1.2 }}>{t(`checkin.emotions.${em.id}`)}</span>
                     </button>
                   ))}
                 </div>
@@ -880,7 +885,7 @@ export function CheckinPage() {
                   onClick={() => setExpressPhase("sliders")}
                   style={{ width: "100%", background: "none", border: "none", cursor: "pointer", fontSize: 12.5, color: "var(--text-3)", padding: "8px 0", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                  Prefiro usar números →
+                  {t("checkin.useNumbers")}
                 </button>
 
 
@@ -893,8 +898,8 @@ export function CheckinPage() {
                   <div style={{ marginBottom: 22, display: "flex", alignItems: "center", gap: 14 }}>
                     <span style={{ fontSize: 48, lineHeight: 1 }}>{emotions.find((e) => e.id === emotionsSelected[0])?.emoji}</span>
                     <div>
-                      <p style={{ margin: 0, fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)" }}>Você está</p>
-                      <p style={{ margin: "2px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-1)" }}>{emotions.find((e) => e.id === emotionsSelected[0])?.label}</p>
+                      <p style={{ margin: 0, fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)" }}>{t("checkin.youAre")}</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 24, fontWeight: 900, color: "var(--text-1)" }}>{emotionsSelected[0] ? t(`checkin.emotions.${emotionsSelected[0]}`) : ""}</p>
                     </div>
                   </div>
 
@@ -922,15 +927,15 @@ export function CheckinPage() {
                       padding: "10px 14px", borderRadius: 12, marginBottom: 12,
                       background: "rgba(150,199,179,0.10)", border: "1px solid rgba(150,199,179,0.25)",
                     }}>
-                      <p style={{ margin: "0 0 5px", fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sage)" }}>Capturado pela voz</p>
+                <p style={{ margin: "0 0 5px", fontSize: 9, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sage)" }}>{t("checkin.voiceCaptured")}</p>
                       {detailEnabled.sono && (
                         <p style={{ margin: "2px 0", fontSize: 12, color: "var(--text-2)" }}>
-                          🌙 {sonoHoras}h de sono
+                          🌙 {l(`${sonoHoras}h de sono`, `${sonoHoras}h of sleep`)}
                         </p>
                       )}
                       {selectedFactors.length > 0 && (
                         <p style={{ margin: "2px 0", fontSize: 12, color: "var(--text-2)" }}>
-                          ✨ {selectedFactors.length} fator{selectedFactors.length > 1 ? "es" : ""} registrado{selectedFactors.length > 1 ? "s" : ""}
+                          ✨ {l(`${selectedFactors.length} ${selectedFactors.length === 1 ? "fator registrado" : "fatores registrados"}`, `${selectedFactors.length} ${selectedFactors.length === 1 ? "factor recorded" : "factors recorded"}`)}
                         </p>
                       )}
                       {note.trim() && (
@@ -946,14 +951,14 @@ export function CheckinPage() {
                     onClick={() => setShowAdjust(!showAdjust)}
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", padding: "0 0 12px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
-                    {showAdjust ? "▲ Fechar ajuste" : "Ajustar números"}
+                    {showAdjust ? l("▲ Fechar ajuste", "▲ Close adjustment") : l("Ajustar números", "Adjust values")}
                   </button>
 
                   {showAdjust && (
                     <div style={{ marginBottom: 14 }}>
                       {[
-                        { key: "humor" as const, title: "Humor", value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: ["Pesado", "Baixo", "Ok", "Bem", "Ótimo"] },
-                        { key: "energia" as const, title: "Energia", value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: ["Zerada", "Baixa", "Média", "Boa", "Alta"] },
+                        { key: "humor" as const, title: l("Humor", "Mood"), value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: [l("Pesado", "Heavy"), l("Baixo", "Low"), "Ok", l("Bem", "Good"), l("Ótimo", "Great")] },
+                        { key: "energia" as const, title: l("Energia", "Energy"), value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: [l("Zerada", "Empty"), l("Baixa", "Low"), l("Média", "Medium"), l("Boa", "Good"), l("Alta", "High")] },
                       ].map((row) => (
                         <div key={row.key} style={{ marginBottom: 14 }}>
                           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>{row.title}</p>
@@ -1007,7 +1012,7 @@ export function CheckinPage() {
                     }}
                   >
                     <div>
-                      <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "var(--text-1)" }}>Adicionar contexto</p>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "var(--text-1)" }}>{t("checkin.addContext")}</p>
                       <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>Fatores, sono, ciclo, nota…</p>
                     </div>
                     <span style={{ fontSize: 18, color: "var(--text-3)" }}>›</span>
@@ -1018,7 +1023,7 @@ export function CheckinPage() {
                     onClick={() => setExpressPhase("emotion")}
                     style={{ width: "100%", marginTop: 6, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", padding: "6px 0", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
-                    ← Mudar emoção
+                    {t("checkin.changeEmotion")}
                   </button>
               </>
             )}
@@ -1030,12 +1035,12 @@ export function CheckinPage() {
                   <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
                     Humor & Energia
                   </h2>
-                  <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>Ajusta e confirma.</p>
+                <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0 }}>{t("checkin.adjustAndConfirm")}</p>
                 </div>
 
                 {([
-                  { key: "humor" as const, title: "Humor", icon: "😊", value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: ["Pesado", "Baixo", "Ok", "Bem", "Ótimo"] },
-                  { key: "energia" as const, title: "Energia", icon: "⚡", value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: ["Zerada", "Baixa", "Média", "Boa", "Alta"] },
+                  { key: "humor" as const, title: l("Humor", "Mood"), icon: "😊", value: humor, onSelect: setHumor, color: "var(--accent-peach)", emojiOf: getMoodEmoji, labels: [l("Pesado", "Heavy"), l("Baixo", "Low"), "Ok", l("Bem", "Good"), l("Ótimo", "Great")] },
+                  { key: "energia" as const, title: l("Energia", "Energy"), icon: "⚡", value: energia, onSelect: setEnergia, color: "var(--accent-sky)", emojiOf: getEnergyEmoji, labels: [l("Zerada", "Empty"), l("Baixa", "Low"), l("Média", "Medium"), l("Boa", "Good"), l("Alta", "High")] },
                 ]).map((row) => (
                   <div key={row.key} style={{ marginBottom: 18 }}>
                     <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px" }}>
@@ -1066,7 +1071,7 @@ export function CheckinPage() {
 
                 {!isReentry && prediction.source !== "neutral" && (
                   <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
-                    ✦ Pré-marcado pelo seu padrão — ajusta se não bater.
+                    {t("checkin.presetPattern")}
                   </p>
                 )}
 
@@ -1094,7 +1099,7 @@ export function CheckinPage() {
                   }}
                 >
                   <div>
-                    <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "var(--text-1)" }}>Adicionar contexto</p>
+              <p style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: "var(--text-1)" }}>{t("checkin.addContext")}</p>
                     <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>Fatores, sono, ciclo, nota…</p>
                   </div>
                   <span style={{ fontSize: 18, color: "var(--text-3)" }}>›</span>
@@ -1105,7 +1110,7 @@ export function CheckinPage() {
                   onClick={() => setExpressPhase("emotion")}
                   style={{ width: "100%", marginTop: 6, background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-3)", padding: "6px 0", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                  ← Voltar para emoções
+                  {t("checkin.backEmotions")}
                 </button>
               </>
             )}
@@ -1228,7 +1233,7 @@ export function CheckinPage() {
               {/* Contador */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)", fontWeight: 600 }}>
-                  Selecione até 3 emoções
+                  {t("checkin.selectThree")}
                 </p>
                 <span style={{
                   fontSize: 11, fontWeight: 800,
@@ -1272,7 +1277,7 @@ export function CheckinPage() {
                         </span>
                       )}
                       <span className="emoji">{em.emoji}</span>
-                      {em.label}
+                      {t(`checkin.emotions.${em.id}`)}
                     </button>
                   );
                 })}
@@ -1292,7 +1297,7 @@ export function CheckinPage() {
                         fontSize: 12, fontWeight: 700, color: "var(--accent-peach-ink)",
                         display: "flex", alignItems: "center", gap: 6,
                       }}>
-                        {em.emoji} {em.label}
+                        {em.emoji} {t(`checkin.emotions.${em.id}`)}
                       </div>
                     );
                   })}
@@ -1344,7 +1349,7 @@ export function CheckinPage() {
                   }}
                 >
                   <span style={{ fontSize: "15px", lineHeight: 1 }}>{f.icon}</span>
-                  {f.label}
+                  {t(`checkin.factors.${f.id}`)}
                 </button>
               );
             };
@@ -1353,7 +1358,7 @@ export function CheckinPage() {
               <div>
                 {/* Seção positiva */}
                 <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sage)", margin: "0 0 10px" }}>
-                  O que ajudou hoje? ✨
+                  {t("checkin.helpedToday")}
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: 20 }}>
                   {positiveFactors.map(f => <FactorChip key={f.id} f={f} />)}
@@ -1364,7 +1369,7 @@ export function CheckinPage() {
 
                 {/* Seção negativa */}
                 <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "#C44444", margin: "0 0 10px" }}>
-                  O que pesou hoje? 🌧️
+                  {t("checkin.weighedToday")}
                 </p>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: 8 }}>
                   {negativeFactors.map(f => <FactorChip key={f.id} f={f} />)}
@@ -1395,27 +1400,27 @@ export function CheckinPage() {
               {/* Detail cards */}
               <div>
                 <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 10px" }}>
-                  Escaneie outras áreas
+                  {t("checkin.scanAreas")}
                 </p>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px" }}>
-                  <DetailCard emoji="🌙" title="Sono"
-                    summary={detailEnabled.sono ? `${sonoHoras}h de sono` : "Quantas horas você dormiu?"}
+                  <DetailCard emoji="🌙" title={l("Sono", "Sleep")}
+                    summary={detailEnabled.sono ? l(`${sonoHoras}h de sono`, `${sonoHoras}h of sleep`) : l("Quantas horas você dormiu?", "How many hours did you sleep?")}
                     active={activeDetail === "sono"} onClick={() => toggleDetailCard("sono")} />
-                  <DetailCard emoji="💪" title="Corpo"
-                    summary={detailEnabled.fisico ? `${fisico}/10 registrado` : "Toque para registrar"}
+                  <DetailCard emoji="💪" title={l("Corpo", "Body")}
+                    summary={detailEnabled.fisico ? l(`${fisico}/10 registrado`, `${fisico}/10 recorded`) : l("Toque para registrar", "Tap to record")}
                     active={activeDetail === "fisico"} onClick={() => toggleDetailCard("fisico")} />
-                  <DetailCard emoji="👥" title="Social"
-                    summary={detailEnabled.social ? `${social}/10 registrado` : "Toque para registrar"}
+                  <DetailCard emoji="👥" title={l("Social", "Social")}
+                    summary={detailEnabled.social ? l(`${social}/10 registrado`, `${social}/10 recorded`) : l("Toque para registrar", "Tap to record")}
                     active={activeDetail === "social"} onClick={() => toggleDetailCard("social")} />
-                  <DetailCard emoji="🌸" title="Ciclo menstrual"
-                    summary={showCiclo ? "Painel aberto" : "Toque se quiser registrar"}
+                  <DetailCard emoji="🌸" title={l("Ciclo menstrual", "Menstrual cycle")}
+                    summary={showCiclo ? l("Painel aberto", "Panel open") : l("Toque se quiser registrar", "Tap if you want to record")}
                     active={activeDetail === "ciclo"} onClick={() => toggleDetailCard("ciclo")} />
                 </div>
 
                 {activeDetail === "sono" && (
                   <div style={{ marginTop: 12 }}>
                     <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "0 0 10px", letterSpacing: ".1em", textTransform: "uppercase" }}>
-                      🌙 Quantas horas você dormiu?
+                      {t("checkin.sleepQuestion")}
                     </p>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => {
@@ -1439,26 +1444,26 @@ export function CheckinPage() {
                             }}
                           >
                             <span>{h}h</span>
-                            {h === 3 && <span style={{ fontSize: 9, fontWeight: 600, color: isActive ? activeColor : "var(--text-3)" }}>ou menos</span>}
+                            {h === 3 && <span style={{ fontSize: 9, fontWeight: 600, color: isActive ? activeColor : "var(--text-3)" }}>{l("ou menos", "or less")}</span>}
                           </button>
                         );
                       })}
                     </div>
                     <p style={{ margin: "8px 0 0", fontSize: 11, color: "var(--text-3)" }}>
-                      {!detailEnabled.sono ? "Toque para registrar" : sonoHoras <= 5 ? "Sono curto — impacta humor e foco." : sonoHoras >= 8 ? "Ótimo sono 🌙" : "Sono razoável."}
+                      {!detailEnabled.sono ? l("Toque para registrar", "Tap to record") : sonoHoras <= 5 ? l("Sono curto — impacta humor e foco.", "Short sleep affects mood and focus.") : sonoHoras >= 8 ? l("Ótimo sono 🌙", "Great sleep 🌙") : l("Sono razoável.", "Reasonable sleep.")}
                     </p>
                   </div>
                 )}
                 {activeDetail === "fisico" && (
                   <div style={{ marginTop: "12px" }}>
-                    <OptionalSlider label="Como está seu corpo?" emoji="💪" value={fisico}
+              <OptionalSlider label={t("checkin.bodyQuestion")} emoji="💪" value={fisico}
                       onChange={(v) => { setFisico(v); setDetailEnabled((c) => ({ ...c, fisico: true })); }}
                       color="var(--accent-sage)" />
                   </div>
                 )}
                 {activeDetail === "social" && (
                   <div style={{ marginTop: "12px" }}>
-                    <OptionalSlider label="Como foi sua atividade social?" emoji="👥" value={social}
+                    <OptionalSlider label={t("checkin.socialQuestion")} emoji="👥" value={social}
                       onChange={(v) => { setSocial(v); setDetailEnabled((c) => ({ ...c, social: true })); }}
                       color="var(--social-color)" />
                   </div>
@@ -1473,7 +1478,7 @@ export function CheckinPage() {
                             {menstrualPrediction.emoji} Dia {menstrualPrediction.dayOfCycle} do ciclo — fase {menstrualPrediction.label}
                           </p>
                           <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "10px" }}>
-                            Isso bateu com como você está se sentindo?
+                            {t("checkin.feelingMatch")}
                           </p>
                           <div style={{ display: "flex", gap: "8px" }}>
                             <button type="button" onClick={() => {
@@ -1490,28 +1495,28 @@ export function CheckinPage() {
                               border: "1.5px solid var(--accent-peach)",
                               background: "var(--accent-peach-a3)",
                               color: "var(--accent-peach-ink)", fontWeight: 700, fontSize: "13px", cursor: "pointer",
-                            }}>Sim, bateu</button>
+                  }}>{t("checkin.matched")}</button>
                             <button type="button" onClick={() => setCycleConfirmed(false)} style={{
                               flex: 1, height: "36px", borderRadius: "999px",
                               border: "1.5px solid var(--warm-border-2)",
                               background: "transparent",
                               color: "var(--text-3)", fontWeight: 700, fontSize: "13px", cursor: "pointer",
-                            }}>Corrigir</button>
+                  }}>{t("checkin.correct")}</button>
                           </div>
                         </div>
                       )}
                       {menstrualPrediction && cycleConfirmed === true && (
                         <p style={{ fontSize: "12px", color: "var(--accent-peach-ink)", fontWeight: 600, marginBottom: "10px" }}>
-                          {menstrualPrediction.emoji} Dia {menstrualPrediction.dayOfCycle} confirmado.
-                          {menstrualPrediction.phase !== "menstrual" && " Se estiver no fluxo agora, registre abaixo."}
+                          {menstrualPrediction.emoji} {l(`Dia ${menstrualPrediction.dayOfCycle} confirmado.`, `Day ${menstrualPrediction.dayOfCycle} confirmed.`)}
+                          {menstrualPrediction.phase !== "menstrual" && l(" Se estiver no fluxo agora, registre abaixo.", " If your period started now, record it below.")}
                         </p>
                       )}
                       {/* Pergunta manual quando sem dados ou usuária quer corrigir */}
                       {(!menstrualPrediction || cycleConfirmed === false) && (
                         <>
-                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Está menstruada hoje?</p>
+                  <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>{t("checkin.menstruatingToday")}</p>
                       <div style={{ display: "flex", gap: "8px", marginBottom: "14px" }}>
-                        {[{ label: "Sim", value: true }, { label: "Não", value: false }].map(opt => (
+                        {[{ label: l("Sim", "Yes"), value: true }, { label: l("Não", "No"), value: false }].map(opt => (
                           <button type="button" key={String(opt.value)}
                             onClick={() => { setIsFlowing(opt.value); if (!opt.value) { setFlowDay(null); setFlowIntensity(null); setSymptomLvls({}); } }}
                             style={{
@@ -1560,7 +1565,7 @@ export function CheckinPage() {
                               >{fi.label}</button>
                             ))}
                           </div>
-                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Cólica</p>
+                      <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>{t("checkin.cramps")}</p>
                           <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
                             {symptomLevels_opts.map(s => (
                               <button type="button" key={s.v}
@@ -1575,7 +1580,7 @@ export function CheckinPage() {
                               >{s.label}</button>
                             ))}
                           </div>
-                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>Dor de cabeça</p>
+                          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-peach-ink)", marginBottom: "8px" }}>{t("checkin.headache")}</p>
                           <div style={{ display: "flex", gap: "8px" }}>
                             {symptomLevels_opts.map(s => (
                               <button type="button" key={s.v}
@@ -1631,7 +1636,7 @@ export function CheckinPage() {
                   <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
                     {/* Tipo de dia */}
                     <div>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>Como foi o dia hoje?</p>
+                <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>{t("checkin.dayQuestion")}</p>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {(["up", "down", "mixed", "stable"] as const).map((t) => {
                           const labels = { up: "↑ Pra cima", down: "↓ Pra baixo", mixed: "↕ Misto", stable: "= Estável" };
@@ -1663,7 +1668,7 @@ export function CheckinPage() {
                     {/* Foco TDAH */}
                     <div>
                       <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>
-                        Foco hoje (1-10)
+                        {t("checkin.focusToday")}
                       </p>
                       <div style={{ display: "flex", gap: 4 }}>
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
@@ -1695,11 +1700,11 @@ export function CheckinPage() {
                     {/* Hyperfocus + Medication toggles */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                       <div>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>Hiperfoco hoje?</p>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>{t("checkin.hyperfocusToday")}</p>
                         <div style={{ display: "flex", gap: 4 }}>
                           {[
-                            { l: "Sim", v: true },
-                            { l: "Não", v: false },
+                            { l: l("Sim", "Yes"), v: true },
+                            { l: l("Não", "No"), v: false },
                           ].map((opt) => {
                             const active = hyperfocus === opt.v;
                             return (
@@ -1727,11 +1732,11 @@ export function CheckinPage() {
                       </div>
 
                       <div>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>Medicação hoje?</p>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>{t("checkin.medicationToday")}</p>
                         <div style={{ display: "flex", gap: 4 }}>
                           {[
-                            { l: "Sim", v: true },
-                            { l: "Não", v: false },
+                            { l: l("Sim", "Yes"), v: true },
+                            { l: l("Não", "No"), v: false },
                           ].map((opt) => {
                             const active = medTaken === opt.v;
                             return (
@@ -1763,14 +1768,14 @@ export function CheckinPage() {
                     {dayType === "mixed" && (
                       <div>
                         <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>
-                          O que tá misto?
+                          {t("checkin.mixedWhat")}
                         </p>
                         <input
                           type="text"
                           value={mixedNote}
                           maxLength={500}
                           onChange={(e) => setMixedNote(e.target.value)}
-                          placeholder="Ex.: energia alta, humor baixo"
+                          placeholder={t("checkin.mixedPlaceholder")}
                           style={{
                             width: "100%",
                             padding: "8px 10px",
@@ -1802,7 +1807,7 @@ export function CheckinPage() {
                 <textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Um pensamento, uma situação... vai direto para o seu diário."
+                placeholder={t("checkin.notePlaceholder")}
                   rows={3}
                   style={{
                     width: "100%",
@@ -1821,7 +1826,7 @@ export function CheckinPage() {
                 />
                 {note.trim() && (
                   <p style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 600, marginTop: 6, marginBottom: 0 }}>
-                    ✓ Vai para o seu diário de hoje
+                    {t("checkin.goesToJournal")}
                   </p>
                 )}
               </div>

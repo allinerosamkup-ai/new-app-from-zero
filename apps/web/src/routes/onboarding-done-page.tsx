@@ -1,5 +1,6 @@
 // Onboarding: Conclusão — confetti + resumo do perfil
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { buildOnboardingProcessPayload } from "../features/aura/onboarding";
@@ -26,6 +27,7 @@ function ConfettiPiece({ delay, x }: { delay: number; x: number }) {
 }
 
 export function OnboardingDonePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state, refreshData } = useAuraStore();
   const [show, setShow] = useState(false);
@@ -38,9 +40,9 @@ export function OnboardingDonePage() {
   }, []);
 
   const nameSource = state.onboardingDraft.fullName || state.name;
-  const name = nameSource ? nameSource.split(" ")[0] : "você";
-  const preferredFocus = state.onboardingDraft.cognitivePreferences[0] ?? "A calibrar";
-  const sleepQuality = state.onboardingDraft.sleepQuality || "não informado";
+  const name = nameSource ? nameSource.split(" ")[0] : t("config.user");
+  const preferredFocus = state.onboardingDraft.cognitivePreferences[0] ?? t("onboarding.done.calibrating");
+  const sleepQuality = state.onboardingDraft.sleepQuality || t("onboarding.done.notInformed");
 
   async function handleFinish() {
     setSubmitting(true);
@@ -56,7 +58,7 @@ export function OnboardingDonePage() {
       await refreshData();
       navigate("/home");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível salvar o onboarding.");
+      setError(err instanceof Error ? err.message : t("onboarding.done.saveError"));
     } finally {
       setSubmitting(false);
     }
@@ -106,13 +108,13 @@ export function OnboardingDonePage() {
           color: "var(--text-1)", marginBottom: 10, lineHeight: 1.25,
           animation: "fade-up 0.6s ease 0.2s both",
         }}>
-          Tudo pronto, {name}!
+          {t("onboarding.done.ready", { name })}
         </h1>
         <p style={{
           fontSize: 14, color: "var(--text-2)", lineHeight: 1.65, marginBottom: 32, maxWidth: 280,
           animation: "fade-up 0.6s ease 0.35s both",
         }}>
-          Seu perfil foi criado com sucesso. A Airia já sabe como te ajudar melhor.
+          {t("onboarding.done.subtitle")}
         </p>
 
         {/* Resumo do perfil */}
@@ -124,14 +126,14 @@ export function OnboardingDonePage() {
           boxShadow: "0 18px 32px rgba(17,24,39,.06)",
         }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: 14 }}>
-            SEU PERFIL
+            {t("onboarding.done.profile")}
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              { emoji: "🌙", label: "Ciclo",             value: state.onboardingDraft.cycleStart ? "Informado" : "A calibrar" },
-              { emoji: "⚡", label: "Energia",           value: `${state.onboardingDraft.focusScore}/10 em dia bom` },
-              { emoji: "😴", label: "Sono",              value: `${state.onboardingDraft.sleepHours}h (${sleepQuality})` },
-              { emoji: "🎯", label: "Foco preferido",    value: preferredFocus },
+              { emoji: "🌙", label: t("onboarding.done.cycle"), value: state.onboardingDraft.cycleStart ? t("onboarding.done.informed") : t("onboarding.done.calibrating") },
+              { emoji: "⚡", label: t("onboarding.done.energy"), value: t("onboarding.done.goodDay", { score: state.onboardingDraft.focusScore }) },
+              { emoji: "😴", label: t("onboarding.done.sleep"), value: `${state.onboardingDraft.sleepHours}h (${sleepQuality})` },
+              { emoji: "🎯", label: t("onboarding.done.preferredFocus"), value: preferredFocus },
             ].map(item => (
               <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -174,7 +176,7 @@ export function OnboardingDonePage() {
             animation: "fade-up 0.6s ease 0.65s both",
           }}
         >
-          {submitting ? "Salvando perfil..." : "Começar minha jornada"}
+          {submitting ? t("onboarding.done.saving") : t("onboarding.done.start")}
         </button>
       </div>
     </>

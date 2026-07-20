@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 
-import { createApp } from './index';
+import { createApp, enforceAuraCaptureGate } from './index';
 
 async function readResponseText(response: Response): Promise<string> {
   return await response.text();
@@ -10,6 +10,117 @@ async function readResponseText(response: Response): Promise<string> {
 async function run() {
   const createdSessions: any[] = [];
   const savedMessages: any[] = [];
+  const updatedBlocks: any[] = [];
+  const previousOpenAiKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+
+  const mutatingActions = [
+    'create_task', 'create_checklist', 'create_goal', 'create_agenda',
+    'handoff_to_journal', 'update_task', 'delete_task', 'complete_items',
+  ] as const;
+  for (const action of mutatingActions) {
+    const candidate = {
+      assistantMessage: 'Mutation accepted by the model.',
+      intent: 'planner_task',
+      action,
+      payload: { taskId: 'task-1' },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    } as any;
+    const blocked = enforceAuraCaptureGate(candidate, {
+      captureJudgment: { allowedMutationActions: [] },
+    }, 'en-US');
+    assert.equal(blocked.action, 'ask_clarification');
+    assert.deepEqual(blocked.payload, {});
+
+    const payloadWithTarget = action === 'complete_items'
+      ? { items: [{ title: 'Proposal', type: 'task' }] }
+      : action === 'update_task'
+        ? { taskId: 'task-1', newDate: '2026-04-07', newStartTime: '14:00' }
+        : action === 'delete_task'
+          ? { taskId: 'task-1' }
+          : action === 'create_task'
+            ? { title: 'Proposal', date: '2026-04-07', startTime: '14:00' }
+            : action === 'create_goal'
+              ? { title: 'Finish course' }
+              : action === 'create_checklist'
+                ? { title: 'Proposal', items: ['Review'] }
+                : action === 'create_agenda'
+                  ? { blocks: [{ title: 'Proposal', date: '2026-04-07', startTime: '14:00' }] }
+                  : {};
+    const exactCandidate = { ...candidate, payload: payloadWithTarget };
+    const allowed = enforceAuraCaptureGate(exactCandidate, {
+      captureJudgment: {
+        allowedMutationActions: [action],
+        mutationTargetText: action === 'update_task' || action === 'delete_task' ? 'proposal' : null,
+      },
+    }, 'en-US', { resolvedTaskTitle: action === 'update_task' || action === 'delete_task' ? 'Send proposal' : null });
+    assert.equal(allowed, exactCandidate);
+  }
+
+  const actionMismatch = enforceAuraCaptureGate({
+    assistantMessage: 'Deleted it.', intent: 'delete_task', action: 'delete_task',
+    payload: { taskId: 'task-1' }, needsConfirmation: false,
+    needsClarification: false, clarifyingQuestion: null,
+  }, { captureJudgment: { allowedMutationActions: ['create_task'] } }, 'en-US');
+  assert.equal(actionMismatch.action, 'ask_clarification');
+
+  for (const action of ['update_task', 'delete_task', 'complete_items'] as const) {
+    const missingTarget = enforceAuraCaptureGate({
+      assistantMessage: 'Done.',
+      intent: action === 'update_task' ? 'reschedule' : action,
+      action,
+      payload: {},
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    }, { captureJudgment: { allowedMutationActions: [action] } }, 'en-US');
+    assert.equal(missingTarget.action, 'ask_clarification');
+  }
+
+  const wrongTarget = enforceAuraCaptureGate({
+    assistantMessage: 'Deleted it.', intent: 'delete_task', action: 'delete_task',
+    payload: { taskId: 'task-1' }, needsConfirmation: false,
+    needsClarification: false, clarifyingQuestion: null,
+  }, {
+    captureJudgment: { allowedMutationActions: ['delete_task'], mutationTargetText: 'dentist' },
+  }, 'en-US', { resolvedTaskTitle: 'Send proposal' });
+  assert.equal(wrongTarget.action, 'ask_clarification');
+
+  for (const politeTarget of ['proposta por favor', 'proposal please', 'proposta pra mim', 'proposal for me']) {
+    const politeTargetCandidate = {
+      assistantMessage: 'Deleted it.', intent: 'delete_task', action: 'delete_task',
+      payload: { taskId: 'task-1' }, needsConfirmation: false,
+      needsClarification: false, clarifyingQuestion: null,
+    } as const;
+    const politeTargetAllowed = enforceAuraCaptureGate(politeTargetCandidate, {
+      captureJudgment: { allowedMutationActions: ['delete_task'], mutationTargetText: politeTarget },
+    }, 'en-US', { resolvedTaskTitle: politeTarget.startsWith('proposal') ? 'Send proposal' : 'Enviar proposta' });
+    assert.equal(politeTargetAllowed, politeTargetCandidate, politeTarget);
+  }
+
+  const incompleteUpdate = enforceAuraCaptureGate({
+    assistantMessage: 'Moved it.', intent: 'reschedule', action: 'update_task',
+    payload: { taskId: 'task-1', newDate: '2026-04-07' }, needsConfirmation: false,
+    needsClarification: false, clarifyingQuestion: null,
+  }, {
+    captureJudgment: { allowedMutationActions: ['update_task'], mutationTargetText: 'proposal' },
+  }, 'en-US', { resolvedTaskTitle: 'Send proposal' });
+  assert.equal(incompleteUpdate.action, 'ask_clarification');
+
+  for (const [action, payload] of [
+    ['create_task', { title: 'Proposal' }],
+    ['create_goal', {}],
+    ['create_checklist', { title: 'Proposal', items: [] }],
+    ['create_agenda', { blocks: [] }],
+  ] as const) {
+    const incompleteCreation = enforceAuraCaptureGate({
+      assistantMessage: 'Created.', intent: action === 'create_goal' ? 'goal_project' : action === 'create_checklist' ? 'checklist' : action === 'create_agenda' ? 'agenda_plan' : 'planner_task',
+      action, payload, needsConfirmation: false, needsClarification: false, clarifyingQuestion: null,
+    }, { captureJudgment: { allowedMutationActions: [action] } }, 'en-US');
+    assert.equal(incompleteCreation.action, 'ask_clarification', action);
+  }
 
   const prisma = {
     $queryRaw: async () => [],
@@ -41,6 +152,19 @@ async function run() {
     },
     timelineBlock: {
       findMany: async () => [],
+      findFirst: async ({ where }: any) => where.id === 'task-1' ? ({
+        id: 'task-1',
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        title: 'Tarefa existente',
+        startAt: new Date('2026-04-06T10:00:00.000Z'),
+        endAt: new Date('2026-04-06T11:00:00.000Z'),
+        gcalEventId: null,
+      }) : null,
+      update: async ({ where, data }: any) => {
+        updatedBlocks.push({ where, data });
+        return { id: where.id, ...data };
+      },
+      delete: async () => ({}),
     },
     journalSession: {
       create: async ({ data }: any) => {
@@ -68,15 +192,39 @@ async function run() {
     },
     prisma: prisma as any,
     auraCommandService: {
-      interpretCommand: async () => ({
-        assistantMessage: 'Isso parece diário. Vou guardar um resumo por aqui.',
-        intent: 'reflective_handoff',
-        action: 'handoff_to_journal',
-        payload: {},
-        needsConfirmation: false,
-        needsClarification: false,
-        clarifyingQuestion: null,
-      }),
+      interpretCommand: async ({ message }: any) => {
+        if (/mova|desabafando|do not want you to create/i.test(message)) {
+          return {
+            assistantMessage: 'Pronto, movi a tarefa.',
+            intent: 'reschedule',
+            action: 'update_task',
+            payload: { taskId: 'task-1', newDate: '2026-04-07', newStartTime: '14:00' },
+            needsConfirmation: false,
+            needsClarification: false,
+            clarifyingQuestion: null,
+          };
+        }
+        if (/organize esse texto/i.test(message)) {
+          return {
+            assistantMessage: 'Montei os blocos.',
+            intent: 'agenda_plan',
+            action: 'create_agenda',
+            payload: { blocks: [] },
+            needsConfirmation: false,
+            needsClarification: false,
+            clarifyingQuestion: null,
+          };
+        }
+        return {
+          assistantMessage: 'Isso parece diário. Vou guardar um resumo por aqui.',
+          intent: 'reflective_handoff',
+          action: 'handoff_to_journal',
+          payload: {},
+          needsConfirmation: false,
+          needsClarification: false,
+          clarifyingQuestion: null,
+        };
+      },
     } as any,
     aiService: {
       summarizeJournalSession: async () => ({
@@ -87,6 +235,15 @@ async function run() {
       }),
       streamJournalReply: async () => 'ok',
     } as any,
+    memoryService: {
+      store: async () => ({}),
+      retrieve: async () => [],
+      formatForPrompt: () => '',
+      deleteAll: async () => undefined,
+    } as any,
+    auraMemoryIngestionService: {
+      ingest: async () => undefined,
+    },
     generateJournalSuggestedTasks: async () => [],
   });
 
@@ -109,7 +266,7 @@ async function run() {
       },
       body: JSON.stringify({
         sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d11',
-        message: 'Estou mexida com o que aconteceu hoje e queria processar isso.',
+        message: 'Salve no diário o que aconteceu hoje para eu processar isso.',
         history: [
           { role: 'assistant', content: 'Pode me contar o que aconteceu.' },
           { role: 'user', content: 'Foi uma conversa difícil.' },
@@ -142,6 +299,53 @@ async function run() {
     });
 
     assert.equal(longCommandResponse.status, 200);
+
+    const explicitMoveResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d13',
+        message: 'Mova a tarefa existente para amanhã às 14h.',
+        history: [],
+      }),
+    });
+    const explicitMoveBody = await readResponseText(explicitMoveResponse);
+    assert.equal(explicitMoveResponse.status, 200);
+    assert.equal(updatedBlocks.length, 1);
+    assert.match(explicitMoveBody, /update_task/);
+    assert.match(explicitMoveBody, /updatedTaskId/);
+
+    const blockedVentResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d14',
+        message: 'Só estou desabafando. Não quero que você faça nada.',
+        history: [],
+      }),
+    });
+    const blockedVentBody = await readResponseText(blockedVentResponse);
+    assert.equal(blockedVentResponse.status, 200);
+    assert.equal(updatedBlocks.length, 1);
+    assert.match(blockedVentBody, /ask_clarification/);
+    assert.doesNotMatch(blockedVentBody, /Pronto, movi a tarefa/);
+
+    const blockedEnglishNegationResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7d15',
+        message: 'I do not want you to create a task. Just hear me out.',
+        locale: 'en-US',
+        history: [],
+      }),
+    });
+    const blockedEnglishNegationBody = await readResponseText(blockedEnglishNegationResponse);
+    assert.equal(blockedEnglishNegationResponse.status, 200);
+    assert.equal(updatedBlocks.length, 1);
+    assert.match(blockedEnglishNegationBody, /ask_clarification/);
+    assert.match(blockedEnglishNegationBody, /I won't turn this into a task/i);
+    assert.doesNotMatch(blockedEnglishNegationBody, /Pronto, movi a tarefa/);
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {
@@ -153,6 +357,8 @@ async function run() {
         resolve();
       });
     });
+    if (previousOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousOpenAiKey;
   }
 }
 

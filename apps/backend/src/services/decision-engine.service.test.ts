@@ -25,6 +25,21 @@ const context: DailyContext = {
 };
 
 {
+  const targetId = '99999999-9999-4999-8999-999999999999';
+  const result = DecisionEngine.evaluate({
+    dailyContext: {
+      ...context,
+      pendingTaskTitles: ['Titulo completamente alterado'],
+      blockedActionCanonicalKeys: [`timeline:${targetId}`],
+      tasks: [{ id: targetId, title: 'Titulo completamente alterado', status: 'planned' }],
+    },
+    surface: 'planner',
+    requestContext: { currentHour: 9 },
+  });
+  assert.equal(result.allowedActions.some((item) => item.targetId === targetId), false, 'exact target id blocks before title similarity');
+}
+
+{
   const result = DecisionEngine.evaluate({
     dailyContext: context,
     surface: 'planner',
@@ -50,6 +65,60 @@ const context: DailyContext = {
 
   assert.equal(result.allowedActions[0]?.kind, 'insight_only');
   assert.equal(result.emptyReason, 'Sem candidato operacional confiável; manter como insight.');
+  assert.equal(result.allowedActions.length, 1);
+  assert.equal(result.allowedActions[0]?.source, 'system');
+  assert.equal(result.allowedActions[0]?.action, 'insight');
+  assert.match(result.allowedActions[0]?.title ?? '', /âncora|ancora|falta/i);
+}
+
+{
+  const empty = {
+    ...context,
+    activeGoalTitles: [],
+    todayAnchorTitles: [],
+  };
+  for (const surface of ['home', 'aura-chat', 'checkin'] as const) {
+    const result = DecisionEngine.evaluate({
+      dailyContext: empty,
+      surface,
+      requestContext: { phase: 'stable', currentHour: 9 },
+    });
+    assert.equal(result.allowedActions.length, 1, `${surface} must expose one principal movement`);
+    assert.equal(result.allowedActions[0]?.kind, 'insight_only');
+  }
+}
+
+{
+  const result = DecisionEngine.evaluate({
+    dailyContext: { ...context, activeGoalTitles: [], todayAnchorTitles: [] },
+    surface: 'aura-chat',
+    requestContext: {
+      phase: 'stable',
+      explicitActionRequested: true,
+      explicitActionTitle: 'Revisar o contrato da Airia',
+    },
+  });
+  assert.equal(result.allowedActions.length, 1);
+  assert.equal(result.allowedActions[0]?.kind, 'suggested_commitment');
+  assert.equal(result.allowedActions[0]?.source, 'request');
+  assert.equal(result.allowedActions[0]?.anchor, 'Revisar o contrato da Airia');
+}
+
+{
+  const multiAnchorContext: DailyContext = {
+    ...context,
+    activeGoalTitles: [],
+    todayAnchorTitles: ['Tarefa A', 'Tarefa B'],
+    pendingTaskTitles: ['Tarefa A', 'Tarefa B'],
+    tasks: [
+      { id: 'task-a', title: 'Tarefa A', status: 'planned', startAt: new Date('2026-04-30T09:00:00.000Z'), endAt: new Date('2026-04-30T10:00:00.000Z') },
+      { id: 'task-b', title: 'Tarefa B', status: 'planned', startAt: new Date('2026-04-30T11:00:00.000Z'), endAt: new Date('2026-04-30T12:00:00.000Z') },
+    ],
+  };
+  const home = DecisionEngine.evaluate({ dailyContext: multiAnchorContext, surface: 'home', requestContext: { phase: 'stable', currentHour: 8 } });
+  const planner = DecisionEngine.evaluate({ dailyContext: multiAnchorContext, surface: 'planner', requestContext: { phase: 'stable', currentHour: 8 } });
+  assert.equal(home.allowedActions.length, 1, 'Home must select one principal movement');
+  assert.ok(planner.allowedActions.length > 1, 'Planner may expose multiple grounded adjustments');
 }
 
 {
@@ -149,6 +218,31 @@ const context: DailyContext = {
   assert.equal(result.allowedActions[0]?.action, 'shrink');
   assert.match(result.allowedActions[0]?.bioReason ?? '', /Health Connect/);
   assert.match(result.reasoning, /sinais corporais/);
+}
+
+{
+  const dailyContext: DailyContext = {
+    ...context,
+    activeGoalTitles: [],
+    todayAnchorTitles: ['Revisar proposta'],
+    pendingTaskTitles: ['Revisar proposta'],
+    tasks: [{
+      id: 'phase-low-task',
+      title: 'Revisar proposta',
+      status: 'planned',
+      category: 'trabalho',
+      intensity: 'P',
+      startAt: new Date('2026-04-30T09:00:00.000Z'),
+      endAt: new Date('2026-04-30T10:00:00.000Z'),
+    }],
+  };
+  const byId = DecisionEngine.evaluate({ dailyContext, surface: 'planner', requestContext: { phase: 'low', currentHour: 8 } });
+  const byLabel = DecisionEngine.evaluate({ dailyContext, surface: 'planner', requestContext: { phase: 'Recolhimento', currentHour: 8 } });
+  assert.deepEqual(
+    byId.allowedActions.map(({ action, suggestedStartTime, suggestedEndTime }) => ({ action, suggestedStartTime, suggestedEndTime })),
+    byLabel.allowedActions.map(({ action, suggestedStartTime, suggestedEndTime }) => ({ action, suggestedStartTime, suggestedEndTime })),
+    'internal low id and Portuguese Recolhimento must yield identical planning decisions',
+  );
 }
 
 console.log('decision-engine.service tests passed');

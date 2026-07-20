@@ -68,7 +68,7 @@ async function run() {
     userName: 'Ana',
     domain: 'aura-command',
   });
-  assert.match(commandPrompt, /AURA CHAT EXECUTOR/i);
+  assert.match(commandPrompt, /AIRIA CHAT EXECUTOR/i);
   assert.match(commandPrompt, /criar, marcar, excluir, concluir, reagendar/i);
   assert.match(commandPrompt, /aja como executora/i);
   assert.match(commandPrompt, /dado indispensavel/i);
@@ -78,8 +78,8 @@ async function run() {
     domain: 'home',
   });
   assert.match(homePrompt, /HOME/i);
-  assert.match(homePrompt, /Se nao houver ancora operacional suficiente/i);
-  assert.match(homePrompt, /Se nao houver ancora operacional suficiente/i);
+  assert.match(homePrompt, /Sem agenda, habito ou meta real/i);
+  assert.match(homePrompt, /pergunta minima, nunca uma acao inventada/i);
 
   const planningPrompt = buildAuraSystemPrompt({
     userName: 'Ana',
@@ -158,12 +158,18 @@ async function run() {
   // Nova regra explícita de palavras proibidas precisa estar presente
   assert.match(journalForJargonAudit, /PROIBIDO no texto visivel/i);
   assert.match(journalForJargonAudit, /manobra.*ancora/i);
+  assert.doesNotMatch(journalForJargonAudit, /PROIBIDO[^.]*palavras:[^.]*\bfase\b/i);
+  assert.match(journalForJargonAudit, /Voo Alto.*Fluindo.*Estavel.*Desacelerando.*Recolhimento.*Pausa.*Retomada.*Turbulencia/is);
+  assert.match(journalForJargonAudit, /sem ancora real.*pergunta curta/is);
+  assert.doesNotMatch(journalForJargonAudit, /sem ancora.*menor ruptura possivel de qualquer eixo/is);
 
   // ─── Fix 2: INTERNAL_METHOD_LENS reescrita com 9 regras concretas ──────
   assert.match(journalForJargonAudit, /UM PROBLEMA POR VEZ/);
   assert.match(journalForJargonAudit, /NUNCA costure tres numa resposta so/i);
+  assert.doesNotMatch(journalForJargonAudit, /escudo|moeda de troca|[aá]libi|alibi|presuma que ela j[aá] disse|ela prefere esse problema/i);
+  assert.match(journalForJargonAudit, /subtexto.*hip[oó]tese.*evid[eê]ncia|hip[oó]tese.*subtexto.*evid[eê]ncia/i);
   assert.match(journalForJargonAudit, /APOIO, NAO SOLUCAO/);
-  assert.match(journalForJargonAudit, /PARA QUE, NAO POR QUE/);
+  assert.match(journalForJargonAudit, /FATO ANTES DA INTERPRETACAO/);
   assert.match(journalForJargonAudit, /DIAGNOSTICO INICIAL/);
   // ─── Fix #3: regra 7 reescrita — análise pronta + direcionamento + provocação ──
   assert.match(journalForJargonAudit, /ANALISE PRONTA \+ DIRECIONAMENTO \+ PROVOCACAO/i);

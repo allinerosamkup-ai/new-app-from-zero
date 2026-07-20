@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -128,17 +129,18 @@ function extractExplicitActionSave(text: string, messages: Message[]): string | 
   return pickActionFromAssistant(messages);
 }
 
-function formatSessionDate(localDate: string, startedAt: string): string {
+function formatSessionDate(localDate: string, startedAt: string, locale: string): string {
   const date = localDate ? new Date(`${localDate}T12:00:00`) : new Date(startedAt);
 
-  return date.toLocaleDateString("pt-BR", {
+  return date.toLocaleDateString(locale, {
     day: "2-digit",
     month: "short",
   });
 }
 
 export function JournalPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
   const { state } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
@@ -279,7 +281,7 @@ export function JournalPage() {
           ? response.openingContext
           : (initialDraft
               ? "Trouxe sua nota do check-in para iniciar o diário. Complete do seu jeito e me envie quando quiser organizar isso."
-              : INITIAL_ASSISTANT_MESSAGE);
+              : l(INITIAL_ASSISTANT_MESSAGE, "This space is yours. Start wherever you are: a loose thought, a tangled emotion, or something you simply need to let out."));
         setMessages([{ role: "assistant", content: openingMsg }]);
       }
 
@@ -317,7 +319,7 @@ export function JournalPage() {
           razao: "Pedido explícito feito dentro do diário.",
           source: "journal",
         });
-        showSuccess("Salvei em Ações.");
+        showSuccess(t("journal.savedActions"));
       }
 
       const { data: { session: authSession } } = await supabase.auth.getSession();
@@ -428,9 +430,9 @@ export function JournalPage() {
       setExpandedSessionId(null);
       setView("overview");
       await loadSessions();
-      showSuccess("Sessão finalizada e resumo salvo.");
+      showSuccess(t("journal.finishedSaved"));
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Não foi possível encerrar a sessão.");
+      showError(error instanceof Error ? error.message : t("journal.finishError"));
     } finally {
       setIsFinalizing(false);
     }
@@ -458,7 +460,7 @@ export function JournalPage() {
     }
 
     const recognition = new SpeechRecognitionApi();
-    recognition.lang = "pt-BR";
+    recognition.lang = resolveIntlLocale();
     // Contínuo + interim: aguenta pausas ("falar 30s") e mostra o texto ao vivo.
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -584,13 +586,13 @@ export function JournalPage() {
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <p style={{ margin: 0, fontSize: 12, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)" }}>
-            Sessão finalizada
+            {t("journal.finished")}
           </p>
           <button
             type="button"
             onClick={() => setShowFinalizationModal(false)}
             style={{ border: "1px solid var(--warm-border)", background: "#fff", borderRadius: 8, width: 28, height: 28, cursor: "pointer" }}
-            aria-label="Fechar resumo"
+            aria-label={t("journal.closeSummary")}
           >
             ×
           </button>
@@ -598,15 +600,15 @@ export function JournalPage() {
 
         <div style={{ background: "rgba(255, 251, 246, .9)", borderRadius: 14, border: "1px solid rgba(197,165,147,.24)", padding: "12px 13px" }}>
           <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "var(--text-3)" }}>
-            Resumo do dia
+            {l("Resumo do dia", "Day summary")}
           </p>
           <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--text-1)" }}>
-            {finalizationResult.summary?.text ?? "Resumo indisponível para esta sessão."}
+            {finalizationResult.summary?.text ?? l("Resumo indisponível para esta sessão.", "Summary unavailable for this session.")}
           </p>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>Base de contexto:</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>{l("Base de contexto:", "Context base:")}</span>
           <span style={{ fontSize: 11, padding: "4px 8px", borderRadius: 999, background: "rgba(150,199,179,.16)", color: "var(--text-1)", fontWeight: 700 }}>
             Check-in: {cycleReport.phaseLabel}
           </span>
@@ -620,7 +622,7 @@ export function JournalPage() {
             Compromissos sugeridos
           </p>
           {commitmentSuggestions.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>Sem compromisso sugerido para este fechamento.</p>
+                <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>{t("journal.noCommitment")}</p>
           ) : (
             commitmentSuggestions.map((item, idx) => {
               const key = `commit-${idx}`;
@@ -653,7 +655,7 @@ export function JournalPage() {
             Tarefas sugeridas
           </p>
           {finalizationResult.suggestedTasks.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>Nenhuma tarefa foi sugerida neste fechamento.</p>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)" }}>{t("journal.noSuggestedTasks")}</p>
           ) : (
             finalizationResult.suggestedTasks.map((task, index) => {
               const key = `task-${index}`;
@@ -704,7 +706,7 @@ export function JournalPage() {
               background: "#fff", borderRadius: 20, padding: 20, maxWidth: 320, width: "100%",
               boxShadow: "0 24px 64px rgba(17,24,39,.2)",
             }}>
-              <p style={{ fontWeight: 800, fontSize: 15, margin: "0 0 6px", color: "var(--text-1)" }}>Quando adicionar?</p>
+              <p style={{ fontWeight: 800, fontSize: 15, margin: "0 0 6px", color: "var(--text-1)" }}>{t("journal.whenAdd")}</p>
               <p style={{ fontSize: 13, color: "var(--text-2)", margin: "0 0 16px", lineHeight: 1.5 }}>
                 "{dayChoice.task.title}"
               </p>
@@ -713,17 +715,17 @@ export function JournalPage() {
                   onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 0)}
                   style={{ flex: 1, padding: "10px", borderRadius: 12, border: "1.5px solid var(--accent-peach)", background: "rgba(244,168,150,.1)", color: "var(--accent-peach)", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
                 >
-                  Hoje
+                  {t("common.today")}
                 </button>
                 <button
                   onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 1)}
                   style={{ flex: 1, padding: "10px", borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13, boxShadow: "0 4px 14px rgba(244,168,150,.4)" }}
                 >
-                  Amanhã
+                  {t("common.tomorrow")}
                 </button>
               </div>
               <button onClick={() => setDayChoice(null)} style={{ width: "100%", marginTop: 10, background: "none", border: "none", color: "var(--text-3)", fontSize: 12, cursor: "pointer", padding: 6 }}>
-                Cancelar
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -741,7 +743,7 @@ export function JournalPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           <AuraButtonV2 className="btn btn-ghost" onClick={() => setShowFinalizationModal(false)}>
-            Continuar
+            {t("common.continue")}
           </AuraButtonV2>
           <AuraButtonV2
             className="ui-btn-gradient"
@@ -763,13 +765,13 @@ export function JournalPage() {
         <div className="screen-content" style={{ padding: "20px 24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--primary)", margin: 0 }}>
-              Diário com IA
+              {t("journal.aiJournal")}
             </p>
             <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 24, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>
-              Um só lugar para conversar e acompanhar
+              {t("journal.onePlace")}
             </h2>
             <p style={{ fontSize: 13.5, color: "var(--text-2)", lineHeight: 1.6, margin: 0 }}>
-              Abra uma conversa quando quiser. Cada sessão salva um resumo aqui para você revisitar depois.
+              {t("journal.overviewBody")}
             </p>
           </div>
 
@@ -787,13 +789,13 @@ export function JournalPage() {
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--primary)", margin: 0 }}>
-                Entrada única
+                {t("journal.singleEntry")}
               </p>
               <p style={{ fontSize: 16, fontWeight: 800, color: "var(--text-1)", margin: 0 }}>
-                Seu diário vivo
+                {t("journal.livingJournal")}
               </p>
               <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55, margin: 0 }}>
-                Use este espaço para desabafar, organizar emoções ou acompanhar padrões ao longo do tempo.
+                {t("journal.livingJournalBody")}
               </p>
             </div>
 
@@ -816,7 +818,7 @@ export function JournalPage() {
               }}
             >
               <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", margin: 0 }}>
-                Sessão recém-salva
+                {t("journal.recentlySaved")}
               </p>
               <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text-1)", margin: 0 }}>
                 {latestSummary.text}
@@ -859,7 +861,7 @@ export function JournalPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-                Memória do diário
+                {t("journal.memory")}
               </p>
               <AuraButtonV2 variant="glass" size="sm" onClick={() => void loadSessions()}>
                 Atualizar
@@ -946,14 +948,14 @@ export function JournalPage() {
             ) : sessions.length === 0 ? (
               <SmartEmptyState
                 icon={MessageSquareText}
-                title="Use o diario para dar contexto"
-                description="A Airia entende melhor seu humor e energia quando voce conta o que aconteceu, nao so a nota do check-in."
-                ctaLabel="Começar primeira sessão"
+                title={l("Use o diário para dar contexto", "Use the journal to provide context")}
+                description={l("A Airia entende melhor seu humor e energia quando você conta o que aconteceu, não só a nota do check-in.", "Airia understands your mood and energy better when you share what happened, not just the check-in score.")}
+              ctaLabel={t("journal.firstSession")}
                 onAction={openJournal}
                 examples={[
-                  { title: "Hoje pesou porque...", description: "Bom para organizar um dia confuso." },
-                  { title: "Preciso decidir sobre...", description: "Bom quando tem uma escolha travada." },
-                  { title: "Quero guardar que...", description: "Bom para criar memória útil para depois." },
+                  { title: l("Hoje pesou porque...", "Today felt heavy because..."), description: l("Bom para organizar um dia confuso.", "Useful for organizing a confusing day.") },
+                  { title: l("Preciso decidir sobre...", "I need to decide about..."), description: l("Bom quando tem uma escolha travada.", "Useful when a choice feels stuck.") },
+                  { title: l("Quero guardar que...", "I want to remember that..."), description: l("Bom para criar memória útil para depois.", "Useful for building meaningful memory for later.") },
                 ]}
               />
             ) : (
@@ -970,7 +972,7 @@ export function JournalPage() {
                 });
                 if (filteredSessions.length === 0) return (
                   <div style={{ padding: "16px", textAlign: "center", color: "var(--text-3)", fontSize: 13 }}>
-                    Nenhuma sessão encontrada para "{searchQuery || filterEmotion}".
+                    {t("journal.noSessionFound", { query: searchQuery || filterEmotion })}
                   </div>
                 );
                 return filteredSessions.map((session) => {
@@ -998,10 +1000,10 @@ export function JournalPage() {
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                         <p style={{ margin: 0, fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)" }}>
-                          {formatSessionDate(session.localDate, session.startedAt)}
+                          {formatSessionDate(session.localDate, session.startedAt, resolveIntlLocale(i18n.language))}
                         </p>
                         <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>
-                          {isActive ? "Sessão em andamento" : "Sessão concluída"}
+                          {isActive ? l("Sessão em andamento", "Session in progress") : l("Sessão concluída", "Session completed")}
                         </p>
                       </div>
                       <span
@@ -1014,12 +1016,12 @@ export function JournalPage() {
                           fontWeight: 700,
                         }}
                       >
-                        {isActive ? "Retomar" : "Resumo"}
+                        {isActive ? l("Retomar", "Resume") : l("Resumo", "Summary")}
                       </span>
                     </div>
 
                     <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: "var(--text-2)" }}>
-                      {session.summary || "Esta sessão ainda está aberta. Toque para retomar a conversa."}
+                      {session.summary || l("Esta sessão ainda está aberta. Toque para retomar a conversa.", "This session is still open. Tap to resume the conversation.")}
                     </p>
 
                     {expanded && (
@@ -1068,7 +1070,7 @@ export function JournalPage() {
                               void openJournal();
                             }}
                           >
-                            Continuar sessão
+                            {t("journal.continueSession")}
                           </AuraButtonV2>
                         )}
                       </div>
@@ -1112,7 +1114,7 @@ export function JournalPage() {
           </AuraButtonV2>
           <div>
             <h2 style={{ fontFamily: "'Poppins'", fontSize: "16px", fontWeight: 800, color: "var(--text-1)", margin: 0 }}>
-              Diário com IA
+              {t("journal.aiJournal")}
             </h2>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <span
@@ -1125,7 +1127,7 @@ export function JournalPage() {
                 }}
               />
               <p style={{ fontSize: "10.5px", fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-                {isTyping ? "Airia contemplando..." : "Sessão aberta"}
+                {isTyping ? l("Airia contemplando...", "Airia is reflecting...") : l("Sessão aberta", "Session open")}
               </p>
             </div>
           </div>
@@ -1240,7 +1242,7 @@ export function JournalPage() {
               }}>
                 <span style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 5 }}>
                   <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--accent-sage, #96c7b3)", animation: "voicePulse 1.4s ease-in-out infinite" }} />
-                  Airia vai responder em instantes…
+                  {t("journal.responding")}
                 </span>
                 <button
                   type="button"
@@ -1250,7 +1252,7 @@ export function JournalPage() {
                   }}
                   style={{ fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", padding: "0 2px", textDecoration: "underline" }}
                 >
-                  cancelar
+                  {t("common.cancel")}
                 </button>
               </div>
             )}
@@ -1259,8 +1261,8 @@ export function JournalPage() {
               <button
                 type="button"
                 onClick={() => toggleVoice()}
-                title={isRecording ? "Parar" : "Falar"}
-                aria-label={isRecording ? "Parar de gravar" : "Ditar por voz"}
+                title={isRecording ? t("journal.stop") : t("journal.speak")}
+                aria-label={isRecording ? t("journal.stopRecording") : t("journal.dictate")}
                 style={{
                   width: "36px",
                   height: "36px",
@@ -1312,7 +1314,7 @@ export function JournalPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, padding: "0 4px" }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent-sage)", flexShrink: 0, animation: "voicePulse 1.4s ease-in-out infinite" }} />
               <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)", lineHeight: 1.4, fontStyle: interimVoice ? "italic" : "normal" }}>
-                {interimVoice || "Ouvindo… pode falar, eu escrevo pra você."}
+                {interimVoice || l("Ouvindo… pode falar, eu escrevo pra você.", "Listening… go ahead, I'll write it down for you.")}
               </p>
             </div>
           )}
@@ -1340,7 +1342,7 @@ export function JournalPage() {
               textUnderlineOffset: "3px",
             }}
           >
-            {isFinalizing ? "Salvando..." : "encerrar e salvar sessão"}
+            {isFinalizing ? l("Salvando...", "Saving...") : l("encerrar e salvar sessão", "end and save session")}
           </button>
         </div>
       </div>

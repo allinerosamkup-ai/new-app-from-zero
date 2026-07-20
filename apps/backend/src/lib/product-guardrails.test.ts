@@ -46,6 +46,22 @@ const unsafeClinicalClaimPatterns = [
   /\b(?:substituo|substitu[ií]mos|a\s+Airia\s+substitui)\s+(?:psic[oó]loga|psiquiatra|terapia|emerg[eê]ncia)\b/i,
 ];
 
+const fabricatedUngroundedActionPatterns = [
+  /fresh:morning-coffee/i,
+  /fresh:morning-task/i,
+  /fresh:post-lunch-admin/i,
+  /fresh:night-wind/i,
+  /gera sugest[aã]o de ancoragem baseada em hor[aá]rio e fase/i,
+];
+
+const pseudoTherapeuticInferencePatterns = [
+  /serve de escudo/i,
+  /moeda de troca/i,
+  /precisa existir como alibi/i,
+  /ela prefere esse problema/i,
+  /presuma que ela j[aá] disse/i,
+];
+
 const backendAgendaFilesWithUtcTimePolicy = [
   'apps/backend/src/services/planner.service.ts',
   'apps/backend/src/services/agenda-adaptation.service.ts',
@@ -99,6 +115,7 @@ function run() {
   const unsafeClinicalMatches: string[] = [];
   const timezoneMatches: string[] = [];
   const reviewSkillMatches: string[] = [];
+  const groundingGuardrailMatches: string[] = [];
 
   // Fixture files whose purpose is to LIST forbidden phrases (so the test
   // harness can prove the model avoids them). They are allowed to mention
@@ -139,6 +156,27 @@ function run() {
       }
     }
   }
+
+  const decisionEngine = readFileSync(path.join(repoRoot, 'apps/backend/src/services/decision-engine.service.ts'), 'utf8');
+  for (const pattern of fabricatedUngroundedActionPatterns) {
+    if (pattern.test(decisionEngine)) groundingGuardrailMatches.push(`decision-engine.service.ts matches ${pattern}`);
+  }
+
+  const airiaMethod = readFileSync(path.join(repoRoot, 'apps/backend/src/lib/airia-method.ts'), 'utf8');
+  for (const pattern of pseudoTherapeuticInferencePatterns) {
+    if (pattern.test(airiaMethod)) groundingGuardrailMatches.push(`airia-method.ts matches ${pattern}`);
+  }
+
+  const phaseWindows = readFileSync(path.join(repoRoot, 'apps/backend/src/lib/phase-time-windows.ts'), 'utf8');
+  for (const phaseId of ['elevated', 'flowing', 'stable', 'falling', 'low', 'depleted', 'recovering', 'mixed']) {
+    if (!phaseWindows.includes(`${phaseId}:`)) groundingGuardrailMatches.push(`phase-time-windows.ts must explicitly map ${phaseId}`);
+  }
+
+  assert.deepEqual(
+    groundingGuardrailMatches,
+    [],
+    `Operational action and phase guardrails must stay explicit:\n${groundingGuardrailMatches.join('\n')}`,
+  );
 
   assert.deepEqual(
     offendingMatches,
@@ -189,6 +227,11 @@ function run() {
   const agents = readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
   if (!agents.includes(reviewSkillPath)) {
     reviewSkillMatches.push(`AGENTS.md must require ${reviewSkillPath}`);
+  }
+
+  const roadmap = readFileSync(path.join(repoRoot, 'docs/product/pr-review-skill-roadmap.md'), 'utf8');
+  if (!/Di[aá]rio e Check-in s[aã]o contexto[^\n]+n[aã]o (?:s[aã]o )?autoridade operacional/i.test(roadmap)) {
+    reviewSkillMatches.push('pr-review roadmap must state that Journal and Check-in are context, not operational authority');
   }
 
   assert.deepEqual(

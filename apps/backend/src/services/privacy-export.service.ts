@@ -26,6 +26,14 @@ export type PrivacyExportPayload = {
     habits: unknown[];
     insights: unknown[];
     memories: unknown[];
+    canonicalMemories: unknown[];
+    memoryEvidence: unknown[];
+    knowledgeGraph: {
+      entities: unknown[];
+      facts: unknown[];
+      patterns: unknown[];
+      openDecisions: unknown[];
+    };
     events: unknown[];
     pushSubscriptions: unknown[];
   };
@@ -79,6 +87,12 @@ export async function buildPrivacyExport(
     habits,
     insights,
     memories,
+    canonicalMemories,
+    memoryEvidence,
+    entities,
+    facts,
+    patterns,
+    openDecisions,
     events,
     pushSubscriptions,
   ] = await Promise.all([
@@ -98,6 +112,12 @@ export async function buildPrivacyExport(
     }),
     findMany(prisma.weeklyInsight, { where: { userId }, orderBy: { weekStart: 'asc' } }),
     findMany(prisma.memoryEmbedding, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.userMemory, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.userMemoryEvidence, { where: { userId }, orderBy: { observedAt: 'asc' } }),
+    findMany(prisma.userEntity, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.userFact, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.userPattern, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.userOpenDecision, { where: { userId }, orderBy: { raisedAt: 'asc' } }),
     findMany(prisma.eventLog, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.pushSubscription, { where: { userId }, orderBy: { createdAt: 'asc' } }),
   ]);
@@ -120,6 +140,9 @@ export async function buildPrivacyExport(
       habits,
       insights,
       memories,
+      canonicalMemories,
+      memoryEvidence,
+      knowledgeGraph: { entities, facts, patterns, openDecisions },
       events,
       pushSubscriptions,
     },

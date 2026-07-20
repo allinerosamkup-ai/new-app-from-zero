@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Compass, ArrowRight } from "lucide-react";
 import { api } from "../lib/api";
+import { useLocalizedCopy } from "../i18n";
 
 type JornadaData = {
   steps: { n: number; titulo: string }[];
@@ -14,6 +15,7 @@ type JornadaData = {
  * Auto-busca o progresso; some silenciosamente se a chamada falhar.
  */
 export function JornadaHomeCard() {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const [data, setData] = useState<JornadaData | null>(null);
 
@@ -49,10 +51,10 @@ export function JornadaHomeCard() {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ margin: 0, fontSize: 10, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage)" }}>
-          Sua Jornada · {doneCount}/13
+          {l("Sua Jornada", "Your Journey")} · {doneCount}/13
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 13.5, fontWeight: 800, color: "var(--text-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          Passo {current.n}: {current.titulo}
+          {l("Passo", "Step")} {current.n}: {current.titulo}
         </p>
       </div>
       <ArrowRight size={18} color="var(--accent-sage)" style={{ flexShrink: 0 }} />

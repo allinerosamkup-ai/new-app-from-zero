@@ -1,5 +1,6 @@
 // Onboarding: Mapa de Energia — chips drena mais/menos + slider foco
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
@@ -11,6 +12,7 @@ const STEP = 2;
 const TOTAL = 5;
 
 export function OnboardingEnergyPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state, updateOnboardingDraft } = useAuraStore();
   const [drainsMore, setDrainsMore] = useState<Set<string>>(new Set(state.onboardingDraft.energyDrainsMore));
@@ -56,20 +58,20 @@ export function OnboardingEnergyPage() {
         </div>
 
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", marginBottom: 4 }}>
-          PASSO {STEP} DE {TOTAL}
+          {t("onboarding.step", { current: STEP, total: TOTAL })}
         </p>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.25, marginBottom: 6 }}>
-          Como VOCÊ gasta energia?
+          {t("onboarding.energy.title")}
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55, marginBottom: 24 }}>
-          Selecione o que mais te cansa e o que te renova. Vamos usar isso para montar sua agenda ideal.
+          {t("onboarding.energy.subtitle")}
         </p>
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px" }}>
         {/* Drena MAIS */}
         <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-strong)", marginBottom: 10 }}>
-          ❗ Drena MAIS
+          ❗ {t("onboarding.energy.drainsMore")}
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
           {DRAINS_MORE.map(item => {
@@ -88,7 +90,7 @@ export function OnboardingEnergyPage() {
                   transition: "all 150ms",
                 }}
               >
-                {item}
+                {t(`onboarding.energy.items.${item}`)}
               </button>
             );
           })}
@@ -96,7 +98,7 @@ export function OnboardingEnergyPage() {
 
         {/* Drena MENOS */}
         <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage-ink)", marginBottom: 10 }}>
-          💚 Drena MENOS
+          💚 {t("onboarding.energy.drainsLess")}
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 28 }}>
           {DRAINS_LESS.map(item => {
@@ -115,7 +117,7 @@ export function OnboardingEnergyPage() {
                   transition: "all 150ms",
                 }}
               >
-                {item}
+                {t(`onboarding.energy.items.${item}`)}
               </button>
             );
           })}
@@ -123,13 +125,13 @@ export function OnboardingEnergyPage() {
 
         {/* Slider foco */}
         <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sky)", marginBottom: 10 }}>
-          ⚡ Foco disponível num dia bom
+          ⚡ {t("onboarding.energy.focus")}
         </p>
         <div style={{ marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-            <span style={{ fontSize: 12, color: "var(--text-3)" }}>Pouco</span>
+            <span style={{ fontSize: 12, color: "var(--text-3)" }}>{t("onboarding.energy.little")}</span>
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--accent-sky)" }}>{foco}/10</span>
-            <span style={{ fontSize: 12, color: "var(--text-3)" }}>Total</span>
+            <span style={{ fontSize: 12, color: "var(--text-3)" }}>{t("onboarding.energy.full")}</span>
           </div>
           <div style={{ position: "relative" }}>
             <div style={{ width: "100%", height: 8, background: "rgba(99,152,169,.15)", borderRadius: 999, position: "relative", overflow: "visible" }}>
@@ -153,7 +155,7 @@ export function OnboardingEnergyPage() {
             marginBottom: 10,
           }}
         >
-          Continuar →
+          {t("common.continue")} →
         </button>
         <button
           onClick={() => persistAndGo("/onboarding/cycle")}
@@ -162,7 +164,7 @@ export function OnboardingEnergyPage() {
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer",
           }}
         >
-          Pular por enquanto
+          {t("onboarding.skip")}
         </button>
       </div>
     </div>

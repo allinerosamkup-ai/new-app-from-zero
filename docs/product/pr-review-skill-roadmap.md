@@ -30,7 +30,8 @@ Skill operacional criada em `skills/airia-pr-review/SKILL.md` e registrada em `s
 
 5. **IA ancorada em contexto atual**
    - Evidência: commits `0af5d58`, `4f362be`, `f8f7db4`, `9267dba` e `20128b2` reforçaram grounding, Decision Brain e raciocínio operacional.
-   - Prática obrigatória: sugestão operacional da Airia precisa citar âncora real do dia: tarefa, hábito, meta, check-in, diário ou pedido explícito. Sem âncora, perguntar.
+   - Prática obrigatória: sugestão operacional da Airia precisa citar âncora real do dia: tarefa ou subtarefa pendente, compromisso real, hábito devido, meta ativa ou pedido explícito. Sem âncora, perguntar.
+   - Diário e Check-in são contexto para interpretar humor, energia e padrão; não são autoridade operacional para criar tarefa. Só autorizam ação quando registram um pedido explícito atual ou apontam para uma âncora operacional já existente.
    - Pergunta de revisão: "qual dado atual sustenta essa ação?". Se a resposta for só memória antiga, padrão genérico ou intuição da IA, a ação deve virar pergunta curta.
 
 6. **Segurança sem terapeuta falsa**
@@ -48,6 +49,7 @@ Skill operacional criada em `skills/airia-pr-review/SKILL.md` e registrada em `s
 - A mudança melhora um fluxo de usuária real?
 - Não há demo, seed, pitch ou copy para investidor em `apps/web/src` ou `apps/backend/src`?
 - Toda sugestão IA tem âncora operacional atual?
+- Diário e Check-in foram usados como contexto, sem virar autoridade para fabricar ação?
 - Toda escrita backend tem contrato claro de sucesso/erro?
 - Datas de planner preservam horário local sem drift?
 - Risco emocional aciona `riskSafety` e protocolo humano/crise?
@@ -58,6 +60,8 @@ Skill operacional criada em `skills/airia-pr-review/SKILL.md` e registrada em `s
 - `apps/backend/src/lib/product-guardrails.test.ts` bloqueia copy de venda/demo/investidor, fluxo falso, alegação clínica perigosa e `setHours()` em serviços de agenda.
 - `apps/backend/src/contracts/risk-safety.contract.test.ts` valida o contrato único de `riskSafety` em Check-in, Diário e Aura.
 - `apps/backend/src/services/planner.service.test.ts` cobre preservação UTC de horários em virada de dia.
+- `apps/backend/src/lib/phase-time-windows.test.ts` cobre a paridade dos oito IDs internos com as oito fases visíveis.
+- `apps/backend/src/services/decision-engine.service.test.ts` e `apps/backend/src/lib/product-guardrails.test.ts` bloqueiam ações sem âncora atual.
 - Esses guardrails rodam dentro de `npm run test --workspace=@app/backend`.
 
 ## Checklist de Release Integrado

@@ -1,16 +1,17 @@
 import { NavLink } from "react-router-dom";
 import { Card } from "../ui/card";
-
-const items = [
-  { to: "/home", label: "Seu dia" },
-  { to: "/journal", label: "Diário IA" },
-  { to: "/goals", label: "Objetivos" },
-  { to: "/onboarding", label: "Onboarding" },
-  { to: "/profile", label: "Perfil" },
-  { to: "/preferences", label: "Preferências" },
-];
+import { useLocalizedCopy } from "../../i18n";
 
 export function AuraSidebar() {
+  const l = useLocalizedCopy();
+  const items = [
+    { to: "/home", label: l("Seu dia", "Your day") },
+    { to: "/journal", label: l("Diário IA", "AI Journal") },
+    { to: "/goals", label: l("Objetivos", "Goals") },
+    { to: "/onboarding", label: "Onboarding" },
+    { to: "/profile", label: l("Perfil", "Profile") },
+    { to: "/preferences", label: l("Preferências", "Preferences") },
+  ];
   return (
     <aside className="aura-sidebar">
       <div className="aura-brand">
@@ -36,11 +37,10 @@ export function AuraSidebar() {
       </nav>
 
       <Card className="aura-sidebar-card">
-        <span className="aura-label">Foco total</span>
+        <span className="aura-label">{l("Foco total", "Full focus")}</span>
         <h3>50m</h3>
         <p>
-          Bom ritmo! Sua energia está no pico — aproveite para as tarefas mais
-          exigentes.
+          {l("Bom ritmo! Sua energia está no pico — aproveite para as tarefas mais exigentes.", "Good rhythm! Your energy is peaking — use it for the most demanding tasks.")}
         </p>
       </Card>
     </aside>

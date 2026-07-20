@@ -1,5 +1,6 @@
 // Onboarding: Sono — slider horas + cards qualidade + time pickers
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
@@ -16,6 +17,7 @@ const QUALITY_CARDS: { id: SleepQuality; emoji: string; label: string; sub: stri
 ];
 
 export function OnboardingSleepPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state, updateOnboardingDraft } = useAuraStore();
   const [horas, setHoras] = useState(state.onboardingDraft.sleepHours);
@@ -51,13 +53,13 @@ export function OnboardingSleepPage() {
         </div>
 
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", marginBottom: 4 }}>
-          PASSO {STEP} DE {TOTAL}
+          {t("onboarding.step", { current: STEP, total: TOTAL })}
         </p>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.25, marginBottom: 6 }}>
-          Como é o seu sono?
+          {t("onboarding.sleep.title")}
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55, marginBottom: 24 }}>
-          O sono é o principal regulador da sua energia. Vamos usar isso na sua agenda.
+          {t("onboarding.sleep.subtitle")}
         </p>
       </div>
 
@@ -67,7 +69,7 @@ export function OnboardingSleepPage() {
         <div style={{ marginBottom: 28 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-              🌙 Horas de sono por noite
+              🌙 {t("onboarding.sleep.hours")}
             </p>
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 700, color: "var(--accent-sky)" }}>
               {horas}h
@@ -89,7 +91,7 @@ export function OnboardingSleepPage() {
 
         {/* Cards qualidade */}
         <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: 12 }}>
-          ✨ Qualidade do sono
+          ✨ {t("onboarding.sleep.quality")}
         </p>
         <div style={{ display: "flex", gap: 10, marginBottom: 28 }}>
           {QUALITY_CARDS.map(c => {
@@ -109,8 +111,8 @@ export function OnboardingSleepPage() {
                 }}
               >
                 <span style={{ fontSize: 24 }}>{c.emoji}</span>
-                <p style={{ fontSize: 12, fontWeight: 700, color: active ? "var(--accent-peach-ink)" : "var(--text-1)", margin: 0 }}>{c.label}</p>
-                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{c.sub}</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: active ? "var(--accent-peach-ink)" : "var(--text-1)", margin: 0 }}>{t(`onboarding.sleep.cards.${c.id}.label`)}</p>
+                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{t(`onboarding.sleep.cards.${c.id}.sub`)}</p>
               </button>
             );
           })}
@@ -118,11 +120,11 @@ export function OnboardingSleepPage() {
 
         {/* Time pickers */}
         <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: 12 }}>
-          ⏰ Horários habituais
+          ⏰ {t("onboarding.sleep.usualTimes")}
         </p>
         <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>Dormir</p>
+            <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>{t("onboarding.sleep.bed")}</p>
             <input type="time" value={bedTime} onChange={e => setBedTime(e.target.value)}
               style={{
                 width: "100%", height: 46, borderRadius: 12,
@@ -134,7 +136,7 @@ export function OnboardingSleepPage() {
             />
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>Acordar</p>
+            <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>{t("onboarding.sleep.wake")}</p>
             <input type="time" value={wakeTime} onChange={e => setWakeTime(e.target.value)}
               style={{
                 width: "100%", height: 46, borderRadius: 12,
@@ -158,13 +160,13 @@ export function OnboardingSleepPage() {
             cursor: "pointer", boxShadow: "0 12px 24px rgba(243,176,140,.24)", marginBottom: 10,
           }}
         >
-          Continuar →
+          {t("common.continue")} →
         </button>
         <button
           onClick={() => persistAndGo("/onboarding/preferences")}
           style={{ width: "100%", height: 40, background: "none", border: "none", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer" }}
         >
-          Pular por enquanto
+          {t("onboarding.skip")}
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useEffect, useState, type KeyboardEvent } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
@@ -12,6 +13,7 @@ const REMEMBER_ME_KEY = "aura.rememberMe";
 const REMEMBERED_EMAIL_KEY = "aura.rememberedEmail";
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state, setName, setEmail } = useAuraStore();
   const [tab, setTab] = useState<Tab>("entrar");
@@ -90,10 +92,10 @@ export function LoginPage() {
       }
       navigate("/home");
     } catch (err: any) {
-      const msg = err?.message || "Erro ao autenticar";
-      if (msg.includes("Invalid login credentials")) setError("Email ou senha incorretos.");
-      else if (msg.includes("already registered")) setError("Email já cadastrado. Tente entrar.");
-      else if (msg.includes("Password should be")) setError("Senha muito curta — mínimo 6 caracteres.");
+      const msg = err?.message || t("auth.errors.generic");
+      if (msg.includes("Invalid login credentials")) setError(t("auth.errors.credentials"));
+      else if (msg.includes("already registered")) setError(t("auth.errors.registered"));
+      else if (msg.includes("Password should be")) setError(t("auth.errors.shortPassword"));
       else setError(msg);
     } finally {
       setLoading(false);
@@ -120,7 +122,7 @@ export function LoginPage() {
       });
       if (error) throw error;
     } catch (err: any) {
-      setError(err.message || 'Erro ao entrar com Google');
+      setError(err.message || t("auth.errors.google"));
     }
   };
 
@@ -157,8 +159,8 @@ export function LoginPage() {
         {/* Hero card */}
         <div className="auth-hero">
           <div className="auth-hero-eyebrow">Mood Energy</div>
-          <h1>Seu ritmo merece um ponto de partida mais gentil.</h1>
-          <p>Acompanhe humor, energia e rotina em um fluxo que respeita seu humor e energia.</p>
+          <h1>{t("auth.heroTitle")}</h1>
+          <p>{t("auth.heroSubtitle")}</p>
         </div>
 
         {/* Tab switcher */}
@@ -167,13 +169,13 @@ export function LoginPage() {
             className={`aura-tab${tab === "entrar" ? " active" : ""}`}
             onClick={() => setTab("entrar")}
           >
-            Entrar
+            {t("auth.signIn")}
           </div>
           <div
             className={`aura-tab${tab === "criar" ? " active" : ""}`}
             onClick={() => setTab("criar")}
           >
-            Criar conta
+            {t("auth.createAccount")}
           </div>
         </div>
 
@@ -181,7 +183,7 @@ export function LoginPage() {
         {tab === "entrar" && (
           <>
             <div className="aura-input-wrap">
-              <label className="aura-input-label">Email</label>
+              <label className="aura-input-label">{t("auth.email")}</label>
               <div className="aura-input aura-inline-field">
                 {/* Ícone email */}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -200,7 +202,7 @@ export function LoginPage() {
             </div>
 
             <div className="aura-input-wrap" style={{ marginBottom: 20 }}>
-              <label className="aura-input-label">Senha</label>
+              <label className="aura-input-label">{t("auth.password")}</label>
               <div
                 className="aura-input"
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
@@ -223,7 +225,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                   style={{ border: "none", background: "transparent", padding: 0, display: "flex", cursor: "pointer" }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -242,12 +244,12 @@ export function LoginPage() {
                 onChange={(e) => setRememberMe(e.target.checked)}
                 style={{ accentColor: "var(--accent-peach)" }}
               />
-              Lembrar de mim
+              {t("auth.rememberMe")}
             </label>
 
             <div style={{ textAlign: "right", marginBottom: 16 }}>
               <Link to="/forgot-password" className="aura-muted-link">
-                Esqueci minha senha
+                {t("auth.forgotPassword")}
               </Link>
             </div>
 
@@ -258,25 +260,25 @@ export function LoginPage() {
             )}
 
             <AuraButtonV2 className="aura-btn-primary" onClick={handleLogin} disabled={loading}>
-              {loading ? "Entrando..." : (
+              {loading ? t("auth.signingIn") : (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
                     <polyline points="10 17 15 12 10 7" />
                     <line x1="15" y1="12" x2="3" y2="12" />
                   </svg>
-                  Entrar e continuar
+                  {t("auth.signInContinue")}
                 </>
               )}
             </AuraButtonV2>
 
             <p style={{ fontSize: 11, color: "var(--text-3)", textAlign: "center", marginTop: 12 }}>
-              Depois do login, seguimos direto para seu dia.
+              {t("auth.afterLogin")}
             </p>
 
             <div style={{ margin: "24px 0", display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ flex: 1, height: 1, background: "var(--warm-border)" }} />
-              <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>OU</span>
+              <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>{t("auth.or")}</span>
               <div style={{ flex: 1, height: 1, background: "var(--warm-border)" }} />
             </div>
 
@@ -299,7 +301,7 @@ export function LoginPage() {
         {tab === "criar" && (
           <>
             <div className="aura-input-wrap">
-              <label className="aura-input-label">Seu nome</label>
+              <label className="aura-input-label">{t("auth.name")}</label>
               <div className="aura-input aura-inline-field">
                 {/* Ícone user */}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -311,14 +313,14 @@ export function LoginPage() {
                   value={state.name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={handleEnterSubmit}
-                  placeholder="Como quer ser chamado(a)?"
+                  placeholder={t("auth.namePlaceholder")}
                   className="aura-inline-input"
                 />
               </div>
             </div>
 
             <div className="aura-input-wrap">
-              <label className="aura-input-label">Email</label>
+              <label className="aura-input-label">{t("auth.email")}</label>
               <div className="aura-input aura-inline-field">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <rect x="2" y="4" width="20" height="16" rx="3" />
@@ -336,7 +338,7 @@ export function LoginPage() {
             </div>
 
             <div className="aura-input-wrap" style={{ marginBottom: 20 }}>
-              <label className="aura-input-label">Senha</label>
+              <label className="aura-input-label">{t("auth.password")}</label>
               <div
                 className="aura-input"
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
@@ -358,7 +360,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  aria-label={showPassword ? t("auth.hidePassword") : t("auth.showPassword")}
                   style={{ border: "none", background: "transparent", padding: 0, display: "flex", cursor: "pointer" }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -377,7 +379,7 @@ export function LoginPage() {
             )}
 
             <AuraButtonV2 className="aura-btn-primary" onClick={handleLogin} disabled={loading}>
-              {loading ? "Criando conta..." : (
+              {loading ? t("auth.creating") : (
                 <>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -385,18 +387,18 @@ export function LoginPage() {
                     <line x1="19" y1="8" x2="19" y2="14" />
                     <line x1="16" y1="11" x2="22" y2="11" />
                   </svg>
-                  Criar conta e continuar
+                  {t("auth.createContinue")}
                 </>
               )}
             </AuraButtonV2>
 
             <p style={{ fontSize: 11, color: "var(--text-3)", textAlign: "center", marginTop: 12 }}>
-              Depois do login, seguimos direto para seu dia.
+              {t("auth.afterLogin")}
             </p>
 
             <div style={{ margin: "24px 0", display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ flex: 1, height: 1, background: "var(--warm-border)" }} />
-              <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>OU</span>
+              <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>{t("auth.or")}</span>
               <div style={{ flex: 1, height: 1, background: "var(--warm-border)" }} />
             </div>
 
@@ -411,7 +413,7 @@ export function LoginPage() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
-              Entrar com Google
+              {t("auth.google")}
             </AuraButtonV2>
           </>
         )}
@@ -449,10 +451,9 @@ export function LoginPage() {
                 </svg>
               </div>
               
-              <h2 className="aura-page-title" style={{ marginBottom: '12px' }}>Quase lá!</h2>
+              <h2 className="aura-page-title" style={{ marginBottom: '12px' }}>{t("auth.almostThere")}</h2>
               <p className="aura-page-subtitle" style={{ marginBottom: '24px', fontSize: '14px' }}>
-                Enviamos um link de confirmação para <b>{state.email}</b>.
-                Por favor, verifique sua caixa de entrada (e o spam) para ativar sua conta.
+                <Trans i18nKey="auth.confirmEmail" values={{ email: state.email }} components={{ 1: <b /> }} />
               </p>
 
               <AuraButtonV2 
@@ -462,7 +463,7 @@ export function LoginPage() {
                   setTab("entrar");
                 }}
               >
-                Entendi, ir para o login
+                {t("auth.goToLogin")}
               </AuraButtonV2>
 
               <button 
@@ -477,7 +478,7 @@ export function LoginPage() {
                   cursor: 'pointer'
                 }}
               >
-                Voltar e corrigir e-mail
+                {t("auth.correctEmail")}
               </button>
             </div>
           </div>
@@ -487,12 +488,12 @@ export function LoginPage() {
       {/* Footer legal */}
       <footer className="auth-footer" style={{ padding: '20px', textAlign: 'center', backgroundColor: 'var(--warm-bg)' }}>
         <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', fontSize: '12px', color: 'var(--text-3)' }}>
-          <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }} className="hover:text-black transition-colors">Termos de Uso</Link>
+          <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }} className="hover:text-black transition-colors">{t("auth.terms")}</Link>
           <span style={{ color: 'var(--warm-border)' }}>|</span>
-          <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }} className="hover:text-black transition-colors">Política de Privacidade</Link>
+          <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }} className="hover:text-black transition-colors">{t("auth.privacy")}</Link>
         </div>
         <p style={{ marginTop: '12px', fontSize: '10px', color: 'var(--text-3)', opacity: 0.6 }}>
-          &copy; 2026 Aura (AirIA). Todos os direitos reservados.
+          {t("auth.copyright")}
         </p>
       </footer>
     </div>

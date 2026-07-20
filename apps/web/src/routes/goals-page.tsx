@@ -1,5 +1,7 @@
 // Goals & GTD v8 — Glass design + Next Action highlight + depth
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
@@ -147,6 +149,7 @@ function GoalCard({
   highlightedSubtaskId?: number | string;
   highlightedText?: string;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(initiallyOpen);
   const [addingTask, setAddingTask] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -212,7 +215,7 @@ function GoalCard({
               borderRadius: 999, padding: "1px 7px",
               fontSize: 9, fontWeight: 800, letterSpacing: ".07em",
               color: color.accent, textTransform: "uppercase" as const,
-            }}>🎯 Meta</span>
+            }}>🎯 {t("goals.goal")}</span>
           </div>
 
           {isEditingTitle ? (
@@ -270,7 +273,7 @@ function GoalCard({
           <button
             onClick={e => { e.stopPropagation(); onConvertToTask(goal); }}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6 }}
-            title="Converter em tarefa diária"
+            title={t("goals.convertDaily")}
           >
             <RefreshCw size={13} />
           </button>
@@ -304,7 +307,7 @@ function GoalCard({
               display: "flex", alignItems: "center", gap: 6, padding: "8px 0",
               color: "var(--accent-peach)", fontSize: "calc(var(--a) * 0.83)",
             }}>
-              <AuraIcon size={14} /> Airia está gerando próximas ações...
+              <AuraIcon size={14} /> {t("goals.generating")}
             </div>
           )}
 
@@ -315,7 +318,7 @@ function GoalCard({
               background: "rgba(0,0,0,0.03)",
               textAlign: "center", color: "var(--text-3)", fontSize: "calc(var(--a) * 0.85)",
             }}>
-              Sem próximas ações. Use <strong style={{ color: "var(--accent-peach)" }}>Airia quebrar</strong> para gerar.
+              {t("goals.noNextActions")}
             </div>
           )}
 
@@ -338,7 +341,7 @@ function GoalCard({
                     color: "var(--accent-peach)", textTransform: "uppercase",
                     marginBottom: 4,
                   }}>
-                    ▶ Fazer agora
+                    {t("goals.doNow")}
                   </div>
                 )}
                 <div
@@ -389,7 +392,7 @@ function GoalCard({
                   }
                   if (e.key === "Escape") { setAddingTask(false); setNewTask(""); }
                 }}
-                placeholder="Próxima ação concreta..."
+                placeholder={t("goals.nextActionPlaceholder")}
                 style={{
                   flex: 1, background: "rgba(255,255,255,0.8)",
                   border: "1.5px solid var(--accent-peach)", borderRadius: 10,
@@ -414,8 +417,8 @@ function GoalCard({
             }}>
               <span style={{ fontSize: "1.1rem" }}>🎉</span>
               <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", margin: "0 0 2px" }}>Meta concluída!</p>
-                <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0 }}>Que tal registrar essa conquista no diário?</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", margin: "0 0 2px" }}>{t("goals.completed")}</p>
+                <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0 }}>{t("goals.journalWin")}</p>
               </div>
               <button
                 onClick={onJournalReflect}
@@ -469,6 +472,8 @@ function GoalCard({
 // ── Main Page ─────────────────────────────────────────────────
 
 export function GoalsPage() {
+  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
   const { state, addGoal, addGoalWithSubGoals, addSubGoals, toggleSubGoal, removeGoal, updateGoal, addHabit } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const navigate = useNavigate();
@@ -546,7 +551,7 @@ export function GoalsPage() {
       recognitionRef.current.stop(); setIsRecording(false); return;
     }
     const rec = new SR();
-    rec.lang = "pt-BR";
+    rec.lang = resolveIntlLocale(i18n.language);
     rec.onresult = (e: any) => {
       const t = e.results[0][0].transcript;
       setCaptureInput(prev => prev ? `${prev} ${t}` : t);
@@ -577,10 +582,10 @@ export function GoalsPage() {
       if (items.length > 0) {
         await addSubGoals(goalId, items);
       } else {
-        showError("A Airia não conseguiu gerar subtarefas agora.");
+        showError(t("goals.subtasksError"));
       }
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Erro ao gerar próximas ações.");
+      showError(err instanceof Error ? err.message : t("goals.actionsError"));
     } finally {
       setLoadingBreakdown(null);
     }
@@ -642,7 +647,7 @@ export function GoalsPage() {
         ? `A IA está sobrecarregada agora. Guardei na aba Ações para você revisar depois.`
         : `Guardei para revisão. Você pode clarificar depois na aba Capturar.`
       );
-      if (!isRateLimit) showError("Erro ao classificar. Item salvo para revisão.");
+      if (!isRateLimit) showError(t("goals.classifyError"));
     } finally {
       setCaptureLoading(false);
       capturingRef.current = false;
@@ -686,7 +691,7 @@ export function GoalsPage() {
           }, ...prev]);
           setActionsOpen(true);
           setActiveTab("acoes");
-          setCaptureReply("Próxima ação registrada.");
+          setCaptureReply(t("goals.actionRegistered"));
         }
         awardXP(10);
       } else if (pending.kind === "reference" || pending.kind === "someday") {
@@ -699,7 +704,7 @@ export function GoalsPage() {
           titulo: title,
           razao: captureSession.summary,
         }, ...prev]);
-        setCaptureReply(pending.kind === "reference" ? "Guardei como referência." : "Guardei em algum dia.");
+        setCaptureReply(pending.kind === "reference" ? t("goals.referenceSaved") : t("goals.somedaySaved"));
       } else {
         setGtdItems(prev => [{
           id: `gtd-${Date.now()}`,
@@ -711,7 +716,7 @@ export function GoalsPage() {
       }
       setCaptureSession(null);
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Não foi possível salvar essa captura.");
+      showError(err instanceof Error ? err.message : t("goals.captureError"));
     }
   }
 
@@ -795,18 +800,18 @@ export function GoalsPage() {
       await addSubGoals(goalId, [item.titulo || item.text]);
       setGtdItems(prev => prev.map(i => i.id === itemId ? { ...i, sentToGoal: true, linkedGoalId: goalId } : i));
       setLinkingItem(null);
-      showSuccess("Ação vinculada à meta.");
+      showSuccess(t("goals.linked"));
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Erro ao vincular ação.");
+      showError(err instanceof Error ? err.message : t("goals.linkError"));
     }
   }
 
   async function handleUpdateGoalTitle(goalId: string | number, newTitle: string) {
     try {
       await updateGoal(goalId, { title: newTitle });
-      showSuccess("Título da meta atualizado.");
+      showSuccess(t("goals.titleUpdated"));
     } catch (err) {
-      showError("Erro ao atualizar título.");
+      showError(t("goals.titleError"));
     }
   }
 
@@ -826,9 +831,9 @@ export function GoalsPage() {
       // 2. Remove a Meta original
       await removeGoal(goal.id);
       
-      showSuccess("Meta convertida em hábito diário com sucesso!");
+      showSuccess(t("goals.habitCreated"));
     } catch (err) {
-      showError("Erro ao converter meta.");
+      showError(t("goals.convertError"));
     }
   }
 
@@ -843,7 +848,7 @@ export function GoalsPage() {
           marginBottom: 18,
         }}>
           <div>
-            <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 2px" }}>Seus objetivos</p>
+            <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 2px" }}>{t("goals.yourObjectives")}</p>
             <h1 style={{
               fontFamily: "'Poppins', 'Plus Jakarta Sans', sans-serif",
               fontSize: 20, fontWeight: 800, color: "var(--text-1)", margin: 0,
@@ -882,7 +887,7 @@ export function GoalsPage() {
                 Fase {cycleReport.phaseLabel} detectada
               </p>
               <p style={{ fontSize: 11.5, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-                Prefira metas leves hoje. Adiar tarefas de alta energia não é fraqueza — é inteligência.
+                {t("goals.lowPhaseTip")}
               </p>
             </div>
           </div>
@@ -895,7 +900,7 @@ export function GoalsPage() {
         }}>
           {([
             { key: "metas" as const, label: "Metas", count: activeGoals.length },
-            { key: "acoes" as const, label: "Ações", count: priorityActions.filter(i => i.source === "goal" || i.source === "capture").length },
+            { key: "acoes" as const, label: t("goals.actions"), count: priorityActions.filter(i => i.source === "goal" || i.source === "capture").length },
           ] as const).map(tab => {
             const isActive = activeTab === tab.key;
             return (
@@ -942,27 +947,27 @@ export function GoalsPage() {
             }}>
               {captureLoading
                 ? <span style={{ color: "var(--text-3)", fontStyle: "italic" }}>
-                    Entendendo o que você capturou...
+                    {t("goals.understanding")}
                   </span>
                 : captureReply
                   ? <span>{captureReply}</span>
                   : captureSession?.pending
                     ? <span>
-                        Revise antes de salvar: <strong>{captureSession.pending.title || captureSession.summary}</strong>
+                        {t("goals.reviewBeforeSave")} <strong>{captureSession.pending.title || captureSession.summary}</strong>
                         <br />
                         <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-                          {captureSession.pending.kind === "goal" ? "Isso parece uma meta com próximas ações." :
-                            captureSession.pending.kind === "next_action" ? "Isso parece uma próxima ação." :
-                            captureSession.pending.kind === "reference" ? "Isso parece uma referência." :
+                          {captureSession.pending.kind === "goal" ? t("goals.looksGoal") :
+                            captureSession.pending.kind === "next_action" ? t("goals.looksAction") :
+                            captureSession.pending.kind === "reference" ? t("goals.looksReference") :
                             captureSession.pending.kind === "someday" ? "Isso parece algo para algum dia." :
                             "Isso ainda fica melhor na caixa de entrada."}
                         </span>
                       </span>
                     : captureSession?.question
                       ? <span>{captureSession.question}</span>
-                      : <span>O que está na sua mente agora?<br />
+                      : <span>{t("goals.capturePrompt")}<br />
                       <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-                        Uma ideia, meta, tarefa ou qualquer coisa que precise sair da cabeça.
+                        {t("goals.captureHint")}
                       </span>
                     </span>
               }
@@ -1073,7 +1078,7 @@ export function GoalsPage() {
                   cursor: "pointer", fontWeight: 700,
                 }}
               >
-                Salvar
+                {t("common.save")}
               </button>
               <button
                 onClick={resetCaptureConversation}
@@ -1141,14 +1146,14 @@ export function GoalsPage() {
           activeGoals.length === 0 ? (
             <SmartEmptyState
               icon={Target}
-              title="Transforme uma intenção em próximos passos"
-              description="Metas funcionam melhor quando a Airia quebra em ações pequenas. Escreva a ideia acima ou comece com um exemplo."
-              ctaLabel="Escrever uma meta"
+              title={t("goals.emptyTitle")}
+              description={t("goals.emptyDescription")}
+              ctaLabel={l("Escrever uma meta", "Write a goal")}
               onAction={() => captureInputRef.current?.focus()}
               examples={[
-                { title: "Organizar minha rotina da semana", description: "Para transformar bagunça em passos." },
-                { title: "Retomar um projeto parado", description: "Para achar a primeira ação real." },
-                { title: "Cuidar melhor da minha energia", description: "Para criar metas compatíveis com seu ritmo." },
+                { title: l("Organizar minha rotina da semana", "Organize my weekly routine"), description: l("Para transformar bagunça em passos.", "Turn the mess into steps.") },
+                { title: l("Retomar um projeto parado", "Restart a stalled project"), description: l("Para achar a primeira ação real.", "Find the first real action.") },
+                { title: l("Cuidar melhor da minha energia", "Take better care of my energy"), description: l("Para criar metas compatíveis com seu ritmo.", "Create goals that fit your rhythm.") },
               ]}
             />
           ) : (
@@ -1189,7 +1194,7 @@ export function GoalsPage() {
             >
               <CheckCircle2 size={15} style={{ color: "var(--accent-sage)" }} />
               <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
-                Concluídas
+                {t("goals.completedPlural")}
               </span>
               <span style={{
                 background: "rgba(150,199,179,.22)", color: "var(--accent-sage-ink)",
@@ -1236,7 +1241,7 @@ export function GoalsPage() {
             >
               <Zap size={15} style={{ color: "var(--accent-sky)" }} />
               <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
-                Próximas ações
+                {t("goals.nextActions")}
               </span>
               <span style={{
                 background: "var(--accent-sky)", color: "#fff",
@@ -1253,14 +1258,14 @@ export function GoalsPage() {
             {actionsOpen && priorityActions.length === 0 && (
               <SmartEmptyState
                 icon={Zap}
-                title="Nenhuma próxima ação ainda"
-                description="Quando uma meta tiver passos, a Airia puxa o que dá para fazer agora. Para começar, capture uma intenção acima."
-                ctaLabel="Capturar uma ação"
+                title={t("goals.noActions")}
+                description={t("goals.noActionsDescription")}
+                ctaLabel={t("goals.captureAction")}
                 onAction={() => captureInputRef.current?.focus()}
                 examples={[
-                  { title: "Enviar mensagem para destravar X", description: "Ação clara com pessoa ou projeto." },
-                  { title: "Separar 20 min para revisar Y", description: "Bom para avanço mínimo." },
-                  { title: "Listar documentos de Z", description: "Bom quando a meta ainda está grande." },
+                  { title: l("Enviar mensagem para destravar X", "Send a message to unblock X"), description: l("Ação clara com pessoa ou projeto.", "A clear action with a person or project.") },
+                  { title: l("Separar 20 min para revisar Y", "Set aside 20 min to review Y"), description: l("Bom para avanço mínimo.", "Good for minimum progress.") },
+                  { title: l("Listar documentos de Z", "List the documents for Z"), description: l("Bom quando a meta ainda está grande.", "Good when the goal still feels too big.") },
                 ]}
               />
             )}
@@ -1288,7 +1293,7 @@ export function GoalsPage() {
                         fontSize: 9, fontWeight: 800, letterSpacing: ".07em",
                         color: action.source === "goal" ? "var(--accent-peach)" : "var(--accent-sky)",
                         textTransform: "uppercase" as const,
-                      }}>{action.source === "goal" ? "🎯 Meta" : "⚡ Tarefa"}</span>
+                      }}>{action.source === "goal" ? l("🎯 Meta", "🎯 Goal") : l("⚡ Tarefa", "⚡ Task")}</span>
                     </div>
                     <div style={{
                       fontSize: "calc(var(--a) * 0.9)", fontWeight: 500,
@@ -1363,7 +1368,7 @@ export function GoalsPage() {
                       ))}
                       <button onClick={() => setLinkingItem(null)}
                         style={{ background: "none", border: "none", cursor: "pointer", fontSize: "calc(var(--a) * 0.82)", color: "var(--text-3)", textAlign: "center", padding: 4 }}>
-                        Cancelar
+                        {t("common.cancel")}
                       </button>
                     </div>
                   </div>
@@ -1451,7 +1456,7 @@ export function GoalsPage() {
             }}>
               <span style={{ fontSize: "0.9rem" }}>🗂️</span>
               <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-2)" }}>
-                Referência & Algum Dia
+                {t("goals.referenceSomeday")}
               </span>
               <span style={{
                 background: "var(--text-3)", color: "#fff",

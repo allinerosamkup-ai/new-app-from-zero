@@ -32,6 +32,18 @@ const eventLogMigration = fs.readFileSync(
   path.resolve(__dirname, '../../../../supabase/migrations/20260420120000_add_event_logs.sql'),
   'utf8',
 );
+const timelineAdaptabilityMigration = fs.readFileSync(
+  path.resolve(__dirname, '../../../../supabase/migrations/20260714180000_add_timeline_adaptability_contract.sql'),
+  'utf8',
+);
+const timelineAdaptabilityProvenanceMigration = fs.readFileSync(
+  path.resolve(__dirname, '../../../../supabase/migrations/20260714183000_add_timeline_adaptability_provenance.sql'),
+  'utf8',
+);
+const canonicalMemoryMigration = fs.readFileSync(
+  path.resolve(__dirname, '../../../../supabase/migrations/20260714200000_add_canonical_memory.sql'),
+  'utf8',
+);
 
 assert.match(migration, /suggestions\s+text\[\]/);
 assert.match(migration, /age\s+integer/);
@@ -72,5 +84,37 @@ assert.match(eventLogMigration, /properties\s+jsonb/);
 assert.match(eventLogMigration, /user_agent\s+text/);
 assert.match(eventLogMigration, /create index if not exists event_logs_user_id_created_at_idx/);
 assert.match(eventLogMigration, /create index if not exists event_logs_user_id_event_name_idx/);
+assert.match(timelineAdaptabilityMigration, /temporal_policy\s+text\s+not null\s+default 'flexible'/);
+assert.match(timelineAdaptabilityMigration, /adaptation_permission\s+text\s+not null\s+default 'eligible'/);
+assert.match(timelineAdaptabilityMigration, /where gcal_event_id is not null/);
+assert.match(timelineAdaptabilityMigration, /temporal_policy = 'fixed'/);
+assert.match(timelineAdaptabilityMigration, /adaptation_permission = 'protected'/);
+assert.match(timelineAdaptabilityProvenanceMigration, /adaptability_source\s+text\s+not null\s+default 'default'/);
+assert.match(timelineAdaptabilityProvenanceMigration, /adaptability_confidence\s+double precision\s+not null\s+default 0\.5/);
+assert.match(timelineAdaptabilityProvenanceMigration, /adaptability_source = 'gcal', adaptability_confidence = 1/);
+assert.match(timelineAdaptabilityProvenanceMigration, /where gcal_event_id is not null/);
+assert.match(timelineAdaptabilityProvenanceMigration, /adaptability_source = 'recurrence'/);
+assert.match(timelineAdaptabilityProvenanceMigration, /adaptability_source = 'ai'/);
+assert.match(timelineAdaptabilityProvenanceMigration, /adaptability_source = 'language'/);
+assert.match(timelineAdaptabilityProvenanceMigration, /temporal_policy = 'windowed', adaptation_permission = 'preview'/);
+assert.doesNotMatch(timelineAdaptabilityProvenanceMigration, /\(recurring->>'enabled'\)::boolean/);
+assert.match(timelineAdaptabilityProvenanceMigration, /\(\^\|\[\^\[:alnum:\]_\]\)/);
+assert.doesNotMatch('Paula networking', /(^|[^\p{L}\p{N}_])(aula|work)([^\p{L}\p{N}_]|$)/iu);
+assert.match(canonicalMemoryMigration, /negative_state text check \(negative_state is null or negative_state in \('completed','rejected','deleted','scheduled'\)\)/);
+assert.match(canonicalMemoryMigration, /foreign key \(memory_id, user_id\)/);
+assert.match(canonicalMemoryMigration, /exists \([\s\S]*memory\.user_id = auth\.uid\(\)/);
+assert.match(canonicalMemoryMigration, /insert into public\.user_memories[\s\S]*'legacy\.rag'/);
+assert.match(canonicalMemoryMigration, /'none'/);
+assert.match(canonicalMemoryMigration, /set memory_id = memory\.id/);
+assert.match(canonicalMemoryMigration, /function public\.match_user_memories/);
+assert.match(canonicalMemoryMigration, /create extension if not exists vector/);
+assert.match(canonicalMemoryMigration, /create table if not exists public\.memory_embeddings/);
+assert.match(canonicalMemoryMigration, /embedding vector\(1536\) not null/);
+assert.match(canonicalMemoryMigration, /memory_embeddings_manage_own/);
+assert.ok(
+  canonicalMemoryMigration.indexOf('create table if not exists public.memory_embeddings')
+    < canonicalMemoryMigration.indexOf('alter table public.memory_embeddings add column if not exists memory_id'),
+  'clean migration creates memory_embeddings before altering/backfilling it',
+);
 
 console.log('schema alignment tests passed');

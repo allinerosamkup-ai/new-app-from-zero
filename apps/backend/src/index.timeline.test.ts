@@ -28,8 +28,11 @@ async function run() {
       },
       upsert: async ({ where, update, create }: any) => {
         const previous = storedBlocks.get(where.id);
+        const persistedUpdate = Object.fromEntries(
+          Object.entries(update).filter(([, value]) => value !== undefined),
+        );
         const upserted = previous
-          ? { ...previous, ...update, id: where.id }
+          ? { ...previous, ...persistedUpdate, id: where.id }
           : { ...create, id: where.id };
         upsertedBlocks.push(upserted);
         storedBlocks.set(where.id, upserted);
@@ -81,6 +84,10 @@ async function run() {
     assert.equal(createdBlocks[0].title, 'Consulta médica');
     assert.equal(createdBlocks[0].intensity, 'P');
     assert.equal(createdBlocks[0].status, 'planned');
+    assert.equal(createdBlocks[0].temporalPolicy, 'windowed');
+    assert.equal(createdBlocks[0].adaptationPermission, 'preview');
+    assert.equal(createdBlocks[0].adaptabilitySource, 'language');
+    assert.equal(createdBlocks[0].adaptabilityConfidence, 0.68);
 
     const updateResponse = await fetch(`${baseUrl}/api/timeline`, {
       method: 'POST',
@@ -131,6 +138,9 @@ async function run() {
             persistentReminderIntervalMinutes: 60,
             isAiSuggested: true,
             aiReasoning: 'Sugerido pela Airia.',
+            gcalEventId: 'google-event-protected',
+            temporalPolicy: 'flexible',
+            adaptationPermission: 'eligible',
           },
         ],
       }),
@@ -148,6 +158,10 @@ async function run() {
     assert.equal(createdBlocks[1].persistentReminderIntervalMinutes, 60);
     assert.equal(createdBlocks[1].isAiSuggested, true);
     assert.equal(createdBlocks[1].aiReasoning, 'Sugerido pela Airia.');
+    assert.equal(createdBlocks[1].temporalPolicy, 'fixed');
+    assert.equal(createdBlocks[1].adaptationPermission, 'protected');
+    assert.equal(createdBlocks[1].adaptabilitySource, 'gcal');
+    assert.equal(createdBlocks[1].adaptabilityConfidence, 1);
 
     const metadataBlockId = '44444444-4444-4444-8444-444444444444';
     const metadataUpsertResponse = await fetch(`${baseUrl}/api/timeline`, {
@@ -203,6 +217,78 @@ async function run() {
     assert.equal(partialUpdateBody.savedBlocks[0].note, 'Nota que nao pode sumir.');
     assert.equal(partialUpdateBody.savedBlocks[0].noteMode, 'text');
 
+    const protectedBlockId = '88888888-8888-4888-8888-888888888888';
+    const protectedCreateResponse = await fetch(`${baseUrl}/api/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-06',
+        forceSave: true,
+        blocks: [{
+          id: protectedBlockId,
+          title: 'Âncora protegida',
+          startTime: '19:00',
+          endTime: '19:30',
+          category: 'trabalho',
+          intensity: 'M',
+          status: 'planned',
+          temporalPolicy: 'fixed',
+          adaptationPermission: 'protected',
+          adaptabilitySource: 'manual',
+          adaptabilityConfidence: 1,
+        }],
+      }),
+    });
+    assert.equal(protectedCreateResponse.status, 200);
+
+    const protectedPartialUpdateResponse = await fetch(`${baseUrl}/api/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-06',
+        forceSave: true,
+        blocks: [{
+          id: protectedBlockId,
+          title: 'Âncora protegida renomeada',
+          startTime: '19:00',
+          endTime: '19:30',
+          category: 'trabalho',
+          intensity: 'M',
+          status: 'planned',
+        }],
+      }),
+    });
+    const protectedPartialUpdateBody = await protectedPartialUpdateResponse.json();
+    assert.equal(protectedPartialUpdateResponse.status, 200);
+    assert.equal(protectedPartialUpdateBody.savedBlocks[0].temporalPolicy, 'fixed');
+    assert.equal(protectedPartialUpdateBody.savedBlocks[0].adaptationPermission, 'protected');
+    assert.equal(protectedPartialUpdateBody.savedBlocks[0].adaptabilitySource, 'manual');
+    assert.equal(protectedPartialUpdateBody.savedBlocks[0].adaptabilityConfidence, 1);
+
+    const explicitAdaptabilityUpdateResponse = await fetch(`${baseUrl}/api/timeline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: '2026-04-06',
+        forceSave: true,
+        blocks: [{
+          id: protectedBlockId,
+          title: 'Âncora com janela',
+          startTime: '19:00',
+          endTime: '19:30',
+          category: 'trabalho',
+          intensity: 'M',
+          status: 'planned',
+          temporalPolicy: 'windowed',
+          adaptationPermission: 'preview',
+        }],
+      }),
+    });
+    const explicitAdaptabilityUpdateBody = await explicitAdaptabilityUpdateResponse.json();
+    assert.equal(explicitAdaptabilityUpdateResponse.status, 200);
+    assert.equal(explicitAdaptabilityUpdateBody.savedBlocks[0].temporalPolicy, 'windowed');
+    assert.equal(explicitAdaptabilityUpdateBody.savedBlocks[0].adaptationPermission, 'preview');
+
     existingBlocks = [
       {
         id: '33333333-3333-4333-8333-333333333333',
@@ -254,6 +340,9 @@ async function run() {
         lastResetDate: new Date('2026-04-05T00:00:00.000Z'),
         persistentReminderEnabled: true,
         persistentReminderIntervalMinutes: 120,
+        gcalEventId: 'legacy-google-event',
+        temporalPolicy: 'flexible',
+        adaptationPermission: 'eligible',
       },
     ];
 
@@ -268,6 +357,10 @@ async function run() {
     assert.equal(getBody[0].lastResetDate, '2026-04-05');
     assert.equal(getBody[0].persistentReminderEnabled, true);
     assert.equal(getBody[0].persistentReminderIntervalMinutes, 120);
+    assert.equal(getBody[0].temporalPolicy, 'fixed');
+    assert.equal(getBody[0].adaptationPermission, 'protected');
+    assert.equal(getBody[0].adaptabilitySource, 'gcal');
+    assert.equal(getBody[0].adaptabilityConfidence, 1);
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {

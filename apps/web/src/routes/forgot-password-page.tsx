@@ -1,10 +1,12 @@
 // Forgot Password — recuperação de senha com timer 60s
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import "../styles/aura.css";
 
 export function ForgotPasswordPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +32,7 @@ export function ForgotPasswordPage() {
       setSent(true);
       setTimer(60);
     } catch (err: any) {
-      setError(err?.message || "Erro ao enviar link.");
+      setError(err?.message || t("auth.recovery.sendError"));
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export function ForgotPasswordPage() {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
         </svg>
-        Voltar
+        {t("common.back")}
       </button>
 
       {/* Icon */}
@@ -68,16 +70,16 @@ export function ForgotPasswordPage() {
       </div>
 
       <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", marginBottom: 8 }}>
-        Esqueceu a senha?
+        {t("auth.recovery.forgotTitle")}
       </h1>
       <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 32 }}>
-        Informe seu e-mail e enviaremos um link para redefinir sua senha.
+        {t("auth.recovery.forgotSubtitle")}
       </p>
 
       {!sent ? (
         <>
           <div className="aura-input-wrap">
-            <label className="aura-input-label">Seu e-mail</label>
+            <label className="aura-input-label">{t("auth.recovery.yourEmail")}</label>
             <div className="aura-input aura-inline-field">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <rect x="2" y="4" width="20" height="16" rx="3" />
@@ -114,7 +116,7 @@ export function ForgotPasswordPage() {
               transition: "all 150ms",
             }}
           >
-            {loading ? "Enviando..." : "Enviar link de recuperação"}
+            {loading ? t("auth.recovery.sending") : t("auth.recovery.send")}
           </button>
         </>
       ) : (
@@ -128,10 +130,10 @@ export function ForgotPasswordPage() {
         }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
           <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, fontWeight: 700, color: "var(--text-1)", marginBottom: 8 }}>
-            Link enviado!
+            {t("auth.recovery.sent")}
           </p>
           <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 20 }}>
-            Verifique sua caixa de entrada em <strong>{email}</strong> e clique no link para redefinir.
+            {t("auth.recovery.checkInbox", { email })}
           </p>
 
           <button
@@ -143,7 +145,7 @@ export function ForgotPasswordPage() {
               color: timer > 0 ? "var(--text-3)" : "var(--accent-peach-ink)",
             }}
           >
-            {timer > 0 ? `Reenviar em ${timer}s` : "Reenviar link"}
+            {timer > 0 ? t("auth.recovery.resendIn", { seconds: timer }) : t("auth.recovery.resend")}
           </button>
         </div>
       )}
@@ -156,7 +158,7 @@ export function ForgotPasswordPage() {
           marginTop: 24, textAlign: "center",
         }}
       >
-        Lembrei a senha — <span style={{ color: "var(--accent-peach-ink)", fontWeight: 600 }}>Entrar</span>
+        {t("auth.recovery.remembered")} <span style={{ color: "var(--accent-peach-ink)", fontWeight: 600 }}>{t("auth.signIn")}</span>
       </button>
     </div>
   );

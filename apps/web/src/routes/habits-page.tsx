@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { Habit } from "../features/aura/types";
@@ -10,6 +11,7 @@ import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil, Sparkles
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { getLocalDateKey } from "../utils/day-context";
+import { useLocalizedCopy } from "../i18n";
 
 // ─── Confetti burst (CSS-only, no dependency) ────────────────────────────────
 const CONFETTI_COLORS = ["#D7897F","#96C7B3","#6398A9","#B5A4C8","#F9C784","#fff"];
@@ -343,6 +345,7 @@ function HabitCard({
 
 // ─── Habit completion calendar (4 weeks × 7 days) ────────────────────────
 function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
+  const { t } = useTranslation();
   const [completedDates, setCompletedDates] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
 
@@ -379,7 +382,7 @@ function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
   if (!loaded) {
     return (
       <div style={{ padding: "8px 0", display: "flex", justifyContent: "center" }}>
-        <span style={{ fontSize: 10, color: "var(--text-3)" }}>carregando...</span>
+        <span style={{ fontSize: 10, color: "var(--text-3)" }}>{t("habits.loading")}</span>
       </div>
     );
   }
@@ -422,7 +425,7 @@ function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
       ))}
       {/* Summary */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
-        <span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 600 }}>Últimas 4 semanas</span>
+        <span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 600 }}>{t("habits.lastWeeks")}</span>
         <span style={{ fontSize: 10, color, fontWeight: 700 }}>{filledCount}/28 dias</span>
       </div>
     </div>
@@ -431,6 +434,7 @@ function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
 
 // ─── All habits card (expandable with calendar) ───────────────────────────
 function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dateKey: string; onArchive: () => void; onEdit: () => void }) {
+  const { t } = useTranslation();
   const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
   const completedToday = isHabitCompleteForDate(habit, dateKey);
   const [expanded, setExpanded] = useState(false);
@@ -625,7 +629,7 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
             }}
           >
             <Pencil size={13} />
-            Editar hábito
+            {t("habits.editTitle")}
           </button>
           <button
             onClick={async (e) => {
@@ -654,7 +658,7 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
             }}
           >
             <Archive size={13} />
-            {archiving ? "Excluindo..." : "Excluir hábito"}
+            {archiving ? t("habits.deleting") : t("habits.delete")}
           </button>
         </div>
       )}
@@ -664,6 +668,8 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
 
 // ─── Main page ────────────────────────────────────────────────────────────
 export function HabitsPage() {
+  const { t } = useTranslation();
+  const l = useLocalizedCopy();
   const { state, addHabit, updateHabit, toggleHabit, archiveHabit, unarchiveHabit } = useAuraStore();
   const navigate = useNavigate();
   const { showSuccess, showError, showUndo } = useToast();
@@ -672,10 +678,10 @@ export function HabitsPage() {
     try {
       await archiveHabit(habit.id);
       showUndo(`"${habit.title}" excluído`, () => {
-        unarchiveHabit(habit.id).catch(() => showError("Não consegui restaurar o hábito"));
+        unarchiveHabit(habit.id).catch(() => showError(t("habits.restoreError")));
       });
     } catch {
-      showError("Não consegui excluir o hábito");
+      showError(t("habits.deleteError"));
     }
   }
   const [tab, setTab] = useState<"today" | "all" | "badges">("today");
@@ -724,7 +730,7 @@ export function HabitsPage() {
         setTimeout(() => setShowConfetti(false), 3000);
       }
     } catch {
-      showError("Erro ao atualizar hábito.");
+      showError(t("habits.updateError"));
     } finally {
       setTogglingIds((prev) => {
         const next = new Set(prev);
@@ -738,10 +744,10 @@ export function HabitsPage() {
     try {
       await addHabit(data);
       setShowAddModal(false);
-      showSuccess("Hábito criado.");
+      showSuccess(t("habits.created"));
       return true;
     } catch {
-      showError("Erro ao criar hábito.");
+      showError(t("habits.createError"));
       return false;
     }
   }
@@ -751,10 +757,10 @@ export function HabitsPage() {
     try {
       await updateHabit(editingHabit.id, data);
       setEditingHabit(null);
-      showSuccess("Hábito salvo.");
+      showSuccess(t("habits.saved"));
       return true;
     } catch {
-      showError("Erro ao salvar hábito.");
+      showError(t("habits.saveError"));
       return false;
     }
   }
@@ -791,9 +797,9 @@ export function HabitsPage() {
             <ChevronLeft size={24} />
           </button>
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Meus Hábitos</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{t("habits.title")}</h1>
             <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.35 }}>
-              Hábitos pequenos do tamanho da sua fase.
+              {t("habits.smallForPhase")}
             </p>
           </div>
           <button
@@ -833,7 +839,7 @@ export function HabitsPage() {
                 {completedToday}/{todayHabits.length}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0, fontWeight: 600, textTransform: "uppercase" }}>
-                Hoje
+                {t("common.today")}
               </p>
             </div>
           </div>
@@ -887,7 +893,7 @@ export function HabitsPage() {
                 transition: "all 0.18s",
               }}
             >
-              {t === "today" ? "Hoje" : t === "all" ? "Todos" : "🏆"}
+              {t === "today" ? l("Hoje", "Today") : t === "all" ? l("Todos", "All") : "🏆"}
             </button>
           ))}
         </div>
@@ -898,14 +904,14 @@ export function HabitsPage() {
             {todayHabits.length === 0 ? (
               <SmartEmptyState
                 icon={Sparkles}
-                title="Crie um habito pequeno"
-                description="Habito aqui nao e cobrança. É uma repetição leve que combina com seu humor e energia."
-                ctaLabel="Criar habito"
+                title={t("habits.emptyTitle")}
+                description={t("habits.emptyDescription")}
+                ctaLabel={l("Criar hábito", "Create habit")}
                 onAction={() => setShowAddModal(true)}
                 examples={[
-                  { title: "Abrir o planner de manha", description: "Para orientar o dia antes de começar." },
-                  { title: "Revisar uma pendencia as 16h", description: "Para evitar peso acumulado no fim do dia." },
-                  { title: "Registrar uma linha no diario", description: "Para dar contexto quando o dia oscilar." },
+                  { title: l("Abrir o planner de manhã", "Open the planner in the morning"), description: l("Para orientar o dia antes de começar.", "Set direction before the day begins.") },
+                  { title: l("Revisar uma pendência às 16h", "Review a pending item at 4 PM"), description: l("Para evitar peso acumulado no fim do dia.", "Avoid accumulated weight at the end of the day.") },
+                  { title: l("Registrar uma linha no diário", "Write one line in the journal"), description: l("Para dar contexto quando o dia oscilar.", "Provide context when the day fluctuates.") },
                 ]}
               />
             ) : (
@@ -914,7 +920,7 @@ export function HabitsPage() {
                 {pendingToday.length > 0 && (
                   <div style={{ marginBottom: 16 }}>
                     <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", margin: "0 0 10px" }}>
-                      Para fazer ({pendingToday.length})
+                      {l(`Para fazer (${pendingToday.length})`, `To do (${pendingToday.length})`)}
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {pendingToday.map((h) => (
@@ -936,7 +942,7 @@ export function HabitsPage() {
                 {doneToday.length > 0 && (
                   <div>
                     <p style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-sage)", textTransform: "uppercase", margin: "0 0 10px" }}>
-                      Concluídos hoje ({doneToday.length})
+                      {t("habits.completedToday", { count: doneToday.length })}
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {doneToday.map((h) => (
@@ -968,10 +974,10 @@ export function HabitsPage() {
                   >
                     <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
                     <p style={{ fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 4px", fontSize: 15 }}>
-                      Todos os hábitos do dia!
+                      {t("habits.allDone")}
                     </p>
                     <p style={{ color: "var(--text-3)", fontSize: 12, margin: 0 }}>
-                      Consistência é o caminho.
+                      {t("habits.consistencyPath")}
                     </p>
                   </div>
                 )}
@@ -986,14 +992,14 @@ export function HabitsPage() {
             {habits.length === 0 ? (
               <SmartEmptyState
                 icon={Sparkles}
-                title="Nenhum habito cadastrado"
-                description="Comece com algo que ajude a Airia a sustentar seu ritmo, sem virar lista pesada."
-                ctaLabel="Criar primeiro habito"
+                title={t("habits.noneTitle")}
+                description={l("Comece com algo que ajude a Airia a sustentar seu ritmo, sem virar lista pesada.", "Start with something that helps Airia support your rhythm without becoming a heavy list.")}
+                ctaLabel={l("Criar primeiro hábito", "Create first habit")}
                 onAction={() => setShowAddModal(true)}
                 examples={[
-                  { title: "Check-in da manha", description: "Humor e energia antes da agenda." },
-                  { title: "Fechamento do dia", description: "Olhar o que ficou pendente." },
-                  { title: "Planejar uma janela leve", description: "Proteger energia em dias sensiveis." },
+                  { title: l("Check-in da manhã", "Morning check-in"), description: l("Humor e energia antes da agenda.", "Mood and energy before the agenda.") },
+                  { title: l("Fechamento do dia", "End-of-day review"), description: l("Olhar o que ficou pendente.", "Review what remains pending.") },
+                  { title: l("Planejar uma janela leve", "Plan a light window"), description: l("Proteger energia em dias sensíveis.", "Protect energy on sensitive days.") },
                 ]}
               />
             ) : (
@@ -1167,9 +1173,9 @@ export function HabitsPage() {
           onClose={() => setEditingHabit(null)}
           onSave={handleEditHabit}
           initialDraft={editingHabitDraft}
-          title="Editar hábito"
-          subtitle="Ajuste frequência, metas, dias e lembretes desse hábito."
-          saveLabel="Salvar alterações"
+          title={t("habits.editTitle")}
+          subtitle={t("habits.editSubtitle")}
+          saveLabel={t("habits.saveChanges")}
         />
       )}
     </div>

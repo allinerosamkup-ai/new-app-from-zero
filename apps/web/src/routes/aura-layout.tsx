@@ -279,10 +279,10 @@ export function AuraLayout() {
             <AuraIcon size={22} />
             <div style={{ flex: 1 }}>
               <p style={{ fontSize: 12, fontWeight: 800, color: "var(--text-1)", margin: "0 0 3px" }}>
-                Quer calibrar sua Airia?
+                {t("onboarding.prompt.title")}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-2)", lineHeight: 1.45, margin: 0 }}>
-                O onboarding ajuda a ajustar humor, energia e sugestões. Dá para usar o app sem fazer isso agora.
+                {t("onboarding.prompt.body")}
               </p>
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <button
@@ -292,7 +292,7 @@ export function AuraLayout() {
                   }}
                   style={{ flex: 1, height: 32, border: "none", borderRadius: 10, background: "var(--accent-peach)", color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer" }}
                 >
-                  Fazer agora
+                  {t("onboarding.prompt.doNow")}
                 </button>
                 <button
                   onClick={() => dismissOnboardingPrompt(false)}
@@ -304,7 +304,7 @@ export function AuraLayout() {
                   onClick={() => dismissOnboardingPrompt(true)}
                   style={{ height: 32, border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
                 >
-                  Não mostrar
+                  {t("onboarding.prompt.notShow")}
                 </button>
               </div>
             </div>

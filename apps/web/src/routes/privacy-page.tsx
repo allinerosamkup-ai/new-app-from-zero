@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const BRAND = {
   nectarine: "#F4A896",
@@ -16,6 +17,7 @@ const BRAND = {
 } as const;
 
 export function PrivacyPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -45,7 +47,7 @@ export function PrivacyPage() {
           }}
         >
           <ArrowLeft size={18} />
-          Voltar para o Início
+          {t("legal.backHome")}
         </button>
 
         <header style={{ marginBottom: 64 }}>
@@ -64,7 +66,7 @@ export function PrivacyPage() {
             marginBottom: 16
           }}>
             <ShieldCheck size={14} />
-            Transparência & Privacidade
+            {t("legal.privacy.eyebrow")}
           </div>
           <h1 style={{ 
             fontSize: "clamp(32px, 5vw, 48px)", 
@@ -75,29 +77,25 @@ export function PrivacyPage() {
             fontFamily: "'Playfair Display', serif",
             fontStyle: "italic"
           }}>
-            Política de Privacidade
+            {t("legal.privacy.title")}
           </h1>
           <p style={{ fontSize: 18, lineHeight: 1.6, color: BRAND.textSoft, maxWidth: 600 }}>
-            Sua privacidade é a base da Airia. Como você confia a nós sua jornada biológica e emocional, 
-            estamos comprometidos em proteger cada dado com o mais alto rigor técnico e ético.
+            {t("legal.privacy.intro")}
           </p>
         </header>
 
         <article style={{ display: "flex", flexDirection: "column", gap: 48, paddingBottom: 80 }}>
           <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>1. Coleta e Uso de Dados</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>{t("legal.privacy.s1Title")}</h2>
             <p style={{ fontSize: 15, lineHeight: 1.8, color: BRAND.textSoft }}>
-              A Airia coleta informações que você fornece voluntariamente durante seu uso, como registros de humor, 
-              níveis de energia, padrões de sono e metas pessoais. Esses dados são processados exclusivamente para 
-              fornecer insights personalizados e ajudar você a harmonizar sua rotina.
+              {t("legal.privacy.s1")}
             </p>
           </section>
 
           <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>2. Integração com Google Calendar</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>{t("legal.privacy.s2Title")}</h2>
             <p style={{ fontSize: 15, lineHeight: 1.8, color: BRAND.textSoft, marginBottom: 16 }}>
-              Caso você opte por ativar a sincronização com o Google Calendar, a Airia solicitará acesso para visualizar 
-              seus eventos e criar novos compromissos no seu calendário. 
+              {t("legal.privacy.s2")}
             </p>
             <div style={{ 
               background: "white", 
@@ -107,37 +105,31 @@ export function PrivacyPage() {
               boxShadow: "0 12px 24px rgba(0,0,0,0.02)"
             }}>
               <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-                <li style={{ fontSize: 14, color: BRAND.textSoft }}><strong>O que acessamos:</strong> Títulos, horários e durações de eventos existentes para evitar conflitos no seu planejamento.</li>
-                <li style={{ fontSize: 14, color: BRAND.textSoft }}><strong>O que criamos:</strong> Apenas os blocos de tempo que você explicitamente confirmar no Planner da Airia.</li>
-                <li style={{ fontSize: 14, color: BRAND.textSoft }}><strong>Nossa política:</strong> Não compartilhamos seus dados de calendário com terceiros nem os utilizamos para fins publicitários.</li>
+                <li style={{ fontSize: 14, color: BRAND.textSoft }}>{t("legal.privacy.access")}</li>
+                <li style={{ fontSize: 14, color: BRAND.textSoft }}>{t("legal.privacy.create")}</li>
+                <li style={{ fontSize: 14, color: BRAND.textSoft }}>{t("legal.privacy.policy")}</li>
               </ul>
             </div>
           </section>
 
           <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>3. Segurança da Informação</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>{t("legal.privacy.s3Title")}</h2>
             <p style={{ fontSize: 15, lineHeight: 1.8, color: BRAND.textSoft }}>
-              Utilizamos infraestrutura de ponta, incluindo Supabase para autenticação e PostgreSQL para armazenamento, 
-              com políticas de segurança baseadas em Row-Level Security (RLS). Isso significa que seus dados são 
-              isolados e inacessíveis para qualquer outra pessoa, incluindo nossa equipe, a menos que seja estritamente 
-              necessário para suporte técnico solicitado por você.
+              {t("legal.privacy.s3")}
             </p>
           </section>
 
           <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>4. Inteligência Artificial</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>{t("legal.privacy.s4Title")}</h2>
             <p style={{ fontSize: 15, lineHeight: 1.8, color: BRAND.textSoft }}>
-              Suas reflexões de diário e interações com a Airia IA são processadas para gerar resumos e insights de vida. 
-              Utilizamos modelos de IA (como GPT-4o-mini) via APIs seguras onde seus dados não são utilizados para 
-              treinamento público de modelos de terceiros.
+              {t("legal.privacy.s4")}
             </p>
           </section>
 
           <section>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>5. Seus Direitos</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16, color: BRAND.textWarm }}>{t("legal.privacy.s5Title")}</h2>
             <p style={{ fontSize: 15, lineHeight: 1.8, color: BRAND.textSoft }}>
-              Você detém a propriedade total de seus dados. A qualquer momento, você pode solicitar a exclusão integral 
-              de sua conta e de todo o histórico associado através das configurações do aplicativo.
+              {t("legal.privacy.s5")}
             </p>
           </section>
 
@@ -149,8 +141,8 @@ export function PrivacyPage() {
             color: BRAND.textSoft,
             lineHeight: 1.6
           }}>
-            Última atualização: Abril de 2026. <br />
-            Para dúvidas ou solicitações, entre em contato em support@airia.pro
+            {t("legal.updated")} <br />
+            {t("legal.privacy.contact")}
           </footer>
         </article>
       </div>

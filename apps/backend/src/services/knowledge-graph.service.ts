@@ -2,6 +2,7 @@ import { PrismaClient } from '@app/database';
 import OpenAI from 'openai';
 
 import { getOpenAiModel } from '../lib/openai-config';
+import { CanonicalMemoryService } from './canonical-memory.service';
 import {
   KnowledgeGraphExtractionSchema,
   type KnowledgeGraphExtraction,
@@ -62,7 +63,14 @@ export class KnowledgeGraphService {
   static async extractFromMessage(
     userId: string,
     userMessage: string,
-    options: { assistantReply?: string; source?: 'journal' | 'checkin'; client?: Pick<OpenAI, 'chat'> } = {},
+    options: {
+      assistantReply?: string; source?: 'journal' | 'checkin' | 'aura'; client?: Pick<OpenAI, 'chat'>;
+      allowDecisions?: boolean; locale?: string;
+      canonicalMemoryService?: Pick<CanonicalMemoryService, 'write'>;
+      prismaClient?: any;
+      sourceId?: string;
+      observedAt?: Date;
+    } = {},
   ): Promise<{ extracted: KnowledgeGraphExtraction | null; saved: boolean }> {
     const source = options.source ?? 'journal';
     const client = options.client ?? getOpenAI();
@@ -86,7 +94,15 @@ export class KnowledgeGraphService {
         return { extracted: null, saved: false };
       }
 
-      await this.persistExtraction(userId, parsed, source);
+      await this.persistExtraction(userId, parsed, {
+        source,
+        locale: options.locale ?? 'pt-BR',
+        allowDecisions: options.allowDecisions ?? true,
+        canonicalMemoryService: options.canonicalMemoryService,
+        prismaClient: options.prismaClient,
+        sourceId: options.sourceId,
+        observedAt: options.observedAt,
+      });
       return { extracted: parsed, saved: true };
     } catch (error) {
       console.warn('[knowledge-graph] extract falhou silenciosamente:', error);
@@ -98,16 +114,26 @@ export class KnowledgeGraphService {
   static async persistExtraction(
     userId: string,
     extraction: KnowledgeGraphExtraction,
-    source: string,
+    options: {
+      source: string; locale: string; allowDecisions: boolean;
+      canonicalMemoryService?: Pick<CanonicalMemoryService, 'write'>;
+      prismaClient?: any;
+      sourceId?: string;
+      observedAt?: Date;
+    },
   ): Promise<void> {
-    const now = new Date();
+    const { source, locale, allowDecisions } = options;
+    const now = options.observedAt ?? new Date();
+    const db = options.prismaClient ?? prisma;
+    const canonical = options.canonicalMemoryService ?? new CanonicalMemoryService(db);
+    const memoryKey = (prefix: string, text: string) => `${prefix}.${this.normalize(text).replace(/\s+/g, '.').slice(0, 120)}`;
 
     // 1. Upsert de entidades — chave única (userId, canonicalName)
     const entityIdByName = new Map<string, string>();
     for (const entity of extraction.entities) {
       const canonical = entity.canonicalName.trim();
       if (!canonical) continue;
-      const upserted = await prisma.userEntity.upsert({
+      const upserted = await db.userEntity.upsert({
         where: { userId_canonicalName: { userId, canonicalName: canonical } },
         create: {
           userId,
@@ -129,63 +155,88 @@ export class KnowledgeGraphService {
     }
 
     // 2. Append de fatos
-    for (const fact of extraction.facts) {
+    for (const [factIndex, fact] of extraction.facts.entries()) {
       const statement = fact.statement.trim();
       if (!statement) continue;
       const entityId = fact.entityCanonicalName
         ? entityIdByName.get(fact.entityCanonicalName.trim().toLowerCase()) ?? null
         : null;
       const occurredAt = fact.occurredAt ? new Date(fact.occurredAt) : now;
-      await prisma.userFact.create({
+      const canonicalResult = await canonical.write({
+        userId, kind: 'fact', scope: entityId ? 'entity' : 'life', canonicalKey: memoryKey('fact', statement),
+        content: statement, confidence: fact.confidence ?? 0.8, salience: 0.6, actionAuthority: 'none',
+        source, sourceId: `${options.sourceId ?? source}:fact:${factIndex}`, observedAt: Number.isNaN(occurredAt.getTime()) ? now : occurredAt, locale,
+      }).catch((error) => { console.warn('[knowledge-graph/canonical-fact]', error); return null; });
+      if (!canonicalResult) continue;
+      // Sem data explícita, a primeira observação canônica é a identidade
+      // temporal estável da projeção. Assim um retry posterior repara ou
+      // reutiliza o mesmo fato, em vez de criar outro só porque `now` mudou.
+      const projectionOccurredAt = fact.occurredAt
+        ? (Number.isNaN(occurredAt.getTime()) ? now : occurredAt)
+        : (canonicalResult.memory?.firstSeenAt ?? now);
+      const existingFact = await db.userFact.findFirst?.({
+        where: {
+          userId,
+          statement,
+          source,
+          occurredAt: projectionOccurredAt,
+        },
+      });
+      if (existingFact) continue;
+      await db.userFact.create({
         data: {
           userId,
           entityId,
           statement,
           source,
-          occurredAt: Number.isNaN(occurredAt.getTime()) ? now : occurredAt,
+          occurredAt: projectionOccurredAt,
           confidence: fact.confidence ?? 0.8,
         },
       });
     }
 
     // 3. Padrões — só cria se ainda não existir um padrão idêntico
-    for (const pattern of extraction.patterns) {
+    for (const [patternIndex, pattern] of extraction.patterns.entries()) {
       const text = pattern.pattern.trim();
       if (!text) continue;
-      const existing = await prisma.userPattern.findFirst({
-        where: { userId, pattern: text },
-      });
+      const evidence = pattern.evidenceFactStatements.length > 0 ? pattern.evidenceFactStatements : [text];
+      let hasNewEvidence = false;
+      let canonicalSucceeded = false;
+      for (const [index, statement] of evidence.entries()) {
+        const result = await canonical.write({
+          userId, kind: 'pattern', scope: 'life', canonicalKey: memoryKey('pattern', text), content: text,
+          confidence: 0.55, salience: 0.65, actionAuthority: 'none', inferred: true,
+          source, sourceId: `${options.sourceId ?? source}:pattern:${patternIndex}:${index}`, observedAt: now, statement, locale,
+        }).catch((error) => { console.warn('[knowledge-graph/canonical-pattern]', error); return null; });
+        canonicalSucceeded = canonicalSucceeded || Boolean(result);
+        hasNewEvidence = hasNewEvidence || Boolean(result?.evidenceCreated);
+      }
+      if (!canonicalSucceeded) continue;
+      const existing = await db.userPattern.findFirst({ where: { userId, pattern: text } });
       if (existing) {
-        // Reforça padrão observado novamente
-        await prisma.userPattern.update({
-          where: { id: existing.id },
-          data: {
-            strength: Math.min(1, existing.strength + 0.05),
-            lastConfirmedAt: now,
-          },
-        });
+        if (hasNewEvidence) await db.userPattern.update({ where: { id: existing.id }, data: { strength: Math.min(1, existing.strength + 0.05), lastConfirmedAt: now } });
       } else {
-        await prisma.userPattern.create({
-          data: {
-            userId,
-            pattern: text,
-            evidenceFactIds: [],
-            strength: 0.55,
-            lastConfirmedAt: now,
-          },
-        });
+        await db.userPattern.create({ data: { userId, pattern: text, evidenceFactIds: [], strength: 0.55, lastConfirmedAt: now } });
       }
     }
 
     // 4. Decisões em aberto — evita duplicar pergunta idêntica não resolvida
-    for (const decision of extraction.decisions) {
+    for (const [decisionIndex, decision] of (allowDecisions ? extraction.decisions : []).entries()) {
       const question = decision.question.trim();
       if (!question) continue;
-      const dup = await prisma.userOpenDecision.findFirst({
-        where: { userId, question, resolvedAt: null },
-      });
+      // Consultar a projeção antes da escrita canônica é essencial: uma
+      // reexecução da extração original não pode recriar como ativa uma
+      // decisão que a usuária já resolveu.
+      const dup = await db.userOpenDecision.findFirst({ where: { userId, question } });
+      if (dup?.resolvedAt) continue;
+      const canonicalResult = await canonical.write({
+        userId, kind: 'decision', scope: 'open_decision', canonicalKey: memoryKey('decision', question),
+        content: question, structuredValue: { context: decision.context ?? null, open: true }, confidence: 0.9,
+        salience: 0.75, actionAuthority: 'none', source, sourceId: `${options.sourceId ?? source}:decision:${decisionIndex}`, observedAt: now, locale,
+      }).catch((error) => { console.warn('[knowledge-graph/canonical-decision]', error); return null; });
+      if (!canonicalResult) continue;
       if (dup) continue;
-      await prisma.userOpenDecision.create({
+      await db.userOpenDecision.create({
         data: {
           userId,
           question,
@@ -336,11 +387,70 @@ export class KnowledgeGraphService {
   }
 
   /** Marca uma decisão como resolvida. Usado quando a usuária responde ou age. */
-  static async markDecisionResolved(decisionId: string, resolution?: string): Promise<void> {
-    await prisma.userOpenDecision.update({
-      where: { id: decisionId },
-      data: { resolvedAt: new Date(), resolution: resolution ?? null },
-    });
+  static async markDecisionResolved(
+    decisionId: string,
+    resolution?: string,
+    options: { prismaClient?: any; now?: Date } = {},
+  ): Promise<void> {
+    const db = options.prismaClient ?? prisma;
+    const now = options.now ?? new Date();
+    const synchronize = async (tx: any) => {
+      const decision = await tx.userOpenDecision.findUnique({ where: { id: decisionId } });
+      if (!decision) {
+        // Mantém a semântica anterior de lançar o erro Prisma para um id
+        // inexistente, sem simular sucesso.
+        await tx.userOpenDecision.update({
+          where: { id: decisionId },
+          data: { resolvedAt: now, resolution: resolution ?? null },
+        });
+        return;
+      }
+
+      const resolvedAt = decision.resolvedAt ?? now;
+      const resolvedWith = decision.resolution ?? resolution ?? null;
+      if (!decision.resolvedAt) {
+        await tx.userOpenDecision.update({
+          where: { id: decisionId },
+          data: { resolvedAt, resolution: resolvedWith },
+        });
+      }
+
+      const canonicalDecisions = await tx.userMemory.findMany({
+        where: {
+          userId: decision.userId,
+          kind: 'decision',
+          scope: 'open_decision',
+          content: decision.question,
+        },
+      });
+      for (const memory of canonicalDecisions) {
+        if (memory.lifecycle === 'retracted' && memory.structuredValue?.open === false) continue;
+        await tx.userMemory.update({
+          where: { id: memory.id },
+          data: {
+            structuredValue: {
+              ...(memory.structuredValue ?? {}),
+              context: memory.structuredValue?.context ?? decision.context ?? null,
+              open: false,
+              resolution: resolvedWith,
+              resolvedAt: resolvedAt.toISOString(),
+            },
+            lifecycle: 'retracted',
+            negativeState: 'completed',
+            targetType: 'open_decision',
+            targetId: decisionId,
+            actionAuthority: 'none',
+            lastSeenAt: resolvedAt,
+          },
+        });
+      }
+    };
+
+    if (db.$transaction) {
+      await db.$transaction((tx: any) => synchronize(tx));
+    } else {
+      await synchronize(db);
+    }
   }
 
   /** Reforça/enfraquece padrão conforme aceitação de ação ligada. */

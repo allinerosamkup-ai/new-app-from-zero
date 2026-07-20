@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-import { TimelineBlockSchema } from '../services/planner.service';
+import {
+  AdaptationPermissionSchema,
+  AdaptabilitySourceSchema,
+  resolveTimelineAdaptability,
+  resolveTimelineAdaptabilityProvenance,
+  TemporalPolicySchema,
+  TimelineBlockSchema,
+} from '../services/planner.service';
 
 export const PlannerSyncSchema = z.object({
   userId: z.string().uuid(),
@@ -28,7 +35,16 @@ export const PlannerAISuggestionExistingBlockSchema = z.object({
   category: z.string().optional().default('outro'),
   intensity: PlannerIntensitySchema.optional().default('M'),
   status: z.enum(['planned', 'completed', 'postponed', 'cancelled']).optional().default('planned'),
-});
+  gcalEventId: z.string().optional().nullable(),
+  temporalPolicy: TemporalPolicySchema.optional().default('flexible'),
+  adaptationPermission: AdaptationPermissionSchema.optional().default('eligible'),
+  adaptabilitySource: AdaptabilitySourceSchema.optional().default('default'),
+  adaptabilityConfidence: z.number().min(0).max(1).optional().default(0.5),
+}).transform((block) => ({
+  ...block,
+  ...resolveTimelineAdaptability(block),
+  ...resolveTimelineAdaptabilityProvenance(block),
+}));
 
 export const PlannerAIEnergyStateSchema = z.object({
   label: z.string().max(200),
@@ -53,7 +69,8 @@ export const PlannerAISuggestionRequestSchema = z.object({
   currentMinute: z.number().int().min(0).max(59).optional(),
   phase: z.string().nullable().optional(),
 });
-export type PlannerAISuggestionRequest = z.infer<typeof PlannerAISuggestionRequestSchema>;
+export type PlannerAISuggestionRequest = z.input<typeof PlannerAISuggestionRequestSchema>;
+export type PlannerAISuggestionValidatedRequest = z.output<typeof PlannerAISuggestionRequestSchema>;
 
 export const PlannerAIScheduledItemSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/),

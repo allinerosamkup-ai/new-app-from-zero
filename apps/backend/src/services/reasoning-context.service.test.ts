@@ -56,6 +56,37 @@ async function run() {
   assert.equal(oldMemoryTrace.confidence, 'baixa');
   assert.match(oldMemoryTrace.hypothesis, /pouca ancora operacional atual/i);
 
+  const fabricatedDecisionTrace = ReasoningContextService.build({
+    dailyContext: baseContext({ patternMemoryContext: 'Memória antiga sobre responder clientes.' }),
+    surface: 'aura-chat',
+    ragContext: 'Memória antiga sobre responder clientes.',
+    decisionBrain: {
+      surface: 'aura-chat',
+      date: '2026-05-07',
+      allowedActions: [{
+        id: 'memory:reply',
+        title: 'Responder cliente',
+        kind: 'suggested_commitment',
+        source: 'memory',
+        targetType: 'system',
+        action: 'suggest',
+        score: 90,
+        confidence: 0.95,
+        reason: 'A memória sugere isso.',
+        notificationAllowed: false,
+        requiresConfirmation: true,
+      }],
+      blockedActions: [],
+      dayPriorities: ['Responder cliente'],
+      reasoning: 'Memória antiga.',
+      confidence: 0.95,
+      emptyReason: null,
+    },
+  });
+  assert.equal(fabricatedDecisionTrace.decision.type, 'pergunta');
+  assert.equal(fabricatedDecisionTrace.decision.targetId, null);
+  assert.equal(fabricatedDecisionTrace.confidence, 'baixa');
+
   const goalTrace = ReasoningContextService.build({
     dailyContext: baseContext({
       activeGoalTitles: ['Finalizar proposta comercial'],

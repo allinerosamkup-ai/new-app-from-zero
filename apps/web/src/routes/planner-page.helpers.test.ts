@@ -3,17 +3,24 @@ import { describe, it } from "vitest";
 
 import {
   buildPlannerAgendaSlots,
+  buildPlannerAISuggestionExistingBlocks,
   buildTimelineBlockInput,
   buildGoogleCalendarTaskId,
+  buildDefaultSelectedAdaptationIds,
   formatTimelineDurationLabel,
+  getDayStructurePresentation,
   parseGoogleCalendarTaskId,
   resolveTaskCardSwipeAction,
+  resolveTaskCardSecondaryActions,
+  resolvePlannerTaskAdaptability,
+  canApplyPlannerAIAdjustment,
   resolvePlannerBlockDate,
   shouldNavigateAgendaBySwipe,
   stripGoogleCalendarTaskId,
   stripGoogleCalendarTaskTitle,
   type FormStateLike,
   type PlannerTaskLike,
+  resolveTimelinePolicySelection,
 } from "./planner-page.helpers.ts";
 
 describe("planner page helpers", () => {
@@ -177,6 +184,89 @@ describe("planner page helpers", () => {
     assert.equal(resolveTaskCardSwipeAction({ deltaX: -110, deltaY: 100 }), null);
   });
 
+  it("maps the visible timing policy to a safe backend payload", () => {
+    assert.deepEqual(resolveTimelinePolicySelection("fixed"), {
+      temporalPolicy: "fixed",
+      adaptationPermission: "protected",
+    });
+    assert.deepEqual(resolveTimelinePolicySelection("windowed"), {
+      temporalPolicy: "windowed",
+      adaptationPermission: "preview",
+    });
+    assert.deepEqual(resolveTimelinePolicySelection("flexible"), {
+      temporalPolicy: "flexible",
+      adaptationPermission: "eligible",
+    });
+
+    const payload = buildTimelineBlockInput({
+      ...baseForm,
+      temporalPolicy: "fixed",
+      adaptabilitySource: "manual",
+      adaptabilityConfidence: 1,
+    });
+    assert.equal(payload.temporalPolicy, "fixed");
+    assert.equal(payload.adaptationPermission, "protected");
+    assert.equal(payload.adaptabilitySource, "manual");
+    assert.equal(payload.adaptabilityConfidence, 1);
+  });
+
+  it("leaves automatic classification unset until the person corrects it", () => {
+    const payload = buildTimelineBlockInput(baseForm);
+    assert.equal("temporalPolicy" in payload, false);
+    assert.equal("adaptationPermission" in payload, false);
+    assert.equal("adaptabilitySource" in payload, false);
+    assert.equal("adaptabilityConfidence" in payload, false);
+  });
+
+  it("never preselects a protected anchor in the adaptation preview", () => {
+    const selected = buildDefaultSelectedAdaptationIds(
+      [
+        { id: "move-fixed", targetId: "fixed-1", type: "move", requiresConfirmation: true },
+        { id: "move-flex", targetId: "flex-1", type: "move", requiresConfirmation: true },
+        { id: "keep-flex", targetId: "flex-1", type: "keep", requiresConfirmation: true },
+      ],
+      [{ id: "fixed-1" }],
+    );
+
+    assert.deepEqual([...selected], ["move-flex"]);
+  });
+
+  it("presents the day shape without turning protected anchors into suggestions", () => {
+    const presentation = getDayStructurePresentation({
+      mode: "mixed",
+      initiativeLevel: "collaborate",
+      freedomScore: 58,
+      scheduledMinutes: 300,
+      protectedMinutes: 180,
+      flexibleMinutes: 120,
+      freeMinutes: 420,
+      protectedAnchors: [{ id: "fixed-1", title: "Expediente", startTime: "09:00", endTime: "12:00", source: "planner" }],
+    });
+
+    assert.equal(presentation.title, "Dia misto");
+    assert.equal(presentation.freeTimeLabel, "7h livres");
+    assert.match(presentation.explanation, /protege.*adapta/i);
+  });
+
+  it("exposes the secondary action that matches each planner task source", () => {
+    assert.deepEqual(
+      resolveTaskCardSecondaryActions({ source: "gcal", done: false }),
+      { canConvertToTask: true, canSnooze: false },
+    );
+    assert.deepEqual(
+      resolveTaskCardSecondaryActions({ source: "planner", done: false, persistentReminderEnabled: true }),
+      { canConvertToTask: false, canSnooze: true },
+    );
+    assert.deepEqual(
+      resolveTaskCardSecondaryActions({ source: "planner", done: false, persistentReminderEnabled: false }),
+      { canConvertToTask: false, canSnooze: false },
+    );
+    assert.deepEqual(
+      resolveTaskCardSecondaryActions({ source: "gcal", done: true }),
+      { canConvertToTask: false, canSnooze: false },
+    );
+  });
+
   it("only changes planner day on deliberate horizontal agenda swipes", () => {
     assert.equal(shouldNavigateAgendaBySwipe({ deltaX: 180, deltaY: 30 }), true);
     assert.equal(shouldNavigateAgendaBySwipe({ deltaX: -190, deltaY: 42 }), true);
@@ -199,5 +289,52 @@ describe("planner page helpers", () => {
     assert.equal(stripGoogleCalendarTaskId("local-task"), "local-task");
     assert.equal(stripGoogleCalendarTaskTitle("📅 Reunião com equipe"), "Reunião com equipe");
     assert.equal(stripGoogleCalendarTaskTitle("   "), "Evento");
+  });
+
+  it("keeps Google Calendar anchors protected through the AI suggestion payload", () => {
+    const adaptability = resolvePlannerTaskAdaptability({
+      source: "gcal",
+      gcalEventId: "google-event-1",
+      temporalPolicy: "flexible",
+      adaptationPermission: "eligible",
+    });
+    assert.deepEqual(adaptability, {
+      temporalPolicy: "fixed",
+      adaptationPermission: "protected",
+    });
+
+    const blocks = buildPlannerAISuggestionExistingBlocks([{
+      id: "gcal:google-event-1",
+      title: "Reunião externa",
+      time: "09:00",
+      endTime: "10:00",
+      done: false,
+      source: "gcal",
+      gcalEventId: "google-event-1",
+      temporalPolicy: "fixed",
+      adaptationPermission: "protected",
+      category: "trabalho",
+      intensity: "P",
+    }]);
+
+    assert.equal(blocks[0]?.gcalEventId, "google-event-1");
+    assert.equal(blocks[0]?.temporalPolicy, "fixed");
+    assert.equal(blocks[0]?.adaptationPermission, "protected");
+    assert.equal(canApplyPlannerAIAdjustment(blocks[0]), false);
+  });
+
+  it("allows stale AI mutations only for non-protected planner blocks", () => {
+    assert.equal(canApplyPlannerAIAdjustment({
+      temporalPolicy: "fixed",
+      adaptationPermission: "eligible",
+    }), false);
+    assert.equal(canApplyPlannerAIAdjustment({
+      temporalPolicy: "flexible",
+      adaptationPermission: "protected",
+    }), false);
+    assert.equal(canApplyPlannerAIAdjustment({
+      temporalPolicy: "flexible",
+      adaptationPermission: "eligible",
+    }), true);
   });
 });

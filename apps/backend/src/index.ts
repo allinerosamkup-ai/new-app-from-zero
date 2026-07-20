@@ -11,7 +11,7 @@ import { requireAuth, AuthRequest } from './middleware/auth';
 import { AIService } from './services/ai.service';
 import { KnowledgeGraphService } from './services/knowledge-graph.service';
 import { KnowledgeGraphBackfillService } from './services/knowledge-graph-backfill.service';
-import { PlannerService, type TimelineBlockInput } from './services/planner.service';
+import { PlannerService, buildPostponeAdaptabilityUpdate, resolveTimelineAdaptability, resolveTimelineAdaptabilityProvenance, type TimelineBlockInput } from './services/planner.service';
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
 import { GCalService } from './services/gcal.service';
@@ -35,6 +35,9 @@ import {
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
 import { MemoryService } from './services/memory.service';
+import { CanonicalMemoryService } from './services/canonical-memory.service';
+import { AuraMemoryIngestionService, conservativeAuraExtractor } from './services/aura-memory-ingestion.service';
+import { AgendaPatternRecognitionService } from './services/agenda-pattern-recognition.service';
 import { ContextGroundingService } from './services/context-grounding.service';
 import { ReasoningContextService } from './services/reasoning-context.service';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './services/airia-operational-reasoning.service';
@@ -93,6 +96,7 @@ import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
   AuraCommandMessageStreamSchema,
   AuraCommandStartSchema,
+  type AuraCommandResponse,
 } from './contracts/aura-command.contract';
 import { z } from 'zod';
 import { startOfDay, subDays, format } from 'date-fns';
@@ -118,6 +122,101 @@ const defaultAllowed = ['localhost', '127.0.0.1', 'localhost:5051', 'localhost:5
 const defaultPrisma = new PrismaClient();
 const DEFAULT_TIMELINE_RECURRING = { enabled: false, frequency: 'daily', days: [], everyNDays: 1 };
 
+const MUTATING_AURA_ACTIONS = new Set<AuraCommandResponse['action']>([
+  'create_task',
+  'create_checklist',
+  'create_goal',
+  'create_agenda',
+  'handoff_to_journal',
+  'update_task',
+  'delete_task',
+  'complete_items',
+]);
+
+export function enforceAuraCaptureGate(
+  response: AuraCommandResponse,
+  cognitive: { captureJudgment: { allowedMutationActions: string[]; mutationTargetText?: string | null } },
+  locale = 'pt-BR',
+  targetContext: { resolvedTaskTitle?: string | null } = {},
+): AuraCommandResponse {
+  const actionIsAllowed = cognitive.captureJudgment.allowedMutationActions.includes(response.action);
+  const payload = response.payload as Record<string, unknown>;
+  const hasText = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
+  const validDate = (value: unknown) => hasText(value) && /^\d{4}-\d{2}-\d{2}$/.test(String(value));
+  const validTime = (value: unknown) => hasText(value) && /^\d{1,2}:\d{2}$/.test(String(value));
+  const hasTitledItems = (value: unknown, requireType = false) => Array.isArray(value) && value.length > 0 && value.every((item) => {
+    if (typeof item === 'string') return !requireType && item.trim().length > 0;
+    if (!item || typeof item !== 'object') return false;
+    const record = item as Record<string, unknown>;
+    return hasText(record.title) && (!requireType || record.type === 'task' || record.type === 'habit');
+  });
+  const titleFrom = (value: Record<string, unknown>) => value.title ?? value.goalTitle ?? value.name ?? value.text;
+  const normalizeTarget = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b(?:por favor|please|pra mim|para mim|for me)\b\s*$/g, '')
+    .trim();
+  const targetMatches = (requested: string | null | undefined, resolved: string | null | undefined) => {
+    const requestText = normalizeTarget(requested ?? '');
+    const resolvedText = normalizeTarget(resolved ?? '');
+    if (!requestText || !resolvedText) return false;
+    if (requestText === resolvedText || resolvedText.includes(requestText)) return true;
+    const ignored = new Set(['a', 'o', 'as', 'os', 'the', 'my', 'de', 'da', 'do', 'of', 'task', 'tarefa']);
+    const requestTokens = requestText.split(' ').filter((token) => token.length >= 3 && !ignored.has(token));
+    const resolvedTokens = new Set(resolvedText.split(' ').filter((token) => token.length >= 3 && !ignored.has(token)));
+    if (requestTokens.length === 0) return false;
+    return requestTokens.filter((token) => resolvedTokens.has(token)).length / requestTokens.length >= 0.8;
+  };
+  const payloadIsSufficient = (() => {
+    switch (response.action) {
+      case 'create_task':
+        return hasText(titleFrom(payload)) && validDate(payload.date) && validTime(payload.startTime ?? payload.time);
+      case 'create_checklist':
+        return hasText(titleFrom(payload)) && hasTitledItems(payload.items ?? payload.steps ?? payload.checklist);
+      case 'create_goal':
+        return hasText(titleFrom(payload));
+      case 'create_agenda':
+        return Array.isArray(payload.blocks) && payload.blocks.length > 0 && payload.blocks.every((block) => {
+          if (!block || typeof block !== 'object') return false;
+          const item = block as Record<string, unknown>;
+          return hasText(titleFrom(item)) && validDate(item.date) && validTime(item.startTime ?? item.time);
+        });
+      case 'handoff_to_journal':
+        return true;
+      case 'update_task':
+        return hasText(payload.taskId) && validDate(payload.newDate) && validTime(payload.newStartTime)
+          && targetMatches(cognitive.captureJudgment.mutationTargetText, targetContext.resolvedTaskTitle);
+      case 'delete_task':
+        return hasText(payload.taskId)
+          && targetMatches(cognitive.captureJudgment.mutationTargetText, targetContext.resolvedTaskTitle);
+      case 'complete_items':
+        return hasTitledItems(payload.items, true);
+      default:
+        return true;
+    }
+  })();
+
+  if (!MUTATING_AURA_ACTIONS.has(response.action) || (actionIsAllowed && payloadIsSufficient)) {
+    return response;
+  }
+
+  const english = locale.toLowerCase().startsWith('en');
+  return {
+    assistantMessage: english
+      ? "I'm listening. I won't turn this into a task or change your schedule without an explicit request."
+      : 'Estou te ouvindo. Não vou transformar isso em tarefa nem alterar sua agenda sem um pedido explícito.',
+    intent: 'clarify',
+    action: 'ask_clarification',
+    payload: {},
+    needsConfirmation: false,
+    needsClarification: false,
+    clarifyingQuestion: null,
+  };
+}
+
 const PostponeTimelineBlockSchema = z.object({
   targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   reason: z.string().trim().max(240).optional(),
@@ -135,6 +234,7 @@ type AppDependencies = {
   aiService?: Pick<typeof AIService, 'summarizeJournalSession' | 'streamJournalReply' | 'generateOnboardingProfile'>;
   journalService?: Pick<typeof JournalService, 'startOrResumeSession' | 'getSessionMessages' | 'buildRoutineContext' | 'nextOrderIndex'>;
   memoryService?: Pick<MemoryService, 'store' | 'retrieve' | 'formatForPrompt' | 'deleteAll'>;
+  auraMemoryIngestionService?: Pick<AuraMemoryIngestionService, 'ingest'>;
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
@@ -223,6 +323,10 @@ function buildTimelineMetadataData(block: TimelineBlockInput) {
   if (block.isAiSuggested !== undefined) metadata.isAiSuggested = block.isAiSuggested;
   if (block.aiReasoning !== undefined) metadata.aiReasoning = block.aiReasoning ?? null;
   if (block.gcalEventId !== undefined) metadata.gcalEventId = block.gcalEventId ?? null;
+  if (block.temporalPolicy !== undefined) metadata.temporalPolicy = block.temporalPolicy;
+  if (block.adaptationPermission !== undefined) metadata.adaptationPermission = block.adaptationPermission;
+  if (block.adaptabilitySource !== undefined) metadata.adaptabilitySource = block.adaptabilitySource;
+  if (block.adaptabilityConfidence !== undefined) metadata.adaptabilityConfidence = block.adaptabilityConfidence;
   if (block.icon !== undefined) metadata.icon = block.icon ?? null;
   if (block.color !== undefined) metadata.color = block.color ?? null;
   if (block.vibrateEnabled !== undefined) metadata.vibrateEnabled = block.vibrateEnabled;
@@ -232,6 +336,33 @@ function buildTimelineMetadataData(block: TimelineBlockInput) {
   if ((block as any).taskMode !== undefined) metadata.taskMode = (block as any).taskMode ?? 'standard';
 
   return metadata;
+}
+
+function timelineAdaptabilityPresence(value: unknown): {
+  temporalPolicy: boolean;
+  adaptationPermission: boolean;
+  adaptabilitySource: boolean;
+  adaptabilityConfidence: boolean;
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { temporalPolicy: false, adaptationPermission: false, adaptabilitySource: false, adaptabilityConfidence: false };
+  }
+
+  const block = value as Record<string, unknown>;
+  const hasTemporalPolicy = Object.prototype.hasOwnProperty.call(block, 'temporalPolicy');
+  const hasAdaptationPermission = Object.prototype.hasOwnProperty.call(block, 'adaptationPermission');
+  const hasAdaptabilitySource = Object.prototype.hasOwnProperty.call(block, 'adaptabilitySource');
+  const hasAdaptabilityConfidence = Object.prototype.hasOwnProperty.call(block, 'adaptabilityConfidence');
+  const hasExternalEvent = Object.prototype.hasOwnProperty.call(block, 'gcalEventId')
+    && typeof block.gcalEventId === 'string'
+    && block.gcalEventId.trim().length > 0;
+
+  return {
+    temporalPolicy: hasTemporalPolicy || hasExternalEvent,
+    adaptationPermission: hasAdaptationPermission || hasExternalEvent || block.temporalPolicy === 'fixed',
+    adaptabilitySource: hasAdaptabilitySource || hasExternalEvent,
+    adaptabilityConfidence: hasAdaptabilityConfidence || hasExternalEvent,
+  };
 }
 
 function formatDateOnly(value: Date | string | null | undefined): string | null {
@@ -1402,6 +1533,16 @@ export function createApp(dependencies: AppDependencies = {}) {
   const auraCommandService = dependencies.auraCommandService ?? AuraCommandService;
   const journalSuggestedTasksGenerator = dependencies.generateJournalSuggestedTasks ?? generateJournalSuggestedTasks;
   const memoryService = dependencies.memoryService ?? new MemoryService(prisma);
+  const canonicalMemoryService = new CanonicalMemoryService(prisma, {
+    retrieve: (userId, query, limit) => memoryService.retrieve(userId, query, limit) as any,
+    store: (input) => memoryService.store(input),
+  });
+  const auraMemoryIngestionService = dependencies.auraMemoryIngestionService ?? new AuraMemoryIngestionService({
+    canonical: canonicalMemoryService,
+    vector: memoryService,
+    extractor: conservativeAuraExtractor,
+  });
+  const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
   const contextGroundingService = new ContextGroundingService(prisma);
 
   const matchesAllowedHost = (origin: string, allowed: string) => {
@@ -2069,6 +2210,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       setImmediate(() => {
         void KnowledgeGraphService.extractFromMessage(data.userId, data.note!.trim(), {
           source: 'checkin',
+          canonicalMemoryService,
+          locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+          sourceId: checkin.id,
+          observedAt: checkin.recordedAt ?? new Date(),
         }).catch((err) => console.warn('[checkin/kg] extração falhou:', err));
       });
     }
@@ -2383,7 +2528,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       const context = { ...routineCtx, moodCycleContext: runtimeContext.moodCycleContext };
       const userOrderIndex = journalService.nextOrderIndex(existingMessages);
 
-      await prisma.journalMessage.create({
+      const persistedUserMessage = await prisma.journalMessage.create({
         data: {
           sessionId: data.sessionId,
           userId: data.userId,
@@ -2619,6 +2764,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         void KnowledgeGraphService.extractFromMessage(data.userId, data.message, {
           assistantReply: assistantContent,
           source: 'journal',
+          canonicalMemoryService,
+          locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+          sourceId: persistedUserMessage.id,
+          observedAt: persistedUserMessage.createdAt ?? new Date(),
         }).catch((err) => {
           console.warn('[journal/kg] extração assíncrona falhou:', err);
         });
@@ -2689,8 +2838,13 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
 
       // Shared Brain: busca memórias relevantes antes de interpretar o comando
-      const commandMemories = await memoryService.retrieve(data.userId, data.message, 3).catch(() => []);
-      const commandRagContext = memoryService.formatForPrompt(commandMemories);
+      const commandMemories = await canonicalMemoryService.retrieve({
+        userId: data.userId,
+        query: data.message,
+        limit: 8,
+        locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+      }).catch(() => null);
+      const commandRagContext = commandMemories ? canonicalMemoryService.formatForPrompt(commandMemories, typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR') : '';
 
       // Planner Brain: injeta agenda completa de hoje (planner interno + Google Calendar)
       const plannerContext = await buildTodayPlannerContext(prisma, data.userId);
@@ -2749,7 +2903,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         text: data.message,
       });
 
-      const commandResponse = await auraCommandService.interpretCommand({
+      const rawCommandResponse = await auraCommandService.interpretCommand({
         message: data.message,
         history: data.history,
         userName: runtimeContext.userName,
@@ -2770,6 +2924,18 @@ export function createApp(dependencies: AppDependencies = {}) {
         priorDiagnoses: runtimeContext.priorDiagnoses,
         ...extractAdaptiveFromRequest(req.body),
       });
+      const rawTaskId = typeof rawCommandResponse.payload?.taskId === 'string'
+        ? rawCommandResponse.payload.taskId.trim()
+        : '';
+      const resolvedCommandTask = rawTaskId && (rawCommandResponse.action === 'update_task' || rawCommandResponse.action === 'delete_task')
+        ? await prisma.timelineBlock.findFirst({ where: { id: rawTaskId, userId: data.userId } })
+        : null;
+      const commandResponse = enforceAuraCaptureGate(
+        rawCommandResponse,
+        commandCognitive,
+        typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+        { resolvedTaskTitle: resolvedCommandTask?.title ?? null },
+      );
 
       const responsePayload = { ...commandResponse.payload };
 
@@ -2778,7 +2944,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         try {
           const { taskId, newDate, newStartTime } = commandResponse.payload as Record<string, string>;
           if (taskId && newDate && newStartTime) {
-            const block = await prisma.timelineBlock.findFirst({ where: { id: taskId, userId: data.userId } });
+            const block = resolvedCommandTask?.id === taskId ? resolvedCommandTask : null;
             if (block) {
               const durationMs = block.endAt.getTime() - block.startAt.getTime();
               const newStartAt = new Date(`${newDate}T${newStartTime}:00.000Z`);
@@ -2819,7 +2985,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         try {
           const { taskId } = commandResponse.payload as Record<string, string>;
           if (taskId) {
-            const block = await prisma.timelineBlock.findFirst({ where: { id: taskId, userId: data.userId } });
+            const block = resolvedCommandTask?.id === taskId ? resolvedCommandTask : null;
             if (block) {
               await prisma.timelineBlock.delete({ where: { id: taskId } });
               if (block.gcalEventId) {
@@ -2861,6 +3027,17 @@ export function createApp(dependencies: AppDependencies = {}) {
           payload: responsePayload,
         },
       });
+
+      // Longitudinal memory is best-effort and never delays/changes the answer.
+      void auraMemoryIngestionService.ingest({
+        userId: data.userId,
+        messageId: `${data.sessionId}:${data.history.length}`,
+        message: data.message,
+        assistantReply: commandResponse.assistantMessage,
+        history: data.history,
+        locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+        allowDecisions: AiriaCognitiveInterpreterService.allowsMemoryDecisionExtraction(commandCognitive),
+      }).catch((error) => console.warn('[aura/memory-ingestion]', error));
 
       return res.end();
     } catch (error: any) {
@@ -3100,6 +3277,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.post('/api/timeline', async (req: Request, res: Response) => {
   try {
     const { userId, date, forceSave, blocks } = PlannerSyncSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+    const rawBlocks = Array.isArray(req.body?.blocks) ? req.body.blocks : [];
     const baseDate = parseLocalDateInput(date);
 
     // Aprimoramento: Validar conflitos ANTES de salvar, a menos que forceSave = true
@@ -3164,7 +3342,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
 
       return Promise.all(
-        blocks.map((block) => {
+        blocks.map((block, index) => {
           const startAt = PlannerService.parseTimeToDate(baseDate, block.startTime);
           const endAt = PlannerService.parseTimeToDate(baseDate, block.endTime);
 
@@ -3181,9 +3359,16 @@ export function createApp(dependencies: AppDependencies = {}) {
           };
 
           if (block.id && req.body.overwrite !== true) {
+            const adaptabilityPresence = timelineAdaptabilityPresence(rawBlocks[index]);
             return tx.timelineBlock.upsert({
               where: { id: block.id },
-              update: data,
+              update: {
+                ...data,
+                temporalPolicy: adaptabilityPresence.temporalPolicy ? block.temporalPolicy : undefined,
+                adaptationPermission: adaptabilityPresence.adaptationPermission ? block.adaptationPermission : undefined,
+                adaptabilitySource: adaptabilityPresence.adaptabilitySource ? block.adaptabilitySource : undefined,
+                adaptabilityConfidence: adaptabilityPresence.adaptabilityConfidence ? block.adaptabilityConfidence : undefined,
+              },
               create: { id: block.id, ...data },
             });
           } else {
@@ -3665,6 +3850,8 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       return res.json(
         blocks.map((block) => ({
+          ...resolveTimelineAdaptability(block),
+          ...resolveTimelineAdaptabilityProvenance(block),
           id: block.id,
           title: block.title,
           startTime: formatTime(block.startAt),
@@ -3745,13 +3932,13 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const query = DayContextQuerySchema.parse(req.query);
       const localDate = query.date ?? format(new Date(), 'yyyy-MM-dd');
-      const ragMemories = await memoryService.retrieve(userId, `padrões e preferências operacionais para ${localDate}`, 3).catch(() => []);
+      const canonicalMemories = await canonicalMemoryService.retrieve({ userId, query: `padrões e preferências operacionais para ${localDate}`, limit: 8, locale: typeof (req.query as any)?.locale === 'string' ? String((req.query as any).locale) : 'pt-BR' }).catch(() => null);
       const dailyContext = await contextGroundingService.buildDailyContext({
         userId,
         type: 'day-context',
         context: { localDate },
         recentSuggestionItems: await SuggestionMemoryService.getRecent(prisma, userId).catch(() => []),
-        ragContext: memoryService.formatForPrompt(ragMemories),
+        ragContext: canonicalMemories ? canonicalMemoryService.formatForPrompt(canonicalMemories, typeof (req.query as any)?.locale === 'string' ? String((req.query as any).locale) : 'pt-BR') : '',
       });
       const agendaPreview = AgendaAdaptationService.buildPreview({
         dailyContext,
@@ -3777,6 +3964,8 @@ export function createApp(dependencies: AppDependencies = {}) {
     surface: z.string().trim().min(1).max(40).optional(),
     sourceType: z.string().trim().max(60).optional(),
     localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    targetType: z.string().trim().max(60).optional(),
+    targetId: z.string().trim().max(180).optional(),
   });
 
   app.post('/api/ai/action-feedback', async (req: Request, res: Response) => {
@@ -3835,27 +4024,36 @@ export function createApp(dependencies: AppDependencies = {}) {
     try {
       const data = AgendaAdaptSchema.parse(req.body);
       const localDate = data.date ?? format(new Date(), 'yyyy-MM-dd');
+      const agendaStylePattern = await agendaPatternRecognitionService.recognize(
+        userId,
+        new Date(`${localDate}T12:00:00.000Z`),
+        typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+      ).catch((error) => {
+        console.warn('[agenda/pattern-recognition]', error);
+        return null;
+      });
+      const adaptiveRequestContext = { ...data.context, agendaStylePattern };
       const recentSuggestionItems = await SuggestionMemoryService.getRecent(prisma, userId).catch(() => []);
-      const ragMemories = await memoryService.retrieve(userId, `adaptação de agenda e rotina real em ${localDate}`, 3).catch(() => []);
+      const canonicalMemories = await canonicalMemoryService.retrieve({ userId, query: `adaptação de agenda e rotina real em ${localDate}`, limit: 8, locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR' }).catch(() => null);
       const dailyContext = await contextGroundingService.buildDailyContext({
         userId,
         type: 'agenda-adapt',
-        context: { ...data.context, localDate },
+        context: { ...adaptiveRequestContext, localDate },
         recentSuggestionItems,
-        ragContext: memoryService.formatForPrompt(ragMemories),
+        ragContext: canonicalMemories ? canonicalMemoryService.formatForPrompt(canonicalMemories, typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR') : '',
       });
       const result = data.mode === 'apply'
         ? await AgendaAdaptationService.apply({
             prisma,
             userId,
             dailyContext,
-            requestContext: data.context,
+            requestContext: adaptiveRequestContext,
             trigger: data.trigger,
             selectedDecisionIds: data.selectedDecisionIds,
           })
         : AgendaAdaptationService.buildPreview({
             dailyContext,
-            requestContext: data.context,
+            requestContext: adaptiveRequestContext,
             mode: data.mode,
             trigger: data.trigger,
           });
@@ -5614,6 +5812,7 @@ JSON APENAS: {"profileSummary":"..."}`,
           startAt,
           endAt,
           status: 'planned',
+          ...buildPostponeAdaptabilityUpdate(block),
         },
       });
 

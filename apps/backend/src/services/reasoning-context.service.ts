@@ -92,8 +92,16 @@ function confidenceFromDecision(decisionBrain: DecisionResult, action: DecisionC
   return 'baixa';
 }
 
-function chooseAction(decisionBrain: DecisionResult, capacity: ReasoningCapacity): DecisionCandidate | null {
-  const actionable = decisionBrain.allowedActions.filter((item) => item.kind !== 'insight_only');
+function hasOperationalAnchor(candidate: DecisionCandidate, context: DailyContext): boolean {
+  if (candidate.kind === 'insight_only') return false;
+  if (candidate.source === 'request') return Boolean(cleanText(candidate.anchor));
+  if (!['timeline', 'habit', 'goal'].includes(candidate.source)) return false;
+  if (!candidate.targetId && !cleanText(candidate.anchor)) return false;
+  return context.todayAnchorTitles.some((title) => cleanText(candidate.anchor) === title || candidate.title.includes(title));
+}
+
+function chooseAction(decisionBrain: DecisionResult, capacity: ReasoningCapacity, context: DailyContext): DecisionCandidate | null {
+  const actionable = decisionBrain.allowedActions.filter((item) => hasOperationalAnchor(item, context));
   const changing = actionable.find((item) => item.action !== 'keep');
   if (changing) return changing;
   if (capacity === 'protecao') {
@@ -166,9 +174,9 @@ export class ReasoningContextService {
       requestContext,
     });
     const capacity = inferCapacity(input.dailyContext, requestContext);
-    const action = chooseAction(decisionBrain, capacity);
+    const action = chooseAction(decisionBrain, capacity, input.dailyContext);
     const hasCurrentFact = Boolean(cleanText(input.currentMessage) || cleanText(input.situationSummary));
-    const hasAnchor = input.dailyContext.todayAnchorTitles.length > 0 || Boolean(action && action.kind !== 'insight_only');
+    const hasAnchor = Boolean(action && hasOperationalAnchor(action, input.dailyContext));
     const confidence = confidenceFromDecision(decisionBrain, action, hasCurrentFact || hasAnchor);
     const type = decisionType(input.surface, action, hasAnchor, confidence);
     const protectedHabit = capacity === 'protecao' && action?.targetType === 'habit';

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Target, Sparkles, ChevronRight, X } from "lucide-react";
 import type { Goal, Task } from "../features/aura/types";
+import { useLocalizedCopy } from "../i18n";
 
 interface GoalNudgeCardProps {
   goals: Goal[];
@@ -24,6 +25,7 @@ function pickMicroAction(goal: Goal): string {
 }
 
 export function GoalNudgeCard({ goals, tasks, onAddTask }: GoalNudgeCardProps) {
+  const l = useLocalizedCopy();
   const [dismissed, setDismissed] = useState(false);
   const [added, setAdded] = useState(false);
 
@@ -77,13 +79,13 @@ export function GoalNudgeCard({ goals, tasks, onAddTask }: GoalNudgeCardProps) {
         </div>
         <div>
           <p style={{ margin: 0, fontSize: 10, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-sage)" }}>
-            Sugestão para hoje
+            {l("Sugestão para hoje", "Suggestion for today")}
           </p>
           <p style={{ margin: "3px 0 0", fontSize: 13.5, fontWeight: 700, color: "var(--text-1)", lineHeight: 1.35 }}>
             {microAction}
           </p>
           <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--text-3)" }}>
-            Meta: {goal.title}
+            {l("Meta", "Goal")}: {goal.title}
           </p>
         </div>
       </div>
@@ -105,12 +107,12 @@ export function GoalNudgeCard({ goals, tasks, onAddTask }: GoalNudgeCardProps) {
           {added ? (
             <>
               <Sparkles size={12} />
-              Adicionado!
+              {l("Adicionado!", "Added!")}
             </>
           ) : (
             <>
               <ChevronRight size={13} />
-              Adicionar ao dia
+              {l("Adicionar ao dia", "Add to day")}
             </>
           )}
         </button>
@@ -124,7 +126,7 @@ export function GoalNudgeCard({ goals, tasks, onAddTask }: GoalNudgeCardProps) {
             fontFamily: "'Plus Jakarta Sans', sans-serif",
           }}
         >
-          Agora não
+          {l("Agora não", "Not now")}
         </button>
       </div>
     </div>

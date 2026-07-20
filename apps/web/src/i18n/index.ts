@@ -10,6 +10,7 @@
 
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { useSyncExternalStore } from "react";
 import LanguageDetector from "i18next-browser-languagedetector";
 
 import pt from "./locales/pt.json";
@@ -54,6 +55,27 @@ export function getCurrentLanguage(): SupportedLanguage {
   return (SUPPORTED_LANGUAGES as readonly string[]).includes(raw)
     ? (raw as SupportedLanguage)
     : "pt";
+}
+
+export function resolveIntlLocale(language = i18n.language): "pt-BR" | "en-US" {
+  return language.toLowerCase().startsWith("en") ? "en-US" : "pt-BR";
+}
+
+export function selectLocalizedCopy(language: string, portuguese: string, english: string): string {
+  return language.toLowerCase().startsWith("en") ? english : portuguese;
+}
+
+/** Reactive helper for long-form/editorial copy that would make locale catalogs unreadable. */
+export function useLocalizedCopy() {
+  const language = useSyncExternalStore(
+    (notify) => {
+      i18n.on("languageChanged", notify);
+      return () => i18n.off("languageChanged", notify);
+    },
+    () => i18n.language,
+    () => i18n.language,
+  );
+  return (portuguese: string, english: string) => selectLocalizedCopy(language, portuguese, english);
 }
 
 export default i18n;

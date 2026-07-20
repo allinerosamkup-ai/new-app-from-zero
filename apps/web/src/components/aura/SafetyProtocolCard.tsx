@@ -1,5 +1,6 @@
 import { AuraButtonV2 } from "../editorial/AuraButtonV2";
 import { trackEvent } from "../../lib/track";
+import { useTranslation } from "react-i18next";
 
 export type RiskSafety = {
   riskLevel: "none" | "low" | "moderate" | "high" | "crisis";
@@ -14,17 +15,17 @@ type SafetyProtocolCardProps = {
   onAdaptDay?: () => void;
 };
 
-const SUPPORT_RESOURCES = [
-  { label: "CVV 188", detail: "apoio emocional 24h no Brasil" },
-  { label: "SAMU 192", detail: "risco médico ou urgência" },
-  { label: "190", detail: "risco imediato de violência" },
-];
-
 export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyProtocolCardProps) {
+  const { t } = useTranslation();
   if (!riskSafety || riskSafety.route === "self_support") return null;
 
   const isCrisis = riskSafety.route === "crisis_protocol";
   const needsHuman = isCrisis || riskSafety.route === "human_support";
+  const supportResources = [
+    { label: "CVV 188", detail: t("safety.resources.cvv") },
+    { label: "SAMU 192", detail: t("safety.resources.samu") },
+    { label: "190", detail: t("safety.resources.police") },
+  ];
 
   function trackProtocol(action: string) {
     trackEvent("risk_protocol_triggered", {
@@ -47,12 +48,12 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
       }}
     >
       <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: isCrisis ? "#8A463A" : "#8A5D4B" }}>
-        {isCrisis ? "Protocolo de crise" : "Camada de segurança"}
+        {isCrisis ? t("safety.crisisProtocol") : t("safety.safetyLayer")}
       </p>
       <p style={{ margin: "0 0 9px", fontSize: 13, lineHeight: 1.55, color: "#5E4036", fontWeight: 750 }}>
         {isCrisis
-          ? "A Airia não vai tratar isso como produtividade. Agora a prioridade é segurança humana e apoio imediato."
-          : "A Airia percebeu sinais que pedem menos carga e mais apoio humano se isso estiver pesado demais."}
+          ? t("safety.crisisBody")
+          : t("safety.humanBody")}
       </p>
 
       {riskSafety.signals.length > 0 && (
@@ -67,7 +68,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
 
       {needsHuman && (
         <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
-          {SUPPORT_RESOURCES.map((resource) => (
+          {supportResources.map((resource) => (
             <div key={resource.label} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 9px", borderRadius: 10, background: "rgba(255,255,255,.62)" }}>
               <strong style={{ fontSize: 12, color: "#50362F" }}>{resource.label}</strong>
               <span style={{ fontSize: 11, color: "#70564E", textAlign: "right" }}>{resource.detail}</span>
@@ -77,8 +78,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
       )}
 
       <p style={{ margin: "0 0 10px", fontSize: 11.5, lineHeight: 1.55, color: "#6F4D40" }}>
-        Se houver risco imediato para você ou outra pessoa, procure emergência local agora. A Airia não substitui psicóloga,
-        psiquiatra, atendimento médico ou rede de apoio.
+        {t("safety.emergency")}
       </p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -92,7 +92,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
             }}
             style={{ flex: "1 1 150px" }}
           >
-            Adaptar meu dia
+            {t("safety.adaptDay")}
           </AuraButtonV2>
         )}
         <AuraButtonV2
@@ -101,7 +101,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
           onClick={() => trackProtocol(isCrisis ? "crisis_resources_viewed" : "human_support_viewed")}
           style={{ flex: "1 1 150px" }}
         >
-          {isCrisis ? "Registrar protocolo" : "Entendi o alerta"}
+          {isCrisis ? t("safety.registerProtocol") : t("safety.understood")}
         </AuraButtonV2>
       </div>
     </div>

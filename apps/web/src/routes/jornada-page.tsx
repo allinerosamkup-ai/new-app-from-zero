@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Check, Lock, BookOpen, ArrowRight } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuraStore } from "../features/aura/store";
+import { useLocalizedCopy } from "../i18n";
 import { computeMoodCycle, type MoodPhase } from "../utils/mood-cycle-engine";
 
 type JornadaFeature = "journal" | "habits" | "checkin" | "insights" | "planner";
@@ -43,6 +44,7 @@ const FEATURE_LABEL: Record<JornadaFeature, string> = {
 const LOW_PHASES = new Set<MoodPhase>(["low", "depleted"]);
 
 export default function JornadaPage() {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const { state } = useAuraStore();
   const [data, setData] = useState<JornadaData | null>(null);
@@ -86,7 +88,7 @@ export default function JornadaPage() {
         <div style={{ flex: 1 }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Jornada Interior</h1>
           <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--text-3)" }}>
-            Do livro “Além da Solidão” — um passo por vez, no seu ritmo.
+          {l("Do livro “Além da Solidão” — um passo por vez, no seu ritmo.", "From the book “Beyond Loneliness” — one step at a time, at your pace.")}
           </p>
         </div>
       </div>
@@ -99,7 +101,7 @@ export default function JornadaPage() {
           </span>
           {isLowPhase && (
             <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-sage)", background: "rgba(150,199,179,0.12)", borderRadius: 999, padding: "3px 9px" }}>
-              modo dia difícil
+                {l("modo dia difícil", "difficult-day mode")}
             </span>
           )}
         </div>
@@ -162,7 +164,7 @@ export default function JornadaPage() {
                     </p>
                     <div style={{ padding: "12px 14px", borderRadius: 14, background: "rgba(215,137,127,0.06)", border: "1px solid rgba(215,137,127,0.18)" }}>
                       <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
-                        {isLowPhase ? "Hoje, só isto" : "Seu passo de hoje"}
+                        {isLowPhase ? l("Hoje, só isto", "Just this today") : l("Seu passo de hoje", "Your step today")}
                       </p>
                       <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: "var(--text-1)", fontWeight: 600 }}>
                         {isLowPhase ? step.faseBaixa : step.exercicio}
@@ -205,7 +207,7 @@ export default function JornadaPage() {
           <div style={{ marginTop: 12, padding: "16px", borderRadius: 16, background: "rgba(150,199,179,0.07)", border: "1px solid rgba(150,199,179,0.2)", display: "flex", gap: 10, alignItems: "flex-start" }}>
             <BookOpen size={16} color="var(--accent-sage)" style={{ flexShrink: 0, marginTop: 2 }} />
             <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: "var(--text-2)" }}>
-              Esta jornada não termina — você revisita os passos conforme seu humor cicla. Autoconhecimento é prática, não curso que se conclui.
+          {l("Esta jornada não termina — você revisita os passos conforme seu humor cicla. Autoconhecimento é prática, não curso que se conclui.", "This journey does not end — you revisit the steps as your mood cycles. Self-knowledge is a practice, not a course you finish.")}
             </p>
           </div>
         )}

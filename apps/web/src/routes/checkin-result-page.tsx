@@ -3,17 +3,18 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
-import { computeMoodCycle, computeStreak, getPhaseColor } from '../utils/mood-cycle-engine';
+import { computeMoodCycle, getPhaseColor } from '../utils/mood-cycle-engine';
 import { PhaseLegendSheet } from '../components/PhaseLegendSheet';
 import { useTranslation } from 'react-i18next';
 import { api } from "../lib/api";
-import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
+import { tryParseAiSuggestion } from "../lib/ai";
 import { trackEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import type { MoodOption } from "../features/aura/types";
 import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
+import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
 import { RefreshCcw, X } from "lucide-react";
 import "../styles/aura.css";
@@ -83,6 +84,15 @@ const variants: Record<MoodOption, ResultVariant> = {
     bg: "linear-gradient(180deg, #F0E4E2 0%, #F7EEEC 50%, #FAF6F2 100%)",
     accent: "var(--accent-peach)",
   },
+};
+
+const VARIANT_EN: Record<MoodOption, Pick<ResultVariant, "label" | "description" | "tip" | "chipLabel">> = {
+  focada: { label: "Radiant Energy", description: "Mood and energy are balanced. Mental clarity is above average.", tip: "Use this peak for your most important tasks before 2 PM.", chipLabel: "Focused" },
+  equilibrada: { label: "Balanced", description: "A calm, steady rhythm. A good base for today's tasks.", tip: "Start with lighter tasks and gradually build momentum.", chipLabel: "Balanced" },
+  tensa: { label: "Tense Day", description: "Elevated tension detected. Pay attention to your pace.", tip: "Take short breaks and avoid important decisions right now.", chipLabel: "Tense" },
+  cansada: { label: "Tiring Day", description: "Low energy today. Respect your pace.", tip: "If possible, add 20 minutes of rest to your planner today.", chipLabel: "Tired" },
+  sensivel: { label: "Sensitive Day", description: "Your energy needs extra care. Sensitivity is higher today.", tip: "Prioritize self-care and avoid important decisions right now.", chipLabel: "Delicate" },
+  sobrecarregada: { label: "Difficult Day", description: "Your signals call for rest. Overload detected.", tip: "Cancel what you can and leave room for recovery.", chipLabel: "Intense" },
 };
 
 type AuraMsg = { message: string; suggestionEmoji: string; suggestion: string };
@@ -231,7 +241,8 @@ function filterSuggestionsAgainstCompleted(items: string[], blockedTitles: strin
 }
 
 export function CheckinResultPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const location = useLocation();
   const checkinAI = (location.state as {
@@ -249,9 +260,20 @@ export function CheckinResultPage() {
   const { state, addTask, prepareJournalFromMood, refreshData, hydrated } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
-  const v = variants[state.mood] ?? variants.equilibrada;
+  const rawVariant = variants[state.mood] ?? variants.equilibrada;
+  const englishVariant = VARIANT_EN[state.mood] ?? VARIANT_EN.equilibrada;
+  const v = {
+    ...rawVariant,
+    label: l(rawVariant.label, englishVariant.label),
+    description: l(rawVariant.description, englishVariant.description),
+    tip: l(rawVariant.tip, englishVariant.tip),
+    chipLabel: l(rawVariant.chipLabel, englishVariant.chipLabel),
+  };
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
-  const dayContext = useMemo(() => getClientDayContext(), []);
+  const dayContext = useMemo(
+    () => getClientDayContext(new Date(), resolveIntlLocale(i18n.language)),
+    [i18n.language],
+  );
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
 
   // Airia auto-response ao check-in
@@ -265,7 +287,6 @@ export function CheckinResultPage() {
     () => (state.checkinHistory || []).slice(0, 7).map(h => ({ date: h.date, humor: h.humor, energia: h.energia, sono: h.sono })),
     [state.checkinHistory]
   );
-  const streak = useMemo(() => computeStreak(state.checkinHistory || []), [state.checkinHistory]);
   const goalTitles = useMemo(
     () => (state.goals || []).filter(g => g.completedPct < 100).map(g => g.title),
     [state.goals]
@@ -304,10 +325,6 @@ export function CheckinResultPage() {
   const todayFactors = useMemo(() => (state.checkinHistory || [])[0]?.factors ?? [], [state.checkinHistory]);
   const todayEmotions = useMemo(() => (state.checkinHistory || [])[0]?.emotions ?? [], [state.checkinHistory]);
   const todayNote = useMemo(() => (state.checkinHistory || [])[0]?.note ?? "", [state.checkinHistory]);
-  const previousCheckinSuggestion = useMemo(
-    () => localStorage.getItem("aura_last_checkin_suggestion") ?? "",
-    [],
-  );
   const blockedTaskTitles = useMemo(() => {
     const existingPlanner = (state.tasks || []).map((task) => task.title.trim()).filter(Boolean);
     const lastAiTasks = (localStorage.getItem("aura_last_day_tasks") ?? "")
@@ -415,7 +432,7 @@ export function CheckinResultPage() {
       }
       trackEvent("agenda_recalibrated", { signal: recalibrateSignal, mood: state.mood });
     } catch {
-      showError("Não foi possível reajustar a agenda agora.");
+      showError(t("checkin.result.recalibrateError"));
     } finally {
       setRecalibrateLoading(false);
     }
@@ -680,13 +697,13 @@ export function CheckinResultPage() {
           source: "checkin-result",
         };
         localStorage.setItem("gtd-inbox-v1", JSON.stringify([item, ...list]));
-        showSuccess("Sugestão enviada para Ações.");
+        showSuccess(t("checkin.result.sentActions"));
         return;
       }
 
-      showSuccess("Essa sugestão já está em Ações.");
+      showSuccess(t("checkin.result.alreadyActions"));
     } catch {
-      showError("Não foi possível enviar para Ações agora.");
+      showError(t("checkin.result.sendActionsError"));
     }
   }
 
@@ -820,7 +837,7 @@ export function CheckinResultPage() {
                 background: checkinAI.suggestedIntensity === "P" ? "rgba(99,152,169,.15)" : checkinAI.suggestedIntensity === "M" ? "rgba(150,199,179,.15)" : "rgba(215,137,127,.15)",
                 color: checkinAI.suggestedIntensity === "P" ? "var(--accent-sky)" : checkinAI.suggestedIntensity === "M" ? "var(--accent-sage)" : "var(--accent-peach)",
               }}>
-                {checkinAI.suggestedIntensity === "P" ? "Ritmo intenso" : checkinAI.suggestedIntensity === "M" ? "Ritmo médio" : "Ritmo leve"}
+                {checkinAI.suggestedIntensity === "P" ? l("Ritmo intenso", "Intense pace") : checkinAI.suggestedIntensity === "M" ? l("Ritmo médio", "Medium pace") : l("Ritmo leve", "Light pace")}
               </span>
             )}
             {checkinAI?.riskSafety?.riskLevel && checkinAI.riskSafety.riskLevel !== "none" && !auraMsgLoading && (
@@ -832,7 +849,7 @@ export function CheckinResultPage() {
                 background: "rgba(161,125,108,.12)",
                 color: "#8A5D4B",
               }}>
-                Segurança: {checkinAI.riskSafety.route === "crisis_protocol" ? "crise" : "atenção"}
+                {t("checkin.result.safety", { status: t(checkinAI.riskSafety.route === "crisis_protocol" ? "checkin.result.crisis" : "checkin.result.attention") })}
               </span>
             )}
             {auraMsgLoading && (
@@ -870,7 +887,7 @@ export function CheckinResultPage() {
                       <span style={{ fontSize: 11, color: v.accent, fontWeight: 700, flexShrink: 0, marginTop: 1 }}>→</span>
                       <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5, flex: 1 }}>{rec}</p>
                       <span style={{ fontSize: 9, color: v.accent, fontWeight: 800, textTransform: "uppercase", whiteSpace: "nowrap", marginTop: 1 }}>
-                        Ações
+                        {t("checkin.result.actions")}
                       </span>
                     </div>
                   ))}
@@ -903,7 +920,7 @@ export function CheckinResultPage() {
                 <span style={{ fontSize: 16, flexShrink: 0 }}>{auraMsg.suggestionEmoji}</span>
                 <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5, flex: 1 }}>{auraMsg.suggestion}</p>
                 <span style={{ fontSize: 9, color: v.accent, fontWeight: 800, textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                  Ações
+                  {t("checkin.result.actions")}
                 </span>
               </div>
             </>
@@ -945,10 +962,10 @@ export function CheckinResultPage() {
               disabled={recalibrateLoading}
             >
               {recalibrateLoading
-                ? "Reajustando..."
+                ? l("Reajustando...", "Readjusting...")
                 : recalibrateSignal === "day_great"
-                  ? "Aproveitar a energia de hoje"
-                  : "Reajustar minha agenda a esse ritmo"}
+                  ? l("Aproveitar a energia de hoje", "Use today's energy")
+                  : l("Reajustar minha agenda a esse ritmo", "Readjust my agenda to this pace")}
             </AuraButtonV2>
           )}
 
@@ -996,7 +1013,7 @@ export function CheckinResultPage() {
           }}>
             <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
             <p style={{ fontSize: 13, color: "var(--text-2)", fontStyle: "italic" }}>
-              Lendo seu estado e montando sugestões personalizadas...
+              {t("checkin.result.reading")}
             </p>
           </div>
         )}
@@ -1056,7 +1073,7 @@ export function CheckinResultPage() {
                           type="button"
                           onClick={() => regenTask(idx)}
                           disabled={regenIdx === idx}
-                          title="Gerar outra sugestão"
+                title={t("checkin.anotherSuggestion")}
                           style={{
                             width: 32, height: 32, borderRadius: 10, border: "1.5px solid var(--warm-border-2)",
                             background: "transparent", cursor: "pointer", display: "flex",
@@ -1103,7 +1120,7 @@ export function CheckinResultPage() {
                   style={{ flex: 1 }}
                   onClick={() => setPhase("idle")}
                 >
-                  Cancelar
+                  {t("common.cancel")}
                 </AuraButtonV2>
                 <AuraButtonV2
                   className={`btn ${isMenuthe ? "btn-sage" : "btn-primary"}`}
@@ -1133,7 +1150,7 @@ export function CheckinResultPage() {
             Depois do check-in
           </p>
           <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.55 }}>
-            Se quiser descarregar melhor o que apareceu agora, leve esse estado para o diário e deixe a Airia guardar o resumo da sessão.
+            {t("checkin.result.journalBody")}
           </p>
           <AuraButtonV2
             className="btn btn-ghost btn-full"
@@ -1145,7 +1162,7 @@ export function CheckinResultPage() {
               });
             }}
           >
-            Abrir meu diário
+            {t("checkin.result.openJournal")}
           </AuraButtonV2>
         </div>
 

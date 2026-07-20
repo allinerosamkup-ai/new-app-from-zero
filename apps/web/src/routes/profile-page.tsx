@@ -1,5 +1,6 @@
 // Profile Page v2 — Padrões / Ciclagem
 import { useAuraStore } from "../features/aura/store";
+import { useLocalizedCopy } from "../i18n";
 import "../styles/aura.css";
 
 const weekDays = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
@@ -31,6 +32,7 @@ const insights = [
 ];
 
 export function ProfilePage() {
+  const l = useLocalizedCopy();
   const { state } = useAuraStore();
 
   const displayName = state.name
@@ -54,7 +56,7 @@ export function ProfilePage() {
               margin: 0,
             }}
           >
-            Padrões
+          {l("Padrões", "Patterns")}
           </h2>
           <p style={{ fontSize: "11px", color: "var(--text-3)", margin: "2px 0 0" }}>
             Ciclagem de humor e energia · {displayName}
@@ -71,9 +73,9 @@ export function ProfilePage() {
           }}
         >
           {[
-            { label: "Média humor", value: "74", unit: "/100", color: "var(--accent-sage)" },
-            { label: "Média energia", value: "69", unit: "/100", color: "var(--accent-sky)" },
-            { label: "Check-ins", value: "12", unit: " dias", color: "var(--accent-peach)" },
+            { label: l("Média de humor", "Average mood"), value: "74", unit: "/100", color: "var(--accent-sage)" },
+            { label: l("Média de energia", "Average energy"), value: "69", unit: "/100", color: "var(--accent-sky)" },
+            { label: "Check-ins", value: "12", unit: l(" dias", " days"), color: "var(--accent-peach)" },
           ].map((stat) => (
             <div key={stat.label} className="aura-card" style={{ padding: "12px 10px", textAlign: "center" }}>
               <p

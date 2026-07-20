@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
@@ -7,6 +8,7 @@ import { ONBOARDING_BASIC_STEPS } from "../features/aura/onboarding";
 import "../styles/aura.css";
 
 export function OnboardingPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state, updateOnboardingDraft } = useAuraStore();
   const [stepIndex, setStepIndex] = useState(0);
@@ -51,9 +53,9 @@ export function OnboardingPage() {
       >
         <div className="aura-page-header">
           <p className="aura-page-kicker">Onboarding</p>
-          <h1 className="aura-page-title">Vamos recalibrar sua Airia.</h1>
+          <h1 className="aura-page-title">{t("onboarding.title")}</h1>
           <p className="aura-page-subtitle">
-            Responda de novo do zero. Nada aqui usa resposta antiga.
+            {t("onboarding.subtitle")}
           </p>
 
           <div
@@ -76,7 +78,7 @@ export function OnboardingPage() {
             />
           </div>
           <p style={{ fontSize: 11, color: "var(--text-3)", textAlign: "right" }}>
-            Pergunta {stepIndex + 1} / {ONBOARDING_BASIC_STEPS.length}
+            {t("onboarding.question", { current: stepIndex + 1, total: ONBOARDING_BASIC_STEPS.length })}
           </p>
         </div>
 
@@ -100,7 +102,7 @@ export function OnboardingPage() {
               color: "var(--accent-peach)",
             }}
           >
-            Passo 1 de 5
+            {t("onboarding.step", { current: 1, total: 5 })}
           </p>
           <div>
             <h2
@@ -112,10 +114,10 @@ export function OnboardingPage() {
                 lineHeight: 1.2,
               }}
             >
-              {step.question}
+              {t(`onboarding.basic.${step.field}.question`)}
             </h2>
             <p style={{ margin: 0, color: "var(--text-2)", fontSize: 13, lineHeight: 1.55 }}>
-              {step.helper}
+              {t(`onboarding.basic.${step.field}.helper`)}
             </p>
           </div>
 
@@ -125,7 +127,7 @@ export function OnboardingPage() {
               inputMode={step.inputType === "number" ? "numeric" : undefined}
               min={step.inputType === "number" ? 13 : undefined}
               max={step.inputType === "number" ? 120 : undefined}
-              placeholder={step.placeholder}
+              placeholder={t(`onboarding.basic.${step.field}.placeholder`)}
               value={value}
               onChange={(event) => updateOnboardingDraft({ [step.field]: event.target.value })}
               onKeyDown={(event) => {
@@ -147,7 +149,7 @@ export function OnboardingPage() {
             onClick={handleBack}
             style={{ flex: 1 }}
           >
-            Voltar
+            {t("common.back")}
           </AuraButtonV2>
           <AuraButtonV2
             type="button"
@@ -157,7 +159,7 @@ export function OnboardingPage() {
             disabled={!canContinue}
             style={{ flex: 1, opacity: canContinue ? 1 : 0.55 }}
           >
-            {stepIndex === ONBOARDING_BASIC_STEPS.length - 1 ? "Continuar" : "Próxima"}
+            {stepIndex === ONBOARDING_BASIC_STEPS.length - 1 ? t("common.continue") : t("onboarding.next")}
           </AuraButtonV2>
         </div>
       </div>

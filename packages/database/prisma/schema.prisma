@@ -29,6 +29,8 @@ model Profile {
   weeklyInsights   WeeklyInsight[]
   objectives       Objective[]
   memoryEmbeddings  MemoryEmbedding[]
+  userMemories      UserMemory[]
+  userMemoryEvidence UserMemoryEvidence[]
   aiBackgroundJobs  AiBackgroundJob[]
   pushSubscriptions PushSubscription[]
   userEntities      UserEntity[]
@@ -82,14 +84,78 @@ model MemoryEmbedding {
   userId      String   @map("user_id") @db.Uuid
   contentType String   @map("content_type") // journal | checkin_note | goal | insight
   contentId   String?  @map("content_id")
+  memoryId    String?  @map("memory_id") @db.Uuid
   content     String   @db.Text
   metadata    Json     @default("{}")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memory UserMemory? @relation(fields: [memoryId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([memoryId])
   @@map("memory_embeddings")
+}
+
+/// Canonical, lifecycle-aware memory. It can explain and calibrate, but never
+/// authorizes an operational action by itself.
+model UserMemory {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  kind            String   // fact | pattern | preference | decision | context
+  scope           String
+  canonicalKey    String   @map("canonical_key")
+  content         String   @db.Text
+  structuredValue Json     @default("{}") @map("structured_value")
+  confidence      Float    @default(0.5)
+  salience        Float    @default(0.5)
+  lifecycle       String   @default("active") // active | superseded | expired | retracted
+  locale          String   @default("pt-BR")
+  actionAuthority String   @default("none") @map("action_authority")
+  negativeState   String?  @map("negative_state")
+  targetType      String?  @map("target_type")
+  targetId        String?  @map("target_id")
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(6)
+  lastSeenAt      DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  validUntil      DateTime? @map("valid_until") @db.Timestamptz(6)
+  supersededById  String?  @map("superseded_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evidence      UserMemoryEvidence[]
+  embeddings    MemoryEmbedding[]
+  supersededBy  UserMemory? @relation("MemorySupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes    UserMemory[] @relation("MemorySupersession")
+
+  @@index([userId, lifecycle, kind, scope])
+  @@index([userId, canonicalKey, lifecycle])
+  @@index([userId, targetType, targetId, negativeState])
+  @@index([validUntil])
+  @@unique([id, userId], name: "user_memory_id_user_id")
+  @@map("user_memories")
+}
+
+model UserMemoryEvidence {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  memoryId   String   @map("memory_id") @db.Uuid
+  source     String
+  sourceId   String?  @map("source_id")
+  observedAt DateTime @map("observed_at") @db.Timestamptz(6)
+  statement  String   @db.Text
+  metrics    Json     @default("{}")
+  hash       String
+  locale     String   @default("pt-BR")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user   Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memory UserMemory @relation(fields: [memoryId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@unique([memoryId, hash])
+  @@index([userId, observedAt(sort: Desc)])
+  @@index([memoryId, observedAt])
+  @@map("user_memory_evidence")
 }
 
 model UserPreference {
@@ -233,6 +299,10 @@ model TimelineBlock {
   status        String   @default("planned")
   isAiSuggested Boolean  @default(false) @map("is_ai_suggested")
   gcalEventId   String?  @map("gcal_event_id")
+  temporalPolicy String  @default("flexible") @map("temporal_policy")
+  adaptationPermission String @default("eligible") @map("adaptation_permission")
+  adaptabilitySource String @default("default") @map("adaptability_source")
+  adaptabilityConfidence Float @default(0.5) @map("adaptability_confidence")
   aiReasoning   String?  @map("ai_reasoning") @db.Text
   noteMode      String   @default("text") @map("note_mode")
   note          String?  @db.Text

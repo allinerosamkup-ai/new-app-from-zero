@@ -1,4 +1,5 @@
 type AiActionFeedbackStatus = 'shown' | 'accepted' | 'done' | 'dismissed' | 'deleted' | 'scheduled' | 'rejected';
+import { CanonicalMemoryService, type NegativeMemoryState } from './canonical-memory.service';
 
 export type AiActionFeedbackItem = {
   key: string;
@@ -7,6 +8,8 @@ export type AiActionFeedbackItem = {
   surface: string;
   sourceType?: string | null;
   localDate?: string | null;
+  targetType?: string | null;
+  targetId?: string | null;
   createdAt: string;
   /**
    * Número de vezes que essa sugestão foi mostrada sem aceite/dismiss explícito.
@@ -96,6 +99,8 @@ export class AiActionFeedbackService {
     surface?: unknown;
     sourceType?: unknown;
     localDate?: unknown;
+    targetType?: unknown;
+    targetId?: unknown;
   }): Promise<AiActionFeedbackItem | null> {
     const title = cleanText(input.title);
     const key = this.buildKey(title);
@@ -139,6 +144,8 @@ export class AiActionFeedbackService {
       surface,
       sourceType: cleanText(input.sourceType) || null,
       localDate: normalizeDate(input.localDate),
+      targetType: cleanText(input.targetType) || null,
+      targetId: cleanText(input.targetId) || null,
       createdAt: new Date().toISOString(),
       ...(shownCount !== undefined ? { shownCount } : {}),
       ...(auto ? { auto: true } : {}),
@@ -166,6 +173,26 @@ export class AiActionFeedbackService {
     }).catch((error: unknown) => {
       console.warn('[AiActionFeedbackService.append] failed:', error);
     });
+
+    const negativeByStatus: Partial<Record<AiActionFeedbackStatus, NegativeMemoryState>> = {
+      done: 'completed',
+      rejected: 'rejected',
+      deleted: 'deleted',
+      scheduled: 'scheduled',
+    };
+    const negativeState = negativeByStatus[item.status];
+    if (negativeState && prisma.userMemory && prisma.userMemoryEvidence) {
+      void new CanonicalMemoryService(prisma).writeNegative({
+        userId,
+        canonicalKey: item.targetId ? `${item.targetType ?? 'action'}:${item.targetId}` : `feedback:${item.key}`,
+        targetType: item.targetType ?? item.sourceType ?? 'action',
+        targetId: item.targetId,
+        state: negativeState,
+        content: item.title,
+        source: 'ai_action_feedback',
+        sourceId: `${item.surface}:${item.targetId ?? item.key}:${item.status}`,
+      }).catch((error) => console.warn('[AiActionFeedbackService.canonical]', error));
+    }
 
     return item;
   }

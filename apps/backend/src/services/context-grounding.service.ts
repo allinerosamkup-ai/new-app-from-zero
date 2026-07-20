@@ -3,6 +3,15 @@ import type { SuggestionMemoryItem } from './suggestion-memory.service';
 import { AiActionFeedbackService, type AiActionFeedbackItem } from './ai-action-feedback.service';
 import { DecisionEngine, type DecisionSurface } from './decision-engine.service';
 import type { AdaptiveAgendaPlan } from './adaptive-agenda-engine.service';
+import {
+  resolveTimelineAdaptability,
+  type AdaptationPermission,
+  type TemporalPolicy,
+} from './planner.service';
+import {
+  inferTimelineAdaptability,
+  type AdaptabilityInferenceSource,
+} from './timeline-adaptability-inference.service';
 
 type GroundingInput = {
   userId: string;
@@ -23,6 +32,8 @@ export type GroundingLists = {
   completedSubgoalTitles: string[];
   recentSuggestionTitles: string[];
   blockedActionTitles: string[];
+  blockedActionTargetIds?: string[];
+  blockedActionCanonicalKeys?: string[];
   todayAnchorTitles: string[];
 };
 
@@ -38,6 +49,9 @@ export type DailyContext = GroundingLists & {
   repeatedSnoozes?: GroundedRepeatedSnooze[];
   // null = nunca fez check-in; 0 = hoje; N = dias desde o último (sempre preenchido pelo serviço)
   daysSinceLastCheckin?: number | null;
+  // Fase do ciclo menstrual estimada a partir do histórico de checkins
+  menstrualPhaseLabel?: string | null;
+  menstrualCycleDay?: number | null;
   patternMemoryContext: string;
   operationalRule: string;
 };
@@ -58,6 +72,14 @@ export type GroundedTask = {
   category?: string | null;
   intensity?: string | null;
   isAiSuggested?: boolean | null;
+  gcalEventId?: string | null;
+  temporalPolicy?: TemporalPolicy | null;
+  adaptationPermission?: AdaptationPermission | null;
+  adaptabilitySource?: string | null;
+  adaptabilityConfidence?: number | null;
+  recurring?: unknown;
+  adaptabilityInferenceSource?: AdaptabilityInferenceSource;
+  adaptabilityInferenceConfidence?: number;
 };
 
 export type GroundedHabit = {
@@ -88,6 +110,7 @@ export type GroundedHealthSignals = {
 };
 
 export type GroundedPostponement = {
+  blockId?: string | null;
   title: string;
   originalDate?: string | null;
   targetDate?: string | null;
@@ -197,7 +220,7 @@ function formatCheckinAbsenceLine(daysSinceLastCheckin: number | null | undefine
   return `Sinal de ausência: ${daysSinceLastCheckin} dias sem check-in. Para este público, ausência é dado provável de fase baixa ou sobrecarga — nunca falha. Proibido cobrar, mencionar sequência perdida ou pedir registro retroativo. Acolher a volta em no máximo 1 frase curta e reduzir a carga sugerida para hoje.`;
 }
 
-function formatGroundingBlock(lists: GroundingLists & { postponedActions?: GroundedPostponement[]; repeatedSnoozes?: GroundedRepeatedSnooze[]; daysSinceLastCheckin?: number | null }, dateKey: string, ragContext: string): string {
+function formatGroundingBlock(lists: GroundingLists & { postponedActions?: GroundedPostponement[]; repeatedSnoozes?: GroundedRepeatedSnooze[]; daysSinceLastCheckin?: number | null; menstrualPhaseLabel?: string | null; menstrualCycleDay?: number | null }, dateKey: string, ragContext: string): string {
   const postponementLines = (lists.postponedActions ?? [])
     .slice(0, 5)
     .map((item) => {
@@ -220,6 +243,9 @@ function formatGroundingBlock(lists: GroundingLists & { postponedActions?: Groun
       ? `Padrão de Deriva detectado (mesma tarefa pausada 3+ vezes): ${(lists.repeatedSnoozes ?? []).map(s => `${s.title} (${s.snoozeCount}x)`).join(' | ')} — Airia pode propor renegociar o horário desta tarefa de forma definitiva.`
       : '',
     formatCheckinAbsenceLine(lists.daysSinceLastCheckin),
+    lists.menstrualPhaseLabel
+      ? `Ciclo menstrual: ${lists.menstrualPhaseLabel}${lists.menstrualCycleDay !== null ? ` (D${lists.menstrualCycleDay})` : ''} — usar como modulador biológico ao interpretar energia e humor, não como tema central.`
+      : '',
     'Regra de grounding: memórias e histórico explicam padrão; ação nova só pode nascer de agenda pendente, hábito pendente ou meta ativa de hoje.',
     'Regra de compromisso: sugestão opcional pode ser proposta, mas só compromisso real salvo/confirmado pode virar pendência ou notificação.',
     ragContext ? 'Memórias RAG entram como padrão/contexto, não como autorização para inventar tarefa operacional.' : '',
@@ -274,17 +300,66 @@ function surfaceFromType(type: string): DecisionSurface {
 export class ContextGroundingService {
   constructor(private readonly prisma: PrismaClient) {}
 
+  /** Detecta a fase do ciclo menstrual a partir do histórico de checkins recentes.
+   *  Retorna label e dia do ciclo estimado, ou null se não houver dados. */
+  private detectMenstrualPhase(checkins: Array<{ localDate: Date; isFlowing: boolean | null }>): { label: string; cycleDay: number } | null {
+    // Ordena do mais antigo ao mais recente
+    const sorted = [...checkins].sort((a, b) => a.localDate.getTime() - b.localDate.getTime());
+
+    // Encontra a entrada mais recente com isFlowing = true
+    const lastFlowing = [...sorted].reverse().find(c => c.isFlowing === true);
+    if (!lastFlowing) return null;
+
+    // Encontra o início do episódio (primeiro dia consecutivo de fluxo)
+    const lastFlowingIdx = sorted.findIndex(c => c.localDate.getTime() === lastFlowing.localDate.getTime());
+    let flowStartIdx = lastFlowingIdx;
+    for (let i = lastFlowingIdx - 1; i >= 0; i--) {
+      if (sorted[i].isFlowing === true) flowStartIdx = i;
+      else break;
+    }
+    const flowStartDate = sorted[flowStartIdx].localDate;
+
+    const msPerDay = 86_400_000;
+    const daysSince = Math.round((Date.now() - flowStartDate.getTime()) / msPerDay);
+    if (daysSince < 0 || daysSince > 34) return null;
+
+    const cycleDay = daysSince + 1;
+    let label: string;
+    if (cycleDay <= 5)       label = 'Menstruação';
+    else if (cycleDay <= 13) label = 'Pós-menstruação';
+    else if (cycleDay <= 16) label = 'Ovulação';
+    else if (cycleDay <= 22) label = 'Pós-ovulação';
+    else                     label = 'TPM';
+
+    return { label, cycleDay };
+  }
+
   async buildDailyContext(input: GroundingInput): Promise<DailyContext> {
     const dateKey = normalizeDateKey(input.context.localDate) ?? new Date().toISOString().slice(0, 10);
     const { start, end } = dateRange(dateKey);
 
     const prismaAny = this.prisma as any;
 
-    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals, rawLastCheckin, rawSnoozeEvents] = await Promise.all([
+    const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals, rawLastCheckin, rawSnoozeEvents, rawFlowCheckins, rawNegativeMemories] = await Promise.all([
       prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
         where: { userId: input.userId, localDate: { gte: start, lte: end } },
         orderBy: { startAt: 'asc' },
-        select: { id: true, title: true, status: true, startAt: true, endAt: true, category: true, intensity: true, isAiSuggested: true },
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          startAt: true,
+          endAt: true,
+          category: true,
+          intensity: true,
+          isAiSuggested: true,
+          gcalEventId: true,
+          temporalPolicy: true,
+          adaptationPermission: true,
+          adaptabilitySource: true,
+          adaptabilityConfidence: true,
+          recurring: true,
+        },
       }).catch(() => []) : Promise.resolve([]),
       prismaAny.habit?.findMany ? prismaAny.habit.findMany({
         where: { userId: input.userId, archived: false },
@@ -317,6 +392,7 @@ export class ContextGroundingService {
         .map((row) => {
           const properties = row.properties as Record<string, unknown>;
           return {
+            blockId: cleanText(properties?.blockId) || null,
             title: cleanText(properties?.title),
             originalDate: cleanText(properties?.originalDate) || null,
             targetDate: cleanText(properties?.targetDate) || null,
@@ -357,6 +433,25 @@ export class ContextGroundingService {
         take: 60,
         select: { properties: true, createdAt: true },
       }).catch(() => []) : Promise.resolve([]),
+      // Checkins dos últimos 35 dias com isFlowing para detectar fase menstrual
+      prismaAny.dailyCheckin?.findMany ? prismaAny.dailyCheckin.findMany({
+        where: {
+          userId: input.userId,
+          localDate: { gte: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000) },
+        },
+        orderBy: { localDate: 'asc' },
+        select: { localDate: true, isFlowing: true },
+      }).catch(() => []) : Promise.resolve([]),
+      prismaAny.userMemory?.findMany ? prismaAny.userMemory.findMany({
+        where: {
+          userId: input.userId,
+          lifecycle: 'active',
+          negativeState: { not: null },
+          OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }],
+        },
+        select: { targetId: true, canonicalKey: true, content: true },
+        take: 100,
+      }).catch(() => []) : Promise.resolve([]),
     ]);
 
     const lastCheckinKey = normalizeDateKey((rawLastCheckin as { localDate?: Date } | null)?.localDate);
@@ -366,7 +461,34 @@ export class ContextGroundingService {
       daysSinceLastCheckin = Math.max(0, Math.round(diffMs / 86_400_000));
     }
 
-    const tasks = rawTasks as GroundedTask[];
+    const postponedBlockIds = new Set((rawPostponements as GroundedPostponement[])
+      .map((postponement) => postponement.blockId)
+      .filter((blockId): blockId is string => Boolean(blockId)));
+    const tasks = (rawTasks as GroundedTask[]).map((task) => {
+      const persisted = resolveTimelineAdaptability(task);
+      const inference = inferTimelineAdaptability({
+        ...task,
+        ...persisted,
+        manualOverride: task.adaptabilitySource === 'manual',
+        wasPostponed: Boolean(task.id && postponedBlockIds.has(task.id)),
+      });
+      const inferredSource = inference.inferenceSource === 'google_calendar' ? 'gcal'
+        : inference.inferenceSource === 'recurring_schedule' ? 'recurrence'
+          : inference.inferenceSource === 'commitment_pattern' ? 'language'
+            : inference.inferenceSource === 'ai_suggestion' ? 'ai'
+              : inference.inferenceSource === 'postponed_task' ? 'behavior'
+                : inference.inferenceSource === 'manual_override' ? 'manual'
+                  : 'default';
+      return {
+        ...task,
+        temporalPolicy: inference.temporalPolicy,
+        adaptationPermission: inference.adaptationPermission,
+        adaptabilityInferenceSource: inference.inferenceSource,
+        adaptabilityInferenceConfidence: inference.inferenceConfidence,
+        adaptabilitySource: inferredSource,
+        adaptabilityConfidence: inference.inferenceConfidence,
+      };
+    });
     const habits = rawHabits as GroundedHabit[];
     const goals = rawGoals as GroundedGoal[];
     const postponedActions = rawPostponements as GroundedPostponement[];
@@ -416,6 +538,13 @@ export class ContextGroundingService {
       ...feedbackTitles(input.context.homeAutonomyFeedback),
       ...actionableFeedbackTitles(actionFeedback),
     ]);
+    const blockedActionTargetIds = unique((rawNegativeMemories as Array<{ targetId?: string | null }>).map((item) => item.targetId ?? ''));
+    const blockedActionCanonicalKeys = unique((rawNegativeMemories as Array<{ canonicalKey?: string | null }>).map((item) => item.canonicalKey ?? ''));
+
+    // Fase menstrual estimada a partir do histórico de fluxo
+    const menstrualPhaseResult = this.detectMenstrualPhase(
+      (rawFlowCheckins as Array<{ localDate: Date; isFlowing: boolean | null }>)
+    );
 
     return {
       source: 'ContextGroundingService',
@@ -429,6 +558,8 @@ export class ContextGroundingService {
       completedSubgoalTitles,
       recentSuggestionTitles,
       blockedActionTitles,
+      blockedActionTargetIds,
+      blockedActionCanonicalKeys,
       todayAnchorTitles: unique([
         ...stringList(input.context.pendingTasks),
         ...stringList(input.context.pendingTaskTitles),
@@ -446,6 +577,8 @@ export class ContextGroundingService {
       postponedActions,
       repeatedSnoozes,
       daysSinceLastCheckin,
+      menstrualPhaseLabel: menstrualPhaseResult?.label ?? null,
+      menstrualCycleDay: menstrualPhaseResult?.cycleDay ?? null,
       patternMemoryContext: cleanText(input.ragContext),
       operationalRule: 'Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual.',
     };
@@ -477,6 +610,8 @@ export class ContextGroundingService {
       completedGoalTitles: mergeContextList(input.context.completedGoalTitles, lists.completedGoalTitles),
       completedSubgoalTitles: mergeContextList(input.context.completedSubgoalTitles, lists.completedSubgoalTitles),
       blockedActionTitles: mergeContextList(input.context.blockedActionTitles, [...lists.blockedActionTitles, ...lists.recentSuggestionTitles]),
+      blockedActionTargetIds: mergeContextList(input.context.blockedActionTargetIds, lists.blockedActionTargetIds ?? []),
+      blockedActionCanonicalKeys: mergeContextList(input.context.blockedActionCanonicalKeys, lists.blockedActionCanonicalKeys ?? []),
       todayAnchorTitles: mergeContextList(input.context.todayAnchorTitles, lists.todayAnchorTitles),
       daysSinceLastCheckin: lists.daysSinceLastCheckin,
       groundingContext,

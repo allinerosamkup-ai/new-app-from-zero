@@ -1,6 +1,7 @@
 import { ArrowRight, BrainCircuit, CalendarRange, ClipboardList, HeartHandshake, ShieldCheck, Sparkles, Waves, type LucideIcon } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { useLocalizedCopy } from "../i18n";
 
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -187,6 +188,53 @@ const heroHighlights = [
   "Perceba queda, aceleração e exaustão antes que virem apagão",
   "Entenda o padrão por trás do problema, não só o sentimento do momento",
   "Receba uma próxima ação possível para a fase em que você está",
+];
+
+const audienceCardsEn: InfoCard[] = [
+  { title: "Airia connects how you feel with what was already happening", description: "For people who notice too late that they are dropping, accelerating, or exhausted. Airia reads mood, energy, sleep, agenda, journal, and history to build a personal baseline and a more faithful reading of the moment." },
+  { title: "A space where facts, stories, and decisions stay separate", description: "Instead of generic phrases, Airia helps you understand what happened, which interpretation took over, and which concrete decision is being avoided, protected, or postponed." },
+  { title: "Biological predictability to adjust the day before friction", description: "When the app notices your energy changing, the planner, alerts, and suggestions change with it. It reads your rhythm so you can choose the next move more intelligently." },
+  { title: "Organized history for better conversations about you", description: "Vague sensations become records of cycles, stability, drops, early signals, decisions, and recurring patterns. You can bring useful context to therapy or medical care instead of relying on scattered memory." },
+];
+
+const flowStepsEn: StepCard[] = [
+  { eyebrow: "01", title: "A 30-second check-in", description: "Record mood, energy, sleep, and body signals without turning it into an obligation. It is the minimum data Airia needs to begin understanding your real day." },
+  { eyebrow: "02", title: "The app calculates patterns, trends, and stability", description: "The Mood Cycle Engine combines your personal baseline, individual EWMA, variation, sleep, and seven-day trend instead of relying on a generic average." },
+  { eyebrow: "03", title: "Airia turns the reading into movement", description: "With context and memory, Airia separates facts from interpretation, recognizes patterns, and suggests a small maneuver: move forward, reduce stimulation, reorganize, or expose yourself gradually." },
+];
+
+const featuresEn: Array<Omit<FeatureCard, "icon">> = [
+  { title: "Mood and energy across eight phases", description: "See whether you are in high flight, flow, stability, slowdown, retreat, pause, resumption, or turbulence." },
+  { title: "A planner that respects real energy", description: "Agenda items, habits, actions, and goals are calibrated to your current phase without turning everything into a timed event." },
+  { title: "Airia with pattern memory", description: "AI uses your journal, check-ins, planner, goals, and recent suggestions to recognize repetition, hidden cost, and pending decisions." },
+  { title: "A journal that talks and becomes a plan", description: "The journal does more than welcome you: it helps test ideas, validate suggestions, and turn what makes sense into planner actions." },
+  { title: "History that shows your phases over time", description: "Weekly and monthly charts and forecasts show mood and energy together, with personal baselines and alerts grounded in your own usage." },
+];
+
+const screenshotsEn: Array<Omit<ScreenshotCard, "src" | "imageTransform">> = [
+  { title: "Home with a reading of your day", description: "Open to your current state, weekly signals, and a quick reading of what needs care now." },
+  { title: "A fast, tactile check-in", description: "A simple flow for recording mood and energy without unnecessary friction." },
+  { title: "Planner with an adaptive agenda", description: "Blocks, priorities, and replanning that respect the day's real state." },
+  { title: "Insights and patterns", description: "Visualizations for noticing phases, drops, stability, and recurring signals." },
+  { title: "Airia: patterns, decisions, and phases", description: "A conversation that reads context, recognizes patterns, and turns emotional clarity into practical action." },
+];
+
+const testimonialsEn = [
+  { role: "Designer (ADHD)", content: "Airia is the first app that does not make me feel guilty for changing the plan when my energy drops. The adaptive planner is what I always needed." },
+  { role: "Entrepreneur", content: "Noticing the exhaustion signal three days early changed everything. Fewer blackouts and more clarity about my limits." },
+  { role: "Writer", content: "It is not another generic tracker; it is a conversation that makes sense. The AI understands my patterns and helps me choose the next step." },
+];
+
+const faqsEn = [
+  { question: "Is my mood data secure?", answer: "Yes. Your records are private and used to give you context. We do not sell your data or use it to train public models." },
+  { question: "What is bio-synchrony?", answer: "It is the practice of aligning tasks and expectations with your real biology — energy, sleep, and mood phases — instead of forcing a rigid agenda." },
+  { question: "Why is the app free?", answer: "Airia is in private beta. We are building the product foundation with real users before defining a future subscription model." },
+];
+
+const heroHighlightsEn = [
+  "Notice drops, acceleration, and exhaustion before they become a blackout",
+  "Understand the pattern behind the problem, not only the feeling of the moment",
+  "Get a possible next action for the phase you are in",
 ];
 
 const sectionTitleStyle = {
@@ -431,7 +479,15 @@ function ScreenshotPhone({ shot }: { shot: ScreenshotCard }) {
 }
 
 export function SplashPage() {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
+  const localizedAudienceCards = audienceCards.map((card, index) => ({ ...card, title: l(card.title, audienceCardsEn[index].title), description: l(card.description, audienceCardsEn[index].description) }));
+  const localizedFlowSteps = flowSteps.map((step, index) => ({ ...step, title: l(step.title, flowStepsEn[index].title), description: l(step.description, flowStepsEn[index].description) }));
+  const localizedFeatures = features.map((feature, index) => ({ ...feature, title: l(feature.title, featuresEn[index].title), description: l(feature.description, featuresEn[index].description) }));
+  const localizedScreenshots = screenshots.map((shot, index) => ({ ...shot, title: l(shot.title, screenshotsEn[index].title), description: l(shot.description, screenshotsEn[index].description) }));
+  const localizedTestimonials = testimonials.map((item, index) => ({ ...item, role: l(item.role, testimonialsEn[index].role), content: l(item.content, testimonialsEn[index].content) }));
+  const localizedFaqs = faqs.map((item, index) => ({ question: l(item.question, faqsEn[index].question), answer: l(item.answer, faqsEn[index].answer) }));
+  const localizedHeroHighlights = heroHighlights.map((item, index) => l(item, heroHighlightsEn[index]));
 
   return (
     <div
@@ -510,7 +566,7 @@ export function SplashPage() {
               }}
             >
               <Sparkles size={14} color="#B86D4C" />
-              BIO-SINCRONIA · NEURODIVERGENTES · IA QUE ACOLHE
+              {l("BIO-SINCRONIA · NEURODIVERGENTES · IA QUE ACOLHE", "BIO-SYNCHRONY · NEURODIVERGENCE · SUPPORTIVE AI")}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -526,7 +582,7 @@ export function SplashPage() {
                   maxWidth: "100%",
                 }}
               >
-                  Sincronize seu dia com sua energia real, não com o relógio.
+                  {l("Sincronize seu dia com sua energia real, não com o relógio.", "Sync your day with your real energy, not the clock.")}
               </h1>
               <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 660 }}>
                 <p
@@ -537,7 +593,7 @@ export function SplashPage() {
                     color: BRAND.textSoft,
                   }}
                 >
-                  O tracker de humor e planner adaptativo que entende seu ritmo e prevê quedas de energia antes que você possa desabar.
+                  {l("O tracker de humor e planner adaptativo que entende seu ritmo e prevê quedas de energia antes que você possa desabar.", "The mood tracker and adaptive planner that understands your rhythm and anticipates energy drops before you crash.")}
                 </p>
                 <p
                   style={{
@@ -547,7 +603,7 @@ export function SplashPage() {
                     color: "var(--text-3)",
                   }}
                 >
-                  Gratuito durante o Beta • 100% Privado • Sem cartão de crédito.
+                  {l("Gratuito durante o Beta • 100% Privado • Sem cartão de crédito.", "Free during Beta • 100% private • No credit card.")}
                 </p>
               </div>
             </div>
@@ -574,7 +630,7 @@ export function SplashPage() {
                   maxWidth: 400,
                 }}
               >
-                Começar grátis
+                {l("Começar grátis", "Start free")}
                 <ArrowRight size={20} />
               </button>
               
@@ -592,7 +648,7 @@ export function SplashPage() {
                   opacity: 0.8,
                 }}
               >
-                Já tenho conta
+                {l("Já tenho conta", "I already have an account")}
               </button>
             </div>
             <div
@@ -611,7 +667,7 @@ export function SplashPage() {
               }}
             >
               <Sparkles size={14} color="#50705B" />
-              Acesso Beta: Gratuito hoje
+              {l("Acesso Beta: Gratuito hoje", "Beta access: Free today")}
             </div>
 
             <div
@@ -621,7 +677,7 @@ export function SplashPage() {
                 gap: 12,
               }}
             >
-              {heroHighlights.map((item) => (
+              {localizedHeroHighlights.map((item) => (
                 <div
                   key={item}
                   style={{
@@ -696,7 +752,7 @@ export function SplashPage() {
                         Preview
                       </p>
                       <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: BRAND.textWarm }}>
-                        Agenda, check-ins e padrões no mesmo lugar
+                        {l("Agenda, check-ins e padrões no mesmo lugar", "Agenda, check-ins, and patterns in one place")}
                       </p>
                     </div>
                   </div>
@@ -711,7 +767,7 @@ export function SplashPage() {
                     fontWeight: 800,
                   }}
                 >
-                  Ao vivo
+                  {l("Ao vivo", "Live")}
                 </div>
               </div>
 
@@ -783,7 +839,7 @@ export function SplashPage() {
                   <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-3)", letterSpacing: ".08em", textTransform: "uppercase" }}>
                     Check-in
                   </span>
-                  <span style={{ fontSize: 12, color: "var(--text-1)", fontWeight: 700, lineHeight: 1.3 }}>Leitura do dia em poucos toques</span>
+                  <span style={{ fontSize: 12, color: "var(--text-1)", fontWeight: 700, lineHeight: 1.3 }}>{l("Leitura do dia em poucos toques", "Read your day in a few taps")}</span>
                 </div>
               </div>
 
@@ -817,8 +873,8 @@ export function SplashPage() {
                   <Sparkles size={16} color="#5A7A64" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>Planner adaptativo</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Menos atrito, mais clareza</span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>{l("Planner adaptativo", "Adaptive planner")}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>{l("Menos atrito, mais clareza", "Less friction, more clarity")}</span>
                 </div>
               </div>
             </div>
@@ -826,9 +882,9 @@ export function SplashPage() {
         </section>
 
         <SplashSection
-          kicker="Para quem é"
-          title="Feito para pessoas que sentem o dia mudar por dentro."
-          subtitle="A Airia faz sentido para quem vive oscilações de humor, energia, foco e regulação ao longo do tempo e quer parar de descobrir tudo tarde demais."
+          kicker={l("Para quem é", "Who it is for")}
+          title={l("Feito para pessoas que sentem o dia mudar por dentro.", "Made for people who feel the day change from within.")}
+          subtitle={l("A Airia faz sentido para quem vive oscilações de humor, energia, foco e regulação ao longo do tempo e quer parar de descobrir tudo tarde demais.", "Airia is for people whose mood, energy, focus, and regulation fluctuate over time and who want to stop noticing everything too late.")}
         >
           <div
             style={{
@@ -837,7 +893,7 @@ export function SplashPage() {
               gap: 18,
             }}
           >
-            {audienceCards.map((card) => (
+            {localizedAudienceCards.map((card) => (
               <article
                 key={card.title}
                 style={{
@@ -876,8 +932,8 @@ export function SplashPage() {
         </SplashSection>
 
         <SplashSection
-          kicker="O que dizem"
-          title="Quem já está usando para entender seus ciclos."
+          kicker={l("O que dizem", "What people say")}
+          title={l("Quem já está usando para entender seus ciclos.", "People already using Airia to understand their cycles.")}
         >
           <div
             style={{
@@ -886,7 +942,7 @@ export function SplashPage() {
               gap: 18,
             }}
           >
-            {testimonials.map((t) => (
+            {localizedTestimonials.map((t) => (
               <article
                 key={t.name}
                 style={{
@@ -939,10 +995,10 @@ export function SplashPage() {
               color: "var(--text-3)",
             }}
           >
-            Diferenciais
+            {l("Diferenciais", "What makes Airia different")}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {["Tracker genérico", "Agenda rígida", "Métricas vazias"].map((label) => (
+            {[l("Tracker genérico", "Generic tracker"), l("Agenda rígida", "Rigid agenda"), l("Métricas vazias", "Empty metrics")].map((label) => (
               <div
                 key={label}
                 style={{
@@ -981,16 +1037,16 @@ export function SplashPage() {
                 Bio-Sincronia: Onde o plano encontra o corpo.
               </p>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, color: BRAND.textSoft }}>
-                Enquanto outros apps te cobram rotinas que você não consegue cumprir, a Airia recalcula sua carga cognitiva baseada no seu humor e energia real. Menos atrito, mais sustentabilidade.
+                {l("Enquanto outros apps te cobram rotinas que você não consegue cumprir, a Airia recalcula sua carga cognitiva baseada no seu humor e energia real. Menos atrito, mais sustentabilidade.", "While other apps demand routines you cannot sustain, Airia recalculates your cognitive load from your real mood and energy. Less friction, more sustainability.")}
               </p>
             </div>
           </div>
         </section>
 
         <SplashSection
-          kicker="Como funciona"
-          title="Menos surpresa. Mais clareza antes do atrito."
-          subtitle="Tudo começa com uma leitura honesta do agora. Depois, os registros revelam o que se repete. E, com isso, fica muito mais fácil entender quando seguir, quando reduzir e quando se proteger."
+          kicker={l("Como funciona", "How it works")}
+          title={l("Menos surpresa. Mais clareza antes do atrito.", "Fewer surprises. More clarity before friction.")}
+          subtitle={l("Tudo começa com uma leitura honesta do agora. Depois, os registros revelam o que se repete. E, com isso, fica muito mais fácil entender quando seguir, quando reduzir e quando se proteger.", "It begins with an honest reading of the present. Records then reveal what repeats, making it easier to know when to move forward, slow down, or protect yourself.")}
         >
           <div
             style={{
@@ -999,7 +1055,7 @@ export function SplashPage() {
               gap: 18,
             }}
           >
-            {flowSteps.map((step) => (
+            {localizedFlowSteps.map((step) => (
               <article
                 key={step.eyebrow}
                 style={{
@@ -1036,9 +1092,9 @@ export function SplashPage() {
         </SplashSection>
 
         <SplashSection
-          kicker="Funções"
-          title="O que começa a mudar quando você entende o seu ritmo"
-          subtitle="Menos escuro sobre o que está acontecendo por dentro. Mais clareza para agir melhor, se relacionar melhor e trabalhar melhor."
+          kicker={l("Funções", "Features")}
+          title={l("O que começa a mudar quando você entende o seu ritmo", "What starts to change when you understand your rhythm")}
+          subtitle={l("Menos escuro sobre o que está acontecendo por dentro. Mais clareza para agir melhor, se relacionar melhor e trabalhar melhor.", "Less uncertainty about what is happening inside. More clarity to act, relate, and work better.")}
         >
           <div
             style={{
@@ -1047,7 +1103,7 @@ export function SplashPage() {
               gap: 18,
             }}
           >
-            {features.map((feature) => {
+            {localizedFeatures.map((feature) => {
               const Icon = feature.icon;
 
               return (
@@ -1088,8 +1144,8 @@ export function SplashPage() {
         </SplashSection>
 
         <SplashSection
-          kicker="Dúvidas frequentes"
-          title="Tudo o que você precisa saber para começar."
+          kicker={l("Dúvidas frequentes", "Frequently asked questions")}
+          title={l("Tudo o que você precisa saber para começar.", "Everything you need to know to get started.")}
         >
           <div
             style={{
@@ -1098,7 +1154,7 @@ export function SplashPage() {
               gap: 18,
             }}
           >
-            {faqs.map((f) => (
+            {localizedFaqs.map((f) => (
               <article
                 key={f.question}
                 style={{
@@ -1120,9 +1176,9 @@ export function SplashPage() {
         </SplashSection>
 
         <SplashSection
-          kicker="Veja o app em ação"
-          title="Clareza que aparece na tela e muda o dia"
-          subtitle="Cada tela existe para te mostrar mais cedo o que está acontecendo por dentro e o que fazer com isso na prática."
+          kicker={l("Veja o app em ação", "See the app in action")}
+          title={l("Clareza que aparece na tela e muda o dia", "Clarity on screen that changes your day")}
+          subtitle={l("Cada tela existe para te mostrar mais cedo o que está acontecendo por dentro e o que fazer com isso na prática.", "Every screen helps you notice sooner what is happening inside and what to do with it in practice.")}
         >
           <div
             style={{
@@ -1131,7 +1187,7 @@ export function SplashPage() {
               gap: 22,
             }}
           >
-            {screenshots.map((shot) => (
+            {localizedScreenshots.map((shot) => (
               <ScreenshotPhone key={shot.title} shot={shot} />
             ))}
           </div>
@@ -1162,7 +1218,7 @@ export function SplashPage() {
                 color: "var(--text-3)",
               }}
             >
-              Pronto para começar
+              {l("Pronto para começar", "Ready to start")}
             </p>
             <h2
               style={{
@@ -1174,11 +1230,10 @@ export function SplashPage() {
                 fontWeight: 800,
               }}
             >
-              O fim da montanha-russa emocional para quem faz acontecer.
+              {l("O fim da montanha-russa emocional para quem faz acontecer.", "Step off the emotional roller coaster without giving up your drive.")}
             </h2>
             <p style={{ margin: 0, fontSize: 16, lineHeight: 1.8, color: BRAND.textSoft, maxWidth: 620 }}>
-              A Airia te ajuda a reconhecer padrão, ajustar o dia e decidir o próximo movimento com menos culpa, menos
-              repetição e mais clareza sobre si.
+              {l("A Airia te ajuda a reconhecer padrão, ajustar o dia e decidir o próximo movimento com menos culpa, menos repetição e mais clareza sobre si.", "Airia helps you recognize patterns, adjust your day, and choose the next move with less guilt, less repetition, and more self-clarity.")}
             </p>
           </div>
 
@@ -1200,7 +1255,7 @@ export function SplashPage() {
                 maxWidth: 400,
               }}
             >
-              Começar minha leitura de ritmo
+              {l("Começar minha leitura de ritmo", "Start my rhythm reading")}
             </button>
             <button
               type="button"
@@ -1216,7 +1271,7 @@ export function SplashPage() {
                 opacity: 0.8,
               }}
             >
-              Entrar na conta
+              {l("Entrar na conta", "Sign in")}
             </button>
           </div>
         </section>
@@ -1236,7 +1291,7 @@ export function SplashPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <AiriaConstellationLogo size={32} />
             <span style={{ fontSize: 13, color: BRAND.textSoft, fontWeight: 500 }}>
-              &copy; {new Date().getFullYear()} Airia Health. Todos os direitos reservados.
+              &copy; {new Date().getFullYear()} Airia Health. {l("Todos os direitos reservados.", "All rights reserved.")}
             </span>
           </div>
           <div style={{ display: "flex", gap: 24 }}>
@@ -1244,13 +1299,13 @@ export function SplashPage() {
               onClick={() => navigate("/privacy")}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: BRAND.textSoft, fontWeight: 600 }}
             >
-              Política de Privacidade
+              {l("Política de Privacidade", "Privacy Policy")}
             </button>
             <button 
               onClick={() => navigate("/terms")}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: BRAND.textSoft, fontWeight: 600 }}
             >
-              Termos de Uso
+              {l("Termos de Uso", "Terms of Use")}
             </button>
           </div>
         </footer>

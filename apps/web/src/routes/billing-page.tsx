@@ -4,6 +4,8 @@ import { ChevronLeft, Sparkles, CheckCircle2, ExternalLink, Zap, Check } from "l
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { trackEvent } from "../lib/track";
+import { useTranslation } from "react-i18next";
+import { resolveIntlLocale } from "../i18n";
 
 type SubscriptionStatus = {
   status: string | null;
@@ -13,24 +15,8 @@ type SubscriptionStatus = {
 
 type BillingPlan = "monthly" | "annual";
 
-const FEATURES_FREE = [
-  "Check-in diario de humor e energia",
-  "Habitos basicos (ate 5)",
-  "Diario reflexivo",
-  "Planner basico",
-];
-
-const FEATURES_PRO = [
-  "IA Airia ilimitada (Airia, Planner, Check-in)",
-  "Memoria de longo prazo e knowledge graph",
-  "Insights e padroes avancados",
-  "Previsao de fase (7 dias)",
-  "Habitos ilimitados",
-  "Exportacao de dados",
-  "Suporte prioritario",
-];
-
 export default function BillingPage() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [sub, setSub] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +79,7 @@ export default function BillingPage() {
         >
           <ChevronLeft size={24} />
         </button>
-        <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>Plano</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{t("billing.title")}</h1>
       </div>
 
       <div style={{ flex: 1, padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -106,7 +92,7 @@ export default function BillingPage() {
           }}>
             <CheckCircle2 size={18} color="var(--accent-sage)" />
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--accent-sage)" }}>
-              Assinatura ativada. Obrigada!
+              {t("billing.activated")}
             </p>
           </div>
         )}
@@ -120,14 +106,14 @@ export default function BillingPage() {
             background: isActive ? "rgba(150,199,179,0.07)" : "rgba(255,255,255,.85)",
           }}>
             <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: isActive ? "var(--accent-sage)" : "var(--text-3)" }}>
-              {isActive ? "Plano atual" : "Plano gratuito"}
+              {isActive ? t("billing.currentPlan") : t("billing.freePlan")}
             </p>
             <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: "var(--text-1)" }}>
-              {isActive ? "Airia Pro" : "Gratuito"}
+              {isActive ? "Airia Pro" : t("billing.free")}
             </p>
             {isActive && sub?.periodEnd && (
               <p style={{ margin: 0, fontSize: 11, color: "var(--text-3)" }}>
-                Renova em {new Date(sub.periodEnd).toLocaleDateString("pt-BR")}
+                {t("billing.renewsOn", { date: new Date(sub.periodEnd).toLocaleDateString(resolveIntlLocale(i18n.language)) })}
               </p>
             )}
           </div>
@@ -157,7 +143,7 @@ export default function BillingPage() {
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                     }}
                   >
-                    {p === "monthly" ? "Mensal" : "Anual"}
+                    {p === "monthly" ? t("billing.monthly") : t("billing.annual")}
                     {p === "annual" && (
                       <span style={{
                         fontSize: 10, fontWeight: 900,
@@ -176,7 +162,7 @@ export default function BillingPage() {
               {selectedPlan === "monthly" ? (
                 <div>
                   <span style={{ fontSize: 36, fontWeight: 900, color: "var(--accent-peach-ink)" }}>R$29</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-3)" }}>/mes</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-3)" }}>{t("billing.perMonth")}</span>
                 </div>
               ) : (
                 <div>
@@ -184,15 +170,15 @@ export default function BillingPage() {
                     <span style={{ fontSize: 36, fontWeight: 900, color: "var(--accent-peach-ink)" }}>
                       {"R$"}{annualMonthly}
                     </span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-3)" }}>/mes</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-3)" }}>{t("billing.perMonth")}</span>
                   </div>
                   <p style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--text-3)" }}>
-                    {"Cobrado anualmente · R$"}{annualTotal}{"/ano "}
+                    {t("billing.annualCharge", { total: annualTotal })}{" "}
                     <span style={{
                       background: "rgba(150,199,179,0.18)", color: "var(--accent-sage)",
                       padding: "1px 7px", borderRadius: 999, fontWeight: 800, fontSize: 10.5,
                     }}>
-                      {"Voce economiza R$"}{annualSavings}{"/ano"}
+                      {t("billing.annualSaving", { saving: annualSavings })}
                     </span>
                   </p>
                 </div>
@@ -200,7 +186,7 @@ export default function BillingPage() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-              {FEATURES_PRO.map((f) => (
+              {(t("billing.proFeatures", { returnObjects: true }) as string[]).map((f) => (
                 <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                   <div style={{
                     width: 18, height: 18, borderRadius: "50%",
@@ -229,18 +215,18 @@ export default function BillingPage() {
                 fontFamily: "'Plus Jakarta Sans', sans-serif",
               }}
             >
-              {checkoutLoading ? "Aguarde..." : (
+              {checkoutLoading ? t("billing.wait") : (
                 <>
                   <Zap size={16} />
                   {selectedPlan === "annual"
-                    ? `Assinar por R$${annualTotal}/ano`
-                    : "Assinar por R$29/mes"}
+                    ? t("billing.subscribeAnnual", { total: annualTotal })
+                    : t("billing.subscribeMonthly")}
                 </>
               )}
             </button>
 
             <p style={{ margin: "10px 0 0", fontSize: 11, color: "var(--text-3)", textAlign: "center" }}>
-              Cancele quando quiser
+              {t("billing.cancelAnytime")}
             </p>
           </div>
         )}
@@ -261,17 +247,17 @@ export default function BillingPage() {
             }}
           >
             <ExternalLink size={15} />
-            {portalLoading ? "Aguarde..." : "Gerenciar assinatura"}
+            {portalLoading ? t("billing.wait") : t("billing.manage")}
           </button>
         )}
 
         {!isActive && (
           <div style={{ padding: "16px 20px", borderRadius: 18, background: "rgba(255,255,255,.7)", border: "1px solid var(--warm-border)" }}>
             <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>
-              Plano gratuito inclui
+              {t("billing.freeIncludes")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {FEATURES_FREE.map((f) => (
+              {(t("billing.freeFeatures", { returnObjects: true }) as string[]).map((f) => (
                 <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Check size={12} color="var(--text-3)" strokeWidth={2.5} />
                   <span style={{ fontSize: 12, color: "var(--text-3)" }}>{f}</span>

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { buildPrivacyExport } from './privacy-export.service';
+import { deleteAllMemoryData } from './memory.service';
 
 async function run() {
   const calls: string[] = [];
@@ -29,6 +30,12 @@ async function run() {
     habit: { findMany: async () => [{ id: 'habit-1', title: 'Agua', completions: [] }] },
     weeklyInsight: { findMany: async () => [{ id: 'insight-1', summary: 'Semana oscilou' }] },
     memoryEmbedding: { findMany: async () => [{ id: 'mem-1', content: 'preferencia registrada' }] },
+    userMemory: { findMany: async () => [{ id: 'canonical-1', canonicalKey: 'routine.focus' }] },
+    userMemoryEvidence: { findMany: async () => [{ id: 'evidence-1', memoryId: 'canonical-1' }] },
+    userEntity: { findMany: async () => [{ id: 'entity-1', canonicalName: 'trabalho' }] },
+    userFact: { findMany: async () => [{ id: 'fact-1', statement: 'trabalha a tarde' }] },
+    userPattern: { findMany: async () => [{ id: 'pattern-1', pattern: 'foco tarde' }] },
+    userOpenDecision: { findMany: async () => [{ id: 'decision-1', question: 'quando focar?' }] },
     eventLog: { findMany: async () => [{ id: 'event-1', eventName: 'risk_protocol_triggered' }] },
     pushSubscription: { findMany: async () => [{ id: 'push-1', endpoint: 'push-endpoint' }] },
   };
@@ -47,7 +54,43 @@ async function run() {
   assert.equal(firstJournalMessage.content, 'texto da usuaria');
   assert.equal(firstHabit.title, 'Agua');
   assert.equal(firstPushSubscription.endpoint, 'push-endpoint');
+  assert.equal(payload.data.canonicalMemories.length, 1);
+  assert.equal(payload.data.memoryEvidence.length, 1);
+  assert.equal(payload.data.knowledgeGraph.entities.length, 1);
   assert.deepEqual(calls, ['profile']);
+
+  const deleted: string[] = [];
+  const deletable: any = Object.fromEntries(['memoryEmbedding', 'userMemoryEvidence', 'userMemory', 'userFact', 'userPattern', 'userOpenDecision', 'userEntity']
+    .map((name) => [name, { deleteMany: async () => { deleted.push(name); } }]));
+  let cleanedPayload: Record<string, unknown> | null = null;
+  let transactions = 0;
+  deletable.$transaction = async (fn: (tx: any) => Promise<void>) => { transactions += 1; return fn(deletable); };
+  deletable.onboardingResponse = {
+    findUnique: async () => ({ aiProfilePayload: {
+      aiActionFeedback: [{ title: 'old' }],
+      longTermMemory: [{ summary: 'legacy' }],
+      longTermMemoryRaw: 'legacy raw',
+      keepMe: true,
+    } }),
+    update: async ({ data }: any) => { cleanedPayload = data.aiProfilePayload; },
+  };
+  await deleteAllMemoryData(deletable, 'user-1');
+  assert.deepEqual(deleted, ['memoryEmbedding', 'userMemoryEvidence', 'userMemory', 'userFact', 'userPattern', 'userOpenDecision', 'userEntity']);
+  assert.deepEqual(cleanedPayload, { keepMe: true }, 'memory deletion clears legacy action feedback without deleting unrelated onboarding context');
+  assert.equal(transactions, 1);
+  await assert.doesNotReject(() => deleteAllMemoryData(deletable, 'user-1'));
+  assert.equal(transactions, 2, 'memory deletion is transactionally idempotent');
+
+  let serializationAttempts = 0;
+  const retryable: any = {
+    $transaction: async (fn: (tx: any) => Promise<void>) => {
+      serializationAttempts += 1;
+      if (serializationAttempts < 3) throw Object.assign(new Error('serialization conflict'), { code: 'P2034' });
+      return fn(retryable);
+    },
+  };
+  await deleteAllMemoryData(retryable, 'user-2');
+  assert.equal(serializationAttempts, 3, 'privacy erasure retries bounded Prisma serialization conflicts');
 }
 
 run()

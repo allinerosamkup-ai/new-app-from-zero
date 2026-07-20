@@ -122,7 +122,48 @@ async function run() {
   assert.equal(filtered.adjustedExisting.length, 1, 'block-fantasma deveria ter sido filtrado');
   assert.equal(filtered.adjustedExisting[0].id, 'block-real');
 
-  // 5. JSON inválido → devolve vazio (não derruba)
+  // 5. Âncoras protegidas só podem receber KEEP, mesmo se o modelo tentar mutá-las.
+  const protectedResult = await PlannerAIService.getSuggestions(
+    {
+      date: '2026-05-14',
+      existingBlocks: [{
+        id: 'block-protected',
+        title: 'Reunião externa',
+        startTime: '10:00',
+        endTime: '11:00',
+        category: 'trabalho',
+        intensity: 'P',
+        status: 'planned',
+        temporalPolicy: 'fixed',
+        adaptationPermission: 'protected',
+      }],
+      energyState: { label: 'Baixa energia', suggestedIntensity: 'L' },
+    },
+    {},
+    {
+      chat: {
+        completions: {
+          create: async () => ({
+            choices: [{ message: { content: JSON.stringify({
+              schedule: [],
+              adjustedExisting: [{
+                id: 'block-protected',
+                action: 'CANCEL',
+                reason: 'A energia caiu bastante hoje.',
+                confidence: 0.9,
+              }],
+              adjustments: [],
+              warnings: [],
+            }) } }],
+          }),
+        },
+      },
+    } as any,
+  );
+  assert.equal(protectedResult.adjustedExisting[0]?.action, 'KEEP');
+  assert.match(protectedResult.adjustedExisting[0]?.reason ?? '', /protegido|fixo/i);
+
+  // 6. JSON inválido → devolve vazio (não derruba)
   const fakeBroken = {
     chat: {
       completions: {
@@ -138,7 +179,7 @@ async function run() {
   assert.deepEqual(safeResult.schedule, []);
   assert.deepEqual(safeResult.adjustedExisting, []);
 
-  // 6. Dedup de schedule por startTime idêntico
+  // 7. Dedup de schedule por startTime idêntico
   const fakeDup = {
     chat: {
       completions: {

@@ -6,8 +6,10 @@ import {
   PlannerAISuggestionRequestSchema,
   PlannerAISuggestionResponseSchema,
   type PlannerAISuggestionRequest,
+  type PlannerAISuggestionValidatedRequest,
   type PlannerAISuggestionResponse,
 } from '../contracts/planner.contract';
+import { isTimelineBlockProtected } from './planner.service';
 
 // Lazy OpenAI — mesmo padrão de knowledge-graph.service.ts
 let _openai: OpenAI | null = null;
@@ -45,6 +47,7 @@ const SYSTEM_EXTRA_INSTRUCTIONS = [
   '  - Se já tem agenda cheia ou energia baixa, schedule=[].',
   'PARA "adjustedExisting":',
   '  - 1 ação por bloco existente. Use KEEP por default. Só MOVE_TOMORROW/DOWNGRADE_INTENSITY/CANCEL com motivo concreto.',
+  '  - Bloco temporalPolicy=fixed ou adaptationPermission=protected é ÂNCORA: use somente KEEP. Nunca mova, reduza ou cancele.',
   '  - MOVE_TOMORROW: bloco P em dia de baixa energia. DOWNGRADE_INTENSITY: humor/energia caíram >=2 desde ontem.',
   '  - CANCEL é raro — só se tem evidência de que o bloco não faz mais sentido.',
   'CONFIDENCE realista: 0.5-0.7 para hipóteses razoáveis, 0.8-0.95 quando há evidência clara no contexto.',
@@ -120,8 +123,20 @@ export class PlannerAIService {
     // Filtragem extra de segurança:
     //  - garante que adjustedExisting só refere a IDs que vieram no input
     //  - dedup schedule por horário inicial idêntico
-    const validIds = new Set(validated.existingBlocks.map((b) => b.id));
-    parsed.adjustedExisting = parsed.adjustedExisting.filter((a) => validIds.has(a.id));
+    const blocksById = new Map(validated.existingBlocks.map((block) => [block.id, block]));
+    parsed.adjustedExisting = parsed.adjustedExisting
+      .filter((adjustment) => blocksById.has(adjustment.id))
+      .map((adjustment) => {
+        const block = blocksById.get(adjustment.id);
+        if (block && isTimelineBlockProtected(block) && adjustment.action !== 'KEEP') {
+          return {
+            ...adjustment,
+            action: 'KEEP' as const,
+            reason: 'Bloco fixo ou protegido; a Airia mantém esta âncora intacta.',
+          };
+        }
+        return adjustment;
+      });
     const seenStarts = new Set<string>();
     parsed.schedule = parsed.schedule.filter((s) => {
       if (seenStarts.has(s.startTime)) return false;
@@ -134,7 +149,7 @@ export class PlannerAIService {
 
   /** Constrói a mensagem do usuário com state + agenda atual + schema hint. */
   private static buildUserPrompt(
-    input: PlannerAISuggestionRequest,
+    input: PlannerAISuggestionValidatedRequest,
     learningContext?: string | null,
   ): string {
     const lines: string[] = [];
@@ -156,7 +171,7 @@ export class PlannerAIService {
       lines.push('AGENDA ATUAL DO DIA (decidir KEEP/MOVE/DOWNGRADE/CANCEL para cada):');
       for (const b of input.existingBlocks) {
         lines.push(
-          `- id=${b.id} | ${b.startTime}-${b.endTime} | ${b.title} | cat=${b.category} | int=${b.intensity} | status=${b.status}`,
+          `- id=${b.id} | ${b.startTime}-${b.endTime} | ${b.title} | cat=${b.category} | int=${b.intensity} | status=${b.status} | temporalPolicy=${b.temporalPolicy} | adaptationPermission=${b.adaptationPermission}`,
         );
       }
     } else {

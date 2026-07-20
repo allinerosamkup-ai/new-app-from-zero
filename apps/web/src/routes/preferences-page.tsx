@@ -2,7 +2,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 // Preferences Page v2 — Configurações
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { setLanguage, getCurrentLanguage, type SupportedLanguage } from "../i18n";
+import { setLanguage, getCurrentLanguage, resolveIntlLocale, type SupportedLanguage } from "../i18n";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { NotificationPreferences } from "../features/aura/types";
 import { useAuraStore } from "../features/aura/store";
@@ -32,6 +32,7 @@ function getDefaultSelectedCalendarIds(calendars: GCalCalendar[]) {
 }
 
 function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const { t } = useTranslation();
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [calendars, setCalendars] = useState<GCalCalendar[]>([]);
@@ -71,7 +72,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
         setCalendarsOpen(true);
       }
     } catch {
-      onStatusChange("Não consegui carregar as agendas.");
+      onStatusChange(t("config.gcal.loadError"));
     }
   }
 
@@ -86,9 +87,9 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
         window.location.href = url;
         return;
       }
-      onStatusChange("Não consegui abrir a conexão com o Google Agenda.");
+      onStatusChange(t("config.gcal.openError"));
     } catch {
-      onStatusChange("Não consegui conectar o Google Agenda agora.");
+      onStatusChange(t("config.gcal.connectError"));
     }
   }
 
@@ -99,9 +100,9 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
       setCalendars([]);
       setSelectedIds([]);
       setCalendarsOpen(false);
-      onStatusChange("Google Agenda desconectado.");
+      onStatusChange(t("config.gcal.disconnected"));
     } catch {
-      onStatusChange("Erro ao desconectar.");
+      onStatusChange(t("config.gcal.disconnectError"));
     }
   }
 
@@ -119,10 +120,10 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
     setSaving(true);
     try {
       await api.put("/gcal/calendars", { calendarIds: selectedIds });
-      onStatusChange("Agendas selecionadas salvas!");
+      onStatusChange(t("config.gcal.saved"));
       setTimeout(() => onStatusChange(null), 2000);
     } catch {
-      onStatusChange("Erro ao salvar seleção de agendas.");
+      onStatusChange(t("config.gcal.saveError"));
     } finally {
       setSaving(false);
     }
@@ -138,8 +139,8 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
             </svg>
           </div>
           <div>
-            <p className="config-row-text">Google Agenda</p>
-            <p className="config-row-sub">Verificando conexão...</p>
+            <p className="config-row-text">{t("config.gcal.title")}</p>
+            <p className="config-row-sub">{t("config.gcal.checking")}</p>
           </div>
         </div>
       </div>
@@ -157,9 +158,11 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
             </svg>
           </div>
           <div>
-            <p className="config-row-text">Google Agenda</p>
+            <p className="config-row-text">{t("config.gcal.title")}</p>
             <p className="config-row-sub">
-              {connected ? `${selectedIds.length || calendars.length} agenda${(selectedIds.length || calendars.length) === 1 ? "" : "s"} sincronizada${(selectedIds.length || calendars.length) === 1 ? "" : "s"}` : "Toque para conectar sua agenda"}
+              {connected
+                ? t("config.gcal.synced", { count: selectedIds.length || calendars.length })
+                : t("config.gcal.tapToConnect")}
             </p>
           </div>
         </div>
@@ -178,7 +181,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
         }}>
           {calendars.length === 0 ? (
             <div style={{ textAlign: "center", padding: "12px 0" }}>
-              <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 8px" }}>Carregando agendas...</p>
+              <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 8px" }}>{t("config.gcal.loading")}</p>
               <button
                 onClick={loadCalendars}
                 style={{
@@ -186,13 +189,13 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
                   padding: "6px 16px", fontSize: 12, fontWeight: 600, color: "var(--accent-sky)", cursor: "pointer"
                 }}
               >
-                Carregar agendas
+                {t("config.gcal.load")}
               </button>
             </div>
           ) : (
             <>
               <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>
-                Agendas sincronizadas no Planner
+                {t("config.gcal.plannerSync")}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {calendars.map(cal => (
@@ -249,7 +252,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
                     padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "var(--accent-peach)", cursor: "pointer",
                   }}
                 >
-                  Desconectar
+                  {t("config.gcal.disconnect")}
                 </button>
                 <button
                   onClick={saveSelection}
@@ -260,7 +263,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
                     opacity: saving ? .7 : 1,
                   }}
                 >
-                  {saving ? "Salvando..." : "Salvar seleção"}
+                  {saving ? t("config.gcal.saving") : t("config.gcal.saveSelection")}
                 </button>
               </div>
             </>
@@ -272,6 +275,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
 }
 
 function HealthConnectSettingsSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
@@ -292,7 +296,7 @@ function HealthConnectSettingsSection({ onStatusChange }: { onStatusChange: (msg
 
   async function handleSync() {
     if (!nativeAvailable) {
-      onStatusChange("Health Connect fica disponível no app Android instalado.");
+      onStatusChange(t("config.health.androidOnly"));
       return;
     }
 
@@ -300,11 +304,11 @@ function HealthConnectSettingsSection({ onStatusChange }: { onStatusChange: (msg
     try {
       const result = await requestNativeHealthConnectSync();
       if (!result.ok) {
-        onStatusChange(result.error || "Não consegui sincronizar o Health Connect.");
+        onStatusChange(result.error || t("config.health.syncError"));
         return;
       }
       await loadLatest();
-      onStatusChange("Health Connect sincronizado.");
+      onStatusChange(t("config.health.synced"));
       setTimeout(() => onStatusChange(null), 2400);
     } finally {
       setSyncing(false);
@@ -314,8 +318,9 @@ function HealthConnectSettingsSection({ onStatusChange }: { onStatusChange: (msg
   const sleepMinutes = typeof snapshot?.sleepMinutes === "number" ? snapshot.sleepMinutes : null;
   const steps = typeof snapshot?.steps === "number" ? snapshot.steps : null;
   const syncedAt = typeof snapshot?.syncedAt === "string" ? snapshot.syncedAt : null;
-  const sleepText = sleepMinutes ? `${Math.round((sleepMinutes / 60) * 10) / 10}h de sono` : "sono ainda não sincronizado";
-  const stepsText = steps != null ? `${Math.round(steps).toLocaleString("pt-BR")} passos` : "passos como complemento";
+  const locale = resolveIntlLocale(i18n.language);
+  const sleepText = sleepMinutes ? t("config.health.sleepHours", { hours: Math.round((sleepMinutes / 60) * 10) / 10 }) : t("config.health.sleepPending");
+  const stepsText = steps != null ? t("config.health.steps", { count: Math.round(steps).toLocaleString(locale) }) : t("config.health.stepsExtra");
 
   return (
     <div className="config-row" style={{ cursor: syncing ? "wait" : "pointer", opacity: syncing ? 0.7 : 1 }} onClick={handleSync}>
@@ -328,17 +333,17 @@ function HealthConnectSettingsSection({ onStatusChange }: { onStatusChange: (msg
         <div>
           <p className="config-row-text">Health Connect</p>
           <p className="config-row-sub">
-            {loading ? "Verificando..." : snapshot ? `${sleepText} · ${stepsText}` : nativeAvailable ? "Conectar sono como base da bio-sincronia" : "Disponível no app Android"}
+            {loading ? t("config.health.checking") : snapshot ? `${sleepText} · ${stepsText}` : nativeAvailable ? t("config.health.connectSleep") : t("config.health.androidAvailable")}
           </p>
           {syncedAt && (
             <p className="config-row-sub" style={{ marginTop: 2 }}>
-              Atualizado {new Date(syncedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              {t("config.health.updated", { date: new Date(syncedAt).toLocaleString(locale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) })}
             </p>
           )}
         </div>
       </div>
       <span style={{ fontSize: 11, fontWeight: 800, color: "var(--accent-peach)", flexShrink: 0 }}>
-        {syncing ? "Sincronizando" : snapshot ? "Atualizar" : "Conectar"}
+        {syncing ? t("config.health.syncing") : snapshot ? t("config.health.update") : t("config.health.connect")}
       </span>
     </div>
   );
@@ -351,6 +356,7 @@ type DeletionStatusResponse =
   | { status: "cancelled"; cancelledAt: string };
 
 function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const { t, i18n } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<DeletionStatusResponse>({ status: "none" });
 
@@ -368,15 +374,15 @@ function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string
   }, [refresh]);
 
   async function handleRequest() {
-    if (!confirm("Iniciar pedido de exclusão? Você terá 24h para confirmar.")) return;
+    if (!confirm(t("config.data.requestConfirm"))) return;
     setBusy(true);
     onStatusChange(null);
     try {
       const data = (await api.post("/privacy/delete-request", {})) as DeletionStatusResponse;
       setState(data);
-      onStatusChange("Pedido iniciado. Confirme em até 24h para agendar a exclusão.");
+      onStatusChange(t("config.data.requestStarted"));
     } catch {
-      onStatusChange("Não consegui iniciar o pedido agora.");
+      onStatusChange(t("config.data.requestError"));
     } finally {
       setBusy(false);
     }
@@ -384,15 +390,15 @@ function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string
 
   async function handleConfirm() {
     if (state.status !== "requested") return;
-    if (!confirm("Confirmar exclusão? Seus dados serão removidos em 30 dias e isto pode ser cancelado durante esse período.")) return;
+    if (!confirm(t("config.data.deleteConfirm"))) return;
     setBusy(true);
     onStatusChange(null);
     try {
       const data = (await api.post("/privacy/delete-confirm", { token: state.token })) as DeletionStatusResponse;
       setState(data);
-      onStatusChange("Exclusão agendada. Você pode cancelar até a data agendada.");
+      onStatusChange(t("config.data.deleteScheduled"));
     } catch {
-      onStatusChange("Não consegui confirmar o pedido. Tente reabrir o pedido.");
+      onStatusChange(t("config.data.confirmError"));
     } finally {
       setBusy(false);
     }
@@ -404,27 +410,28 @@ function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string
     try {
       const data = (await api.post("/privacy/delete-cancel", {})) as DeletionStatusResponse;
       setState(data);
-      onStatusChange("Pedido de exclusão cancelado.");
+      onStatusChange(t("config.data.cancelled"));
     } catch {
-      onStatusChange("Não consegui cancelar agora.");
+      onStatusChange(t("config.data.cancelError"));
     } finally {
       setBusy(false);
     }
   }
 
+  const locale = resolveIntlLocale(i18n.language);
   const subText =
     state.status === "requested"
-      ? `Aguardando confirmação até ${new Date(state.confirmDeadline).toLocaleString("pt-BR")}`
+      ? t("config.data.awaiting", { date: new Date(state.confirmDeadline).toLocaleString(locale) })
       : state.status === "confirmed"
-      ? `Agendada para ${new Date(state.scheduledFor).toLocaleDateString("pt-BR")} — você pode cancelar até lá`
-      : "Remove permanentemente perfil, check-ins, diário, planner, hábitos e memórias após 30 dias";
+      ? t("config.data.scheduled", { date: new Date(state.scheduledFor).toLocaleDateString(locale) })
+      : t("config.data.deleteDescription");
 
   const primaryLabel =
     state.status === "requested"
-      ? "Confirmar exclusão"
+      ? t("config.data.confirmDelete")
       : state.status === "confirmed"
-      ? "Cancelar exclusão"
-      : "Solicitar exclusão dos meus dados";
+      ? t("config.data.cancelDelete")
+      : t("config.data.requestDelete");
 
   const primaryAction =
     state.status === "requested"
@@ -462,7 +469,7 @@ function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string
           </svg>
         </div>
         <div>
-          <p className="config-row-text">{busy ? "Processando..." : primaryLabel}</p>
+          <p className="config-row-text">{busy ? t("config.data.processing") : primaryLabel}</p>
           <p className="config-row-sub">{subText}</p>
         </div>
       </div>
@@ -483,7 +490,7 @@ function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string
             cursor: busy ? "wait" : "pointer",
           }}
         >
-          Cancelar
+          {t("common.cancel")}
         </button>
       ) : null}
     </div>
@@ -491,6 +498,7 @@ function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string
 }
 
 function PrivacyDataSection({ onStatusChange }: { onStatusChange: (msg: string | null) => void }) {
+  const { t } = useTranslation();
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -509,9 +517,9 @@ function PrivacyDataSection({ onStatusChange }: { onStatusChange: (msg: string |
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      onStatusChange("Arquivo de dados gerado.");
+      onStatusChange(t("config.data.exportGenerated"));
     } catch {
-      onStatusChange("Não consegui exportar seus dados agora.");
+      onStatusChange(t("config.data.exportError"));
     } finally {
       setExporting(false);
     }
@@ -543,8 +551,8 @@ function PrivacyDataSection({ onStatusChange }: { onStatusChange: (msg: string |
           </svg>
         </div>
         <div>
-          <p className="config-row-text">{exporting ? "Gerando exportação..." : "Exportar meus dados"}</p>
-          <p className="config-row-sub">Baixa um JSON com perfil, check-ins, diário, planner, hábitos, memórias e consentimentos</p>
+          <p className="config-row-text">{exporting ? t("config.data.exporting") : t("config.data.export")}</p>
+          <p className="config-row-sub">{t("config.data.exportDescription")}</p>
         </div>
       </div>
       <span style={{ fontSize: 11, fontWeight: 800, color: "var(--accent-sky)", flexShrink: 0 }}>
@@ -603,7 +611,7 @@ export function PreferencesPage() {
     if (!gcalStatus) return;
 
     if (gcalStatus === "connected") {
-      setAccountStatus("Google Agenda conectado.");
+      setAccountStatus(t("config.gcalConnected"));
       if (!gcalConnectedTrackedRef.current) {
         gcalConnectedTrackedRef.current = true;
         trackEvent("gcal_connected", {
@@ -611,7 +619,7 @@ export function PreferencesPage() {
         });
       }
     } else if (gcalStatus === "error") {
-      setAccountStatus("Não consegui conectar o Google Agenda.");
+      setAccountStatus(t("config.gcalConnectError"));
     }
 
     const nextParams = new URLSearchParams(searchParams);
@@ -628,9 +636,9 @@ export function PreferencesPage() {
     setAccountStatus(null);
     try {
       await saveProfile();
-      setAccountStatus("Perfil salvo.");
+      setAccountStatus(t("config.profileSaved"));
     } catch {
-      setAccountStatus("Não consegui salvar o perfil agora.");
+      setAccountStatus(t("config.profileSaveError"));
     }
   }
 
@@ -927,7 +935,7 @@ export function PreferencesPage() {
                 type="text"
                 value={state.name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Seu nome"
+                placeholder={t("config.namePlaceholder")}
                 className="aura-inline-input"
               />
             </div>
@@ -939,7 +947,7 @@ export function PreferencesPage() {
                 type="email"
                 value={state.email}
                 readOnly
-                placeholder="E-mail de login"
+                placeholder={t("config.emailPlaceholder")}
                 className="aura-inline-input"
                 style={{ color: "var(--text-3)" }}
               />
@@ -960,8 +968,8 @@ export function PreferencesPage() {
             onClick={() => setNotificationsOpen((open) => !open)}
             aria-expanded={notificationsOpen}
           >
-            <span>Notificações</span>
-            <span>{notificationsOpen ? "Recolher" : "Abrir"}</span>
+            <span>{t("config.notifications")}</span>
+            <span>{notificationsOpen ? t("config.collapse") : t("config.open")}</span>
           </button>
           {notificationsOpen && (
             <>
@@ -973,8 +981,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Lembretes de check-in</p>
-                <p className="config-row-sub">Manhã às {state.morningCheckinTime} e noite às {state.eveningCheckinTime}</p>
+                <p className="config-row-text">{t("config.checkinReminders")}</p>
+                <p className="config-row-sub">{t("config.checkinReminderTimes", { morning: state.morningCheckinTime, evening: state.eveningCheckinTime })}</p>
               </div>
             </div>
             <Toggle on={state.checkinReminder ?? true} onToggle={toggleCheckinReminder} />
@@ -987,8 +995,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Horários do check-in</p>
-                <p className="config-row-sub">Ajuste fino dos dois lembretes diários</p>
+                <p className="config-row-text">{t("config.checkinTimes")}</p>
+                <p className="config-row-sub">{t("config.checkinTimesDescription")}</p>
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -998,7 +1006,7 @@ export function PreferencesPage() {
                 onChange={(event) => setCheckinReminderTimes({ morning: event.target.value })}
                 className="aura-inline-input"
                 style={{ width: 82, fontSize: 12, fontWeight: 700 }}
-                aria-label="Horário do check-in da manhã"
+                aria-label={t("config.morningCheckinAria")}
               />
               <input
                 type="time"
@@ -1006,7 +1014,7 @@ export function PreferencesPage() {
                 onChange={(event) => setCheckinReminderTimes({ evening: event.target.value })}
                 className="aura-inline-input"
                 style={{ width: 82, fontSize: 12, fontWeight: 700 }}
-                aria-label="Horário do check-in da noite"
+                aria-label={t("config.eveningCheckinAria")}
               />
             </div>
           </div>
@@ -1018,8 +1026,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Escrever no diário</p>
-                <p className="config-row-sub">Duas chamadas por dia, às {notificationPrefs.journalMorningTime} e {notificationPrefs.journalEveningTime}</p>
+                <p className="config-row-text">{t("config.journalReminders")}</p>
+                <p className="config-row-sub">{t("config.journalReminderTimes", { morning: notificationPrefs.journalMorningTime, evening: notificationPrefs.journalEveningTime })}</p>
               </div>
             </div>
             <Toggle
@@ -1036,8 +1044,8 @@ export function PreferencesPage() {
                   </svg>
                 </div>
                 <div>
-                  <p className="config-row-text">Horários do diário</p>
-                  <p className="config-row-sub">Primeiro e segundo lembrete</p>
+                  <p className="config-row-text">{t("config.journalTimes")}</p>
+                  <p className="config-row-sub">{t("config.journalTimesDescription")}</p>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
@@ -1047,7 +1055,7 @@ export function PreferencesPage() {
                   onChange={(event) => handleNotificationPatch({ journalMorningTime: event.target.value })}
                   className="aura-inline-input"
                   style={{ width: 82, fontSize: 12, fontWeight: 700 }}
-                  aria-label="Primeiro horário do diário"
+                  aria-label={t("config.journalFirstAria")}
                 />
                 <input
                   type="time"
@@ -1055,7 +1063,7 @@ export function PreferencesPage() {
                   onChange={(event) => handleNotificationPatch({ journalEveningTime: event.target.value })}
                   className="aura-inline-input"
                   style={{ width: 82, fontSize: 12, fontWeight: 700 }}
-                  aria-label="Segundo horário do diário"
+                  aria-label={t("config.journalSecondAria")}
                 />
               </div>
             </div>
@@ -1068,8 +1076,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Agenda e tarefas</p>
-                <p className="config-row-sub">Avisos no horário marcado</p>
+                <p className="config-row-text">{t("config.plannerNotifications")}</p>
+                <p className="config-row-sub">{t("config.plannerNotificationsDescription")}</p>
               </div>
             </div>
             <Toggle
@@ -1085,8 +1093,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Hábitos</p>
-                <p className="config-row-sub">Água, plantas, remédios, rotina e metas pequenas</p>
+                <p className="config-row-text">{t("config.habitNotifications")}</p>
+                <p className="config-row-sub">{t("config.habitNotificationsDescription")}</p>
               </div>
             </div>
             <Toggle
@@ -1102,8 +1110,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Notificação insistente</p>
-                <p className="config-row-sub">Repete até a tarefa ou hábito ser concluído</p>
+                <p className="config-row-text">{t("config.persistentNotifications")}</p>
+                <p className="config-row-sub">{t("config.persistentNotificationsDescription")}</p>
               </div>
             </div>
             <Toggle
@@ -1119,8 +1127,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Sugestões da Airia</p>
-                <p className="config-row-sub">Toques de revisão, retomada e mudança de fase</p>
+                <p className="config-row-text">{t("config.aiSuggestions")}</p>
+                <p className="config-row-sub">{t("config.aiSuggestionsDescription")}</p>
               </div>
             </div>
             <Toggle
@@ -1136,8 +1144,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Modo Tranquilo</p>
-                <p className="config-row-sub">Sem notificações das {state.quietModeStartTime} às {state.quietModeEndTime}</p>
+                <p className="config-row-text">{t("config.quietMode")}</p>
+                <p className="config-row-sub">{t("config.quietModeDescription", { start: state.quietModeStartTime, end: state.quietModeEndTime })}</p>
               </div>
             </div>
             <Toggle on={state.quietMode ?? false} onToggle={toggleQuietMode} />
@@ -1148,7 +1156,7 @@ export function PreferencesPage() {
 
         {/* Aparência section */}
         <div className="config-section">
-          <p className="config-section-title">Aparência</p>
+          <p className="config-section-title">{t("config.appearance")}</p>
           <div className="config-row" style={{ alignItems: "stretch" }}>
             <div className="config-row-label" style={{ alignItems: "center" }}>
               <div className="icon-bg" style={{ background: isDarkTheme ? "rgba(190,230,243,.14)" : "rgba(180,185,169,.12)" }}>
@@ -1163,14 +1171,14 @@ export function PreferencesPage() {
                 )}
               </div>
               <div>
-                <p className="config-row-text">Tema do app</p>
-                <p className="config-row-sub">{isDarkTheme ? "Escuro ativo" : "Claro ativo"}</p>
+                <p className="config-row-text">{t("config.appTheme")}</p>
+                <p className="config-row-sub">{isDarkTheme ? t("config.darkActive") : t("config.lightActive")}</p>
               </div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
               {[
-                { id: "light", label: "Claro" },
-                { id: "dark", label: "Escuro" },
+                { id: "light", label: t("config.light") },
+                { id: "dark", label: t("config.dark") },
               ].map((option) => {
                 const active = option.id === (isDarkTheme ? "dark" : "light");
                 return (
@@ -1203,7 +1211,7 @@ export function PreferencesPage() {
 
         {/* Biblioteca section */}
         <div className="config-section">
-          <p className="config-section-title">Conteúdo</p>
+          <p className="config-section-title">{t("config.content")}</p>
           <div
             className="config-row"
             style={{ cursor: "pointer" }}
@@ -1219,8 +1227,8 @@ export function PreferencesPage() {
                 </svg>
               </div>
               <div>
-                <p className="config-row-text">Biblioteca de conteúdo</p>
-                <p className="config-row-sub">TDAH, bipolar II, ciclotimia e produtividade</p>
+                <p className="config-row-text">{t("config.contentLibrary")}</p>
+                <p className="config-row-sub">{t("config.contentLibraryDescription")}</p>
               </div>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1231,7 +1239,7 @@ export function PreferencesPage() {
 
         {/* Plano section */}
         <div className="config-section">
-          <p className="config-section-title">Plano</p>
+          <p className="config-section-title">{t("config.plan")}</p>
           <div
             className="config-row"
             style={{ cursor: "pointer" }}
@@ -1248,7 +1256,7 @@ export function PreferencesPage() {
               </div>
               <div>
                 <p className="config-row-text">Airia Pro</p>
-                <p className="config-row-sub">Assinatura, IA ilimitada e recursos avançados</p>
+                <p className="config-row-sub">{t("config.proDescription")}</p>
               </div>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1259,7 +1267,7 @@ export function PreferencesPage() {
 
         {/* Conta e Integrações section */}
         <div className="config-section">
-          <p className="config-section-title">Conta e Integrações</p>
+          <p className="config-section-title">{t("config.accountIntegrations")}</p>
           
           <PrivacyDataSection onStatusChange={setAccountStatus} />
           <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
@@ -1288,7 +1296,7 @@ export function PreferencesPage() {
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
                 </svg>
               </div>
-              <p className="config-row-text">{isSigningOut ? "Saindo..." : "Sair da conta"}</p>
+              <p className="config-row-text">{isSigningOut ? t("config.signingOut") : t("config.signOut")}</p>
             </div>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
@@ -1307,7 +1315,7 @@ export function PreferencesPage() {
           className="btn btn-ghost btn-full"
           style={{ marginTop: 20, color: "var(--accent-peach)" }}
         >
-          🔄 Refazer onboarding
+          🔄 {t("config.redoOnboarding")}
         </AuraButtonV2>
       </div>
       <PhaseLegendSheet

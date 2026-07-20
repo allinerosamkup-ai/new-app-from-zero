@@ -6,7 +6,7 @@ async function run() {
   const prisma = {
     timelineBlock: {
       findMany: async () => [
-        { title: 'Responder cliente da agenda', status: 'planned' },
+        { title: 'Responder cliente da agenda', status: 'planned', gcalEventId: 'legacy-google-event' },
         { title: 'Treino na Polônia', status: 'completed' },
       ],
     },
@@ -86,6 +86,8 @@ async function run() {
   assert.ok((context.blockedActionTitles as string[]).includes('Arrumar kit do treino'));
   assert.ok((context.blockedActionTitles as string[]).includes('Separar roupa de treino'));
   assert.ok((context.blockedActionTitles as string[]).includes('Ligar para proprietária'));
+  assert.equal((context.grounding as any).tasks[0].temporalPolicy, 'fixed');
+  assert.equal((context.grounding as any).tasks[0].adaptationPermission, 'protected');
 
   const journalContext = await service.buildForSuggest({
     userId: 'user-1',
@@ -95,6 +97,49 @@ async function run() {
   });
 
   assert.equal((journalContext.decisionBrain as any).surface, 'journal');
+
+  const behaviorService = new ContextGroundingService({
+    timelineBlock: {
+      findMany: async () => [{
+        id: 'task-behavior',
+        title: 'Organizar documentos',
+        status: 'planned',
+        startAt: new Date('2026-04-30T10:00:00.000Z'),
+        endAt: new Date('2026-04-30T10:30:00.000Z'),
+        temporalPolicy: 'windowed',
+        adaptationPermission: 'preview',
+        adaptabilitySource: 'default',
+        adaptabilityConfidence: 0.55,
+      }],
+    },
+    habit: { findMany: async () => [] },
+    objective: { findMany: async () => [] },
+    onboardingResponse: { findUnique: async () => null },
+    eventLog: {
+      findMany: async ({ where }: any) => where.eventName === 'timeline.block_postponed'
+        ? [{
+            properties: {
+              blockId: 'task-behavior',
+              title: 'Organizar documentos',
+              originalDate: '2026-04-29',
+              targetDate: '2026-04-30',
+              postponeCount: 1,
+            },
+            createdAt: new Date('2026-04-29T12:00:00.000Z'),
+          }]
+        : [],
+      findFirst: async () => null,
+    },
+  } as any);
+  const behaviorContext = await behaviorService.buildDailyContext({
+    userId: 'user-1',
+    type: 'agenda-adapt',
+    context: { localDate: '2026-04-30' },
+  });
+  assert.equal(behaviorContext.tasks[0].temporalPolicy, 'flexible');
+  assert.equal(behaviorContext.tasks[0].adaptationPermission, 'eligible');
+  assert.equal(behaviorContext.tasks[0].adaptabilitySource, 'behavior');
+  assert.equal(behaviorContext.postponedActions?.[0]?.blockId, 'task-behavior');
 }
 
 run().then(() => {

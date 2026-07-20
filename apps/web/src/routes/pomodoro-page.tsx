@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
+import { useLocalizedCopy } from "../i18n";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import "../styles/aura.css";
 
@@ -23,6 +24,7 @@ const RADIUS = 96;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function PomodoroPage() {
+  const l = useLocalizedCopy();
   const { state } = useAuraStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -285,7 +287,7 @@ export function PomodoroPage() {
           marginTop: "16px",
           padding: "0 8px",
         }}>
-          "Bom ritmo! Sua energia está no pico — aproveite para as tarefas mais exigentes."
+          {l("Bom ritmo! Sua energia está no pico — aproveite para as tarefas mais exigentes.", "Good rhythm! Your energy is peaking — use it for the most demanding tasks.")}
         </p>
 
         {/* Finalizar */}
@@ -294,7 +296,7 @@ export function PomodoroPage() {
             variant="outline"
             onClick={() => navigate("/daily-summary")}
           >
-            ✓ Sessão concluída
+          {l("✓ Sessão concluída", "✓ Session completed")}
           </AuraButtonV2>
         </div>
 

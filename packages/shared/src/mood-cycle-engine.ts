@@ -81,6 +81,19 @@ export type MoodPhase =
   | "mixed"             // Alta variabilidade — estado instável
   | "insufficient_data"; // Menos de 3 checkins
 
+export type CanonicalMoodPhase = Exclude<MoodPhase, "insufficient_data">;
+
+export const CANONICAL_MOOD_PHASES: CanonicalMoodPhase[] = [
+  "elevated",
+  "flowing",
+  "stable",
+  "falling",
+  "low",
+  "depleted",
+  "recovering",
+  "mixed",
+];
+
 export type EnergyForecast = "high" | "moderate" | "low" | "rest";
 
 export type WarningFlag =
@@ -118,7 +131,7 @@ export type MoodCycleReport = {
 
 // ── Config de fase ─────────────────────────────────────────
 
-const PHASE_CONFIG: Record<MoodPhase, {
+export const PHASE_CONFIG: Record<MoodPhase, {
   label: string;
   emoji: string;
   description: string;
@@ -127,66 +140,66 @@ const PHASE_CONFIG: Record<MoodPhase, {
   energyForecast: EnergyForecast;
 }> = {
   elevated: {
-    label: "Fase Elevada",
+    label: "Voo Alto",
     emoji: "🚀",
-    description: "Humor e energia acima do seu basal habitual. Ótimo para projetos que exigem criatividade e iniciativa.",
-    tip: "Aproveite a energia, mas mantenha o ritmo sustentável. Evite decisões impulsivas.",
+    description: "Humor e energia acima do seu basal habitual, com maior capacidade de iniciativa.",
+    tip: "Priorize uma âncora exigente do dia e preserve um limite claro.",
     color: "var(--accent-sky)",
     energyForecast: "high",
   },
   flowing: {
     label: "Fluindo",
     emoji: "✨",
-    description: "Você está no seu melhor ritmo. Clareza mental, motivação e energia alinhadas.",
-    tip: "Pico de produtividade. Priorize suas tarefas mais importantes agora.",
+    description: "Clareza, motivação e energia estão alinhadas ao ritmo recente.",
+    tip: "Use a janela para avançar no que já é prioridade hoje.",
     color: "var(--accent-sage)",
     energyForecast: "high",
   },
   stable: {
     label: "Estável",
     emoji: "💚",
-    description: "Estado basal equilibrado — eutimia. Ritmo constante e previsível.",
-    tip: "Bom momento para construir hábitos e avançar consistentemente.",
+    description: "Humor e energia próximos do seu padrão, com ritmo mais previsível.",
+    tip: "Mantenha o plano real do dia sem aumentar a carga.",
     color: "var(--accent-sage)",
     energyForecast: "moderate",
   },
   falling: {
-    label: "Descendo",
+    label: "Desacelerando",
     emoji: "📉",
     description: "Tendência de queda detectada. Seu humor está abaixo do padrão recente.",
-    tip: "Reduza o ritmo. Priorize sono, alimentação e autocuidado agora.",
+    tip: "Reduza ou mova uma demanda real antes que ela pese mais.",
     color: "var(--accent-peach)",
     energyForecast: "moderate",
   },
   low: {
-    label: "Fase Baixa",
+    label: "Recolhimento",
     emoji: "🌙",
     description: "Você está numa fase de menor energia e humor. É um padrão natural do ciclo.",
-    tip: "Este é o momento de restaurar — não de produzir. Gentileza consigo mesma é a prioridade.",
+    tip: "Proteja energia e mantenha apenas o mínimo das âncoras reais.",
     color: "var(--accent-peach-strong)",
     energyForecast: "low",
   },
   depleted: {
-    label: "Esgotamento",
+    label: "Pausa",
     emoji: "😴",
     description: "Energia e humor muito baixos. Seu sistema precisa de recuperação ativa.",
-    tip: "Cancele o que puder. Descanso não é fraqueza — é necessidade biológica agora.",
+    tip: "Pause ou reduza o que for adaptável; preserve compromissos protegidos.",
     color: "var(--accent-peach-ink)",
     energyForecast: "rest",
   },
   recovering: {
-    label: "Recuperando",
+    label: "Retomada",
     emoji: "🌱",
     description: "Você está saindo de uma fase baixa. Energia retornando gradualmente.",
-    tip: "Retome devagar. Comemore cada pequeno avanço — você está no caminho certo.",
+    tip: "Reintroduza uma prioridade real por vez.",
     color: "var(--accent-sage)",
     energyForecast: "low",
   },
   mixed: {
-    label: "Instável",
+    label: "Turbulência",
     emoji: "⚡",
     description: "Alta variabilidade detectada. Altos e baixos frequentes sem padrão claro.",
-    tip: "Cuidado com decisões impulsivas. Foque em rotina e sono — estabilizam o ciclo.",
+    tip: "Prefira ajustes reversíveis e preserve as âncoras protegidas.",
     color: "var(--accent-peach)",
     energyForecast: "moderate",
   },

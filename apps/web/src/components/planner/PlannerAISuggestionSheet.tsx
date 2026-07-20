@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Sparkles, Check, X as XIcon, Clock, AlertTriangle, Info } from "lucide-react";
 
 import { AiriaBottomSheet } from "../airia";
+import { useTranslation } from "react-i18next";
 
 export type PlannerAIScheduleItem = {
   startTime: string;
@@ -44,13 +45,6 @@ type Props = {
   onRejectAdjust: (item: PlannerAIAdjustItem, index: number) => Promise<void> | void;
 };
 
-const INTENSITY_LABEL: Record<string, string> = { L: "leve", M: "média", P: "pesada" };
-const ACTION_LABEL: Record<PlannerAIAdjustItem["action"], string> = {
-  MOVE_TOMORROW: "Mover pra amanhã",
-  DOWNGRADE_INTENSITY: "Reduzir intensidade",
-  CANCEL: "Cancelar",
-  KEEP: "Manter",
-};
 const ACTION_ICON_COLOR: Record<PlannerAIAdjustItem["action"], string> = {
   MOVE_TOMORROW: "var(--accent-sky, #6398A9)",
   DOWNGRADE_INTENSITY: "var(--accent-sage-ink, #50705B)",
@@ -58,13 +52,14 @@ const ACTION_ICON_COLOR: Record<PlannerAIAdjustItem["action"], string> = {
   KEEP: "var(--text-3)",
 };
 
-function confidenceLabel(value: number): { text: string; color: string } {
-  if (value >= 0.8) return { text: "alta", color: "var(--accent-sage-ink, #50705B)" };
-  if (value >= 0.6) return { text: "média", color: "#7C641A" };
-  return { text: "baixa", color: "var(--text-3)" };
+function confidenceLabel(value: number): { key: "high" | "medium" | "low"; color: string } {
+  if (value >= 0.8) return { key: "high", color: "var(--accent-sage-ink, #50705B)" };
+  if (value >= 0.6) return { key: "medium", color: "#7C641A" };
+  return { key: "low", color: "var(--text-3)" };
 }
 
 export function PlannerAISuggestionSheet(props: Props) {
+  const { t } = useTranslation();
   const { open, loading, result, errorMessage, onClose } = props;
 
   // Estado local: quais itens já foram resolvidos (aceitos OU rejeitados)
@@ -152,19 +147,19 @@ export function PlannerAISuggestionSheet(props: Props) {
     <AiriaBottomSheet
       open={open}
       onClose={onClose}
-      title="Sugestões da Airia para hoje"
+      title={t("plannerAi.title")}
       description={
         loading
-          ? "A Airia está pensando no seu dia…"
+          ? t("plannerAi.thinking")
           : totalPending > 0
-            ? `${totalPending} proposta${totalPending !== 1 ? "s" : ""} pra você decidir`
-            : "Confirme cada bloco abaixo. Nada será aplicado sem o seu OK."
+            ? t("plannerAi.pending", { count: totalPending })
+            : t("plannerAi.confirm")
       }
       icon={<Sparkles size={18} color="var(--accent-peach, #D7897F)" />}
     >
       {loading && (
         <p style={{ textAlign: "center", padding: 24, color: "var(--text-3)", fontSize: 13 }}>
-          Cruzando seu estado de hoje com o histórico…
+          {t("plannerAi.crossing")}
         </p>
       )}
 
@@ -255,7 +250,7 @@ export function PlannerAISuggestionSheet(props: Props) {
                   margin: "0 0 8px 4px",
                 }}
               >
-                Novos blocos propostos
+                {t("plannerAi.newBlocks")}
               </h3>
               {result.schedule.map((item, idx) => {
                 const isResolved = resolvedSchedule.has(idx);
@@ -283,9 +278,9 @@ export function PlannerAISuggestionSheet(props: Props) {
                       <span>·</span>
                       <span>{item.category}</span>
                       <span>·</span>
-                      <span>intensidade {INTENSITY_LABEL[item.intensity] ?? item.intensity}</span>
+                      <span>{t("plannerAi.intensity", { value: t(`plannerAi.intensityLabels.${item.intensity}`) })}</span>
                       <span style={{ marginLeft: "auto", color: conf.color, fontWeight: 700 }}>
-                        confiança {conf.text}
+                        {t("plannerAi.confidence", { value: t(`plannerAi.confidenceLabels.${conf.key}`) })}
                       </span>
                     </div>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>
@@ -317,7 +312,7 @@ export function PlannerAISuggestionSheet(props: Props) {
                           }}
                         >
                           <Check size={14} />
-                          Aceitar
+                          {t("plannerAi.accept")}
                         </button>
                         <button
                           type="button"
@@ -340,7 +335,7 @@ export function PlannerAISuggestionSheet(props: Props) {
                           }}
                         >
                           <XIcon size={14} />
-                          Não, obrigada
+                          {t("plannerAi.decline")}
                         </button>
                       </div>
                     )}
@@ -363,7 +358,7 @@ export function PlannerAISuggestionSheet(props: Props) {
                   margin: "0 0 8px 4px",
                 }}
               >
-                Mudanças propostas em blocos seus
+                {t("plannerAi.changes")}
               </h3>
               {result.adjustedExisting.map((item, idx) => {
                 if (item.action === "KEEP") return null;
@@ -388,7 +383,7 @@ export function PlannerAISuggestionSheet(props: Props) {
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-3)" }}>
                       <span style={{ fontWeight: 800, color: ACTION_ICON_COLOR[item.action] }}>
-                        {ACTION_LABEL[item.action]}
+                        {t(`plannerAi.actions.${item.action}`)}
                       </span>
                       {item.blockTime && (
                         <>
@@ -397,11 +392,11 @@ export function PlannerAISuggestionSheet(props: Props) {
                         </>
                       )}
                       <span style={{ marginLeft: "auto", color: conf.color, fontWeight: 700 }}>
-                        confiança {conf.text}
+                        {t("plannerAi.confidence", { value: t(`plannerAi.confidenceLabels.${conf.key}`) })}
                       </span>
                     </div>
                     <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>
-                      {item.blockTitle ?? `Bloco ${item.id}`}
+                      {item.blockTitle ?? t("plannerAi.block", { id: item.id })}
                     </p>
                     <p style={{ margin: 0, fontSize: 12, color: "var(--text-3)", lineHeight: 1.5 }}>
                       {item.reason}
@@ -429,7 +424,7 @@ export function PlannerAISuggestionSheet(props: Props) {
                           }}
                         >
                           <Check size={14} />
-                          Aplicar
+                          {t("plannerAi.apply")}
                         </button>
                         <button
                           type="button"
@@ -452,7 +447,7 @@ export function PlannerAISuggestionSheet(props: Props) {
                           }}
                         >
                           <XIcon size={14} />
-                          Manter
+                          {t("plannerAi.keep")}
                         </button>
                       </div>
                     )}
@@ -469,7 +464,7 @@ export function PlannerAISuggestionSheet(props: Props) {
             && result.warnings.length === 0
             && (
               <p style={{ textAlign: "center", padding: 24, color: "var(--text-3)", fontSize: 13 }}>
-                Sua agenda já está alinhada com o seu estado de hoje. Nada a sugerir agora.
+                {t("plannerAi.aligned")}
               </p>
             )}
         </>

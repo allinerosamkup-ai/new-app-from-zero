@@ -14,6 +14,29 @@ export type InsightActionDecision = InsightActionDecisionInput & {
   reason: string | null;
 };
 
+export type MoodDayHighlight = {
+  day: string;
+  mood: number;
+};
+
+export function resolveMoodDayHighlights<T extends MoodDayHighlight>(
+  bestDay: T | null,
+  worstDay: T | null,
+): { bestDay: T | null; worstDay: T | null } {
+  return {
+    bestDay,
+    worstDay: worstDay && worstDay.day !== bestDay?.day ? worstDay : null,
+  };
+}
+
+export function formatEstimatedMenstrualPhase(
+  phaseLabel: string,
+  estimatedCycleDay: number | null,
+): string {
+  const dayLabel = estimatedCycleDay === null ? "" : ` · D${estimatedCycleDay}`;
+  return `Estimativa: ${phaseLabel}${dayLabel}`;
+}
+
 export function buildInsightActionDecision(input: InsightActionDecisionInput): InsightActionDecision {
   const checkins = Math.max(0, Math.floor(input.checkins || 0));
   const hasMinimumEvidence = checkins >= 3;

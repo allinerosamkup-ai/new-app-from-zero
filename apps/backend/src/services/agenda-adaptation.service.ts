@@ -1,6 +1,6 @@
-import { AdaptiveAgendaEngine, type AdaptiveAgendaPlan } from './adaptive-agenda-engine.service';
+import { AdaptiveAgendaEngine, type AdaptiveAgendaPlan, type DayStructureProfile } from './adaptive-agenda-engine.service';
 import { PrismaClient } from '@app/database';
-import { PlannerService } from './planner.service';
+import { isTimelineBlockProtected, PlannerService } from './planner.service';
 import { AiActionFeedbackService } from './ai-action-feedback.service';
 import type { DailyContext } from './context-grounding.service';
 
@@ -35,6 +35,7 @@ export type AgendaAdaptationResult = {
   mode: AgendaAdaptationMode;
   trigger: AgendaAdaptationTrigger;
   summary: string;
+  dayStructure: DayStructureProfile;
   changes: AgendaAdaptationChange[];
   blockedSuggestions: string[];
   blockedDecisions: AgendaAdaptationChange[];
@@ -132,6 +133,7 @@ export class AgendaAdaptationService {
       mode: input.mode ?? 'preview',
       trigger: input.trigger ?? 'manual',
       summary: adaptiveAgenda.summary,
+      dayStructure: adaptiveAgenda.dayStructure,
       changes,
       blockedSuggestions: blockedDecisions.map((decision) => decision.title),
       blockedDecisions,
@@ -176,6 +178,10 @@ export class AgendaAdaptationService {
             skippedChanges.push({ ...change, applied: false, reason: 'Bloco não encontrado para aplicar ajuste.' });
             continue;
           }
+          if (isTimelineBlockProtected(block)) {
+            skippedChanges.push({ ...change, applied: false, reason: 'Bloco fixo ou protegido; ajuste automático recusado.' });
+            continue;
+          }
           const dateKey = change.suggestedDate ?? formatDateKey(block.localDate);
           const baseDate = parseDateKey(dateKey);
           const startTime = change.type === 'move' ? change.suggestedStartTime : change.from;
@@ -184,14 +190,24 @@ export class AgendaAdaptationService {
             skippedChanges.push({ ...change, applied: false, reason: 'Ajuste sem horário seguro.' });
             continue;
           }
-          await input.prisma.timelineBlock.update({
-            where: { id: block.id },
+          const updateResult = await input.prisma.timelineBlock.updateMany({
+            where: {
+              id: block.id,
+              userId: input.userId,
+              gcalEventId: null,
+              temporalPolicy: { not: 'fixed' },
+              adaptationPermission: { not: 'protected' },
+            },
             data: {
               localDate: baseDate,
               startAt: PlannerService.parseTimeToDate(baseDate, startTime),
               endAt: PlannerService.parseTimeToDate(baseDate, endTime),
             },
           });
+          if (updateResult.count !== 1) {
+            skippedChanges.push({ ...change, applied: false, reason: 'Bloco fixo ou protegido; ajuste automático recusado.' });
+            continue;
+          }
           appliedChanges.push({ ...change, applied: true });
         } else if (change.type === 'pause' && change.targetType === 'timeline' && change.targetId) {
           const block = await input.prisma.timelineBlock.findFirst({
@@ -201,14 +217,24 @@ export class AgendaAdaptationService {
             skippedChanges.push({ ...change, applied: false, reason: 'Bloco não encontrado para pausar.' });
             continue;
           }
+          if (isTimelineBlockProtected(block)) {
+            skippedChanges.push({ ...change, applied: false, reason: 'Bloco fixo ou protegido; pausa automática recusada.' });
+            continue;
+          }
           const originalDate = formatDateKey(block.localDate);
           const targetDate = addDaysToDateKey(originalDate, 1);
           const baseDate = parseDateKey(targetDate);
           const startTime = change.from ?? '10:00';
           const durationMs = Math.max(30 * 60_000, block.endAt.getTime() - block.startAt.getTime());
           const startAt = PlannerService.parseTimeToDate(baseDate, startTime);
-          await input.prisma.timelineBlock.update({
-            where: { id: block.id },
+          const updateResult = await input.prisma.timelineBlock.updateMany({
+            where: {
+              id: block.id,
+              userId: input.userId,
+              gcalEventId: null,
+              temporalPolicy: { not: 'fixed' },
+              adaptationPermission: { not: 'protected' },
+            },
             data: {
               localDate: baseDate,
               startAt,
@@ -216,6 +242,10 @@ export class AgendaAdaptationService {
               status: 'planned',
             },
           });
+          if (updateResult.count !== 1) {
+            skippedChanges.push({ ...change, applied: false, reason: 'Bloco fixo ou protegido; pausa automática recusada.' });
+            continue;
+          }
           appliedChanges.push({ ...change, suggestedDate: targetDate, applied: true });
         } else if (change.type === 'convert' || change.type === 'suggest') {
           const dateKey = change.suggestedDate ?? input.dailyContext.date;
@@ -233,6 +263,10 @@ export class AgendaAdaptationService {
               intensity: mapIntensity(change),
               status: 'planned',
               isAiSuggested: true,
+              temporalPolicy: 'flexible',
+              adaptationPermission: 'eligible',
+              adaptabilitySource: 'ai',
+              adaptabilityConfidence: 0.9,
               aiReasoning: `${change.reason} ${change.bioReason}`,
               energyLevel: mapIntensity(change) === 'L' ? 'leve' : 'media',
             },
@@ -249,7 +283,7 @@ export class AgendaAdaptationService {
           surface: 'planner',
           sourceType: `agenda-adapt-${change.type}`,
           localDate: input.dailyContext.date,
-        });
+        }).catch(() => null);
         await input.prisma.eventLog?.create?.({
           data: {
             userId: input.userId,
@@ -264,6 +298,9 @@ export class AgendaAdaptationService {
               suggestedStartTime: change.suggestedStartTime,
               suggestedEndTime: change.suggestedEndTime,
               trigger: input.trigger ?? 'manual',
+              mode: preview.dayStructure.mode,
+              freedom_score: preview.dayStructure.freedomScore,
+              initiative_level: preview.dayStructure.initiativeLevel,
             },
             path: '/api/agenda/adapt',
             userAgent: null,

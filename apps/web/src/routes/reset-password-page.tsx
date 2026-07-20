@@ -1,10 +1,12 @@
 // Reset Password — nova senha via token Supabase
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import "../styles/aura.css";
 
 export function ResetPasswordPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -30,11 +32,11 @@ export function ResetPasswordPage() {
     setError("");
 
     if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres.");
+      setError(t("auth.recovery.tooShort"));
       return;
     }
     if (password !== confirm) {
-      setError("As senhas não coincidem.");
+      setError(t("auth.recovery.mismatch"));
       return;
     }
 
@@ -66,10 +68,10 @@ export function ResetPasswordPage() {
           boxShadow: "0 18px 32px rgba(17,24,39,.08)",
         }}>✅</div>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", marginBottom: 10 }}>
-          Senha redefinida!
+          {t("auth.recovery.resetDone")}
         </h1>
         <p style={{ fontSize: 14, color: "var(--text-2)" }}>
-          Redirecionando para o login...
+          {t("auth.recovery.redirecting")}
         </p>
       </div>
     );
@@ -92,10 +94,10 @@ export function ResetPasswordPage() {
       }}>🔐</div>
 
       <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", marginBottom: 6, textAlign: "center" }}>
-        Nova senha
+        {t("auth.recovery.resetTitle")}
       </h1>
       <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 28, textAlign: "center", maxWidth: 280, lineHeight: 1.6 }}>
-        Escolha uma senha segura com pelo menos 6 caracteres.
+        {t("auth.recovery.resetSubtitle")}
       </p>
 
       {!sessionReady && (
@@ -105,7 +107,7 @@ export function ResetPasswordPage() {
           border: "1px solid rgba(229,219,247,.6)", marginBottom: 16,
         }}>
           <p style={{ fontSize: 12, color: "var(--accent-peach-ink)", margin: 0, textAlign: "center" }}>
-            Aguardando verificação do link de redefinição...
+            {t("auth.recovery.waiting")}
           </p>
         </div>
       )}
@@ -114,14 +116,14 @@ export function ResetPasswordPage() {
         {/* Password */}
         <div style={{ marginBottom: 14 }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>
-            Nova senha
+            {t("auth.recovery.resetTitle")}
           </p>
           <div style={{ position: "relative" }}>
             <input
               type={show ? "text" : "password"}
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Mínimo 6 caracteres"
+              placeholder={t("auth.recovery.minimum")}
               required
               style={{
                 width: "100%", height: 50, borderRadius: 16,
@@ -147,14 +149,14 @@ export function ResetPasswordPage() {
         {/* Confirm */}
         <div style={{ marginBottom: 20 }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 6 }}>
-            Confirmar senha
+            {t("auth.recovery.confirm")}
           </p>
           <div style={{ position: "relative" }}>
             <input
               type={showConfirm ? "text" : "password"}
               value={confirm}
               onChange={e => setConfirm(e.target.value)}
-              placeholder="Repita a senha"
+              placeholder={t("auth.recovery.repeat")}
               required
               style={{
                 width: "100%", height: 50, borderRadius: 16,
@@ -176,7 +178,7 @@ export function ResetPasswordPage() {
             </button>
           </div>
           {confirm && confirm !== password && (
-            <p style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>As senhas não coincidem.</p>
+            <p style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>{t("auth.recovery.mismatch")}</p>
           )}
         </div>
 
@@ -205,7 +207,7 @@ export function ResetPasswordPage() {
             transition: "all 200ms",
           }}
         >
-          {loading ? "Salvando..." : "Redefinir senha"}
+          {loading ? t("auth.recovery.resetting") : t("auth.recovery.reset")}
         </button>
       </form>
 
@@ -213,7 +215,7 @@ export function ResetPasswordPage() {
         onClick={() => navigate("/login")}
         style={{ marginTop: 20, background: "none", border: "none", fontSize: 13, color: "var(--text-3)", cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
-        ← Voltar ao login
+        ← {t("auth.recovery.backToLogin")}
       </button>
     </div>
   );

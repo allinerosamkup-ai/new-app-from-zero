@@ -8,6 +8,7 @@ import { useToast } from "../components/Toast";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraIcon } from "../components/AuraIcon";
 import { buildDailyCloseSummary } from "./daily-summary-page.helpers";
+import { useLocalizedCopy } from "../i18n";
 import "../styles/aura.css";
 
 type JTask = { title: string; category: string; time: string; discarded: boolean };
@@ -20,6 +21,7 @@ const CAT_COLOR: Record<string, string> = {
 };
 
 export function DailySummaryPage() {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const { state, addTask } = useAuraStore();
   const { showError, showSuccess } = useToast();
@@ -130,7 +132,7 @@ export function DailySummaryPage() {
               lineHeight: 1.5,
             }}
           >
-            {closeSummary.hasData ? closeSummary.headline : "Vamos criar a primeira pista real do seu ritmo."}
+            {closeSummary.hasData ? closeSummary.headline : l("Vamos criar a primeira pista real do seu ritmo.", "Let's create the first real clue about your rhythm.")}
           </p>
         </div>
 
@@ -176,7 +178,7 @@ export function DailySummaryPage() {
                 }}
               >
                 <p style={{ margin: "0 0 8px", fontSize: 10, fontWeight: 800, color: "var(--accent-sage)", textTransform: "uppercase", letterSpacing: ".12em" }}>
-                  Base real de hoje
+                  {l("Base real de hoje", "Today's real basis")}
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {closeSummary.evidence.slice(0, 4).map((item) => (
@@ -238,7 +240,7 @@ export function DailySummaryPage() {
             }}
           >
             <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--text-2)" }}>
-              Sem check-in, planner, habito, meta ou diario, a Airia nao tem base confiavel para fechar o dia.
+              {l("Sem check-in, planner, hábito, meta ou diário, a Airia não tem base confiável para fechar o dia.", "Without a check-in, planner, habit, goal, or journal entry, Airia has no reliable basis for closing the day.")}
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
               <AuraButtonV2 variant="primary" size="sm" onClick={() => navigate("/checkin")}>Check-in</AuraButtonV2>
@@ -348,7 +350,7 @@ export function DailySummaryPage() {
             background: "rgba(255,253,249,.9)", border: "1.5px solid rgba(197,165,147,.2)",
           }}>
             <p style={{ fontSize: 13, color: "var(--text-2)", fontStyle: "italic", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              <AuraIcon size={14} className="animate-pulse" /> Lendo a sessão e montando tarefas...
+              <AuraIcon size={14} className="animate-pulse" /> {l("Lendo a sessão e montando tarefas...", "Reading the session and building tasks...")}
             </p>
           </div>
         )}
@@ -361,7 +363,7 @@ export function DailySummaryPage() {
             <div style={{ padding: "12px 14px 10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)", display: "flex", alignItems: "center", gap: 4 }}>
-                  <AuraIcon size={10} /> TAREFAS DO DIÁRIO
+                  <AuraIcon size={10} /> {l("TAREFAS DO DIÁRIO", "JOURNAL TASKS")}
                 </p>
                 {phase === "done" && (
                   <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 700 }}>✓ Salvo no Planner</span>
@@ -442,7 +444,7 @@ export function DailySummaryPage() {
             size="md"
             onClick={() => navigate("/home")}
           >
-            Início
+            {l("Início", "Home")}
           </AuraButtonV2>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import type { CheckinEntry } from "../features/aura/types";
+import { useLocalizedCopy } from "../i18n";
 
 interface PresenceCardProps {
   checkinHistory: CheckinEntry[];
@@ -23,6 +24,7 @@ function getWeekDays(): string[] {
 const DAY_LABELS = ["S", "T", "Q", "Q", "S", "S", "D"];
 
 export function PresenceCard({ checkinHistory }: PresenceCardProps) {
+  const l = useLocalizedCopy();
   const checkedDays = new Set(checkinHistory.map((c) => c.date));
   const totalDays = checkedDays.size;
 
@@ -53,7 +55,7 @@ export function PresenceCard({ checkinHistory }: PresenceCardProps) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <p style={{ margin: 0, fontSize: 10, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>
-            Sua presença
+            {l("Sua presença", "Your presence")}
           </p>
           <p style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 900, color: "var(--text-1)" }}>
             {presenceLabel(totalDays)}
@@ -107,12 +109,12 @@ export function PresenceCard({ checkinHistory }: PresenceCardProps) {
       {weekPresent > 0 && (
         <p style={{ margin: 0, fontSize: 11.5, color: "var(--text-3)", lineHeight: 1.4 }}>
           {weekPresent === 7
-            ? "Semana completa — que presença bonita."
+            ? l("Semana completa — que presença bonita.", "A full week — beautiful consistency.")
             : weekPresent >= 5
-              ? `${weekPresent} de 7 dias essa semana. Consistência real.`
+              ? l(`${weekPresent} de 7 dias essa semana. Consistência real.`, `${weekPresent} of 7 days this week. Real consistency.`)
               : weekPresent >= 3
-                ? `${weekPresent} dias essa semana. Cada um conta.`
-                : `${weekPresent} ${weekPresent === 1 ? "dia" : "dias"} essa semana. Todo começo vale.`}
+                ? l(`${weekPresent} dias essa semana. Cada um conta.`, `${weekPresent} days this week. Each one counts.`)
+                : l(`${weekPresent} ${weekPresent === 1 ? "dia" : "dias"} essa semana. Todo começo vale.`, `${weekPresent} ${weekPresent === 1 ? "day" : "days"} this week. Every start matters.`)}
         </p>
       )}
     </div>

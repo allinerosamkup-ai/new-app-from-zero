@@ -1,5 +1,6 @@
 // Onboarding: Ciclo Menstrual — date picker + sliders duração
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import "../styles/aura.css";
@@ -8,6 +9,7 @@ const STEP = 3;
 const TOTAL = 5;
 
 export function OnboardingCyclePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state, updateOnboardingDraft } = useAuraStore();
   const [lastPeriod, setLastPeriod] = useState(state.onboardingDraft.cycleStart);
@@ -45,13 +47,13 @@ export function OnboardingCyclePage() {
         </div>
 
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", marginBottom: 4 }}>
-          PASSO {STEP} DE {TOTAL}
+          {t("onboarding.step", { current: STEP, total: TOTAL })}
         </p>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.25, marginBottom: 6 }}>
-          Seu ciclo menstrual
+          {t("onboarding.cycle.title")}
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55, marginBottom: 24 }}>
-          Essas informações personalizam suas sugestões de acordo com sua fase.
+          {t("onboarding.cycle.subtitle")}
         </p>
       </div>
 
@@ -60,7 +62,7 @@ export function OnboardingCyclePage() {
         {/* Date picker */}
         <div style={{ marginBottom: 24 }}>
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", marginBottom: 10 }}>
-            🗓️ Início da última menstruação
+            🗓️ {t("onboarding.cycle.lastPeriod")}
           </p>
           <input
             type="date"
@@ -84,10 +86,10 @@ export function OnboardingCyclePage() {
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-              🔄 Duração do ciclo
+              🔄 {t("onboarding.cycle.duration")}
             </p>
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 700, color: "var(--accent-peach)" }}>
-              {cycleDuration} dias
+              {t("onboarding.cycle.days", { count: cycleDuration })}
             </span>
           </div>
           <div style={{ position: "relative" }}>
@@ -99,8 +101,8 @@ export function OnboardingCyclePage() {
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", margin: 0 }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-            <span style={{ fontSize: 11, color: "var(--text-3)" }}>{cycleMin} dias</span>
-            <span style={{ fontSize: 11, color: "var(--text-3)" }}>{cycleMax} dias</span>
+            <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("onboarding.cycle.days", { count: cycleMin })}</span>
+            <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("onboarding.cycle.days", { count: cycleMax })}</span>
           </div>
         </div>
 
@@ -108,10 +110,10 @@ export function OnboardingCyclePage() {
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
-              🌊 Fase lútea
+              🌊 {t("onboarding.cycle.luteal")}
             </p>
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, fontWeight: 700, color: "var(--accent-sky)" }}>
-              {lutealDuration} dias
+              {t("onboarding.cycle.days", { count: lutealDuration })}
             </span>
           </div>
           <div style={{ position: "relative" }}>
@@ -131,14 +133,14 @@ export function OnboardingCyclePage() {
           backdropFilter: "blur(18px)", boxShadow: "0 14px 32px rgba(243,176,140,.08)",
         }}>
           <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 10 }}>
-            Seu ciclo estimado
+            {t("onboarding.cycle.estimate")}
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             {[
-              { emoji: "🌙", label: "Menstrual", days: "5d", color: "var(--accent-peach)" },
-              { emoji: "🌱", label: "Folicular", days: `${folicular - 5}d`, color: "var(--accent-sage)" },
-              { emoji: "🚀", label: "Ovulatória", days: "3d", color: "var(--accent-sky)" },
-              { emoji: "🌊", label: "Lútea", days: `${lutealDuration}d`, color: "var(--accent-sky)" },
+              { emoji: "🌙", label: t("onboarding.cycle.menstrual"), days: "5d", color: "var(--accent-peach)" },
+              { emoji: "🌱", label: t("onboarding.cycle.follicular"), days: `${folicular - 5}d`, color: "var(--accent-sage)" },
+              { emoji: "🚀", label: t("onboarding.cycle.ovulatory"), days: "3d", color: "var(--accent-sky)" },
+              { emoji: "🌊", label: t("onboarding.cycle.luteal"), days: `${lutealDuration}d`, color: "var(--accent-sky)" },
             ].map(f => (
               <div key={f.label} style={{ flex: 1, textAlign: "center" }}>
                 <div style={{ fontSize: 18, marginBottom: 2 }}>{f.emoji}</div>
@@ -150,7 +152,7 @@ export function OnboardingCyclePage() {
         </div>
 
         <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic", lineHeight: 1.6, marginBottom: 20 }}>
-          💡 Esses dados ajudam a IA a entender sua energia em cada fase e personalizar sua agenda.
+          💡 {t("onboarding.cycle.tip")}
         </p>
 
         {/* CTAs */}
@@ -165,13 +167,13 @@ export function OnboardingCyclePage() {
             marginBottom: 10,
           }}
         >
-          Continuar →
+          {t("common.continue")} →
         </button>
         <button
           onClick={() => persistAndGo("/onboarding/sleep")}
           style={{ width: "100%", height: 40, background: "none", border: "none", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer" }}
         >
-          Pular por enquanto
+          {t("onboarding.skip")}
         </button>
       </div>
     </div>

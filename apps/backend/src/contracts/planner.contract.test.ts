@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { PlannerSyncSchema } from './planner.contract';
+import { PlannerAISuggestionExistingBlockSchema, PlannerSyncSchema } from './planner.contract';
 
 const validPayload = {
   userId: '550e8400-e29b-41d4-a716-446655440000',
@@ -31,6 +31,59 @@ const validPayload = {
   const result = PlannerSyncSchema.safeParse(validPayload);
 
   assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.blocks[0].temporalPolicy, 'windowed');
+    assert.equal(result.data.blocks[0].adaptationPermission, 'preview');
+    assert.equal(result.data.blocks[0].adaptabilitySource, 'default');
+    assert.equal(result.data.blocks[0].adaptabilityConfidence, 0.55);
+  }
+}
+
+{
+  const [consultation, aiTask] = PlannerSyncSchema.parse({
+    ...validPayload,
+    blocks: [
+      { ...validPayload.blocks[0], title: 'Consulta médica' },
+      { ...validPayload.blocks[0], title: 'Rascunhar proposta', isAiSuggested: true },
+    ],
+  }).blocks;
+
+  assert.equal(consultation.temporalPolicy, 'windowed');
+  assert.equal(consultation.adaptationPermission, 'preview');
+  assert.equal(consultation.adaptabilitySource, 'language');
+  assert.equal(aiTask.temporalPolicy, 'flexible');
+  assert.equal(aiTask.adaptationPermission, 'eligible');
+  assert.equal(aiTask.adaptabilitySource, 'ai');
+}
+
+{
+  const result = PlannerSyncSchema.parse({
+    ...validPayload,
+    blocks: [{
+      ...validPayload.blocks[0],
+      gcalEventId: 'google-event-1',
+      temporalPolicy: 'flexible',
+      adaptationPermission: 'eligible',
+    }],
+  });
+
+  assert.equal(result.blocks[0].temporalPolicy, 'fixed');
+  assert.equal(result.blocks[0].adaptationPermission, 'protected');
+  assert.equal(result.blocks[0].adaptabilitySource, 'gcal');
+  assert.equal(result.blocks[0].adaptabilityConfidence, 1);
+}
+
+{
+  const block = PlannerAISuggestionExistingBlockSchema.parse({
+    id: 'gcal:google-event-1',
+    title: 'Reunião externa',
+    startTime: '09:00',
+    endTime: '10:00',
+    gcalEventId: 'google-event-1',
+  });
+
+  assert.equal(block.temporalPolicy, 'fixed');
+  assert.equal(block.adaptationPermission, 'protected');
 }
 
 {

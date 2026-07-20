@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
-import { buildTimelineBlocks, buildTimelineSyncRequests } from "./aura-chat-page.helpers.ts";
+import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests } from "./aura-chat-page.helpers.ts";
 
 describe("aura chat page helpers", () => {
   it("builds a single timeline block with the default start time", () => {
@@ -59,5 +59,20 @@ describe("aura chat page helpers", () => {
     assert.equal(requests.length, 1);
     assert.equal(requests[0]?.forceSave, true);
     assert.equal(requests[0]?.blocks[0]?.isAiSuggested, true);
+  });
+
+  it("rejects empty objective payloads instead of inventing generic titles", () => {
+    assert.equal(buildAuraObjectiveInput({}), null);
+    assert.equal(buildAuraObjectiveInput({ items: ["Review"] }), null);
+  });
+
+  it("builds objectives only from an explicit title and keeps checklist items", () => {
+    assert.deepEqual(buildAuraObjectiveInput({
+      title: "Prepare proposal",
+      items: ["Review numbers", { title: "Send draft" }],
+    }), {
+      title: "Prepare proposal",
+      itemTitles: ["Review numbers", "Send draft"],
+    });
   });
 });

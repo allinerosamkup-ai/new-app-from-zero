@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
+import { useLocalizedCopy } from "../i18n";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -63,6 +64,7 @@ function relativeDays(dateString: string): string {
 }
 
 export function ContextoPage() {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [loading, setLoading] = useState(true);
@@ -120,23 +122,23 @@ export function ContextoPage() {
   }
 
   async function deletePattern(id: string) {
-    if (!confirm("Apagar esse padrão observado?")) return;
+    if (!confirm(l("Apagar esse padrão observado?", "Delete this observed pattern?"))) return;
     try {
       await api.delete(`/me/knowledge-graph/pattern/${id}`);
       setPatterns((prev) => prev.filter((p) => p.id !== id));
     } catch (error) {
-      showError("Falha ao apagar padrão.");
+      showError(l("Falha ao apagar padrão.", "Failed to delete pattern."));
     }
   }
 
   async function resolveDecision(id: string) {
-    const resolution = prompt("Como você resolveu essa decisão? (opcional)") ?? undefined;
+    const resolution = prompt(l("Como você resolveu essa decisão? (opcional)", "How did you resolve this decision? (optional)")) ?? undefined;
     try {
       await api.post(`/me/knowledge-graph/decision/${id}/resolve`, { resolution });
       setDecisions((prev) => prev.map((d) => (d.id === id ? { ...d, resolvedAt: new Date().toISOString(), resolution: resolution ?? null } : d)));
-      showSuccess("Decisão marcada como resolvida.");
+      showSuccess(l("Decisão marcada como resolvida.", "Decision marked as resolved."));
     } catch (error) {
-      showError("Falha ao marcar decisão.");
+      showError(l("Falha ao marcar decisão.", "Failed to resolve decision."));
     }
   }
 
@@ -150,9 +152,9 @@ export function ContextoPage() {
         </button>
       </div>
 
-      <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: "var(--text-1)" }}>O que a Airia entende de você</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 6px", color: "var(--text-1)" }}>{l("O que a Airia entende de você", "What Airia understands about you")}</h1>
       <p style={{ fontSize: 13, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
-        A Airia aprende automaticamente do seu diário e check-ins. Você pode corrigir, apagar e marcar decisões como resolvidas.
+        {l("A Airia aprende automaticamente do seu diário e check-ins. Você pode corrigir, apagar e marcar decisões como resolvidas.", "Airia learns automatically from your journal and check-ins. You can correct or delete patterns and mark decisions as resolved.")}
       </p>
 
       {/* Status compacto, sem botão */}
@@ -167,7 +169,7 @@ export function ContextoPage() {
           }}
         >
           <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0 }}>
-            <strong>{status.entitiesInGraph}</strong> entidades · <strong>{status.factsInGraph}</strong> fatos · <strong>{status.patternsInGraph}</strong> padrões · <strong>{status.openDecisionsInGraph}</strong> decisões abertas
+            <strong>{status.entitiesInGraph}</strong> {l("entidades", "entities")} · <strong>{status.factsInGraph}</strong> {l("fatos", "facts")} · <strong>{status.patternsInGraph}</strong> {l("padrões", "patterns")} · <strong>{status.openDecisionsInGraph}</strong> {l("decisões abertas", "open decisions")}
             {status.lastBackfillAt && ` · atualizado ${relativeDays(status.lastBackfillAt)}`}
           </p>
         </div>
@@ -176,10 +178,10 @@ export function ContextoPage() {
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--warm-border)" }}>
         {([
-          { key: "entidades", label: "Entidades", count: entities.length },
-          { key: "fatos", label: "Fatos", count: facts.length },
-          { key: "padroes", label: "Padrões", count: patterns.length },
-          { key: "decisoes", label: "Decisões", count: decisions.filter((d) => !d.resolvedAt).length },
+          { key: "entidades", label: l("Entidades", "Entities"), count: entities.length },
+          { key: "fatos", label: l("Fatos", "Facts"), count: facts.length },
+          { key: "padroes", label: l("Padrões", "Patterns"), count: patterns.length },
+          { key: "decisoes", label: l("Decisões", "Decisions"), count: decisions.filter((d) => !d.resolvedAt).length },
         ] as const).map((tab) => (
           <button
             key={tab.key}
@@ -207,7 +209,7 @@ export function ContextoPage() {
       {/* Empty state */}
       {!loading && activeTab === "entidades" && entities.length === 0 && (
         <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>
-          Nada extraído ainda. Use o diário ou rode o processamento de histórico.
+          {l("Nada extraído ainda. Use o diário ou rode o processamento de histórico.", "Nothing extracted yet. Use the journal or process your history.")}
         </p>
       )}
 
@@ -222,7 +224,7 @@ export function ContextoPage() {
               </p>
               {e.aliases.length > 0 && (
                 <p style={{ fontSize: 11, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
-                  Também chamado de: {e.aliases.join(", ")}
+                  {l("Também chamado de:", "Also known as:")} {e.aliases.join(", ")}
                 </p>
               )}
             </div>
@@ -235,7 +237,7 @@ export function ContextoPage() {
 
       {/* Fatos */}
       {!loading && activeTab === "fatos" && facts.length === 0 && (
-        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>Nenhum fato ainda.</p>
+        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>{l("Nenhum fato ainda.", "No facts yet.")}</p>
       )}
       {!loading && activeTab === "fatos" && facts.map((f) => (
         <div key={f.id} className="glass-card" style={{ padding: 12, marginBottom: 8, borderRadius: 12, border: "1px solid var(--warm-border)" }}>
@@ -244,7 +246,7 @@ export function ContextoPage() {
               <p style={{ fontSize: 13, color: "var(--text-1)", margin: 0, lineHeight: 1.5 }}>{f.statement}</p>
               <p style={{ fontSize: 10.5, color: "var(--text-3)", margin: "4px 0 0" }}>
                 {f.entity?.canonicalName ? `[${f.entity.canonicalName}] · ` : ""}
-                {new Date(f.occurredAt).toLocaleDateString("pt-BR")} · {f.source} · confiança {Math.round(f.confidence * 100)}%
+                {new Date(f.occurredAt).toLocaleDateString()} · {f.source} · {l("confiança", "confidence")} {Math.round(f.confidence * 100)}%
               </p>
             </div>
             <button onClick={() => void deleteFact(f.id)} aria-label="Apagar" style={{ border: "none", background: "transparent", cursor: "pointer", padding: 4 }}>
@@ -256,7 +258,7 @@ export function ContextoPage() {
 
       {/* Padrões */}
       {!loading && activeTab === "padroes" && patterns.length === 0 && (
-        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>Nenhum padrão observado ainda.</p>
+        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>{l("Nenhum padrão observado ainda.", "No observed patterns yet.")}</p>
       )}
       {!loading && activeTab === "padroes" && patterns.map((p) => (
         <div key={p.id} className="glass-card" style={{ padding: 12, marginBottom: 8, borderRadius: 12, border: "1px solid var(--warm-border)" }}>
@@ -279,7 +281,7 @@ export function ContextoPage() {
 
       {/* Decisões */}
       {!loading && activeTab === "decisoes" && decisions.length === 0 && (
-        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>Nenhuma decisão em aberto.</p>
+        <p style={{ color: "var(--text-3)", padding: 24, textAlign: "center", fontSize: 13 }}>{l("Nenhuma decisão em aberto.", "No open decisions.")}</p>
       )}
       {!loading && activeTab === "decisoes" && decisions.map((d) => (
         <div key={d.id} className="glass-card" style={{ padding: 12, marginBottom: 8, borderRadius: 12, border: "1px solid var(--warm-border)", opacity: d.resolvedAt ? 0.55 : 1 }}>

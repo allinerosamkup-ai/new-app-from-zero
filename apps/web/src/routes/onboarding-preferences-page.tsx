@@ -1,5 +1,6 @@
 // Onboarding: Como você pensa melhor? — cards de preferência cognitiva
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { PRIOR_DIAGNOSIS_OPTIONS, type PriorDiagnosis } from "../features/aura/onboarding";
@@ -19,6 +20,7 @@ const PREF_CARDS = [
 ];
 
 export function OnboardingPreferencesPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { state, updateOnboardingDraft } = useAuraStore();
   const [selected, setSelected] = useState<Set<string>>(
@@ -84,16 +86,16 @@ export function OnboardingPreferencesPage() {
         </div>
 
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--accent-peach)", marginBottom: 4 }}>
-          PASSO {STEP} DE {TOTAL}
+          {t("onboarding.step", { current: STEP, total: TOTAL })}
         </p>
         <h1 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.25, marginBottom: 6 }}>
-          Como você pensa melhor?
+          {t("onboarding.preferences.title")}
         </h1>
         <p style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55, marginBottom: 6 }}>
-          Selecione até 3 preferências. Vamos usar para organizar sua agenda de forma inteligente.
+          {t("onboarding.preferences.subtitle")}
         </p>
         <p style={{ fontSize: 11, color: "var(--accent-peach-ink)", fontWeight: 600, marginBottom: 24 }}>
-          {selected.size}/3 selecionadas
+          {t("onboarding.preferences.selected", { count: selected.size })}
         </p>
       </div>
 
@@ -120,8 +122,8 @@ export function OnboardingPreferencesPage() {
               >
                 <span style={{ fontSize: 24, flexShrink: 0 }}>{c.emoji}</span>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--accent-peach-ink)" : "var(--text-1)", margin: "0 0 2px" }}>{c.label}</p>
-                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>{c.sub}</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: active ? "var(--accent-peach-ink)" : "var(--text-1)", margin: "0 0 2px" }}>{t(`onboarding.preferences.cards.${c.id}.label`)}</p>
+                  <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>{t(`onboarding.preferences.cards.${c.id}.sub`)}</p>
                 </div>
                 {active && (
                   <div style={{ width: 20, height: 20, borderRadius: "50%", background: "var(--accent-peach)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -138,10 +140,10 @@ export function OnboardingPreferencesPage() {
         {/* Contexto opcional — autorrelato, não diagnóstico */}
         <div style={{ marginBottom: 24, padding: "16px 14px", background: "rgba(150,199,179,.08)", borderRadius: 14, border: "1.5px solid rgba(150,199,179,.20)" }}>
           <p style={{ fontSize: 12, fontWeight: 800, color: "var(--text-1)", margin: "0 0 4px" }}>
-            Você convive com algum desses? <span style={{ fontWeight: 500, color: "var(--text-3)" }}>(opcional)</span>
+            {t("onboarding.preferences.diagnosisQuestion")} <span style={{ fontWeight: 500, color: "var(--text-3)" }}>{t("onboarding.preferences.optional")}</span>
           </p>
           <p style={{ fontSize: 11, color: "var(--text-3)", margin: "0 0 12px", lineHeight: 1.5 }}>
-            Isso é autorrelato — a Airia nunca diagnostica. Ajuda só a ajustar o tom e o tipo de sugestão.
+            {t("onboarding.preferences.diagnosisHelp")}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {PRIOR_DIAGNOSIS_OPTIONS.map((opt) => {
@@ -172,13 +174,13 @@ export function OnboardingPreferencesPage() {
           {diagnoses.size > 0 && !diagnoses.has("prefer_not_to_say") && (
             <div style={{ marginTop: 14 }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>
-                Faz uso de medicação contínua?
+                {t("onboarding.preferences.medication")}
               </p>
               <div style={{ display: "flex", gap: 6 }}>
                 {[
-                  { label: "Sim", value: true },
-                  { label: "Não", value: false },
-                  { label: "Prefiro não dizer", value: null },
+                  { label: t("common.yes"), value: true },
+                  { label: t("common.no"), value: false },
+                  { label: t("onboarding.preferences.preferNot"), value: null },
                 ].map((opt) => {
                   const active = medication === opt.value;
                   return (
@@ -221,13 +223,13 @@ export function OnboardingPreferencesPage() {
             marginBottom: 10, transition: "all 200ms",
           }}
         >
-          Continuar →
+          {t("common.continue")} →
         </button>
         <button
           onClick={() => persistAndGo("/onboarding/done")}
           style={{ width: "100%", height: 40, background: "none", border: "none", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "var(--text-3)", cursor: "pointer" }}
         >
-          Pular por enquanto
+          {t("onboarding.skip")}
         </button>
       </div>
     </div>

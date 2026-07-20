@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { trackInstallConversion } from "../lib/meta-pixel";
+import { useLocalizedCopy } from "../i18n";
 import { trackEvent } from "../lib/track";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -47,6 +48,7 @@ function isFreshDismiss(): boolean {
  * quando não dispara (caso comum em iOS e Android com heurística não atendida), abre instruções.
  */
 export function InstallPWA() {
+  const l = useLocalizedCopy();
   const [show, setShow] = useState(false);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [sheet, setSheet] = useState<Platform | null>(null);
@@ -118,13 +120,13 @@ export function InstallPWA() {
           style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0 }}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={titleStyle}>Instalar Airia no celular</div>
-          <div style={subtitleStyle}>Acesse direto da tela inicial</div>
+          <div style={titleStyle}>{l("Instalar Airia no celular", "Install Airia on your phone")}</div>
+          <div style={subtitleStyle}>{l("Acesse direto da tela inicial", "Open it directly from your Home Screen")}</div>
         </div>
         <button onClick={handleInstall} style={installButtonStyle}>
-          Instalar
+          {l("Instalar", "Install")}
         </button>
-        <button onClick={handleDismiss} style={dismissButtonStyle} aria-label="Fechar">
+        <button onClick={handleDismiss} style={dismissButtonStyle} aria-label={l("Fechar", "Close")}>
           ✕
         </button>
       </div>
@@ -137,31 +139,32 @@ export function InstallPWA() {
 }
 
 function IosInstallSheet({ onClose }: { onClose: () => void }) {
+  const l = useLocalizedCopy();
   return (
-    <SheetWrapper onClose={onClose} title="Instalar no iPhone/iPad">
+    <SheetWrapper onClose={onClose} title={l("Instalar no iPhone/iPad", "Install on iPhone/iPad")}>
       <ol style={stepsListStyle}>
         <li style={stepItemStyle}>
           <span style={stepNumStyle}>1</span>
           <span>
-            Abra esta página no <strong>Safari</strong> (outros navegadores não permitem).
+            {l("Abra esta página no", "Open this page in")} <strong>Safari</strong> {l("(outros navegadores não permitem).", "(other browsers are not supported).")}
           </span>
         </li>
         <li style={stepItemStyle}>
           <span style={stepNumStyle}>2</span>
           <span>
-            Toque no ícone de <strong>Compartilhar</strong> <span style={{ fontSize: 16 }}>⎙</span> na barra inferior.
+            {l("Toque no ícone de", "Tap the")} <strong>{l("Compartilhar", "Share")}</strong> <span style={{ fontSize: 16 }}>⎙</span> {l("na barra inferior.", "icon in the bottom toolbar.")}
           </span>
         </li>
         <li style={stepItemStyle}>
           <span style={stepNumStyle}>3</span>
           <span>
-            Role e toque em <strong>"Adicionar à Tela de Início"</strong>.
+            {l("Role e toque em", "Scroll and tap")} <strong>{l('"Adicionar à Tela de Início"', '"Add to Home Screen"')}</strong>.
           </span>
         </li>
         <li style={stepItemStyle}>
           <span style={stepNumStyle}>4</span>
           <span>
-            Confirme tocando em <strong>"Adicionar"</strong> no canto superior direito.
+            {l("Confirme tocando em", "Confirm by tapping")} <strong>{l('"Adicionar"', '"Add"')}</strong> {l("no canto superior direito.", "in the upper-right corner.")}
           </span>
         </li>
       </ol>
@@ -170,41 +173,43 @@ function IosInstallSheet({ onClose }: { onClose: () => void }) {
 }
 
 function AndroidInstallSheet({ onClose }: { onClose: () => void }) {
+  const l = useLocalizedCopy();
   return (
-    <SheetWrapper onClose={onClose} title="Instalar no Android">
+    <SheetWrapper onClose={onClose} title={l("Instalar no Android", "Install on Android")}>
       <ol style={stepsListStyle}>
         <li style={stepItemStyle}>
           <span style={stepNumStyle}>1</span>
           <span>
-            Toque no <strong>menu ⋮</strong> no canto superior direito do navegador.
+            {l("Toque no", "Tap the")} <strong>{l("menu ⋮", "⋮ menu")}</strong> {l("no canto superior direito do navegador.", "in the upper-right corner of the browser.")}
           </span>
         </li>
         <li style={stepItemStyle}>
           <span style={stepNumStyle}>2</span>
           <span>
-            Toque em <strong>"Instalar app"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
+            {l("Toque em", "Tap")} <strong>{l('"Instalar app"', '"Install app"')}</strong> {l("ou", "or")} <strong>{l('"Adicionar à tela inicial"', '"Add to Home Screen"')}</strong>.
           </span>
         </li>
         <li style={stepItemStyle}>
           <span style={stepNumStyle}>3</span>
-          <span>Confirme tocando em <strong>"Instalar"</strong>.</span>
+          <span>{l("Confirme tocando em", "Confirm by tapping")} <strong>{l('"Instalar"', '"Install"')}</strong>.</span>
         </li>
       </ol>
       <p style={{ margin: "12px 0 0", fontSize: 12, color: "#7C6D68", lineHeight: 1.4 }}>
-        Funciona em Chrome, Edge e Samsung Internet.
+        {l("Funciona em Chrome, Edge e Samsung Internet.", "Works in Chrome, Edge, and Samsung Internet.")}
       </p>
     </SheetWrapper>
   );
 }
 
 function DesktopInstallSheet({ onClose }: { onClose: () => void }) {
+  const l = useLocalizedCopy();
   return (
-    <SheetWrapper onClose={onClose} title="Instalar no computador">
+    <SheetWrapper onClose={onClose} title={l("Instalar no computador", "Install on computer")}>
       <p style={{ margin: 0, fontSize: 14, color: "#4A3B37", lineHeight: 1.5 }}>
-        No Chrome ou Edge, procure o ícone de instalação <strong>⊕</strong> no canto direito da barra de endereço e clique em <strong>"Instalar"</strong>.
+        {l("No Chrome ou Edge, procure o ícone de instalação", "In Chrome or Edge, look for the install icon")} <strong>⊕</strong> {l("no canto direito da barra de endereço e clique em", "on the right side of the address bar and click")} <strong>{l('"Instalar"', '"Install"')}</strong>.
       </p>
       <p style={{ margin: "12px 0 0", fontSize: 12, color: "#7C6D68" }}>
-        Se não aparecer, abra o menu <strong>⋮</strong> → <strong>Instalar Airia</strong>.
+        {l("Se não aparecer, abra o menu", "If it does not appear, open the menu")} <strong>⋮</strong> → <strong>{l("Instalar Airia", "Install Airia")}</strong>.
       </p>
     </SheetWrapper>
   );
@@ -219,11 +224,12 @@ function SheetWrapper({
   onClose: () => void;
   title: string;
 }) {
+  const l = useLocalizedCopy();
   return (
     <>
       <div onClick={onClose} style={backdropStyle} />
       <div style={sheetStyle}>
-        <button type="button" onClick={onClose} style={closeButtonStyle} aria-label="Fechar">
+        <button type="button" onClick={onClose} style={closeButtonStyle} aria-label={l("Fechar", "Close")}>
           ✕
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
@@ -234,7 +240,7 @@ function SheetWrapper({
           />
           <div>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#4A3B37" }}>{title}</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#7C6D68" }}>Adicionar à tela inicial</p>
+            <p style={{ margin: 0, fontSize: 12, color: "#7C6D68" }}>{l("Adicionar à tela inicial", "Add to Home Screen")}</p>
           </div>
         </div>
         {children}

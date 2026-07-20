@@ -291,13 +291,35 @@ export function buildTimelineSyncRequests(blocks: TimelineBlock[]): TimelineSync
   }));
 }
 
-export function formatDateLabel(date: string): string {
-  return new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", {
+export function formatDateLabel(date: string, locale = "pt-BR"): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(locale, {
     day: "2-digit",
     month: "short",
   });
 }
 
-export function formatTimelineBlock(block: TimelineBlock): string {
-  return `${block.title} · ${formatDateLabel(block.date)} · ${block.startTime}`;
+export function formatTimelineBlock(block: TimelineBlock, locale = "pt-BR"): string {
+  return `${block.title} · ${formatDateLabel(block.date, locale)} · ${block.startTime}`;
+}
+
+export function buildAuraObjectiveInput(payload: Record<string, unknown>): { title: string; itemTitles: string[] } | null {
+  const title = pickString(payload, ["title", "goalTitle", "name", "text"]);
+  if (!title) return null;
+
+  const itemSources = ["subtasks", "checklist", "items", "steps", "tasks", "subgoals"];
+  let itemTitles: string[] = [];
+  for (const key of itemSources) {
+    const value = payload[key];
+    if (!Array.isArray(value)) continue;
+    itemTitles = value
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim();
+        if (!isRecord(entry)) return null;
+        return pickString(entry, ["title", "text", "name", "label", "task"]);
+      })
+      .filter((item): item is string => Boolean(item));
+    if (itemTitles.length > 0) break;
+  }
+
+  return { title, itemTitles };
 }

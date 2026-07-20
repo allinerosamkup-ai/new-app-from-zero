@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Sparkles, Lock } from "lucide-react";
 import { useSubscription } from "../hooks/useSubscription";
+import { useLocalizedCopy } from "../i18n";
 
 type PremiumGateProps = {
   children: ReactNode;
@@ -17,6 +18,7 @@ type PremiumGateProps = {
  * Enquanto carrega o status, renderiza children (evita flash de paywall em quem é Pro).
  */
 export function PremiumGate({ children, feature, blurBehind = false }: PremiumGateProps) {
+  const l = useLocalizedCopy();
   const navigate = useNavigate();
   const { isPro, loading } = useSubscription();
 
@@ -59,10 +61,10 @@ export function PremiumGate({ children, feature, blurBehind = false }: PremiumGa
             <Lock size={18} color="var(--accent-peach)" />
           </div>
           <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 900, color: "var(--text-1)" }}>
-            Recurso do Airia Pro
+            {l("Recurso do Airia Pro", "Airia Pro feature")}
           </p>
           <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5 }}>
-            {feature ?? "Desbloqueie IA ilimitada, insights avançados e mais."}
+            {feature ?? l("Desbloqueie IA ilimitada, insights avançados e mais.", "Unlock unlimited AI, advanced insights, and more.")}
           </p>
           <button
             onClick={() => navigate("/billing")}
@@ -82,7 +84,7 @@ export function PremiumGate({ children, feature, blurBehind = false }: PremiumGa
             }}
           >
             <Sparkles size={15} />
-            Conhecer o Pro
+            {l("Conhecer o Pro", "Explore Pro")}
           </button>
         </div>
       </div>

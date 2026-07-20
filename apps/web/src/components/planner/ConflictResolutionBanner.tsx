@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowRight, CalendarClock, ChevronsDown, Trash2, type LucideIcon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 export type ConflictResolutionType =
   | "MOVE_BLOCK_LATER"
@@ -32,14 +33,6 @@ type Props = {
   busyResolutionKey?: string | null;
 };
 
-const RESOLUTION_LABEL: Record<ConflictResolutionType, string> = {
-  MOVE_BLOCK_LATER: "Mover pra depois",
-  MOVE_BLOCK_EARLIER: "Mover pra antes",
-  DOWNGRADE_INTENSITY: "Reduzir intensidade",
-  POSTPONE_TOMORROW: "Adiar pra amanhã",
-  CANCEL: "Cancelar",
-};
-
 const RESOLUTION_ICON: Record<ConflictResolutionType, LucideIcon> = {
   MOVE_BLOCK_LATER: ArrowRight,
   MOVE_BLOCK_EARLIER: ArrowRight,
@@ -49,6 +42,7 @@ const RESOLUTION_ICON: Record<ConflictResolutionType, LucideIcon> = {
 };
 
 export function ConflictResolutionBanner({ conflicts, onApply, onDismiss, busyResolutionKey }: Props) {
+  const { t } = useTranslation();
   if (!conflicts || conflicts.length === 0) return null;
 
   return (
@@ -66,8 +60,8 @@ export function ConflictResolutionBanner({ conflicts, onApply, onDismiss, busyRe
         <div style={{ flex: 1 }}>
           <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#7C641A", lineHeight: 1.4 }}>
             {conflicts.length === 1
-              ? "1 conflito de horário hoje"
-              : `${conflicts.length} conflitos de horário hoje`}
+              ? t("conflicts.one")
+              : t("conflicts.many", { count: conflicts.length })}
           </p>
         </div>
         {onDismiss && (
@@ -84,7 +78,7 @@ export function ConflictResolutionBanner({ conflicts, onApply, onDismiss, busyRe
               padding: "2px 6px",
             }}
           >
-            Dispensar
+            {t("conflicts.dismiss")}
           </button>
         )}
       </div>
@@ -103,7 +97,7 @@ export function ConflictResolutionBanner({ conflicts, onApply, onDismiss, busyRe
             "{conflict.block1}" × "{conflict.block2}"
           </p>
           <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--text-3)" }}>
-            Sobreposição de {conflict.overlapMinutes} min
+            {t("conflicts.overlap", { minutes: conflict.overlapMinutes })}
           </p>
 
           {(conflict.suggestedResolutions ?? []).length > 0 && (
@@ -134,7 +128,7 @@ export function ConflictResolutionBanner({ conflicts, onApply, onDismiss, busyRe
                     <Icon size={13} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "var(--text-1)" }}>
-                        {RESOLUTION_LABEL[resolution.type] ?? resolution.type}
+                        {t(`conflicts.${({ MOVE_BLOCK_LATER: "moveLater", MOVE_BLOCK_EARLIER: "moveEarlier", DOWNGRADE_INTENSITY: "reduce", POSTPONE_TOMORROW: "tomorrow", CANCEL: "cancel" } as const)[resolution.type]}`)}
                         {resolution.targetBlockTitle ? ` · "${resolution.targetBlockTitle}"` : ""}
                       </p>
                       <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.4 }}>

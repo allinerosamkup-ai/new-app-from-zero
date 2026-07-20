@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { Bell, X, Zap } from "lucide-react";
 import { requestPushPermissionExplicit } from "../hooks/usePushNotifications";
+import { useTranslation } from "react-i18next";
 
 const DISMISS_KEY = "airia-notif-banner-dismissed-at";
 const DISMISS_TTL_DAYS = 14;
@@ -35,6 +36,7 @@ type Props = {
 };
 
 export function NotificationPromptBanner({ userId, checkinCount }: Props) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [granted, setGranted] = useState(false);
@@ -113,7 +115,7 @@ export function NotificationPromptBanner({ userId, checkinCount }: Props) {
           color: "var(--text-1)",
           fontFamily: "'Plus Jakarta Sans', sans-serif",
         }}>
-          Airia avisa antes da queda
+          {t("notificationsPrompt.title")}
         </p>
         <p style={{
           margin: "0 0 12px",
@@ -121,7 +123,7 @@ export function NotificationPromptBanner({ userId, checkinCount }: Props) {
           color: "var(--text-2)",
           lineHeight: 1.5,
         }}>
-          Ative notificações e a Airia te avisa quando seu padrão indica fase de baixa — antes de você entrar nela.
+          {t("notificationsPrompt.body")}
         </p>
 
         <div style={{ display: "flex", gap: 8 }}>
@@ -146,7 +148,7 @@ export function NotificationPromptBanner({ userId, checkinCount }: Props) {
             }}
           >
             <Zap size={13} />
-            {loading ? "Ativando..." : "Ativar"}
+            {loading ? t("notificationsPrompt.activating") : t("notificationsPrompt.activate")}
           </button>
 
           <button
@@ -164,7 +166,7 @@ export function NotificationPromptBanner({ userId, checkinCount }: Props) {
               fontFamily: "'Plus Jakarta Sans', sans-serif",
             }}
           >
-            Agora não
+            {t("notificationsPrompt.notNow")}
           </button>
         </div>
       </div>
@@ -184,7 +186,7 @@ export function NotificationPromptBanner({ userId, checkinCount }: Props) {
           display: "flex",
           alignItems: "center",
         }}
-        aria-label="Fechar"
+        aria-label={t("common.close")}
       >
         <X size={14} />
       </button>

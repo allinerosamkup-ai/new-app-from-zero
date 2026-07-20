@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { getCurrentLanguage } from '../i18n';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api');
 
@@ -38,11 +39,26 @@ export function getAdaptiveSnapshot(): AdaptiveSnapshot {
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
+  const language = getCurrentLanguage();
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return { 'Content-Type': 'application/json' };
+  if (!session) return {
+    'Content-Type': 'application/json',
+    'Accept-Language': language,
+    'Content-Language': language,
+  };
   return {
     Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
+    'Accept-Language': language,
+    'Content-Language': language,
+  };
+}
+
+function getLocaleContext() {
+  const language = getCurrentLanguage();
+  return {
+    language,
+    locale: language === 'en' ? 'en-US' : 'pt-BR',
   };
 }
 
@@ -110,7 +126,7 @@ export const api = {
     // Injeta horário do cliente em qualquer POST com body objeto.
     // Backend usa pra calibrar sugestões; rotas que não precisam ignoram silenciosamente.
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...(body as Record<string, unknown>) }
+      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
       : body;
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
@@ -123,7 +139,7 @@ export const api = {
   async patch(endpoint: string, body: unknown) {
     const headers = await getAuthHeaders();
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...(body as Record<string, unknown>) }
+      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
       : body;
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'PATCH',
@@ -136,7 +152,7 @@ export const api = {
   async put(endpoint: string, body: unknown) {
     const headers = await getAuthHeaders();
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...(body as Record<string, unknown>) }
+      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
       : body;
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'PUT',
