@@ -4,26 +4,17 @@ import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope;
 
-const AIRIA_SW_BUILD = '20260702-livro-checkout-hotmart';
-
 self.skipWaiting();
 clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      return Promise.all(
-        clients.map((client) => {
-          const url = new URL(client.url);
-          url.searchParams.set('__airia_sw', AIRIA_SW_BUILD);
-          return client.navigate(url.toString()).catch(() => undefined);
-        }),
-      );
-    }),
-  );
-});
+// NÃO force client.navigate() no activate. Combinado com skipWaiting +
+// clientsClaim + o reload do autoUpdate, isso criava um loop de reload
+// (página "tremelicando", botões não respondiam) em redes instáveis: cada
+// ativação re-navegava a janela, que re-registrava o SW, que reativava.
+// clientsClaim() já entrega os assets novos na próxima navegação e o
+// autoUpdate do vite-plugin-pwa recarrega a aba ativa uma única vez.
 
 // Handle push events
 self.addEventListener('push', (event) => {

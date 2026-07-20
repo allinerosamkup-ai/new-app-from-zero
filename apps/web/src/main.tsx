@@ -12,11 +12,12 @@ import "./i18n";
 
 // Register Service Worker for PWA
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+  // registerType: 'autoUpdate' — o próprio vite-plugin-pwa recarrega a aba
+  // uma única vez quando o novo SW assume (com trava interna anti-loop).
+  // NÃO chamar window.location.reload() manualmente aqui: reload sem trava +
+  // skipWaiting causava loop de reload (página tremendo, botões mortos).
   registerSW({
     immediate: true,
-    onNeedRefresh() {
-      window.location.reload();
-    },
     onRegistered(r) {
       console.log("SW Registered:", r);
     },
