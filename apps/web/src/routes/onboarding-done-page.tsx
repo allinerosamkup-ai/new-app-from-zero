@@ -56,7 +56,12 @@ export function OnboardingDonePage() {
         sleep_hours: state.onboardingDraft.sleepHours,
       });
       await refreshData();
-      navigate("/home");
+      navigate("/routine-builder", {
+        state: {
+          initialSource: state.onboardingDraft.routineText || "",
+          focus: state.onboardingDraft.primaryGoal || "",
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("onboarding.done.saveError"));
     } finally {

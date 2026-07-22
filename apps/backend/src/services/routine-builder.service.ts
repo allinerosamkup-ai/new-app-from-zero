@@ -1,0 +1,308 @@
+import { z } from 'zod';
+
+import { deriveRoutineCapacity } from '../lib/phase-capacity';
+import {
+  RoutineClassifiedItemSchema,
+  RoutineCreateSessionSchema,
+  RoutineUpdateItemsSchema,
+  type RoutineClassifiedItem,
+  type RoutineCreateSessionInput,
+} from '../contracts/routine-builder.contract';
+import { AiActionFeedbackService } from './ai-action-feedback.service';
+import { RoutineApplyService } from './routine-apply.service';
+import { RoutineClarificationService, type RoutineClarificationQuestion } from './routine-clarification.service';
+import { RoutineClassifierService } from './routine-classifier.service';
+import { RoutineComposerService } from './routine-composer.service';
+import { RoutineSourceExtractorService } from './routine-source-extractor.service';
+
+type BuilderDependencies = {
+  extractor?: RoutineSourceExtractorService;
+  classifier?: Pick<RoutineClassifierService, 'classify'>;
+  applyService?: Pick<RoutineApplyService, 'apply'>;
+};
+
+function dateOnly(value: Date | string): string {
+  return (value instanceof Date ? value.toISOString() : value).slice(0, 10);
+}
+
+function timeOnly(value: Date | string): string {
+  return (value instanceof Date ? value.toISOString() : value).slice(11, 16);
+}
+
+function addDays(date: string, days: number): string {
+  const value = new Date(`${date}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function publicSession<T extends Record<string, any>>(session: T): Omit<T, 'sourceText'> {
+  const { sourceText: _sourceText, ...safe } = session;
+  return safe;
+}
+
+function applyAnswer(
+  item: RoutineClassifiedItem,
+  question: RoutineClarificationQuestion,
+  answer: string,
+): RoutineClassifiedItem {
+  if (question.field === 'title') return RoutineClassifiedItemSchema.parse({ ...item, title: answer.trim() });
+  if (question.field === 'recurrence') {
+    const recurrenceByAnswer: Record<string, { frequency: 'daily' | 'weekly'; daysOfWeek: number[]; timesPerWeek?: number; interval: number }> = {
+      daily: { frequency: 'daily', daysOfWeek: [], interval: 1 },
+      weekdays: { frequency: 'weekly', daysOfWeek: [1, 2, 3, 4, 5], timesPerWeek: 5, interval: 1 },
+      three_per_week: { frequency: 'weekly', daysOfWeek: [1, 3, 5], timesPerWeek: 3, interval: 1 },
+      weekly: { frequency: 'weekly', daysOfWeek: [], timesPerWeek: 1, interval: 1 },
+    };
+    const recurrence = recurrenceByAnswer[answer];
+    if (!recurrence) throw new Error(`routine_invalid_clarification_answer:${question.id}`);
+    return RoutineClassifiedItemSchema.parse({ ...item, recurrence });
+  }
+
+  const match = answer.trim().match(/^(\d{4}-\d{2}-\d{2})[T ]([0-2]\d:[0-5]\d)$/);
+  if (!match) throw new Error(`routine_invalid_clarification_answer:${question.id}`);
+  return RoutineClassifiedItemSchema.parse({ ...item, date: match[1], startTime: match[2], isFixed: true });
+}
+
+export class RoutineBuilderService {
+  private readonly extractor: RoutineSourceExtractorService;
+  private readonly classifier: Pick<RoutineClassifierService, 'classify'>;
+  private readonly applyService: Pick<RoutineApplyService, 'apply'>;
+
+  constructor(private readonly prisma: any, dependencies: BuilderDependencies = {}) {
+    this.extractor = dependencies.extractor ?? new RoutineSourceExtractorService();
+    this.classifier = dependencies.classifier ?? {
+      classify: (input) => new RoutineClassifierService().classify(input),
+    };
+    this.applyService = dependencies.applyService ?? new RoutineApplyService(prisma);
+  }
+
+  private async event(userId: string, eventName: string, properties: Record<string, unknown>): Promise<void> {
+    await this.prisma.eventLog?.create?.({ data: { userId, eventName, properties } }).catch(() => undefined);
+  }
+
+  async createSession(userId: string, rawInput: RoutineCreateSessionInput): Promise<any> {
+    const input = RoutineCreateSessionSchema.parse(rawInput);
+    const session = await this.prisma.routineBuildSession.create({
+      data: {
+        userId,
+        status: 'draft',
+        stage: 'source',
+        focus: input.focus,
+        weekStart: new Date(`${input.weekStart}T00:00:00.000Z`),
+        timezone: input.timezone,
+        locale: input.locale,
+        constraints: { limits: input.limits },
+        items: [],
+        questions: [],
+        answers: [],
+      },
+    });
+    await this.event(userId, 'routine_builder_started', { sessionId: session.id, weekStart: input.weekStart });
+    return publicSession(session);
+  }
+
+  async getSession(userId: string, sessionId: string): Promise<any> {
+    const session = await this.prisma.routineBuildSession.findFirst({ where: { id: sessionId, userId } });
+    if (!session) throw new Error('routine_session_not_found');
+    return publicSession(session);
+  }
+
+  async ingestSource(input: {
+    userId: string;
+    sessionId: string;
+    buffer: Buffer;
+    mimeType: string;
+    fileName?: string | null;
+    sourceType: 'text' | 'transcript' | 'file';
+  }): Promise<any> {
+    const session = await this.prisma.routineBuildSession.findFirst({ where: { id: input.sessionId, userId: input.userId } });
+    if (!session) throw new Error('routine_session_not_found');
+    if (!['draft', 'classified', 'needs_clarification', 'failed'].includes(session.status)) {
+      throw new Error('routine_session_source_locked');
+    }
+
+    const source = await this.extractor.extract({ buffer: input.buffer, mimeType: input.mimeType, fileName: input.fileName });
+    const [objectives, habits, timeline, feedback] = await Promise.all([
+      this.prisma.objective.findMany({ where: { userId: input.userId, archived: false }, select: { title: true } }),
+      this.prisma.habit.findMany({ where: { userId: input.userId, archived: false }, select: { title: true } }),
+      this.prisma.timelineBlock.findMany({ where: { userId: input.userId, status: { notIn: ['done', 'deleted'] } }, select: { title: true, status: true } }),
+      AiActionFeedbackService.getRecent(this.prisma, input.userId, 80),
+    ]);
+    const existingTitles = [...objectives, ...habits, ...timeline].map((item: { title: string }) => item.title);
+    const negativeItems = feedback
+      .filter((item) => AiActionFeedbackService.blocksFutureSuggestion(item.status))
+      .map((item) => ({
+        title: item.title,
+        state: item.status === 'done' ? 'completed' as const
+          : item.status === 'scheduled' ? 'scheduled' as const
+            : item.status === 'deleted' ? 'deleted' as const
+              : 'rejected' as const,
+      }));
+    const classified = await this.classifier.classify({
+      text: source.text,
+      locale: session.locale,
+      existingTitles,
+      negativeItems,
+    });
+    const clarification = RoutineClarificationService.build(classified.items);
+    const updated = await this.prisma.routineBuildSession.update({
+      where: { id: session.id },
+      data: {
+        status: clarification.needsClarification ? 'needs_clarification' : 'classified',
+        stage: 'review',
+        sourceType: input.sourceType,
+        sourceName: source.fileName,
+        sourceMime: source.mimeType,
+        sourceHash: source.sha256,
+        sourceText: source.text,
+        sourceExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        items: classified.items,
+        questions: clarification.questions,
+        answers: [],
+        draftPlan: null,
+      },
+    });
+    await this.event(input.userId, 'routine_builder_source_classified', {
+      sessionId: session.id,
+      sourceType: input.sourceType,
+      itemCount: classified.items.length,
+      questionCount: clarification.questions.length,
+      truncated: source.truncated,
+    });
+    return publicSession(updated);
+  }
+
+  async updateItems(input: { userId: string; sessionId: string; items: unknown[] }): Promise<any> {
+    const session = await this.prisma.routineBuildSession.findFirst({ where: { id: input.sessionId, userId: input.userId } });
+    if (!session) throw new Error('routine_session_not_found');
+    if (!['classified', 'needs_clarification', 'ready'].includes(session.status)) throw new Error('routine_session_items_locked');
+    const { items } = RoutineUpdateItemsSchema.parse({ items: input.items });
+    const clarification = RoutineClarificationService.build(items);
+    const hasPending = items.some((item) => item.reviewState === 'pending');
+    const status = clarification.needsClarification ? 'needs_clarification' : hasPending ? 'classified' : 'ready';
+    const stage = status === 'ready' ? 'compose' : status === 'needs_clarification' ? 'clarify' : 'review';
+    const updated = await this.prisma.routineBuildSession.update({
+      where: { id: session.id },
+      data: { items, questions: clarification.questions, status, stage, draftPlan: null },
+    });
+    return publicSession(updated);
+  }
+
+  async answerClarifications(input: {
+    userId: string;
+    sessionId: string;
+    answers: Array<{ questionId: string; answer: string }>;
+  }): Promise<any> {
+    const session = await this.prisma.routineBuildSession.findFirst({ where: { id: input.sessionId, userId: input.userId } });
+    if (!session) throw new Error('routine_session_not_found');
+    if (session.status !== 'needs_clarification') throw new Error('routine_session_not_waiting_for_answers');
+    let items = z.array(RoutineClassifiedItemSchema).parse(session.items);
+    const questions = z.array(z.object({
+      id: z.string(), itemId: z.string(), field: z.enum(['date_and_time', 'recurrence', 'title']),
+      answerType: z.enum(['datetime', 'frequency', 'text']), prompt: z.string(), reason: z.string(), priority: z.number(),
+      options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
+    })).parse(session.questions) as RoutineClarificationQuestion[];
+
+    for (const answer of input.answers) {
+      const question = questions.find((candidate) => candidate.id === answer.questionId);
+      if (!question) throw new Error(`routine_question_not_found:${answer.questionId}`);
+      items = items.map((item) => item.id === question.itemId ? applyAnswer(item, question, answer.answer) : item);
+    }
+    const remaining = RoutineClarificationService.build(items);
+    const hasPending = items.some((item) => item.reviewState === 'pending');
+    const status = remaining.needsClarification ? 'needs_clarification' : hasPending ? 'classified' : 'ready';
+    const stage = status === 'ready' ? 'compose' : status === 'needs_clarification' ? 'clarify' : 'review';
+    const updated = await this.prisma.routineBuildSession.update({
+      where: { id: session.id },
+      data: {
+        items,
+        questions: remaining.questions,
+        answers: [...(Array.isArray(session.answers) ? session.answers : []), ...input.answers],
+        status,
+        stage,
+      },
+    });
+    return publicSession(updated);
+  }
+
+  async compose(userId: string, sessionId: string): Promise<any> {
+    const session = await this.prisma.routineBuildSession.findFirst({ where: { id: sessionId, userId } });
+    if (!session) throw new Error('routine_session_not_found');
+    if (session.status !== 'ready') throw new Error('routine_session_not_ready');
+    const items = z.array(RoutineClassifiedItemSchema).parse(session.items);
+    const weekStart = dateOnly(session.weekStart);
+    const weekEnd = addDays(weekStart, 6);
+    const [blocks, habits, latestCheckin] = await Promise.all([
+      this.prisma.timelineBlock.findMany({
+        where: { userId, localDate: { gte: new Date(`${weekStart}T00:00:00.000Z`), lte: new Date(`${weekEnd}T00:00:00.000Z`) }, status: { notIn: ['deleted'] } },
+        orderBy: { startAt: 'asc' },
+      }),
+      this.prisma.habit.findMany({
+        where: { userId, archived: false },
+        select: { id: true, title: true, frequency: true, targetDays: true, durationMinutes: true },
+      }),
+      this.prisma.dailyCheckin.findFirst({
+        where: { userId },
+        orderBy: [{ localDate: 'desc' }, { recordedAt: 'desc' }],
+        select: { energyScore: true, moodScore: true, stateLabel: true, recordedAt: true },
+      }),
+    ]);
+    const capacity = deriveRoutineCapacity({
+      phaseLabel: latestCheckin?.stateLabel,
+      energyScore: latestCheckin?.energyScore,
+      recordedAt: latestCheckin?.recordedAt,
+    });
+    const limits = ((session.constraints ?? {}) as any).limits ?? {};
+    const plan = RoutineComposerService.compose({
+      weekStart,
+      items,
+      limits: {
+        wakeTime: limits.wakeTime ?? '07:00',
+        sleepTime: limits.sleepTime ?? '23:00',
+        maxDailyLoadMinutes: limits.maxDailyLoadMinutes ?? 360,
+        unavailable: Array.isArray(limits.unavailable) ? limits.unavailable : [],
+      },
+      existingBlocks: blocks.map((block: any) => ({
+        id: block.id,
+        date: dateOnly(block.localDate),
+        startTime: timeOnly(block.startAt),
+        endTime: timeOnly(block.endAt),
+        title: block.title,
+        isFixed: block.temporalPolicy === 'fixed' || block.adaptationPermission === 'protected',
+      })),
+      existingHabits: habits.map((habit: any) => ({
+        id: habit.id,
+        title: habit.title,
+        frequency: ['daily', 'weekly', 'monthly'].includes(habit.frequency) ? habit.frequency : 'daily',
+        targetDays: Array.isArray(habit.targetDays) ? habit.targetDays : [],
+        durationMinutes: habit.durationMinutes,
+      })),
+      capacity,
+    });
+    const updated = await this.prisma.routineBuildSession.update({
+      where: { id: session.id },
+      data: { draftPlan: plan, stage: 'preview' },
+    });
+    await this.event(userId, 'routine_builder_plan_composed', {
+      sessionId,
+      scheduledCount: plan.entries.filter((entry) => entry.persist).length,
+      unscheduledCount: plan.unscheduled.length,
+      capacity: plan.capacity.level,
+    });
+    return publicSession(updated);
+  }
+
+  async apply(userId: string, sessionId: string): Promise<any> {
+    const result = await this.applyService.apply({ userId, sessionId });
+    await this.event(userId, 'routine_builder_applied', { sessionId, counts: result.counts });
+    return result;
+  }
+
+  async purgeExpiredSources(now = new Date()): Promise<number> {
+    const result = await this.prisma.routineBuildSession.updateMany({
+      where: { sourceText: { not: null }, sourceExpiresAt: { lte: now } },
+      data: { sourceText: null, sourceExpiresAt: null },
+    });
+    return result.count;
+  }
+}

@@ -4,6 +4,19 @@ import { getOpenAiModel } from '../lib/openai-config';
 import { AuraCommandService, parseAuraCommandResponse } from './aura-command.service';
 
 async function run() {
+  const routineBuilder = parseAuraCommandResponse(
+    JSON.stringify({
+      assistantMessage: 'Vou abrir o montador para separar, revisar e organizar sua semana.',
+      intent: 'routine_builder',
+      action: 'start_routine_builder',
+      payload: { sourceText: 'Minha rotina está toda solta.' },
+      needsConfirmation: false,
+    }),
+    'Monte minha rotina completa a partir disso.',
+  );
+  assert.equal(routineBuilder.intent, 'routine_builder');
+  assert.equal(routineBuilder.action, 'start_routine_builder');
+
   const recoveredAgenda = parseAuraCommandResponse(
     JSON.stringify({
       assistantMessage: 'Separei a proposta em blocos para você revisar.',
@@ -169,10 +182,11 @@ async function run() {
   assert.match(userPrompt, /create_checklist/i);
   assert.match(userPrompt, /handoff_to_journal/i);
   assert.match(userPrompt, /ask_clarification/i);
+  assert.match(userPrompt, /start_routine_builder/i);
   assert.match(userPrompt, /needsConfirmation/i);
   assert.match(userPrompt, /recorrent/i);
   assert.match(userPrompt, /HIERARQUIA DE EXECUÇÃO/i);
-  assert.match(userPrompt, /ROTINA AUTOMÁTICA/i);
+  assert.match(userPrompt, /MONTADOR DE ROTINA/i);
   assert.match(userPrompt, /MODO EXECUTOR/i);
   assert.match(userPrompt, /FORMATO OBRIGATÓRIO PARA CREATE_AGENDA/i);
   assert.match(userPrompt, /RELATO DE CONCLUSÃO/i);

@@ -87,12 +87,19 @@ export class RoutineApplyService {
       for (const item of items) {
         if (item.reviewState === 'excluded' || item.duplicateOf) continue;
         if (item.kind === 'goal' || item.kind === 'project') {
+          const subgoals = items
+            .filter((candidate) => candidate.kind === 'task'
+              && candidate.parentItemId === item.id
+              && candidate.reviewState !== 'excluded'
+              && !candidate.duplicateOf)
+            .map((candidate) => ({ id: candidate.id, title: candidate.title, done: false }));
           const objective = await tx.objective.create({
             data: {
               userId: input.userId,
               title: item.title,
               description: item.description ?? null,
               category: item.kind === 'project' ? 'projeto' : 'geral',
+              subgoals,
               aiInsight: `Criado pelo Montador de Rotina a partir de uma fonte revisada pela usuária. Origem: ${item.sourceExcerpt}`,
             },
           });

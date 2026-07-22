@@ -63,6 +63,7 @@ import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { ActivationChecklist } from "../components/activation/ActivationChecklist";
 import { FirstRunGuide } from "../components/activation/FirstRunGuide";
 import { getActivationState } from "../features/aura/activation";
+import { isHabitDueOnWeekday } from "../features/aura/habit-helpers";
 import { NotificationPromptBanner } from "../components/NotificationPromptBanner";
 import { PresenceCard } from "../components/PresenceCard";
 import { GoalNudgeCard } from "../components/GoalNudgeCard";
@@ -518,7 +519,10 @@ export function HomePage() {
     equilibrada: "Balanced", focada: "Focused", tensa: "Tense", cansada: "Tired", sensivel: "Sensitive", sobrecarregada: "Overloaded",
   };
   const mood = { ...rawMood, label: l(rawMood.label, moodLabelsEn[state.mood] ?? "Balanced") };
-  const habits = state.habits || [];
+  const habits = useMemo(
+    () => (state.habits || []).filter((habit) => isHabitDueOnWeekday(habit, clockTime.getDay())),
+    [clockTime, state.habits],
+  );
   const activationState = useMemo(
     () => getActivationState(state, { hasLocalJournalEntry }),
     [hasLocalJournalEntry, state],
@@ -2493,11 +2497,9 @@ export function HomePage() {
                         {t("home.blankAi")}
                       </p>
                       <button
-                        onClick={() => navigate("/aura", {
+                        onClick={() => navigate("/routine-builder", {
                           state: {
-                            initialPrompt: l("Monta meu dia. Não sei por onde começar.", "Build my day. I don't know where to start."),
-                            mode: "executor",
-                            autoSend: true,
+                            focus: l("Montar um dia possível a partir do que é real agora", "Build a workable day from what is real now"),
                           }
                         })}
                         style={{
@@ -2516,7 +2518,7 @@ export function HomePage() {
                         }}
                       >
                         <span style={{ fontSize: 16 }}>✦</span>
-                        Airia monta meu dia
+                        {l("Montar minha rotina", "Build my routine")}
                       </button>
                     </>
                   )}

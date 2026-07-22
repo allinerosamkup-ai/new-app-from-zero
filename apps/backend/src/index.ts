@@ -46,6 +46,8 @@ import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
+import { RoutineBuilderService } from './services/routine-builder.service';
+import { createRoutineBuilderRouter } from './routes/routine-builder.routes';
 import { getSalesHistory as getHotmartSalesHistory } from './services/hotmart.service';
 import { sendPurchaseEvent as sendMetaPurchaseEvent } from './services/meta-capi.service';
 import { buildPrivacyExport, type PrivacyExportPrisma } from './services/privacy-export.service';
@@ -238,6 +240,8 @@ type AppDependencies = {
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
+  routineBuilderService?: Pick<RoutineBuilderService,
+    'createSession' | 'getSession' | 'ingestSource' | 'updateItems' | 'answerClarifications' | 'compose' | 'apply'>;
 };
 
 /**
@@ -1544,6 +1548,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
   const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
   const contextGroundingService = new ContextGroundingService(prisma);
+  const routineBuilderService = dependencies.routineBuilderService ?? new RoutineBuilderService(prisma);
 
   const matchesAllowedHost = (origin: string, allowed: string) => {
     try {
@@ -1736,6 +1741,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   // Todas as rotas abaixo exigem autenticação Supabase
   app.use('/api', dependencies.authMiddleware ?? requireAuth);
+  app.use('/api/routine-builder', createRoutineBuilderRouter({ service: routineBuilderService }));
 
   app.post('/api/onboarding/process', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
@@ -6790,6 +6796,15 @@ if (require.main === module) {
       }
     } catch (err) {
       console.warn('[cron/kg-backfill] erro geral:', err);
+    }
+  });
+
+  cron.schedule('7 * * * *', async () => {
+    try {
+      const purged = await new RoutineBuilderService(defaultPrisma).purgeExpiredSources();
+      if (purged > 0) console.log(`[cron/routine-builder] fontes temporárias removidas=${purged}`);
+    } catch (error) {
+      console.warn('[cron/routine-builder] falha ao limpar fontes temporárias:', error);
     }
   });
 

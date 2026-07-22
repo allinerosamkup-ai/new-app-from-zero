@@ -37,3 +37,20 @@ Uma experiência da Airia só está correta quando entrega, em conjunto:
 3. adaptação de agenda compatível com a liberdade e as restrições do dia;
 4. um próximo passo específico quando existe âncora atual, ou uma pergunta curta quando ela não existe;
 5. memória que dá continuidade sem criar autoridade operacional.
+
+## Montador de Rotina
+
+Pedidos amplos como “monte meu dia”, “organize minha semana” ou “transforme este documento em rotina” não usam o gerador rápido de blocos. Eles abrem uma sessão persistente do Montador de Rotina.
+
+O fluxo obrigatório é:
+
+1. receber texto, transcrição, TXT, Markdown, PDF, DOCX ou XLSX;
+2. separar meta, projeto, tarefa, hábito, compromisso, referência e preocupação sem inventar campos ausentes;
+3. bloquear duplicatas e itens concluídos, rejeitados, excluídos ou já agendados;
+4. permitir correção e exclusão antes de qualquer gravação;
+5. perguntar somente data, frequência ou resultado quando isso impedir a montagem;
+6. cruzar itens confirmados com agenda protegida, hábitos existentes e check-in recente;
+7. apresentar uma semana editável, incluindo o que não coube;
+8. criar metas, hábitos e blocos em uma única transação idempotente.
+
+Compromissos fixos nunca são movidos. Hábitos aparecem somente nos dias devidos. A fase e o check-in dimensionam carga e duração; o horário disponível serve para posicionar, nunca para inferir a fase da pessoa.

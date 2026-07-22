@@ -3264,24 +3264,23 @@ export function PlannerPage() {
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
             <button
               type="button"
-              onClick={() => void openPlannerAISuggestions()}
-              disabled={aiSuggestionLoading}
+              onClick={() => navigate("/routine-builder", { state: { focus: t("routineBuilder.focusPlaceholder") } })}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
                 border: "1.5px solid var(--accent-peach, #D7897F)",
-                background: aiSuggestionLoading ? "rgba(215,137,127,.15)" : "rgba(215,137,127,.08)",
+                background: "rgba(215,137,127,.08)",
                 color: "var(--accent-peach-ink, #A8584A)",
                 borderRadius: 999,
                 padding: "6px 14px",
                 fontSize: 12,
                 fontWeight: 700,
-                cursor: aiSuggestionLoading ? "default" : "pointer",
+                cursor: "pointer",
               }}
             >
               <Sparkles size={13} />
-              {aiSuggestionLoading ? "Pensando…" : "Sugerir blocos com IA"}
+              {t("routineBuilder.eyebrow")}
             </button>
           </div>
         </AiriaCard>

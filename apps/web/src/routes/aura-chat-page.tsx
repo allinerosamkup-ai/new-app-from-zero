@@ -27,6 +27,7 @@ type AuraCommandIntent =
   | "checklist"
   | "goal_project"
   | "agenda_plan"
+  | "routine_builder"
   | "clarify"
   | "reflective_handoff";
 
@@ -35,6 +36,7 @@ type AuraCommandAction =
   | "create_checklist"
   | "create_goal"
   | "create_agenda"
+  | "start_routine_builder"
   | "ask_clarification"
   | "handoff_to_journal"
   | "update_task"
@@ -275,6 +277,16 @@ export function AuraChatPage() {
 
   async function executeAuraAction(response: AuraCommandResponse): Promise<string | null> {
     try {
+      if (response.action === "start_routine_builder") {
+        navigate("/routine-builder", {
+          state: {
+            initialSource: typeof response.payload.sourceText === "string" ? response.payload.sourceText : "",
+            focus: typeof response.payload.focus === "string" ? response.payload.focus : "",
+          },
+        });
+        return null;
+      }
+
       if (response.action === "create_task" || response.action === "create_agenda") {
         const blocks = buildTimelineBlocks(response.payload);
         if (blocks.length === 0) {

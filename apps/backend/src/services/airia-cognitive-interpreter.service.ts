@@ -361,9 +361,19 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
     };
   }
 
+  const explicitRoutineBuilder = /\b(?:monte|monta|organize|organiza|planeje|planeja) (?:meu|minha|o|a) (?:dia|semana|agenda|rotina)\b|\b(?:transforme|organize) .{0,80}\b(?:anotacoes|documento|lista)\b|\b(?:build|plan|organize) (?:my|the) (?:day|week|routine|schedule)\b/.test(text);
+  if (explicitRoutineBuilder) {
+    return {
+      captureAs: 'clarification', allowedMutationActions: [],
+      allowTaskCreation: false, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual pede abrir uma montagem revisável; ainda não autoriza criar itens antes da revisão.',
+    };
+  }
+
   const explicitChecklist = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|monte) (?:uma? )?(?:checklist|lista)\b|\b(?:quebra|quebre|divida) .{1,80}\bem (?:passos|etapas)\b|\b(?:create|add|make|build) (?:a )?(?:checklist|list)\b|\bbreak .{1,80}\binto (?:steps|stages)\b/.test(text);
   const explicitGoal = /\b(?:crie|cria|adicione|adiciona|inclua|inclui) (?:uma? )?meta\b|\b(?:quero|preciso|vamos) criar (?:uma? )?meta\b|\b(?:create|add|make) (?:a )?goal\b/.test(text);
-  const explicitAgendaAction = /\b(?:agende|marque|marcar) .{0,60}\b(?:consulta|dentista|reuniao|compromisso|sessao|bloco|evento)\b|\b(?:monte|organize) (?:meu|minha|o|a) (?:dia|agenda|rotina)\b|\b(?:schedule) .{0,60}\b(?:appointment|meeting|commitment|block|event)\b|\b(?:plan|organize) (?:my|the) (?:day|agenda|schedule)\b/.test(text);
+  const explicitAgendaAction = /\b(?:agende|marque|marcar) .{0,60}\b(?:consulta|dentista|reuniao|compromisso|sessao|bloco|evento)\b|\b(?:schedule) .{0,60}\b(?:appointment|meeting|commitment|block|event)\b/.test(text);
   const explicitTask = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|registre) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:quero|preciso|vamos) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:pode|consegue) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:transforme|coloque) (?:isto|isso) (?:em|como) (?:uma? )?tarefa\b|\b(?:please |can you |could you |i want you to |i need you to )?(?:create|add|make) (?:a )?(?:task|reminder)\b|\b(?:turn|put) (?:this|that|it) (?:down )?(?:into|as) (?:a )?(?:task|reminder)\b/.test(text);
   if (explicitChecklist || explicitGoal || explicitAgendaAction || explicitTask) {
     const allowedMutationActions: AiriaMutationAction[] = explicitChecklist

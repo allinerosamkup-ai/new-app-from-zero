@@ -223,6 +223,10 @@ async function run() {
   assert.equal(explicitSchedulePt.captureJudgment.allowTaskCreation, true);
   assert.deepEqual(explicitSchedulePt.captureJudgment.allowedMutationActions, ['create_agenda']);
 
+  const broadRoutinePt = await offline('Monte minha rotina completa a partir das minhas anotações.');
+  assert.equal(broadRoutinePt.captureJudgment.allowTaskCreation, false);
+  assert.deepEqual(broadRoutinePt.captureJudgment.allowedMutationActions, []);
+
   const explicitGoalEn = await offline('Could you create a goal to finish the course?');
   assert.equal(explicitGoalEn.captureJudgment.allowTaskCreation, true);
   assert.deepEqual(explicitGoalEn.captureJudgment.allowedMutationActions, ['create_goal']);

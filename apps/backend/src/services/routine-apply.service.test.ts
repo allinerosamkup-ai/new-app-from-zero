@@ -11,7 +11,7 @@ function createFakePrisma(options?: { failTimeline?: boolean }) {
       items: [
         { id: 'goal-1', kind: 'goal', title: 'Concluir a mudança', sourceExcerpt: 'Quero concluir a mudança', confidence: 0.9, reviewState: 'confirmed' },
         { id: 'habit-1', kind: 'habit', title: 'Caminhar', sourceExcerpt: 'Caminhar terça', confidence: 0.9, reviewState: 'confirmed', durationMinutes: 30, recurrence: { frequency: 'weekly', daysOfWeek: [2], interval: 1 } },
-        { id: 'task-1', kind: 'task', title: 'Embalar livros', sourceExcerpt: 'Embalar os livros', confidence: 0.9, reviewState: 'confirmed' },
+        { id: 'task-1', kind: 'task', title: 'Embalar livros', sourceExcerpt: 'Embalar os livros', confidence: 0.9, reviewState: 'confirmed', parentItemId: 'goal-1' },
       ],
       draftPlan: {
         weekStart: '2026-07-27',
@@ -95,6 +95,7 @@ async function run(): Promise<void> {
   assert.equal(state.session.status, 'applied');
   assert.equal(state.session.sourceText, null);
   assert.equal(state.objectives[0].userId, 'user-1');
+  assert.deepEqual(state.objectives[0].subgoals, [{ id: 'task-1', title: 'Embalar livros', done: false }]);
   assert.deepEqual(state.habits[0].targetDays, [2]);
   assert.equal(state.blocks[0].isAiSuggested, true);
   assert.equal(state.blocks[0].temporalPolicy, 'flexible');

@@ -37,6 +37,7 @@ const loadLivroPage = () => import("./routes/livro-page");
 const loadTermsPage = () => import("./routes/terms-page");
 const loadConteudoPage = () => import("./routes/conteudo-page");
 const loadContextoPage = () => import("./routes/contexto-page");
+const loadRoutineBuilderPage = () => import("./routes/routine-builder-page");
 
 const AuraLayout = lazy(() => loadAuraLayout().then((module) => ({ default: module.AuraLayout })));
 const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
@@ -72,6 +73,7 @@ const JornadaPage = lazy(() => loadJornadaPage().then((module) => ({ default: mo
 const LivroPage = lazy(() => loadLivroPage().then((module) => ({ default: module.default })));
 const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: module.ConteudoPage })));
 const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: module.ContextoPage })));
+const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
@@ -280,6 +282,7 @@ export default function App() {
           <Route path="/aura" element={<AuraChatPage />} />
           <Route path="/conteudo" element={<ConteudoPage />} />
           <Route path="/contexto" element={<ContextoPage />} />
+          <Route path="/routine-builder" element={<RoutineBuilderPage />} />
         </Route>
       </Routes>
       </div>

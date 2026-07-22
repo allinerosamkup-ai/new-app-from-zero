@@ -106,12 +106,29 @@ async function handleResponse(response: Response) {
   let message = `Erro ${response.status}`;
   try {
     const body = await response.json();
-    if (body?.error) message = body.error;
-    else if (body?.message) message = body.message;
+    if (body?.message) {
+      const firstDetail = Array.isArray(body.details) && typeof body.details[0]?.message === 'string'
+        ? ` ${body.details[0].message}`
+        : '';
+      message = `${body.message}${firstDetail}`.trim();
+    } else if (body?.error) message = body.error;
   } catch {
     message = `Erro ${response.status}: ${response.statusText}`;
   }
   throw new Error(message);
+}
+
+function uploadContentType(file: File): string {
+  if (file.type && file.type !== 'application/octet-stream') return file.type;
+  const extension = file.name.toLowerCase().split('.').pop();
+  const byExtension: Record<string, string> = {
+    txt: 'text/plain',
+    md: 'text/markdown',
+    pdf: 'application/pdf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+  return (extension && byExtension[extension]) || 'application/octet-stream';
 }
 
 export const api = {
@@ -167,6 +184,19 @@ export const api = {
     const response = await fetch(`${API_URL}${endpoint}`, {
       method: 'DELETE',
       headers,
+    });
+    return handleResponse(response);
+  },
+
+  async upload(endpoint: string, file: File) {
+    const headers = await getAuthHeaders();
+    delete headers['Content-Type'];
+    headers['Content-Type'] = uploadContentType(file);
+    headers['X-File-Name'] = encodeURIComponent(file.name);
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: file,
     });
     return handleResponse(response);
   },

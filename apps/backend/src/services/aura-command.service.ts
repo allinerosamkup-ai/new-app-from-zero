@@ -63,6 +63,8 @@ function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandInt
       return 'goal_project';
     case 'create_agenda':
       return 'agenda_plan';
+    case 'start_routine_builder':
+      return 'routine_builder';
     case 'ask_clarification':
       return 'clarify';
     case 'handoff_to_journal':
@@ -88,6 +90,8 @@ function inferActionFromIntent(intent: AuraCommandIntent | null): AuraCommandAct
       return 'create_goal';
     case 'agenda_plan':
       return 'create_agenda';
+    case 'routine_builder':
+      return 'start_routine_builder';
     case 'clarify':
       return 'ask_clarification';
     case 'reflective_handoff':
@@ -280,38 +284,33 @@ export class AuraCommandService {
       '2. PROPONHA se precisar de confirmação do usuário (só para datas futuras).',
       '3. PERGUNTE apenas se falta dado completamente indispensável (ex: qual tarefa específica remover).',
       '',
-      '== ROTINA AUTOMÁTICA (PRIORIDADE MÁXIMA) ==',
-      'Se a pessoa disser que não sabe o que fazer, está paralisada, quer organizar o dia,',
-      'não tem agenda, está perdida ou pede "monta meu dia" / "o que faço agora" / "me ajuda a começar":',
-      '→ Use create_agenda com blocos reais baseados em:',
-      '  - Hora atual (se disponível no contexto)',
-      '  - Fase/energia (do estado atual)',
-      '  - Metas ativas',
-      '  - Hábitos pendentes',
-      '  - Necessidades básicas (alimentação, movimento, descanso)',
-      '→ NÃO pergunte "qual é sua prioridade". Monte a rotina, apresente, deixe a pessoa ajustar.',
-      '→ assistantMessage: confirme o que foi criado de forma breve e animada. Máx 2 frases.',
+      '== MONTADOR DE ROTINA (PRIORIDADE MÁXIMA) ==',
+      'Quando a pessoa pedir para montar/organizar o dia, a semana ou a rotina inteira; colar uma lista misturada; ou pedir para transformar um documento em metas, hábitos, tarefas e compromissos:',
+      '→ Use action "start_routine_builder" e intent "routine_builder".',
+      '→ payload: {"sourceText":"texto original útil, sem inventar itens","focus":"objetivo explícito, se houver"}.',
+      '→ O Montador fará classificação, revisão, esclarecimentos indispensáveis, cruzamento com agenda/hábitos/check-in e aplicação atômica.',
+      '→ Não gere blocos genéricos, não suponha prioridades e não diga que a rotina já foi salva.',
+      '→ assistantMessage: diga em uma frase que vai abrir a montagem revisável.',
       '',
       '== FORMATO OBRIGATÓRIO PARA CREATE_AGENDA ==',
+      'Use create_agenda apenas para uma lista PEQUENA de blocos concretos já especificados pela pessoa; pedidos amplos pertencem ao start_routine_builder.',
       'Quando action = "create_agenda", o payload DEVE ter uma chave "blocks" com array de blocos:',
       '{"action":"create_agenda","intent":"agenda_plan","needsConfirmation":false,"assistantMessage":"Pronto! Montei seu dia.","payload":{"blocks":[{"title":"Café + planejamento","date":"' + todayKey + '","startTime":"08:00","category":"pessoal"},{"title":"Foco profundo","date":"' + todayKey + '","startTime":"09:30","category":"trabalho"},{"title":"Almoço e pausa","date":"' + todayKey + '","startTime":"12:00","category":"autocuidado"},{"title":"Projetos da tarde","date":"' + todayKey + '","startTime":"14:00","category":"trabalho"},{"title":"Encerrar o dia","date":"' + todayKey + '","startTime":"17:30","category":"pessoal"}]}}',
       'Categorias válidas: "trabalho", "pessoal", "autocuidado", "social", "outro".',
       'NUNCA retorne create_agenda sem o campo "blocks" dentro de "payload".',
       '',
       '== MODO ZERO CONTEXTO ==',
-      'Se NÃO houver metas, hábitos, planner, nem estado de humor disponível:',
-      '→ MESMO ASSIM use create_agenda com o formato acima — nunca retorne só texto quando pedirem rotina.',
-      '→ Crie 5-6 blocos para um dia equilibrado começando ~1h depois da hora atual.',
-      '→ Estrutura base: Café + planejamento (pessoal), Foco profundo (trabalho), Almoço e pausa (autocuidado), Projetos / tarefas (trabalho), Encerrar o dia (pessoal).',
-      '→ Títulos em português natural. Datas: todas com ' + todayKey + '.',
+      'Se NÃO houver metas, hábitos, planner nem estado recente, nunca invente uma rotina padrão.',
+      '→ Use start_routine_builder para coletar uma fonte real e permitir revisão antes de salvar.',
       '',
       '== REGRAS DE NEEDSCONFIRMATION ==',
-      '- FALSE (executa direto): tarefa de HOJE, rotina do dia, tarefas sem data específica',
+      '- FALSE (executa direto): tarefa de HOJE, abertura do Montador, tarefas sem data específica',
       '- TRUE (mostra proposta): APENAS quando a data é futura (amanhã ou depois)',
       '',
       '== REGRAS OPERACIONAIS ==',
       '- create_task: title + date (' + todayKey + ' se hoje) + startTime + category + note',
       '- create_agenda: blocks[] com title/date/startTime/category cada um',
+      '- start_routine_builder: sourceText original + focus explícito opcional; não cria blocos diretamente',
       '- create_checklist: title + items[] (mantém TODOS os itens, sem resumir)',
       '- create_goal: title + subgoals[]',
       '- update_task: taskId + newDate + newStartTime',
@@ -336,7 +335,7 @@ export class AuraCommandService {
       '→ needsConfirmation: false — se ela disse que fez, registra direto.',
       '',
       '== ANTI-PADRÕES (NUNCA FAÇA) ==',
-      '- Não pergunte "qual é sua prioridade?" quando a agenda está vazia — crie a rotina.',
+      '- Não pergunte "qual é sua prioridade?" quando a agenda está vazia — abra o Montador para obter e revisar uma fonte real.',
       '- Não resuma uma lista em uma tarefa — use create_checklist.',
       '- Não use análise emocional longa em modo executor.',
       '- Não faça handoff ao diário sem a pessoa pedir.',

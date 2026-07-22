@@ -30,3 +30,11 @@ Conclusão, rejeição, exclusão e agendamento geram memória negativa best-eff
 ## Privacidade
 
 O export inclui memórias canônicas, evidências, embeddings e Knowledge Graph. `DELETE /api/memory` apaga essas camadas e projeções legadas de memória, sem apagar a conta ou outros dados do produto. As tabelas canônicas têm cascade por usuário, RLS com `auth.uid()` e restrições de domínio no banco.
+
+## Memória do Montador de Rotina
+
+`RoutineBuildSession` guarda estado recuperável, itens classificados, perguntas, respostas, prévia e resultado da aplicação. O texto bruto da fonte é temporário: recebe expiração de uma hora, é apagado ao aplicar a rotina e também é limpo automaticamente pelo processo horário do backend.
+
+O histórico longitudinal participa apenas de duas decisões: explicar capacidade/padrão e impedir repetição. Ele não cria uma tarefa por conta própria. Itens do documento só ganham autoridade operacional depois da revisão da usuária; a confirmação final é aplicada atomicamente em `Objective`, `Habit` e `TimelineBlock`.
+
+Eventos do Montador registram apenas identificador da sessão, contagens, tipo de fonte e nível de capacidade. Conteúdo bruto, trechos do documento e respostas pessoais não entram em `EventLog`.

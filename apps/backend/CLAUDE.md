@@ -12,8 +12,8 @@
 Arquivo: `src/lib/aura-prompt.ts`
 Gera o prompt de sistema unificado para a Aura. O `domain` define a policy da superfície (`journal-live`, `journal-finalize`, `aura-command`, `checkin`, `planning`, `home`, `insight`, `summary`, etc.) e o `moodCycleContext` deve ser injetado quando houver contexto de fase.
 
-**Aliança Divergente — estrutura de output obrigatória (injetada em todo prompt):**
-Todo output substantivo deve conter 4 elementos: **FATO AGORA** (o que está acontecendo de verdade, nomeado com detalhe concreto) → **LEITURA** (o que esse fato revela no padrão, cruzando fase + histórico + RAG) → **TRAVA OU JANELA** (capacidade / disposição / permissão, ou a janela disponível) → **MOVIMENTO** (próximo passo com verbo + objeto concreto + âncora do dia real). Definido em `ALIANCA_DIVERGENTE_STRUCTURE` em `airia-method.ts`. Cada domínio tem mapeamento explícito desses 4 elementos para seu formato de saída.
+**Método interno de raciocínio:**
+`airia-method.ts` contém uma lente interna de análise, direção e ação. Ela orienta a resposta, mas nunca vira cabeçalho, sigla, nomenclatura ou explicação do método para a usuária. A Airia entrega análise pronta, direcionamento concreto e, quando útil, uma provocação curta em linguagem natural.
 
 ### `ContextGroundingService.buildDailyContext(...)`
 Arquivo: `src/services/context-grounding.service.ts`
@@ -58,6 +58,12 @@ Gerencia a resposta em tempo real do diário usando Server-Sent Events (SSE). O 
 - `POST /api/ai/action-feedback`: Registra feedback sobre ação sugerida pela IA.
 - `POST /api/timeline/:id/postpone`: Adia bloco para o próximo dia e registra padrão de adiamento.
 - `POST /api/journal/message/stream`: Endpoint SSE para chat do diário.
+- `POST /api/routine-builder/sessions`: inicia uma montagem persistente.
+- `POST /api/routine-builder/sessions/:id/source`: lê texto ou arquivo e classifica a fonte.
+- `PATCH /api/routine-builder/sessions/:id/items`: salva a revisão dos itens.
+- `POST /api/routine-builder/sessions/:id/clarifications`: responde somente bloqueios operacionais.
+- `POST /api/routine-builder/sessions/:id/compose`: cruza agenda, hábitos e check-in e produz a semana.
+- `POST /api/routine-builder/sessions/:id/apply`: aplica metas, hábitos e blocos em uma transação idempotente.
 
 ## Regras de Banco (Prisma)
 - Schema: `packages/database/prisma/schema.prisma`

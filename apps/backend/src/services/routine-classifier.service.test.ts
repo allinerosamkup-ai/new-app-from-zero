@@ -20,7 +20,7 @@ async function run() {
     items: [
       { kind: 'goal', title: 'Mudar para a casa nova', sourceExcerpt: 'Minha meta é concluir a mudança', confidence: 0.95, classificationReason: 'É um resultado amplo.' },
       { kind: 'project', title: 'Preparar a mudança', sourceExcerpt: 'O projeto da mudança tem várias partes', confidence: 0.91, classificationReason: 'Exige várias ações.', parentItemId: 'source-1' },
-      { kind: 'task', title: 'Pintar a parede da sala', sourceExcerpt: 'Preciso pintar a parede da sala', confidence: 0.98, classificationReason: 'É uma ação concluível.', durationMinutes: 90 },
+      { kind: 'task', title: 'Pintar a parede da sala', sourceExcerpt: 'Preciso pintar a parede da sala', confidence: 0.98, classificationReason: 'É uma ação concluível.', durationMinutes: 90, parentItemId: 'source-2' },
       { kind: 'habit', title: 'Caminhar segunda, quarta e sexta', sourceExcerpt: 'Quero caminhar segunda, quarta e sexta', confidence: 0.99, classificationReason: 'É recorrente.', recurrence: { frequency: 'weekly', daysOfWeek: [1, 3, 5], interval: 1 } },
       { kind: 'calendar', title: 'Consulta com a dentista', sourceExcerpt: 'Dentista terça às 14h', confidence: 0.99, classificationReason: 'Tem data e horário externos.', date: '2026-07-28', startTime: '14:00', durationMinutes: 60, isFixed: true },
       { kind: 'reference', title: 'Orçamento da tinta', sourceExcerpt: 'O orçamento da tinta está no anexo', confidence: 0.87, classificationReason: 'É informação de apoio.' },
@@ -42,6 +42,7 @@ async function run() {
     ['goal', 'project', 'task', 'habit', 'calendar', 'reference', 'concern'],
   );
   assert.equal(result.items[0].id, 'source-1');
+  assert.equal(result.items[2].parentItemId, 'source-2');
   assert.equal(result.items[2].reviewState, 'excluded');
   assert.equal(result.items[2].duplicateOf, 'rejected:Pintar a parede da sala');
   assert.equal(result.items[7].reviewState, 'excluded');

@@ -80,6 +80,7 @@ function buildSystemPrompt(locale: string): string {
     '- reference: informação útil sem ação explícita.',
     '- concern: medo, problema ou contexto emocional que não é obrigação.',
     'Separe todas as ações de uma mesma fonte. Nunca resuma um documento misto em um único item.',
+    'Quando uma tarefa fizer parte de uma meta ou projeto da mesma resposta, preencha parentItemId como source-N, em que N é a posição desse item pai no array (a primeira posição é source-1).',
     'Não transforme referência, preocupação ou análise em tarefa.',
     'Não invente data, horário, duração, frequência, prazo ou ação ausente na fonte.',
     'Cada item exige kind, title, sourceExcerpt, confidence e classificationReason.',
