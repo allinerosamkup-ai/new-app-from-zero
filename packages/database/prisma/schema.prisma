@@ -37,8 +37,41 @@ model Profile {
   userFacts         UserFact[]
   userPatterns      UserPattern[]
   userOpenDecisions UserOpenDecision[]
+  routineBuildSessions RoutineBuildSession[]
 
   @@map("profiles")
+}
+
+model RoutineBuildSession {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  status          String   @default("draft")
+  stage           String   @default("source")
+  sourceType      String?  @map("source_type")
+  sourceName      String?  @map("source_name")
+  sourceMime      String?  @map("source_mime")
+  sourceHash      String?  @map("source_hash")
+  sourceText      String?  @map("source_text") @db.Text
+  sourceExpiresAt DateTime? @map("source_expires_at") @db.Timestamptz(6)
+  focus           String   @db.Text
+  constraints     Json     @default("{}")
+  items           Json     @default("[]")
+  questions       Json     @default("[]")
+  answers         Json     @default("[]")
+  draftPlan       Json?    @map("draft_plan")
+  applyResult     Json?    @map("apply_result")
+  locale          String   @default("pt-BR")
+  timezone        String   @default("America/Sao_Paulo")
+  weekStart       DateTime @map("week_start") @db.Date
+  appliedAt       DateTime? @map("applied_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, updatedAt(sort: Desc)], name: "idx_routine_build_sessions_user_status")
+  @@index([sourceExpiresAt], name: "idx_routine_build_sessions_source_expiry")
+  @@map("routine_build_sessions")
 }
 
 model OnboardingResponse {

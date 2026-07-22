@@ -28,6 +28,7 @@ export type PrivacyExportPayload = {
     memories: unknown[];
     canonicalMemories: unknown[];
     memoryEvidence: unknown[];
+    routineBuilder: unknown[];
     knowledgeGraph: {
       entities: unknown[];
       facts: unknown[];
@@ -89,6 +90,7 @@ export async function buildPrivacyExport(
     memories,
     canonicalMemories,
     memoryEvidence,
+    routineBuilder,
     entities,
     facts,
     patterns,
@@ -114,6 +116,7 @@ export async function buildPrivacyExport(
     findMany(prisma.memoryEmbedding, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.userMemory, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.userMemoryEvidence, { where: { userId }, orderBy: { observedAt: 'asc' } }),
+    findMany(prisma.routineBuildSession, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.userEntity, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.userFact, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.userPattern, { where: { userId }, orderBy: { createdAt: 'asc' } }),
@@ -142,6 +145,7 @@ export async function buildPrivacyExport(
       memories,
       canonicalMemories,
       memoryEvidence,
+      routineBuilder,
       knowledgeGraph: { entities, facts, patterns, openDecisions },
       events,
       pushSubscriptions,
