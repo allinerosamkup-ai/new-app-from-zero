@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const RoutineItemKindSchema = z.enum(['goal', 'project', 'task', 'habit', 'calendar', 'reference', 'concern']);
 export const RoutineItemReviewStateSchema = z.enum(['pending', 'confirmed', 'excluded']);
-export const RoutineSessionStatusSchema = z.enum(['draft', 'classified', 'needs_clarification', 'ready', 'applied', 'failed', 'cancelled']);
+export const RoutineSessionStatusSchema = z.enum(['draft', 'classified', 'needs_clarification', 'ready', 'applying', 'applied', 'failed', 'cancelled']);
 
 export const RoutineRecurrenceSchema = z.object({
   frequency: z.enum(['daily', 'weekly', 'monthly']),
@@ -80,7 +80,8 @@ const TRANSITIONS: Record<RoutineSessionStatus, ReadonlySet<RoutineSessionStatus
   draft: new Set(['classified', 'failed', 'cancelled']),
   classified: new Set(['needs_clarification', 'ready', 'failed', 'cancelled']),
   needs_clarification: new Set(['classified', 'ready', 'failed', 'cancelled']),
-  ready: new Set(['applied', 'classified', 'failed', 'cancelled']),
+  ready: new Set(['applying', 'classified', 'failed', 'cancelled']),
+  applying: new Set(['applied', 'ready', 'failed']),
   applied: new Set(),
   failed: new Set(['draft', 'classified', 'cancelled']),
   cancelled: new Set(),

@@ -74,7 +74,10 @@ const date = '2026-07-27';
 
 {
   assert.equal(RoutineSessionStatusSchema.safeParse('ready').success, true);
+  assert.equal(RoutineSessionStatusSchema.safeParse('applying').success, true);
   assert.equal(canTransitionRoutineSession('draft', 'classified'), true);
+  assert.equal(canTransitionRoutineSession('ready', 'applying'), true);
+  assert.equal(canTransitionRoutineSession('applying', 'applied'), true);
   assert.equal(canTransitionRoutineSession('classified', 'applied'), false);
   assert.equal(canTransitionRoutineSession('applied', 'draft'), false);
 }

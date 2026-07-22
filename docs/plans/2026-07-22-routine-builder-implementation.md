@@ -175,7 +175,3 @@
 4. Fazer push; aplicar a migration no Supabase de produção e verificar tabela, índices, RLS e persistência funcional.
 5. Publicar pelo fluxo oficial e confirmar o mesmo SHA no GitHub/VPS.
 6. Verificar `/api/health`, `/home` e um fluxo autenticado de classificação, composição e aplicação.
-
-## Fora desta entrega
-
-WhatsApp e Instagram entram depois como adaptadores autenticados de entrada. Nenhum deles terá classificador, compositor ou persistência próprios.

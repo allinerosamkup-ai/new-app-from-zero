@@ -4,7 +4,7 @@ create table if not exists public.routine_build_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
   status text not null default 'draft'
-    check (status in ('draft','classified','needs_clarification','ready','applied','failed','cancelled')),
+    check (status in ('draft','classified','needs_clarification','ready','applying','applied','failed','cancelled')),
   stage text not null default 'source',
   source_type text,
   source_name text,

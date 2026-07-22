@@ -82,10 +82,6 @@ A rota `/routine-builder` terá etapas progressivas: entrada, classificação, e
 - A aplicação exige sessão autenticada, pertencimento ao usuário e confirmação explícita.
 - Em falha, nenhuma entidade parcial permanece criada.
 
-## Integrações futuras
-
-WhatsApp e Instagram serão adaptadores de entrada para o mesmo pipeline. Não terão lógica própria de planejamento nem acesso direto às tabelas operacionais.
-
 ## Critérios de aceite
 
 1. Um texto misto produz vários itens classificados.
