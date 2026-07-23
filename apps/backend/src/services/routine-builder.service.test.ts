@@ -4,6 +4,8 @@ import { RoutineBuilderService } from './routine-builder.service';
 
 async function run(): Promise<void> {
   let session: any = null;
+  let extractorCalls = 0;
+  const events: any[] = [];
   const prisma = {
     routineBuildSession: {
       create: async ({ data }: any) => { session = { id: 'session-1', ...data, questions: [], answers: [], items: [], draftPlan: null, applyResult: null }; return session; },
@@ -20,10 +22,18 @@ async function run(): Promise<void> {
     },
     dailyCheckin: { findFirst: async () => ({ energyScore: 2, moodScore: 4, recordedAt: new Date() }) },
     onboardingResponse: { findUnique: async () => ({ aiProfilePayload: {} }) },
-    eventLog: { create: async () => ({ id: 'event-1' }) },
+    eventLog: {
+      create: async ({ data }: any) => {
+        events.push(data);
+        return { id: `event-${events.length}` };
+      },
+    },
   };
   const extractor = {
-    extract: async () => ({ text: 'Preciso embalar os livros.', mimeType: 'text/plain', fileName: null, sha256: 'a'.repeat(64), bytes: 30, originalCharacters: 30, truncated: false }),
+    extract: async () => {
+      extractorCalls += 1;
+      return { text: 'Preciso embalar os livros.', mimeType: 'text/plain', fileName: null, sha256: 'a'.repeat(64), bytes: 30, originalCharacters: 30, truncated: false };
+    },
   };
   const classifier = {
     classify: async () => ({ items: [{ id: 'source-1', kind: 'task', title: 'Embalar os livros', sourceExcerpt: 'Preciso embalar os livros', confidence: 0.95, reviewState: 'pending', isFixed: false }] }),
@@ -31,10 +41,49 @@ async function run(): Promise<void> {
   const applyService = { apply: async () => ({ sessionId: 'session-1', counts: { objectives: 0, habits: 0, timelineBlocks: 1 }, ids: { objectives: [], habits: [], timelineBlocks: ['block-1'] } }) };
   const service = new RoutineBuilderService(prisma as any, { extractor: extractor as any, classifier: classifier as any, applyService: applyService as any });
 
+  const guided = await service.createSession('user-1', {
+    mode: 'guided',
+    weekStart: '2026-07-27',
+    timezone: 'America/Sao_Paulo',
+  });
+  await assert.rejects(
+    () => service.ingestSource({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      buffer: Buffer.from('fonte'),
+      mimeType: 'text/plain',
+      sourceType: 'text',
+    }),
+    /routine_session_mode_conflict/,
+  );
+  const guidedExtractorCalls = extractorCalls;
+  const guidedStartedEvent = events.find((event) => (
+    event.eventName === 'routine_builder_started'
+    && event.properties?.mode === 'guided'
+  ));
+
   const created = await service.createSession('user-1', {
     focus: 'Organizar a mudança', weekStart: '2026-07-27', timezone: 'America/Sao_Paulo', locale: 'pt-BR',
     limits: { wakeTime: '08:00', sleepTime: '22:00', maxDailyLoadMinutes: 360, unavailable: [] },
   });
+  assert.deepEqual(
+    {
+      guidedFocus: guided.focus,
+      guidedMode: guided.constraints?.mode,
+      guidedLimitsPreserved: guided.constraints?.limits?.maxDailyLoadMinutes,
+      guidedExtractorCalls,
+      guidedEventMode: guidedStartedEvent?.properties?.mode,
+      legacyMode: created.constraints?.mode,
+    },
+    {
+      guidedFocus: 'Rotina guiada',
+      guidedMode: 'guided',
+      guidedLimitsPreserved: 360,
+      guidedExtractorCalls: 0,
+      guidedEventMode: 'guided',
+      legacyMode: 'import',
+    },
+  );
   assert.equal(created.status, 'draft');
 
   const classified = await service.ingestSource({ userId: 'user-1', sessionId: 'session-1', buffer: Buffer.from('fonte'), mimeType: 'text/plain', sourceType: 'text' });

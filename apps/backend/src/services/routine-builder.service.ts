@@ -82,22 +82,27 @@ export class RoutineBuilderService {
 
   async createSession(userId: string, rawInput: RoutineCreateSessionInput): Promise<any> {
     const input = RoutineCreateSessionSchema.parse(rawInput);
+    const focus = input.mode === 'guided' ? input.focus ?? 'Rotina guiada' : input.focus!;
     const session = await this.prisma.routineBuildSession.create({
       data: {
         userId,
         status: 'draft',
         stage: 'source',
-        focus: input.focus,
+        focus,
         weekStart: new Date(`${input.weekStart}T00:00:00.000Z`),
         timezone: input.timezone,
         locale: input.locale,
-        constraints: { limits: input.limits },
+        constraints: { mode: input.mode, limits: input.limits },
         items: [],
         questions: [],
         answers: [],
       },
     });
-    await this.event(userId, 'routine_builder_started', { sessionId: session.id, weekStart: input.weekStart });
+    await this.event(userId, 'routine_builder_started', {
+      sessionId: session.id,
+      weekStart: input.weekStart,
+      mode: input.mode,
+    });
     return publicSession(session);
   }
 
@@ -117,6 +122,11 @@ export class RoutineBuilderService {
   }): Promise<any> {
     const session = await this.prisma.routineBuildSession.findFirst({ where: { id: input.sessionId, userId: input.userId } });
     if (!session) throw new Error('routine_session_not_found');
+    const constraints = session.constraints && typeof session.constraints === 'object'
+      ? session.constraints as Record<string, unknown>
+      : {};
+    const mode = constraints.mode === 'guided' ? 'guided' : 'import';
+    if (mode === 'guided') throw new Error('routine_session_mode_conflict');
     if (!['draft', 'classified', 'needs_clarification', 'failed'].includes(session.status)) {
       throw new Error('routine_session_source_locked');
     }
