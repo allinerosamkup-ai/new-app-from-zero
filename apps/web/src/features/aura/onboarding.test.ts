@@ -4,6 +4,7 @@ import {
   ONBOARDING_BASIC_STEPS,
   buildOnboardingProcessPayload,
   createEmptyOnboardingDraft,
+  restartOnboardingFlow,
 } from "./onboarding";
 
 describe("onboarding flow", () => {
@@ -18,6 +19,17 @@ describe("onboarding flow", () => {
     expect(draft.fullName).toBe("");
     expect(draft.currentFeeling).toBe("");
     expect(JSON.stringify(draft)).not.toContain("Cansada mas esperançosa");
+  });
+
+  it("restarts onboarding by clearing only the draft before opening the first step", () => {
+    const calls: string[] = [];
+
+    restartOnboardingFlow(
+      () => calls.push("reset"),
+      (path) => calls.push(`navigate:${path}`),
+    );
+
+    expect(calls).toEqual(["reset", "navigate:/onboarding"]);
   });
 
   it("builds the backend payload from new answers", () => {

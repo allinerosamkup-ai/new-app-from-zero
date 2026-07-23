@@ -118,6 +118,14 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
   };
 }
 
+export function restartOnboardingFlow(
+  resetDraft: () => void,
+  navigate: (path: string) => void,
+): void {
+  resetDraft();
+  navigate("/onboarding");
+}
+
 function clean(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }

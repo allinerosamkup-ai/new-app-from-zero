@@ -898,6 +898,7 @@
     "signingOut": "Signing out...",
     "signOut": "Sign out",
     "redoOnboarding": "Redo onboarding",
+    "redoOnboardingDescription": "Recalibrate your profile without deleting your history",
     "profileSaved": "Profile saved.",
     "profileSaveError": "I couldn't save your profile right now.",
     "gcalConnected": "Google Calendar connected.",

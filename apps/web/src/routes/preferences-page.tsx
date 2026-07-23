@@ -13,6 +13,7 @@ import { trackEvent } from "../lib/track";
 import { isNativeShell, requestNativeHealthConnectSync } from "../utils/native-shell";
 import { supabase } from "../lib/supabase";
 import { ReferralCard } from "../components/ReferralCard";
+import { restartOnboardingFlow } from "../features/aura/onboarding";
 import "../styles/aura.css";
 
 type GCalCalendar = {
@@ -653,8 +654,7 @@ export function PreferencesPage() {
   }
 
   function handleRedoOnboarding() {
-    resetOnboardingDraft();
-    navigate("/onboarding");
+    restartOnboardingFlow(resetOnboardingDraft, navigate);
   }
 
   async function handleNotificationPatch(patch: Partial<NotificationPreferences>) {
@@ -1276,6 +1276,36 @@ export function PreferencesPage() {
           <GCalSettingsSection onStatusChange={setAccountStatus} />
           <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
           <HealthConnectSettingsSection onStatusChange={setAccountStatus} />
+          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
+          <div
+            className="config-row"
+            style={{ cursor: "pointer" }}
+            onClick={handleRedoOnboarding}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleRedoOnboarding();
+              }
+            }}
+          >
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(215,137,127,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v6h6" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">{t("config.redoOnboarding")}</p>
+                <p className="config-row-sub">{t("config.redoOnboardingDescription")}</p>
+              </div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
           
           <div
             className="config-row"
@@ -1309,14 +1339,6 @@ export function PreferencesPage() {
           <ReferralCard userId={prefUserId} />
         )}
 
-        {/* Link onboarding */}
-        <AuraButtonV2
-          onClick={handleRedoOnboarding}
-          className="btn btn-ghost btn-full"
-          style={{ marginTop: 20, color: "var(--accent-peach)" }}
-        >
-          🔄 {t("config.redoOnboarding")}
-        </AuraButtonV2>
       </div>
       <PhaseLegendSheet
         open={phaseLegendOpen}
