@@ -1,5 +1,43 @@
 export type RoutineItemKind = 'goal' | 'project' | 'task' | 'habit' | 'calendar' | 'reference' | 'concern';
 export type RoutineReviewState = 'pending' | 'confirmed' | 'excluded';
+export type RoutineBuilderMode = 'guided' | 'import';
+
+export type GuidedAvailability = {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+};
+
+export type GuidedFixedCommitment = GuidedAvailability & {
+  title: string;
+};
+
+export type GuidedHabitChoice = {
+  templateId: string;
+  title: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  daysOfWeek: number[];
+  timesPerWeek?: number | null;
+  timeOfDay: 'morning' | 'afternoon' | 'evening' | 'anytime';
+  durationMinutes: number;
+};
+
+export type GuidedRoutineAnswers = {
+  lifeAreas: string[];
+  availability: GuidedAvailability[];
+  fixedCommitments: GuidedFixedCommitment[];
+  energyDrains: string[];
+  energyRestorers: string[];
+  intentions: string[];
+  selectedHabits: GuidedHabitChoice[];
+  currentState: {
+    mood: number;
+    energy: number;
+    focus: number;
+    sleepQuality: string;
+  };
+  freeText?: string;
+};
 
 export type RoutineItem = {
   id: string;
