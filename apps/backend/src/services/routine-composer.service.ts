@@ -45,7 +45,10 @@ export type RoutineConflictAlternative = {
 
 export type RoutineLoadStatus = 'light' | 'balanced' | 'overloaded';
 
+export const ROUTINE_PLAN_VERSION = 2;
+
 export type RoutineWeekPlan = {
+  version: number;
   weekStart: string;
   capacity: RoutineCapacity;
   entries: RoutinePlanEntry[];
@@ -83,6 +86,7 @@ type ComposeInput = {
     title: string;
     frequency: 'daily' | 'weekly' | 'monthly';
     targetDays: number[];
+    targetCount?: number | null;
     durationMinutes?: number | null;
     timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'anytime' | null;
     reminderTime?: string | null;
@@ -171,6 +175,32 @@ function adaptedDuration(item: RoutineClassifiedItem, capacity: RoutineCapacity)
 
 function withinWeek(date: string, weekDates: string[]): boolean {
   return weekDates.includes(date);
+}
+
+function comparableTitle(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+function flexibleWeeklyDates(weekDates: string[], requestedCount: number): string[] {
+  const count = Math.max(1, Math.min(7, requestedCount));
+  const preferredDaysByCount: Record<number, number[]> = {
+    1: [weekDates.length > 0 ? utcDay(weekDates[0]) : 1],
+    2: [2, 5],
+    3: [1, 3, 5],
+    4: [1, 2, 4, 5],
+    5: [1, 2, 3, 4, 5],
+    6: [1, 2, 3, 4, 5, 6],
+    7: [0, 1, 2, 3, 4, 5, 6],
+  };
+  const preferred = preferredDaysByCount[count] ?? [];
+  const selected = weekDates.filter((date) => preferred.includes(utcDay(date)));
+  if (selected.length >= count) return selected.slice(0, count);
+  return [...selected, ...weekDates.filter((date) => !selected.includes(date))].slice(0, count);
 }
 
 function sortedTasks(items: RoutineClassifiedItem[]): RoutineClassifiedItem[] {
@@ -305,13 +335,17 @@ export class RoutineComposerService {
       }
     }
 
+    const existingHabitTitles = new Set(
+      (input.existingHabits ?? []).map((habit) => comparableTitle(habit.title)),
+    );
+
     for (const habit of input.existingHabits ?? []) {
       const dates = habit.frequency === 'daily'
         ? weekDates
         : habit.frequency === 'weekly'
           ? habit.targetDays.length > 0
             ? weekDates.filter((date) => habit.targetDays.includes(utcDay(date)))
-            : weekDates
+            : flexibleWeeklyDates(weekDates, habit.targetCount ?? 1)
           : weekDates.filter((date) => date.slice(8, 10) === '01');
       const duration = Math.max(5, habit.durationMinutes ?? 10);
       for (const date of dates) {
@@ -319,7 +353,7 @@ export class RoutineComposerService {
         const habitWindow = defaultHabitWindow(habit, wake, sleep);
         const allowedWindows = intersectWindows(
           [habitWindow],
-          availableWindowsForDate(date, input.limits.available, { start: wake, end: sleep }),
+          [{ start: wake, end: sleep }],
         );
         let placed = false;
         for (const allowed of allowedWindows) {
@@ -362,7 +396,12 @@ export class RoutineComposerService {
       }
     }
 
-    const placeFlexible = (item: RoutineClassifiedItem, preferredDates: string[], kind: 'task' | 'habit'): boolean => {
+    const placeFlexible = (
+      item: RoutineClassifiedItem,
+      preferredDates: string[],
+      kind: 'task' | 'habit',
+      respectGeneralAvailability = true,
+    ): boolean => {
       const preferredDuration = adaptedDuration(item, input.capacity);
       const durations = kind === 'habit' && item.timeWindow
         ? [...new Set([preferredDuration, item.timeWindow.minDurationMinutes])]
@@ -376,7 +415,9 @@ export class RoutineComposerService {
         };
         const allowedWindows = intersectWindows(
           [itemWindow],
-          availableWindowsForDate(date, input.limits.available, { start: wake, end: sleep }),
+          respectGeneralAvailability
+            ? availableWindowsForDate(date, input.limits.available, { start: wake, end: sleep })
+            : [{ start: wake, end: sleep }],
         );
         for (const allowed of allowedWindows) {
           for (const duration of durations) {
@@ -472,7 +513,9 @@ export class RoutineComposerService {
       }
     }
 
-    for (const item of reviewed.filter((candidate) => candidate.kind === 'habit')) {
+    for (const item of reviewed.filter((candidate) => (
+      candidate.kind === 'habit' && !existingHabitTitles.has(comparableTitle(candidate.title))
+    ))) {
       const recurrence = item.recurrence;
       if (!recurrence) {
         unscheduled.push({
@@ -494,7 +537,7 @@ export class RoutineComposerService {
         dates = weekDates.filter((date) => date.slice(8, 10) === '01');
       }
       for (const date of dates) {
-        if (!placeFlexible(item, [date], 'habit')) {
+        if (!placeFlexible(item, [date], 'habit', false)) {
           unscheduled.push({
             sourceItemId: item.id,
             title: item.title,
@@ -523,6 +566,7 @@ export class RoutineComposerService {
     entries.sort((left, right) => `${left.date}T${left.startTime}`.localeCompare(`${right.date}T${right.startTime}`));
 
     return {
+      version: ROUTINE_PLAN_VERSION,
       weekStart: input.weekStart,
       capacity: input.capacity,
       entries,

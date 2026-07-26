@@ -95,14 +95,35 @@ export function buildRoutineSuggestionCards(input: {
 }): RoutineSuggestionCard[] {
   const applied = new Set(input.appliedSourceItemIds ?? []);
   const operationalKinds = new Set(['goal', 'project', 'task', 'habit', 'calendar']);
+  const existingHabitTitles = new Set(
+    input.plan.entries
+      .filter((entry) => entry.kind === 'habit' && !entry.persist)
+      .map((entry) => entry.title
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim()),
+  );
 
   return input.items
-    .filter((item) => operationalKinds.has(item.kind) && !item.duplicateOf)
+    .filter((item) => {
+      if (!operationalKinds.has(item.kind) || item.duplicateOf) return false;
+      if (item.kind !== 'habit') return true;
+      const normalizedTitle = item.title
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        .trim();
+      return !existingHabitTitles.has(normalizedTitle);
+    })
     .map((item) => {
       const entries = input.plan.entries
         .filter((entry) => entry.persist && entry.sourceItemId === item.id)
         .sort((left, right) => `${left.date}T${left.startTime}`.localeCompare(`${right.date}T${right.startTime}`));
       const first = entries[0];
+      const unscheduled = input.plan.unscheduled.find((entry) => entry.sourceItemId === item.id);
       const requiresOccurrence = item.kind === 'task' || item.kind === 'calendar';
       const state: RoutineSuggestionCard['state'] = applied.has(item.id)
         ? 'added'
@@ -117,7 +138,7 @@ export function buildRoutineSuggestionCards(input: {
         kind: item.kind as RoutineSuggestionCard['kind'],
         title: item.title,
         description: item.description,
-        reason: first?.reason ?? item.classificationReason ?? item.sourceExcerpt,
+        reason: first?.reason ?? unscheduled?.reason ?? item.classificationReason ?? item.sourceExcerpt,
         recurrence: item.recurrence,
         firstOccurrence: first
           ? {

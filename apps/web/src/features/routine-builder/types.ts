@@ -95,6 +95,7 @@ export type RoutinePlanEntry = {
 };
 
 export type RoutinePlan = {
+  version?: number;
   weekStart: string;
   capacity: { level: 'low' | 'balanced' | 'high'; reason: string };
   entries: RoutinePlanEntry[];

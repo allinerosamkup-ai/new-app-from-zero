@@ -59,7 +59,11 @@ Um pedido simples como “monte minha rotina” abre o fluxo guiado. Uma lista o
 
 Pedidos naturais com intenção equivalente — por exemplo, “preciso criar uma rotina”, “quero montar meu dia” ou “me ajude a organizar minha semana” — também abrem o Montador de forma determinística. Esse roteamento não depende da interpretação livre do modelo e prevalece sobre respostas conversacionais ou tentativas de criar blocos diretamente. Quando o pedido já contém conteúdo suficiente, a classificação começa automaticamente ao abrir o Montador, sem exigir outro clique. Negação, desabafo e mera menção ao tema não abrem o fluxo.
 
-Compromissos fixos nunca são movidos. Hábitos aparecem somente nos dias devidos. A fase e o check-in dimensionam carga e duração; o horário disponível serve para posicionar, nunca para inferir a fase da pessoa.
+Listas operacionais extensas, com caixas de seleção, recorrências, objetivos ou seções numeradas, também são fonte de rotina mesmo quando a usuária não escreve literalmente “monte uma rotina”. A conversa deve encaminhar esse conteúdo para classificação e revisão; uma resposta genérica não substitui a montagem.
+
+Compromissos fixos nunca são movidos. Hábitos aparecem somente nos dias devidos. A disponibilidade geral organiza tarefas flexíveis, mas não apaga a recorrência nem a janela própria de um hábito. Um hábito já existente não pode reaparecer como sugestão nova com o mesmo título. A fase e o check-in dimensionam carga e duração; o horário disponível serve para posicionar, nunca para inferir a fase da pessoa.
+
+Cada prévia possui uma versão do motor. Ao abrir uma sessão pronta produzida por versão anterior, o backend recompõe automaticamente a prévia antes de entregá-la. A usuária não precisa apagar dados, reiniciar o onboarding nem apertar um botão de atualização.
 
 Na aplicação:
 

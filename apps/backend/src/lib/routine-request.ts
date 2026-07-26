@@ -8,6 +8,23 @@ function normalizeRoutineRequest(value: string): string {
     .trim();
 }
 
+function looksLikeStructuredRoutineSource(original: string, normalized: string): boolean {
+  if (normalized.length < 120) return false;
+
+  const checkboxCount = (original.match(/[□☐☑✅]/g) ?? []).length
+    + (original.match(/\[\s?[xX]?\s?\]/g) ?? []).length;
+  const numberedSectionCount = (
+    original.match(/(?:^|\n)\s*(?:\d{1,2}[.)-]|[0-9]\uFE0F?\u20E3)\s*/g) ?? []
+  ).length;
+  const operationalSignals = [
+    /\bobjetivo\s*:/,
+    /\b(?:todo dia|diari[oa]|semanal|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b/,
+    /\b(?:checklist|rotina|tarefa|habito|meta|publicar|criar|fazer|encerrar|definir)\b/,
+  ].filter((pattern) => pattern.test(normalized)).length;
+
+  return operationalSignals >= 2 && (checkboxCount >= 3 || numberedSectionCount >= 3);
+}
+
 export function isExplicitRoutineBuilderRequest(message: string): boolean {
   const text = normalizeRoutineRequest(message);
   if (!text) return false;
@@ -34,5 +51,5 @@ export function isExplicitRoutineBuilderRequest(message: string): boolean {
     /\b(?:transforme|organize|converta)\s+.{0,100}\b(?:anotacoes|documento|lista|texto)\b.{0,60}\b(?:rotina|agenda|semana|habitos|tarefas|metas)\b/.test(text)
     || /\b(?:transform|organize|convert)\s+.{0,100}\b(?:notes|document|list|text)\b.{0,60}\b(?:routine|schedule|week|habits|tasks|goals)\b/.test(text);
 
-  return directRequest || sourceTransformation;
+  return directRequest || sourceTransformation || looksLikeStructuredRoutineSource(message, text);
 }

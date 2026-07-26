@@ -72,9 +72,12 @@ Regras do fluxo:
 - texto ou documento é opcional e sempre passa por revisão;
 - compromisso protegido mantém dia, horário e duração;
 - tarefa flexível usa prioridade, prazo, capacidade e espaço real;
-- hábito usa frequência, dias, janela e duração mínima/máxima;
+- hábito usa frequência, dias, janela e duração mínima/máxima; disponibilidade geral não cancela sua recorrência;
+- hábito persistido é deduplicado por título normalizado antes de sugerir novo hábito;
 - conflito retorna alternativas de mover, reduzir ou adiar, sem aplicar sozinho;
-- uma nova solicitação não pode ser substituída por sessão antiga salva no navegador.
+- lista operacional estruturada com caixas, objetivos e recorrências abre o montador mesmo sem comando literal;
+- uma nova solicitação não pode ser substituída por sessão antiga salva no navegador;
+- prévia antiga é recomposta automaticamente quando sua versão difere do motor atual.
 
 ## Regras de Banco (Prisma)
 - Schema: `packages/database/prisma/schema.prisma`

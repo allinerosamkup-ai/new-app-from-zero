@@ -56,6 +56,14 @@ export function WeekPreview({
     plan,
     appliedSourceItemIds,
   }), [appliedSourceItemIds, items, plan]);
+  const representedSourceItemIds = useMemo(
+    () => new Set(cards.map((card) => card.sourceItemId)),
+    [cards],
+  );
+  const orphanConflicts = useMemo(
+    () => plan.unscheduled.filter((item) => !representedSourceItemIds.has(item.sourceItemId)),
+    [plan.unscheduled, representedSourceItemIds],
+  );
   const overloadedDays = plan.days.filter((day) => day.status === 'overloaded');
   const highestLoad = plan.days.reduce((highest, day) => Math.max(highest, day.utilizationPercent ?? 0), 0);
   const formatter = useMemo(() => new Intl.DateTimeFormat(locale, { weekday: 'short' }), [locale]);
@@ -64,8 +72,8 @@ export function WeekPreview({
     setEditing(card);
     setEditTitle(card.title);
     setEditKind(card.kind);
-    setEditDate(card.firstOccurrence?.date ?? '');
-    setEditTime(card.firstOccurrence?.startTime ?? '');
+    setEditDate(card.firstOccurrence?.date ?? plan.weekStart);
+    setEditTime(card.firstOccurrence?.startTime ?? '09:00');
     setEditDuration(card.firstOccurrence?.durationMinutes ?? 30);
     setEditFrequency(card.recurrence?.frequency ?? 'weekly');
     setEditDays(card.recurrence?.daysOfWeek ?? []);
@@ -115,7 +123,6 @@ export function WeekPreview({
       <div className="routine-suggestion-list">
         {cards.map((card) => {
           const visualState = resolveRoutineSuggestionCardState(card, savingSourceItemIds);
-          const canEdit = Boolean(card.firstOccurrence || card.kind === 'habit');
           return (
             <RoutineSuggestionCardView
               key={card.sourceItemId}
@@ -124,17 +131,17 @@ export function WeekPreview({
               locale={locale}
               disabled={saving}
               onAdd={() => onAddCard(card.sourceItemId)}
-              onEdit={canEdit ? () => openEditor(card) : undefined}
+              onEdit={() => openEditor(card)}
               onToggleDiscard={() => onToggleDiscard(card.sourceItemId, card.state !== 'discarded')}
             />
           );
         })}
       </div>
 
-      {plan.unscheduled.length > 0 && (
+      {orphanConflicts.length > 0 && (
         <section className="routine-unscheduled">
-          <strong>{t('routineBuilder.outsideWeek')}</strong>
-          {plan.unscheduled.map((item) => (
+          <strong>{t('routineBuilder.unresolvedConflicts', { defaultValue: 'Ainda precisa de revisão' })}</strong>
+          {orphanConflicts.map((item) => (
             <p key={`${item.sourceItemId}:${item.title}`}>{item.title} — {item.reason}</p>
           ))}
         </section>
@@ -172,7 +179,7 @@ export function WeekPreview({
                   ))}
                 </select>
               </label>
-              {editing.firstOccurrence && (
+              {(editing.kind === 'task' || editing.kind === 'calendar' || editing.kind === 'habit') && (
                 <>
                   <label>
                     {t('routineBuilder.date')}

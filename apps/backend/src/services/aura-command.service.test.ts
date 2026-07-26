@@ -46,6 +46,33 @@ async function run() {
   );
   assert.equal(naturalShortRoutineRequest.action, 'start_routine_builder');
 
+  const structuredChecklistWithoutCommand = [
+    'CHECKLIST — GOVERNO E ACELERAÇÃO',
+    '1. UM DIA FIXO PARA SAIR',
+    '□ Defini qual dia da semana',
+    '□ Saí de casa',
+    'Objetivo: tirar a vida do modo espera',
+    '2. TETO DE GASTO PESSOAL',
+    '□ Defini valor máximo',
+    '□ Não antecipei',
+    'Objetivo: treinar limite sem punição',
+    '3. ENCERRAMENTOS',
+    '□ Encerrei pelo menos uma coisa',
+    '□ Nada ficou aberto por distração',
+  ].join('\n');
+  const structuredChecklistResult = parseAuraCommandResponse(
+    JSON.stringify({
+      assistantMessage: 'Faça um check-in e escolha uma coisa para hoje.',
+      intent: 'conversation',
+      action: 'respond',
+      payload: {},
+    }),
+    structuredChecklistWithoutCommand,
+  );
+  assert.equal(structuredChecklistResult.action, 'start_routine_builder');
+  assert.equal(structuredChecklistResult.intent, 'routine_builder');
+  assert.equal(structuredChecklistResult.payload.sourceText, structuredChecklistWithoutCommand);
+
   const negatedRoutineRequest = parseAuraCommandResponse(
     JSON.stringify({ assistantMessage: 'Entendi.', payload: {} }),
     'Não quero criar uma rotina agora; só estou desabafando.',

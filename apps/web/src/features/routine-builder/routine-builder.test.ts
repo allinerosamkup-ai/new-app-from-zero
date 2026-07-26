@@ -165,6 +165,71 @@ describe('routine builder helpers', () => {
     assert.deepEqual(remainingRoutineSourceItemIds(cards), ['task-1']);
   });
 
+  it('does not offer a habit that is already present in the real routine', () => {
+    const cards = buildRoutineSuggestionCards({
+      items: [{
+        id: 'checkin-new',
+        kind: 'habit',
+        title: 'Check-in de humor e energia',
+        sourceExcerpt: 'Hábito escolhido no onboarding',
+        confidence: 1,
+        reviewState: 'confirmed',
+        recurrence: { frequency: 'daily', daysOfWeek: [] },
+      }],
+      plan: {
+        weekStart: '2026-07-26',
+        capacity: { level: 'balanced', reason: 'Carga possível.' },
+        entries: [{
+          id: 'existing-habit:checkin-existing:2026-07-26',
+          kind: 'habit',
+          date: '2026-07-26',
+          startTime: '07:00',
+          endTime: '07:10',
+          title: 'Check-in de humor e energia',
+          durationMinutes: 10,
+          isFixed: false,
+          persist: false,
+          reason: 'Hábito já existente.',
+        }],
+        days: [],
+        contextItems: [],
+        unscheduled: [],
+      },
+    });
+
+    expect(cards).toEqual([]);
+  });
+
+  it('puts an unscheduled conflict on its own editable card instead of a duplicate list', () => {
+    const cards = buildRoutineSuggestionCards({
+      items: [{
+        id: 'task-1',
+        kind: 'task',
+        title: 'Anotar os gastos de ontem',
+        sourceExcerpt: 'Próxima ação da meta de dinheiro',
+        confidence: 0.9,
+        reviewState: 'confirmed',
+      }],
+      plan: {
+        weekStart: '2026-07-26',
+        capacity: { level: 'balanced', reason: 'Carga possível.' },
+        entries: [],
+        days: [],
+        contextItems: [],
+        unscheduled: [{
+          sourceItemId: 'task-1',
+          title: 'Anotar os gastos de ontem',
+          reason: 'Não coube sem ultrapassar a carga prevista.',
+          alternatives: [],
+        }],
+      },
+    });
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0].state).toBe('needs_adjustment');
+    expect(cards[0].reason).toBe('Não coube sem ultrapassar a carga prevista.');
+  });
+
   it('shows saving only for an available card with an active request', () => {
     const available: Pick<RoutineSuggestionCard, 'sourceItemId' | 'state'> = { sourceItemId: 'task-1', state: 'available' };
     const added: Pick<RoutineSuggestionCard, 'sourceItemId' | 'state'> = { sourceItemId: 'habit-1', state: 'added' };

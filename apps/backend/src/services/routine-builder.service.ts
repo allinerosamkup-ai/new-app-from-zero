@@ -16,7 +16,7 @@ import { AiActionFeedbackService } from './ai-action-feedback.service';
 import { RoutineApplyService } from './routine-apply.service';
 import { RoutineClarificationService, type RoutineClarificationQuestion } from './routine-clarification.service';
 import { RoutineClassifierService } from './routine-classifier.service';
-import { RoutineComposerService } from './routine-composer.service';
+import { ROUTINE_PLAN_VERSION, RoutineComposerService } from './routine-composer.service';
 import { RoutineSourceExtractorService } from './routine-source-extractor.service';
 
 type BuilderDependencies = {
@@ -190,6 +190,17 @@ export class RoutineBuilderService {
   async getSession(userId: string, sessionId: string): Promise<any> {
     const session = await this.prisma.routineBuildSession.findFirst({ where: { id: sessionId, userId } });
     if (!session) throw new Error('routine_session_not_found');
+    const draftPlan = session.draftPlan && typeof session.draftPlan === 'object'
+      ? session.draftPlan as Record<string, unknown>
+      : null;
+    if (
+      session.status === 'ready'
+      && session.stage === 'preview'
+      && draftPlan
+      && draftPlan.version !== ROUTINE_PLAN_VERSION
+    ) {
+      return this.compose(userId, sessionId);
+    }
     return publicSession(session);
   }
 
@@ -400,6 +411,7 @@ export class RoutineBuilderService {
           title: true,
           frequency: true,
           targetDays: true,
+          targetCount: true,
           durationMinutes: true,
           timeOfDay: true,
           reminderTime: true,
@@ -460,6 +472,7 @@ export class RoutineBuilderService {
         title: habit.title,
         frequency: ['daily', 'weekly', 'monthly'].includes(habit.frequency) ? habit.frequency : 'daily',
         targetDays: Array.isArray(habit.targetDays) ? habit.targetDays : [],
+        targetCount: Number.isInteger(habit.targetCount) ? habit.targetCount : 1,
         durationMinutes: habit.durationMinutes,
         timeOfDay: ['morning', 'afternoon', 'evening', 'anytime'].includes(habit.timeOfDay)
           ? habit.timeOfDay

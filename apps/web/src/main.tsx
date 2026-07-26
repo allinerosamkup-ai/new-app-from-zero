@@ -12,14 +12,25 @@ import "./i18n";
 
 // Register Service Worker for PWA
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-  // registerType: 'autoUpdate' — o próprio vite-plugin-pwa recarrega a aba
-  // uma única vez quando o novo SW assume (com trava interna anti-loop).
-  // NÃO chamar window.location.reload() manualmente aqui: reload sem trava +
-  // skipWaiting causava loop de reload (página tremendo, botões mortos).
-  registerSW({
+  const reloadLockKey = "airia:pwa-update-reload-at";
+  let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
+  updateSW = registerSW({
     immediate: true,
-    onRegistered(r) {
-      console.log("SW Registered:", r);
+    onNeedRefresh() {
+      const lastReload = Number(sessionStorage.getItem(reloadLockKey) || 0);
+      if (Date.now() - lastReload < 30_000) return;
+      sessionStorage.setItem(reloadLockKey, String(Date.now()));
+      void updateSW?.(true);
+    },
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return;
+      const checkForUpdate = () => {
+        if (document.visibilityState === "visible") void registration.update();
+      };
+      checkForUpdate();
+      window.addEventListener("focus", checkForUpdate);
+      document.addEventListener("visibilitychange", checkForUpdate);
+      window.setInterval(checkForUpdate, 15 * 60 * 1000);
     },
     onRegisterError(error) {
       console.error("SW Registration Error:", error);

@@ -342,6 +342,7 @@ function item(overrides: Partial<RoutineClassifiedItem>): RoutineClassifiedItem 
       title: 'Alongar',
       frequency: 'weekly',
       targetDays: [],
+      targetCount: 1,
       durationMinutes: 10,
       timeOfDay: 'morning',
     }],
@@ -350,9 +351,58 @@ function item(overrides: Partial<RoutineClassifiedItem>): RoutineClassifiedItem 
 
   assert.equal(
     plan.entries.filter((entry) => entry.id.startsWith('existing-habit:weekly-open')).length,
-    7,
-    'weekly habit without fixed weekdays follows the same every-day due rule used by the product',
+    1,
+    'weekly habit without fixed weekdays must respect its weekly target instead of becoming daily',
   );
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-26',
+    items: [item({
+      id: 'checkin-new',
+      kind: 'habit',
+      title: 'Check-in de humor e energia',
+      durationMinutes: 5,
+      recurrence: { frequency: 'daily', daysOfWeek: [], interval: 1 },
+      timeWindow: {
+        startTime: '06:00',
+        endTime: '12:00',
+        minDurationMinutes: 5,
+        maxDurationMinutes: 10,
+      },
+    })],
+    limits: {
+      wakeTime: '07:00',
+      sleepTime: '23:00',
+      maxDailyLoadMinutes: 360,
+      unavailable: [],
+      available: [
+        { date: '2026-07-27', startTime: '09:00', endTime: '18:00' },
+        { date: '2026-07-29', startTime: '09:00', endTime: '18:00' },
+        { date: '2026-07-31', startTime: '09:00', endTime: '18:00' },
+      ],
+    },
+    existingBlocks: [],
+    existingHabits: [{
+      id: 'checkin-existing',
+      title: 'Check-in de humor e energia',
+      frequency: 'daily',
+      targetDays: [],
+      targetCount: 1,
+      durationMinutes: 10,
+      timeOfDay: 'morning',
+    }],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+
+  const existingCheckins = plan.entries.filter((entry) => entry.id.startsWith('existing-habit:checkin-existing'));
+  const duplicatedSuggestions = plan.entries.filter((entry) => entry.sourceItemId === 'checkin-new');
+  const checkinConflicts = plan.unscheduled.filter((entry) => entry.title === 'Check-in de humor e energia');
+
+  assert.equal(existingCheckins.length, 7, 'a frequência própria do hábito vale em todos os dias devidos');
+  assert.equal(duplicatedSuggestions.length, 0, 'um hábito já existente não pode ser proposto de novo');
+  assert.equal(checkinConflicts.length, 0, 'o mesmo hábito não pode gerar uma lista de falsos conflitos');
 }
 
 {

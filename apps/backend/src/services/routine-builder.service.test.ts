@@ -140,12 +140,19 @@ async function run(): Promise<void> {
   assert.equal(reviewed.status, 'ready');
 
   const composed = await service.compose('user-1', 'session-1');
+  assert.equal(composed.draftPlan.version, 2);
   assert.equal(composed.draftPlan.capacity.level, 'low');
   assert.equal(composed.draftPlan.entries.some((entry: any) => entry.sourceItemId === 'source-1'), true);
   assert.deepEqual(
     composed.draftPlan.entries.filter((entry: any) => entry.id.startsWith('existing-habit:')).map((entry: any) => entry.date),
     ['2026-07-27', '2026-07-29', '2026-07-31'],
   );
+  session.draftPlan = { ...session.draftPlan, version: 1, entries: [] };
+  session.stage = 'preview';
+  session.status = 'ready';
+  const refreshed = await service.getSession('user-1', 'session-1');
+  assert.equal(refreshed.draftPlan.version, 2, 'stale previews must be recomposed automatically');
+  assert.equal(refreshed.draftPlan.entries.length > 0, true);
 
   await assert.rejects(() => service.getSession('user-2', 'session-1'), /routine_session_not_found/);
   assert.deepEqual(await service.apply('user-1', 'session-1'), await applyService.apply());
