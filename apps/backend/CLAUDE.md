@@ -58,7 +58,9 @@ Gerencia a resposta em tempo real do diário usando Server-Sent Events (SSE). O 
 - `POST /api/ai/action-feedback`: Registra feedback sobre ação sugerida pela IA.
 - `POST /api/timeline/:id/postpone`: Adia bloco para o próximo dia e registra padrão de adiamento.
 - `POST /api/journal/message/stream`: Endpoint SSE para chat do diário.
-- `POST /api/routine-builder/sessions`: inicia uma montagem persistente.
+- `POST /api/routine-builder/sessions`: inicia uma montagem persistente. `mode: 'guided'` dispensa `focus`.
+- `GET /api/routine-builder/library`: catálogo de opções do onboarding guiado (áreas, drenos, recuperadores, intenções, hábitos).
+- `POST /api/routine-builder/sessions/:id/guided`: respostas de botão viram itens classificados sem IA e sem documento.
 - `POST /api/routine-builder/sessions/:id/source`: lê texto ou arquivo e classifica a fonte.
 - `PATCH /api/routine-builder/sessions/:id/items`: salva a revisão dos itens.
 - `POST /api/routine-builder/sessions/:id/clarifications`: responde somente bloqueios operacionais.
