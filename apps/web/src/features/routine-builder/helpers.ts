@@ -1,4 +1,4 @@
-import type { RoutineBuilderStep, RoutinePlanEntry, RoutineSession } from './types';
+import type { RoutineBuilderStep, RoutinePlan, RoutinePlanEntry, RoutineSession } from './types';
 
 export function nextBuilderStep(session: Pick<RoutineSession, 'status' | 'stage' | 'draftPlan'>): RoutineBuilderStep {
   if (session.status === 'applied') return 'done';
@@ -17,4 +17,22 @@ export function groupPlanByDay(entries: RoutinePlanEntry[]): Array<{ date: strin
     grouped.set(entry.date, current);
   }
   return [...grouped.entries()].map(([date, dayEntries]) => ({ date, entries: dayEntries }));
+}
+
+export function buildRoutinePreviewSections(plan: RoutinePlan, today: string): {
+  today: RoutinePlanEntry[];
+  week: RoutinePlanEntry[];
+  habits: RoutinePlanEntry[];
+  objectives: RoutinePlan['contextItems'];
+} {
+  const week = [...plan.entries].sort((left, right) =>
+    `${left.date}T${left.startTime}`.localeCompare(`${right.date}T${right.startTime}`),
+  );
+
+  return {
+    today: week.filter((entry) => entry.date === today),
+    week,
+    habits: week.filter((entry) => entry.kind === 'habit'),
+    objectives: plan.contextItems.filter((item) => item.kind === 'goal' || item.kind === 'project'),
+  };
 }

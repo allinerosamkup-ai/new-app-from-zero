@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupPlanByDay, nextBuilderStep } from './helpers';
+import { buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep } from './helpers';
 
 describe('routine builder helpers', () => {
   it('routes every persisted session state to one clear UI step', () => {
@@ -21,5 +21,28 @@ describe('routine builder helpers', () => {
     ] as any);
     expect(groups.map((group) => group.date)).toEqual(['2026-07-27', '2026-07-28']);
     expect(groups[0].entries.map((entry) => entry.title)).toEqual(['A1', 'A2']);
+  });
+
+  it('separates today, week, habits and objectives without duplicating entries', () => {
+    const sections = buildRoutinePreviewSections({
+      weekStart: '2026-07-27',
+      capacity: { level: 'balanced', reason: 'Carga possível.' },
+      entries: [
+        { id: 'today-task', kind: 'task', date: '2026-07-27', startTime: '09:00', endTime: '09:30', title: 'Enviar proposta' },
+        { id: 'future-task', kind: 'task', date: '2026-07-28', startTime: '10:00', endTime: '10:30', title: 'Revisar contrato' },
+        { id: 'today-habit', kind: 'habit', date: '2026-07-27', startTime: '08:00', endTime: '08:15', title: 'Caminhar' },
+      ],
+      days: [],
+      contextItems: [
+        { sourceItemId: 'goal-1', kind: 'goal', title: 'Organizar a mudança' },
+        { sourceItemId: 'reference-1', kind: 'reference', title: 'O que costuma me drenar' },
+      ],
+      unscheduled: [],
+    } as any, '2026-07-27');
+
+    expect(sections.today.map((entry) => entry.id)).toEqual(['today-habit', 'today-task']);
+    expect(sections.week.map((entry) => entry.id)).toEqual(['today-habit', 'today-task', 'future-task']);
+    expect(sections.habits.map((entry) => entry.id)).toEqual(['today-habit']);
+    expect(sections.objectives.map((item) => item.sourceItemId)).toEqual(['goal-1']);
   });
 });
