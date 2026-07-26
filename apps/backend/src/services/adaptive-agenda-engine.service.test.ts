@@ -203,7 +203,7 @@ function at(time: string): Date {
   assert.equal(plan.decisions[0]?.impactLabel, 'aproveita janela');
   assert.match(plan.decisions[0]?.bioReason ?? '', /janela boa|meta ativa/);
   assert.equal(plan.decisions[0]?.kind, 'suggested_commitment');
-  assert.equal(plan.decisions[0]?.requiresConfirmation, true);
+  assert.equal(plan.decisions[0]?.requiresConfirmation, false);
   assert.equal(plan.decisions[0]?.notificationAllowed, false);
   assert.equal(plan.dayStructure.mode, 'open');
   assert.match(plan.summary, /mais iniciativa|toma a frente/i);

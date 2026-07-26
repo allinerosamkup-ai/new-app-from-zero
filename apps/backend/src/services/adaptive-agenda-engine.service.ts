@@ -59,7 +59,7 @@ export type AdaptiveAgendaPlan = {
   decisions: AgendaAdaptationDecision[];
   blocked: AgendaAdaptationDecision[];
   decisionBrain: DecisionResult;
-  applied: false;
+  applied: boolean;
 };
 
 const PLANNING_START_MINUTE = 8 * 60;

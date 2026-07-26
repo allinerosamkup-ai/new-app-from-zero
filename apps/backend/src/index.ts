@@ -4143,7 +4143,9 @@ export function createApp(dependencies: AppDependencies = {}) {
     mode: z.enum(['preview', 'apply']).optional().default('preview'),
     trigger: z.enum(['manual', 'checkin', 'cron', 'home', 'planner']).optional().default('manual'),
     context: z.record(z.unknown()).optional().default({}),
-    selectedDecisionIds: z.array(z.string().min(1)).optional().default([]),
+    // Sem lista, a Airia aplica sozinha o que não exige aval humano. Lista vazia
+    // explícita continua significando "não aplique nada".
+    selectedDecisionIds: z.array(z.string().min(1)).optional(),
   });
 
   app.post('/api/agenda/adapt', async (req: Request, res: Response) => {

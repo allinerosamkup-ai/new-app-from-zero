@@ -47,7 +47,9 @@ const context: DailyContext = {
   });
 
   assert.equal(result.allowedActions[0]?.kind, 'suggested_commitment');
-  assert.equal(result.allowedActions[0]?.requiresConfirmation, true);
+  // Sugestão operacional entra no dia sozinha; notificar continua sendo decisão
+  // separada — criar bloco é barato, tocar o celular não é.
+  assert.equal(result.allowedActions[0]?.requiresConfirmation, false);
   assert.equal(result.allowedActions[0]?.notificationAllowed, false);
   assert.match(result.allowedActions[0]?.reason ?? '', /Agenda sem pendências reais/);
 }

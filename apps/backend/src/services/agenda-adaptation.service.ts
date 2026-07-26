@@ -159,12 +159,19 @@ export class AgendaAdaptationService {
       mode: 'apply',
       trigger: input.trigger,
     });
+    // Sem seleção explícita, a Airia aplica tudo que é dela para aplicar. Quem
+    // precisa de aval humano fica de fora por requiresConfirmation — e o loop
+    // abaixo ainda recusa bloco fixo ou protegido, por segurança de dado.
+    const autoSelected = input.selectedDecisionIds === undefined;
     const selected = new Set(input.selectedDecisionIds ?? []);
+    const isSelected = (change: AgendaAdaptationChange) => (
+      autoSelected ? change.requiresConfirmation !== true : selected.has(change.id)
+    );
     const appliedChanges: AgendaAdaptationChange[] = [];
     const skippedChanges: AgendaAdaptationChange[] = [];
 
     for (const change of preview.changes) {
-      if (!selected.has(change.id) || change.type === 'keep' || change.type === 'block' || change.type === 'notify') {
+      if (!isSelected(change) || change.type === 'keep' || change.type === 'block' || change.type === 'notify') {
         skippedChanges.push({ ...change, applied: false });
         continue;
       }

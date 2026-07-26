@@ -70,7 +70,8 @@ function contextWithTask(task: GroundedTask): DailyContext {
   });
 
   assert.equal(result.allowedActions[0]?.action, 'move');
-  assert.equal(result.allowedActions[0]?.requiresConfirmation, true);
+  // Bloco flexível e elegível: a Airia move sozinha. Só âncora protegida pede aval.
+  assert.equal(result.allowedActions[0]?.requiresConfirmation, false);
 }
 
 {

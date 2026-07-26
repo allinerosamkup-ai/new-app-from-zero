@@ -53,7 +53,7 @@ const baseContext: DailyContext = {
   assert.match(result.changes[0]?.bioReason ?? '', /reduzir duração/);
   assert.ok(result.blockedSuggestions.includes('Treino'));
   assert.ok(result.blockedSuggestions.includes('Separar roupa de treino'));
-  assert.equal(result.adaptiveAgenda.decisions[0]?.requiresConfirmation, true);
+  assert.equal(result.adaptiveAgenda.decisions[0]?.requiresConfirmation, false);
 }
 
 {
@@ -70,7 +70,7 @@ const baseContext: DailyContext = {
 
   assert.equal(result.changes[0]?.type, 'suggest');
   assert.equal(result.changes[0]?.kind, 'suggested_commitment');
-  assert.equal(result.changes[0]?.requiresConfirmation, true);
+  assert.equal(result.changes[0]?.requiresConfirmation, false);
   assert.equal(result.changes[0]?.notificationAllowed, false);
   assert.match(result.summary, /sugestão opcional/);
 }
@@ -386,6 +386,68 @@ function makeMockPrisma(blocks: any[] = [], options: { protectAfterRead?: boolea
   assert.equal(calls.creates[0].adaptabilityConfidence, 0.9);
   assert.equal(applied.appliedChanges.length, 1);
   assert.equal(applied.skippedChanges.length, 0, 'feedback failure does not undo a confirmed mutation');
+}
+
+// Aplicação automática: sem lista de seleção, a Airia aplica sozinha o que é dela.
+{
+  const { prisma, calls } = makeMockPrisma();
+  const contextWithHabit = {
+    ...baseContext,
+    tasks: [],
+    pendingTaskTitles: [],
+    completedTaskTitles: [],
+    completedHabitTitles: [],
+    pendingHabitTitles: ['Diário'],
+    activeGoalTitles: [],
+    completedGoalTitles: [],
+    completedSubgoalTitles: [],
+    recentSuggestionTitles: [],
+    blockedActionTitles: [],
+    todayAnchorTitles: ['Diário'],
+    habits: [{ id: '66666666-6666-4666-8666-666666666666', title: 'Diário', frequency: 'daily', completions: [] }],
+  };
+
+  const auto = await AgendaAdaptationService.apply({
+    prisma,
+    userId: '550e8400-e29b-41d4-a716-446655440000',
+    dailyContext: contextWithHabit,
+    requestContext: { phase: 'Estável', currentHour: 9, currentMinute: 0 },
+  });
+
+  assert.equal(auto.appliedChanges.length, 1, 'sem seleção explícita, a Airia aplica sozinha');
+  assert.equal(calls.creates.length, 1);
+  assert.equal(calls.creates[0].title, 'Diário');
+}
+
+// Lista vazia explícita continua significando "não aplique nada".
+{
+  const { prisma, calls } = makeMockPrisma();
+  const contextWithHabit = {
+    ...baseContext,
+    tasks: [],
+    pendingTaskTitles: [],
+    completedTaskTitles: [],
+    completedHabitTitles: [],
+    pendingHabitTitles: ['Diário'],
+    activeGoalTitles: [],
+    completedGoalTitles: [],
+    completedSubgoalTitles: [],
+    recentSuggestionTitles: [],
+    blockedActionTitles: [],
+    todayAnchorTitles: ['Diário'],
+    habits: [{ id: '66666666-6666-4666-8666-666666666666', title: 'Diário', frequency: 'daily', completions: [] }],
+  };
+
+  const nothing = await AgendaAdaptationService.apply({
+    prisma,
+    userId: '550e8400-e29b-41d4-a716-446655440000',
+    dailyContext: contextWithHabit,
+    requestContext: { phase: 'Estável', currentHour: 9, currentMinute: 0 },
+    selectedDecisionIds: [],
+  });
+
+  assert.equal(nothing.appliedChanges.length, 0);
+  assert.equal(calls.creates.length, 0);
 }
 
 console.log('agenda-adaptation.service tests passed');

@@ -552,7 +552,10 @@ export class DecisionEngine {
             : 'O bloco já combina com o ritmo atual e pode permanecer como está.')) + healthReasonSuffix(input.dailyContext),
         impactLabel: action === 'move' ? 'mantém ritmo' : action === 'pause' ? 'protege energia' : action === 'shrink' ? 'reduz carga' : 'mantém ritmo',
         notificationAllowed: !past,
-        requiresConfirmation: action !== 'keep',
+        // A Airia ajusta sozinha o que é dela para ajustar. Âncora protegida
+        // (consulta, buscar alguém, compromisso com terceiro) continua exigindo
+        // aval humano: quebrar isso tem custo fora do app.
+        requiresConfirmation: action !== 'keep' && protectedAnchor,
         travaType: action !== 'keep' ? 'capacidade' : undefined,
       });
     }
@@ -610,7 +613,7 @@ export class DecisionEngine {
         ),
         impactLabel: lowCapacity ? 'protege energia' : 'mantém ritmo',
         notificationAllowed: !lowCapacity,
-        requiresConfirmation: true,
+        requiresConfirmation: false,
         travaType: trava,
       });
     }
@@ -681,7 +684,7 @@ export class DecisionEngine {
         ),
         impactLabel: lowCapacity ? 'reduz carga' : highCapacity ? 'aproveita janela' : 'mantém ritmo',
         notificationAllowed: false,
-        requiresConfirmation: true,
+        requiresConfirmation: false,
         travaType: trava,
       });
     }
