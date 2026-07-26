@@ -1,1475 +1,1120 @@
-// Goals & GTD v8 — Glass design + Next Action highlight + depth
-import { useState, useEffect, useRef, useMemo } from "react";
-import { useTranslation } from "react-i18next";
-import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  Archive,
+  ArrowRight,
+  CalendarPlus,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CirclePause,
+  Clock3,
+  Edit3,
+  Pause,
+  Play,
+  Plus,
+  Sparkles,
+  Target,
+  X,
+} from "lucide-react";
+
+import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
+import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
-import { useToast } from "../components/Toast";
-import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-import { SmartEmptyState } from "../components/activation/SmartEmptyState";
-import { useNavigate, useLocation } from "react-router-dom";
-import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import {
-  Plus, Mic, Trash2, ChevronDown, ChevronUp,
-  Link, X, Zap, Inbox, Edit2, RefreshCw, Target, CheckCircle2,
-} from "lucide-react";
-import { AuraIcon } from "../components/AuraIcon";
-import { normalizeSuggestionText } from "../utils/goal-suggestion-routing";
-import { buildGoalPriorityActions, type GoalPriorityAction } from "../utils/goal-priority-actions";
+  buildGoalCardModel,
+  buildGoalTaskSchedule,
+  parsePausedGoalIds,
+  togglePausedGoalId,
+  type GoalTaskPlacement,
+} from "../utils/goal-priority-actions";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
-// ── Types ─────────────────────────────────────────────────────
-
-type GTDTipo =
-  | "proxima_acao" | "projeto" | "aguardando"
-  | "referencia" | "algum_dia" | "deletar";
-
-type GTDItem = {
-  id: string;
-  text: string;
-  capturedAt: string;
-  clarifying?: boolean;
-  clarified?: boolean;
-  tipo?: GTDTipo;
-  titulo?: string;
-  proxima_acao?: string;
-  categoria?: string;
-  tempo_estimado?: string;
-  razao?: string;
-  meta_sugerida?: string | null;
-  done?: boolean;
-  linkedGoalId?: number | string | null;
-  sentToGoal?: boolean;
-  archived?: boolean;
+type GoalLike = {
+  id: string | number;
+  title: string;
+  completedPct: number;
+  subtasks: Array<{ id: string | number; title: string; done: boolean }>;
 };
 
-type CaptureDialogueResult = {
-  status: "needs_clarification" | "ready";
-  question?: string | null;
-  summary?: string | null;
-  kind: "goal" | "next_action" | "inbox" | "reference" | "someday";
-  title?: string | null;
-  firstActions?: string[];
-  linkedGoalTitle?: string | null;
+type GoalTemplate = {
+  direction: string;
+  result: string;
+  nextAction: string;
 };
 
-type CaptureSession = {
-  initial: string;
-  summary: string;
-  question: string | null;
-  turns: number;
-  pending: CaptureDialogueResult | null;
+type TaskDraft = {
+  goalId: string | number;
+  goalTitle: string;
+  actionId: string | number;
+  actionTitle: string;
 };
 
-// ── XP storage (background) ───────────────────────────────────
-function awardXP(amount: number, isTask = false) {
-  try {
-    const g = JSON.parse(localStorage.getItem("aura-gami-v1") || "{}");
-    const xp = (g.xp || 0) + amount;
-    const totalDone = isTask ? (g.totalDone || 0) + 1 : (g.totalDone || 0);
-    localStorage.setItem("aura-gami-v1", JSON.stringify({ ...g, xp, totalDone }));
-  } catch {}
-}
+type ScheduledAction = {
+  taskId: string | number;
+  date: string;
+  time: string;
+};
 
-// ── Cores por índice de meta ───────────────────────────────────
-const GOAL_COLORS = [
-  { accent: "var(--accent-sky)",    bg: "rgba(99,152,169,.12)"  },
-  { accent: "var(--accent-sage)",    bg: "rgba(150,199,179,.12)" },
-  { accent: "var(--accent-peach)", bg: "rgba(215,137,127,.12)" },
+const PAUSED_GOALS_KEY = "airia-paused-goals-v1";
+const SCHEDULED_ACTIONS_KEY = "airia-goal-action-tasks-v1";
+
+export const GOAL_STARTER_TEMPLATES: GoalTemplate[] = [
+  {
+    direction: "Minha rotina",
+    result: "Ter uma manhã que caiba na minha energia",
+    nextAction: "Definir o horário possível de acordar amanhã",
+  },
+  {
+    direction: "Casa",
+    result: "Deixar a sala pronta para uso",
+    nextAction: "Separar por 15 minutos o que não pertence à sala",
+  },
+  {
+    direction: "Projeto",
+    result: "Publicar a primeira versão do meu projeto",
+    nextAction: "Listar as três entregas da primeira versão",
+  },
+  {
+    direction: "Saúde",
+    result: "Retomar meu acompanhamento de saúde",
+    nextAction: "Localizar o contato do profissional ou serviço",
+  },
+  {
+    direction: "Dinheiro",
+    result: "Organizar as contas deste mês",
+    nextAction: "Reunir as contas que vencem neste mês",
+  },
+  {
+    direction: "Trabalho ou estudo",
+    result: "Concluir minha próxima apresentação",
+    nextAction: "Escrever os títulos dos três primeiros slides",
+  },
 ];
 
-// ── Checkbox quadrado (GTD) ────────────────────────────────────
-function TaskBox({ done, onClick, isNext = false }: { done: boolean; onClick: () => void; isNext?: boolean }) {
-  const [animating, setAnimating] = useState(false);
+const cardStyle: CSSProperties = {
+  background: "rgba(255,255,255,.86)",
+  border: "1px solid rgba(99,152,169,.16)",
+  borderRadius: 24,
+  boxShadow: "0 12px 34px rgba(66,49,43,.06)",
+};
 
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (done) {
-       onClick();
-       return;
+const quietButtonStyle: CSSProperties = {
+  minHeight: 40,
+  border: "1px solid rgba(99,152,169,.22)",
+  borderRadius: 999,
+  background: "rgba(255,255,255,.72)",
+  color: "var(--text-2)",
+  padding: "8px 13px",
+  fontSize: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+};
+
+function readScheduledActions(): Record<string, ScheduledAction> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SCHEDULED_ACTIONS_KEY) || "{}");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function actionKey(goalId: string | number, actionId: string | number): string {
+  return `${goalId}:${actionId}`;
+}
+
+function CreationSheet({
+  open,
+  saving,
+  onClose,
+  onCreate,
+}: {
+  open: boolean;
+  saving: boolean;
+  onClose: () => void;
+  onCreate: (result: string, nextAction: string) => Promise<void>;
+}) {
+  const l = useLocalizedCopy();
+  const [result, setResult] = useState("");
+  const [nextAction, setNextAction] = useState("");
+  const [selectedDirection, setSelectedDirection] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setResult("");
+      setNextAction("");
+      setSelectedDirection("");
     }
-    setAnimating(true);
-    setTimeout(() => {
-      onClick();
-      setAnimating(false);
-    }, 450);
+  }, [open]);
+
+  if (!open) return null;
+
+  const ready = result.trim().length >= 3 && nextAction.trim().length >= 3;
+  const chooseTemplate = (template: GoalTemplate) => {
+    setSelectedDirection(template.direction);
+    setResult(template.result);
+    setNextAction(template.nextAction);
   };
 
   return (
     <div
-      onClick={handleClick}
+      role="dialog"
+      aria-modal="true"
+      aria-label={l("Criar objetivo", "Create goal")}
       style={{
-        width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: "pointer",
-        background: (done || animating) ? "var(--accent-sage)" : isNext ? "rgba(215,137,127,0.15)" : "transparent",
-        border: (done || animating) ? "none" : isNext ? "1.5px solid var(--accent-peach)" : "1.5px solid var(--text-3)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        transition: "all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-        transform: animating ? 'scale(1.2)' : 'scale(1)'
+        position: "fixed",
+        inset: 0,
+        zIndex: 120,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        background: "rgba(26,22,20,.30)",
+        backdropFilter: "blur(4px)",
       }}
+      onClick={onClose}
     >
-      {(done || animating) && (
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-          stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      )}
-    </div>
-  );
-}
-
-// ── GoalCard v8 ───────────────────────────────────────────────
-function GoalCard({
-  goal,
-  colorIndex,
-  onToggleSubtask,
-  onBreakDown,
-  onAddSubtask,
-  onRemove,
-  loadingBreakdown,
-  onJournalReflect,
-  onUpdateTitle,
-  onConvertToTask,
-  initiallyOpen = true,
-  highlightedSubtaskId,
-  highlightedText,
-}: {
-  goal: { id: number | string; title: string; completedPct: number; subtasks: Array<{ id: number | string; title: string; done: boolean }> };
-  colorIndex: number;
-  onToggleSubtask: (subId: number | string) => void;
-  onBreakDown: () => void;
-  onAddSubtask: (text: string) => void;
-  onRemove: () => void;
-  loadingBreakdown: boolean;
-  onJournalReflect: () => void;
-  onUpdateTitle: (newTitle: string) => void;
-  onConvertToTask: (goal: any) => void;
-  initiallyOpen?: boolean;
-  highlightedSubtaskId?: number | string;
-  highlightedText?: string;
-}) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(initiallyOpen);
-  const [addingTask, setAddingTask] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [editedTitle, setEditedTitle] = useState(goal.title);
-  const [newTask, setNewTask] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const editInputRef = useRef<HTMLInputElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const color = GOAL_COLORS[colorIndex % GOAL_COLORS.length];
-  const pct = goal.completedPct;
-  const done = pct >= 100;
-  const doneSubs = goal.subtasks.filter(s => s.done).length;
-  // GTD: first uncompleted subtask = Next Action
-  const nextActionIdx = goal.subtasks.findIndex(s => !s.done);
-  const normalizedHighlightText = highlightedText ? normalizeSuggestionText(highlightedText) : "";
-
-  useEffect(() => { if (addingTask) inputRef.current?.focus(); }, [addingTask]);
-  useEffect(() => { if (isEditingTitle) editInputRef.current?.focus(); }, [isEditingTitle]);
-  useEffect(() => {
-    if (!initiallyOpen) return;
-    setOpen(true);
-    cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [initiallyOpen]);
-
-  const handleTitleSubmit = () => {
-    if (editedTitle.trim() && editedTitle !== goal.title) {
-      onUpdateTitle(editedTitle.trim());
-    }
-    setIsEditingTitle(false);
-  };
-
-  return (
-    <div ref={cardRef} style={{
-      backdropFilter: "blur(20px)",
-      WebkitBackdropFilter: "blur(20px)",
-      background: "rgba(255,255,255,0.62)",
-      border: "1px solid rgba(255,255,255,0.80)",
-      borderLeft: `4px solid ${color.accent}`,
-      borderRadius: 18,
-      marginBottom: 10,
-      overflow: "hidden",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
-    }}>
-      {/* Header */}
       <div
-        onClick={() => setOpen(o => !o)}
-        style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 14px 12px", cursor: "pointer" }}
+        style={{
+          width: "min(100%, 560px)",
+          maxHeight: "92vh",
+          overflowY: "auto",
+          borderRadius: "32px 32px 0 0",
+          background: "var(--warm-bg)",
+          padding: "18px 18px calc(24px + env(safe-area-inset-bottom))",
+          boxShadow: "0 -18px 50px rgba(34,28,25,.16)",
+        }}
+        onClick={(event) => event.stopPropagation()}
       >
-        {/* Icon box */}
-        <div style={{
-          width: 36, height: 36, borderRadius: 11, background: color.bg,
-          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-        }}>
-          <AuraIcon size={17} style={{ color: color.accent }} />
-        </div>
-
-        {/* Title + progress bar */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ marginBottom: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 3,
-              background: color.bg, border: `1px solid ${color.accent}44`,
-              borderRadius: 999, padding: "1px 7px",
-              fontSize: 9, fontWeight: 800, letterSpacing: ".07em",
-              color: color.accent, textTransform: "uppercase" as const,
-            }}>🎯 {t("goals.goal")}</span>
-          </div>
-
-          {isEditingTitle ? (
-            <input
-              ref={editInputRef}
-              value={editedTitle}
-              onChange={e => setEditedTitle(e.target.value)}
-              onBlur={handleTitleSubmit}
-              onKeyDown={e => e.key === 'Enter' && handleTitleSubmit()}
-              style={{
-                width: '100%',
-                padding: '4px 8px',
-                borderRadius: '8px',
-                border: `2px solid ${color.accent}`,
-                fontSize: '14px',
-                fontWeight: 700,
-                color: 'var(--text-1)',
-                background: '#fff',
-                marginBottom: '6px',
-                outline: 'none'
-              }}
-            />
-          ) : (
-            <p style={{
-              fontSize: 14, fontWeight: 700, margin: "0 0 6px",
-              color: done ? "var(--accent-sage)" : "var(--text-1)",
-              textDecoration: done ? "line-through" : "none",
-              lineHeight: 1.4,
-            }}>
-              {done ? "✓ " : ""}{goal.title}
+        <div style={{ width: 42, height: 4, borderRadius: 99, background: "rgba(26,22,20,.14)", margin: "0 auto 18px" }} />
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: "0 0 4px", color: "var(--lagune)", fontSize: 11, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase" }}>
+              {l("Novo objetivo", "New goal")}
             </p>
-          )}
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ flex: 1, height: 5, borderRadius: 999, background: color.bg, overflow: "hidden" }}>
-              <div style={{
-                height: "100%", width: `${pct}%`, borderRadius: 999,
-                background: color.accent, transition: "width 0.4s ease",
-              }} />
-            </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: color.accent, flexShrink: 0 }}>
-              {doneSubs}/{goal.subtasks.length}
-            </span>
+            <h2 style={{ margin: 0, color: "var(--text-1)", fontSize: 22, lineHeight: 1.2 }}>
+              {l("O que você quer tornar real?", "What do you want to make real?")}
+            </h2>
           </div>
+          <button aria-label={l("Fechar", "Close")} onClick={onClose} style={{ ...quietButtonStyle, width: 40, padding: 0 }}>
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Controls */}
-        <div style={{ display: "flex", gap: 2, alignItems: "center", flexShrink: 0 }}>
-          <button
-            onClick={e => { e.stopPropagation(); setIsEditingTitle(true); }}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6 }}
-          >
-            <Edit2 size={13} />
-          </button>
-          <button
-            onClick={e => { e.stopPropagation(); onConvertToTask(goal); }}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6 }}
-            title={t("goals.convertDaily")}
-          >
-            <RefreshCw size={13} />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onRemove(); }}
-            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 4, borderRadius: 6 }}>
-            <Trash2 size={13} />
-          </button>
-          {open
-            ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} />
-            : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
-        </div>
-      </div>
-
-      {/* Expanded */}
-      {open && (
-        <div style={{ padding: "0 14px 14px", marginLeft: 46 }}>
-
-          {/* Subtasks label */}
-          {goal.subtasks.length > 0 && (
-            <p style={{
-              fontSize: "9.5px", fontWeight: 700, letterSpacing: ".1em",
-              textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 6px",
-            }}>
-              Subtarefas ({doneSubs}/{goal.subtasks.length})
-            </p>
-          )}
-
-          {/* Loading */}
-          {loadingBreakdown && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "8px 0",
-              color: "var(--accent-peach)", fontSize: "calc(var(--a) * 0.83)",
-            }}>
-              <AuraIcon size={14} /> {t("goals.generating")}
-            </div>
-          )}
-
-          {/* Empty state */}
-          {goal.subtasks.length === 0 && !loadingBreakdown && (
-            <div style={{
-              padding: "10px 12px", borderRadius: 10, marginBottom: 8,
-              background: "rgba(0,0,0,0.03)",
-              textAlign: "center", color: "var(--text-3)", fontSize: "calc(var(--a) * 0.85)",
-            }}>
-              {t("goals.noNextActions")}
-            </div>
-          )}
-
-          {/* Subtask rows */}
-          {goal.subtasks.map((s, idx) => {
-            const isNext = idx === nextActionIdx;
-            const isHighlighted = highlightedSubtaskId != null
-              ? s.id === highlightedSubtaskId
-              : normalizedHighlightText.length > 0 && normalizeSuggestionText(s.title) === normalizedHighlightText;
+        <p style={{ margin: "0 0 9px", color: "var(--text-2)", fontSize: 13, fontWeight: 700 }}>
+          {l("Comece por uma direção", "Start with a direction")}
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
+          {GOAL_STARTER_TEMPLATES.map((template) => {
+            const selected = selectedDirection === template.direction;
             return (
-              <div key={s.id}>
-                {/* GTD: Next Action badge */}
-                {isNext && !done && (
-                  <div style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    background: "rgba(215,137,127,0.12)",
-                    border: "1px solid rgba(215,137,127,0.30)",
-                    borderRadius: 999, padding: "2px 8px",
-                    fontSize: "9px", fontWeight: 700, letterSpacing: ".06em",
-                    color: "var(--accent-peach)", textTransform: "uppercase",
-                    marginBottom: 4,
-                  }}>
-                    {t("goals.doNow")}
-                  </div>
-                )}
-                <div
-                  onClick={() => onToggleSubtask(s.id)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 8,
-                    padding: isNext && !done ? "7px 10px" : "5px 0",
-                    borderRadius: isNext && !done ? 10 : 0,
-                    background: isHighlighted
-                      ? "rgba(99,152,169,0.12)"
-                      : isNext && !done
-                        ? "rgba(215,137,127,0.06)"
-                        : "transparent",
-                    border: isHighlighted
-                      ? "1px solid rgba(99,152,169,0.35)"
-                      : isNext && !done
-                        ? "1px solid rgba(215,137,127,0.20)"
-                        : "none",
-                    cursor: "pointer", marginBottom: 4,
-                    transition: "background 0.15s",
-                    boxShadow: isHighlighted ? "0 0 0 1px rgba(99,152,169,0.08)" : "none",
-                  }}
-                >
-                  <TaskBox done={s.done} isNext={isNext && !done} onClick={() => onToggleSubtask(s.id)} />
-                  <span style={{
-                    flex: 1, fontSize: "11.5px", lineHeight: 1.4,
-                    color: s.done ? "var(--text-3)" : isNext ? "var(--text-1)" : "var(--text-2)",
-                    textDecoration: s.done ? "line-through" : "none",
-                    fontWeight: isNext && !done ? 600 : 400,
-                  }}>
-                    {s.title}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Add subtask inline */}
-          {addingTask && (
-            <div style={{ display: "flex", gap: 6, margin: "8px 0" }}>
-              <input
-                ref={inputRef}
-                value={newTask}
-                onChange={e => setNewTask(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter" && newTask.trim()) {
-                    onAddSubtask(newTask.trim()); setNewTask(""); setAddingTask(false);
-                  }
-                  if (e.key === "Escape") { setAddingTask(false); setNewTask(""); }
-                }}
-                placeholder={t("goals.nextActionPlaceholder")}
-                style={{
-                  flex: 1, background: "rgba(255,255,255,0.8)",
-                  border: "1.5px solid var(--accent-peach)", borderRadius: 10,
-                  padding: "7px 10px", color: "var(--text-1)",
-                  fontSize: "calc(var(--a) * 0.88)", outline: "none",
-                }}
-              />
-              <button onClick={() => { setAddingTask(false); setNewTask(""); }}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}>
-                <X size={15} />
-              </button>
-            </div>
-          )}
-
-          {/* Meta concluída → CTA de reflexão no diário */}
-          {done && (
-            <div style={{
-              background: "rgba(150,199,179,0.12)",
-              border: "1px solid rgba(150,199,179,0.35)",
-              borderRadius: 12, padding: "10px 12px", marginTop: 10,
-              display: "flex", alignItems: "center", gap: 10,
-            }}>
-              <span style={{ fontSize: "1.1rem" }}>🎉</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage)", margin: "0 0 2px" }}>{t("goals.completed")}</p>
-                <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0 }}>{t("goals.journalWin")}</p>
-              </div>
               <button
-                onClick={onJournalReflect}
+                key={template.direction}
+                onClick={() => chooseTemplate(template)}
                 style={{
-                  background: "var(--accent-sage)", color: "#fff",
-                  border: "none", borderRadius: 10, padding: "6px 12px",
-                  fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+                  minHeight: 48,
+                  borderRadius: 14,
+                  border: selected ? "1.5px solid var(--nectarine)" : "1px solid rgba(99,152,169,.20)",
+                  background: selected ? "var(--nectarine-a3)" : "rgba(255,255,255,.78)",
+                  color: selected ? "var(--nectarine-11)" : "var(--text-2)",
+                  padding: "10px 12px",
+                  textAlign: "left",
+                  fontSize: 12,
+                  fontWeight: 750,
+                  cursor: "pointer",
                 }}
               >
-                Refletir
-              </button>
-            </div>
-          )}
-
-          {/* Actions */}
-          {!done && <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button
-              onClick={() => setAddingTask(true)}
-              style={{
-                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                padding: "8px", background: "rgba(255,255,255,0.5)",
-                backdropFilter: "blur(8px)", border: "1px dashed rgba(0,0,0,0.14)",
-                borderRadius: 10, color: "var(--text-2)",
-                fontSize: "calc(var(--a) * 0.82)", cursor: "pointer", fontWeight: 500,
-              }}
-            >
-              <Plus size={13} /> Adicionar
-            </button>
-            <button
-              onClick={onBreakDown}
-              disabled={loadingBreakdown}
-              style={{
-                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                padding: "8px", background: "rgba(215,137,127,0.08)",
-                backdropFilter: "blur(8px)", border: "1px solid rgba(215,137,127,0.45)",
-                borderRadius: 10, color: "var(--accent-peach)",
-                fontSize: "calc(var(--a) * 0.82)", cursor: loadingBreakdown ? "default" : "pointer",
-                opacity: loadingBreakdown ? 0.5 : 1, fontWeight: 600,
-              }}
-            >
-              <AuraIcon size={13} />
-              {loadingBreakdown ? "Gerando..." : "Airia quebrar"}
-            </button>
-          </div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Main Page ─────────────────────────────────────────────────
-
-export function GoalsPage() {
-  const { t, i18n } = useTranslation();
-  const l = useLocalizedCopy();
-  const { state, addGoal, addGoalWithSubGoals, addSubGoals, toggleSubGoal, removeGoal, updateGoal, addHabit } = useAuraStore();
-  const { showError, showSuccess } = useToast();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
-  const isLowPhase = cycleReport.phase === "low" || cycleReport.phase === "depleted";
-
-  const [gtdItems, setGtdItems] = useState<GTDItem[]>(() => {
-    try { return JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]"); } catch { return []; }
-  });
-
-  const [captureInput, setCaptureInput] = useState("");
-  const [captureLoading, setCaptureLoading] = useState(false);
-  const [captureReply, setCaptureReply] = useState<string | null>(null);
-  const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const captureInputRef = useRef<HTMLInputElement>(null);
-  const [metasOpen, setMetasOpen] = useState(true);
-  const [completedOpen, setCompletedOpen] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(true);
-  const [inboxOpen, setInboxOpen] = useState(true);
-  const [loadingBreakdown, setLoadingBreakdown] = useState<number | string | null>(null);
-  const [linkingItem, setLinkingItem] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const capturingRef = useRef(false);
-  const [activeTab, setActiveTab] = useState<"metas" | "acoes">("metas");
-  const navState = (location.state as {
-    activeTab?: "capturar" | "metas" | "acoes";
-    openGoalId?: string | number;
-    openSubtaskId?: string | number;
-    highlightText?: string;
-  } | null) ?? null;
-
-  useEffect(() => {
-    if (navState?.activeTab && navState.activeTab !== "capturar") setActiveTab(navState.activeTab);
-    if (navState?.openGoalId) {
-      setActiveTab("metas");
-      setMetasOpen(true);
-    }
-  }, [navState]);
-
-  useEffect(() => {
-    localStorage.setItem("gtd-inbox-v1", JSON.stringify(gtdItems));
-  }, [gtdItems]);
-
-  const goals = state.goals;
-  const activeGoals = useMemo(() => goals.filter((goal) => goal.completedPct < 100), [goals]);
-  const completedGoals = useMemo(() => goals.filter((goal) => goal.completedPct >= 100), [goals]);
-
-  const standaloneActions = gtdItems.filter(i =>
-    !i.archived && !i.sentToGoal && i.clarified &&
-    i.tipo === "proxima_acao" && !i.linkedGoalId
-  );
-
-  const priorityActions = useMemo(
-    () => buildGoalPriorityActions(activeGoals, { gtdItems: gtdItems.map((item) => ({ id: item.id, text: item.text })) }),
-    [activeGoals, gtdItems]
-  );
-
-  const inbox = gtdItems.filter(i =>
-    !i.archived && !i.sentToGoal && !i.clarified
-  );
-
-  const parked = gtdItems.filter(i =>
-    !i.archived && !i.sentToGoal && i.clarified &&
-    (i.tipo === "aguardando" || i.tipo === "referencia" || i.tipo === "algum_dia")
-  );
-
-  // ── Voice ────────────────────────────────────────────────
-  function toggleVoice() {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    if (isRecording && recognitionRef.current) {
-      recognitionRef.current.stop(); setIsRecording(false); return;
-    }
-    const rec = new SR();
-    rec.lang = resolveIntlLocale(i18n.language);
-    rec.onresult = (e: any) => {
-      const t = e.results[0][0].transcript;
-      setCaptureInput(prev => prev ? `${prev} ${t}` : t);
-    };
-    rec.onend = () => setIsRecording(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setIsRecording(true);
-  }
-
-  // ── Break goal down ───────────────────────────────────────
-  async function breakGoalDown(goalId: number | string) {
-    const goal = goals.find(g => g.id === goalId);
-    if (!goal) return;
-    setLoadingBreakdown(goalId);
-    try {
-      const res: any = await api.post("/ai/suggest", {
-        type: "goal-subtasks",
-        context: { goalTitle: goal.title, existingSubtasks: goal.subtasks.map(s => s.title) },
-      });
-      const parsed = parseAiSuggestion<{ items?: string[] } | string[]>(res.suggestion);
-      const items = Array.isArray(parsed)
-        ? parsed
-        : Array.isArray(parsed?.items)
-          ? parsed.items
-          : [];
-
-      if (items.length > 0) {
-        await addSubGoals(goalId, items);
-      } else {
-        showError(t("goals.subtasksError"));
-      }
-    } catch (err) {
-      showError(err instanceof Error ? err.message : t("goals.actionsError"));
-    } finally {
-      setLoadingBreakdown(null);
-    }
-  }
-
-  // ── Smart capture ─────────────────────────────────────────
-  async function handleCapture() {
-    const text = captureInput.trim();
-    if (!text || capturingRef.current) return;
-    capturingRef.current = true;
-    setCaptureInput("");
-    setCaptureLoading(true);
-    try {
-      const initial = captureSession?.initial ?? text;
-      const res: any = await api.post("/ai/suggest", {
-        type: "goal-capture-dialogue",
-        context: {
-          capture: initial,
-          answer: captureSession ? text : "",
-          previousSummary: captureSession?.summary ?? "",
-          goals: goals.map(g => g.title),
-        },
-      });
-      const parsed = parseAiSuggestion<CaptureDialogueResult>(res.suggestion);
-      const safeSummary = parsed.summary?.trim() || captureSession?.summary || initial;
-      const turns = (captureSession?.turns ?? 0) + 1;
-
-      if (parsed.status === "needs_clarification" && parsed.question && turns < 3) {
-        setCaptureSession({
-          initial,
-          summary: safeSummary,
-          question: parsed.question,
-          turns,
-          pending: null,
-        });
-        setCaptureReply(null);
-        return;
-      }
-
-      setCaptureSession({
-        initial,
-        summary: safeSummary,
-        question: null,
-        turns,
-        pending: {
-          ...parsed,
-          status: "ready",
-          title: parsed.title?.trim() || safeSummary,
-          firstActions: Array.isArray(parsed.firstActions) ? parsed.firstActions.filter(Boolean) : [],
-        },
-      });
-      setCaptureReply(null);
-    } catch (err) {
-      const itemId = `gtd-${Date.now()}`;
-      setGtdItems(prev => [{ id: itemId, text, capturedAt: new Date().toISOString() }, ...prev]);
-      const msg = err instanceof Error ? err.message : "";
-      const isRateLimit = msg.includes("429") || msg.includes("rate") || msg.includes("limit");
-      setCaptureReply(isRateLimit
-        ? `A IA está sobrecarregada agora. Guardei na aba Ações para você revisar depois.`
-        : `Guardei para revisão. Você pode clarificar depois na aba Capturar.`
-      );
-      if (!isRateLimit) showError(t("goals.classifyError"));
-    } finally {
-      setCaptureLoading(false);
-      capturingRef.current = false;
-      setTimeout(() => {
-        captureInputRef.current?.focus();
-      }, 80);
-    }
-  }
-
-  async function confirmCaptureResult() {
-    const pending = captureSession?.pending;
-    if (!pending) return;
-    const title = pending.title?.trim() || captureSession.summary;
-    const firstActions = Array.isArray(pending.firstActions)
-      ? pending.firstActions.map((item) => item.trim()).filter(Boolean)
-      : [];
-
-    try {
-      if (pending.kind === "goal") {
-        await addGoalWithSubGoals(title, firstActions);
-        awardXP(20);
-        setMetasOpen(true);
-        setActiveTab("metas");
-        setCaptureReply(`Meta criada com próximas ações: "${title}".`);
-      } else if (pending.kind === "next_action") {
-        const goalMatch = pending.linkedGoalTitle
-          ? goals.find(g => normalizeSuggestionText(g.title) === normalizeSuggestionText(pending.linkedGoalTitle || ""))
-          : null;
-        if (goalMatch) {
-          await addSubGoals(goalMatch.id, [title]);
-          setCaptureReply(`Adicionei como próxima ação em "${goalMatch.title}".`);
-        } else {
-          setGtdItems(prev => [{
-            id: `gtd-${Date.now()}`,
-            text: captureSession.initial,
-            capturedAt: new Date().toISOString(),
-            clarified: true,
-            tipo: "proxima_acao",
-            titulo: title,
-            meta_sugerida: pending.linkedGoalTitle ?? null,
-          }, ...prev]);
-          setActionsOpen(true);
-          setActiveTab("acoes");
-          setCaptureReply(t("goals.actionRegistered"));
-        }
-        awardXP(10);
-      } else if (pending.kind === "reference" || pending.kind === "someday") {
-        setGtdItems(prev => [{
-          id: `gtd-${Date.now()}`,
-          text: captureSession.initial,
-          capturedAt: new Date().toISOString(),
-          clarified: true,
-          tipo: pending.kind === "reference" ? "referencia" : "algum_dia",
-          titulo: title,
-          razao: captureSession.summary,
-        }, ...prev]);
-        setCaptureReply(pending.kind === "reference" ? t("goals.referenceSaved") : t("goals.somedaySaved"));
-      } else {
-        setGtdItems(prev => [{
-          id: `gtd-${Date.now()}`,
-          text: title,
-          capturedAt: new Date().toISOString(),
-        }, ...prev]);
-        setInboxOpen(true);
-        setCaptureReply("Guardei na caixa de entrada.");
-      }
-      setCaptureSession(null);
-    } catch (err) {
-      showError(err instanceof Error ? err.message : t("goals.captureError"));
-    }
-  }
-
-  function resetCaptureConversation() {
-    setCaptureSession(null);
-    setCaptureReply(null);
-    setCaptureInput("");
-    setTimeout(() => captureInputRef.current?.focus(), 50);
-  }
-
-  // Auto-breakdown
-  useEffect(() => {
-    const flag = sessionStorage.getItem("aura-auto-break-goal");
-    if (!flag) return;
-    const newGoal = goals.find(g => g.title === flag && g.subtasks.length === 0);
-    if (newGoal) {
-      sessionStorage.removeItem("aura-auto-break-goal");
-      breakGoalDown(newGoal.id);
-    }
-  }, [goals]);
-
-  // ── GTD Clarify ───────────────────────────────────────────
-  async function clarifyItem(id: string) {
-    const item = gtdItems.find(i => i.id === id);
-    if (!item || item.clarifying) return;
-    setGtdItems(prev => prev.map(i => i.id === id ? { ...i, clarifying: true } : i));
-    try {
-      const res: any = await api.post("/ai/suggest", {
-        type: "gtd-clarify",
-        context: { item: item.text, goals: goals.map(g => g.title) },
-      });
-      const parsed = parseAiSuggestion<Partial<GTDItem>>(res.suggestion);
-      setGtdItems(prev => prev.map(i => i.id === id ? { ...i, clarifying: false, clarified: true, ...parsed } : i));
-
-      if (parsed?.tipo === "projeto" && parsed.titulo) {
-        await addGoal(parsed.titulo);
-        setGtdItems(prev => prev.map(i => i.id === id ? { ...i, sentToGoal: true } : i));
-        setMetasOpen(true);
-        sessionStorage.setItem("aura-auto-break-goal", parsed.titulo);
-      }
-      if (parsed?.tipo === "proxima_acao" && (parsed as any).meta_sugerida) {
-        const goalMatch = goals.find(g => g.title === (parsed as any).meta_sugerida);
-        if (goalMatch) {
-          await addSubGoals(goalMatch.id, [parsed.titulo || item.text]);
-          setGtdItems(prev => prev.map(i => i.id === id ? { ...i, sentToGoal: true, linkedGoalId: goalMatch.id } : i));
-        }
-      }
-      awardXP(5);
-    } catch (err) {
-      showError(err instanceof Error ? err.message : "Erro ao clarificar.");
-      setGtdItems(prev => prev.map(i => i.id === id ? { ...i, clarifying: false } : i));
-    }
-  }
-
-  function toggleStandaloneAction(id: string) {
-    setGtdItems(prev => prev.map(i => {
-      if (i.id !== id) return i;
-      const nowDone = !i.done;
-      if (nowDone) awardXP(10, true);
-      return { ...i, done: nowDone };
-    }));
-  }
-
-  async function completePriorityAction(action: GoalPriorityAction) {
-    if (action.source === "goal" && action.goalId != null && action.subId != null) {
-      await toggleSubGoal(action.goalId, action.subId);
-      awardXP(15, true);
-      return;
-    }
-
-    if (action.source === "capture" && action.gtdId) {
-      toggleStandaloneAction(action.gtdId);
-    }
-  }
-
-  async function linkToGoal(itemId: string, goalId: string | number) {
-    const item = gtdItems.find(i => i.id === itemId);
-    if (!item) return;
-
-    try {
-      await addSubGoals(goalId, [item.titulo || item.text]);
-      setGtdItems(prev => prev.map(i => i.id === itemId ? { ...i, sentToGoal: true, linkedGoalId: goalId } : i));
-      setLinkingItem(null);
-      showSuccess(t("goals.linked"));
-    } catch (err) {
-      showError(err instanceof Error ? err.message : t("goals.linkError"));
-    }
-  }
-
-  async function handleUpdateGoalTitle(goalId: string | number, newTitle: string) {
-    try {
-      await updateGoal(goalId, { title: newTitle });
-      showSuccess(t("goals.titleUpdated"));
-    } catch (err) {
-      showError(t("goals.titleError"));
-    }
-  }
-
-  async function handleConvertToTask(goal: any) {
-    const confirm = window.confirm(`Deseja transformar a meta "${goal.title}" em um checklist diário? A meta original será removida.`);
-    if (!confirm) return;
-
-    try {
-      // 1. Cria o Hábito (Checklist Diário)
-      await addHabit({
-        title: goal.title,
-        category: 'pessoal',
-        frequency: 'daily',
-        description: goal.subtasks.map((s: any) => `- ${s.title}`).join('\n'),
-      });
-
-      // 2. Remove a Meta original
-      await removeGoal(goal.id);
-      
-      showSuccess(t("goals.habitCreated"));
-    } catch (err) {
-      showError(t("goals.convertError"));
-    }
-  }
-
-  // ── Render ────────────────────────────────────────────────
-  return (
-    <div className="aura-layout-content">
-      <div className="screen-content" style={{ paddingBottom: "calc(var(--a) * 6)" }}>
-
-        {/* Header */}
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          marginBottom: 18,
-        }}>
-          <div>
-            <p style={{ fontSize: 12, color: "var(--text-3)", margin: "0 0 2px" }}>{t("goals.yourObjectives")}</p>
-            <h1 style={{
-              fontFamily: "'Poppins', 'Plus Jakarta Sans', sans-serif",
-              fontSize: 20, fontWeight: 800, color: "var(--text-1)", margin: 0,
-            }}>
-              Metas & GTD
-            </h1>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
-              Grandes objetivos, divididos em pequenos passos.
-            </p>
-          </div>
-          <div style={{
-            width: 38, height: 38, borderRadius: 12,
-            background: "rgba(215,137,127,0.12)",
-            border: "1.5px solid rgba(215,137,127,0.30)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0,
-          }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-              stroke="var(--accent-peach)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-            </svg>
-          </div>
-        </div>
-
-        {/* ── Phase warning — contexto cruzado ─────────────── */}
-        {isLowPhase && (
-          <div style={{
-            background: "rgba(215,137,127,0.08)",
-            border: "1.5px solid rgba(215,137,127,0.25)",
-            borderRadius: 14, padding: "10px 14px", marginBottom: 14,
-            display: "flex", alignItems: "flex-start", gap: 10,
-          }}>
-            <span style={{ fontSize: "1rem", flexShrink: 0 }}>⚠️</span>
-            <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-peach)", margin: "0 0 2px" }}>
-                Fase {cycleReport.phaseLabel} detectada
-              </p>
-              <p style={{ fontSize: 11.5, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-                {t("goals.lowPhaseTip")}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Tab bar ─────────────────────────────────────────── */}
-        <div style={{
-          display: "flex", gap: 4, marginBottom: 20,
-          background: "rgba(0,0,0,0.04)", borderRadius: 14, padding: 4,
-        }}>
-          {([
-            { key: "metas" as const, label: "Metas", count: activeGoals.length },
-            { key: "acoes" as const, label: t("goals.actions"), count: priorityActions.filter(i => i.source === "goal" || i.source === "capture").length },
-          ] as const).map(tab => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-                flex: 1, padding: "8px 6px", borderRadius: 10, border: "none",
-                background: isActive ? "white" : "transparent",
-                boxShadow: isActive ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
-                cursor: "pointer", fontSize: 12,
-                fontWeight: isActive ? 700 : 500,
-                color: isActive ? "var(--text-1)" : "var(--text-3)",
-                transition: "all 200ms",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-              }}>
-                {tab.label}
-                {tab.count > 0 && (
-                  <span style={{
-                    background: isActive ? "var(--accent-peach)" : "rgba(0,0,0,0.10)",
-                    color: isActive ? "white" : "var(--text-3)",
-                    borderRadius: 999, padding: "0 5px",
-                    fontSize: 10, fontWeight: 700, lineHeight: "16px",
-                  }}>{tab.count}</span>
-                )}
+                {template.direction}
               </button>
             );
           })}
         </div>
 
-        {/* ── Captura conversacional GTD ── */}
-        <div style={{ marginBottom: 24 }}>
+        <label style={{ display: "block", marginBottom: 14 }}>
+          <span style={{ display: "block", marginBottom: 6, color: "var(--text-2)", fontSize: 12, fontWeight: 800 }}>
+            {l("Resultado desejado", "Desired result")}
+          </span>
+          <input
+            value={result}
+            onChange={(event) => setResult(event.target.value)}
+            placeholder={l("Ex.: deixar a sala pronta para uso", "E.g. make the living room ready to use")}
+            maxLength={180}
+            style={{
+              width: "100%",
+              minHeight: 48,
+              boxSizing: "border-box",
+              border: "1.5px solid rgba(99,152,169,.24)",
+              borderRadius: 14,
+              background: "#fff",
+              color: "var(--text-1)",
+              padding: "12px 14px",
+              fontSize: 15,
+              outline: "none",
+            }}
+          />
+        </label>
 
-          {/* Bubble da Airia — pergunta ou confirmação */}
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginBottom: 10 }}>
-            <div style={{ flexShrink: 0, opacity: captureLoading ? 0.6 : 1, transition: "opacity 300ms" }}>
-              <AuraIcon size={26} />
-            </div>
-            <div style={{
-              background: captureReply ? "rgba(150,199,179,.15)" : "rgba(244,168,150,.10)",
-              border: `1px solid ${captureReply ? "rgba(150,199,179,.3)" : "rgba(244,168,150,.22)"}`,
-              borderRadius: "14px 14px 14px 4px",
-              padding: "9px 13px",
-              fontSize: 13, color: "var(--text-1)", lineHeight: 1.55,
-              maxWidth: "82%",
-              transition: "background 300ms, border-color 300ms",
-            }}>
-              {captureLoading
-                ? <span style={{ color: "var(--text-3)", fontStyle: "italic" }}>
-                    {t("goals.understanding")}
-                  </span>
-                : captureReply
-                  ? <span>{captureReply}</span>
-                  : captureSession?.pending
-                    ? <span>
-                        {t("goals.reviewBeforeSave")} <strong>{captureSession.pending.title || captureSession.summary}</strong>
-                        <br />
-                        <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-                          {captureSession.pending.kind === "goal" ? t("goals.looksGoal") :
-                            captureSession.pending.kind === "next_action" ? t("goals.looksAction") :
-                            captureSession.pending.kind === "reference" ? t("goals.looksReference") :
-                            captureSession.pending.kind === "someday" ? "Isso parece algo para algum dia." :
-                            "Isso ainda fica melhor na caixa de entrada."}
-                        </span>
-                      </span>
-                    : captureSession?.question
-                      ? <span>{captureSession.question}</span>
-                      : <span>{t("goals.capturePrompt")}<br />
-                      <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-                        {t("goals.captureHint")}
-                      </span>
-                    </span>
-              }
-            </div>
-          </div>
+        <label style={{ display: "block", marginBottom: 18 }}>
+          <span style={{ display: "block", marginBottom: 6, color: "var(--text-2)", fontSize: 12, fontWeight: 800 }}>
+            {l("Primeira ação concreta", "First concrete action")}
+          </span>
+          <input
+            value={nextAction}
+            onChange={(event) => setNextAction(event.target.value)}
+            placeholder={l("Ex.: separar por 15 minutos o que não pertence à sala", "E.g. sort misplaced items for 15 minutes")}
+            maxLength={180}
+            style={{
+              width: "100%",
+              minHeight: 48,
+              boxSizing: "border-box",
+              border: "1.5px solid rgba(150,199,179,.45)",
+              borderRadius: 14,
+              background: "#fff",
+              color: "var(--text-1)",
+              padding: "12px 14px",
+              fontSize: 15,
+              outline: "none",
+            }}
+          />
+          <span style={{ display: "block", marginTop: 6, color: "var(--text-3)", fontSize: 11, lineHeight: 1.4 }}>
+            {l("Essa ação ainda não entra na agenda. Você escolhe quando colocá-la no seu dia.", "This action is not scheduled yet. You choose when to place it in your day.")}
+          </span>
+        </label>
 
-          {captureSession?.pending?.firstActions && captureSession.pending.firstActions.length > 0 && (
-            <div style={{ paddingLeft: 34, marginBottom: 10 }}>
-              <div style={{
-                background: "rgba(255,255,255,.70)",
-                border: "1px solid rgba(0,0,0,.07)",
-                borderRadius: 12,
-                padding: "9px 12px",
-              }}>
-                {captureSession.pending.firstActions.slice(0, 5).map((item, index) => (
-                  <div key={`${item}-${index}`} style={{ display: "flex", gap: 7, fontSize: 12, color: "var(--text-2)", lineHeight: 1.45, marginBottom: index < captureSession.pending!.firstActions!.length - 1 ? 5 : 0 }}>
-                    <span style={{ color: "var(--accent-peach)", fontWeight: 800 }}>{index + 1}.</span>
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Resposta do usuário — input ou confirmação visual */}
-          {!captureReply && !captureLoading && !captureSession?.pending && (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", paddingLeft: 34 }}>
-              <div style={{
-                flex: 1, display: "flex", alignItems: "center", gap: 6,
-                background: "white",
-                border: "1.5px solid rgba(0,0,0,.09)",
-                borderRadius: "14px 14px 4px 14px",
-                padding: "0 12px",
-                boxShadow: "0 2px 10px rgba(0,0,0,.05)",
-              }}>
-                <input
-                  ref={captureInputRef}
-                  value={captureInput}
-                  onChange={e => setCaptureInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !captureLoading && handleCapture()}
-                  placeholder={captureSession?.question ? "Responda aqui..." : "Escreva ou dite..."}
-                  style={{
-                    flex: 1, background: "transparent", border: "none", outline: "none",
-                    fontSize: 13, color: "var(--text-1)", padding: "11px 0",
-                  }}
-                />
-                <button
-                  onClick={toggleVoice}
-                  style={{
-                    background: isRecording ? "var(--accent-peach)" : "transparent",
-                    border: "none", cursor: "pointer",
-                    color: isRecording ? "#fff" : "var(--text-3)",
-                    width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: "background 200ms",
-                  }}
-                >
-                  <Mic size={13} />
-                </button>
-              </div>
-
-              {/* Botão enviar */}
-              <button
-                onClick={handleCapture}
-                disabled={!captureInput.trim()}
-                style={{
-                  width: 38, height: 38, borderRadius: "50%", flexShrink: 0, border: "none",
-                  background: captureInput.trim() ? "var(--accent-peach)" : "rgba(0,0,0,.07)",
-                  color: captureInput.trim() ? "#fff" : "var(--text-3)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: captureInput.trim() ? "pointer" : "default",
-                  transition: "background 200ms, color 200ms",
-                  boxShadow: captureInput.trim() ? "0 4px 14px rgba(244,168,150,.4)" : "none",
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13"/>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {/* Estado: processando */}
-          {captureLoading && (
-            <div style={{ paddingLeft: 34 }}>
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                background: "white", border: "1.5px solid rgba(0,0,0,.07)",
-                borderRadius: "14px 14px 4px 14px", padding: "9px 14px",
-                fontSize: 12, color: "var(--text-3)",
-              }}>
-                <span style={{ fontStyle: "italic" }}>{captureInput || "..."}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Estado: confirmado — "continuar" */}
-          {captureSession?.pending && !captureLoading && (
-            <div style={{ paddingLeft: 34, display: "flex", gap: 8 }}>
-              <button
-                onClick={confirmCaptureResult}
-                style={{
-                  background: "var(--accent-peach)", border: "none",
-                  borderRadius: "14px 14px 4px 14px", padding: "9px 14px",
-                  fontSize: 12, color: "#fff",
-                  cursor: "pointer", fontWeight: 700,
-                }}
-              >
-                {t("common.save")}
-              </button>
-              <button
-                onClick={resetCaptureConversation}
-                style={{
-                  background: "rgba(0,0,0,.04)", border: "1px solid rgba(0,0,0,.08)",
-                  borderRadius: "14px", padding: "9px 14px",
-                  fontSize: 12, color: "var(--text-2)",
-                  cursor: "pointer", fontWeight: 600,
-                }}
-              >
-                Descartar
-              </button>
-            </div>
-          )}
-
-          {captureReply && !captureLoading && !captureSession?.pending && (
-            <div style={{ paddingLeft: 34 }}>
-              <button
-                onClick={resetCaptureConversation}
-                style={{
-                  background: "rgba(244,168,150,.12)", border: "1px solid rgba(244,168,150,.25)",
-                  borderRadius: "14px 14px 4px 14px", padding: "9px 14px",
-                  fontSize: 12, color: "var(--accent-peach-ink)",
-                  cursor: "pointer", fontWeight: 600,
-                }}
-              >
-                + Capturar outra
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* ── METAS ──────────────────────────────────────── */}
-        {activeTab === "metas" && (<>
         <button
-          onClick={() => setMetasOpen(o => !o)}
+          disabled={!ready || saving}
+          onClick={() => ready && onCreate(result.trim(), nextAction.trim())}
           style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 8,
-            background: "none", border: "none", borderBottom: "1px solid rgba(0,0,0,0.07)",
-            padding: "6px 0 10px", marginBottom: 12, cursor: "pointer",
+            width: "100%",
+            minHeight: 52,
+            border: 0,
+            borderRadius: 14,
+            background: ready ? "var(--nectarine)" : "rgba(26,22,20,.10)",
+            color: ready ? "#fff" : "var(--text-3)",
+            fontSize: 14,
+            fontWeight: 850,
+            cursor: ready && !saving ? "pointer" : "default",
           }}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-            stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
-            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-          </svg>
-          <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
-            Metas & Projetos
-          </span>
-          {activeGoals.length > 0 && (
-            <span style={{
-              background: "var(--accent-peach)", color: "#fff",
-              borderRadius: 99, padding: "1px 8px",
-              fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
-            }}>
-              {activeGoals.length}
-            </span>
-          )}
-          {metasOpen
-            ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} />
-            : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
+          {saving ? l("Criando…", "Creating…") : l("Criar objetivo com primeiro passo", "Create goal with first step")}
         </button>
+      </div>
+    </div>
+  );
+}
 
-        {metasOpen && (
-          activeGoals.length === 0 ? (
-            <SmartEmptyState
-              icon={Target}
-              title={t("goals.emptyTitle")}
-              description={t("goals.emptyDescription")}
-              ctaLabel={l("Escrever uma meta", "Write a goal")}
-              onAction={() => captureInputRef.current?.focus()}
-              examples={[
-                { title: l("Organizar minha rotina da semana", "Organize my weekly routine"), description: l("Para transformar bagunça em passos.", "Turn the mess into steps.") },
-                { title: l("Retomar um projeto parado", "Restart a stalled project"), description: l("Para achar a primeira ação real.", "Find the first real action.") },
-                { title: l("Cuidar melhor da minha energia", "Take better care of my energy"), description: l("Para criar metas compatíveis com seu ritmo.", "Create goals that fit your rhythm.") },
-              ]}
-            />
-          ) : (
-            activeGoals.map((goal, idx) => (
-              <GoalCard
-                key={goal.id}
-                goal={goal}
-                colorIndex={idx}
-                onToggleSubtask={subId => {
-                  const sub = goal.subtasks.find(s => s.id === subId);
-                  if (sub && !sub.done) awardXP(15, true);
-                  toggleSubGoal(goal.id, subId);
+function TaskPlacementSheet({
+  draft,
+  saving,
+  onClose,
+  onChoose,
+}: {
+  draft: TaskDraft | null;
+  saving: boolean;
+  onClose: () => void;
+  onChoose: (placement: GoalTaskPlacement) => Promise<void>;
+}) {
+  const l = useLocalizedCopy();
+  if (!draft) return null;
+
+  const nowSchedule = buildGoalTaskSchedule("now");
+  const laterSchedule = buildGoalTaskSchedule("later");
+  const options: Array<{ value: GoalTaskPlacement; label: string; detail: string }> = [
+    { value: "now", label: l("Agora", "Now"), detail: `${l("hoje", "today")}, ${nowSchedule.time}` },
+    { value: "later", label: l("Mais tarde", "Later"), detail: `${l("hoje", "today")}, ${laterSchedule.time}` },
+    { value: "tomorrow", label: l("Amanhã", "Tomorrow"), detail: l("às 9h", "at 9 AM") },
+  ];
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={l("Colocar próxima ação no dia", "Place next action in your day")}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 125,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        background: "rgba(26,22,20,.30)",
+        backdropFilter: "blur(4px)",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: "min(100%, 560px)",
+          borderRadius: "32px 32px 0 0",
+          background: "var(--warm-bg)",
+          padding: "18px 18px calc(24px + env(safe-area-inset-bottom))",
+          boxShadow: "0 -18px 50px rgba(34,28,25,.16)",
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div style={{ width: 42, height: 4, borderRadius: 99, background: "rgba(26,22,20,.14)", margin: "0 auto 18px" }} />
+        <p style={{ margin: "0 0 5px", color: "var(--lagune)", fontSize: 11, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase" }}>
+          {l("Próxima ação", "Next action")}
+        </p>
+        <h2 style={{ margin: "0 0 7px", color: "var(--text-1)", fontSize: 20, lineHeight: 1.3 }}>
+          {draft.actionTitle}
+        </h2>
+        <p style={{ margin: "0 0 18px", color: "var(--text-3)", fontSize: 12 }}>
+          {l("Ligada ao resultado:", "Linked to result:")} {draft.goalTitle}
+        </p>
+        <div style={{ display: "grid", gap: 8 }}>
+          {options.map((option) => (
+            <button
+              key={option.value}
+              disabled={saving}
+              onClick={() => onChoose(option.value)}
+              style={{
+                minHeight: 58,
+                borderRadius: 16,
+                border: "1px solid rgba(99,152,169,.22)",
+                background: "#fff",
+                color: "var(--text-1)",
+                padding: "10px 14px",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                textAlign: "left",
+                cursor: saving ? "default" : "pointer",
+              }}
+            >
+              <Clock3 size={18} color="var(--lagune)" />
+              <span style={{ flex: 1 }}>
+                <strong style={{ display: "block", fontSize: 14 }}>{option.label}</strong>
+                <span style={{ color: "var(--text-3)", fontSize: 11 }}>{option.detail}</span>
+              </span>
+              <ArrowRight size={16} color="var(--text-3)" />
+            </button>
+          ))}
+        </div>
+        <button onClick={onClose} style={{ ...quietButtonStyle, width: "100%", marginTop: 10 }}>
+          {l("Voltar sem agendar", "Go back without scheduling")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GoalCard({
+  goal,
+  paused,
+  focused,
+  scheduledActions,
+  loadingSuggestion,
+  suggestionDraft,
+  onToggleAction,
+  onAddAction,
+  onRequestSuggestion,
+  onAcceptSuggestion,
+  onPlanAction,
+  onEditResult,
+  onPause,
+  onArchive,
+}: {
+  goal: GoalLike;
+  paused: boolean;
+  focused: boolean;
+  scheduledActions: Record<string, ScheduledAction>;
+  loadingSuggestion: boolean;
+  suggestionDraft: string[];
+  onToggleAction: (actionId: string | number) => Promise<void>;
+  onAddAction: (title: string) => Promise<void>;
+  onRequestSuggestion: () => Promise<void>;
+  onAcceptSuggestion: (title: string) => Promise<void>;
+  onPlanAction: (draft: TaskDraft) => void;
+  onEditResult: (title: string) => Promise<void>;
+  onPause: () => void;
+  onArchive: () => Promise<void>;
+}) {
+  const l = useLocalizedCopy();
+  const model = buildGoalCardModel(goal);
+  const [open, setOpen] = useState(focused || !paused);
+  const [addingAction, setAddingAction] = useState(false);
+  const [actionTitle, setActionTitle] = useState("");
+  const [editingResult, setEditingResult] = useState(false);
+  const [resultTitle, setResultTitle] = useState(goal.title);
+  const [showManagement, setShowManagement] = useState(false);
+
+  useEffect(() => {
+    if (focused) setOpen(true);
+  }, [focused]);
+
+  const scheduled = model.nextAction
+    ? scheduledActions[actionKey(goal.id, model.nextAction.id)]
+    : null;
+
+  return (
+    <article
+      id={`goal-${goal.id}`}
+      style={{
+        ...cardStyle,
+        overflow: "hidden",
+        opacity: paused ? 0.78 : 1,
+        outline: focused ? "2px solid rgba(99,152,169,.34)" : "none",
+      }}
+    >
+      <button
+        onClick={() => setOpen((value) => !value)}
+        style={{
+          width: "100%",
+          border: 0,
+          background: "transparent",
+          padding: "16px 16px 14px",
+          display: "flex",
+          gap: 12,
+          textAlign: "left",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{
+          width: 38,
+          height: 38,
+          borderRadius: 14,
+          flexShrink: 0,
+          background: model.completed ? "rgba(150,199,179,.20)" : "var(--nectarine-a3)",
+          display: "grid",
+          placeItems: "center",
+          color: model.completed ? "var(--menthe)" : "var(--nectarine)",
+        }}>
+          {model.completed ? <CheckCircle2 size={19} /> : <Target size={19} />}
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: "block", marginBottom: 4, color: "var(--text-3)", fontSize: 10, fontWeight: 850, letterSpacing: ".09em", textTransform: "uppercase" }}>
+            {l("Resultado desejado", "Desired result")}
+          </span>
+          <span style={{ display: "block", color: "var(--text-1)", fontSize: 16, fontWeight: 820, lineHeight: 1.32 }}>
+            {goal.title}
+          </span>
+          <span style={{ display: "block", marginTop: 6, color: model.completed ? "var(--menthe)" : "var(--text-3)", fontSize: 11, fontWeight: 700 }}>
+            {model.progressLabel}
+          </span>
+        </span>
+        {open ? <ChevronUp size={18} color="var(--text-3)" /> : <ChevronDown size={18} color="var(--text-3)" />}
+      </button>
+
+      {open && (
+        <div style={{ padding: "0 16px 16px" }}>
+          <div style={{
+            borderRadius: 18,
+            border: "1px solid rgba(150,199,179,.34)",
+            background: "rgba(150,199,179,.10)",
+            padding: "13px",
+          }}>
+            <p style={{ margin: "0 0 6px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>
+              {l("Próxima ação", "Next action")}
+            </p>
+
+            {model.completed ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text-2)" }}>
+                <CheckCircle2 size={20} color="var(--menthe)" />
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 720, lineHeight: 1.45 }}>
+                  {l("Os movimentos previstos foram concluídos. Este resultado fica guardado como conquista.", "The planned moves are complete. This result is kept as an achievement.")}
+                </p>
+              </div>
+            ) : model.nextAction ? (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <button
+                    aria-label={l("Marcar ação como concluída", "Mark action as completed")}
+                    onClick={() => onToggleAction(model.nextAction!.id)}
+                    style={{
+                      width: 26,
+                      height: 26,
+                      borderRadius: 9,
+                      border: "1.5px solid var(--menthe)",
+                      background: "#fff",
+                      color: "var(--menthe)",
+                      display: "grid",
+                      placeItems: "center",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Check size={15} />
+                  </button>
+                  <p style={{ flex: 1, margin: 0, color: "var(--text-1)", fontSize: 14, fontWeight: 750, lineHeight: 1.45 }}>
+                    {model.nextAction.title}
+                  </p>
+                </div>
+
+                {scheduled ? (
+                  <div style={{
+                    marginTop: 11,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    color: "var(--lagune)",
+                    fontSize: 11,
+                    fontWeight: 750,
+                  }}>
+                    <CalendarPlus size={14} />
+                    {l("No seu dia em", "In your day on")} {scheduled.date} · {scheduled.time}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onPlanAction({
+                      goalId: goal.id,
+                      goalTitle: goal.title,
+                      actionId: model.nextAction!.id,
+                      actionTitle: model.nextAction!.title,
+                    })}
+                    style={{
+                      width: "100%",
+                      minHeight: 43,
+                      marginTop: 12,
+                      border: 0,
+                      borderRadius: 13,
+                      background: "var(--lagune)",
+                      color: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 7,
+                      fontSize: 12,
+                      fontWeight: 850,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <CalendarPlus size={16} />
+                    {l("Colocar no meu dia", "Place in my day")}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <p style={{ margin: "0 0 11px", color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
+                  {l("Este resultado ainda não tem um passo concreto. Você decide o primeiro; a Airia não inventa por você.", "This result has no concrete step yet. You decide the first one; Airia does not invent it for you.")}
+                </p>
+                {!addingAction && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={() => setAddingAction(true)} style={{ ...quietButtonStyle, flex: 1 }}>
+                      <Plus size={14} /> {l("Definir próxima ação", "Define next action")}
+                    </button>
+                    <button disabled={loadingSuggestion} onClick={onRequestSuggestion} style={{ ...quietButtonStyle, flex: 1, color: "var(--nectarine-11)", borderColor: "var(--nectarine-a5)" }}>
+                      <Sparkles size={14} /> {loadingSuggestion ? l("Pensando…", "Thinking…") : l("Pedir opções à Airia", "Ask Airia for options")}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {addingAction && (
+              <div style={{ marginTop: 10 }}>
+                <input
+                  autoFocus
+                  value={actionTitle}
+                  onChange={(event) => setActionTitle(event.target.value)}
+                  placeholder={l("Verbo + objeto concreto", "Verb + concrete object")}
+                  style={{
+                    width: "100%",
+                    minHeight: 44,
+                    boxSizing: "border-box",
+                    border: "1.5px solid rgba(150,199,179,.55)",
+                    borderRadius: 12,
+                    background: "#fff",
+                    padding: "10px 12px",
+                    color: "var(--text-1)",
+                    fontSize: 13,
+                    outline: "none",
+                  }}
+                />
+                <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
+                  <button
+                    disabled={actionTitle.trim().length < 3}
+                    onClick={async () => {
+                      if (actionTitle.trim().length < 3) return;
+                      await onAddAction(actionTitle.trim());
+                      setActionTitle("");
+                      setAddingAction(false);
+                    }}
+                    style={{
+                      ...quietButtonStyle,
+                      flex: 1,
+                      background: "var(--menthe)",
+                      borderColor: "var(--menthe)",
+                      color: "#fff",
+                      opacity: actionTitle.trim().length < 3 ? 0.45 : 1,
+                    }}
+                  >
+                    {l("Salvar ação", "Save action")}
+                  </button>
+                  <button onClick={() => setAddingAction(false)} style={quietButtonStyle}>
+                    {l("Cancelar", "Cancel")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {suggestionDraft.length > 0 && !model.nextAction && (
+              <div style={{ marginTop: 12 }}>
+                <p style={{ margin: "0 0 7px", color: "var(--text-3)", fontSize: 11, lineHeight: 1.4 }}>
+                  {l("Opções para você escolher — nenhuma foi criada ainda:", "Options for you to choose — none have been created yet:")}
+                </p>
+                <div style={{ display: "grid", gap: 7 }}>
+                  {suggestionDraft.slice(0, 3).map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => onAcceptSuggestion(suggestion)}
+                      style={{
+                        minHeight: 43,
+                        borderRadius: 12,
+                        border: "1px solid rgba(215,137,127,.30)",
+                        background: "#fff",
+                        color: "var(--text-1)",
+                        padding: "9px 11px",
+                        textAlign: "left",
+                        fontSize: 12,
+                        fontWeight: 650,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {goal.subtasks.length > 1 && (
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ cursor: "pointer", color: "var(--text-3)", fontSize: 11, fontWeight: 750 }}>
+                {l("Ver caminho completo", "View full path")} · {model.completedActions}/{model.totalActions}
+              </summary>
+              <div style={{ display: "grid", gap: 7, marginTop: 9 }}>
+                {goal.subtasks.map((action) => (
+                  <button
+                    key={action.id}
+                    onClick={() => onToggleAction(action.id)}
+                    style={{
+                      border: 0,
+                      background: "transparent",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 9,
+                      padding: "4px 0",
+                      color: action.done ? "var(--text-3)" : "var(--text-2)",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 6,
+                      border: action.done ? "1px solid var(--menthe)" : "1px solid rgba(99,152,169,.30)",
+                      background: action.done ? "var(--menthe)" : "#fff",
+                      color: "#fff",
+                      display: "grid",
+                      placeItems: "center",
+                      flexShrink: 0,
+                    }}>
+                      {action.done && <Check size={12} />}
+                    </span>
+                    <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
+                      {action.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </details>
+          )}
+
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => setShowManagement((value) => !value)} style={{ ...quietButtonStyle, width: "100%", minHeight: 36, border: 0, background: "transparent", color: "var(--text-3)" }}>
+              {l("Gerenciar objetivo", "Manage goal")}
+              {showManagement ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {showManagement && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7, marginTop: 6 }}>
+                <button onClick={() => setEditingResult(true)} style={{ ...quietButtonStyle, padding: "8px 6px" }}>
+                  <Edit3 size={14} /> {l("Editar", "Edit")}
+                </button>
+                <button onClick={onPause} style={{ ...quietButtonStyle, padding: "8px 6px" }}>
+                  {paused ? <Play size={14} /> : <Pause size={14} />}
+                  {paused ? l("Retomar", "Resume") : l("Pausar", "Pause")}
+                </button>
+                <button onClick={onArchive} style={{ ...quietButtonStyle, padding: "8px 6px", color: "var(--nectarine-11)" }}>
+                  <Archive size={14} /> {l("Arquivar", "Archive")}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {editingResult && (
+            <div style={{ marginTop: 10, display: "flex", gap: 7 }}>
+              <input
+                autoFocus
+                value={resultTitle}
+                onChange={(event) => setResultTitle(event.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  border: "1.5px solid rgba(99,152,169,.30)",
+                  borderRadius: 12,
+                  background: "#fff",
+                  color: "var(--text-1)",
+                  padding: "9px 11px",
+                  fontSize: 13,
+                  outline: "none",
                 }}
-                onBreakDown={() => breakGoalDown(goal.id)}
-                onAddSubtask={text => addSubGoals(goal.id, [text])}
-                onRemove={() => removeGoal(goal.id)}
-                loadingBreakdown={loadingBreakdown === goal.id}
-                onJournalReflect={() => navigate("/journal")}
-                onUpdateTitle={newTitle => handleUpdateGoalTitle(goal.id, newTitle)}
-                onConvertToTask={handleConvertToTask}
-                initiallyOpen={navState?.openGoalId ? navState.openGoalId === goal.id : undefined}
-                highlightedSubtaskId={navState?.openGoalId === goal.id ? navState.openSubtaskId : undefined}
-                highlightedText={navState?.openGoalId === goal.id ? navState.highlightText : undefined}
               />
-            ))
-          )
+              <button
+                onClick={async () => {
+                  if (resultTitle.trim().length < 3) return;
+                  await onEditResult(resultTitle.trim());
+                  setEditingResult(false);
+                }}
+                style={{ ...quietButtonStyle, background: "var(--lagune)", color: "#fff" }}
+              >
+                {l("Salvar", "Save")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+export function GoalsPage() {
+  const l = useLocalizedCopy();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const {
+    state,
+    addGoalWithSubGoals,
+    addSubGoals,
+    toggleSubGoal,
+    removeGoal,
+    updateGoal,
+    addTask,
+  } = useAuraStore();
+  const { showError, showSuccess } = useToast();
+
+  const [creationOpen, setCreationOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [taskDraft, setTaskDraft] = useState<TaskDraft | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const [completedOpen, setCompletedOpen] = useState(false);
+  const [pausedOpen, setPausedOpen] = useState(false);
+  const [loadingSuggestion, setLoadingSuggestion] = useState<string | number | null>(null);
+  const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
+  const [pausedIds, setPausedIds] = useState<string[]>(() => {
+    try {
+      return parsePausedGoalIds(localStorage.getItem(PAUSED_GOALS_KEY));
+    } catch {
+      return [];
+    }
+  });
+  const [scheduledActions, setScheduledActions] = useState<Record<string, ScheduledAction>>(() => {
+    try {
+      return readScheduledActions();
+    } catch {
+      return {};
+    }
+  });
+
+  const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
+  const goals = state.goals as unknown as GoalLike[];
+
+  const activeGoals = useMemo(
+    () => goals.filter((goal) => goal.completedPct < 100 && !pausedIds.includes(String(goal.id))),
+    [goals, pausedIds],
+  );
+  const pausedGoals = useMemo(
+    () => goals.filter((goal) => goal.completedPct < 100 && pausedIds.includes(String(goal.id))),
+    [goals, pausedIds],
+  );
+  const completedGoals = useMemo(
+    () => goals.filter((goal) => goal.completedPct >= 100),
+    [goals],
+  );
+  const goalsWithAction = activeGoals.filter((goal) => buildGoalCardModel(goal).nextAction).length;
+
+  useEffect(() => {
+    localStorage.setItem(PAUSED_GOALS_KEY, JSON.stringify(pausedIds));
+  }, [pausedIds]);
+
+  useEffect(() => {
+    localStorage.setItem(SCHEDULED_ACTIONS_KEY, JSON.stringify(scheduledActions));
+  }, [scheduledActions]);
+
+  useEffect(() => {
+    if (!focusedGoalId) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`goal-${focusedGoalId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [focusedGoalId]);
+
+  async function createGoal(result: string, nextAction: string) {
+    setCreating(true);
+    try {
+      await addGoalWithSubGoals(result, [nextAction]);
+      setCreationOpen(false);
+      showSuccess(l("Objetivo criado com um primeiro passo real.", "Goal created with a real first step."));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l("Não foi possível criar o objetivo.", "Could not create the goal."));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function requestSuggestion(goal: GoalLike) {
+    setLoadingSuggestion(goal.id);
+    try {
+      const response = await api.post("/ai/suggest", {
+        type: "goal-subtasks",
+        context: {
+          goalTitle: goal.title,
+          existingSubtasks: goal.subtasks.map((subtask) => subtask.title),
+        },
+      }) as { suggestion?: unknown };
+      const parsed = parseAiSuggestion<{ items?: string[] } | string[]>(response.suggestion);
+      const items = (Array.isArray(parsed) ? parsed : parsed?.items ?? [])
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+        .slice(0, 3);
+
+      if (items.length === 0) {
+        showError(l("A Airia não encontrou uma opção concreta. Defina o primeiro passo com suas palavras.", "Airia did not find a concrete option. Define the first step in your own words."));
+        return;
+      }
+      setSuggestionDrafts((current) => ({ ...current, [String(goal.id)]: items }));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l("Não foi possível gerar opções agora.", "Could not generate options right now."));
+    } finally {
+      setLoadingSuggestion(null);
+    }
+  }
+
+  async function addAction(goalId: string | number, title: string) {
+    try {
+      await addSubGoals(goalId, [title]);
+      setSuggestionDrafts((current) => ({ ...current, [String(goalId)]: [] }));
+      showSuccess(l("Próxima ação adicionada.", "Next action added."));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l("Não foi possível adicionar a ação.", "Could not add the action."));
+    }
+  }
+
+  function togglePaused(goalId: string | number) {
+    setPausedIds((current) => togglePausedGoalId(current, goalId));
+  }
+
+  async function archiveGoal(goal: GoalLike) {
+    const confirmed = window.confirm(
+      l(
+        `Arquivar “${goal.title}”? O histórico fica preservado, mas ele sai dos objetivos ativos.`,
+        `Archive “${goal.title}”? Its history is preserved, but it leaves active goals.`,
+      ),
+    );
+    if (!confirmed) return;
+
+    try {
+      await removeGoal(goal.id);
+      setPausedIds((current) => current.filter((id) => id !== String(goal.id)));
+      showSuccess(l("Objetivo arquivado.", "Goal archived."));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l("Não foi possível arquivar.", "Could not archive."));
+    }
+  }
+
+  async function placeAction(placement: GoalTaskPlacement) {
+    if (!taskDraft) return;
+    setScheduling(true);
+    try {
+      const schedule = buildGoalTaskSchedule(placement);
+      const created = await addTask(taskDraft.actionTitle, schedule.time, "objetivo", {
+        date: schedule.date,
+        note: `${l("Próxima ação de", "Next action for")}: ${taskDraft.goalTitle}`,
+      });
+      if (!created) throw new Error(l("A tarefa não foi criada.", "The task was not created."));
+
+      setScheduledActions((current) => ({
+        ...current,
+        [actionKey(taskDraft.goalId, taskDraft.actionId)]: {
+          taskId: created.id,
+          date: schedule.date,
+          time: schedule.time,
+        },
+      }));
+      setTaskDraft(null);
+      showSuccess(l("A próxima ação entrou no seu dia.", "The next action was added to your day."));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l("Não foi possível colocar a ação no seu dia.", "Could not place the action in your day."));
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  const renderGoal = (goal: GoalLike) => (
+    <GoalCard
+      key={goal.id}
+      goal={goal}
+      paused={pausedIds.includes(String(goal.id))}
+      focused={focusedGoalId != null && String(focusedGoalId) === String(goal.id)}
+      scheduledActions={scheduledActions}
+      loadingSuggestion={loadingSuggestion === goal.id}
+      suggestionDraft={suggestionDrafts[String(goal.id)] ?? []}
+      onToggleAction={async (actionId) => {
+        try {
+          await toggleSubGoal(goal.id, actionId);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : l("Não foi possível atualizar a ação.", "Could not update the action."));
+        }
+      }}
+      onAddAction={(title) => addAction(goal.id, title)}
+      onRequestSuggestion={() => requestSuggestion(goal)}
+      onAcceptSuggestion={(title) => addAction(goal.id, title)}
+      onPlanAction={setTaskDraft}
+      onEditResult={async (title) => {
+        try {
+          await updateGoal(goal.id, { title });
+          showSuccess(l("Resultado atualizado.", "Result updated."));
+        } catch (error) {
+          showError(error instanceof Error ? error.message : l("Não foi possível atualizar.", "Could not update."));
+        }
+      }}
+      onPause={() => togglePaused(goal.id)}
+      onArchive={() => archiveGoal(goal)}
+    />
+  );
+
+  return (
+    <div className="page-shell" style={{ minHeight: "100%", background: "var(--warm-bg)" }}>
+      <div className="screen-content" style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 118 }}>
+        <header style={{ padding: "18px 2px 16px" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: "0 0 5px", color: "var(--lagune)", fontSize: 11, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase" }}>
+                {l("Direção e movimento", "Direction and movement")}
+              </p>
+              <h1 style={{ margin: "0 0 7px", color: "var(--text-1)", fontSize: 28, lineHeight: 1.18 }}>
+                {l("Objetivos", "Goals")}
+              </h1>
+              <p style={{ margin: 0, maxWidth: 440, color: "var(--text-2)", fontSize: 13, lineHeight: 1.5 }}>
+                {l("Resultados que você quer tornar reais, sempre ligados a um próximo passo possível.", "Results you want to make real, always linked to a possible next step.")}
+              </p>
+            </div>
+            <button
+              onClick={() => setCreationOpen(true)}
+              style={{
+                minHeight: 44,
+                border: 0,
+                borderRadius: 14,
+                background: "var(--nectarine)",
+                color: "#fff",
+                padding: "10px 14px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                fontSize: 12,
+                fontWeight: 850,
+                cursor: "pointer",
+                boxShadow: "0 8px 20px rgba(215,137,127,.22)",
+              }}
+            >
+              <Plus size={17} />
+              {l("Criar objetivo", "Create goal")}
+            </button>
+          </div>
+        </header>
+
+        {activeGoals.length > 0 && (
+          <section
+            style={{
+              ...cardStyle,
+              marginBottom: 14,
+              padding: "14px 15px",
+              background: "linear-gradient(135deg, rgba(150,199,179,.14), rgba(255,255,255,.88))",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+              <span style={{ width: 36, height: 36, borderRadius: 13, background: "rgba(150,199,179,.18)", color: "var(--menthe)", display: "grid", placeItems: "center" }}>
+                <Sparkles size={18} />
+              </span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: "0 0 3px", color: "var(--text-1)", fontSize: 13, fontWeight: 820 }}>
+                  {goalsWithAction === activeGoals.length
+                    ? l("Todos os objetivos têm um próximo passo", "Every goal has a next step")
+                    : l(`${goalsWithAction} de ${activeGoals.length} objetivos têm um próximo passo`, `${goalsWithAction} of ${activeGoals.length} goals have a next step`)}
+                </p>
+                <p style={{ margin: 0, color: "var(--text-3)", fontSize: 11, lineHeight: 1.4 }}>
+                  {l("Avançar é encontrar o movimento possível — não preencher uma barra.", "Progress means finding the possible move — not filling a bar.")}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <main style={{ display: "grid", gap: 12 }}>
+          {activeGoals.length === 0 ? (
+            <section style={{ ...cardStyle, padding: "24px 18px", textAlign: "center" }}>
+              <span style={{ width: 52, height: 52, margin: "0 auto 12px", borderRadius: 18, background: "var(--nectarine-a3)", color: "var(--nectarine)", display: "grid", placeItems: "center" }}>
+                <Target size={24} />
+              </span>
+              <h2 style={{ margin: "0 0 7px", color: "var(--text-1)", fontSize: 18 }}>
+                {pausedGoals.length > 0 ? l("Seus objetivos ativos estão pausados", "Your active goals are paused") : l("Escolha algo que merece virar realidade", "Choose something worth making real")}
+              </h2>
+              <p style={{ margin: "0 auto 15px", maxWidth: 360, color: "var(--text-2)", fontSize: 13, lineHeight: 1.5 }}>
+                {l("Você escolhe a direção. A Airia ajuda a separar o resultado do primeiro movimento.", "You choose the direction. Airia helps separate the result from the first move.")}
+              </p>
+              <button onClick={() => setCreationOpen(true)} style={{ ...quietButtonStyle, minHeight: 46, background: "var(--nectarine)", borderColor: "var(--nectarine)", color: "#fff" }}>
+                <Plus size={16} /> {l("Criar meu primeiro objetivo", "Create my first goal")}
+              </button>
+            </section>
+          ) : activeGoals.map(renderGoal)}
+        </main>
+
+        {pausedGoals.length > 0 && (
+          <section style={{ marginTop: 18 }}>
+            <button onClick={() => setPausedOpen((value) => !value)} style={{ ...quietButtonStyle, width: "100%", border: 0, background: "transparent", justifyContent: "space-between" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                <CirclePause size={16} color="var(--lagune)" />
+                {l("Objetivos pausados", "Paused goals")} · {pausedGoals.length}
+              </span>
+              {pausedOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </button>
+            {pausedOpen && <div style={{ display: "grid", gap: 12, marginTop: 8 }}>{pausedGoals.map(renderGoal)}</div>}
+          </section>
         )}
 
         {completedGoals.length > 0 && (
-          <div style={{ marginTop: 18 }}>
-            <button
-              onClick={() => setCompletedOpen(o => !o)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 8,
-                background: "none", border: "none", borderBottom: "1px solid rgba(0,0,0,0.07)",
-                padding: "6px 0 10px", marginBottom: 12, cursor: "pointer",
-              }}
-            >
-              <CheckCircle2 size={15} style={{ color: "var(--accent-sage)" }} />
-              <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
-                {t("goals.completedPlural")}
+          <section style={{ marginTop: 12 }}>
+            <button onClick={() => setCompletedOpen((value) => !value)} style={{ ...quietButtonStyle, width: "100%", border: 0, background: "transparent", justifyContent: "space-between" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                <CheckCircle2 size={16} color="var(--menthe)" />
+                {l("Resultados alcançados", "Achieved results")} · {completedGoals.length}
               </span>
-              <span style={{
-                background: "rgba(150,199,179,.22)", color: "var(--accent-sage-ink)",
-                borderRadius: 99, padding: "1px 8px",
-                fontSize: "calc(var(--a) * 0.75)", fontWeight: 800,
-              }}>
-                {completedGoals.length}
-              </span>
-              {completedOpen
-                ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} />
-                : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
+              {completedOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
-
-            {completedOpen && completedGoals.map((goal, idx) => (
-              <GoalCard
-                key={goal.id}
-                goal={goal}
-                colorIndex={idx}
-                onToggleSubtask={subId => toggleSubGoal(goal.id, subId)}
-                onBreakDown={() => breakGoalDown(goal.id)}
-                onAddSubtask={text => addSubGoals(goal.id, [text])}
-                onRemove={() => removeGoal(goal.id)}
-                loadingBreakdown={loadingBreakdown === goal.id}
-                onJournalReflect={() => navigate("/journal")}
-                onUpdateTitle={newTitle => handleUpdateGoalTitle(goal.id, newTitle)}
-                onConvertToTask={handleConvertToTask}
-              />
-            ))}
-          </div>
-        )}
-        </>)}
-
-        {/* ── PRÓXIMAS AÇÕES ───────────────────── */}
-        {activeTab === "acoes" && (
-          <>
-            <div style={{ height: 8 }} />
-            <button
-              onClick={() => setActionsOpen(o => !o)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 8,
-                background: "none", border: "none", borderBottom: "1px solid rgba(0,0,0,0.07)",
-                padding: "6px 0 10px", marginBottom: 12, cursor: "pointer",
-              }}
-            >
-              <Zap size={15} style={{ color: "var(--accent-sky)" }} />
-              <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
-                {t("goals.nextActions")}
-              </span>
-              <span style={{
-                background: "var(--accent-sky)", color: "#fff",
-                borderRadius: 99, padding: "1px 8px",
-                fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
-              }}>
-                {priorityActions.length}
-              </span>
-              {actionsOpen
-                ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} />
-                : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
-            </button>
-
-            {actionsOpen && priorityActions.length === 0 && (
-              <SmartEmptyState
-                icon={Zap}
-                title={t("goals.noActions")}
-                description={t("goals.noActionsDescription")}
-                ctaLabel={t("goals.captureAction")}
-                onAction={() => captureInputRef.current?.focus()}
-                examples={[
-                  { title: l("Enviar mensagem para destravar X", "Send a message to unblock X"), description: l("Ação clara com pessoa ou projeto.", "A clear action with a person or project.") },
-                  { title: l("Separar 20 min para revisar Y", "Set aside 20 min to review Y"), description: l("Bom para avanço mínimo.", "Good for minimum progress.") },
-                  { title: l("Listar documentos de Z", "List the documents for Z"), description: l("Bom quando a meta ainda está grande.", "Good when the goal still feels too big.") },
-                ]}
-              />
-            )}
-
-            {actionsOpen && priorityActions.map(action => {
-              const linkedItem = action.source === "capture" ? standaloneActions.find(item => item.id === action.gtdId) : null;
-              return (
-              <div key={action.id}>
-                <div style={{
-                  backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-                  background: "rgba(255,255,255,0.55)",
-                  border: "1px solid rgba(255,255,255,0.78)",
-                  borderRadius: 14, padding: "10px 12px", marginBottom: 8,
-                  display: "flex", alignItems: "flex-start", gap: 10,
-                  boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-                }}>
-                  <TaskBox done={false} onClick={() => void completePriorityAction(action)} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ marginBottom: 2 }}>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 3,
-                        background: action.source === "goal" ? "rgba(215,137,127,0.10)" : "rgba(99,152,169,0.10)",
-                        border: action.source === "goal" ? "1px solid rgba(215,137,127,0.25)" : "1px solid rgba(99,152,169,0.25)",
-                        borderRadius: 999, padding: "1px 7px",
-                        fontSize: 9, fontWeight: 800, letterSpacing: ".07em",
-                        color: action.source === "goal" ? "var(--accent-peach)" : "var(--accent-sky)",
-                        textTransform: "uppercase" as const,
-                      }}>{action.source === "goal" ? l("🎯 Meta", "🎯 Goal") : l("⚡ Tarefa", "⚡ Task")}</span>
-                    </div>
-                    <div style={{
-                      fontSize: "calc(var(--a) * 0.9)", fontWeight: 500,
-                      color: "var(--text-1)",
-                    }}>
-                      {action.text}
-                    </div>
-                    {action.source === "goal" && action.goalTitle && (
-                      <div style={{ fontSize: "calc(var(--a) * 0.78)", color: "var(--text-3)", marginTop: 2 }}>
-                        {action.goalTitle}
-                      </div>
-                    )}
-                    {linkedItem?.razao && (
-                      <div style={{ fontSize: "calc(var(--a) * 0.78)", color: "var(--text-3)", marginTop: 2 }}>
-                        {linkedItem.razao}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                    {action.source === "capture" && linkedItem && goals.length > 0 && (
-                      <button
-                        onClick={() => setLinkingItem(linkingItem === linkedItem.id ? null : linkedItem.id)}
-                        style={{
-                          background: linkingItem === linkedItem.id ? "var(--accent-sky)" : "rgba(99,152,169,0.10)",
-                          border: "1px solid rgba(99,152,169,0.30)",
-                          borderRadius: 8, cursor: "pointer",
-                          color: linkingItem === linkedItem.id ? "#fff" : "var(--accent-sky)",
-                          padding: "3px 7px", fontSize: "calc(var(--a) * 0.78)",
-                          display: "flex", alignItems: "center", gap: 3, fontWeight: 600,
-                        }}
-                      >
-                        <Link size={11} /> Meta
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (action.source === "goal") {
-                          navigate("/goals", { state: { openGoalId: action.goalId, openSubtaskId: action.subId } });
-                        } else if (action.gtdId) {
-                          setGtdItems(prev => prev.map(i => i.id === action.gtdId ? { ...i, archived: true } : i));
-                        }
-                      }}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 2 }}
-                    >
-                      {action.source === "goal" ? <Link size={13} /> : <X size={13} />}
-                    </button>
-                  </div>
-                </div>
-
-                {linkedItem && linkingItem === linkedItem.id && (
-                  <div style={{
-                    backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-                    background: "rgba(255,255,255,0.78)",
-                    border: "1.5px solid rgba(215,137,127,0.35)",
-                    borderRadius: 14, padding: "12px",
-                    marginTop: -4, marginBottom: 8,
-                  }}>
-                    <div style={{ fontSize: "calc(var(--a) * 0.82)", color: "var(--text-2)", marginBottom: 8, fontWeight: 600 }}>
-                      Vincular à qual meta?
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {goals.map(g => (
-                        <button key={g.id} onClick={() => linkToGoal(linkedItem.id, g.id)}
-                          style={{
-                            background: "rgba(255,255,255,0.7)", border: "1px solid rgba(0,0,0,0.08)",
-                            borderRadius: 10, padding: "7px 10px", cursor: "pointer",
-                            textAlign: "left", fontSize: "calc(var(--a) * 0.85)", color: "var(--text-1)",
-                          }}
-                        >
-                          🎯 {g.title}
-                        </button>
-                      ))}
-                      <button onClick={() => setLinkingItem(null)}
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: "calc(var(--a) * 0.82)", color: "var(--text-3)", textAlign: "center", padding: 4 }}>
-                        {t("common.cancel")}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )})}
-          </>
+            {completedOpen && <div style={{ display: "grid", gap: 12, marginTop: 8 }}>{completedGoals.map(renderGoal)}</div>}
+          </section>
         )}
 
-        {/* ── INBOX ─────────────────────────────────────── */}
-        {inbox.length > 0 && (
-          <>
-            <div style={{ height: 8 }} />
-            <button
-              onClick={() => setInboxOpen(o => !o)}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 8,
-                background: "none", border: "none", borderBottom: "1px solid rgba(0,0,0,0.07)",
-                padding: "6px 0 10px", marginBottom: 12, cursor: "pointer",
-              }}
-            >
-              <Inbox size={15} style={{ color: "var(--accent-sage)" }} />
-              <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)", textAlign: "left" }}>
-                Inbox — Clarificando
-              </span>
-              <span style={{
-                background: "var(--accent-sage)", color: "#fff",
-                borderRadius: 99, padding: "1px 8px",
-                fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
-              }}>
-                {inbox.length}
-              </span>
-              {inboxOpen
-                ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} />
-                : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
-            </button>
-
-            {inboxOpen && inbox.map(item => (
-              <div key={item.id} style={{
-                backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-                background: "rgba(255,255,255,0.55)",
-                border: "1px solid rgba(255,255,255,0.78)",
-                borderRadius: 14, padding: "12px", marginBottom: 8,
-                boxShadow: "0 2px 12px rgba(0,0,0,0.05)",
-              }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-                  <span style={{ fontSize: "1rem", flexShrink: 0 }}>📥</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "calc(var(--a) * 0.9)", color: "var(--text-1)" }}>{item.text}</div>
-                    {item.clarifying && (
-                      <div style={{ fontSize: "calc(var(--a) * 0.8)", color: "var(--accent-sage)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                        <AuraIcon size={12} /> Airia clarificando...
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setGtdItems(prev => prev.map(i => i.id === item.id ? { ...i, archived: true } : i))}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", padding: 2, flexShrink: 0 }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-                <AuraButtonV2
-                  variant="outline"
-                  size="sm"
-                  onClick={() => clarifyItem(item.id)}
-                  disabled={item.clarifying}
-                  leftIcon={<AuraIcon size={12} />}
-                  style={{ width: "100%", borderRadius: 10, justifyContent: "center" }}
-                >
-                  {item.clarifying ? "Clarificando..." : "Clarificar com Airia"}
-                </AuraButtonV2>
-              </div>
-            ))}
-          </>
+        {activeGoals.length > 0 && (
+          <button onClick={() => navigate("/planner")} style={{ ...quietButtonStyle, width: "100%", marginTop: 18, border: 0, background: "transparent", color: "var(--lagune)" }}>
+            {l("Ver as ações que já estão no meu dia", "See actions already in my day")} <ArrowRight size={15} />
+          </button>
         )}
-
-        {/* ── PARKED ────────────────────────────────────── */}
-        {activeTab === "acoes" && parked.length > 0 && (
-          <>
-            <div style={{ height: 8 }} />
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "6px 0 10px", borderBottom: "1px solid rgba(0,0,0,0.07)",
-            }}>
-              <span style={{ fontSize: "0.9rem" }}>🗂️</span>
-              <span style={{ flex: 1, fontWeight: 700, fontSize: "calc(var(--a) * 0.9)", color: "var(--text-2)" }}>
-                {t("goals.referenceSomeday")}
-              </span>
-              <span style={{
-                background: "var(--text-3)", color: "#fff",
-                borderRadius: 99, padding: "1px 8px",
-                fontSize: "calc(var(--a) * 0.75)", fontWeight: 700,
-              }}>
-                {parked.length}
-              </span>
-            </div>
-          </>
-        )}
-
       </div>
+
+      <CreationSheet open={creationOpen} saving={creating} onClose={() => !creating && setCreationOpen(false)} onCreate={createGoal} />
+      <TaskPlacementSheet draft={taskDraft} saving={scheduling} onClose={() => !scheduling && setTaskDraft(null)} onChoose={placeAction} />
     </div>
   );
 }

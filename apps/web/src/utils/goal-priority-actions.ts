@@ -15,6 +15,18 @@ export type GoalPrioritySource = {
   subtasks?: Array<{ id: string | number; title: string; done: boolean }>;
 };
 
+export type GoalCardModel = {
+  id: string | number;
+  result: string;
+  nextAction: { id: string | number; title: string } | null;
+  completedActions: number;
+  totalActions: number;
+  progressLabel: string;
+  completed: boolean;
+};
+
+export type GoalTaskPlacement = "now" | "later" | "tomorrow";
+
 export type StoredGtdAction = {
   id: string;
   text: string;
@@ -104,4 +116,95 @@ export function buildGoalPriorityActions(
 
   const actions = [...goalActions, ...captureActions];
   return typeof options.limit === "number" ? actions.slice(0, options.limit) : actions;
+}
+
+export function buildGoalCardModel(goal: GoalPrioritySource): GoalCardModel {
+  const subtasks = goal.subtasks ?? [];
+  const completedActions = subtasks.filter((subtask) => subtask.done).length;
+  const nextAction = subtasks.find((subtask) => !subtask.done) ?? null;
+  const completed = (goal.completedPct ?? 0) >= 100;
+
+  const progressLabel = completed
+    ? "Resultado alcançado"
+    : subtasks.length === 0
+      ? "Pronto para definir o primeiro passo"
+      : completedActions === 0
+        ? "Primeiro movimento pronto"
+        : `${completedActions} ${completedActions === 1 ? "movimento concluído" : "movimentos concluídos"}`;
+
+  return {
+    id: goal.id,
+    result: goal.title,
+    nextAction: nextAction ? { id: nextAction.id, title: nextAction.title } : null,
+    completedActions,
+    totalActions: subtasks.length,
+    progressLabel,
+    completed,
+  };
+}
+
+export function parsePausedGoalIds(raw: string | null): string[] {
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return [...new Set(
+      parsed
+        .filter((value) => typeof value === "string" || typeof value === "number")
+        .map(String),
+    )];
+  } catch {
+    return [];
+  }
+}
+
+export function togglePausedGoalId(current: string[], goalId: string | number): string[] {
+  const normalizedId = String(goalId);
+  return current.includes(normalizedId)
+    ? current.filter((id) => id !== normalizedId)
+    : [...current, normalizedId];
+}
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function timeKey(hours: number, minutes: number): string {
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function buildGoalTaskSchedule(
+  placement: GoalTaskPlacement,
+  now = new Date(),
+): { date: string; time: string } {
+  if (placement === "tomorrow") {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    return { date: localDateKey(tomorrow), time: "09:00" };
+  }
+
+  if (placement === "later") {
+    if (now.getHours() < 18) {
+      return { date: localDateKey(now), time: "18:00" };
+    }
+    if (now.getHours() >= 23) {
+      const tomorrow = new Date(now);
+      tomorrow.setDate(now.getDate() + 1);
+      return { date: localDateKey(tomorrow), time: "09:00" };
+    }
+    const nextHour = Math.min(now.getHours() + 1, 23);
+    return { date: localDateKey(now), time: timeKey(nextHour, 0) };
+  }
+
+  const rounded = new Date(now);
+  const minutes = Math.ceil((now.getMinutes() + 1) / 15) * 15;
+  rounded.setMinutes(minutes, 0, 0);
+  return {
+    date: localDateKey(rounded),
+    time: timeKey(rounded.getHours(), rounded.getMinutes()),
+  };
 }
