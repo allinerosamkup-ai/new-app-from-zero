@@ -1,4 +1,11 @@
-import type { RoutineBuilderStep, RoutineItem, RoutinePlan, RoutinePlanEntry, RoutineSession } from './types';
+import type {
+  RoutineBuilderStep,
+  RoutineItem,
+  RoutinePlan,
+  RoutinePlanEntry,
+  RoutineSession,
+  RoutineSuggestionCard,
+} from './types';
 
 export function shouldRestoreRoutineSession(incoming: { initialSource?: string; focus?: string }): boolean {
   return !incoming.initialSource?.trim() && !incoming.focus?.trim();
@@ -73,4 +80,64 @@ export function buildRoutinePreviewSections(plan: RoutinePlan, today: string): {
     habits: week.filter((entry) => entry.kind === 'habit'),
     objectives: plan.contextItems.filter((item) => item.kind === 'goal' || item.kind === 'project'),
   };
+}
+
+export function buildRoutineSuggestionCards(input: {
+  items: RoutineItem[];
+  plan: RoutinePlan;
+  appliedSourceItemIds?: string[];
+}): RoutineSuggestionCard[] {
+  const applied = new Set(input.appliedSourceItemIds ?? []);
+  const operationalKinds = new Set(['goal', 'project', 'task', 'habit', 'calendar']);
+
+  return input.items
+    .filter((item) => operationalKinds.has(item.kind) && !item.duplicateOf)
+    .map((item) => {
+      const entries = input.plan.entries
+        .filter((entry) => entry.persist && entry.sourceItemId === item.id)
+        .sort((left, right) => `${left.date}T${left.startTime}`.localeCompare(`${right.date}T${right.startTime}`));
+      const first = entries[0];
+      const requiresOccurrence = item.kind === 'task' || item.kind === 'calendar';
+      const state: RoutineSuggestionCard['state'] = applied.has(item.id)
+        ? 'added'
+        : item.reviewState === 'excluded'
+          ? 'discarded'
+          : requiresOccurrence && !first
+            ? 'needs_adjustment'
+            : 'available';
+
+      return {
+        sourceItemId: item.id,
+        kind: item.kind as RoutineSuggestionCard['kind'],
+        title: item.title,
+        description: item.description,
+        reason: first?.reason ?? item.classificationReason ?? item.sourceExcerpt,
+        recurrence: item.recurrence,
+        firstOccurrence: first
+          ? {
+              date: first.date,
+              startTime: first.startTime,
+              endTime: first.endTime,
+              durationMinutes: first.durationMinutes,
+            }
+          : null,
+        occurrenceCount: entries.length,
+        state,
+      };
+    })
+    .sort((left, right) => {
+      const leftKey = left.firstOccurrence
+        ? `${left.firstOccurrence.date}T${left.firstOccurrence.startTime}`
+        : '9999';
+      const rightKey = right.firstOccurrence
+        ? `${right.firstOccurrence.date}T${right.firstOccurrence.startTime}`
+        : '9999';
+      return leftKey.localeCompare(rightKey);
+    });
+}
+
+export function remainingRoutineSourceItemIds(cards: RoutineSuggestionCard[]): string[] {
+  return cards
+    .filter((card) => card.state === 'available')
+    .map((card) => card.sourceItemId);
 }

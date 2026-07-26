@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyPlanEntryEdit, buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep, shouldAutoStartRoutineSource, shouldRestoreRoutineSession } from './helpers';
+import {
+  applyPlanEntryEdit,
+  buildRoutinePreviewSections,
+  buildRoutineSuggestionCards,
+  groupPlanByDay,
+  nextBuilderStep,
+  remainingRoutineSourceItemIds,
+  shouldAutoStartRoutineSource,
+  shouldRestoreRoutineSession,
+} from './helpers';
 
 describe('routine builder helpers', () => {
   it('routes every persisted session state to one clear UI step', () => {
@@ -80,5 +89,65 @@ describe('routine builder helpers', () => {
       reviewState: 'confirmed',
     });
     expect(applyPlanEntryEdit(items, 'task-1', { excluded: true })[0].reviewState).toBe('excluded');
+  });
+
+  it('turns a composed plan into one operational card per source item', () => {
+    const cards = buildRoutineSuggestionCards({
+      items: [
+        {
+          id: 'habit-1',
+          kind: 'habit',
+          title: 'Criar vídeo dark',
+          sourceExcerpt: 'Criar vídeo três vezes por semana',
+          confidence: 0.94,
+          reviewState: 'confirmed',
+          durationMinutes: 60,
+          recurrence: { frequency: 'weekly', daysOfWeek: [1, 3, 5], timesPerWeek: 3 },
+        },
+        {
+          id: 'task-1',
+          kind: 'task',
+          title: 'Publicar no perfil',
+          sourceExcerpt: 'Publicar no perfil',
+          confidence: 0.91,
+          reviewState: 'confirmed',
+        },
+        {
+          id: 'task-discarded',
+          kind: 'task',
+          title: 'Item descartado',
+          sourceExcerpt: 'Não usar',
+          confidence: 0.7,
+          reviewState: 'excluded',
+        },
+      ] as any,
+      plan: {
+        weekStart: '2026-07-27',
+        capacity: { level: 'balanced', reason: 'Carga possível.' },
+        entries: [
+          { id: 'h1', sourceItemId: 'habit-1', kind: 'habit', date: '2026-07-27', startTime: '09:00', endTime: '10:00', title: 'Criar vídeo dark', durationMinutes: 60, isFixed: false, persist: true, reason: 'Primeira janela possível.' },
+          { id: 'h2', sourceItemId: 'habit-1', kind: 'habit', date: '2026-07-29', startTime: '09:00', endTime: '10:00', title: 'Criar vídeo dark', durationMinutes: 60, isFixed: false, persist: true, reason: 'Mantém espaço entre as sessões.' },
+          { id: 'h3', sourceItemId: 'habit-1', kind: 'habit', date: '2026-07-31', startTime: '09:00', endTime: '10:00', title: 'Criar vídeo dark', durationMinutes: 60, isFixed: false, persist: true, reason: 'Fecha a frequência semanal.' },
+          { id: 't1', sourceItemId: 'task-1', kind: 'task', date: '2026-07-28', startTime: '15:00', endTime: '15:30', title: 'Publicar no perfil', durationMinutes: 30, isFixed: false, persist: true, reason: 'Cabe no período disponível.' },
+        ],
+        days: [],
+        contextItems: [],
+        unscheduled: [],
+      } as any,
+      appliedSourceItemIds: ['habit-1'],
+    });
+
+    assert.equal(cards.length, 3);
+    assert.equal(cards.filter((card) => card.sourceItemId === 'habit-1').length, 1);
+    assert.deepEqual(cards.find((card) => card.sourceItemId === 'habit-1')?.firstOccurrence, {
+      date: '2026-07-27',
+      startTime: '09:00',
+      endTime: '10:00',
+      durationMinutes: 60,
+    });
+    assert.equal(cards.find((card) => card.sourceItemId === 'habit-1')?.occurrenceCount, 3);
+    assert.equal(cards.find((card) => card.sourceItemId === 'habit-1')?.state, 'added');
+    assert.equal(cards.find((card) => card.sourceItemId === 'task-discarded')?.state, 'discarded');
+    assert.deepEqual(remainingRoutineSourceItemIds(cards), ['task-1']);
   });
 });

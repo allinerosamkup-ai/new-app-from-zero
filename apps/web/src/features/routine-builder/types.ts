@@ -122,6 +122,31 @@ export type RoutinePlan = {
   }>;
 };
 
+export type RoutineSuggestionCardState = 'available' | 'added' | 'discarded' | 'needs_adjustment';
+
+export type RoutineSuggestionCard = {
+  sourceItemId: string;
+  kind: Extract<RoutineItemKind, 'goal' | 'project' | 'task' | 'habit' | 'calendar'>;
+  title: string;
+  description?: string | null;
+  reason: string;
+  recurrence?: RoutineItem['recurrence'];
+  firstOccurrence: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    durationMinutes: number;
+  } | null;
+  occurrenceCount: number;
+  state: RoutineSuggestionCardState;
+};
+
+export type RoutineApplyResult = {
+  counts: { objectives: number; habits: number; timelineBlocks: number };
+  ids?: { objectives: string[]; habits: string[]; timelineBlocks: string[] };
+  appliedSourceItemIds?: string[];
+};
+
 export type RoutineSession = {
   id: string;
   status: 'draft' | 'classified' | 'needs_clarification' | 'ready' | 'applying' | 'applied' | 'failed' | 'cancelled';
@@ -132,7 +157,7 @@ export type RoutineSession = {
   questions: RoutineQuestion[];
   answers: Array<{ questionId: string; answer: string }>;
   draftPlan?: RoutinePlan | null;
-  applyResult?: { counts: { objectives: number; habits: number; timelineBlocks: number } } | null;
+  applyResult?: RoutineApplyResult | null;
 };
 
 export type RoutineBuilderStep = 'source' | 'review' | 'clarify' | 'compose' | 'preview' | 'done';

@@ -37,7 +37,14 @@ export const routineBuilderApi = {
   compose(sessionId: string) {
     return api.post(`${base}/${sessionId}/compose`, {}) as Promise<RoutineSession>;
   },
-  apply(sessionId: string) {
-    return api.post(`${base}/${sessionId}/apply`, {}) as Promise<{ counts: { objectives: number; habits: number; timelineBlocks: number } }>;
+  apply(sessionId: string, sourceItemIds?: string[]) {
+    return api.post(
+      `${base}/${sessionId}/apply`,
+      sourceItemIds ? { sourceItemIds } : {},
+    ) as Promise<{
+      counts: { objectives: number; habits: number; timelineBlocks: number };
+      ids: { objectives: string[]; habits: string[]; timelineBlocks: string[] };
+      appliedSourceItemIds: string[];
+    }>;
   },
 };
