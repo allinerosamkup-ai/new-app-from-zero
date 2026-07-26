@@ -241,7 +241,7 @@ type AppDependencies = {
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
   routineBuilderService?: Pick<RoutineBuilderService,
-    'createSession' | 'getSession' | 'ingestSource' | 'updateItems' | 'answerClarifications' | 'compose' | 'apply'>;
+    'createSession' | 'getSession' | 'ingestSource' | 'submitGuidedAnswers' | 'updateItems' | 'answerClarifications' | 'compose' | 'apply'>;
 };
 
 /**

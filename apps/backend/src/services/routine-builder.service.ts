@@ -4,10 +4,12 @@ import { deriveRoutineCapacity } from '../lib/phase-capacity';
 import {
   RoutineClassifiedItemSchema,
   RoutineCreateSessionSchema,
+  RoutineGuidedAnswersSchema,
   RoutineUpdateItemsSchema,
   type RoutineClassifiedItem,
   type RoutineCreateSessionInput,
 } from '../contracts/routine-builder.contract';
+import { transformGuidedAnswers } from './routine-guided-transform.service';
 import { AiActionFeedbackService } from './ai-action-feedback.service';
 import { RoutineApplyService } from './routine-apply.service';
 import { RoutineClarificationService, type RoutineClarificationQuestion } from './routine-clarification.service';
@@ -33,6 +35,20 @@ function addDays(date: string, days: number): string {
   const value = new Date(`${date}T12:00:00.000Z`);
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+}
+
+/**
+ * Lê o estado declarado no onboarding guiado de dentro do JSONB da sessão.
+ * Sessão antiga ou importada não tem esse campo — nesse caso não há estado.
+ */
+function readDeclaredState(value: unknown): { mood: number; energy: number; focus: number } | null {
+  if (!value || typeof value !== 'object') return null;
+  const state = value as Record<string, unknown>;
+  const mood = Number(state.mood);
+  const energy = Number(state.energy);
+  const focus = Number(state.focus);
+  if (![mood, energy, focus].every((score) => Number.isFinite(score) && score >= 1 && score <= 10)) return null;
+  return { mood, energy, focus };
 }
 
 function publicSession<T extends Record<string, any>>(session: T): Omit<T, 'sourceText'> {
@@ -82,22 +98,27 @@ export class RoutineBuilderService {
 
   async createSession(userId: string, rawInput: RoutineCreateSessionInput): Promise<any> {
     const input = RoutineCreateSessionSchema.parse(rawInput);
+    const focus = input.mode === 'guided' ? input.focus ?? 'Rotina guiada' : input.focus!;
     const session = await this.prisma.routineBuildSession.create({
       data: {
         userId,
         status: 'draft',
         stage: 'source',
-        focus: input.focus,
+        focus,
         weekStart: new Date(`${input.weekStart}T00:00:00.000Z`),
         timezone: input.timezone,
         locale: input.locale,
-        constraints: { limits: input.limits },
+        constraints: { mode: input.mode, limits: input.limits },
         items: [],
         questions: [],
         answers: [],
       },
     });
-    await this.event(userId, 'routine_builder_started', { sessionId: session.id, weekStart: input.weekStart });
+    await this.event(userId, 'routine_builder_started', {
+      sessionId: session.id,
+      weekStart: input.weekStart,
+      mode: input.mode,
+    });
     return publicSession(session);
   }
 
@@ -117,6 +138,11 @@ export class RoutineBuilderService {
   }): Promise<any> {
     const session = await this.prisma.routineBuildSession.findFirst({ where: { id: input.sessionId, userId: input.userId } });
     if (!session) throw new Error('routine_session_not_found');
+    const constraints = session.constraints && typeof session.constraints === 'object'
+      ? session.constraints as Record<string, unknown>
+      : {};
+    const mode = constraints.mode === 'guided' ? 'guided' : 'import';
+    if (mode === 'guided') throw new Error('routine_session_mode_conflict');
     if (!['draft', 'classified', 'needs_clarification', 'failed'].includes(session.status)) {
       throw new Error('routine_session_source_locked');
     }
@@ -169,6 +195,66 @@ export class RoutineBuilderService {
       questionCount: clarification.questions.length,
       truncated: source.truncated,
     });
+    return publicSession(updated);
+  }
+
+  /**
+   * Entrada principal do onboarding guiado: respostas de botão viram itens
+   * classificados sem passar por IA nem exigir documento.
+   */
+  async submitGuidedAnswers(input: {
+    userId: string;
+    sessionId: string;
+    answers: unknown;
+    today: string;
+  }): Promise<any> {
+    const session = await this.prisma.routineBuildSession.findFirst({
+      where: { id: input.sessionId, userId: input.userId },
+    });
+    if (!session) throw new Error('routine_session_not_found');
+
+    const constraints = session.constraints && typeof session.constraints === 'object'
+      ? session.constraints as Record<string, unknown>
+      : {};
+    if (constraints.mode !== 'guided') throw new Error('routine_session_mode_conflict');
+    if (!['draft', 'classified', 'needs_clarification', 'failed'].includes(session.status)) {
+      throw new Error('routine_session_source_locked');
+    }
+
+    const answers = RoutineGuidedAnswersSchema.parse(input.answers);
+    const items = transformGuidedAnswers({ answers, today: input.today });
+    if (items.length === 0) throw new Error('routine_guided_answers_empty');
+
+    const updated = await this.prisma.routineBuildSession.update({
+      where: { id: session.id },
+      data: {
+        status: 'ready',
+        // 'review' e não 'compose': ela confere o que a Airia entendeu e tira o
+        // que não serve antes da semana ser montada.
+        stage: 'review',
+        items,
+        questions: [],
+        answers: [],
+        draftPlan: null,
+        // Estado e energia ficam na sessão: a composição usa isso para dimensionar
+        // a semana de quem ainda não tem check-in salvo.
+        constraints: {
+          ...constraints,
+          declaredState: answers.currentState,
+          energyDrains: answers.energyDrains,
+          energyRestorers: answers.energyRestorers,
+        },
+      },
+    });
+
+    await this.event(input.userId, 'routine_builder_guided_submitted', {
+      sessionId: session.id,
+      itemCount: items.length,
+      habitCount: answers.selectedHabits.length,
+      commitmentCount: answers.fixedCommitments.length,
+      intentionCount: answers.intentions.length,
+    });
+
     return publicSession(updated);
   }
 
@@ -247,12 +333,14 @@ export class RoutineBuilderService {
         select: { energyScore: true, moodScore: true, stateLabel: true, recordedAt: true },
       }),
     ]);
+    const sessionConstraints = (session.constraints ?? {}) as any;
     const capacity = deriveRoutineCapacity({
       phaseLabel: latestCheckin?.stateLabel,
       energyScore: latestCheckin?.energyScore,
       recordedAt: latestCheckin?.recordedAt,
+      declaredState: readDeclaredState(sessionConstraints.declaredState),
     });
-    const limits = ((session.constraints ?? {}) as any).limits ?? {};
+    const limits = sessionConstraints.limits ?? {};
     const plan = RoutineComposerService.compose({
       weekStart,
       items,

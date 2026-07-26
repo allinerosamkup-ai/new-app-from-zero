@@ -16,10 +16,23 @@ type Props = {
   ctaLabel: string;
   route?: string;
   onAction?: () => void;
+  /** Saída menor para quem não quer o caminho completo agora. */
+  secondaryLabel?: string;
+  onSecondaryAction?: () => void;
   examples?: Example[];
 };
 
-export function SmartEmptyState({ icon: Icon, title, description, ctaLabel, route, onAction, examples = [] }: Props) {
+export function SmartEmptyState({
+  icon: Icon,
+  title,
+  description,
+  ctaLabel,
+  route,
+  onAction,
+  secondaryLabel,
+  onSecondaryAction,
+  examples = [],
+}: Props) {
   const navigate = useNavigate();
 
   function handleAction() {
@@ -64,6 +77,26 @@ export function SmartEmptyState({ icon: Icon, title, description, ctaLabel, rout
       >
         {ctaLabel}
       </AiriaButton>
+
+      {secondaryLabel && onSecondaryAction && (
+        <button
+          type="button"
+          onClick={onSecondaryAction}
+          style={{
+            width: "100%",
+            marginTop: 8,
+            padding: "11px 0",
+            border: "none",
+            background: "transparent",
+            color: "var(--text-3)",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          {secondaryLabel}
+        </button>
+      )}
     </AiriaCard>
   );
 }

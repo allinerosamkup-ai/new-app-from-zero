@@ -7,13 +7,19 @@ import {
   RoutineUpdateItemsSchema,
 } from '../contracts/routine-builder.contract';
 import { RoutineClassifierError } from '../services/routine-classifier.service';
+import { getGuidedLibrary } from '../services/routine-guided-library';
 import { RoutineSourceError } from '../services/routine-source-extractor.service';
 import type { RoutineBuilderService } from '../services/routine-builder.service';
 
 type RoutineBuilderRouteDependencies = {
   service: Pick<RoutineBuilderService,
-    'createSession' | 'getSession' | 'ingestSource' | 'updateItems' | 'answerClarifications' | 'compose' | 'apply'>;
+    'createSession' | 'getSession' | 'ingestSource' | 'submitGuidedAnswers' | 'updateItems' | 'answerClarifications' | 'compose' | 'apply'>;
 };
+
+const GuidedSubmitSchema = z.object({
+  answers: z.unknown(),
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
 
 const TextSourceSchema = z.object({
   sourceType: z.enum(['text', 'transcript']).default('text'),
@@ -39,6 +45,7 @@ function errorStatus(error: Error): number {
   if (error.message === 'routine_session_not_found') return 404;
   if (error.message.includes('not_ready') || error.message.includes('locked') || error.message.includes('conflict') || error.message.includes('not_waiting')) return 409;
   if (error.message.includes('clarification_answer') || error.message.includes('question_not_found')) return 400;
+  if (error.message === 'routine_guided_answers_empty') return 400;
   if (error instanceof RoutineSourceError) return 400;
   if (error instanceof RoutineClassifierError) return error.code === 'model_unavailable' ? 503 : 422;
   return 500;
@@ -100,6 +107,22 @@ export function createRoutineBuilderRouter(dependencies: RoutineBuilderRouteDepe
 
   router.get('/sessions/:sessionId', asyncRoute(async (req, res) => {
     res.json(await dependencies.service.getSession(userId(req), req.params.sessionId));
+  }));
+
+  /** Catálogo de opções do onboarding guiado — tudo que a tela de botões precisa. */
+  router.get('/library', asyncRoute(async (_req, res) => {
+    res.json(getGuidedLibrary());
+  }));
+
+  router.post('/sessions/:sessionId/guided', asyncRoute(async (req, res) => {
+    const input = GuidedSubmitSchema.parse(req.body);
+    const session = await dependencies.service.submitGuidedAnswers({
+      userId: userId(req),
+      sessionId: req.params.sessionId,
+      answers: input.answers,
+      today: input.today,
+    });
+    res.json(session);
   }));
 
   router.post('/sessions/:sessionId/source', heavyOperationLimiter, rawSourceParser, asyncRoute(async (req, res) => {

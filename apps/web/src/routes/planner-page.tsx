@@ -3292,8 +3292,10 @@ export function PlannerPage() {
             icon={CalendarClock}
             title="Monte um dia possivel"
               description={t("planner.emptyDescription")}
-              ctaLabel={t("planner.firstTask")}
-            onAction={() => openNewFormAt(getCurrentTimeRounded())}
+              ctaLabel={t("planner.buildRoutine")}
+            onAction={() => navigate("/onboarding/guiado")}
+            secondaryLabel={t("planner.singleTask")}
+            onSecondaryAction={() => openNewFormAt(getCurrentTimeRounded())}
             examples={[
               { title: "Responder uma pendencia importante", description: "Bom para tirar peso acumulado." },
               { title: "Separar 25 min para um projeto", description: "Bom quando a energia esta media." },

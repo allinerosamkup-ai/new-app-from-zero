@@ -38,6 +38,7 @@ const loadTermsPage = () => import("./routes/terms-page");
 const loadConteudoPage = () => import("./routes/conteudo-page");
 const loadContextoPage = () => import("./routes/contexto-page");
 const loadRoutineBuilderPage = () => import("./routes/routine-builder-page");
+const loadGuidedOnboardingPage = () => import("./routes/guided-onboarding-page");
 
 const AuraLayout = lazy(() => loadAuraLayout().then((module) => ({ default: module.AuraLayout })));
 const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
@@ -74,6 +75,7 @@ const LivroPage = lazy(() => loadLivroPage().then((module) => ({ default: module
 const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: module.ConteudoPage })));
 const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: module.ContextoPage })));
 const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
+const GuidedOnboardingPage = lazy(() => loadGuidedOnboardingPage().then((module) => ({ default: module.GuidedOnboardingPage })));
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
@@ -232,6 +234,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        {/* Fluxo guiado: tela cheia, sem bottom nav — a barra de ação é da própria etapa. */}
+        <Route path="/onboarding/guiado" element={<GuidedOnboardingPage />} />
         <Route path="/onboarding/energy" element={<OnboardingEnergyPage />} />
         <Route path="/onboarding/cycle" element={<OnboardingCyclePage />} />
         <Route path="/onboarding/sleep" element={<OnboardingSleepPage />} />

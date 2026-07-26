@@ -4,6 +4,100 @@ export const RoutineItemKindSchema = z.enum(['goal', 'project', 'task', 'habit',
 export const RoutineItemReviewStateSchema = z.enum(['pending', 'confirmed', 'excluded']);
 export const RoutineSessionStatusSchema = z.enum(['draft', 'classified', 'needs_clarification', 'ready', 'applying', 'applied', 'failed', 'cancelled']);
 
+export const RoutineBuilderModeSchema = z.enum(['guided', 'import']);
+
+const RoutineDayOfWeekSchema = z.number().int().min(0).max(6);
+const RoutineTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+function timeInMinutes(value: string): number {
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function validateTimeWindow(
+  value: { startTime: string; endTime: string },
+  context: z.RefinementCtx,
+): void {
+  if (timeInMinutes(value.endTime) <= timeInMinutes(value.startTime)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'O horário final deve ser posterior ao horário inicial.',
+      path: ['endTime'],
+    });
+  }
+}
+
+function uniqueStringSelection(maxItems: number) {
+  return z.array(z.string().trim().min(1).max(80))
+    .max(maxItems)
+    .transform((values) => [...new Set(values)]);
+}
+
+const RoutineGuidedDaysSchema = z.array(RoutineDayOfWeekSchema)
+  .max(7)
+  .optional()
+  .default([])
+  .transform((values) => [...new Set(values)]);
+
+export const RoutineGuidedHabitSchema = z.object({
+  templateId: z.string().trim().min(1).max(80),
+  title: z.string().trim().min(3).max(120),
+  frequency: z.enum(['daily', 'weekly', 'monthly']),
+  daysOfWeek: RoutineGuidedDaysSchema,
+  timesPerWeek: z.number().int().min(1).max(7).nullable().optional(),
+  timeOfDay: z.enum(['morning', 'afternoon', 'evening', 'anytime']),
+  durationMinutes: z.number().int().min(5).max(180),
+});
+
+export const RoutineGuidedAvailabilitySchema = z.object({
+  dayOfWeek: RoutineDayOfWeekSchema,
+  startTime: RoutineTimeSchema,
+  endTime: RoutineTimeSchema,
+}).superRefine(validateTimeWindow);
+
+export const RoutineGuidedFixedCommitmentSchema = z.object({
+  title: z.string().trim().min(3).max(120),
+  dayOfWeek: RoutineDayOfWeekSchema,
+  startTime: RoutineTimeSchema,
+  endTime: RoutineTimeSchema,
+}).superRefine(validateTimeWindow);
+
+export const RoutineGuidedAnswersSchema = z.object({
+  lifeAreas: uniqueStringSelection(20),
+  availability: z.array(RoutineGuidedAvailabilitySchema)
+    .max(21)
+    .optional()
+    .default([])
+    .transform((values) => [...new Map(
+      values.map((value) => [`${value.dayOfWeek}:${value.startTime}:${value.endTime}`, value]),
+    ).values()]),
+  fixedCommitments: z.array(RoutineGuidedFixedCommitmentSchema)
+    .max(50)
+    .optional()
+    .default([])
+    .transform((values) => [...new Map(
+      values.map((value) => [
+        `${value.title.toLowerCase()}:${value.dayOfWeek}:${value.startTime}:${value.endTime}`,
+        value,
+      ]),
+    ).values()]),
+  energyDrains: uniqueStringSelection(30),
+  energyRestorers: uniqueStringSelection(30),
+  intentions: uniqueStringSelection(20),
+  selectedHabits: z.array(RoutineGuidedHabitSchema)
+    .max(30)
+    .optional()
+    .default([])
+    .transform((values) => [...new Map(values.map((value) => [value.templateId, value])).values()]),
+  currentState: z.object({
+    mood: z.number().int().min(1).max(10),
+    energy: z.number().int().min(1).max(10),
+    focus: z.number().int().min(1).max(10),
+    sleepQuality: z.string().trim().min(1).max(40),
+  }),
+  freeText: z.string().trim().max(2000).optional(),
+});
+
 export const RoutineRecurrenceSchema = z.object({
   frequency: z.enum(['daily', 'weekly', 'monthly']),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).max(7).optional().default([]),
@@ -59,11 +153,21 @@ export const RoutineSourceSchema = z.object({
 });
 
 export const RoutineCreateSessionSchema = z.object({
-  focus: z.string().trim().min(3).max(500),
+  mode: RoutineBuilderModeSchema.optional().default('import'),
+  focus: z.string().trim().min(3).max(500).optional(),
   weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   timezone: z.string().trim().min(3).max(80),
   locale: z.string().trim().min(2).max(16).optional().default('pt-BR'),
   limits: RoutineLimitsSchema.optional().default({}),
+}).superRefine((session, context) => {
+  // No guiado o foco nasce das escolhas; na importação ainda precisa vir explícito.
+  if (session.mode === 'import' && !session.focus) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'A importação exige um foco com pelo menos 3 caracteres.',
+      path: ['focus'],
+    });
+  }
 });
 
 export const RoutineUpdateItemsSchema = z.object({ items: z.array(RoutineClassifiedItemSchema).min(1).max(200) });
@@ -73,7 +177,10 @@ export const RoutineClarificationAnswersSchema = z.object({ answers: z.array(Rou
 export type RoutineItemKind = z.infer<typeof RoutineItemKindSchema>;
 export type RoutineClassifiedItem = z.infer<typeof RoutineClassifiedItemSchema>;
 export type RoutineSessionStatus = z.infer<typeof RoutineSessionStatusSchema>;
-export type RoutineCreateSessionInput = z.infer<typeof RoutineCreateSessionSchema>;
+export type RoutineBuilderMode = z.infer<typeof RoutineBuilderModeSchema>;
+export type RoutineGuidedHabit = z.infer<typeof RoutineGuidedHabitSchema>;
+export type RoutineGuidedAnswers = z.infer<typeof RoutineGuidedAnswersSchema>;
+export type RoutineCreateSessionInput = z.input<typeof RoutineCreateSessionSchema>;
 export type RoutineSource = z.infer<typeof RoutineSourceSchema>;
 
 const TRANSITIONS: Record<RoutineSessionStatus, ReadonlySet<RoutineSessionStatus>> = {
