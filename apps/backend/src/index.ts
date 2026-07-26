@@ -41,6 +41,7 @@ import { AgendaPatternRecognitionService } from './services/agenda-pattern-recog
 import { ContextGroundingService } from './services/context-grounding.service';
 import { ReasoningContextService } from './services/reasoning-context.service';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './services/airia-operational-reasoning.service';
+import { TaskDecompositionService } from './services/task-decomposition.service';
 import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-interpreter.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
@@ -3065,6 +3066,24 @@ export function createApp(dependencies: AppDependencies = {}) {
       );
 
       const responsePayload = { ...commandResponse.payload };
+
+      // Tarefa vaga ou longa já nasce quebrada: a usuária não precisa pedir para
+      // dividir, e o primeiro passo já vem com o movimento físico que destrava.
+      if (commandResponse.action === 'create_task') {
+        const decompositionTitle = typeof responsePayload.title === 'string' ? responsePayload.title : '';
+        const decompositionSteps = await TaskDecompositionService.decompose({
+          title: decompositionTitle,
+          durationMinutes: typeof responsePayload.durationMinutes === 'number' ? responsePayload.durationMinutes : null,
+          locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+        }).catch(() => []);
+        if (decompositionSteps.length > 0) {
+          Object.assign(responsePayload, {
+            steps: decompositionSteps,
+            checklist: decompositionSteps.map((step) => ({ text: step.title, done: false })),
+            wasDecomposed: true,
+          });
+        }
+      }
 
       // Executar update de tarefa existente
       if (commandResponse.action === 'update_task') {
