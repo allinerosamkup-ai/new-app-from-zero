@@ -55,6 +55,8 @@ function isValidAction(value: unknown): value is AuraCommandAction {
 
 function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandIntent | null {
   switch (action) {
+    case 'respond':
+      return 'conversation';
     case 'create_task':
       return 'planner_task';
     case 'create_checklist':
@@ -82,6 +84,8 @@ function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandInt
 
 function inferActionFromIntent(intent: AuraCommandIntent | null): AuraCommandAction | null {
   switch (intent) {
+    case 'conversation':
+      return 'respond';
     case 'planner_task':
       return 'create_task';
     case 'checklist':
@@ -117,8 +121,12 @@ function inferActionFromPayload(payload: Record<string, unknown>): AuraCommandAc
   return null;
 }
 
-function shouldTreatAsJournal(message: string): boolean {
-  return /\b(desabafar|di[aá]rio|senti|sinto|sentindo|ansios|triste|raiva|medo|culpa|chorei|mexida)\b/i.test(message);
+function asksToSaveInJournal(message: string): boolean {
+  return /\b(salv|registr|guard).{0,24}\b(di[aá]rio|journal)\b|\b(di[aá]rio|journal).{0,24}\b(salv|registr|guard)/i.test(message);
+}
+
+function asksToBuildRoutine(message: string): boolean {
+  return /\b(mont|organiz|cri|refa[çc]|planej).{0,30}\b(rotina|meu dia|minha semana|agenda completa)\b|\b(rotina|meu dia|minha semana).{0,30}\b(mont|organiz|planej)/i.test(message);
 }
 
 export type AgendaCommand = {
@@ -183,12 +191,16 @@ export function parseAuraCommandResponse(content: string, originalMessage = ''):
   }
 
   if (!action || !intent) {
-    if (shouldTreatAsJournal(originalMessage)) {
+    if (asksToBuildRoutine(originalMessage)) {
+      action = 'start_routine_builder';
+      intent = 'routine_builder';
+      if (!asString(payload.sourceText)) payload.sourceText = originalMessage;
+    } else if (asksToSaveInJournal(originalMessage)) {
       action = 'handoff_to_journal';
       intent = 'reflective_handoff';
     } else {
-      action = 'ask_clarification';
-      intent = 'clarify';
+      action = 'respond';
+      intent = 'conversation';
     }
   }
 
@@ -280,9 +292,10 @@ export class AuraCommandService {
       input.reasoningTraceContext ? ('== CONTEXTO OPERACIONAL ==\n' + input.reasoningTraceContext) : '',
       '',
       '== HIERARQUIA DE EXECUÇÃO (CRÍTICO) ==',
-      '1. EXECUTE primeiro: se o pedido é claro, aja. Não analise antes de agir.',
-      '2. PROPONHA se precisar de confirmação do usuário (só para datas futuras).',
-      '3. PERGUNTE apenas se falta dado completamente indispensável (ex: qual tarefa específica remover).',
+      '1. CONVERSE quando a pessoa trouxer relato, dúvida, reflexão ou contexto sem pedir alteração no app: use respond/conversation e entregue leitura + direção.',
+      '2. EXECUTE quando houver pedido operacional claro.',
+      '3. PROPONHA se precisar de confirmação do usuário (só para datas futuras).',
+      '4. PERGUNTE apenas se falta dado completamente indispensável (ex: qual tarefa específica remover).',
       '',
       '== MONTADOR DE ROTINA (PRIORIDADE MÁXIMA) ==',
       'Quando a pessoa pedir para montar/organizar o dia, a semana ou a rotina inteira; colar uma lista misturada; ou pedir para transformar um documento em metas, hábitos, tarefas e compromissos:',
@@ -308,6 +321,7 @@ export class AuraCommandService {
       '- TRUE (mostra proposta): APENAS quando a data é futura (amanhã ou depois)',
       '',
       '== REGRAS OPERACIONAIS ==',
+      '- respond: conversa, análise ou orientação; payload vazio; não cria, move, exclui ou salva nada',
       '- create_task: title + date (' + todayKey + ' se hoje) + startTime + category + note',
       '- create_agenda: blocks[] com title/date/startTime/category cada um',
       '- start_routine_builder: sourceText original + focus explícito opcional; não cria blocos diretamente',
@@ -335,13 +349,14 @@ export class AuraCommandService {
       '→ needsConfirmation: false — se ela disse que fez, registra direto.',
       '',
       '== ANTI-PADRÕES (NUNCA FAÇA) ==',
+      '- Não transforme relato em pergunta de triagem. Se não há pedido operacional, use respond e entregue a resposta.',
       '- Não pergunte "qual é sua prioridade?" quando a agenda está vazia — abra o Montador para obter e revisar uma fonte real.',
       '- Não resuma uma lista em uma tarefa — use create_checklist.',
       '- Não use análise emocional longa em modo executor.',
       '- Não faça handoff ao diário sem a pessoa pedir.',
       '- Não diga que já salvou se needsConfirmation é true.',
       '',
-      'Retorne APENAS JSON com: assistantMessage, intent, action, payload, needsConfirmation.',
+      'Retorne APENAS JSON com: assistantMessage, intent, action, payload, needsConfirmation. Para conversa comum: {"intent":"conversation","action":"respond","payload":{},"needsConfirmation":false}.',
     ].filter(Boolean).join('\n');
 
     const response = await client.chat.completions.create({

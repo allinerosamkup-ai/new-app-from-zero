@@ -17,6 +17,17 @@ async function run() {
   assert.equal(routineBuilder.intent, 'routine_builder');
   assert.equal(routineBuilder.action, 'start_routine_builder');
 
+  const conversational = parseAuraCommandResponse(
+    JSON.stringify({
+      assistantMessage: 'Você está tentando sustentar tudo sozinha; hoje o passo útil é escolher uma decisão pequena e terminá-la.',
+      payload: {},
+    }),
+    'Estou ansiosa com a mudança e não consigo começar.',
+  );
+  assert.equal(conversational.intent, 'conversation');
+  assert.equal(conversational.action, 'respond');
+  assert.equal(conversational.needsClarification, false);
+
   const recoveredAgenda = parseAuraCommandResponse(
     JSON.stringify({
       assistantMessage: 'Separei a proposta em blocos para você revisar.',
@@ -48,9 +59,9 @@ async function run() {
     'texto longo '.repeat(900),
   );
 
-  assert.equal(recoveredClarification.intent, 'clarify');
-  assert.equal(recoveredClarification.action, 'ask_clarification');
-  assert.equal(recoveredClarification.needsClarification, true);
+  assert.equal(recoveredClarification.intent, 'conversation');
+  assert.equal(recoveredClarification.action, 'respond');
+  assert.equal(recoveredClarification.needsClarification, false);
 
   const capturedMessages: Array<{ role: string; content: string }> = [];
   const capturedModels: string[] = [];
@@ -82,9 +93,9 @@ async function run() {
       clarifyingQuestion: null,
     },
     {
-      assistantMessage: 'Isso tem mais cara de diário. Vou registrar um resumo do que conversamos.',
-      intent: 'reflective_handoff',
-      action: 'handoff_to_journal',
+      assistantMessage: 'Você está tentando dar conta de tudo ao mesmo tempo. Vamos escolher uma decisão pequena que muda o restante do dia.',
+      intent: 'conversation',
+      action: 'respond',
       payload: {},
       needsConfirmation: false,
       needsClarification: false,
@@ -147,8 +158,8 @@ async function run() {
     interactionMode: 'conversation',
   }, fakeClient as any);
 
-  assert.equal(reflectiveResult.intent, 'reflective_handoff');
-  assert.equal(reflectiveResult.action, 'handoff_to_journal');
+  assert.equal(reflectiveResult.intent, 'conversation');
+  assert.equal(reflectiveResult.action, 'respond');
   assert.equal(reflectiveResult.needsConfirmation, false);
 
   const clarifyResult = await AuraCommandService.interpretCommand({

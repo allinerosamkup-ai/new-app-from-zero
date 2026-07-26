@@ -11,6 +11,7 @@ export const AuraCommandHistoryMessageSchema = z.object({
 });
 
 export const AuraCommandIntentSchema = z.enum([
+  'conversation',
   'planner_task',
   'checklist',
   'goal_project',
@@ -24,6 +25,7 @@ export const AuraCommandIntentSchema = z.enum([
 ]);
 
 export const AuraCommandActionSchema = z.enum([
+  'respond',
   'create_task',
   'create_checklist',
   'create_goal',

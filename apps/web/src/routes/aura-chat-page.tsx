@@ -23,6 +23,7 @@ type Message = {
 };
 
 type AuraCommandIntent =
+  | "conversation"
   | "planner_task"
   | "checklist"
   | "goal_project"
@@ -32,6 +33,7 @@ type AuraCommandIntent =
   | "reflective_handoff";
 
 type AuraCommandAction =
+  | "respond"
   | "create_task"
   | "create_checklist"
   | "create_goal"
