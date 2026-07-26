@@ -8,6 +8,10 @@ describe("aura chat page helpers", () => {
     assert.equal(hasSubstantiveRoutineSource("Monte minha rotina para mim."), false);
     assert.equal(hasSubstantiveRoutineSource("Segunda: academia às 8h\nTerça: terapia às 16h\nQuero caminhar três vezes por semana."), true);
     assert.equal(hasSubstantiveRoutineSource("Trabalho de segunda a sexta e preciso organizar uma rotina que inclua estudo, academia, mercado e os cuidados da casa sem sobrecarregar meus dias. Também tenho terapia às terças."), true);
+    assert.equal(
+      hasSubstantiveRoutineSource("Eu preciso criar uma rotina onde eu crie todo dia ou pelo menos três vezes por semana um vídeo dark e também faça pelo menos três publicações no meu perfil de cabeleireiro."),
+      true,
+    );
   });
 
   it("builds a single timeline block with the default start time", () => {

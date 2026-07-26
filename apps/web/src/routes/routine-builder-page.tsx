@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Check, ChevronDown, FileText, ListChecks, LoaderCircle, RotateCcw, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { routineBuilderApi } from '../features/routine-builder/api';
-import { applyPlanEntryEdit, nextBuilderStep, shouldRestoreRoutineSession } from '../features/routine-builder/helpers';
+import { applyPlanEntryEdit, nextBuilderStep, shouldAutoStartRoutineSource, shouldRestoreRoutineSession } from '../features/routine-builder/helpers';
 import { RoutineItemCard } from '../features/routine-builder/routine-item-card';
 import type { RoutineItem, RoutineItemKind, RoutineSession } from '../features/routine-builder/types';
 import { WeekPreview } from '../features/routine-builder/week-preview';
@@ -37,6 +37,7 @@ export function RoutineBuilderPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoStartedSourceRef = useRef<string | null>(null);
 
   const step = session ? nextBuilderStep(session) : 'source';
   const stepOrder = ['source', 'review', 'clarify', 'compose', 'preview', 'done'];
@@ -126,6 +127,18 @@ export function RoutineBuilderPage() {
       return routineBuilderApi.compose(reviewed.id);
     }, setSession);
   }
+
+  useEffect(() => {
+    const incomingKey = `${incoming.focus ?? ''}\u0000${incoming.initialSource ?? ''}`;
+    if (!shouldAutoStartRoutineSource(incoming, {
+      hasSession: Boolean(session),
+      busy,
+      alreadyStarted: autoStartedSourceRef.current === incomingKey,
+    })) return;
+
+    autoStartedSourceRef.current = incomingKey;
+    void start();
+  }, [busy, incoming.focus, incoming.initialSource, session]);
 
   function restart(): void {
     localStorage.removeItem(SESSION_KEY);

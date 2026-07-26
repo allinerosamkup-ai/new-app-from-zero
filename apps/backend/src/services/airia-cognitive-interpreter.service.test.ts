@@ -227,6 +227,21 @@ async function run() {
   assert.equal(broadRoutinePt.captureJudgment.allowTaskCreation, false);
   assert.deepEqual(broadRoutinePt.captureJudgment.allowedMutationActions, []);
 
+  const naturalRoutineRequestPt = await offline(
+    'Eu preciso criar uma rotina onde eu crie todo dia ou pelo menos três vezes por semana um vídeo dark e também faça pelo menos três publicações no meu perfil de cabeleireiro.',
+  );
+  assert.equal(naturalRoutineRequestPt.captureJudgment.captureAs, 'clarification');
+  assert.equal(naturalRoutineRequestPt.captureJudgment.explicitness, 'explicit');
+  assert.equal(naturalRoutineRequestPt.captureJudgment.allowTaskCreation, false);
+  assert.deepEqual(naturalRoutineRequestPt.captureJudgment.allowedMutationActions, []);
+
+  const naturalRoutineRequestEn = await offline(
+    'I need to create a routine with three weekly videos and three posts for my professional profile.',
+  );
+  assert.equal(naturalRoutineRequestEn.captureJudgment.captureAs, 'clarification');
+  assert.equal(naturalRoutineRequestEn.captureJudgment.explicitness, 'explicit');
+  assert.deepEqual(naturalRoutineRequestEn.captureJudgment.allowedMutationActions, []);
+
   const explicitGoalEn = await offline('Could you create a goal to finish the course?');
   assert.equal(explicitGoalEn.captureJudgment.allowTaskCreation, true);
   assert.deepEqual(explicitGoalEn.captureJudgment.allowedMutationActions, ['create_goal']);

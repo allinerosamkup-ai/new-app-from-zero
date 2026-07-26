@@ -4,6 +4,9 @@ import { getOpenAiModel } from '../lib/openai-config';
 import { AuraCommandService, parseAuraCommandResponse } from './aura-command.service';
 
 async function run() {
+  const explicitRoutineMessage =
+    'Eu preciso criar uma rotina onde eu crie todo dia ou pelo menos três vezes por semana um vídeo dark e também faça pelo menos três publicações no meu perfil de cabeleireiro.';
+
   const routineBuilder = parseAuraCommandResponse(
     JSON.stringify({
       assistantMessage: 'Vou abrir o montador para separar, revisar e organizar sua semana.',
@@ -16,6 +19,46 @@ async function run() {
   );
   assert.equal(routineBuilder.intent, 'routine_builder');
   assert.equal(routineBuilder.action, 'start_routine_builder');
+
+  const routineBuilderOverridesWrongModelAction = parseAuraCommandResponse(
+    JSON.stringify({
+      assistantMessage: 'Fechado; mantenha seu check-in e tente postar três vezes por semana.',
+      intent: 'conversation',
+      action: 'respond',
+      payload: {},
+      needsConfirmation: false,
+    }),
+    explicitRoutineMessage,
+  );
+  assert.equal(routineBuilderOverridesWrongModelAction.intent, 'routine_builder');
+  assert.equal(routineBuilderOverridesWrongModelAction.action, 'start_routine_builder');
+  assert.equal(routineBuilderOverridesWrongModelAction.payload.sourceText, explicitRoutineMessage);
+  assert.match(routineBuilderOverridesWrongModelAction.assistantMessage, /montador|montagem|rotina/i);
+
+  const naturalShortRoutineRequest = parseAuraCommandResponse(
+    JSON.stringify({
+      assistantMessage: 'Posso ajudar.',
+      intent: 'conversation',
+      action: 'respond',
+      payload: {},
+    }),
+    'Quero montar meu dia.',
+  );
+  assert.equal(naturalShortRoutineRequest.action, 'start_routine_builder');
+
+  const negatedRoutineRequest = parseAuraCommandResponse(
+    JSON.stringify({ assistantMessage: 'Entendi.', payload: {} }),
+    'Não quero criar uma rotina agora; só estou desabafando.',
+  );
+  assert.equal(negatedRoutineRequest.action, 'respond');
+  assert.equal(negatedRoutineRequest.intent, 'conversation');
+
+  const reportedRoutineMention = parseAuraCommandResponse(
+    JSON.stringify({ assistantMessage: 'Entendi.', payload: {} }),
+    'Só estou falando sobre criar uma rotina; não quero que você faça isso agora.',
+  );
+  assert.equal(reportedRoutineMention.action, 'respond');
+  assert.equal(reportedRoutineMention.intent, 'conversation');
 
   const conversational = parseAuraCommandResponse(
     JSON.stringify({
@@ -132,6 +175,29 @@ async function run() {
       },
     },
   };
+
+  let routineModelCalls = 0;
+  const routineMustNotCallModelClient = {
+    chat: {
+      completions: {
+        create: async () => {
+          routineModelCalls += 1;
+          throw new Error('Pedido explícito de rotina não deve depender do modelo');
+        },
+      },
+    },
+  };
+
+  const deterministicRoutineResult = await AuraCommandService.interpretCommand({
+    message: explicitRoutineMessage,
+    userName: 'Ana',
+  }, routineMustNotCallModelClient as any);
+
+  assert.equal(deterministicRoutineResult.intent, 'routine_builder');
+  assert.equal(deterministicRoutineResult.action, 'start_routine_builder');
+  assert.equal(deterministicRoutineResult.payload.sourceText, explicitRoutineMessage);
+  assert.equal(deterministicRoutineResult.needsConfirmation, false);
+  assert.equal(routineModelCalls, 0);
 
   const plannerResult = await AuraCommandService.interpretCommand({
     message: 'Marcar dentista amanhã às 14h',

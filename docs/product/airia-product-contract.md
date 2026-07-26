@@ -56,6 +56,8 @@ Texto, transcrição, TXT, Markdown, PDF, DOCX ou XLSX são uma entrada opcional
 
 Um pedido simples como “monte minha rotina” abre o fluxo guiado. Uma lista ou documento com conteúdo operacional abre a revisão da fonte. Uma sessão antiga nunca substitui silenciosamente um novo pedido.
 
+Pedidos naturais com intenção equivalente — por exemplo, “preciso criar uma rotina”, “quero montar meu dia” ou “me ajude a organizar minha semana” — também abrem o Montador de forma determinística. Esse roteamento não depende da interpretação livre do modelo e prevalece sobre respostas conversacionais ou tentativas de criar blocos diretamente. Quando o pedido já contém conteúdo suficiente, a classificação começa automaticamente ao abrir o Montador, sem exigir outro clique. Negação, desabafo e mera menção ao tema não abrem o fluxo.
+
 Compromissos fixos nunca são movidos. Hábitos aparecem somente nos dias devidos. A fase e o check-in dimensionam carga e duração; o horário disponível serve para posicionar, nunca para inferir a fase da pessoa.
 
 Na aplicação:

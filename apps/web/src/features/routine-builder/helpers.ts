@@ -4,6 +4,19 @@ export function shouldRestoreRoutineSession(incoming: { initialSource?: string; 
   return !incoming.initialSource?.trim() && !incoming.focus?.trim();
 }
 
+export function shouldAutoStartRoutineSource(
+  incoming: { initialSource?: string; focus?: string },
+  state: { hasSession: boolean; busy: boolean; alreadyStarted: boolean },
+): boolean {
+  return Boolean(
+    incoming.initialSource?.trim()
+    && incoming.focus?.trim()
+    && !state.hasSession
+    && !state.busy
+    && !state.alreadyStarted,
+  );
+}
+
 export function applyPlanEntryEdit(
   items: RoutineItem[],
   sourceItemId: string,

@@ -12,6 +12,7 @@ import {
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
 import { extractJsonValue } from '../lib/extract-json';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { isExplicitRoutineBuilderRequest } from '../lib/routine-request';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -125,8 +126,22 @@ function asksToSaveInJournal(message: string): boolean {
   return /\b(salv|registr|guard).{0,24}\b(di[aá]rio|journal)\b|\b(di[aá]rio|journal).{0,24}\b(salv|registr|guard)/i.test(message);
 }
 
-function asksToBuildRoutine(message: string): boolean {
-  return /\b(mont|organiz|cri|refa[çc]|planej).{0,30}\b(rotina|meu dia|minha semana|agenda completa)\b|\b(rotina|meu dia|minha semana).{0,30}\b(mont|organiz|planej)/i.test(message);
+function routineBuilderResponse(message: string): AuraCommandResponse {
+  const isEnglish =
+    /\b(?:i need|i want|i would like|help me|can you|could you)\b/i.test(message)
+    && !/\b(?:eu|preciso|quero|rotina|agenda|semana)\b/i.test(message);
+
+  return AuraCommandResponseSchema.parse({
+    assistantMessage: isEnglish
+      ? 'I will open the Routine Builder, separate the habits and frequencies you described, and show you the week for review before saving.'
+      : 'Vou abrir o Montador de Rotina, separar os hábitos e as frequências que você descreveu e mostrar a semana para você revisar antes de salvar.',
+    intent: 'routine_builder',
+    action: 'start_routine_builder',
+    payload: { sourceText: message },
+    needsConfirmation: false,
+    needsClarification: false,
+    clarifyingQuestion: null,
+  });
 }
 
 export type AgendaCommand = {
@@ -176,6 +191,10 @@ function buildPayloadFromRoot(value: unknown): Record<string, unknown> {
 }
 
 export function parseAuraCommandResponse(content: string, originalMessage = ''): AuraCommandResponse {
+  if (isExplicitRoutineBuilderRequest(originalMessage)) {
+    return routineBuilderResponse(originalMessage);
+  }
+
   const parsed = extractJsonValue(content);
   const root = asObject(parsed);
   const payload = buildPayloadFromRoot(parsed);
@@ -191,11 +210,7 @@ export function parseAuraCommandResponse(content: string, originalMessage = ''):
   }
 
   if (!action || !intent) {
-    if (asksToBuildRoutine(originalMessage)) {
-      action = 'start_routine_builder';
-      intent = 'routine_builder';
-      if (!asString(payload.sourceText)) payload.sourceText = originalMessage;
-    } else if (asksToSaveInJournal(originalMessage)) {
+    if (asksToSaveInJournal(originalMessage)) {
       action = 'handoff_to_journal';
       intent = 'reflective_handoff';
     } else {
@@ -259,6 +274,10 @@ export class AuraCommandService {
     },
     client: Pick<OpenAI, 'chat'> = openai,
   ): Promise<AuraCommandResponseWithAgenda> {
+    if (isExplicitRoutineBuilderRequest(input.message)) {
+      return { ...routineBuilderResponse(input.message), agendaCommand: null };
+    }
+
     const interactionMode = input.interactionMode === 'conversation' ? 'conversation' : 'executor';
     const isPlannerConversation = interactionMode === 'conversation' && (
       /bot[aã]o\s+CONVERSAR/i.test(input.message) ||

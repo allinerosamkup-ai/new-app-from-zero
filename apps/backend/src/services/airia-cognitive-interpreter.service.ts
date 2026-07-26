@@ -5,6 +5,7 @@ import type { DecisionSurface } from './decision-engine.service';
 import type { AiriaActionPlan } from './airia-operational-reasoning.service';
 import type { AuraCommandAction } from '../contracts/aura-command.contract';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
+import { isExplicitRoutineBuilderRequest } from '../lib/routine-request';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -324,6 +325,16 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
     };
   }
 
+  const explicitRoutineBuilder = isExplicitRoutineBuilderRequest(message);
+  if (explicitRoutineBuilder) {
+    return {
+      captureAs: 'clarification', allowedMutationActions: [],
+      allowTaskCreation: false, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual pede abrir uma montagem revisável; ainda não autoriza criar itens antes da revisão.',
+    };
+  }
+
   const contextualOperationMention = /\b(?:i was told|they told me|they said|the message says|the instructions say)\b.{0,100}\b(?:create|add|schedule|save|move|change|update|delete|complete)\b|\bi (?:have|need) to (?:create|add|schedule|save)\b|\bi (?:have|need) to (?:move|change|update|delete|complete) .{0,50}\b(?:task|appointment|meeting|block|event|item)\b|\b(?:me disseram|foi dito|a mensagem diz|as instrucoes dizem)\b.{0,100}\b(?:crie|adicione|agende|salve|mova|altere|exclua|conclua)\b/.test(text);
   if (contextualOperationMention) {
     return {
@@ -358,16 +369,6 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
       allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: false,
       explicitness: 'explicit', confidence: 'alta',
       reason: 'A fala atual contém uma mutação explícita sobre item existente.',
-    };
-  }
-
-  const explicitRoutineBuilder = /\b(?:monte|monta|organize|organiza|planeje|planeja) (?:meu|minha|o|a) (?:dia|semana|agenda|rotina)\b|\b(?:transforme|organize) .{0,80}\b(?:anotacoes|documento|lista)\b|\b(?:build|plan|organize) (?:my|the) (?:day|week|routine|schedule)\b/.test(text);
-  if (explicitRoutineBuilder) {
-    return {
-      captureAs: 'clarification', allowedMutationActions: [],
-      allowTaskCreation: false, allowDecisionMemory: false, allowMemoryCapture: false,
-      explicitness: 'explicit', confidence: 'alta',
-      reason: 'A fala atual pede abrir uma montagem revisável; ainda não autoriza criar itens antes da revisão.',
     };
   }
 

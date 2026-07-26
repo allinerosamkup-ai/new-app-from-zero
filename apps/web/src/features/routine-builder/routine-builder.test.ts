@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyPlanEntryEdit, buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep, shouldRestoreRoutineSession } from './helpers';
+import { applyPlanEntryEdit, buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep, shouldAutoStartRoutineSource, shouldRestoreRoutineSession } from './helpers';
 
 describe('routine builder helpers', () => {
   it('routes every persisted session state to one clear UI step', () => {
@@ -27,6 +27,17 @@ describe('routine builder helpers', () => {
     expect(shouldRestoreRoutineSession({ initialSource: 'Minha rotina está solta', focus: '' })).toBe(false);
     expect(shouldRestoreRoutineSession({ initialSource: '', focus: 'Organizar minha semana' })).toBe(false);
     expect(shouldRestoreRoutineSession({})).toBe(true);
+  });
+
+  it('starts an explicit source from Aura automatically only once', () => {
+    const incoming = {
+      initialSource: 'Preciso criar uma rotina com três vídeos e três publicações por semana.',
+      focus: 'Organizar minha rotina',
+    };
+    expect(shouldAutoStartRoutineSource(incoming, { hasSession: false, busy: false, alreadyStarted: false })).toBe(true);
+    expect(shouldAutoStartRoutineSource(incoming, { hasSession: false, busy: false, alreadyStarted: true })).toBe(false);
+    expect(shouldAutoStartRoutineSource(incoming, { hasSession: true, busy: false, alreadyStarted: false })).toBe(false);
+    expect(shouldAutoStartRoutineSource({}, { hasSession: false, busy: false, alreadyStarted: false })).toBe(false);
   });
 
   it('separates today, week, habits and objectives without duplicating entries', () => {
