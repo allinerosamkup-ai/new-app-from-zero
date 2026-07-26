@@ -8,10 +8,10 @@ import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import i18n from "../i18n";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
-import { getCurrentLanguage, resolveIntlLocale } from "../i18n";
+import { getCurrentLanguage, resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { supabase } from "../lib/supabase";
 import { trackEvent } from "../lib/track";
-import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, hasSubstantiveRoutineSource, type TimelineBlock } from "./aura-chat-page.helpers";
+import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
@@ -38,12 +38,22 @@ type AuraCommandAction =
   | "create_checklist"
   | "create_goal"
   | "create_agenda"
-  | "start_routine_builder"
   | "ask_clarification"
   | "handoff_to_journal"
   | "update_task"
   | "delete_task"
-  | "complete_items";
+  | "complete_items"
+  | "log_checkin"
+  | "create_habit"
+  | "postpone_task"
+  | "start_task"
+  | "adapt_agenda"
+  | "open_screen";
+
+type AuraCommandStep = {
+  action: AuraCommandAction;
+  payload: Record<string, unknown>;
+};
 
 type AuraCommandResponse = {
   assistantMessage: string;
@@ -54,6 +64,8 @@ type AuraCommandResponse = {
   needsClarification: boolean;
   clarifyingQuestion: string | null;
   riskSafety?: RiskSafety;
+  /** Ações extras da mesma fala. A Airia executa todas, na ordem. */
+  actions?: AuraCommandStep[];
 };
 
 type ActionCard = {
@@ -62,6 +74,17 @@ type ActionCard = {
   items: string[];
   ctaLabel?: string;
   ctaPath?: string;
+  /** Item criado sozinho pela Airia pode ser desfeito sem abrir outra tela. */
+  undo?: { label: string; run: () => Promise<void> };
+  /** Retorno visual da conclusão — é o que fecha o ciclo e dá o retorno imediato. */
+  reward?: { headline: string; detail: string | null; animation: string; intensity: string };
+};
+
+/** Rotina proposta na conversa: a pessoa aceita item a item. */
+type RoutineProposal = {
+  blocks: TimelineBlock[];
+  accepted: number[];
+  dismissed: number[];
 };
 
 type PendingTaskConfirmation = {
@@ -203,6 +226,8 @@ export function AuraChatPage() {
   const [actionCard, setActionCard] = useState<ActionCard | null>(null);
   const [lastRiskSafety, setLastRiskSafety] = useState<RiskSafety | null>(null);
   const [pendingTaskConfirmation, setPendingTaskConfirmation] = useState<PendingTaskConfirmation | null>(null);
+  const [routineProposal, setRoutineProposal] = useState<RoutineProposal | null>(null);
+  const l = useLocalizedCopy();
   const [isApplyingPendingAction, setIsApplyingPendingAction] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -279,23 +304,6 @@ export function AuraChatPage() {
 
   async function executeAuraAction(response: AuraCommandResponse): Promise<string | null> {
     try {
-      if (response.action === "start_routine_builder") {
-        const sourceText = typeof response.payload.sourceText === "string" ? response.payload.sourceText : "";
-        if (!hasSubstantiveRoutineSource(sourceText)) {
-          navigate("/onboarding/guiado");
-          return null;
-        }
-        navigate("/routine-builder", {
-          state: {
-            initialSource: sourceText,
-            focus: typeof response.payload.focus === "string" && response.payload.focus.trim()
-              ? response.payload.focus
-              : t("routineBuilder.defaultFocus", { defaultValue: "Organizar minha rotina" }),
-          },
-        });
-        return null;
-      }
-
       if (response.action === "create_task" || response.action === "create_agenda") {
         const blocks = buildTimelineBlocks(response.payload);
         if (blocks.length === 0) {
@@ -307,16 +315,152 @@ export function AuraChatPage() {
           return null;
         }
 
+        // Rotina montada na conversa: a pessoa escolhe o que entra. Item solto
+        // entra sozinho — o trabalho de confirmar um bloco não vale o atrito.
+        if (blocks.length > 1) {
+          setRoutineProposal({ blocks, accepted: [], dismissed: [] });
+          return null;
+        }
+
         await syncTimelineBlocks(blocks);
-        const isMultiple = blocks.length > 1 || response.action === "create_agenda";
         setActionCard({
-          eyebrow: isMultiple ? t("aura.scheduleCreated") : t("aura.plannerUpdated"),
-          title: isMultiple ? t("aura.blocksOrganized", { count: blocks.length }) : t("aura.oneTaskCreated"),
-          items: blocks.slice(0, 4).map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
+          eyebrow: t("aura.plannerUpdated"),
+          title: t("aura.oneTaskCreated"),
+          items: blocks.map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
+          ctaLabel: t("aura.viewPlanner"),
+          ctaPath: "/planner",
+          undo: {
+            label: l("Desfazer", "Undo"),
+            run: async () => {
+              const today = new Date().toISOString().slice(0, 10);
+              const current = await api.get(`/timeline/${blocks[0]?.date ?? today}`) as Array<{ id: string; title: string }>;
+              const created = current.find((item) => item.title === blocks[0]?.title);
+              if (created) await api.delete(`/timeline/${created.id}`);
+              await refreshData();
+              setActionCard(null);
+            },
+          },
+        });
+        showSuccess(t("aura.taskAdded"));
+        return null;
+      }
+
+      // Check-in pela conversa: a pessoa contou como está e isso vira registro,
+      // sem precisar abrir a tela de check-in.
+      if (response.action === "log_checkin") {
+        const mood = typeof response.payload.loggedMoodScore === "number"
+          ? response.payload.loggedMoodScore
+          : typeof response.payload.moodScore === "number" ? response.payload.moodScore : null;
+        const energy = typeof response.payload.loggedEnergyScore === "number"
+          ? response.payload.loggedEnergyScore
+          : typeof response.payload.energyScore === "number" ? response.payload.energyScore : null;
+        if (mood === null && energy === null) return null;
+
+        await refreshData();
+        setActionCard({
+          eyebrow: l("CHECK-IN REGISTRADO", "CHECK-IN LOGGED"),
+          title: l("Anotei como você está hoje", "I noted how you are today"),
+          items: [
+            mood !== null ? l(`Humor ${mood}/10`, `Mood ${mood}/10`) : "",
+            energy !== null ? l(`Energia ${energy}/10`, `Energy ${energy}/10`) : "",
+            l("Isso entra na leitura da sua fase e no tamanho do que eu proponho.", "This feeds your phase reading and the size of what I suggest."),
+          ].filter(Boolean),
+          ctaLabel: l("Ver padrões", "See patterns"),
+          ctaPath: "/insights",
+        });
+        return null;
+      }
+
+      if (response.action === "create_habit") {
+        const title = typeof response.payload.title === "string" ? response.payload.title.trim() : "";
+        if (!title) return null;
+        const daysOfWeek = Array.isArray(response.payload.daysOfWeek)
+          ? (response.payload.daysOfWeek as unknown[]).filter((day): day is number => typeof day === "number")
+          : [];
+        const created = await api.post("/habits", {
+          title,
+          frequency: response.payload.frequency === "weekly" ? "weekly" : "daily",
+          targetDays: daysOfWeek,
+          timeOfDay: typeof response.payload.timeOfDay === "string" ? response.payload.timeOfDay : "anytime",
+          durationMinutes: typeof response.payload.durationMinutes === "number" ? response.payload.durationMinutes : 15,
+          icon: typeof response.payload.icon === "string" ? response.payload.icon : null,
+        }) as { id?: string };
+        await refreshData();
+
+        setActionCard({
+          eyebrow: l("HÁBITO CRIADO", "HABIT CREATED"),
+          title,
+          items: [],
+          ctaLabel: l("Ver hábitos", "See habits"),
+          ctaPath: "/habits",
+          undo: created?.id
+            ? {
+                label: l("Desfazer", "Undo"),
+                run: async () => {
+                  await api.patch(`/habits/${created.id}`, { archived: true });
+                  await refreshData();
+                  setActionCard(null);
+                },
+              }
+            : undefined,
+        });
+        return null;
+      }
+
+      if (response.action === "start_task") {
+        const taskId = typeof response.payload.taskId === "string" ? response.payload.taskId : "";
+        if (!taskId) return null;
+        await api.post(`/timeline/${taskId}/started`, {});
+        await refreshData();
+        setActionCard({
+          eyebrow: l("COMEÇOU", "STARTED"),
+          title: typeof response.payload.title === "string" ? response.payload.title : l("Cronômetro rodando", "Timer running"),
+          items: [l("Começar é a parte cara. Essa parte já foi.", "Starting is the expensive part. That part is done.")],
+        });
+        return null;
+      }
+
+      if (response.action === "postpone_task") {
+        const taskId = typeof response.payload.taskId === "string" ? response.payload.taskId : "";
+        if (!taskId) return null;
+        const targetDate = typeof response.payload.targetDate === "string" ? response.payload.targetDate : undefined;
+        await api.post(`/timeline/${taskId}/postpone`, targetDate ? { targetDate } : {});
+        await refreshData();
+        setActionCard({
+          eyebrow: l("ADIADO", "POSTPONED"),
+          title: typeof response.payload.title === "string" ? response.payload.title : l("Movido", "Moved"),
+          items: targetDate ? [targetDate] : [],
           ctaLabel: t("aura.viewPlanner"),
           ctaPath: "/planner",
         });
-        showSuccess(isMultiple ? t("aura.agendaSent") : t("aura.taskAdded"));
+        return null;
+      }
+
+      if (response.action === "adapt_agenda") {
+        const preview = await api.post("/agenda/adapt", { mode: "apply" }) as {
+          appliedChanges?: Array<{ title?: string; reason?: string }>;
+        };
+        const applied = Array.isArray(preview?.appliedChanges) ? preview.appliedChanges : [];
+        await refreshData();
+        setActionCard({
+          eyebrow: l("AGENDA AJUSTADA", "SCHEDULE ADJUSTED"),
+          title: applied.length > 0
+            ? l(`${applied.length} ${applied.length === 1 ? "mudança" : "mudanças"} no seu dia`, `${applied.length} change(s) to your day`)
+            : l("Seu dia já estava do tamanho certo", "Your day was already the right size"),
+          items: applied.slice(0, 4).map((change) => change.title ?? "").filter(Boolean),
+          ctaLabel: t("aura.viewPlanner"),
+          ctaPath: "/planner",
+        });
+        return null;
+      }
+
+      if (response.action === "open_screen") {
+        const screen = typeof response.payload.screen === "string" ? response.payload.screen : "";
+        const routes: Record<string, string> = {
+          home: "/home", planner: "/planner", habits: "/habits", goals: "/goals",
+          insights: "/insights", journal: "/journal", checkin: "/checkin",
+        };
+        if (routes[screen]) navigate(routes[screen]);
         return null;
       }
 
@@ -376,7 +520,10 @@ export function AuraChatPage() {
           items,
           localDate: new Date().toISOString().slice(0, 10),
           moodCycleContext: response.payload.moodCycleContext ?? null,
-        }) as { matched: string[]; created: string[]; evaluation: string };
+        }) as {
+          matched: string[]; created: string[]; evaluation: string;
+          rewards?: Array<{ headline: string; detail: string | null; animation: string; intensity: string }>;
+        };
 
         const matched: string[] = Array.isArray(result.matched) ? result.matched : [];
         const created: string[] = Array.isArray(result.created) ? result.created : [];
@@ -386,12 +533,14 @@ export function AuraChatPage() {
           ...created.map((t: string) => `+ ${t} (criada como concluída)`),
         ];
 
+        const firstReward = Array.isArray(result.rewards) ? result.rewards[0] : undefined;
         setActionCard({
           eyebrow: t("aura.registered"),
-          title: t("aura.itemsDone", { count: matched.length + created.length }),
+          title: firstReward?.headline ?? t("aura.itemsDone", { count: matched.length + created.length }),
           items: confirmationLines.slice(0, 4),
           ctaLabel: t("aura.viewPlanner"),
           ctaPath: "/planner",
+          reward: firstReward,
         });
 
         return evaluation ?? null;
@@ -504,7 +653,22 @@ export function AuraChatPage() {
         });
       }
 
-      const executionFollowUp = await executeAuraAction(completedResponse);
+      // Uma fala pode ter mais de uma ação. A Airia executa todas, na ordem, e a
+      // primeira devolutiva não-vazia é a que vira mensagem.
+      const steps: AuraCommandResponse[] = [
+        completedResponse,
+        ...(completedResponse.actions ?? []).map((step) => ({
+          ...completedResponse,
+          action: step.action,
+          payload: step.payload,
+          actions: undefined,
+        })),
+      ];
+      let executionFollowUp: string | null = null;
+      for (const step of steps) {
+        const followUp = await executeAuraAction(step);
+        if (followUp && !executionFollowUp) executionFollowUp = followUp;
+      }
       if (executionFollowUp) {
         setMessages((prev) => [...prev, { role: "assistant", content: executionFollowUp }]);
       }
@@ -757,6 +921,21 @@ export function AuraChatPage() {
               backdropFilter: "blur(18px)",
             }}
           >
+            {actionCard.reward && (
+              <div
+                className={`aura-reward aura-reward--${actionCard.reward.animation}`}
+                style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}
+              >
+                <span aria-hidden="true" style={{ fontSize: actionCard.reward.intensity === "big" ? 22 : 16 }}>
+                  {actionCard.reward.animation === "confetti" ? "🎉" : actionCard.reward.animation === "streak" ? "🔥" : "✨"}
+                </span>
+                {actionCard.reward.detail && (
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-peach-ink, var(--text-2))" }}>
+                    {actionCard.reward.detail}
+                  </span>
+                )}
+              </div>
+            )}
             <p
               style={{
                 fontSize: 10,
@@ -797,16 +976,123 @@ export function AuraChatPage() {
                 ))}
               </div>
             )}
-            {actionCard.ctaPath && actionCard.ctaLabel && (
+            <div style={{ display: "flex", gap: 8 }}>
+              {actionCard.ctaPath && actionCard.ctaLabel && (
+                <AuraButtonV2
+                  onClick={() => navigate(actionCard.ctaPath!)}
+                  variant="primary"
+                  size="sm"
+                  style={{ flex: 1 }}
+                >
+                  {actionCard.ctaLabel}
+                </AuraButtonV2>
+              )}
+              {/* Item que entrou sozinho sai sozinho: desfazer fica aqui, não em
+                  outra tela. Sem isso, autonomia vira coisa que a pessoa tem que
+                  ir consertar. */}
+              {actionCard.undo && (
+                <AuraButtonV2
+                  onClick={() => { void actionCard.undo!.run(); }}
+                  variant="outline"
+                  size="sm"
+                  style={{ flex: actionCard.ctaPath ? 0 : 1, minWidth: 96 }}
+                >
+                  {actionCard.undo.label}
+                </AuraButtonV2>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Rotina montada na conversa: cada item é aceito ou descartado aqui, e o
+            que entra vai direto para o Planner. */}
+        {routineProposal && (
+          <div
+            style={{
+              margin: "6px 0 10px 33px",
+              background: "rgba(255,255,255,.72)",
+              border: "1px solid rgba(255,255,255,.84)",
+              borderRadius: 18,
+              padding: "12px 14px",
+              boxShadow: "0 12px 24px rgba(243,176,140,.08)",
+              backdropFilter: "blur(18px)",
+            }}
+          >
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach)", margin: "0 0 8px" }}>
+              {l("ROTINA MONTADA", "ROUTINE BUILT")}
+            </p>
+            <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-2)" }}>
+              {l("Aceite o que servir. O que você aceitar já entra no Planner.", "Accept what fits. Whatever you accept goes straight to the Planner.")}
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+              {routineProposal.blocks.map((block, index) => {
+                const accepted = routineProposal.accepted.includes(index);
+                const dismissed = routineProposal.dismissed.includes(index);
+                if (dismissed) return null;
+                return (
+                  <div key={`${block.title}-${index}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ flex: 1, fontSize: 12.5, color: "var(--text-2)", opacity: accepted ? 0.55 : 1 }}>
+                      {formatTimelineBlock(block, resolveIntlLocale(i18n.language))}
+                    </span>
+                    {accepted ? (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage, var(--text-3))" }}>
+                        {l("no Planner", "in Planner")}
+                      </span>
+                    ) : (
+                      <>
+                        <AuraButtonV2
+                          size="sm"
+                          variant="primary"
+                          onClick={() => {
+                            void (async () => {
+                              await syncTimelineBlocks([block]);
+                              setRoutineProposal((current) => current
+                                ? { ...current, accepted: [...current.accepted, index] }
+                                : current);
+                            })();
+                          }}
+                        >
+                          {l("Aceitar", "Accept")}
+                        </AuraButtonV2>
+                        <AuraButtonV2
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setRoutineProposal((current) => current
+                            ? { ...current, dismissed: [...current.dismissed, index] }
+                            : current)}
+                        >
+                          {l("Não", "No")}
+                        </AuraButtonV2>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
               <AuraButtonV2
-                onClick={() => navigate(actionCard.ctaPath!)}
-                variant="primary"
                 size="sm"
-                style={{ width: "100%" }}
+                variant="primary"
+                style={{ flex: 1 }}
+                onClick={() => {
+                  void (async () => {
+                    const pending = routineProposal.blocks.filter((_, index) => (
+                      !routineProposal.accepted.includes(index) && !routineProposal.dismissed.includes(index)
+                    ));
+                    if (pending.length > 0) await syncTimelineBlocks(pending);
+                    setRoutineProposal(null);
+                    showSuccess(t("aura.agendaSent"));
+                  })();
+                }}
               >
-                {actionCard.ctaLabel}
+                {l("Aceitar tudo", "Accept all")}
               </AuraButtonV2>
-            )}
+              <AuraButtonV2 size="sm" variant="ghost" onClick={() => setRoutineProposal(null)}>
+                {l("Fechar", "Close")}
+              </AuraButtonV2>
+            </div>
           </div>
         )}
 
