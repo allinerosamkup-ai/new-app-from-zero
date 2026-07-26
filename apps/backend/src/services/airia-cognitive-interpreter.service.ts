@@ -246,17 +246,31 @@ function normalizeForClassification(value: string): string {
     .toLowerCase();
 }
 
+// Inclui a forma do imperativo formal ("apague") E a forma que a pessoa realmente
+// digita ("apaga"). Quem escreve com pressa, ou por voz, escreve "apaga isso" —
+// e a Airia tem que entender tanto o pedido quanto a negação dele.
 const MUTATION_VERBS = [
   'crie', 'cria', 'criar', 'adicione', 'adiciona', 'adicionar', 'inclua', 'inclui', 'incluir',
-  'agende', 'agenda', 'agendar', 'marque', 'marcar', 'registre', 'registra', 'registrar',
-  'transforme', 'transformar', 'mova', 'mover', 'atualize', 'atualizar', 'altere', 'alterar',
-  'mude', 'mudar', 'reagende', 'reagendar', 'remarque', 'remarcar', 'ajuste', 'ajustar',
-  'adie', 'adiar', 'apague', 'apagar', 'exclua', 'excluir', 'remova', 'remover',
-  'conclua', 'concluir', 'finalize', 'finalizar', 'termine', 'terminar', 'salve', 'salvar',
-  'leve', 'levar', 'coloque', 'colocar', 'complete', 'create', 'add', 'schedule', 'save',
+  'agende', 'agenda', 'agendar', 'marque', 'marca', 'marcar', 'registre', 'registra', 'registrar',
+  'transforme', 'transforma', 'transformar', 'mova', 'move', 'mover',
+  'atualize', 'atualiza', 'atualizar', 'altere', 'altera', 'alterar',
+  'mude', 'muda', 'mudar', 'reagende', 'reagenda', 'reagendar',
+  'remarque', 'remarca', 'remarcar', 'ajuste', 'ajusta', 'ajustar',
+  'adie', 'adia', 'adiar', 'apague', 'apaga', 'apagar',
+  'exclua', 'exclui', 'excluir', 'remova', 'remove', 'remover',
+  'delete', 'deleta', 'deletar', 'cancele', 'cancela', 'cancelar',
+  'tire', 'tira', 'tirar', 'passe', 'passa', 'passar', 'jogue', 'joga', 'jogar',
+  'empurre', 'empurra', 'empurrar', 'antecipe', 'antecipa', 'antecipar',
+  'conclua', 'conclui', 'concluir', 'finalize', 'finaliza', 'finalizar',
+  'termine', 'termina', 'terminar', 'salve', 'salva', 'salvar',
+  'leve', 'leva', 'levar', 'coloque', 'coloca', 'colocar', 'complete', 'completa',
+  'create', 'add', 'schedule', 'save',
   'move', 'change', 'update', 'delete', 'remove', 'finish', 'mark', 'record', 'log',
   'take', 'put', 'turn', 'reschedule', 'postpone', 'build', 'make',
 ] as const;
+
+/** Substantivos que identificam o que a pessoa quer mexer. */
+const MUTATION_TARGET_NOUNS = 'tarefa|tarefas|lembrete|lembretes|bloco|blocos|evento|eventos|compromisso|compromissos|consulta|reuniao|aula|sessao|item|itens|isso|isto|essa|esse|aquilo|aquela|aquele';
 
 const MUTATION_VERB_PATTERN = MUTATION_VERBS.join('|');
 
@@ -286,8 +300,8 @@ function extractMutationTargetText(message: string, action: AiriaMutationAction)
   const firstVerb = new RegExp(`\\b(?:${MUTATION_VERB_PATTERN}|fiz|terminei|conclui|finished|completed|did)\\b`).exec(text);
   if (firstVerb) text = text.slice((firstVerb.index ?? 0) + firstVerb[0].length).trim();
 
-  if (action === 'update_task') {
-    text = text.split(/\b(?:para|to)\s+(?:hoje|amanha|today|tomorrow|segunda|terca|quarta|quinta|sexta|sabado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/)[0] ?? text;
+  if (action === 'update_task' || action === 'delete_task') {
+    text = text.split(/\b(?:para|pra|pro|to|ate|até)\s+(?:o\s+|a\s+|as\s+)?(?:hoje|amanha|today|tomorrow|depois|segunda|terca|quarta|quinta|sexta|sabado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday|semana|mes|proxima|proximo|fim)\b/)[0] ?? text;
     text = text.split(/\b(?:as|at)\s+\d{1,2}(?::\d{2})?\s*(?:h|am|pm)?\b/)[0] ?? text;
   }
 
@@ -295,6 +309,7 @@ function extractMutationTargetText(message: string, action: AiriaMutationAction)
     'a', 'o', 'as', 'os', 'um', 'uma', 'the', 'my', 'this', 'that', 'it',
     'tarefa', 'tarefas', 'task', 'tasks', 'item', 'items', 'lembrete', 'reminder',
     'bloco', 'block', 'evento', 'event', 'consulta', 'appointment', 'reuniao', 'meeting',
+    'compromisso', 'compromissos', 'commitment', 'sessao', 'aula', 'agenda',
     'da', 'do', 'das', 'dos', 'de', 'of', 'como', 'as', 'feito', 'feita', 'done', 'complete',
     'ja', 'already', 'just',
   ]);
@@ -329,7 +344,8 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
     };
   }
 
-  const explicitNoAction = /\bnao (?:quero|preciso) que (?:voce )?(?:crie|cria|adicione|adiciona|agende|agenda|registre|transforme|mova|apague|exclua|salve)\b|\bnao (?:estou )?pedindo (?:para |que )?(?:voce )?(?:faca|crie|mude|apague|registre|agende)\b|\bnao (?:crie|cria|adicione|adiciona|agende|agenda|registre|transforme|mova|apague|exclua|salve)\b|\b(?:i (?:do not|don't) want you to|do not|don't|please don't) (?:create|add|schedule|save|move|delete|turn this into)\b|\bi am not asking you to (?:do it|create|add|schedule|save|move|delete|change|complete)\b|\bi(?:'m| am) not asking (?:you )?to (?:do it|create|add|schedule|save|move|delete|change|complete)\b/.test(text);
+  const explicitNoAction = new RegExp(`\\bnao (?:quero|preciso) que (?:voce )?(?:${MUTATION_VERB_PATTERN})\\b|\\bnao (?:estou )?pedindo (?:para |que )?(?:voce )?(?:faca|${MUTATION_VERB_PATTERN})\\b|\\bnao (?:${MUTATION_VERB_PATTERN})\\b`).test(text)
+    || /\b(?:i (?:do not|don't) want you to|do not|don't|please don't) (?:create|add|schedule|save|move|delete|turn this into)\b|\bi am not asking you to (?:do it|create|add|schedule|save|move|delete|change|complete)\b|\bi(?:'m| am) not asking (?:you )?to (?:do it|create|add|schedule|save|move|delete|change|complete)\b/.test(text);
   if (explicitNoAction) {
     return {
       captureAs: 'conversation', captureMode: 'listen', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
@@ -379,9 +395,14 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
     };
   }
 
-  const explicitDelete = /\b(apague|exclua|remova) .{0,50}\b(tarefa|lembrete|bloco|evento)\b|\b(?:delete|remove) .{0,50}\b(task|reminder|block|event)\b/.test(text);
-  const explicitComplete = /\b(conclua|finalize|termine) .{0,50}\b(tarefa|item|itens|lembrete|bloco)\b|\bmarque .{0,50}\b(?:como )?(?:concluid[oa]|feito)\b|\b(?:complete|finish) .{0,50}\b(task|item|items|reminder|block)\b|\bmark .{0,50}\b(?:as )?(?:done|complete)\b|\b(ja fiz|terminei|conclui|acabei de|i finished|i completed|i already did|i just finished)\b/.test(text);
-  const explicitUpdate = /\b(atualize|altere|mude|mova|reagende|remarque|ajuste|adie) .{0,60}\b(tarefa|consulta|reuniao|compromisso|bloco|evento)\b|\b(?:update|change|move|reschedule|postpone) .{0,60}\b(task|appointment|meeting|commitment|block|event)\b/.test(text);
+  const explicitDelete = new RegExp(`\\b(?:apague|apaga|apagar|exclua|exclui|excluir|remova|remove|remover|delete|deleta|deletar|cancele|cancela|cancelar|tire|tira|tirar)\\b.{0,50}\\b(?:${MUTATION_TARGET_NOUNS})\\b`).test(text)
+    || new RegExp(`\\b(?:apague|apaga|exclua|exclui|remova|remove|delete|deleta|cancele|cancela)\\s+(?:o|a|os|as|meu|minha|meus|minhas)\\s+\\w+`).test(text)
+    || /\b(?:delete|remove|cancel) .{0,50}\b(task|reminder|block|event|appointment|meeting)\b/.test(text);
+  const explicitComplete = new RegExp(`\\b(?:conclua|conclui|concluir|finalize|finaliza|finalizar|termine|termina|terminar|complete|completa)\\b.{0,50}\\b(?:${MUTATION_TARGET_NOUNS})\\b`).test(text)
+    || /\b(?:marque|marca) .{0,50}\b(?:como )?(?:concluid[oa]|feito|feita)\b|\b(?:complete|finish) .{0,50}\b(task|item|items|reminder|block)\b|\bmark .{0,50}\b(?:as )?(?:done|complete)\b|\b(ja fiz|terminei|conclui|acabei de|i finished|i completed|i already did|i just finished)\b/.test(text);
+  const explicitUpdate = new RegExp(`\\b(?:atualize|atualiza|atualizar|altere|altera|alterar|mude|muda|mudar|mova|move|mover|reagende|reagenda|reagendar|remarque|remarca|remarcar|ajuste|ajusta|ajustar|adie|adia|adiar|passe|passa|passar|jogue|joga|jogar|empurre|empurra|empurrar|antecipe|antecipa|antecipar)\\b.{0,60}\\b(?:${MUTATION_TARGET_NOUNS})\\b`).test(text)
+    || new RegExp(`\\b(?:mova|move|mude|muda|reagende|reagenda|remarque|remarca|adie|adia|passe|passa|jogue|joga|empurre|empurra|antecipe|antecipa|ajuste|ajusta)\\s+(?:o|a|os|as|meu|minha|meus|minhas)\\s+\\w+`).test(text)
+    || /\b(?:update|change|move|reschedule|postpone|push) .{0,60}\b(task|appointment|meeting|commitment|block|event)\b/.test(text);
   if (explicitDelete || explicitComplete || explicitUpdate) {
     const allowedMutationActions: AiriaMutationAction[] = explicitDelete
       ? ['delete_task']

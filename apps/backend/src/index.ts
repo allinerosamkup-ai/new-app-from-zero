@@ -41,6 +41,7 @@ import { AgendaPatternRecognitionService } from './services/agenda-pattern-recog
 import { ContextGroundingService } from './services/context-grounding.service';
 import { ReasoningContextService } from './services/reasoning-context.service';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './services/airia-operational-reasoning.service';
+import { buildCompletionReward } from './services/progress-rewards.service';
 import { TaskDecompositionService } from './services/task-decomposition.service';
 import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-interpreter.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
@@ -3305,7 +3306,21 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       const evaluation = evalResponse.choices?.[0]?.message?.content?.trim() ?? '';
 
-      return res.json({ matched, created, evaluation });
+      // Contar o que já fez também é conquista: cada item relatado volta com
+      // comemoração própria. O que ela fez sem o app ajudar continua contando.
+      const clearedTheDay = stillPending.length === 0;
+      const rewards = [...matched, ...created].map((title, index) => ({
+        title,
+        ...buildCompletionReward({
+          title,
+          kind: 'task_done',
+          reported: true,
+          clearedTheDay: clearedTheDay && index === matched.length + created.length - 1,
+          today: todayKey,
+        }),
+      }));
+
+      return res.json({ matched, created, evaluation, rewards, clearedTheDay });
     } catch (err: any) {
       console.error('[aura/complete-report] error:', err);
       return res.status(500).json({ error: 'Falha ao registrar conclusões' });
@@ -6395,7 +6410,18 @@ JSON APENAS: {"profileSummary":"..."}`,
         }
       }
 
-      return res.json(habit);
+      // Retorno imediato de cada conclusão: é isso que fecha o ciclo e devolve
+      // dopamina. Desmarcar não gera comemoração nenhuma — e também não gera recado.
+      const justCompleted = !wasAlreadyCompleted;
+      const reward = justCompleted
+        ? buildCompletionReward({
+            title: (habit as any)?.title ?? '',
+            kind: 'habit_done',
+            today: format(localDate, 'yyyy-MM-dd'),
+          })
+        : null;
+
+      return res.json({ ...habit, reward });
     } catch (error: any) {
       console.error('[habits/toggle]', error);
       return res.status(500).json({ error: error.message || 'Failed to toggle habit' });

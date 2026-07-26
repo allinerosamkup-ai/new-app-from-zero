@@ -199,6 +199,36 @@ async function run() {
     assert.equal(result.captureJudgment.allowTaskCreation, false, reportedMutation);
   }
 
+  // A pessoa fala "apaga", "move", "adia" — não "apague", "mova", "adie". A Airia
+  // tem autonomia para executar as duas formas.
+  for (const [fala, esperado] of [
+    ['Apaga a tarefa do relatório.', 'delete_task'],
+    ['Exclui esse compromisso.', 'delete_task'],
+    ['Cancela a consulta de quinta.', 'delete_task'],
+    ['Move a tarefa do relatório para amanhã às 14h.', 'update_task'],
+    ['Reagenda o relatório para quinta.', 'update_task'],
+    ['Adia o compromisso do relatório pra semana que vem.', 'update_task'],
+    ['Joga isso pra amanhã.', 'update_task'],
+    ['Conclui a tarefa do relatório.', 'complete_items'],
+  ] as const) {
+    const result = await offline(fala);
+    assert.deepEqual(result.captureJudgment.allowedMutationActions, [esperado], fala);
+    assert.equal(result.captureJudgment.allowTaskCreation, true, fala);
+  }
+
+  // E a negação das mesmas formas coloquiais continua valendo — senão "não apaga
+  // isso" viraria uma exclusão, o inverso exato do pedido.
+  for (const fala of [
+    'Não apaga isso, por favor.',
+    'Não move a tarefa do relatório.',
+    'Não adia o compromisso.',
+    'Não cancela a consulta.',
+  ]) {
+    const result = await offline(fala);
+    assert.deepEqual(result.captureJudgment.allowedMutationActions, [], fala);
+    assert.equal(result.captureJudgment.allowTaskCreation, false, fala);
+  }
+
   const explicitTaskPt = await offline('Crie uma tarefa para ligar para a dentista amanhã.');
   assert.equal(explicitTaskPt.captureJudgment.captureAs, 'task');
   assert.equal(explicitTaskPt.captureJudgment.explicitness, 'explicit');

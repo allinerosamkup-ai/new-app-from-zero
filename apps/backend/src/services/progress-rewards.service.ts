@@ -148,6 +148,96 @@ export function computeProgress(input: {
   };
 }
 
+
+export type RewardAnimation = 'spark' | 'confetti' | 'pulse' | 'streak';
+
+export type CompletionReward = {
+  xpEarned: number;
+  headline: string;
+  detail: string | null;
+  animation: RewardAnimation;
+  intensity: 'small' | 'big';
+};
+
+/**
+ * Frases de conclusão.
+ *
+ * Curtas de propósito: o retorno tem que chegar antes da pessoa sair da tela. E
+ * variadas de propósito: a mesma frase toda vez vira ruído e para de dar retorno
+ * nenhum. Nenhuma delas compara com o que faltou nem com ontem.
+ */
+const DONE_HEADLINES = [
+  'Feito.',
+  'Saiu.',
+  'Fechou.',
+  'Esse foi.',
+  'Mais um.',
+  'Pronto.',
+];
+
+/** Quando a pessoa conta que já fez, o reconhecimento é mais explícito. */
+const REPORTED_HEADLINES = [
+  'Isso conta.',
+  'Anotado como feito.',
+  'Boa — já registrei.',
+  'Marquei aqui.',
+];
+
+/** Escolha estável: a mesma conclusão sempre mostra a mesma frase, mas itens
+ *  diferentes mostram frases diferentes. Sem repetir a anterior por acaso. */
+function pick(pool: string[], seed: string): string {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index++) {
+    hash = ((hash * 31) + seed.charCodeAt(index)) >>> 0;
+  }
+  return pool[hash % pool.length];
+}
+
+/**
+ * Retorno imediato de uma conclusão — o "soltar dopamina" de cada item fechado.
+ *
+ * `reported` marca o caso em que a pessoa contou algo que já tinha feito: aí o
+ * texto reconhece em vez de só confirmar, porque ela fez sem o app ajudar.
+ */
+export function buildCompletionReward(input: {
+  title: string;
+  kind: Extract<ProgressEvent['kind'], 'habit_done' | 'task_done' | 'routine_completed'>;
+  reported?: boolean;
+  streak?: StreakState;
+  leveledUp?: boolean;
+  /** Fechou tudo que tinha para hoje. */
+  clearedTheDay?: boolean;
+  today?: string;
+}): CompletionReward {
+  const seed = `${input.title}:${input.today ?? ''}`;
+  const xpEarned = XP_BY_KIND[input.kind] ?? XP_BY_KIND.task_done;
+
+  const milestoneStreak = !!input.streak && input.streak.current > 0 && input.streak.current % 7 === 0;
+  const big = !!input.leveledUp || !!input.clearedTheDay || milestoneStreak;
+
+  const headline = input.reported
+    ? pick(REPORTED_HEADLINES, seed)
+    : input.clearedTheDay
+      ? 'Dia fechado.'
+      : pick(DONE_HEADLINES, seed);
+
+  const detail = input.leveledUp
+    ? 'Subiu de nível.'
+    : milestoneStreak
+      ? `${input.streak?.current} dias seguidos.`
+      : input.clearedTheDay
+        ? 'Não sobrou nada para hoje.'
+        : null;
+
+  return {
+    xpEarned,
+    headline,
+    detail,
+    animation: input.leveledUp ? 'confetti' : milestoneStreak ? 'streak' : input.clearedTheDay ? 'confetti' : input.reported ? 'pulse' : 'spark',
+    intensity: big ? 'big' : 'small',
+  };
+}
+
 export type Celebration = {
   headline: string;
   detail: string;

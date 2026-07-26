@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   XP_BY_KIND,
   buildCelebration,
+  buildCompletionReward,
   computeProgress,
   computeStreak,
   levelFromXp,
@@ -112,6 +113,67 @@ const day = (n: number) => `2026-07-${String(n).padStart(2, '0')}`;
       /voc[êe] (?:perdeu|falhou|deixou|não|nao)|perdeu a sequ|nao desista|não desista|volte|cobran|prometeu|devia|deveria/i,
       texto,
     );
+  }
+}
+
+// Cada item concluído devolve retorno imediato — o retorno de dopamina do fechar.
+{
+  const streak = computeStreak({ events: [{ date: day(22), kind: 'task_done' }], today: day(22) });
+
+  const simples = buildCompletionReward({ title: 'Enviar relatório', kind: 'task_done', streak, today: day(22) });
+  assert.equal(simples.xpEarned, XP_BY_KIND.task_done);
+  assert.equal(simples.animation, 'spark');
+  assert.equal(simples.intensity, 'small');
+  assert.ok(simples.headline.length <= 24, 'a frase tem que caber antes da pessoa sair da tela');
+
+  // Itens diferentes não mostram sempre a mesma frase.
+  const variacoes = new Set(
+    ['Lavar louça', 'Ligar pro médico', 'Enviar relatório', 'Caminhar', 'Estudar', 'Pagar conta']
+      .map((title) => buildCompletionReward({ title, kind: 'task_done', today: day(22) }).headline),
+  );
+  assert.ok(variacoes.size > 1, 'a mesma frase toda vez para de dar retorno');
+
+  // A mesma conclusão mostra sempre a mesma frase — não pisca a cada render.
+  assert.equal(
+    buildCompletionReward({ title: 'Enviar relatório', kind: 'task_done', today: day(22) }).headline,
+    simples.headline,
+  );
+
+  // Contar algo que já fez tem reconhecimento próprio.
+  const relatado = buildCompletionReward({ title: 'Lavar a louça', kind: 'task_done', reported: true, today: day(22) });
+  assert.equal(relatado.animation, 'pulse');
+  assert.ok(relatado.xpEarned > 0, 'o que ela fez sozinha também pontua');
+
+  // Marcos ganham comemoração grande.
+  const subiuNivel = buildCompletionReward({ title: 'Caminhada', kind: 'habit_done', leveledUp: true, today: day(22) });
+  assert.equal(subiuNivel.animation, 'confetti');
+  assert.equal(subiuNivel.intensity, 'big');
+  assert.equal(subiuNivel.detail, 'Subiu de nível.');
+
+  const fechouODia = buildCompletionReward({ title: 'Última tarefa', kind: 'task_done', clearedTheDay: true, today: day(22) });
+  assert.equal(fechouODia.headline, 'Dia fechado.');
+  assert.equal(fechouODia.intensity, 'big');
+
+  const seteDias = computeStreak({
+    events: Array.from({ length: 7 }, (_, index) => ({ date: day(16 + index), kind: 'habit_done' as const })),
+    today: day(22),
+  });
+  const marco = buildCompletionReward({ title: 'Caminhada', kind: 'habit_done', streak: seteDias, today: day(22) });
+  assert.equal(marco.animation, 'streak');
+  assert.match(String(marco.detail), /7 dias seguidos/);
+}
+
+// Nenhuma frase de conclusão compara com o que faltou nem cobra.
+{
+  const textos: string[] = [];
+  for (const title of ['Lavar louça', 'Ligar pro médico', 'Enviar relatório', 'Caminhar', 'Estudar', 'Pagar conta', 'Alongar']) {
+    for (const reported of [false, true]) {
+      const reward = buildCompletionReward({ title, kind: 'task_done', reported, today: day(22) });
+      textos.push(`${reward.headline} ${reward.detail ?? ''}`);
+    }
+  }
+  for (const texto of textos) {
+    assert.doesNotMatch(texto, /faltou|faltam|ainda|ontem|ao menos|pelo menos|finalmente|at[ée] que enfim|demorou/i, texto);
   }
 }
 
