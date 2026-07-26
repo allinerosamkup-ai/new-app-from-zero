@@ -21,7 +21,7 @@ describe("onboarding flow", () => {
     expect(JSON.stringify(draft)).not.toContain("Cansada mas esperançosa");
   });
 
-  it("restarts onboarding by clearing only the draft before opening the first step", () => {
+  it("restarts onboarding by clearing only the draft before opening the guided flow", () => {
     const calls: string[] = [];
 
     restartOnboardingFlow(
@@ -29,7 +29,7 @@ describe("onboarding flow", () => {
       (path) => calls.push(`navigate:${path}`),
     );
 
-    expect(calls).toEqual(["reset", "navigate:/onboarding"]);
+    expect(calls).toEqual(["reset", "navigate:/onboarding/guiado"]);
   });
 
   it("builds the backend payload from new answers", () => {

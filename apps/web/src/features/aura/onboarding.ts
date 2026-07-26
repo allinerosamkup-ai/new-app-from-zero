@@ -123,7 +123,7 @@ export function restartOnboardingFlow(
   navigate: (path: string) => void,
 ): void {
   resetDraft();
-  navigate("/onboarding");
+  navigate("/onboarding/guiado");
 }
 
 function clean(value: unknown): string {

@@ -14,6 +14,7 @@ import { isNativeShell, requestNativeHealthConnectSync } from "../utils/native-s
 import { supabase } from "../lib/supabase";
 import { ReferralCard } from "../components/ReferralCard";
 import { restartOnboardingFlow } from "../features/aura/onboarding";
+import { ImportRoutineDialog } from "../features/routine-builder/import-routine-dialog";
 import "../styles/aura.css";
 
 type GCalCalendar = {
@@ -591,6 +592,7 @@ export function PreferencesPage() {
     signOut,
   } = useAuraStore();
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [routineImportOpen, setRoutineImportOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [prefUserId, setPrefUserId] = useState<string | null>(null);
   useEffect(() => {
@@ -1280,6 +1282,38 @@ export function PreferencesPage() {
           <div
             className="config-row"
             style={{ cursor: "pointer" }}
+            onClick={() => setRoutineImportOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setRoutineImportOpen(true);
+              }
+            }}
+          >
+            <div className="config-row-label">
+              <div className="icon-bg" style={{ background: "rgba(99,152,169,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6" />
+                  <path d="M12 18v-6" />
+                  <path d="m9 15 3-3 3 3" />
+                </svg>
+              </div>
+              <div>
+                <p className="config-row-text">{t("config.routineImport.action")}</p>
+                <p className="config-row-sub">{t("config.routineImport.actionDescription")}</p>
+              </div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </div>
+          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
+          <div
+            className="config-row"
+            style={{ cursor: "pointer" }}
             onClick={handleRedoOnboarding}
             role="button"
             tabIndex={0}
@@ -1344,6 +1378,14 @@ export function PreferencesPage() {
         open={phaseLegendOpen}
         onClose={() => setPhaseLegendOpen(false)}
         currentPhase={cycleReport.phase === "insufficient_data" ? undefined : cycleReport.phase}
+      />
+      <ImportRoutineDialog
+        open={routineImportOpen}
+        onClose={() => setRoutineImportOpen(false)}
+        onReview={() => {
+          setRoutineImportOpen(false);
+          navigate("/routine-builder");
+        }}
       />
     </div>
   );
