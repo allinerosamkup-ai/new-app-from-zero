@@ -54,6 +54,21 @@ const fabricatedUngroundedActionPatterns = [
   /gera sugest[aã]o de ancoragem baseada em hor[aá]rio e fase/i,
 ];
 
+/**
+ * Gamificação incentiva, não cobra. Copy que culpa ausência, ameaça perda ou manda
+ * a pessoa voltar transforma recompensa em dívida — exatamente o que quebra o
+ * público que a Airia atende.
+ */
+const nagginRewardCopyPatterns = [
+  /voc[eê]\s+perdeu\s+(?:sua\s+)?(?:sequ[eê]ncia|streak|ofensiva)/i,
+  /(?:sequ[eê]ncia|streak|ofensiva)\s+(?:perdida|quebrada|zerada)/i,
+  /n[aã]o\s+desista/i,
+  /voc[eê]\s+(?:falhou|fracassou|deixou\s+de)/i,
+  /volte\s+(?:logo|hoje|agora)\s+(?:ou|antes)/i,
+  /voc[eê]\s+(?:prometeu|devia|deveria)\s+/i,
+  /sentimos\s+sua\s+falta/i,
+];
+
 const pseudoTherapeuticInferencePatterns = [
   /serve de escudo/i,
   /moeda de troca/i,
@@ -160,6 +175,16 @@ function run() {
   const decisionEngine = readFileSync(path.join(repoRoot, 'apps/backend/src/services/decision-engine.service.ts'), 'utf8');
   for (const pattern of fabricatedUngroundedActionPatterns) {
     if (pattern.test(decisionEngine)) groundingGuardrailMatches.push(`decision-engine.service.ts matches ${pattern}`);
+  }
+
+  const rewards = readFileSync(path.join(repoRoot, 'apps/backend/src/services/progress-rewards.service.ts'), 'utf8');
+  for (const pattern of nagginRewardCopyPatterns) {
+    if (pattern.test(rewards)) groundingGuardrailMatches.push(`progress-rewards.service.ts matches ${pattern}`);
+  }
+  for (const required of ['PROTECTED_PHASES', 'Recolhimento', 'Pausa', 'isProtectedToday']) {
+    if (!rewards.includes(required)) {
+      groundingGuardrailMatches.push(`progress-rewards.service.ts must keep streak protection (${required})`);
+    }
   }
 
   const airiaMethod = readFileSync(path.join(repoRoot, 'apps/backend/src/lib/airia-method.ts'), 'utf8');

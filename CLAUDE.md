@@ -53,13 +53,27 @@ packages/
 - `DailyContext` reúne agenda pendente/feita, hábitos pendentes/feitos, metas ativas/concluídas, subtarefas feitas, sugestões recentes, feedback de ações e memória RAG relevante.
 - Cérebro operacional: `apps/backend/src/services/decision-engine.service.ts`.
 - Agenda adaptativa: `apps/backend/src/services/adaptive-agenda-engine.service.ts`, exposta por `AgendaAdaptationService`.
-- Toda sugestão operacional precisa ter âncora em algo real de hoje: agenda pendente, hábito devido, meta ativa ou ação explicitamente aceita.
+- **A Airia decide e preenche.** Quando a fala contém um item — compromisso marcado, prazo, algo que pediram à usuária, intenção de retomar algo — ela entrega o item montado: título, data, hora e duração já resolvidos. Devolver a lacuna como pergunta para quem já contou o que precisa fazer é transferir esforço para quem está sem combustível.
+- Âncora de uma sugestão pode ser agenda pendente, hábito devido, meta ativa, ação aceita **ou o que a usuária acabou de contar**. O que não vale é sugestão tirada do relógio ("um café às 9h") — isso é enchimento, não ajuda.
+- O que a Airia não inventa: o título do item. Sem saber o que é a coisa, ela faz uma pergunta curta — só essa.
 - Memória RAG serve para explicar padrão, compreender o usuario,seus compromiisos, suas questoes emocinais, tudo que o usuario compartilhar com o app
 - Feedback de ações fica em `AiActionFeedbackService` e bloqueia repetição de ações feitas, excluídas, rejeitadas, puladas ou agendadas.
 - O Decision Brain separa `real_commitment`, `suggested_commitment`, `insight_only`, `blocked` e autorização de notificação.
-- Sugestão de compromisso pode existir com horário/bloco sugerido, mas só vira compromisso real depois de confirmação. Sugestão não confirmada não notifica.
-- Preview de adaptação da agenda fica em `AgendaAdaptationService`; ele não aplica mudança estrutural sozinho.
+- Sugestão de compromisso entra no dia sozinha, com desfazer e ajustar à mão. **Criar não é o mesmo que notificar:** gravar um bloco é barato, tocar o celular não é — `notificationAllowed` continua sendo decisão separada.
+- Continuam exigindo aval humano: âncora protegida (consulta, compromisso com terceiro, evento importado do Google) e qualquer ação destrutiva. Pedido de escuta, negação explícita e instrução citada de documento continuam bloqueando criação.
+- `AgendaAdaptationService` aplica sozinho o que não exige aval humano. Chamado sem `selectedDecisionIds`, aplica tudo que é elegível; lista vazia explícita significa não aplicar nada.
 - Adiamento de bloco no Planner registra `timeline.block_postponed`, conta recorrência por bloco e entra no grounding como `postponedActions`.
+
+## Execução e Progresso
+- Motor de execução passo a passo em `apps/backend/src/services/routine-run.service.ts`: um passo por vez, prévia de uma linha do próximo, pausa que preserva tempo corrido, abandono após 15 min sem toque preservando o que já foi feito.
+- Duração real por passo alimenta a calibração de cegueira temporal. O ajuste é do app, nunca da pessoa: a mensagem é "já ajustei", não "você demora".
+- Decomposição automática em `task-decomposition.service.ts`: verbo que descreve resultado ou duração acima de 30 min quebram o item em 2 a 5 passos de 5 a 15 min, cada um com o primeiro movimento físico.
+- Progresso em `progress-rewards.service.ts`. **Gamificação incentiva, não cobra** — são coisas diferentes:
+  - recompensa por aparecer, nunca punição por faltar;
+  - fase de Recolhimento e Pausa não quebra sequência, ela atravessa o dia ruim;
+  - ausência sem fase protegida não gera mensagem nenhuma;
+  - rotina largada no meio também paga, porque começar é a parte cara;
+  - celebração fala do que aconteceu e nunca do que faltou.
 
 ## Status do Design System — Aura Editorial Clean
 - Fundo base: branco/off-white, com uso de cor apenas como acento.
@@ -68,6 +82,7 @@ packages/
 - Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups legados.
 
 ## Atualizações Recentes
+- **2026-07-26:** Virada de captura: a Airia passou a montar tarefa, compromisso, hábito e meta a partir do contexto contado, com agendamento automático, decomposição automática de tarefa vaga, motor de execução passo a passo e progresso que incentiva sem cobrar.
 - **2026-05-10:** Guardrails reais de produto ampliados: bloqueio de copy de venda/demo no app, fluxo falso, alegação clínica perigosa, `setHours()` em serviços de agenda, contrato único de `riskSafety` e checklist de release integrado.
 - **2026-05-10:** Skill local `skills/airia-pr-review/SKILL.md` criada para tornar obrigatoria a revisao Airia baseada em evidencias antes de finalizar PRs/features/deploys.
 - **2026-05-10:** Guardrails de revisão adicionados: `product-guardrails.test.ts`, ampliação de `risk-safety.test.ts` e checklist em `docs/product/pr-review-skill-roadmap.md`.
