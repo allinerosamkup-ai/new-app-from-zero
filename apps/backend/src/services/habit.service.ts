@@ -3,6 +3,26 @@ import { startOfDay, subDays, isSameDay } from 'date-fns';
 
 const prisma = new PrismaClient();
 
+export function parseHabitReferenceDate(value: string | Date | undefined): Date {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new Error('habit_date_invalid');
+    return value;
+  }
+  if (!value) return new Date();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) throw new Error('habit_date_invalid');
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0, 0);
+  if (
+    parsed.getFullYear() !== Number(year)
+    || parsed.getMonth() !== Number(month) - 1
+    || parsed.getDate() !== Number(day)
+  ) {
+    throw new Error('habit_date_invalid');
+  }
+  return parsed;
+}
+
 export interface CreateHabitInput {
   userId: string;
   title: string;

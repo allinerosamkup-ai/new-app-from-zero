@@ -39,6 +39,10 @@ function addDays(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
+function utcDay(date: string): number {
+  return new Date(`${date}T12:00:00.000Z`).getUTCDay();
+}
+
 function minutesBetweenTimes(startTime: string, endTime: string): number {
   const [startHours, startMinutes] = startTime.split(':').map(Number);
   const [endHours, endMinutes] = endTime.split(':').map(Number);
@@ -306,6 +310,7 @@ export class RoutineBuilderService {
         constraints: {
           ...constraints,
           declaredState: answers.currentState,
+          availability: answers.availability,
           energyDrains: answers.energyDrains,
           energyRestorers: answers.energyRestorers,
         },
@@ -414,6 +419,24 @@ export class RoutineBuilderService {
       declaredState: readDeclaredState(sessionConstraints.declaredState),
     });
     const limits = sessionConstraints.limits ?? {};
+    const guidedAvailability = Array.isArray(sessionConstraints.availability)
+      ? sessionConstraints.availability
+          .filter((window: any) => (
+            Number.isInteger(window?.dayOfWeek)
+            && window.dayOfWeek >= 0
+            && window.dayOfWeek <= 6
+            && /^([01]\d|2[0-3]):[0-5]\d$/.test(window.startTime)
+            && /^([01]\d|2[0-3]):[0-5]\d$/.test(window.endTime)
+            && window.endTime > window.startTime
+          ))
+          .flatMap((window: any) => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))
+            .filter((date) => utcDay(date) === window.dayOfWeek)
+            .map((date) => ({
+              date,
+              startTime: window.startTime,
+              endTime: window.endTime,
+            })))
+      : [];
     const plan = RoutineComposerService.compose({
       weekStart,
       items,
@@ -422,6 +445,7 @@ export class RoutineBuilderService {
         sleepTime: limits.sleepTime ?? '23:00',
         maxDailyLoadMinutes: limits.maxDailyLoadMinutes ?? 360,
         unavailable: Array.isArray(limits.unavailable) ? limits.unavailable : [],
+        available: guidedAvailability,
       },
       existingBlocks: blocks.map((block: any) => ({
         id: block.id,

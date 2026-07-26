@@ -22,6 +22,7 @@ import {
 } from "../components/planner/ConflictResolutionBanner";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
+import type { Habit } from "../features/aura/types";
 import { TaskListView } from "../features/planner/task-list-view";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
@@ -1954,6 +1955,9 @@ export function PlannerPage() {
   const [offsetDias, setOffsetDias] = useState(0);
   const [plannerTasks, setPlannerTasks] = useState<PlannerTask[]>([]);
   const [plannerLoading, setPlannerLoading] = useState(false);
+  const [plannerLoadError, setPlannerLoadError] = useState(false);
+  const [plannerReloadTick, setPlannerReloadTick] = useState(0);
+  const [plannerHabitsForDate, setPlannerHabitsForDate] = useState<Habit[]>([]);
   const [plannerView, setPlannerView] = useState<"timeline" | "tasks">("timeline");
   const [focusActionTick, setFocusActionTick] = useState(0);
   const [showNewForm, setShowNewForm] = useState(false);
@@ -2112,12 +2116,16 @@ export function PlannerPage() {
 
   const plannerSummary = plannerLoading
     ? "Montando a visualização da sua agenda."
-    : plannerTasks.length === 0
+    : plannerLoadError
+      ? l("Não consegui carregar este dia. Sua agenda não foi tratada como vazia.", "I couldn't load this day. Your schedule was not treated as empty.")
+      : plannerTasks.length === 0
       ? "Seu dia ainda está livre, mas a timeline continua visível para você organizar sem cair numa tela vazia."
       : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""} organizado${plannerTasks.length > 1 ? "s" : ""} na sua agenda de hoje.`;
   const plannerBadgeLabel = plannerLoading
     ? "Carregando"
-    : plannerTasks.length === 0
+    : plannerLoadError
+      ? l("Falha ao carregar", "Loading failed")
+      : plannerTasks.length === 0
       ? "Agenda livre"
       : `${plannerTasks.length} bloco${plannerTasks.length > 1 ? "s" : ""}`;
 
@@ -2126,15 +2134,22 @@ export function PlannerPage() {
   const dueHabitsForDate = useMemo(() => {
     const parts = selectedDateKey.split("-").map(Number);
     if (parts.length !== 3 || parts.some(Number.isNaN)) return [];
-    return (state.habits || []).filter((habit) => {
+    const habits = selectedDateKey === getLocalDateKey()
+      ? (state.habits || [])
+      : plannerHabitsForDate;
+    return habits.filter((habit) => {
       if (!isHabitDueOnDate(habit, selectedDateKey)) return false;
       if (getHabitCompletionCount(habit, selectedDateKey) >= getHabitTargetCount(habit)) return false;
       return true;
     });
-  }, [state.habits, selectedDateKey]);
+  }, [plannerHabitsForDate, state.habits, selectedDateKey]);
 
   const [animatingHabitIds, setAnimatingHabitIds] = useState<string[]>([]);
   async function handleToggleHabit(habitId: string) {
+    if (selectedDateKey !== getLocalDateKey()) {
+      showError(l("A conclusão é registrada no dia em que você faz o hábito.", "Completion is recorded on the day you do the habit."));
+      return;
+    }
     if (animatingHabitIds.includes(habitId)) return;
     setAnimatingHabitIds((prev) => [...prev, habitId]);
     try {
@@ -2179,12 +2194,17 @@ export function PlannerPage() {
 
     async function loadPlannerTasks() {
       setPlannerLoading(true);
+      setPlannerLoadError(false);
+      setPlannerTasks([]);
+      setPlannerHabitsForDate([]);
       try {
-        const [timeline, gcalRes] = await Promise.all([
+        const [timeline, gcalRes, habits] = await Promise.all([
            api.get(`/timeline/${selectedDateKey}`),
-           api.get(`/gcal/events?date=${selectedDateKey}`).catch(() => ({ connected: false, events: [] }))
+           api.get(`/gcal/events?date=${selectedDateKey}`).catch(() => ({ connected: false, events: [] })),
+           api.get(`/habits?date=${selectedDateKey}`),
         ]);
         if (ignore) return;
+        setPlannerHabitsForDate(Array.isArray(habits) ? habits : []);
         
         let merged: any[] = Array.isArray(timeline) ? timeline.map(mapTaskFromApi) : [];
         
@@ -2209,6 +2229,7 @@ export function PlannerPage() {
       } catch (error) {
         if (!ignore) {
           console.error("[planner/load] Failed to load timeline", error);
+          setPlannerLoadError(true);
         }
       } finally {
         if (!ignore) {
@@ -2222,7 +2243,7 @@ export function PlannerPage() {
     return () => {
       ignore = true;
     };
-  }, [selectedDateKey]);
+  }, [plannerReloadTick, selectedDateKey]);
 
   useEffect(() => {
     if (plannerLoading) return;
@@ -3244,7 +3265,24 @@ export function PlannerPage() {
 
       <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
 
-      {plannerView === "tasks" ? (
+      {!plannerLoading && plannerLoadError && (
+        <AiriaCard tone="default" style={{ marginBottom: 22 }}>
+          <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 850, color: "var(--text-1)" }}>
+            {l("Este dia não foi carregado", "This day could not be loaded")}
+          </p>
+          <p style={{ margin: "0 0 12px", fontSize: 12, lineHeight: 1.55, color: "var(--text-2)" }}>
+            {l(
+              "Mantive a agenda sem afirmar que ela está vazia. Tente buscar os dados novamente.",
+              "The schedule was kept without assuming it is empty. Try loading the data again.",
+            )}
+          </p>
+          <AiriaButton type="button" variant="secondary" size="md" onClick={() => setPlannerReloadTick((value) => value + 1)}>
+            {l("Tentar novamente", "Try again")}
+          </AiriaButton>
+        </AiriaCard>
+      )}
+
+      {!plannerLoadError && (plannerView === "tasks" ? (
         <TaskListView
           tasks={plannerTasks}
           onOpen={openViewTask}
@@ -3446,13 +3484,17 @@ export function PlannerPage() {
                   <button
                     type="button"
                     onClick={() => void handleToggleHabit(habit.id)}
-                    aria-label={`Marcar ${habit.title} como feito`}
+                    disabled={selectedDateKey !== getLocalDateKey()}
+                    aria-label={selectedDateKey === getLocalDateKey()
+                      ? `Marcar ${habit.title} como feito`
+                      : `${habit.title} está previsto para este dia`}
                     style={{
                       width: 22,
                       height: 22,
                       borderRadius: 6,
                       flexShrink: 0,
-                      cursor: "pointer",
+                      cursor: selectedDateKey === getLocalDateKey() ? "pointer" : "default",
+                      opacity: selectedDateKey === getLocalDateKey() ? 1 : 0.45,
                       background: isAnimating ? "var(--accent-sage, #96C7B3)" : "transparent",
                       border: "2px solid var(--accent-sage, #96C7B3)",
                       display: "flex",
@@ -3470,7 +3512,7 @@ export function PlannerPage() {
                     </div>
                     {habit.reminderTime ? (
                       <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4, fontWeight: 500 }}>
-                        Lembrete às {habit.reminderTime}
+                        {l(`Previsto às ${habit.reminderTime}`, `Planned for ${habit.reminderTime}`)}
                       </div>
                     ) : null}
                   </div>
@@ -3710,7 +3752,7 @@ export function PlannerPage() {
         })}
       </div>
         </>
-      )}
+      ))}
 
       {/* FAB — Novo bloco */}
       {plannerView === "timeline" && (

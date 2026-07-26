@@ -35,6 +35,8 @@ O export inclui memórias canônicas, evidências, embeddings e Knowledge Graph.
 
 `RoutineBuildSession` guarda estado recuperável, itens classificados, perguntas, respostas, prévia e resultado da aplicação. O texto bruto da fonte é temporário: recebe expiração de uma hora, é apagado ao aplicar a rotina e também é limpo automaticamente pelo processo horário do backend.
 
+O onboarding guiado usa a mesma sessão persistente, mas não precisa guardar documento: escolhas de toque são convertidas diretamente em compromissos protegidos, hábitos, objetivos e referências de capacidade. A sessão pode ser retomada até a aplicação. Um novo pedido explícito da Aura invalida a restauração visual de uma sessão antiga para não misturar contextos.
+
 O histórico longitudinal participa apenas de duas decisões: explicar capacidade/padrão e impedir repetição. Ele não cria uma tarefa por conta própria. Itens do documento só ganham autoridade operacional depois da revisão da usuária; a confirmação final é aplicada atomicamente em `Objective`, `Habit` e `TimelineBlock`.
 
 Eventos do Montador registram apenas identificador da sessão, contagens, tipo de fonte e nível de capacidade. Conteúdo bruto, trechos do documento e respostas pessoais não entram em `EventLog`.

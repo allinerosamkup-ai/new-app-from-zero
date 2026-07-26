@@ -67,6 +67,15 @@ Gerencia a resposta em tempo real do diário usando Server-Sent Events (SSE). O 
 - `POST /api/routine-builder/sessions/:id/compose`: cruza agenda, hábitos e check-in e produz a semana.
 - `POST /api/routine-builder/sessions/:id/apply`: aplica metas, hábitos e blocos em uma transação idempotente.
 
+Regras do fluxo:
+- pedido simples para montar rotina abre o onboarding guiado por escolhas;
+- texto ou documento é opcional e sempre passa por revisão;
+- compromisso protegido mantém dia, horário e duração;
+- tarefa flexível usa prioridade, prazo, capacidade e espaço real;
+- hábito usa frequência, dias, janela e duração mínima/máxima;
+- conflito retorna alternativas de mover, reduzir ou adiar, sem aplicar sozinho;
+- uma nova solicitação não pode ser substituída por sessão antiga salva no navegador.
+
 ## Regras de Banco (Prisma)
 - Schema: `packages/database/prisma/schema.prisma`
 - Model `DailyCheckin`: Centraliza dados de humor, energia e ciclo biológico.

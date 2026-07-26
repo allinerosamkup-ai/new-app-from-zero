@@ -75,6 +75,7 @@ type ComposeInput = {
     sleepTime: string;
     maxDailyLoadMinutes: number;
     unavailable: Array<{ date: string; startTime: string; endTime: string; reason?: string | null }>;
+    available?: Array<{ date: string; startTime: string; endTime: string }>;
   };
   existingBlocks: RoutineExistingBlock[];
   existingHabits?: Array<{
@@ -120,6 +121,33 @@ function durationBetween(startTime: string, endTime: string): number {
 
 function overlaps(start: number, end: number, window: BusyWindow): boolean {
   return start < window.end + BUFFER_MINUTES && end + BUFFER_MINUTES > window.start;
+}
+
+function availableWindowsForDate(
+  date: string,
+  available: ComposeInput['limits']['available'],
+  fallback: BusyWindow,
+): BusyWindow[] {
+  if (!available || available.length === 0) return [fallback];
+  return available
+    .filter((window) => window.date === date)
+    .map((window) => ({
+      start: Math.max(fallback.start, toMinutes(window.startTime)),
+      end: Math.min(fallback.end, toMinutes(window.endTime)),
+    }))
+    .filter((window) => window.end > window.start);
+}
+
+function intersectWindows(left: BusyWindow[], right: BusyWindow[]): BusyWindow[] {
+  const intersections: BusyWindow[] = [];
+  for (const first of left) {
+    for (const second of right) {
+      const start = Math.max(first.start, second.start);
+      const end = Math.min(first.end, second.end);
+      if (end > start) intersections.push({ start, end });
+    }
+  }
+  return intersections;
 }
 
 function capacityDailyLimit(input: ComposeInput): number {
@@ -281,35 +309,44 @@ export class RoutineComposerService {
       const dates = habit.frequency === 'daily'
         ? weekDates
         : habit.frequency === 'weekly'
-          ? weekDates.filter((date) => habit.targetDays.includes(utcDay(date)))
-          : [weekDates[0]];
+          ? habit.targetDays.length > 0
+            ? weekDates.filter((date) => habit.targetDays.includes(utcDay(date)))
+            : weekDates
+          : weekDates.filter((date) => date.slice(8, 10) === '01');
       const duration = Math.max(5, habit.durationMinutes ?? 10);
       for (const date of dates) {
         const windows = busyByDate.get(date) ?? [];
         const habitWindow = defaultHabitWindow(habit, wake, sleep);
+        const allowedWindows = intersectWindows(
+          [habitWindow],
+          availableWindowsForDate(date, input.limits.available, { start: wake, end: sleep }),
+        );
         let placed = false;
-        for (let start = habitWindow.start; start + duration <= habitWindow.end; start += SLOT_STEP_MINUTES) {
-          const end = start + duration;
-          if (windows.some((window) => overlaps(start, end, window))) continue;
-          const committed = committedByDate.get(date) ?? 0;
-          const used = flexibleByDate.get(date) ?? 0;
-          if (committed + used + duration > dayLimit) continue;
-          entries.push({
-            id: `existing-habit:${habit.id}:${date}`,
-            kind: 'habit',
-            date,
-            startTime: toTime(start),
-            endTime: toTime(end),
-            title: habit.title,
-            durationMinutes: duration,
-            isFixed: false,
-            persist: false,
-            reason: 'Hábito já existente mantido somente no dia em que é devido.',
-          });
-          markBusy(date, start, end);
-          flexibleByDate.set(date, (flexibleByDate.get(date) ?? 0) + duration);
-          placed = true;
-          break;
+        for (const allowed of allowedWindows) {
+          for (let start = allowed.start; start + duration <= allowed.end; start += SLOT_STEP_MINUTES) {
+            const end = start + duration;
+            if (windows.some((window) => overlaps(start, end, window))) continue;
+            const committed = committedByDate.get(date) ?? 0;
+            const used = flexibleByDate.get(date) ?? 0;
+            if (committed + used + duration > dayLimit) continue;
+            entries.push({
+              id: `existing-habit:${habit.id}:${date}`,
+              kind: 'habit',
+              date,
+              startTime: toTime(start),
+              endTime: toTime(end),
+              title: habit.title,
+              durationMinutes: duration,
+              isFixed: false,
+              persist: false,
+              reason: 'Hábito já existente mantido somente no dia em que é devido.',
+            });
+            markBusy(date, start, end);
+            flexibleByDate.set(date, (flexibleByDate.get(date) ?? 0) + duration);
+            placed = true;
+            break;
+          }
+          if (placed) break;
         }
         if (!placed) {
           unscheduled.push({
@@ -333,38 +370,46 @@ export class RoutineComposerService {
       for (const date of preferredDates) {
         if (!withinWeek(date, weekDates)) continue;
         const windows = busyByDate.get(date) ?? [];
-        const startBoundary = item.timeWindow ? Math.max(wake, toMinutes(item.timeWindow.startTime)) : wake;
-        const endBoundary = item.timeWindow ? Math.min(sleep, toMinutes(item.timeWindow.endTime)) : sleep;
-        for (const duration of durations) {
-          const used = flexibleByDate.get(date) ?? 0;
-          const committed = committedByDate.get(date) ?? 0;
-          if (committed + used + duration > dayLimit) continue;
-          for (let start = startBoundary; start + duration <= endBoundary; start += SLOT_STEP_MINUTES) {
-            const end = start + duration;
-            if (windows.some((window) => overlaps(start, end, window))) continue;
-            const requested = item.durationMinutes ?? preferredDuration;
-            const reduced = requested > duration;
-            entries.push({
-              id: `${kind}:${item.id}:${date}`,
-              sourceItemId: item.id,
-              kind,
-              date,
-              startTime: toTime(start),
-              endTime: toTime(end),
-              title: item.title,
-              durationMinutes: duration,
-              isFixed: false,
-              persist: true,
-              reason: reduced
-                ? `${input.capacity.reason} Bloco reduzido para ${duration} minutos dentro do limite aceito, sem alterar compromissos protegidos.`
-                : `${input.capacity.reason} Alocado em uma janela livre, respeitando compromissos e limite diário.`,
-              priority: item.priority ?? 'medium',
-              deadline: item.deadline ?? null,
-              timeWindow: item.timeWindow ?? null,
-            });
-            markBusy(date, start, end);
-            flexibleByDate.set(date, used + duration);
-            return true;
+        const itemWindow = {
+          start: item.timeWindow ? Math.max(wake, toMinutes(item.timeWindow.startTime)) : wake,
+          end: item.timeWindow ? Math.min(sleep, toMinutes(item.timeWindow.endTime)) : sleep,
+        };
+        const allowedWindows = intersectWindows(
+          [itemWindow],
+          availableWindowsForDate(date, input.limits.available, { start: wake, end: sleep }),
+        );
+        for (const allowed of allowedWindows) {
+          for (const duration of durations) {
+            const used = flexibleByDate.get(date) ?? 0;
+            const committed = committedByDate.get(date) ?? 0;
+            if (committed + used + duration > dayLimit) continue;
+            for (let start = allowed.start; start + duration <= allowed.end; start += SLOT_STEP_MINUTES) {
+              const end = start + duration;
+              if (windows.some((window) => overlaps(start, end, window))) continue;
+              const requested = item.durationMinutes ?? preferredDuration;
+              const reduced = requested > duration;
+              entries.push({
+                id: `${kind}:${item.id}:${date}`,
+                sourceItemId: item.id,
+                kind,
+                date,
+                startTime: toTime(start),
+                endTime: toTime(end),
+                title: item.title,
+                durationMinutes: duration,
+                isFixed: false,
+                persist: true,
+                reason: reduced
+                  ? `${input.capacity.reason} Bloco reduzido para ${duration} minutos dentro do limite aceito, sem alterar compromissos protegidos.`
+                  : `${input.capacity.reason} Alocado em uma janela livre, respeitando compromissos e limite diário.`,
+                priority: item.priority ?? 'medium',
+                deadline: item.deadline ?? null,
+                timeWindow: item.timeWindow ?? null,
+              });
+              markBusy(date, start, end);
+              flexibleByDate.set(date, used + duration);
+              return true;
+            }
           }
         }
       }
@@ -443,9 +488,11 @@ export class RoutineComposerService {
       if (recurrence.frequency === 'weekly') {
         const selectedDays = recurrence.daysOfWeek ?? [];
         dates = weekDates.filter((date) => selectedDays.includes(utcDay(date)));
-        if (dates.length === 0 && recurrence.timesPerWeek) dates = weekDates.slice(0, recurrence.timesPerWeek);
+        if (dates.length === 0) dates = weekDates.slice(0, recurrence.timesPerWeek ?? 1);
       }
-      if (recurrence.frequency === 'monthly') dates = [weekDates[0]];
+      if (recurrence.frequency === 'monthly') {
+        dates = weekDates.filter((date) => date.slice(8, 10) === '01');
+      }
       for (const date of dates) {
         if (!placeFlexible(item, [date], 'habit')) {
           unscheduled.push({

@@ -67,7 +67,11 @@ async function run(): Promise<void> {
     today: '2026-07-27',
     answers: {
       lifeAreas: ['work'],
-      availability: [],
+      availability: [{
+        dayOfWeek: 1,
+        startTime: '13:00',
+        endTime: '15:00',
+      }],
       fixedCommitments: [{
         title: 'Aula de inglês',
         dayOfWeek: 4,
@@ -76,7 +80,7 @@ async function run(): Promise<void> {
       }],
       energyDrains: [],
       energyRestorers: [],
-      intentions: [],
+      intentions: ['produce'],
       selectedHabits: [],
       currentState: { mood: 5, energy: 4, focus: 4, sleepQuality: 'regular' },
     },
@@ -84,6 +88,11 @@ async function run(): Promise<void> {
   const guidedCommitment = guidedSubmitted.items.find((item: any) => item.kind === 'calendar');
   assert.equal(guidedCommitment?.durationMinutes, 90, 'guided commitment must preserve its real duration');
   assert.equal(guidedCommitment?.priority, 'urgent');
+  assert.deepEqual(guidedSubmitted.constraints?.availability, [{
+    dayOfWeek: 1,
+    startTime: '13:00',
+    endTime: '15:00',
+  }]);
   const guidedComposed = await service.compose('user-1', 'session-1');
   const guidedFixedEntry = guidedComposed.draftPlan.entries.find(
     (entry: any) => entry.sourceItemId === guidedCommitment?.id,
@@ -92,6 +101,12 @@ async function run(): Promise<void> {
   assert.equal(guidedFixedEntry?.startTime, '15:00');
   assert.equal(guidedFixedEntry?.endTime, '16:30');
   assert.equal(guidedFixedEntry?.isFixed, true);
+  const guidedFirstStep = guidedComposed.draftPlan.entries.find(
+    (entry: any) => entry.title === 'Escrever qual é a próxima coisa a avançar',
+  );
+  assert.equal(guidedFirstStep?.date, '2026-07-27');
+  assert.equal(guidedFirstStep?.startTime >= '13:00', true);
+  assert.equal(guidedFirstStep?.endTime <= '15:00', true);
 
   const created = await service.createSession('user-1', {
     focus: 'Organizar a mudança', weekStart: '2026-07-27', timezone: 'America/Sao_Paulo', locale: 'pt-BR',

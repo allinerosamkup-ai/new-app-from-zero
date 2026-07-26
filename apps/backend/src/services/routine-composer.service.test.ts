@@ -244,4 +244,142 @@ function item(overrides: Partial<RoutineClassifiedItem>): RoutineClassifiedItem 
   assert.equal(conflict?.alternatives[1].durationMinutes, 15);
 }
 
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [item({
+      id: 'monthly-new',
+      kind: 'habit',
+      title: 'Revisar orçamento mensal',
+      durationMinutes: 20,
+      recurrence: { frequency: 'monthly', daysOfWeek: [], interval: 1 },
+    })],
+    limits: { wakeTime: '07:00', sleepTime: '23:00', maxDailyLoadMinutes: 360, unavailable: [] },
+    existingBlocks: [],
+    existingHabits: [{
+      id: 'monthly-existing',
+      title: 'Fechar o mês',
+      frequency: 'monthly',
+      targetDays: [],
+      durationMinutes: 10,
+    }],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+
+  assert.deepEqual(
+    plan.entries.filter((entry) => entry.sourceItemId === 'monthly-new').map((entry) => entry.date),
+    ['2026-08-01'],
+  );
+  assert.deepEqual(
+    plan.entries.filter((entry) => entry.id.startsWith('existing-habit:monthly-existing')).map((entry) => entry.date),
+    ['2026-08-01'],
+  );
+
+  const weekWithoutFirstDay = RoutineComposerService.compose({
+    weekStart: '2026-08-03',
+    items: [item({
+      id: 'monthly-new',
+      kind: 'habit',
+      title: 'Revisar orçamento mensal',
+      durationMinutes: 20,
+      recurrence: { frequency: 'monthly', daysOfWeek: [], interval: 1 },
+    })],
+    limits: { wakeTime: '07:00', sleepTime: '23:00', maxDailyLoadMinutes: 360, unavailable: [] },
+    existingBlocks: [],
+    existingHabits: [{
+      id: 'monthly-existing',
+      title: 'Fechar o mês',
+      frequency: 'monthly',
+      targetDays: [],
+      durationMinutes: 10,
+    }],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+
+  assert.equal(weekWithoutFirstDay.entries.some((entry) => entry.sourceItemId === 'monthly-new'), false);
+  assert.equal(weekWithoutFirstDay.entries.some((entry) => entry.id.startsWith('existing-habit:monthly-existing')), false);
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [item({ id: 'available-task', durationMinutes: 30 })],
+    limits: {
+      wakeTime: '07:00',
+      sleepTime: '23:00',
+      maxDailyLoadMinutes: 360,
+      unavailable: [],
+      available: [{
+        date: '2026-07-28',
+        startTime: '14:00',
+        endTime: '15:00',
+      }],
+    },
+    existingBlocks: [],
+    existingHabits: [],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+
+  const task = plan.entries.find((entry) => entry.sourceItemId === 'available-task');
+  assert.equal(task?.date, '2026-07-28');
+  assert.equal(task?.startTime, '14:00');
+  assert.equal(task?.endTime, '14:30');
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [],
+    limits: {
+      wakeTime: '07:00',
+      sleepTime: '23:00',
+      maxDailyLoadMinutes: 360,
+      unavailable: [],
+    },
+    existingBlocks: [],
+    existingHabits: [{
+      id: 'weekly-open',
+      title: 'Alongar',
+      frequency: 'weekly',
+      targetDays: [],
+      durationMinutes: 10,
+      timeOfDay: 'morning',
+    }],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+
+  assert.equal(
+    plan.entries.filter((entry) => entry.id.startsWith('existing-habit:weekly-open')).length,
+    7,
+    'weekly habit without fixed weekdays follows the same every-day due rule used by the product',
+  );
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [item({
+      id: 'weekly-flexible',
+      kind: 'habit',
+      durationMinutes: 10,
+      recurrence: { frequency: 'weekly', daysOfWeek: [], timesPerWeek: 2, interval: 1 },
+    })],
+    limits: {
+      wakeTime: '07:00',
+      sleepTime: '23:00',
+      maxDailyLoadMinutes: 360,
+      unavailable: [],
+    },
+    existingBlocks: [],
+    existingHabits: [],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+
+  assert.equal(
+    plan.entries.filter((entry) => entry.sourceItemId === 'weekly-flexible').length,
+    2,
+    'new weekly habit without fixed weekdays respects its requested weekly count',
+  );
+}
+
 console.log('routine-composer.service tests passed');

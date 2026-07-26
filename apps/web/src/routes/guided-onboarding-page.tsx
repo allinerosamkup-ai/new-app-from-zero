@@ -26,9 +26,8 @@ const SESSION_KEY = 'airia:routine-builder:session';
 /**
  * Onboarding guiado — da primeira tela a uma rotina utilizável em poucos minutos.
  *
- * Só a etapa de nome abre teclado. Todo o resto se resolve tocando em cartão,
- * dia da semana ou escala. Documento não aparece aqui: fica em Configurações
- * para quem quiser importar depois.
+ * O fluxo inteiro se resolve tocando em cartão, dia da semana ou escala.
+ * Documento não aparece aqui: fica em Configurações para quem quiser importar.
  */
 
 type Step = {
@@ -76,6 +75,7 @@ export function GuidedOnboardingPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [answers, setAnswers] = useState<GuidedAnswers>(EMPTY_ANSWERS);
   const [submitting, setSubmitting] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -141,15 +141,18 @@ export function GuidedOnboardingPage() {
     setSubmitting(true);
     try {
       const { localDate } = getClientTimeContext();
-      const session = await routineBuilderApi.createGuided({
-        weekStart: localDate,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo',
-      });
+      let sessionId = activeSessionId;
+      if (!sessionId) {
+        const session = await routineBuilderApi.createGuided({
+          weekStart: localDate,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo',
+        });
+        sessionId = session.id;
+        setActiveSessionId(sessionId);
+        localStorage.setItem(SESSION_KEY, sessionId);
+      }
 
-      await routineBuilderApi.submitGuided(session.id, answers, localDate);
-
-      // A prévia retoma a sessão por aqui — mesmo contrato do fluxo de importação.
-      localStorage.setItem(SESSION_KEY, session.id);
+      await routineBuilderApi.submitGuided(sessionId, answers, localDate);
       navigate('/routine-builder');
     } catch (error) {
       showError(g('submitError'));

@@ -42,15 +42,25 @@ Uma experiência da Airia só está correta quando entrega, em conjunto:
 
 Pedidos amplos como “monte meu dia”, “organize minha semana” ou “transforme este documento em rotina” não usam o gerador rápido de blocos. Eles abrem uma sessão persistente do Montador de Rotina.
 
-O fluxo obrigatório é:
+O caminho principal é guiado e funciona sem documento: a usuária escolhe áreas da vida, compromissos protegidos, fatores de energia, intenções e hábitos em controles de toque. A Airia transforma essas escolhas em itens classificados e apresenta a semana pronta para revisão.
 
-1. receber texto, transcrição, TXT, Markdown, PDF, DOCX ou XLSX;
-2. separar meta, projeto, tarefa, hábito, compromisso, referência e preocupação sem inventar campos ausentes;
-3. bloquear duplicatas e itens concluídos, rejeitados, excluídos ou já agendados;
-4. permitir correção e exclusão antes de qualquer gravação;
-5. perguntar somente data, frequência ou resultado quando isso impedir a montagem;
-6. cruzar itens confirmados com agenda protegida, hábitos existentes e check-in recente;
-7. apresentar uma semana editável, incluindo o que não coube;
-8. criar metas, hábitos e blocos em uma única transação idempotente.
+Texto, transcrição, TXT, Markdown, PDF, DOCX ou XLSX são uma entrada opcional, acessível no montador e em Configurações. Quando existe uma fonte, o fluxo:
+
+1. separa meta, projeto, tarefa, hábito, compromisso, referência e preocupação sem inventar campos ausentes;
+2. bloqueia duplicatas e itens concluídos, rejeitados, excluídos ou já agendados;
+3. permite correção e exclusão antes de qualquer gravação;
+4. pergunta somente data, frequência ou resultado quando isso impedir a montagem;
+5. cruza itens confirmados com agenda protegida, hábitos existentes e check-in recente;
+6. apresenta uma semana editável, incluindo carga prevista, conflitos e alternativas;
+7. cria metas, hábitos e blocos em uma única transação idempotente.
+
+Um pedido simples como “monte minha rotina” abre o fluxo guiado. Uma lista ou documento com conteúdo operacional abre a revisão da fonte. Uma sessão antiga nunca substitui silenciosamente um novo pedido.
 
 Compromissos fixos nunca são movidos. Hábitos aparecem somente nos dias devidos. A fase e o check-in dimensionam carga e duração; o horário disponível serve para posicionar, nunca para inferir a fase da pessoa.
+
+Na aplicação:
+
+- Objetivo é resultado desejado; próxima ação é o movimento concreto ligado a ele.
+- Uma ação só entra no Planner depois de escolha explícita de quando executá-la.
+- Hábitos preservam frequência, dias, período e duração; adiar ou pular vale apenas para o dia.
+- A visão de tarefas do Planner é outra leitura da mesma fonte de agenda, não uma lista paralela.

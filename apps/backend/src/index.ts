@@ -6186,15 +6186,14 @@ JSON APENAS: {"profileSummary":"..."}`,
     const userId = (req as AuthRequest).userId;
     const { date } = req.query;
     try {
-      const { HabitService } = await import('./services/habit.service');
+      const { HabitService, parseHabitReferenceDate } = await import('./services/habit.service');
       const habits = date
-        ? await HabitService.getHabitsForDate(userId, new Date(String(date)))
+        ? await HabitService.getHabitsForDate(userId, parseHabitReferenceDate(String(date)))
         : await HabitService.listHabits(userId, new Date());
       return res.json(habits);
     } catch (error) {
-      console.error('[habits/list] Falling back to empty list:', error);
-      // Contingência: evitar quebrar o app quando houver mismatch de schema no banco.
-      return res.json([]);
+      console.error('[habits/list]', error);
+      return res.status(500).json({ error: 'Failed to fetch habits' });
     }
   });
 
@@ -6225,7 +6224,8 @@ JSON APENAS: {"profileSummary":"..."}`,
     const { id } = req.params;
     const { date, notes } = req.body;
     try {
-      const targetDate = date ? new Date(String(date)) : new Date();
+      const { HabitService, parseHabitReferenceDate } = await import('./services/habit.service');
+      const targetDate = parseHabitReferenceDate(date ? String(date) : undefined);
       const localDate = startOfDay(targetDate);
 
       // Pre-check: saber se já existia completion pra detectar nova conclusão
@@ -6234,7 +6234,6 @@ JSON APENAS: {"profileSummary":"..."}`,
       }).catch(() => null);
       const wasAlreadyCompleted = Boolean(prevCompletion);
 
-      const { HabitService } = await import('./services/habit.service');
       const habit = await HabitService.toggleCompletion(id, targetDate, userId, notes);
 
       // Memory: registra quando hábito é concluído pela primeira vez no dia (fire-and-forget)
