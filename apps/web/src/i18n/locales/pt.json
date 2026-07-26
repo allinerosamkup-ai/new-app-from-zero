@@ -250,9 +250,58 @@
     "cramps": "Cólica",
     "dayQuestion": "Como foi o dia hoje?",
     "notePlaceholder": "Um pensamento, uma situação... vai direto para o seu diário.",
-    "anotherSuggestion": "Gerar outra sugestão"
-    ,"emotions": { "radiant": "Radiante", "calm": "Calma", "happy": "Feliz", "anxious": "Ansiosa", "tired": "Cansada", "focused": "Focada", "sad": "Triste", "angry": "Irritada", "stressed": "Estressada", "sensitive": "Sensível", "exhausted": "Exausta", "agitated": "Agitada" },
-    "factors": { "slept_well": "Dormi bem (7h+)", "slept_little": "Dormi pouco (<6h)", "woke_up_night": "Acordei no meio da noite", "exercise": "Mexi o corpo", "no_exercise": "Fiquei parada o dia todo", "healthy_meal": "Me alimentei bem", "skipped_meals": "Pular refeições", "took_meds": "Tomei minha medicação", "forgot_meds": "Esqueci a medicação", "fresh_air": "Ar fresco / saí de casa", "good_talk": "Boa conversa", "kind_words": "Recebi palavras gentis", "support": "Me senti apoiada", "social_drain": "Interação social me drenou", "loneliness": "Solidão", "relationship_conflict": "Conflito no relacionamento", "focused_session": "Consegui me concentrar", "hyperfocus_stuck": "Hyperfoco travado — não consigo parar", "small_win": "Pequena vitória", "finished_task": "Tarefa concluída", "feeling_valued": "Me senti valorizada", "work_pressure": "Pressão / prazo apertado", "plan_changed": "Planos mudaram de última hora", "hard_decision": "Decisão difícil pendente", "dissociated": "Dissociada / no piloto automático", "low_dopamine": "Nada parece interessante", "stuck": "Paralisada — não consegui começar", "overwhelmed": "Sobrecarga mental", "self_trust": "Confiança em mim", "rest": "Descanso intencional", "fiz_algo_gosto": "Fiz algo que gosto", "financial_stress": "Estresse financeiro", "bad_news": "Notícia ruim", "pms_symptoms": "Sintomas de TPM", "heavy_period": "Ciclo intenso hoje" },
+    "anotherSuggestion": "Gerar outra sugestão",
+    "emotions": {
+      "radiant": "Radiante",
+      "calm": "Calma",
+      "happy": "Feliz",
+      "anxious": "Ansiosa",
+      "tired": "Cansada",
+      "focused": "Focada",
+      "sad": "Triste",
+      "angry": "Irritada",
+      "stressed": "Estressada",
+      "sensitive": "Sensível",
+      "exhausted": "Exausta",
+      "agitated": "Agitada"
+    },
+    "factors": {
+      "slept_well": "Dormi bem (7h+)",
+      "slept_little": "Dormi pouco (<6h)",
+      "woke_up_night": "Acordei no meio da noite",
+      "exercise": "Mexi o corpo",
+      "no_exercise": "Fiquei parada o dia todo",
+      "healthy_meal": "Me alimentei bem",
+      "skipped_meals": "Pular refeições",
+      "took_meds": "Tomei minha medicação",
+      "forgot_meds": "Esqueci a medicação",
+      "fresh_air": "Ar fresco / saí de casa",
+      "good_talk": "Boa conversa",
+      "kind_words": "Recebi palavras gentis",
+      "support": "Me senti apoiada",
+      "social_drain": "Interação social me drenou",
+      "loneliness": "Solidão",
+      "relationship_conflict": "Conflito no relacionamento",
+      "focused_session": "Consegui me concentrar",
+      "hyperfocus_stuck": "Hyperfoco travado — não consigo parar",
+      "small_win": "Pequena vitória",
+      "finished_task": "Tarefa concluída",
+      "feeling_valued": "Me senti valorizada",
+      "work_pressure": "Pressão / prazo apertado",
+      "plan_changed": "Planos mudaram de última hora",
+      "hard_decision": "Decisão difícil pendente",
+      "dissociated": "Dissociada / no piloto automático",
+      "low_dopamine": "Nada parece interessante",
+      "stuck": "Paralisada — não consegui começar",
+      "overwhelmed": "Sobrecarga mental",
+      "self_trust": "Confiança em mim",
+      "rest": "Descanso intencional",
+      "fiz_algo_gosto": "Fiz algo que gosto",
+      "financial_stress": "Estresse financeiro",
+      "bad_news": "Notícia ruim",
+      "pms_symptoms": "Sintomas de TPM",
+      "heavy_period": "Ciclo intenso hoje"
+    },
     "voiceUnsupported": "Seu navegador não suporta voz.",
     "voiceRetry": "Não ouvi bem. Tente de novo.",
     "voiceChoose": "Não consegui processar. Escolha uma opção abaixo.",
@@ -309,11 +358,26 @@
       "openJournal": "Abrir meu diário"
     },
     "reentry": {
-      "good": { "label": "Bons dias", "sub": "Me senti bem, produtiva, com energia" },
-      "stable": { "label": "Estável", "sub": "Sem altos ou baixos marcantes" },
-      "mixed": { "label": "Misturado", "sub": "Alternei entre dias bons e difíceis" },
-      "hard": { "label": "Dias difíceis", "sub": "Cansada, humor baixo, pouca energia" },
-      "crisis": { "label": "Muito pesado", "sub": "Crise, paralisia ou dias muito ruins" }
+      "good": {
+        "label": "Bons dias",
+        "sub": "Me senti bem, produtiva, com energia"
+      },
+      "stable": {
+        "label": "Estável",
+        "sub": "Sem altos ou baixos marcantes"
+      },
+      "mixed": {
+        "label": "Misturado",
+        "sub": "Alternei entre dias bons e difíceis"
+      },
+      "hard": {
+        "label": "Dias difíceis",
+        "sub": "Cansada, humor baixo, pouca energia"
+      },
+      "crisis": {
+        "label": "Muito pesado",
+        "sub": "Crise, paralisia ou dias muito ruins"
+      }
     }
   },
   "onboarding": {
@@ -330,10 +394,26 @@
     "next": "Próxima",
     "skip": "Pular por enquanto",
     "basic": {
-      "fullName": { "question": "Como você quer ser chamada?", "helper": "Use seu nome ou apelido. É assim que a Airia vai falar com você.", "placeholder": "Ex.: Alline" },
-      "age": { "question": "Qual sua idade?", "helper": "Ajuda a ajustar linguagem e contexto. Se preferir, pode deixar em branco.", "placeholder": "Ex.: 34" },
-      "currentFeeling": { "question": "Como você está se sentindo agora?", "helper": "Pode ser uma frase simples. O importante é capturar o ponto de partida.", "placeholder": "Ex.: cansada, acelerada, sensível, animada..." },
-      "routineText": { "question": "Como costuma ser um dia comum seu?", "helper": "Rotina, trabalho, estudos, casa, pausas, horários ou qualquer coisa que pese no seu dia.", "placeholder": "Ex.: acordo cedo, trabalho à tarde, fico mais cansada à noite..." }
+      "fullName": {
+        "question": "Como você quer ser chamada?",
+        "helper": "Use seu nome ou apelido. É assim que a Airia vai falar com você.",
+        "placeholder": "Ex.: Alline"
+      },
+      "age": {
+        "question": "Qual sua idade?",
+        "helper": "Ajuda a ajustar linguagem e contexto. Se preferir, pode deixar em branco.",
+        "placeholder": "Ex.: 34"
+      },
+      "currentFeeling": {
+        "question": "Como você está se sentindo agora?",
+        "helper": "Pode ser uma frase simples. O importante é capturar o ponto de partida.",
+        "placeholder": "Ex.: cansada, acelerada, sensível, animada..."
+      },
+      "routineText": {
+        "question": "Como costuma ser um dia comum seu?",
+        "helper": "Rotina, trabalho, estudos, casa, pausas, horários ou qualquer coisa que pese no seu dia.",
+        "placeholder": "Ex.: acordo cedo, trabalho à tarde, fico mais cansada à noite..."
+      }
     },
     "energy": {
       "title": "Como VOCÊ gasta energia?",
@@ -343,7 +423,22 @@
       "focus": "Foco disponível num dia bom",
       "little": "Pouco",
       "full": "Total",
-      "items": { "Reuniões": "Reuniões", "Crises": "Crises", "Criar conteúdo": "Criar conteúdo", "Feedbacks difíceis": "Feedbacks difíceis", "Multitarefas": "Multitarefas", "Ruídos": "Ruídos", "Decisões": "Decisões", "E-mails": "E-mails", "Listas": "Listas", "Caminhada": "Caminhada", "Leitura": "Leitura", "Organização": "Organização", "Música": "Música", "Rotina": "Rotina" }
+      "items": {
+        "Reuniões": "Reuniões",
+        "Crises": "Crises",
+        "Criar conteúdo": "Criar conteúdo",
+        "Feedbacks difíceis": "Feedbacks difíceis",
+        "Multitarefas": "Multitarefas",
+        "Ruídos": "Ruídos",
+        "Decisões": "Decisões",
+        "E-mails": "E-mails",
+        "Listas": "Listas",
+        "Caminhada": "Caminhada",
+        "Leitura": "Leitura",
+        "Organização": "Organização",
+        "Música": "Música",
+        "Rotina": "Rotina"
+      }
     },
     "cycle": {
       "title": "Seu ciclo menstrual",
@@ -367,7 +462,20 @@
       "bed": "Dormir",
       "wake": "Acordar",
       "notInformed": "Qualidade não informada",
-      "cards": { "bem": { "label": "Durmo bem", "sub": "Acordo descansada" }, "irregular": { "label": "Irregular", "sub": "Varia bastante" }, "mal": { "label": "Durmo mal", "sub": "Acordo cansada" } }
+      "cards": {
+        "bem": {
+          "label": "Durmo bem",
+          "sub": "Acordo descansada"
+        },
+        "irregular": {
+          "label": "Irregular",
+          "sub": "Varia bastante"
+        },
+        "mal": {
+          "label": "Durmo mal",
+          "sub": "Acordo cansada"
+        }
+      }
     },
     "preferences": {
       "title": "Como você pensa melhor?",
@@ -378,7 +486,36 @@
       "diagnosisHelp": "Isso é autorrelato — a Airia nunca diagnostica. Ajuda só a ajustar o tom e o tipo de sugestão.",
       "medication": "Faz uso de medicação contínua?",
       "preferNot": "Prefiro não dizer",
-      "cards": { "morning": { "label": "Foco máximo de manhã", "sub": "Criativa antes das 12h" }, "afternoon": { "label": "Melhor à tarde", "sub": "Produtiva das 14h–18h" }, "night": { "label": "Trabalho bem à noite", "sub": "Foco após as 20h" }, "creative": { "label": "Tarefas criativas", "sub": "Criação, escrita, arte" }, "analytic": { "label": "Tarefas analíticas", "sub": "Dados, planilhas, lógica" }, "short": { "label": "Blocos curtos", "sub": "25min com pausas" }, "deep": { "label": "Imersão profunda", "sub": "90min sem interrupção" } }
+      "cards": {
+        "morning": {
+          "label": "Foco máximo de manhã",
+          "sub": "Criativa antes das 12h"
+        },
+        "afternoon": {
+          "label": "Melhor à tarde",
+          "sub": "Produtiva das 14h–18h"
+        },
+        "night": {
+          "label": "Trabalho bem à noite",
+          "sub": "Foco após as 20h"
+        },
+        "creative": {
+          "label": "Tarefas criativas",
+          "sub": "Criação, escrita, arte"
+        },
+        "analytic": {
+          "label": "Tarefas analíticas",
+          "sub": "Dados, planilhas, lógica"
+        },
+        "short": {
+          "label": "Blocos curtos",
+          "sub": "25min com pausas"
+        },
+        "deep": {
+          "label": "Imersão profunda",
+          "sub": "90min sem interrupção"
+        }
+      }
     },
     "done": {
       "ready": "Tudo pronto, {{name}}!",
@@ -421,6 +558,8 @@
     "agenda": "AGENDA",
     "emptyDescription": "O Planner serve para adaptar tarefas ao seu humor e energia. Comece com um bloco pequeno ou deixe a Airia sugerir uma estrutura.",
     "firstTask": "Criar primeira tarefa",
+    "buildRoutine": "Montar minha rotina",
+    "singleTask": "Criar uma tarefa só",
     "deleteRecurrence": "Excluir recorrência?",
     "newTask": "Nova tarefa",
     "newTaskDescription": "Crie um bloco possível para o seu dia.",
@@ -699,7 +838,11 @@
     "adaptDay": "Adaptar meu dia",
     "registerProtocol": "Registrar protocolo",
     "understood": "Entendi o alerta",
-    "resources": { "cvv": "apoio emocional 24h no Brasil", "samu": "risco médico ou urgência", "police": "risco imediato de violência" }
+    "resources": {
+      "cvv": "apoio emocional 24h no Brasil",
+      "samu": "risco médico ou urgência",
+      "police": "risco imediato de violência"
+    }
   },
   "conflicts": {
     "one": "1 conflito de horário hoje",
@@ -729,9 +872,22 @@
     "keep": "Manter",
     "block": "Bloco {{id}}",
     "aligned": "Sua agenda já está alinhada com o seu estado de hoje. Nada a sugerir agora.",
-    "intensityLabels": { "L": "leve", "M": "média", "P": "pesada" },
-    "confidenceLabels": { "high": "alta", "medium": "média", "low": "baixa" },
-    "actions": { "MOVE_TOMORROW": "Mover pra amanhã", "DOWNGRADE_INTENSITY": "Reduzir intensidade", "CANCEL": "Cancelar", "KEEP": "Manter" }
+    "intensityLabels": {
+      "L": "leve",
+      "M": "média",
+      "P": "pesada"
+    },
+    "confidenceLabels": {
+      "high": "alta",
+      "medium": "média",
+      "low": "baixa"
+    },
+    "actions": {
+      "MOVE_TOMORROW": "Mover pra amanhã",
+      "DOWNGRADE_INTENSITY": "Reduzir intensidade",
+      "CANCEL": "Cancelar",
+      "KEEP": "Manter"
+    }
   },
   "routineBuilder": {
     "backPlanner": "Voltar ao Planner",
@@ -773,7 +929,15 @@
     "rhythm": "Ritmo considerado",
     "protected": "Horário protegido",
     "outsideWeek": "Ficou fora desta semana",
-    "kinds": { "goal": "Meta", "project": "Projeto", "task": "Tarefa", "habit": "Hábito", "calendar": "Compromisso", "reference": "Referência", "concern": "Preocupação" }
+    "kinds": {
+      "goal": "Meta",
+      "project": "Projeto",
+      "task": "Tarefa",
+      "habit": "Hábito",
+      "calendar": "Compromisso",
+      "reference": "Referência",
+      "concern": "Preocupação"
+    }
   },
   "privacy": "POLÍTICA DE PRIVACIDADE",
   "billing": {
@@ -998,5 +1162,54 @@
       "contextTitle": "Agenda, metas e ações",
       "contextDescription": "Planner, metas, hábitos, diário e sugestões recentes entram no contexto. A Airia usa isso para evitar repetição e sugerir passos possíveis para o estado atual."
     }
+  },
+  "guidedOnboarding": {
+    "stepNameTitle": "Como te chamo?",
+    "stepNameHint": "Só isso. O resto é toque.",
+    "stepAreasTitle": "O que já ocupa seus dias?",
+    "stepAreasHint": "Marque tudo que faz parte da sua semana.",
+    "stepCommitmentsTitle": "Tem horário fixo?",
+    "stepCommitmentsHint": "Só o que é inegociável. Dá pra pular.",
+    "stepEnergyTitle": "O que te drena e o que te recupera?",
+    "stepEnergyHint": "Isso calibra o tamanho dos seus dias.",
+    "stepIntentionsTitle": "O que você quer sustentar ou mudar?",
+    "stepIntentionsHint": "Escolha poucas. Rotina cheia não se sustenta.",
+    "stepHabitsTitle": "Quais desses entram na sua semana?",
+    "stepHabitsHint": "Sugeri a partir do que você escolheu. Tire o que não faz sentido.",
+    "stepTodayTitle": "E hoje, como você está?",
+    "stepTodayHint": "Isso ajusta só o primeiro dia.",
+    "namePlaceholder": "Seu nome ou apelido",
+    "drains": "O que te drena",
+    "restorers": "O que te recupera",
+    "mood": "Humor",
+    "moodLow": "Bem pra baixo",
+    "moodHigh": "Muito bem",
+    "energy": "Energia",
+    "energyLow": "Sem nada",
+    "energyHigh": "A mil",
+    "focus": "Foco",
+    "focusLow": "Disperso",
+    "focusHigh": "Afiado",
+    "sleep": "Como foi seu sono",
+    "sleepBad": "Dormi mal",
+    "sleepOk": "Razoável",
+    "sleepGood": "Dormi bem",
+    "what": "O que",
+    "whichDays": "Quais dias",
+    "startTime": "Que horas começa",
+    "addCommitment": "+ Adicionar compromisso",
+    "removeAria": "Remover {{title}}",
+    "skip": "Pular",
+    "back": "Voltar",
+    "continue": "Continuar",
+    "build": "Montar minha rotina",
+    "building": "Montando sua rotina...",
+    "loadError": "Não consegui carregar as opções.",
+    "loadErrorHint": "Verifique sua conexão e tente de novo.",
+    "retry": "Tentar de novo",
+    "submitError": "Não consegui montar sua rotina agora. Suas respostas continuam aqui — tente de novo.",
+    "everyDay": "todo dia",
+    "everyWeek": "toda semana",
+    "minutes": "{{count}} min"
   }
 }

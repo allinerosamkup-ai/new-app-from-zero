@@ -159,6 +159,7 @@ export const RoutineCreateSessionSchema = z.object({
   locale: z.string().trim().min(2).max(16).optional().default('pt-BR'),
   limits: RoutineLimitsSchema.optional().default({}),
 }).superRefine((session, context) => {
+  // No guiado o foco nasce das escolhas; na importação ainda precisa vir explícito.
   if (session.mode === 'import' && !session.focus) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
