@@ -481,9 +481,13 @@ export class RoutineBuilderService {
     return publicSession(updated);
   }
 
-  async apply(userId: string, sessionId: string): Promise<any> {
-    const result = await this.applyService.apply({ userId, sessionId });
-    await this.event(userId, 'routine_builder_applied', { sessionId, counts: result.counts });
+  async apply(userId: string, sessionId: string, sourceItemIds?: string[]): Promise<any> {
+    const result = await this.applyService.apply({ userId, sessionId, sourceItemIds });
+    await this.event(userId, sourceItemIds?.length ? 'routine_builder_item_applied' : 'routine_builder_applied', {
+      sessionId,
+      sourceItemIds: sourceItemIds ?? null,
+      counts: result.counts,
+    });
     return result;
   }
 

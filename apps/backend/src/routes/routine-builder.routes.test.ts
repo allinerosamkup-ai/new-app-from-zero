@@ -13,7 +13,15 @@ async function run(): Promise<void> {
     updateItems: async (input: any) => { calls.push(`items:${input.userId}`); return { id: input.sessionId, status: 'ready' }; },
     answerClarifications: async (input: any) => { calls.push(`answers:${input.userId}`); return { id: input.sessionId, status: 'ready' }; },
     compose: async (userId: string, sessionId: string) => { calls.push(`compose:${userId}`); return { id: sessionId, status: 'ready', draftPlan: { entries: [] } }; },
-    apply: async (userId: string, sessionId: string) => { calls.push(`apply:${userId}`); return { sessionId, counts: { objectives: 0, habits: 0, timelineBlocks: 0 }, ids: { objectives: [], habits: [], timelineBlocks: [] } }; },
+    apply: async (userId: string, sessionId: string, sourceItemIds?: string[]) => {
+      calls.push(`apply:${userId}:${sourceItemIds?.join(',') ?? 'all'}`);
+      return {
+        sessionId,
+        counts: { objectives: 0, habits: sourceItemIds?.includes('habit-1') ? 1 : 0, timelineBlocks: 0 },
+        ids: { objectives: [], habits: [], timelineBlocks: [] },
+        appliedSourceItemIds: sourceItemIds ?? [],
+      };
+    },
   };
 
   const app = express();
@@ -33,11 +41,22 @@ async function run(): Promise<void> {
   assert.equal((await request(app).patch('/api/routine-builder/sessions/session-1/items').send({ items: [{ id: 'task-1', kind: 'task', title: 'Separar documentos', sourceExcerpt: 'Separar documentos', confidence: 0.9, reviewState: 'confirmed' }] })).status, 200);
   assert.equal((await request(app).post('/api/routine-builder/sessions/session-1/clarifications').send({ answers: [{ questionId: 'question:task-1:title', answer: 'Separar documentos pessoais' }] })).status, 200);
   assert.equal((await request(app).post('/api/routine-builder/sessions/session-1/compose').send({})).status, 200);
+  const selectedApply = await request(app)
+    .post('/api/routine-builder/sessions/session-1/apply')
+    .send({ sourceItemIds: ['habit-1'] });
+  assert.equal(selectedApply.status, 200);
+  assert.deepEqual(selectedApply.body.appliedSourceItemIds, ['habit-1']);
   assert.equal((await request(app).post('/api/routine-builder/sessions/session-1/apply').send({})).status, 200);
   assert.deepEqual(calls, [
     'create:user-1', 'get:user-1:session-1', 'source:user-1', 'items:user-1',
-    'answers:user-1', 'compose:user-1', 'apply:user-1',
+    'answers:user-1', 'compose:user-1', 'apply:user-1:habit-1', 'apply:user-1:all',
   ]);
+
+  const invalidApply = await request(app)
+    .post('/api/routine-builder/sessions/session-1/apply')
+    .send({ sourceItemIds: [42] });
+  assert.equal(invalidApply.status, 400);
+  assert.equal(invalidApply.body.error, 'validation_failed');
 
   const invalid = await request(app).post('/api/routine-builder/sessions').send({ focus: 'x' });
   assert.equal(invalid.status, 400);

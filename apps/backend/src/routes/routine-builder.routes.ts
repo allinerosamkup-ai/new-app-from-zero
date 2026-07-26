@@ -2,6 +2,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { z, ZodError } from 'zod';
 
 import {
+  RoutineApplyRequestSchema,
   RoutineClarificationAnswersSchema,
   RoutineCreateSessionSchema,
   RoutineUpdateItemsSchema,
@@ -176,7 +177,12 @@ export function createRoutineBuilderRouter(dependencies: RoutineBuilderRouteDepe
   }));
 
   router.post('/sessions/:sessionId/apply', asyncRoute(async (req, res) => {
-    res.json(await dependencies.service.apply(userId(req), req.params.sessionId));
+    const input = RoutineApplyRequestSchema.parse(req.body ?? {});
+    res.json(await dependencies.service.apply(
+      userId(req),
+      req.params.sessionId,
+      input.sourceItemIds,
+    ));
   }));
 
   return router;
