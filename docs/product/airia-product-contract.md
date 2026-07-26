@@ -52,7 +52,8 @@ Texto, transcrição, TXT, Markdown, PDF, DOCX ou XLSX são uma entrada opcional
 4. pergunta somente data, frequência ou resultado quando isso impedir a montagem;
 5. cruza itens confirmados com agenda protegida, hábitos existentes e check-in recente;
 6. apresenta uma semana editável, incluindo carga prevista, conflitos e alternativas;
-7. cria metas, hábitos e blocos em uma única transação idempotente.
+7. apresenta uma proposta em cards, um por item operacional, com data, horário, duração e recorrência quando existirem;
+8. cria metas, hábitos e blocos em transação idempotente por item ou por lote.
 
 Um pedido simples como “monte minha rotina” abre o fluxo guiado. Uma lista ou documento com conteúdo operacional abre a revisão da fonte. Uma sessão antiga nunca substitui silenciosamente um novo pedido.
 
@@ -62,6 +63,9 @@ Compromissos fixos nunca são movidos. Hábitos aparecem somente nos dias devido
 
 Na aplicação:
 
+- `Adicionar` salva aquele card imediatamente e muda seu estado visual somente após a confirmação do backend.
+- `Editar` permite corrigir nome, tipo, data, horário, duração e recorrência, e recompõe a proposta antes de salvar; `Descartar` retira o item do lote sem apagar o que já foi adicionado.
+- `Aceitar todos` salva apenas os cards restantes e nunca duplica itens adicionados individualmente.
 - Objetivo é resultado desejado; próxima ação é o movimento concreto ligado a ele.
 - Uma ação só entra no Planner depois de escolha explícita de quando executá-la.
 - Hábitos preservam frequência, dias, período e duração; adiar ou pular vale apenas para o dia.

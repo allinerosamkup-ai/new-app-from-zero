@@ -28,19 +28,25 @@ export function applyPlanEntryEdit(
   items: RoutineItem[],
   sourceItemId: string,
   patch: {
+    title?: string;
+    kind?: RoutineItem['kind'];
     date?: string;
     startTime?: string;
     durationMinutes?: number;
     excluded?: boolean;
+    recurrence?: RoutineItem['recurrence'];
   },
 ): RoutineItem[] {
   return items.map((item) => item.id !== sourceItemId
-    ? item
-    : {
+      ? item
+      : {
         ...item,
+        ...(patch.title?.trim() ? { title: patch.title.trim() } : {}),
+        ...(patch.kind ? { kind: patch.kind } : {}),
         ...(patch.date ? { date: patch.date } : {}),
         ...(patch.startTime ? { startTime: patch.startTime } : {}),
         ...(patch.durationMinutes ? { durationMinutes: patch.durationMinutes } : {}),
+        ...(patch.recurrence !== undefined ? { recurrence: patch.recurrence } : {}),
         reviewState: patch.excluded ? 'excluded' : 'confirmed',
       });
 }
@@ -140,4 +146,13 @@ export function remainingRoutineSourceItemIds(cards: RoutineSuggestionCard[]): s
   return cards
     .filter((card) => card.state === 'available')
     .map((card) => card.sourceItemId);
+}
+
+export function resolveRoutineSuggestionCardState(
+  card: Pick<RoutineSuggestionCard, 'sourceItemId' | 'state'>,
+  savingSourceItemIds: ReadonlySet<string>,
+): RoutineSuggestionCard['state'] | 'saving' {
+  return card.state === 'available' && savingSourceItemIds.has(card.sourceItemId)
+    ? 'saving'
+    : card.state;
 }

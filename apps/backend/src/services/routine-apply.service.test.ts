@@ -198,6 +198,29 @@ async function run(): Promise<void> {
 {
   const { prisma, state } = createFakePrisma();
   const service = new RoutineApplyService(prisma as any);
+  await service.apply({
+    sessionId: 'session-1',
+    userId: 'user-1',
+    sourceItemIds: ['habit-1'],
+  });
+  state.session.items = state.session.items.map((item: any) => (
+    item.id === 'habit-1' ? item : { ...item, reviewState: 'excluded' }
+  ));
+
+  const completedAfterDiscard = await service.apply({
+    sessionId: 'session-1',
+    userId: 'user-1',
+  });
+
+  assert.equal(state.session.status, 'applied');
+  assert.deepEqual(completedAfterDiscard.appliedSourceItemIds, ['habit-1']);
+  assert.equal(state.objectives.length, 0);
+  assert.equal(state.blocks.length, 0);
+}
+
+{
+  const { prisma, state } = createFakePrisma();
+  const service = new RoutineApplyService(prisma as any);
   const result = await service.apply({ sessionId: 'session-1', userId: 'user-1' });
 
   assert.deepEqual(result.counts, { objectives: 1, habits: 1, timelineBlocks: 1 });

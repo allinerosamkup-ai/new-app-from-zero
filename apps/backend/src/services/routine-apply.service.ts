@@ -192,14 +192,21 @@ export class RoutineApplyService {
       const items = z.array(RoutineClassifiedItemSchema).max(200).parse(session.items);
       const plan = DraftPlanSchema.parse(session.draftPlan);
       const applicableSourceItemIds = new Set<string>();
+      const eligibleItemIds = new Set<string>();
       for (const item of items) {
         if (item.reviewState === 'excluded' || item.duplicateOf) continue;
+        eligibleItemIds.add(item.id);
         if (['goal', 'project', 'habit'].includes(item.kind)) {
           applicableSourceItemIds.add(item.id);
         }
       }
       for (const entry of plan.entries) {
-        if (entry.persist && entry.sourceItemId && ['task', 'calendar', 'habit'].includes(entry.kind)) {
+        if (
+          entry.persist
+          && entry.sourceItemId
+          && eligibleItemIds.has(entry.sourceItemId)
+          && ['task', 'calendar', 'habit'].includes(entry.kind)
+        ) {
           applicableSourceItemIds.add(entry.sourceItemId);
         }
       }
@@ -212,6 +219,24 @@ export class RoutineApplyService {
       const targetSourceItemIds = new Set(requestedIds.filter((id) => !alreadyApplied.has(id)));
 
       if (targetSourceItemIds.size === 0) {
+        const allApplicableAlreadyApplied = [...applicableSourceItemIds]
+          .every((id) => alreadyApplied.has(id));
+        if (allApplicableAlreadyApplied) {
+          const finalized = await tx.routineBuildSession.updateMany({
+            where: { id: input.sessionId, userId: input.userId, status: 'ready' },
+            data: { status: 'applied', stage: 'applied' },
+          });
+          if (finalized.count !== 1) throw new Error('routine_session_apply_conflict');
+          await tx.routineBuildSession.update({
+            where: { id: input.sessionId },
+            data: {
+              applyResult: storedResult,
+              appliedAt: new Date(),
+              sourceText: null,
+              sourceExpiresAt: null,
+            },
+          });
+        }
         return storedResult;
       }
 
