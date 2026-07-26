@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
+import { RewardBurst, type Reward } from "../components/RewardBurst";
 import type { Habit } from "../features/aura/types";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { HABIT_SUGGESTIONS, type HabitSuggestion } from "../features/aura/habit-presets";
@@ -923,6 +924,7 @@ export function HabitsPage() {
   const { t } = useTranslation();
   const l = useLocalizedCopy();
   const { state, addHabit, updateHabit, toggleHabit, archiveHabit, unarchiveHabit } = useAuraStore();
+  const [reward, setReward] = useState<Reward | null>(null);
   const navigate = useNavigate();
   const { showSuccess, showError, showUndo } = useToast();
   const todayKey = getLocalDateKey();
@@ -989,7 +991,8 @@ export function HabitsPage() {
       : false;
     setTogglingIds((prev) => new Set([...prev, habitId]));
     try {
-      await toggleHabit(habitId);
+      const reward = await toggleHabit(habitId);
+      if (reward) setReward(reward);
       setDayDecisions((current) => {
         if (!current[habitId]) return current;
         const next = { ...current };
@@ -1572,6 +1575,9 @@ export function HabitsPage() {
           saveLabel={t("habits.saveChanges")}
         />
       )}
+
+      {/* Concluir sem nada acontecer não registra como conquista. */}
+      <RewardBurst reward={reward} onDone={() => setReward(null)} />
     </div>
   );
 }

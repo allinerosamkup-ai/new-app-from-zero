@@ -3727,9 +3727,24 @@ export function createApp(dependencies: AppDependencies = {}) {
       }).catch(() => {});
     }
 
+    // Retorno de conclusão por bloco. O cliente sabe qual item ele acabou de
+    // fechar e mostra a comemoração desse — é o que fecha o ciclo na hora.
+    const clearedTheDay = savedBlocks.every((block: { status?: string }) => block.status === 'completed');
+    const rewards: Record<string, ReturnType<typeof buildCompletionReward>> = {};
+    for (const block of completedBlocks) {
+      rewards[block.id] = buildCompletionReward({
+        title: block.title,
+        kind: 'task_done',
+        clearedTheDay,
+        today: date,
+      });
+    }
+
     return res.json({
       savedBlocks,
       conflicts, // Retornamos conflitos de forma passiva se forceSave for true
+      rewards,
+      clearedTheDay,
     });
 
   } catch (error: any) {

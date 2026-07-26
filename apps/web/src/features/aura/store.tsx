@@ -111,7 +111,10 @@ type AuraStoreContextValue = {
   updateTask: (id: string | number, updates: { title?: string; time?: string; category?: string; note?: string; persistentReminderEnabled?: boolean; persistentReminderIntervalMinutes?: number | null; done?: boolean }) => Promise<void>;
   removeTask: (id: string | number) => Promise<void>;
   reorderTasks: (fromIdx: number, toIdx: number) => void;
-  toggleHabit: (habitId: string) => Promise<void>;
+  /** Devolve a comemoração quando o hábito acabou de ser concluído. */
+  toggleHabit: (habitId: string) => Promise<{
+    headline: string; detail: string | null; animation: string; intensity: string;
+  } | null>;
   archiveHabit: (habitId: string) => Promise<void>;
   unarchiveHabit: (habitId: string) => Promise<void>;
   updateHabit: (habitId: string, habit: Partial<{
@@ -763,8 +766,11 @@ queueCheckin({
           (completion: { date?: string }) => normalizeDateKey(completion.date ?? "") === today,
         );
         if (alreadyDoneToday) tapHaptic(); else successHaptic();
-        await api.post(`/habits/${habitId}/toggle`, { date: today });
+        const result = await api.post(`/habits/${habitId}/toggle`, { date: today }) as {
+          reward?: { headline: string; detail: string | null; animation: string; intensity: string } | null;
+        };
         await refreshData();
+        return result?.reward ?? null;
       },
       archiveHabit: async (habitId) => {
         await api.patch(`/habits/${habitId}`, { archived: true });

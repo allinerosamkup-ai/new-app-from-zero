@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { AuraToggle } from "../components/editorial/AuraToggle";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
+import { RewardBurst, type Reward } from "../components/RewardBurst";
 import { AiriaBottomSheet, AiriaButton, AiriaCard } from "../components/airia";
 import {
   PlannerAISuggestionSheet,
@@ -1954,6 +1955,7 @@ export function PlannerPage() {
   const isLowPhase = cycleReport.phase === "low" || cycleReport.phase === "depleted";
   const [offsetDias, setOffsetDias] = useState(0);
   const [plannerTasks, setPlannerTasks] = useState<PlannerTask[]>([]);
+  const [reward, setReward] = useState<Reward | null>(null);
   const [plannerLoading, setPlannerLoading] = useState(false);
   const [plannerLoadError, setPlannerLoadError] = useState(false);
   const [plannerReloadTick, setPlannerReloadTick] = useState(0);
@@ -2153,7 +2155,8 @@ export function PlannerPage() {
     if (animatingHabitIds.includes(habitId)) return;
     setAnimatingHabitIds((prev) => [...prev, habitId]);
     try {
-      await toggleHabit(habitId);
+      const habitReward = await toggleHabit(habitId);
+      if (habitReward) setReward(habitReward);
     } catch (error) {
       console.error("[planner/habit-toggle]", error);
       showError(t("planner.updateHabitError"));
@@ -2920,7 +2923,7 @@ export function PlannerPage() {
         return;
       }
 
-      await api.post("/timeline", {
+      const syncResult = await api.post("/timeline", {
         date: selectedDateKey,
         forceSave: true,
         blocks: [ {
@@ -2942,6 +2945,14 @@ export function PlannerPage() {
       });
       await reloadPlannerTasks();
       await refreshData();
+
+      // Reabrir não comemora: só fechar. E a comemoração vem do backend, para o
+      // texto ser o mesmo no chat, no Planner e nos Hábitos.
+      if (!task.done) {
+        const rewards = (syncResult as { rewards?: Record<string, Reward> })?.rewards ?? {};
+        const earned = rewards[task.id] ?? Object.values(rewards)[0] ?? null;
+        if (earned) setReward(earned);
+      }
       showSuccess(task.done ? "Bloco reaberto." : "Bloco concluído.");
     } catch (error: any) {
       showError(error.message);
@@ -4113,6 +4124,9 @@ export function PlannerPage() {
           </div>
         </div>
       )}
+
+      {/* Fechar um bloco devolve retorno na hora — é onde a pessoa mais conclui. */}
+      <RewardBurst reward={reward} onDone={() => setReward(null)} />
     </div>
   );
 }
