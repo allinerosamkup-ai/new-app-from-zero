@@ -36,6 +36,8 @@ export function WeekPreview({ plan, locale, today }: { plan: RoutinePlan; locale
   const [activeTab, setActiveTab] = useState<PreviewTab>('today');
   const sections = useMemo(() => buildRoutinePreviewSections(plan, today), [plan, today]);
   const groups = useMemo(() => groupPlanByDay(sections.week), [sections.week]);
+  const overloadedDays = plan.days.filter((day) => day.status === 'overloaded');
+  const highestLoad = plan.days.reduce((highest, day) => Math.max(highest, day.utilizationPercent ?? 0), 0);
   const tabs: Array<{ id: PreviewTab; label: string; count: number }> = [
     { id: 'today', label: t('routineBuilder.previewTabs.today', { defaultValue: 'Hoje' }), count: sections.today.length },
     { id: 'week', label: t('routineBuilder.previewTabs.week', { defaultValue: 'Semana' }), count: sections.week.length },
@@ -48,6 +50,11 @@ export function WeekPreview({ plan, locale, today }: { plan: RoutinePlan; locale
       <div className={`routine-capacity routine-capacity--${plan.capacity.level}`}>
         <span>{t('routineBuilder.rhythm')}</span>
         <strong>{plan.capacity.reason}</strong>
+        <small>
+          {overloadedDays.length > 0
+            ? t('routineBuilder.loadOver', { defaultValue: '{{count}} dia(s) acima da carga prevista — revise antes de confirmar.', count: overloadedDays.length })
+            : t('routineBuilder.loadSafe', { defaultValue: 'Maior carga diária: {{percent}}% do limite previsto.', percent: highestLoad })}
+        </small>
       </div>
 
       <div className="routine-preview-tabs" role="tablist" aria-label={t('routineBuilder.previewTitle')}>
@@ -95,7 +102,18 @@ export function WeekPreview({ plan, locale, today }: { plan: RoutinePlan; locale
       {plan.unscheduled.length > 0 && (
         <section className="routine-unscheduled">
           <strong>{t('routineBuilder.outsideWeek')}</strong>
-          {plan.unscheduled.map((item) => <p key={`${item.sourceItemId}:${item.title}`}>{item.title} — {item.reason}</p>)}
+          {plan.unscheduled.map((item) => (
+            <div key={`${item.sourceItemId}:${item.title}`}>
+              <p>{item.title} — {item.reason}</p>
+              {item.alternatives?.length > 0 && (
+                <ul>
+                  {item.alternatives.map((alternative) => (
+                    <li key={`${item.sourceItemId}:${alternative.action}`}>{alternative.reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
         </section>
       )}
     </div>

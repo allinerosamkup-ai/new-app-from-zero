@@ -81,6 +81,7 @@
 .routine-capacity { border-radius: 18px; padding: 14px; display: grid; gap: 4px; background: rgba(150,199,179,.12); }
 .routine-capacity span { font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; color: var(--text-3); }
 .routine-capacity strong { font-size: 13px; line-height: 1.5; }
+.routine-capacity small { color: var(--text-2); font-size: 10.5px; line-height: 1.45; }
 .routine-capacity--low { background: rgba(143,184,196,.13); }
 .routine-capacity--high { background: rgba(244,168,150,.13); }
 .routine-day { border-radius: 20px; background: rgba(255,255,255,.76); border: 1px solid rgba(107,91,87,.1); overflow: hidden; }
@@ -98,6 +99,7 @@
 .routine-unscheduled { border: 1px solid rgba(215,137,127,.18); border-radius: 18px; padding: 14px; background: rgba(215,137,127,.05); }
 .routine-unscheduled strong { font-size: 13px; }
 .routine-unscheduled p { margin: 7px 0 0; font-size: 11px; color: var(--text-2); }
+.routine-unscheduled ul { margin: 5px 0 0; padding-left: 18px; color: var(--text-3); font-size: 10px; line-height: 1.45; }
 .routine-success { text-align: center; padding: 22px 8px; }
 .routine-success__mark { width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 15px; background: rgba(150,199,179,.18); color: #4e9077; }
 

@@ -1,6 +1,14 @@
 export type RoutineItemKind = 'goal' | 'project' | 'task' | 'habit' | 'calendar' | 'reference' | 'concern';
 export type RoutineReviewState = 'pending' | 'confirmed' | 'excluded';
 export type RoutineBuilderMode = 'guided' | 'import';
+export type RoutinePriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export type RoutineTimeWindow = {
+  startTime: string;
+  endTime: string;
+  minDurationMinutes: number;
+  maxDurationMinutes: number;
+};
 
 export type GuidedAvailability = {
   dayOfWeek: number;
@@ -52,6 +60,8 @@ export type RoutineItem = {
   date?: string | null;
   startTime?: string | null;
   deadline?: string | null;
+  priority?: RoutinePriority;
+  timeWindow?: RoutineTimeWindow | null;
   recurrence?: { frequency: 'daily' | 'weekly' | 'monthly'; daysOfWeek?: number[]; timesPerWeek?: number | null; interval?: number } | null;
   isFixed?: boolean;
   duplicateOf?: string | null;
@@ -79,15 +89,37 @@ export type RoutinePlanEntry = {
   isFixed: boolean;
   persist: boolean;
   reason: string;
+  priority?: RoutinePriority;
+  deadline?: string | null;
+  timeWindow?: RoutineTimeWindow | null;
 };
 
 export type RoutinePlan = {
   weekStart: string;
   capacity: { level: 'low' | 'balanced' | 'high'; reason: string };
   entries: RoutinePlanEntry[];
-  days: Array<{ date: string; flexibleMinutes: number; fixedMinutes: number }>;
+  days: Array<{
+    date: string;
+    flexibleMinutes: number;
+    fixedMinutes: number;
+    predictedMinutes: number;
+    capacityMinutes: number;
+    utilizationPercent: number;
+    status: 'light' | 'balanced' | 'overloaded';
+  }>;
   contextItems: Array<{ sourceItemId: string; kind: RoutineItemKind; title: string }>;
-  unscheduled: Array<{ sourceItemId: string; title: string; reason: string }>;
+  unscheduled: Array<{
+    sourceItemId: string;
+    title: string;
+    reason: string;
+    alternatives: Array<{
+      action: 'move' | 'shorten' | 'defer';
+      reason: string;
+      suggestedDate?: string;
+      suggestedStartTime?: string;
+      durationMinutes?: number;
+    }>;
+  }>;
 };
 
 export type RoutineSession = {
