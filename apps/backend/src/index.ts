@@ -135,6 +135,10 @@ const MUTATING_AURA_ACTIONS = new Set<AuraCommandResponse['action']>([
   'update_task',
   'delete_task',
   'complete_items',
+  'log_checkin',
+  'create_habit',
+  'postpone_task',
+  'start_task',
 ]);
 
 /** Ações que só fazem sentido sobre um item que já existe. */
@@ -142,6 +146,8 @@ const AURA_ACTIONS_ON_EXISTING_ITEMS = new Set<AuraCommandResponse['action']>([
   'update_task',
   'delete_task',
   'complete_items',
+  'postpone_task',
+  'start_task',
 ]);
 
 /**
@@ -341,6 +347,21 @@ export function enforceAuraCaptureGate(
           && targetMatches(cognitive.captureJudgment.mutationTargetText, targetContext.resolvedTaskTitle);
       case 'complete_items':
         return hasTitledItems(payload.items, true);
+      case 'log_checkin': {
+        // Basta um sinal para valer um check-in. Exigir os quatro campos faria a
+        // Airia perguntar o que a pessoa não falou — o oposto do objetivo.
+        const score = (value: unknown) => typeof value === 'number' && value >= 1 && value <= 10;
+        return score(payload.moodScore) || score(payload.energyScore)
+          || score(payload.focusScore) || hasText(payload.sleepQuality);
+      }
+      case 'create_habit':
+        return hasText(titleFrom(payload));
+      case 'postpone_task':
+        return hasText(payload.taskId)
+          && targetMatches(cognitive.captureJudgment.mutationTargetText, targetContext.resolvedTaskTitle);
+      case 'start_task':
+        return hasText(payload.taskId)
+          && targetMatches(cognitive.captureJudgment.mutationTargetText, targetContext.resolvedTaskTitle);
       default:
         return true;
     }
@@ -3137,6 +3158,64 @@ export function createApp(dependencies: AppDependencies = {}) {
             checklist: decompositionSteps.map((step) => ({ text: step.title, done: false })),
             wasDecomposed: true,
           });
+        }
+      }
+
+      // Check-in pela Airia. A pessoa contou como está; isso vira registro sem ela
+      // precisar abrir outra tela. Campos não ditos ficam no meio da escala em vez
+      // de virar pergunta — o valor do check-in está em existir, não em ser exato.
+      if (commandResponse.action === 'log_checkin') {
+        try {
+          const scoreOf = (value: unknown, fallback: number) => (
+            typeof value === 'number' && value >= 1 && value <= 10 ? Math.round(value) : fallback
+          );
+          const mood = scoreOf(responsePayload.moodScore, 5);
+          const energy = scoreOf(responsePayload.energyScore, mood);
+          const localDateKey = typeof (req.body as any)?.localDate === 'string'
+            ? (req.body as any).localDate
+            : new Date().toISOString().slice(0, 10);
+          const hour = Number.isInteger((req.body as any)?.currentHour) ? (req.body as any).currentHour : new Date().getHours();
+          const slot = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+
+          const checkin = await prisma.dailyCheckin.upsert({
+            where: {
+              userId_localDate_checkinSlot: {
+                userId: data.userId,
+                localDate: new Date(`${localDateKey}T00:00:00.000Z`),
+                checkinSlot: slot,
+              },
+            },
+            create: {
+              userId: data.userId,
+              localDate: new Date(`${localDateKey}T00:00:00.000Z`),
+              checkinSlot: slot,
+              moodScore: mood,
+              energyScore: energy,
+              clarityScore: scoreOf(responsePayload.focusScore, energy),
+              irritabilityScore: scoreOf(responsePayload.irritabilityScore, 5),
+              physicalScore: scoreOf(responsePayload.physicalScore, energy),
+              socialScore: scoreOf(responsePayload.socialScore, 5),
+              sleepScore: typeof responsePayload.sleepScore === 'number' ? Math.round(responsePayload.sleepScore) : null,
+              focusScore: typeof responsePayload.focusScore === 'number' ? Math.round(responsePayload.focusScore) : null,
+              note: typeof responsePayload.note === 'string' ? responsePayload.note : data.message.slice(0, 500),
+              stateLabel: typeof responsePayload.stateLabel === 'string' ? responsePayload.stateLabel : null,
+            },
+            update: {
+              moodScore: mood,
+              energyScore: energy,
+              clarityScore: scoreOf(responsePayload.focusScore, energy),
+              note: typeof responsePayload.note === 'string' ? responsePayload.note : data.message.slice(0, 500),
+            },
+          });
+
+          Object.assign(responsePayload, {
+            checkinId: checkin.id,
+            checkinSlot: slot,
+            loggedMoodScore: mood,
+            loggedEnergyScore: energy,
+          });
+        } catch (checkinError) {
+          console.error('[aura/command] log_checkin error:', checkinError);
         }
       }
 

@@ -92,6 +92,10 @@ export const CREATION_ONLY_ACTIONS: AiriaMutationAction[] = [
   'create_agenda',
   'create_goal',
   'create_checklist',
+  'create_habit',
+  // Registrar como a pessoa está é dado, não mexida na agenda. É a escrita mais
+  // barata do app e a que mais alimenta tudo o resto.
+  'log_checkin',
 ];
 
 export type AiriaCognitiveFrame = {
@@ -420,6 +424,26 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
 
   const explicitChecklist = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|monte) (?:uma? )?(?:checklist|lista)\b|\b(?:quebra|quebre|divida) .{1,80}\bem (?:passos|etapas)\b|\b(?:create|add|make|build) (?:a )?(?:checklist|list)\b|\bbreak .{1,80}\binto (?:steps|stages)\b/.test(text);
   const explicitGoal = /\b(?:crie|cria|adicione|adiciona|inclua|inclui) (?:uma? )?meta\b|\b(?:quero|preciso|vamos) criar (?:uma? )?meta\b|\b(?:create|add|make) (?:a )?goal\b/.test(text);
+  const explicitHabit = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|monte|monta) (?:um )?habito\b|\b(?:quero|preciso|vamos) (?:criar|adicionar) (?:um )?habito\b|\b(?:create|add|make) (?:a )?habit\b/.test(text);
+  if (explicitHabit) {
+    return {
+      captureAs: 'task', captureMode: 'auto', allowedMutationActions: ['create_habit'],
+      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala pede explicitamente a criação de um hábito.',
+    };
+  }
+
+  // Check-in pela Airia: "faz meu check-in", "registra que tô mal hoje".
+  const explicitCheckin = /\b(?:faz|faca|fazer|registra|registre|registrar|anota|anote|atualiza|atualize)\s+(?:o\s+|meu\s+|um\s+)?(?:check.?in|checkin)\b|\bcheck.?in\s+(?:de\s+)?(?:hoje|agora)\b/.test(text);
+  if (explicitCheckin) {
+    return {
+      captureAs: 'task', captureMode: 'auto', allowedMutationActions: ['log_checkin'],
+      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: true,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala pede explicitamente para registrar o check-in.',
+    };
+  }
   const explicitAgendaAction = /\b(?:agende|marque|marcar) .{0,60}\b(?:consulta|dentista|reuniao|compromisso|sessao|bloco|evento)\b|\b(?:schedule) .{0,60}\b(?:appointment|meeting|commitment|block|event)\b/.test(text);
   const explicitTask = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|registre) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:quero|preciso|vamos) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:pode|consegue) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:transforme|coloque) (?:isto|isso) (?:em|como) (?:uma? )?tarefa\b|\b(?:please |can you |could you |i want you to |i need you to )?(?:create|add|make) (?:a )?(?:task|reminder)\b|\b(?:turn|put) (?:this|that|it) (?:down )?(?:into|as) (?:a )?(?:task|reminder)\b/.test(text);
   if (explicitChecklist || explicitGoal || explicitAgendaAction || explicitTask) {
@@ -436,6 +460,18 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
       allowedMutationActions, allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: false,
       explicitness: 'explicit', confidence: 'alta',
       reason: 'A fala atual contém um pedido operacional explícito e tipado.',
+    };
+  }
+
+  const startedNow = /\b(?:comecei|to comecando|estou comecando|acabei de comecar|comecando)\b.{0,40}\b(?:agora|ja|nesse momento)?\b/.test(text)
+    && !/\b(ja fiz|terminei|conclui|acabei de fazer)\b/.test(text);
+  if (startedNow) {
+    return {
+      captureAs: 'task', captureMode: 'auto', allowedMutationActions: ['start_task'],
+      mutationTargetText: extractMutationTargetText(message, 'complete_items'),
+      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: true,
+      explicitness: 'explicit', confidence: 'media',
+      reason: 'A fala diz que a pessoa começou algo agora: vira início de execução, não conclusão.',
     };
   }
 
@@ -511,10 +547,29 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
   const intentionToResume = /\b(?:preciso|quero|tenho que|tenho de|queria|gostaria de|to querendo|tava querendo)\s+(?:muito\s+)?(?:voltar a|comecar a|retomar|recomecar|criar o habito de|manter)\b/.test(text);
   if (intentionToResume) {
     return {
-      captureAs: 'task', captureMode: 'propose', allowedMutationActions: ['create_checklist', 'create_goal', 'create_task'],
+      captureAs: 'task', captureMode: 'propose', allowedMutationActions: ['create_habit', 'create_checklist', 'create_goal', 'create_task'],
       allowTaskCreation: true, allowDecisionMemory: true,
       allowMemoryCapture: true, explicitness: 'implicit', confidence: 'media',
       reason: 'A fala declara intenção de retomar algo: a Airia monta o hábito ou a meta já dimensionada para a fase atual.',
+    };
+  }
+
+  const stateWord = /\b(?:humor|energia|foco|animo|disposicao|sono|cansad[oa]|exaust[oa]|acabad[oa]|arrasad[oa]|mal|pessima|pessimo|horrivel|otim[oa]|bem|animad[oa]|acelerad[oa]|ansios[oa]|trist[e]|para baixo|no chao|zerad[oa]|sem energia|sem forcas)\b/.test(text);
+  const stateFraming = /\b(?:to|tou|estou|acordei|dormi|me sinto|sinto|hoje (?:eu )?(?:to|tou|estou|acordei)|meu (?:humor|sono|foco)|minha energia)\b/.test(text);
+  const numericState = /\b(?:humor|energia|foco|sono)\b.{0,12}\b(?:10|[1-9])\b|\b(?:10|[1-9])\s*(?:de|\/)\s*10\b/.test(text);
+  // Fala que carrega intenção ("quero fechar uma parte") não é relato de estado —
+  // é pedido com emoção junto. Registrar check-in ali sequestraria a conversa.
+  const carriesIntention = /\b(?:quero|queria|preciso|vou|pretendo|tenho que|tenho de|me ajuda|preciso de)\b/.test(text);
+  const metricNoun = /\b(?:humor|energia|foco|animo|disposicao|sono)\b/.test(text);
+  const sleepOrWake = /\b(?:acordei|dormi|nao dormi)\b/.test(text);
+  const isStateReport = !carriesIntention
+    && (numericState || (metricNoun && stateFraming) || (sleepOrWake && stateWord));
+  if (isStateReport) {
+    return {
+      captureAs: 'task', captureMode: 'propose', allowedMutationActions: ['log_checkin'],
+      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: true,
+      explicitness: 'implicit', confidence: 'media',
+      reason: 'A fala descreve como a pessoa está hoje: vira check-in registrado, sem virar tarefa.',
     };
   }
 

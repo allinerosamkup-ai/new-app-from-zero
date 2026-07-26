@@ -22,6 +22,14 @@ export const AuraCommandIntentSchema = z.enum([
   'reschedule',
   'delete_task',
   'complete_items',
+  // A Airia é o centro de comando: o que dá para fazer numa tela do app tem que
+  // dar para pedir falando com ela.
+  'checkin',
+  'habit',
+  'postpone',
+  'start_task',
+  'adapt_agenda',
+  'navigate',
 ]);
 
 export const AuraCommandActionSchema = z.enum([
@@ -36,6 +44,17 @@ export const AuraCommandActionSchema = z.enum([
   'update_task',
   'delete_task',
   'complete_items',
+  /** Registra humor, energia, foco e sono a partir do que a pessoa contou. */
+  'log_checkin',
+  'create_habit',
+  /** Empurra um bloco existente para outro dia. */
+  'postpone_task',
+  /** Marca que começou agora — é o gatilho do motor de execução. */
+  'start_task',
+  /** Roda a adaptação da agenda do dia. */
+  'adapt_agenda',
+  /** Leva a pessoa para a tela certa quando ela pede para ver algo. */
+  'open_screen',
 ]);
 
 export const AuraCommandPayloadSchema = z.object({}).catchall(z.unknown());

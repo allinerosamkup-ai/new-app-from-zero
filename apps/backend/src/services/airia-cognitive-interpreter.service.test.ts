@@ -229,6 +229,38 @@ async function run() {
     assert.equal(result.captureJudgment.allowTaskCreation, false, fala);
   }
 
+  // A Airia é o centro de comando: check-in, hábito e início de execução também
+  // se pedem falando com ela.
+  for (const [fala, esperado] of [
+    ['Faz meu check-in de hoje.', 'log_checkin'],
+    ['Registra meu check-in.', 'log_checkin'],
+    ['Tô num 3 hoje, humor lá embaixo.', 'log_checkin'],
+    ['Acordei péssima, dormi mal e não tenho energia nenhuma.', 'log_checkin'],
+    ['Minha energia hoje é 8.', 'log_checkin'],
+    ['Cria um hábito de tomar remédio toda noite.', 'create_habit'],
+    ['Comecei o relatório agora.', 'start_task'],
+  ] as const) {
+    const result = await offline(fala);
+    assert.deepEqual(result.captureJudgment.allowedMutationActions, [esperado], fala);
+  }
+
+  // Fala com intenção junto não vira check-in: "quero fechar uma parte" é pedido,
+  // não relato de estado. Registrar ali sequestraria a conversa.
+  for (const fala of [
+    'Estou ansiosa com a mudança e quero fechar uma parte.',
+    'Tô cansada mas preciso terminar isso hoje.',
+  ]) {
+    const result = await offline(fala);
+    assert.ok(
+      !result.captureJudgment.allowedMutationActions.includes('log_checkin'),
+      fala,
+    );
+  }
+
+  // E negar continua valendo para os comandos novos.
+  const negaCheckin = await offline('Não registra nada disso.');
+  assert.deepEqual(negaCheckin.captureJudgment.allowedMutationActions, []);
+
   const explicitTaskPt = await offline('Crie uma tarefa para ligar para a dentista amanhã.');
   assert.equal(explicitTaskPt.captureJudgment.captureAs, 'task');
   assert.equal(explicitTaskPt.captureJudgment.explicitness, 'explicit');

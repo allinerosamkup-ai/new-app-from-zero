@@ -351,6 +351,12 @@ export class AuraCommandService {
       '- Para update_task/delete_task, use taskId somente quando o título do bloco corresponder ao alvo atual indicado no frame cognitivo; se não houver correspondência segura, use ask_clarification.',
       '- ask_clarification: só quando falta dado COMPLETAMENTE INDISPENSÁVEL',
       '- handoff_to_journal: APENAS quando a pessoa pedir EXPLICITAMENTE "salva no diário"',
+      '- log_checkin: moodScore/energyScore/focusScore de 1 a 10 + sleepScore opcional + note. Use quando a pessoa contar como está ("tô num 3", "acordei péssima", "energia lá em cima") ou pedir o check-in. Estime o que ela não disse a partir do que disse; não pergunte nota por nota.',
+      '- create_habit: title + frequency (daily|weekly) + daysOfWeek[] + timeOfDay (morning|afternoon|evening|anytime) + durationMinutes',
+      '- postpone_task: taskId + targetDate',
+      '- start_task: taskId — quando ela disser que começou agora',
+      '- adapt_agenda: payload vazio — quando ela pedir para ajustar/refazer o dia inteiro',
+      '- open_screen: screen (home|planner|habits|goals|insights|journal|checkin) — quando ela só quiser VER algo',
       '',
       '== MODO ' + interactionMode.toUpperCase() + ' ==',
       interactionMode === 'executor'
