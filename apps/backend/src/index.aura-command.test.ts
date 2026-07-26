@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 
-import { createApp, enforceAuraCaptureGate } from './index';
+import { createApp, enforceAuraCaptureGate, enforceAuraCaptureGateAll } from './index';
 
 async function readResponseText(response: Response): Promise<string> {
   return await response.text();
@@ -175,6 +175,50 @@ async function run() {
   }, 'pt-BR');
   assert.equal(listenOnly.action, 'ask_clarification');
   assert.doesNotMatch(listenOnly.assistantMessage, /pedido expl/i);
+
+  // Agente: uma fala com duas coisas executa as duas.
+  const duasCoisas = enforceAuraCaptureGateAll({
+    assistantMessage: 'Coloquei a consulta e marquei a louça como feita.',
+    intent: 'planner_task',
+    action: 'create_task',
+    payload: { title: 'Consulta com a dermatologista', date: '2026-04-09', startTime: '15:00' },
+    actions: [{ action: 'complete_items', payload: { items: [{ title: 'Lavar a louça', type: 'task' }] } }],
+    needsConfirmation: false, needsClarification: false, clarifyingQuestion: null,
+  } as any, {
+    captureJudgment: { allowedMutationActions: ['create_task', 'complete_items'], captureMode: 'auto' },
+  }, 'pt-BR', { localDate: '2026-04-07', currentHour: 10, currentMinute: 0 });
+  assert.equal(duasCoisas.action, 'create_task');
+  assert.equal(duasCoisas.actions?.length, 1);
+  assert.equal(duasCoisas.actions?.[0].action, 'complete_items');
+
+  // O que não passa é descartado; o que passa continua valendo.
+  const umaSobrevive = enforceAuraCaptureGateAll({
+    assistantMessage: 'ok',
+    intent: 'planner_task',
+    action: 'delete_task',
+    payload: { taskId: 'task-1' },
+    actions: [{ action: 'create_task', payload: { title: 'Comprar ração' } }],
+    needsConfirmation: false, needsClarification: false, clarifyingQuestion: null,
+  } as any, {
+    captureJudgment: { allowedMutationActions: ['create_task'], captureMode: 'propose' },
+  }, 'pt-BR', { localDate: '2026-04-07', currentHour: 10, currentMinute: 0 });
+  assert.equal(umaSobrevive.action, 'create_task', 'a ação válida vira a principal');
+  assert.equal(umaSobrevive.actions, undefined);
+  assert.equal((umaSobrevive.payload as any).title, 'Comprar ração');
+
+  // Nenhuma sobrevivendo, a resposta é a recusa — não um passa-livre.
+  const nenhuma = enforceAuraCaptureGateAll({
+    assistantMessage: 'ok',
+    intent: 'planner_task',
+    action: 'create_task',
+    payload: { title: 'Descansar' },
+    actions: [{ action: 'delete_task', payload: { taskId: 'task-1' } }],
+    needsConfirmation: false, needsClarification: false, clarifyingQuestion: null,
+  } as any, {
+    captureJudgment: { allowedMutationActions: [], captureMode: 'listen' },
+  }, 'pt-BR');
+  assert.equal(nenhuma.action, 'ask_clarification');
+  assert.equal(nenhuma.actions, undefined);
 
   const prisma = {
     $queryRaw: async () => [],

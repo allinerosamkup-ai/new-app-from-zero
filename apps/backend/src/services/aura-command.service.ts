@@ -367,6 +367,17 @@ export class AuraCommandService {
       '→ assistantMessage: confirmar o registro de forma breve (1 frase). Sem elogios excessivos.',
       '→ needsConfirmation: false — se ela disse que fez, registra direto.',
       '',
+      '== VÁRIAS COISAS NA MESMA FALA ==',
+      'Uma fala pode conter mais de uma ação ("marquei consulta quinta às 15h e já lavei a louça" = criar compromisso + registrar conclusão).',
+      '→ Coloque a primeira em action/payload e as demais em "actions": [{ "action": "...", "payload": {...} }]. Máximo 8.',
+      '→ Nunca descarte a segunda coisa que a pessoa disse por já ter usado a primeira.',
+      '',
+      '== CONFIRA O DIA ANTES DE AGIR ==',
+      'Você tem acima o dia real: humor e fase atual, agenda pendente e concluída, hábitos devidos e feitos, metas ativas e o que já foi relatado hoje.',
+      '→ Antes de criar, procure se aquilo já existe. Se existir e a pessoa relatou que fez, use complete_items em vez de criar de novo.',
+      '→ Antes de encaixar horário, olhe o que já está ocupado. Não empilhe em cima de compromisso existente.',
+      '→ Se algo que você ia sugerir já foi feito hoje, não sugira: reconheça.',
+      '',
       '== ANTI-PADRÕES (NUNCA FAÇA) ==',
       '- Não transforme relato em pergunta de triagem. Se não há pedido operacional, use respond e entregue a resposta.',
       '- Não pergunte "qual é sua prioridade?" quando a agenda está vazia — abra o Montador para obter e revisar uma fonte real.',
@@ -375,7 +386,7 @@ export class AuraCommandService {
       '- Não faça handoff ao diário sem a pessoa pedir.',
       '- Não diga que já salvou se needsConfirmation é true.',
       '',
-      'Retorne APENAS JSON com: assistantMessage, intent, action, payload, needsConfirmation. Para conversa comum: {"intent":"conversation","action":"respond","payload":{},"needsConfirmation":false}.',
+      'Retorne APENAS JSON com: assistantMessage, intent, action, payload, needsConfirmation e, quando houver mais de uma coisa a fazer, actions[]. Para conversa comum: {"intent":"conversation","action":"respond","payload":{},"needsConfirmation":false}.',
     ].filter(Boolean).join('\n');
 
     const response = await client.chat.completions.create({

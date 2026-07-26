@@ -199,6 +199,60 @@ export function completeAuraTaskTiming(
   return { date, startTime };
 }
 
+/**
+ * Passa cada ação da fala pelo portão, uma a uma.
+ *
+ * Uma fala pode conter duas coisas ("marquei consulta quinta e já lavei a louça"):
+ * uma pode passar e a outra não. O resultado devolve só o que sobreviveu, na ordem,
+ * e a resposta ao usuário é a da primeira ação válida — ou a recusa, se nenhuma
+ * sobreviver.
+ */
+export function enforceAuraCaptureGateAll(
+  response: AuraCommandResponse,
+  cognitive: { captureJudgment: { allowedMutationActions: string[]; mutationTargetText?: string | null; captureMode?: string } },
+  locale = 'pt-BR',
+  targetContext: {
+    resolvedTaskTitle?: string | null;
+    localDate?: string;
+    currentHour?: number;
+    currentMinute?: number;
+  } = {},
+): AuraCommandResponse {
+  const steps = [
+    { action: response.action, payload: response.payload },
+    ...(response.actions ?? []),
+  ];
+
+  const survivors: Array<{ action: AuraCommandResponse['action']; payload: Record<string, unknown> }> = [];
+  let firstRefusal: AuraCommandResponse | null = null;
+
+  for (const step of steps) {
+    const gated = enforceAuraCaptureGate(
+      { ...response, action: step.action, payload: step.payload, actions: undefined },
+      cognitive,
+      locale,
+      targetContext,
+    );
+    if (gated.action === step.action) {
+      survivors.push({ action: gated.action, payload: gated.payload as Record<string, unknown> });
+    } else if (!firstRefusal) {
+      firstRefusal = gated;
+    }
+  }
+
+  if (survivors.length === 0) {
+    return firstRefusal ?? response;
+  }
+
+  const [primary, ...rest] = survivors;
+  return {
+    ...response,
+    action: primary.action,
+    payload: primary.payload,
+    actions: rest.length > 0 ? rest : undefined,
+  };
+}
+
 export function enforceAuraCaptureGate(
   response: AuraCommandResponse,
   cognitive: { captureJudgment: { allowedMutationActions: string[]; mutationTargetText?: string | null; captureMode?: string } },
@@ -3054,7 +3108,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       const resolvedCommandTask = rawTaskId && (rawCommandResponse.action === 'update_task' || rawCommandResponse.action === 'delete_task')
         ? await prisma.timelineBlock.findFirst({ where: { id: rawTaskId, userId: data.userId } })
         : null;
-      const commandResponse = enforceAuraCaptureGate(
+      const commandResponse = enforceAuraCaptureGateAll(
         rawCommandResponse,
         commandCognitive,
         typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',

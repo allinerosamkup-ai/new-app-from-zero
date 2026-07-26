@@ -40,11 +40,24 @@ export const AuraCommandActionSchema = z.enum([
 
 export const AuraCommandPayloadSchema = z.object({}).catchall(z.unknown());
 
+/**
+ * Uma ação executável. A Airia é um agente: uma fala pode conter mais de uma
+ * coisa a fazer ("marquei consulta quinta e já lavei a louça" são duas), e
+ * obrigar a escolher uma faria a outra ser perdida.
+ */
+export const AuraCommandStepSchema = z.object({
+  action: AuraCommandActionSchema,
+  payload: AuraCommandPayloadSchema.default({}),
+});
+
 export const AuraCommandResponseSchema = z.object({
   assistantMessage: z.string().trim().min(1),
   intent: AuraCommandIntentSchema,
   action: AuraCommandActionSchema,
   payload: AuraCommandPayloadSchema.default({}),
+  /** Ações adicionais da mesma fala. A primeira continua em `action`/`payload`
+   *  para quem só sabe ler uma — cliente antigo não quebra. */
+  actions: z.array(AuraCommandStepSchema).max(8).optional(),
   needsConfirmation: z.boolean().default(false),
   needsClarification: z.boolean().default(false),
   clarifyingQuestion: z.string().trim().min(1).nullable().default(null),
@@ -68,6 +81,7 @@ export const AuraCommandMessageStreamSchema = z.object({
 export type AuraCommandHistoryMessage = z.infer<typeof AuraCommandHistoryMessageSchema>;
 export type AuraCommandIntent = z.infer<typeof AuraCommandIntentSchema>;
 export type AuraCommandAction = z.infer<typeof AuraCommandActionSchema>;
+export type AuraCommandStep = z.infer<typeof AuraCommandStepSchema>;
 export type AuraCommandResponse = z.infer<typeof AuraCommandResponseSchema>;
 export type AuraCommandStartInput = z.infer<typeof AuraCommandStartSchema>;
 export type AuraCommandMessageStreamInput = z.infer<typeof AuraCommandMessageStreamSchema>;
