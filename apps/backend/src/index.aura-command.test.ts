@@ -56,7 +56,10 @@ async function run() {
         mutationTargetText: action === 'update_task' || action === 'delete_task' ? 'proposal' : null,
       },
     }, 'en-US', { resolvedTaskTitle: action === 'update_task' || action === 'delete_task' ? 'Send proposal' : null });
-    assert.equal(allowed, exactCandidate);
+    assert.equal(allowed.action, action);
+    for (const [key, value] of Object.entries(payloadWithTarget)) {
+      assert.deepEqual((allowed.payload as any)[key], value, `${action}.${key}`);
+    }
   }
 
   const actionMismatch = enforceAuraCaptureGate({
@@ -77,6 +80,9 @@ async function run() {
       clarifyingQuestion: null,
     }, { captureJudgment: { allowedMutationActions: [action] } }, 'en-US');
     assert.equal(missingTarget.action, 'ask_clarification');
+    // Falta de alvo é falta de dado, não falta de permissão: a Airia pergunta qual item.
+    assert.equal(missingTarget.needsClarification, true, action);
+    assert.match(String(missingTarget.clarifyingQuestion), /which one/i, action);
   }
 
   const wrongTarget = enforceAuraCaptureGate({
@@ -97,7 +103,8 @@ async function run() {
     const politeTargetAllowed = enforceAuraCaptureGate(politeTargetCandidate, {
       captureJudgment: { allowedMutationActions: ['delete_task'], mutationTargetText: politeTarget },
     }, 'en-US', { resolvedTaskTitle: politeTarget.startsWith('proposal') ? 'Send proposal' : 'Enviar proposta' });
-    assert.equal(politeTargetAllowed, politeTargetCandidate, politeTarget);
+    assert.equal(politeTargetAllowed.action, 'delete_task', politeTarget);
+    assert.equal((politeTargetAllowed.payload as any).taskId, 'task-1', politeTarget);
   }
 
   const incompleteUpdate = enforceAuraCaptureGate({
@@ -109,18 +116,65 @@ async function run() {
   }, 'en-US', { resolvedTaskTitle: 'Send proposal' });
   assert.equal(incompleteUpdate.action, 'ask_clarification');
 
+  // Sem título não há o que criar — isso a Airia não inventa.
   for (const [action, payload] of [
-    ['create_task', { title: 'Proposal' }],
     ['create_goal', {}],
     ['create_checklist', { title: 'Proposal', items: [] }],
     ['create_agenda', { blocks: [] }],
   ] as const) {
     const incompleteCreation = enforceAuraCaptureGate({
-      assistantMessage: 'Created.', intent: action === 'create_goal' ? 'goal_project' : action === 'create_checklist' ? 'checklist' : action === 'create_agenda' ? 'agenda_plan' : 'planner_task',
+      assistantMessage: 'Created.', intent: action === 'create_goal' ? 'goal_project' : action === 'create_checklist' ? 'checklist' : 'agenda_plan',
       action, payload, needsConfirmation: false, needsClarification: false, clarifyingQuestion: null,
     }, { captureJudgment: { allowedMutationActions: [action] } }, 'en-US');
     assert.equal(incompleteCreation.action, 'ask_clarification', action);
   }
+
+  // Com título e sem horário, a Airia decide o horário em vez de devolver a pergunta.
+  const completedTask = enforceAuraCaptureGate({
+    assistantMessage: 'Created.', intent: 'planner_task', action: 'create_task',
+    payload: { title: 'Comprar ração' }, needsConfirmation: false,
+    needsClarification: false, clarifyingQuestion: null,
+  }, {
+    captureJudgment: { allowedMutationActions: ['create_task'], captureMode: 'propose' },
+  }, 'pt-BR', { localDate: '2026-04-07', currentHour: 10, currentMinute: 5 });
+  assert.equal(completedTask.action, 'create_task');
+  assert.equal((completedTask.payload as any).date, '2026-04-07');
+  assert.equal((completedTask.payload as any).startTime, '10:30');
+  assert.equal((completedTask.payload as any).timingWasInferred, true);
+  assert.equal((completedTask.payload as any).inferredFromContext, true);
+
+  // Tarde demais para encaixar hoje: cai para a manhã seguinte, nunca de madrugada.
+  const nextMorning = enforceAuraCaptureGate({
+    assistantMessage: 'Created.', intent: 'planner_task', action: 'create_task',
+    payload: { title: 'Ligar para a escola' }, needsConfirmation: false,
+    needsClarification: false, clarifyingQuestion: null,
+  }, {
+    captureJudgment: { allowedMutationActions: ['create_task'], captureMode: 'propose' },
+  }, 'pt-BR', { localDate: '2026-04-07', currentHour: 23, currentMinute: 40 });
+  assert.equal((nextMorning.payload as any).date, '2026-04-08');
+  assert.equal((nextMorning.payload as any).startTime, '09:00');
+
+  // Horário informado pela usuária é preservado sem arredondamento.
+  const respectsGivenTime = enforceAuraCaptureGate({
+    assistantMessage: 'Created.', intent: 'planner_task', action: 'create_task',
+    payload: { title: 'Consulta', date: '2026-04-09', startTime: '15:00' }, needsConfirmation: false,
+    needsClarification: false, clarifyingQuestion: null,
+  }, {
+    captureJudgment: { allowedMutationActions: ['create_task'], captureMode: 'propose' },
+  }, 'pt-BR', { localDate: '2026-04-07', currentHour: 10, currentMinute: 5 });
+  assert.equal((respectsGivenTime.payload as any).startTime, '15:00');
+  assert.equal((respectsGivenTime.payload as any).timingWasInferred, false);
+
+  // Pedido de escuta continua sendo respeitado — isso não mudou.
+  const listenOnly = enforceAuraCaptureGate({
+    assistantMessage: 'Created.', intent: 'planner_task', action: 'create_task',
+    payload: { title: 'Descansar' }, needsConfirmation: false,
+    needsClarification: false, clarifyingQuestion: null,
+  }, {
+    captureJudgment: { allowedMutationActions: [], captureMode: 'listen' },
+  }, 'pt-BR');
+  assert.equal(listenOnly.action, 'ask_clarification');
+  assert.doesNotMatch(listenOnly.assistantMessage, /pedido expl/i);
 
   const prisma = {
     $queryRaw: async () => [],

@@ -135,13 +135,81 @@ const MUTATING_AURA_ACTIONS = new Set<AuraCommandResponse['action']>([
   'complete_items',
 ]);
 
+/** Ações que só fazem sentido sobre um item que já existe. */
+const AURA_ACTIONS_ON_EXISTING_ITEMS = new Set<AuraCommandResponse['action']>([
+  'update_task',
+  'delete_task',
+  'complete_items',
+]);
+
+/**
+ * Preenche o que a usuária não disse, para que a Airia entregue decidido.
+ *
+ * Data ausente vira hoje. Hora ausente vira o próximo meio-passo do relógio dentro
+ * de uma janela civilizada — nunca 03h da manhã. Isso existe porque devolver
+ * "que horas você quer?" para alguém que acabou de dizer o que precisa fazer é
+ * transferir trabalho para quem já está sem combustível.
+ */
+export function completeAuraTaskTiming(
+  payload: Record<string, unknown>,
+  context: { localDate?: string; currentHour?: number; currentMinute?: number } = {},
+): { date: string; startTime: string } {
+  const now = new Date();
+  const baseDate = typeof context.localDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(context.localDate)
+    ? context.localDate
+    : now.toISOString().slice(0, 10);
+
+  const existingDate = typeof payload.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.date)
+    ? payload.date
+    : null;
+  const rawTime = payload.startTime ?? payload.time;
+  const existingTime = typeof rawTime === 'string' && /^\d{1,2}:\d{2}$/.test(rawTime)
+    ? rawTime.padStart(5, '0')
+    : null;
+
+  if (existingDate && existingTime) return { date: existingDate, startTime: existingTime };
+
+  const hour = Number.isInteger(context.currentHour) ? (context.currentHour as number) : now.getHours();
+  const minute = Number.isInteger(context.currentMinute) ? (context.currentMinute as number) : now.getMinutes();
+
+  // Próximo bloco de 30 minutos, com 15 de folga para não cair "agora mesmo".
+  let slotMinutes = (hour * 60) + minute + 15;
+  slotMinutes = Math.ceil(slotMinutes / 30) * 30;
+
+  const DAY_OPENS = 8 * 60;
+  const DAY_CLOSES = 21 * 60;
+  let date = existingDate ?? baseDate;
+
+  if (!existingTime && slotMinutes >= DAY_CLOSES) {
+    // Já é tarde: cai para a manhã seguinte em vez de agendar de madrugada.
+    if (!existingDate) {
+      const next = new Date(`${baseDate}T12:00:00.000Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      date = next.toISOString().slice(0, 10);
+    }
+    slotMinutes = 9 * 60;
+  }
+  if (!existingTime && slotMinutes < DAY_OPENS) slotMinutes = DAY_OPENS;
+
+  const startTime = existingTime
+    ?? `${String(Math.floor(slotMinutes / 60) % 24).padStart(2, '0')}:${String(slotMinutes % 60).padStart(2, '0')}`;
+
+  return { date, startTime };
+}
+
 export function enforceAuraCaptureGate(
   response: AuraCommandResponse,
-  cognitive: { captureJudgment: { allowedMutationActions: string[]; mutationTargetText?: string | null } },
+  cognitive: { captureJudgment: { allowedMutationActions: string[]; mutationTargetText?: string | null; captureMode?: string } },
   locale = 'pt-BR',
-  targetContext: { resolvedTaskTitle?: string | null } = {},
+  targetContext: {
+    resolvedTaskTitle?: string | null;
+    localDate?: string;
+    currentHour?: number;
+    currentMinute?: number;
+  } = {},
 ): AuraCommandResponse {
   const actionIsAllowed = cognitive.captureJudgment.allowedMutationActions.includes(response.action);
+  const captureMode = cognitive.captureJudgment.captureMode ?? 'auto';
   const payload = response.payload as Record<string, unknown>;
   const hasText = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
   const validDate = (value: unknown) => hasText(value) && /^\d{4}-\d{2}-\d{2}$/.test(String(value));
@@ -172,10 +240,32 @@ export function enforceAuraCaptureGate(
     if (requestTokens.length === 0) return false;
     return requestTokens.filter((token) => resolvedTokens.has(token)).length / requestTokens.length >= 0.8;
   };
+  // A Airia decide a lacuna em vez de devolver a pergunta: título é o único dado
+  // que ela não pode inventar; data e hora ela resolve.
+  const completedPayload: Record<string, unknown> = { ...payload };
+  if (response.action === 'create_task' && hasText(titleFrom(payload))) {
+    const timing = completeAuraTaskTiming(payload, targetContext);
+    completedPayload.date = timing.date;
+    completedPayload.startTime = timing.startTime;
+    completedPayload.timingWasInferred = !validDate(payload.date) || !validTime(payload.startTime ?? payload.time);
+  }
+  if (response.action === 'create_agenda' && Array.isArray(payload.blocks)) {
+    let inferred = false;
+    completedPayload.blocks = payload.blocks.map((block) => {
+      if (!block || typeof block !== 'object') return block;
+      const item = block as Record<string, unknown>;
+      if (!hasText(titleFrom(item))) return block;
+      const timing = completeAuraTaskTiming(item, targetContext);
+      if (!validDate(item.date) || !validTime(item.startTime ?? item.time)) inferred = true;
+      return { ...item, date: timing.date, startTime: timing.startTime };
+    });
+    completedPayload.timingWasInferred = inferred;
+  }
+
   const payloadIsSufficient = (() => {
     switch (response.action) {
       case 'create_task':
-        return hasText(titleFrom(payload)) && validDate(payload.date) && validTime(payload.startTime ?? payload.time);
+        return hasText(titleFrom(payload));
       case 'create_checklist':
         return hasText(titleFrom(payload)) && hasTitledItems(payload.items ?? payload.steps ?? payload.checklist);
       case 'create_goal':
@@ -183,8 +273,7 @@ export function enforceAuraCaptureGate(
       case 'create_agenda':
         return Array.isArray(payload.blocks) && payload.blocks.length > 0 && payload.blocks.every((block) => {
           if (!block || typeof block !== 'object') return false;
-          const item = block as Record<string, unknown>;
-          return hasText(titleFrom(item)) && validDate(item.date) && validTime(item.startTime ?? item.time);
+          return hasText(titleFrom(block as Record<string, unknown>));
         });
       case 'handoff_to_journal':
         return true;
@@ -201,15 +290,42 @@ export function enforceAuraCaptureGate(
     }
   })();
 
-  if (!MUTATING_AURA_ACTIONS.has(response.action) || (actionIsAllowed && payloadIsSufficient)) {
-    return response;
+  if (!MUTATING_AURA_ACTIONS.has(response.action)) return response;
+
+  if (actionIsAllowed && payloadIsSufficient) {
+    // Proposta derivada de contexto nasce marcada, para a UI oferecer ajustar e
+    // desfazer com destaque. Ela é criada de verdade — não fica esperando aceite.
+    return {
+      ...response,
+      payload: { ...completedPayload, captureMode, inferredFromContext: captureMode === 'propose' },
+    };
   }
 
   const english = locale.toLowerCase().startsWith('en');
+
+  // A usuária mandou mexer em algo que já existe, mas não deu para saber em quê.
+  // Isso é falta de alvo, não falta de permissão — e merece pergunta, não recusa.
+  if (actionIsAllowed && AURA_ACTIONS_ON_EXISTING_ITEMS.has(response.action)) {
+    const question = english
+      ? 'Which one do you mean?'
+      : 'Qual desses você quer que eu mexa?';
+    return {
+      assistantMessage: english
+        ? "I couldn't tell which item you meant."
+        : 'Não consegui identificar de qual item você está falando.',
+      intent: 'clarify',
+      action: 'ask_clarification',
+      payload: {},
+      needsConfirmation: false,
+      needsClarification: true,
+      clarifyingQuestion: question,
+    };
+  }
+
   return {
     assistantMessage: english
-      ? "I'm listening. I won't turn this into a task or change your schedule without an explicit request."
-      : 'Estou te ouvindo. Não vou transformar isso em tarefa nem alterar sua agenda sem um pedido explícito.',
+      ? "I'm here. I won't turn this into a task or change your schedule."
+      : 'Estou te ouvindo. Não vou transformar isso em tarefa nem mexer na sua agenda.',
     intent: 'clarify',
     action: 'ask_clarification',
     payload: {},
@@ -2940,7 +3056,12 @@ export function createApp(dependencies: AppDependencies = {}) {
         rawCommandResponse,
         commandCognitive,
         typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
-        { resolvedTaskTitle: resolvedCommandTask?.title ?? null },
+        {
+          resolvedTaskTitle: resolvedCommandTask?.title ?? null,
+          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+          currentHour: Number.isInteger((req.body as any)?.currentHour) ? (req.body as any).currentHour : undefined,
+          currentMinute: Number.isInteger((req.body as any)?.currentMinute) ? (req.body as any).currentMinute : undefined,
+        },
       );
 
       const responsePayload = { ...commandResponse.payload };

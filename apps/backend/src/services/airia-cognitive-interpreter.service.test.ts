@@ -300,9 +300,12 @@ async function run() {
   assert.deepEqual(personalDeleteEn.captureJudgment.allowedMutationActions, ['delete_task']);
   assert.equal(personalDeleteEn.captureJudgment.mutationTargetText, 'proposal');
 
+  // Compromisso relatado com data e hora vira item pronto: a Airia não devolve
+  // para a usuária um dado que ela acabou de dizer.
   const commitment = await offline('I have a dentist appointment tomorrow at 3pm.');
   assert.equal(commitment.captureJudgment.captureAs, 'calendar_commitment');
-  assert.equal(commitment.captureJudgment.allowTaskCreation, false);
+  assert.equal(commitment.captureJudgment.captureMode, 'propose');
+  assert.equal(commitment.captureJudgment.allowTaskCreation, true);
   assert.equal(commitment.captureJudgment.allowDecisionMemory, false);
 
   const note = await offline('Remember that my mother prefers calls in the morning.');
