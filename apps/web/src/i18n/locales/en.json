@@ -250,9 +250,58 @@
     "cramps": "Cramps",
     "dayQuestion": "How was your day?",
     "notePlaceholder": "A thought, a situation... it goes straight to your journal.",
-    "anotherSuggestion": "Generate another suggestion"
-    ,"emotions": { "radiant": "Radiant", "calm": "Calm", "happy": "Happy", "anxious": "Anxious", "tired": "Tired", "focused": "Focused", "sad": "Sad", "angry": "Irritated", "stressed": "Stressed", "sensitive": "Sensitive", "exhausted": "Exhausted", "agitated": "Agitated" },
-    "factors": { "slept_well": "Slept well (7h+)", "slept_little": "Slept little (<6h)", "woke_up_night": "Woke up during the night", "exercise": "Moved my body", "no_exercise": "Stayed still all day", "healthy_meal": "Ate well", "skipped_meals": "Skipped meals", "took_meds": "Took my medication", "forgot_meds": "Forgot my medication", "fresh_air": "Fresh air / went outside", "good_talk": "Good conversation", "kind_words": "Received kind words", "support": "Felt supported", "social_drain": "Social interaction drained me", "loneliness": "Loneliness", "relationship_conflict": "Relationship conflict", "focused_session": "Managed to focus", "hyperfocus_stuck": "Stuck in hyperfocus — can't stop", "small_win": "Small win", "finished_task": "Task completed", "feeling_valued": "Felt valued", "work_pressure": "Pressure / tight deadline", "plan_changed": "Plans changed at the last minute", "hard_decision": "Difficult decision pending", "dissociated": "Dissociated / on autopilot", "low_dopamine": "Nothing feels interesting", "stuck": "Frozen — couldn't start", "overwhelmed": "Mental overload", "self_trust": "Trust in myself", "rest": "Intentional rest", "fiz_algo_gosto": "Did something I enjoy", "financial_stress": "Financial stress", "bad_news": "Bad news", "pms_symptoms": "PMS symptoms", "heavy_period": "Intense period today" },
+    "anotherSuggestion": "Generate another suggestion",
+    "emotions": {
+      "radiant": "Radiant",
+      "calm": "Calm",
+      "happy": "Happy",
+      "anxious": "Anxious",
+      "tired": "Tired",
+      "focused": "Focused",
+      "sad": "Sad",
+      "angry": "Irritated",
+      "stressed": "Stressed",
+      "sensitive": "Sensitive",
+      "exhausted": "Exhausted",
+      "agitated": "Agitated"
+    },
+    "factors": {
+      "slept_well": "Slept well (7h+)",
+      "slept_little": "Slept little (<6h)",
+      "woke_up_night": "Woke up during the night",
+      "exercise": "Moved my body",
+      "no_exercise": "Stayed still all day",
+      "healthy_meal": "Ate well",
+      "skipped_meals": "Skipped meals",
+      "took_meds": "Took my medication",
+      "forgot_meds": "Forgot my medication",
+      "fresh_air": "Fresh air / went outside",
+      "good_talk": "Good conversation",
+      "kind_words": "Received kind words",
+      "support": "Felt supported",
+      "social_drain": "Social interaction drained me",
+      "loneliness": "Loneliness",
+      "relationship_conflict": "Relationship conflict",
+      "focused_session": "Managed to focus",
+      "hyperfocus_stuck": "Stuck in hyperfocus — can't stop",
+      "small_win": "Small win",
+      "finished_task": "Task completed",
+      "feeling_valued": "Felt valued",
+      "work_pressure": "Pressure / tight deadline",
+      "plan_changed": "Plans changed at the last minute",
+      "hard_decision": "Difficult decision pending",
+      "dissociated": "Dissociated / on autopilot",
+      "low_dopamine": "Nothing feels interesting",
+      "stuck": "Frozen — couldn't start",
+      "overwhelmed": "Mental overload",
+      "self_trust": "Trust in myself",
+      "rest": "Intentional rest",
+      "fiz_algo_gosto": "Did something I enjoy",
+      "financial_stress": "Financial stress",
+      "bad_news": "Bad news",
+      "pms_symptoms": "PMS symptoms",
+      "heavy_period": "Intense period today"
+    },
     "voiceUnsupported": "Your browser doesn't support voice input.",
     "voiceRetry": "I didn't hear that clearly. Try again.",
     "voiceChoose": "I couldn't process that. Choose an option below.",
@@ -309,11 +358,26 @@
       "openJournal": "Open my journal"
     },
     "reentry": {
-      "good": { "label": "Good days", "sub": "I felt well, productive, and energetic" },
-      "stable": { "label": "Stable", "sub": "No significant highs or lows" },
-      "mixed": { "label": "Mixed", "sub": "I alternated between good and difficult days" },
-      "hard": { "label": "Difficult days", "sub": "Tired, low mood, little energy" },
-      "crisis": { "label": "Very heavy", "sub": "A crisis, paralysis, or very difficult days" }
+      "good": {
+        "label": "Good days",
+        "sub": "I felt well, productive, and energetic"
+      },
+      "stable": {
+        "label": "Stable",
+        "sub": "No significant highs or lows"
+      },
+      "mixed": {
+        "label": "Mixed",
+        "sub": "I alternated between good and difficult days"
+      },
+      "hard": {
+        "label": "Difficult days",
+        "sub": "Tired, low mood, little energy"
+      },
+      "crisis": {
+        "label": "Very heavy",
+        "sub": "A crisis, paralysis, or very difficult days"
+      }
     }
   },
   "onboarding": {
@@ -330,10 +394,26 @@
     "next": "Next",
     "skip": "Skip for now",
     "basic": {
-      "fullName": { "question": "What would you like to be called?", "helper": "Use your name or nickname. This is how Airia will talk to you.", "placeholder": "e.g. Alline" },
-      "age": { "question": "How old are you?", "helper": "This helps adjust language and context. You can leave it blank if you prefer.", "placeholder": "e.g. 34" },
-      "currentFeeling": { "question": "How are you feeling right now?", "helper": "A simple sentence is enough. What matters is capturing your starting point.", "placeholder": "e.g. tired, restless, sensitive, excited..." },
-      "routineText": { "question": "What is a typical day like for you?", "helper": "Routine, work, study, home, breaks, schedules, or anything that weighs on your day.", "placeholder": "e.g. I wake up early, work in the afternoon, and get more tired at night..." }
+      "fullName": {
+        "question": "What would you like to be called?",
+        "helper": "Use your name or nickname. This is how Airia will talk to you.",
+        "placeholder": "e.g. Alline"
+      },
+      "age": {
+        "question": "How old are you?",
+        "helper": "This helps adjust language and context. You can leave it blank if you prefer.",
+        "placeholder": "e.g. 34"
+      },
+      "currentFeeling": {
+        "question": "How are you feeling right now?",
+        "helper": "A simple sentence is enough. What matters is capturing your starting point.",
+        "placeholder": "e.g. tired, restless, sensitive, excited..."
+      },
+      "routineText": {
+        "question": "What is a typical day like for you?",
+        "helper": "Routine, work, study, home, breaks, schedules, or anything that weighs on your day.",
+        "placeholder": "e.g. I wake up early, work in the afternoon, and get more tired at night..."
+      }
     },
     "energy": {
       "title": "How do YOU spend energy?",
@@ -343,7 +423,22 @@
       "focus": "Available focus on a good day",
       "little": "Little",
       "full": "Full",
-      "items": { "Reuniões": "Meetings", "Crises": "Crises", "Criar conteúdo": "Creating content", "Feedbacks difíceis": "Difficult feedback", "Multitarefas": "Multitasking", "Ruídos": "Noise", "Decisões": "Decisions", "E-mails": "Emails", "Listas": "Lists", "Caminhada": "Walking", "Leitura": "Reading", "Organização": "Organization", "Música": "Music", "Rotina": "Routine" }
+      "items": {
+        "Reuniões": "Meetings",
+        "Crises": "Crises",
+        "Criar conteúdo": "Creating content",
+        "Feedbacks difíceis": "Difficult feedback",
+        "Multitarefas": "Multitasking",
+        "Ruídos": "Noise",
+        "Decisões": "Decisions",
+        "E-mails": "Emails",
+        "Listas": "Lists",
+        "Caminhada": "Walking",
+        "Leitura": "Reading",
+        "Organização": "Organization",
+        "Música": "Music",
+        "Rotina": "Routine"
+      }
     },
     "cycle": {
       "title": "Your menstrual cycle",
@@ -367,7 +462,20 @@
       "bed": "Bedtime",
       "wake": "Wake up",
       "notInformed": "Quality not provided",
-      "cards": { "bem": { "label": "I sleep well", "sub": "I wake up rested" }, "irregular": { "label": "Irregular", "sub": "It varies a lot" }, "mal": { "label": "I sleep poorly", "sub": "I wake up tired" } }
+      "cards": {
+        "bem": {
+          "label": "I sleep well",
+          "sub": "I wake up rested"
+        },
+        "irregular": {
+          "label": "Irregular",
+          "sub": "It varies a lot"
+        },
+        "mal": {
+          "label": "I sleep poorly",
+          "sub": "I wake up tired"
+        }
+      }
     },
     "preferences": {
       "title": "How do you think best?",
@@ -378,7 +486,36 @@
       "diagnosisHelp": "This is self-reported — Airia never diagnoses. It only helps adjust the tone and type of suggestion.",
       "medication": "Do you use ongoing medication?",
       "preferNot": "Prefer not to say",
-      "cards": { "morning": { "label": "Best focus in the morning", "sub": "Creative before noon" }, "afternoon": { "label": "Best in the afternoon", "sub": "Productive from 2–6 PM" }, "night": { "label": "I work well at night", "sub": "Focused after 8 PM" }, "creative": { "label": "Creative tasks", "sub": "Creation, writing, art" }, "analytic": { "label": "Analytical tasks", "sub": "Data, spreadsheets, logic" }, "short": { "label": "Short blocks", "sub": "25 min with breaks" }, "deep": { "label": "Deep immersion", "sub": "90 min without interruption" } }
+      "cards": {
+        "morning": {
+          "label": "Best focus in the morning",
+          "sub": "Creative before noon"
+        },
+        "afternoon": {
+          "label": "Best in the afternoon",
+          "sub": "Productive from 2–6 PM"
+        },
+        "night": {
+          "label": "I work well at night",
+          "sub": "Focused after 8 PM"
+        },
+        "creative": {
+          "label": "Creative tasks",
+          "sub": "Creation, writing, art"
+        },
+        "analytic": {
+          "label": "Analytical tasks",
+          "sub": "Data, spreadsheets, logic"
+        },
+        "short": {
+          "label": "Short blocks",
+          "sub": "25 min with breaks"
+        },
+        "deep": {
+          "label": "Deep immersion",
+          "sub": "90 min without interruption"
+        }
+      }
     },
     "done": {
       "ready": "All set, {{name}}!",
@@ -421,6 +558,8 @@
     "agenda": "AGENDA",
     "emptyDescription": "Planner adapts tasks to your mood and energy. Start with a small block or let Airia suggest a structure.",
     "firstTask": "Create first task",
+    "buildRoutine": "Build my routine",
+    "singleTask": "Just create one task",
     "deleteRecurrence": "Delete recurrence?",
     "newTask": "New task",
     "newTaskDescription": "Create a realistic block for your day.",
@@ -699,7 +838,11 @@
     "adaptDay": "Adapt my day",
     "registerProtocol": "Register protocol",
     "understood": "I understand the alert",
-    "resources": { "cvv": "24/7 emotional support in Brazil", "samu": "medical risk or emergency", "police": "immediate risk of violence" }
+    "resources": {
+      "cvv": "24/7 emotional support in Brazil",
+      "samu": "medical risk or emergency",
+      "police": "immediate risk of violence"
+    }
   },
   "conflicts": {
     "one": "1 scheduling conflict today",
@@ -729,9 +872,22 @@
     "keep": "Keep",
     "block": "Block {{id}}",
     "aligned": "Your agenda is already aligned with how you feel today. Nothing to suggest right now.",
-    "intensityLabels": { "L": "light", "M": "medium", "P": "heavy" },
-    "confidenceLabels": { "high": "high", "medium": "medium", "low": "low" },
-    "actions": { "MOVE_TOMORROW": "Move to tomorrow", "DOWNGRADE_INTENSITY": "Reduce intensity", "CANCEL": "Cancel", "KEEP": "Keep" }
+    "intensityLabels": {
+      "L": "light",
+      "M": "medium",
+      "P": "heavy"
+    },
+    "confidenceLabels": {
+      "high": "high",
+      "medium": "medium",
+      "low": "low"
+    },
+    "actions": {
+      "MOVE_TOMORROW": "Move to tomorrow",
+      "DOWNGRADE_INTENSITY": "Reduce intensity",
+      "CANCEL": "Cancel",
+      "KEEP": "Keep"
+    }
   },
   "routineBuilder": {
     "backPlanner": "Back to Planner",
@@ -773,7 +929,15 @@
     "rhythm": "Rhythm considered",
     "protected": "Protected time",
     "outsideWeek": "Left outside this week",
-    "kinds": { "goal": "Goal", "project": "Project", "task": "Task", "habit": "Habit", "calendar": "Commitment", "reference": "Reference", "concern": "Concern" }
+    "kinds": {
+      "goal": "Goal",
+      "project": "Project",
+      "task": "Task",
+      "habit": "Habit",
+      "calendar": "Commitment",
+      "reference": "Reference",
+      "concern": "Concern"
+    }
   },
   "privacy": "PRIVACY POLICY",
   "billing": {
@@ -998,5 +1162,54 @@
       "contextTitle": "Agenda, goals, and actions",
       "contextDescription": "Planner, goals, habits, journal, and recent suggestions enter the context. Airia uses this to avoid repetition and suggest steps that fit the current state."
     }
+  },
+  "guidedOnboarding": {
+    "stepNameTitle": "What should I call you?",
+    "stepNameHint": "Just this. The rest is tapping.",
+    "stepAreasTitle": "What already fills your days?",
+    "stepAreasHint": "Mark everything that is part of your week.",
+    "stepCommitmentsTitle": "Any fixed schedule?",
+    "stepCommitmentsHint": "Only what is non-negotiable. You can skip.",
+    "stepEnergyTitle": "What drains you and what restores you?",
+    "stepEnergyHint": "This calibrates the size of your days.",
+    "stepIntentionsTitle": "What do you want to sustain or change?",
+    "stepIntentionsHint": "Pick a few. A packed routine does not hold.",
+    "stepHabitsTitle": "Which of these fit your week?",
+    "stepHabitsHint": "Suggested from what you picked. Remove what does not fit.",
+    "stepTodayTitle": "And today, how are you?",
+    "stepTodayHint": "This adjusts the first day only.",
+    "namePlaceholder": "Your name or nickname",
+    "drains": "What drains you",
+    "restorers": "What restores you",
+    "mood": "Mood",
+    "moodLow": "Really low",
+    "moodHigh": "Really good",
+    "energy": "Energy",
+    "energyLow": "Empty",
+    "energyHigh": "Full throttle",
+    "focus": "Focus",
+    "focusLow": "Scattered",
+    "focusHigh": "Sharp",
+    "sleep": "How was your sleep",
+    "sleepBad": "Slept badly",
+    "sleepOk": "So-so",
+    "sleepGood": "Slept well",
+    "what": "What",
+    "whichDays": "Which days",
+    "startTime": "What time it starts",
+    "addCommitment": "+ Add commitment",
+    "removeAria": "Remove {{title}}",
+    "skip": "Skip",
+    "back": "Back",
+    "continue": "Continue",
+    "build": "Build my routine",
+    "building": "Building your routine...",
+    "loadError": "I could not load the options.",
+    "loadErrorHint": "Check your connection and try again.",
+    "retry": "Try again",
+    "submitError": "I could not build your routine now. Your answers are still here — try again.",
+    "everyDay": "every day",
+    "everyWeek": "every week",
+    "minutes": "{{count}} min"
   }
 }

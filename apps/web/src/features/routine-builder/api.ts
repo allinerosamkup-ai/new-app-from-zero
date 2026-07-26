@@ -1,4 +1,5 @@
 import { api } from '../../lib/api';
+import type { GuidedAnswers, GuidedLibrary } from '../guided-onboarding/types';
 import type { RoutineItem, RoutineSession } from './types';
 
 const base = '/routine-builder/sessions';
@@ -6,6 +7,17 @@ const base = '/routine-builder/sessions';
 export const routineBuilderApi = {
   create(input: { focus: string; weekStart: string; timezone: string; locale: string; limits: { wakeTime: string; sleepTime: string; maxDailyLoadMinutes: number; unavailable: never[] } }) {
     return api.post(base, input) as Promise<RoutineSession>;
+  },
+  /** Catálogo de opções do onboarding guiado — uma chamada, tudo que a tela de botões precisa. */
+  library() {
+    return api.get('/routine-builder/library') as Promise<GuidedLibrary>;
+  },
+  /** Abre a sessão do fluxo guiado: sem documento e sem foco escrito. */
+  createGuided(input: { weekStart: string; timezone: string }) {
+    return api.post(base, { mode: 'guided', locale: 'pt-BR', ...input }) as Promise<RoutineSession>;
+  },
+  submitGuided(sessionId: string, answers: GuidedAnswers, today: string) {
+    return api.post(`${base}/${sessionId}/guided`, { answers, today }) as Promise<RoutineSession>;
   },
   get(sessionId: string) {
     return api.get(`${base}/${sessionId}`) as Promise<RoutineSession>;
