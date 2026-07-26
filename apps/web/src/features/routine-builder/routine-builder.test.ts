@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep, shouldRestoreRoutineSession } from './helpers';
+import { applyPlanEntryEdit, buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep, shouldRestoreRoutineSession } from './helpers';
 
 describe('routine builder helpers', () => {
   it('routes every persisted session state to one clear UI step', () => {
@@ -50,5 +50,24 @@ describe('routine builder helpers', () => {
     expect(sections.week.map((entry) => entry.id)).toEqual(['today-habit', 'today-task', 'future-task']);
     expect(sections.habits.map((entry) => entry.id)).toEqual(['today-habit']);
     expect(sections.objectives.map((item) => item.sourceItemId)).toEqual(['goal-1']);
+  });
+
+  it('moves, shortens or removes a preview item through its real classified source', () => {
+    const items = [
+      { id: 'task-1', title: 'Enviar proposta', reviewState: 'confirmed', date: '2026-07-27', startTime: '09:00', durationMinutes: 60 },
+      { id: 'habit-1', title: 'Caminhar', reviewState: 'confirmed', date: null, startTime: null, durationMinutes: 20 },
+    ] as any;
+
+    expect(applyPlanEntryEdit(items, 'task-1', {
+      date: '2026-07-28',
+      startTime: '15:00',
+      durationMinutes: 30,
+    })[0]).toMatchObject({
+      date: '2026-07-28',
+      startTime: '15:00',
+      durationMinutes: 30,
+      reviewState: 'confirmed',
+    });
+    expect(applyPlanEntryEdit(items, 'task-1', { excluded: true })[0].reviewState).toBe('excluded');
   });
 });

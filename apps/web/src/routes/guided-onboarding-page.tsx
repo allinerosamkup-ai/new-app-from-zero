@@ -7,7 +7,9 @@ import { CategorySections, ChoiceCard, ChoiceGrid, PillGroup, ScalePicker } from
 import {
   EMPTY_ANSWERS,
   WEEKDAYS,
+  buildAvailabilityWindows,
   habitFromTemplate,
+  type AvailabilityPeriod,
   type FixedCommitment,
   type GuidedAnswers,
   type GuidedLibrary,
@@ -36,8 +38,8 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { id: 'name', optional: false },
   { id: 'areas', optional: false },
+  { id: 'availability', optional: false },
   { id: 'commitments', optional: true },
   { id: 'energy', optional: false },
   { id: 'intentions', optional: false },
@@ -72,7 +74,6 @@ export function GuidedOnboardingPage() {
   const [library, setLibrary] = useState<GuidedLibrary | null>(null);
   const [libraryError, setLibraryError] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const [name, setName] = useState('');
   const [answers, setAnswers] = useState<GuidedAnswers>(EMPTY_ANSWERS);
   const [submitting, setSubmitting] = useState(false);
 
@@ -112,15 +113,15 @@ export function GuidedOnboardingPage() {
   const canContinue = useMemo(() => {
     if (step.optional) return true;
     switch (step.id) {
-      case 'name': return name.trim().length > 0;
       case 'areas': return answers.lifeAreas.length > 0;
+      case 'availability': return answers.availability.length > 0;
       case 'energy': return answers.energyDrains.length > 0 || answers.energyRestorers.length > 0;
       case 'intentions': return answers.intentions.length > 0;
       case 'habits': return true;
       case 'today': return true;
       default: return true;
     }
-  }, [step, name, answers]);
+  }, [step, answers]);
 
   function goBack() {
     if (stepIndex === 0) {
@@ -249,20 +250,6 @@ export function GuidedOnboardingPage() {
         <p className="aura-page-subtitle" style={{ marginBottom: 22 }}>{g(`step${step.id.charAt(0).toUpperCase()}${step.id.slice(1)}Hint`)}</p>
 
         <div style={{ flex: 1 }}>
-          {step.id === 'name' && (
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={g('namePlaceholder')}
-              autoFocus
-              style={{
-                width: '100%', padding: '15px 16px', borderRadius: 16, fontSize: 16,
-                border: '1.5px solid var(--warm-border-2)', background: 'var(--surface-1, #FFF)',
-                color: 'var(--text-1)',
-              }}
-            />
-          )}
-
           {step.id === 'areas' && (
             <ChoiceGrid>
               {library.lifeAreas.map((option) => (
@@ -274,6 +261,14 @@ export function GuidedOnboardingPage() {
                 />
               ))}
             </ChoiceGrid>
+          )}
+
+          {step.id === 'availability' && (
+            <AvailabilityStep
+              availability={answers.availability}
+              onChange={(availability) => setAnswers((current) => ({ ...current, availability }))}
+              g={g}
+            />
           )}
 
           {step.id === 'commitments' && (
@@ -402,6 +397,104 @@ export function GuidedOnboardingPage() {
     </div>
   );
 }
+
+function AvailabilityStep({
+  availability,
+  onChange,
+  g,
+}: {
+  availability: GuidedAnswers['availability'];
+  onChange: (availability: GuidedAnswers['availability']) => void;
+  g: (key: string, options?: Record<string, unknown>) => string;
+}) {
+  const selectedDays = availability.map((window) => window.dayOfWeek);
+  const firstWindow = availability[0];
+  const period: AvailabilityPeriod = firstWindow?.startTime === '09:00'
+    ? 'daytime'
+    : firstWindow?.startTime === '17:00'
+      ? 'evening'
+      : firstWindow?.endTime === '13:00'
+        ? 'morning'
+        : 'flexible';
+
+  function apply(nextDays: number[], nextPeriod: AvailabilityPeriod = period) {
+    onChange(buildAvailabilityWindows(nextDays, nextPeriod));
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div>
+        <span style={{ display: 'block', marginBottom: 10, color: 'var(--text-1)', fontSize: 14, fontWeight: 800 }}>
+          {g('availableDays')}
+        </span>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button type="button" onClick={() => apply([1, 2, 3, 4, 5])} style={quickChoiceStyle}>
+            {g('weekdays')}
+          </button>
+          <button type="button" onClick={() => apply([0, 1, 2, 3, 4, 5, 6])} style={quickChoiceStyle}>
+            {g('allDays')}
+          </button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+          {WEEKDAYS.map((day) => {
+            const selected = selectedDays.includes(day.value);
+            return (
+              <button
+                key={day.value}
+                type="button"
+                aria-label={day.label}
+                aria-pressed={selected}
+                onClick={() => apply(selected
+                  ? selectedDays.filter((value) => value !== day.value)
+                  : [...selectedDays, day.value])}
+                style={{
+                  height: 44, borderRadius: 12, padding: 0,
+                  border: selected ? 'none' : '1.5px solid var(--warm-border-2)',
+                  background: selected ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+                  color: selected ? '#FFF' : 'var(--text-2)',
+                  fontSize: 13, fontWeight: 800, cursor: 'pointer',
+                }}
+              >
+                {day.short}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
+        <span style={{ display: 'block', marginBottom: 10, color: 'var(--text-1)', fontSize: 14, fontWeight: 800 }}>
+          {g('availablePeriod')}
+        </span>
+        <PillGroup
+          options={[
+            { id: 'morning', label: g('periodMorning') },
+            { id: 'daytime', label: g('periodDaytime') },
+            { id: 'evening', label: g('periodEvening') },
+            { id: 'flexible', label: g('periodFlexible') },
+          ]}
+          value={period}
+          onChange={(value) => apply(selectedDays, value as AvailabilityPeriod)}
+        />
+        <p style={{ margin: '10px 0 0', color: 'var(--text-3)', fontSize: 12, lineHeight: 1.45 }}>
+          {g('availabilityNote')}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const quickChoiceStyle = {
+  minHeight: 38,
+  padding: '8px 13px',
+  borderRadius: 999,
+  border: '1.5px solid var(--warm-border-2)',
+  background: 'var(--surface-1, #FFF)',
+  color: 'var(--text-2)',
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: 'pointer',
+} as const;
 
 /** Compromisso fixo montado por toque: título vem das áreas escolhidas, horário é lista. */
 function CommitmentStep({

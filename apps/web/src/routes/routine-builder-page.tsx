@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { routineBuilderApi } from '../features/routine-builder/api';
-import { nextBuilderStep, shouldRestoreRoutineSession } from '../features/routine-builder/helpers';
+import { applyPlanEntryEdit, nextBuilderStep, shouldRestoreRoutineSession } from '../features/routine-builder/helpers';
 import { RoutineItemCard } from '../features/routine-builder/routine-item-card';
 import type { RoutineItem, RoutineItemKind, RoutineSession } from '../features/routine-builder/types';
 import { WeekPreview } from '../features/routine-builder/week-preview';
@@ -113,6 +113,18 @@ export function RoutineBuilderPage() {
     void run(() => routineBuilderApi.apply(session!.id), (result) => {
       setSession({ ...session!, status: 'applied', applyResult: result });
     });
+  }
+
+  async function revisePlanEntry(
+    entry: { sourceItemId?: string },
+    patch: { date?: string; startTime?: string; durationMinutes?: number; excluded?: boolean },
+  ): Promise<void> {
+    if (!session || !entry.sourceItemId) return;
+    const revisedItems = applyPlanEntryEdit(session.items, entry.sourceItemId, patch);
+    await run(async () => {
+      const reviewed = await routineBuilderApi.updateItems(session.id, revisedItems);
+      return routineBuilderApi.compose(reviewed.id);
+    }, setSession);
   }
 
   function restart(): void {
@@ -243,9 +255,11 @@ export function RoutineBuilderPage() {
                 plan={session.draftPlan}
                 locale={i18n.language === 'en' ? 'en-US' : 'pt-BR'}
                 today={getClientTimeContext().localDate}
+                saving={busy}
+                onEditEntry={revisePlanEntry}
               />
               <div className="routine-actions">
-                <button className="routine-secondary" type="button" disabled={busy} onClick={() => setSession({ ...session, draftPlan: null, status: 'classified' })}>{t('routineBuilder.backReview')}</button>
+                <button className="routine-secondary" type="button" disabled={busy} onClick={() => setSession({ ...session, draftPlan: null, status: 'classified', stage: 'review' })}>{t('routineBuilder.backReview')}</button>
                 <button className="routine-primary" type="button" disabled={busy} onClick={applyPlan}>{busy ? <LoaderCircle size={17} className="spin" /> : <Check size={17} />} {t('routineBuilder.apply')}</button>
               </div>
             </>

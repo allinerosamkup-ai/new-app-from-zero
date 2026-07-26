@@ -95,15 +95,28 @@
 .routine-slot time { font-size: 11px; font-weight: 900; color: var(--accent-peach, #d7897f); }
 .routine-slot strong { display: block; font-size: 13px; }
 .routine-slot p { margin: 3px 0 0; color: var(--text-3); font-size: 10.5px; line-height: 1.4; }
+.routine-slot .routine-icon-button { width: 30px; height: 30px; margin-top: -6px; }
 .routine-slot.is-existing { background: rgba(99,152,169,.035); }
 .routine-unscheduled { border: 1px solid rgba(215,137,127,.18); border-radius: 18px; padding: 14px; background: rgba(215,137,127,.05); }
 .routine-unscheduled strong { font-size: 13px; }
 .routine-unscheduled p { margin: 7px 0 0; font-size: 11px; color: var(--text-2); }
-.routine-unscheduled ul { margin: 5px 0 0; padding-left: 18px; color: var(--text-3); font-size: 10px; line-height: 1.45; }
+.routine-unscheduled ul { margin: 7px 0 0; padding-left: 18px; color: var(--text-3); font-size: 10px; line-height: 1.45; }
+.routine-unscheduled li { margin-top: 7px; }
+.routine-unscheduled li .routine-secondary { min-height: 32px; margin-top: 5px; padding: 5px 10px; font-size: 10px; }
+.routine-preview-editor { position: sticky; bottom: 8px; z-index: 3; padding: 16px; border: 1px solid rgba(215,137,127,.24); border-radius: 20px; background: rgba(255,250,246,.98); box-shadow: 0 16px 38px rgba(107,91,87,.18); }
+.routine-preview-editor > strong { display: block; margin-bottom: 12px; font-size: 14px; }
+.routine-preview-editor__fields { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px; }
+.routine-preview-editor__fields label { display: grid; gap: 5px; color: var(--text-3); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.routine-preview-editor__fields input, .routine-preview-editor__fields select { width: 100%; min-height: 40px; box-sizing: border-box; border: 1px solid rgba(107,91,87,.16); border-radius: 12px; background: #fff; color: var(--text-1); font: inherit; padding: 8px; }
 .routine-success { text-align: center; padding: 22px 8px; }
 .routine-success__mark { width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 15px; background: rgba(150,199,179,.18); color: #4e9077; }
 
 @media (min-width: 700px) {
   .routine-builder-page { padding-top: 34px; }
   .routine-panel { padding: 26px; }
+}
+
+@media (max-width: 520px) {
+  .routine-preview-editor__fields { grid-template-columns: 1fr 1fr; }
+  .routine-preview-editor__fields label:first-child { grid-column: 1 / -1; }
 }

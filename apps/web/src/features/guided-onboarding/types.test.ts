@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EMPTY_ANSWERS, WEEKDAYS, habitFromTemplate, type HabitTemplate } from './types';
+import { EMPTY_ANSWERS, WEEKDAYS, buildAvailabilityWindows, habitFromTemplate, type HabitTemplate } from './types';
 
 function template(overrides: Partial<HabitTemplate> = {}): HabitTemplate {
   return {
@@ -58,5 +58,22 @@ describe('WEEKDAYS', () => {
   it('usa domingo como índice 0, igual ao contrato do backend', () => {
     expect(WEEKDAYS[0].label).toBe('Domingo');
     expect(WEEKDAYS).toHaveLength(7);
+  });
+});
+
+describe('buildAvailabilityWindows', () => {
+  it('converte dias e período escolhidos em disponibilidade operacional', () => {
+    expect(buildAvailabilityWindows([1, 3, 5], 'daytime')).toEqual([
+      { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+      { dayOfWeek: 3, startTime: '09:00', endTime: '18:00' },
+      { dayOfWeek: 5, startTime: '09:00', endTime: '18:00' },
+    ]);
+  });
+
+  it('remove dias repetidos e mantém a ordem semanal', () => {
+    expect(buildAvailabilityWindows([6, 1, 1], 'evening')).toEqual([
+      { dayOfWeek: 1, startTime: '17:00', endTime: '23:00' },
+      { dayOfWeek: 6, startTime: '17:00', endTime: '23:00' },
+    ]);
   });
 });

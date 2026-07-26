@@ -63,7 +63,7 @@ import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { ActivationChecklist } from "../components/activation/ActivationChecklist";
 import { FirstRunGuide } from "../components/activation/FirstRunGuide";
 import { getActivationState } from "../features/aura/activation";
-import { isHabitDueOnWeekday } from "../features/aura/habit-helpers";
+import { isHabitDueOnDate } from "../features/aura/habit-helpers";
 import { NotificationPromptBanner } from "../components/NotificationPromptBanner";
 import { PresenceCard } from "../components/PresenceCard";
 import { GoalNudgeCard } from "../components/GoalNudgeCard";
@@ -520,7 +520,7 @@ export function HomePage() {
   };
   const mood = { ...rawMood, label: l(rawMood.label, moodLabelsEn[state.mood] ?? "Balanced") };
   const habits = useMemo(
-    () => (state.habits || []).filter((habit) => isHabitDueOnWeekday(habit, clockTime.getDay())),
+    () => (state.habits || []).filter((habit) => isHabitDueOnDate(habit, clockTime)),
     [clockTime, state.habits],
   );
   const activationState = useMemo(

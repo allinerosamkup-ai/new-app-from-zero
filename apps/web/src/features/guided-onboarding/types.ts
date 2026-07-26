@@ -66,6 +66,26 @@ export type GuidedAnswers = {
   freeText?: string;
 };
 
+export type AvailabilityPeriod = 'morning' | 'daytime' | 'evening' | 'flexible';
+
+const AVAILABILITY_PERIODS: Record<AvailabilityPeriod, { startTime: string; endTime: string }> = {
+  morning: { startTime: '07:00', endTime: '13:00' },
+  daytime: { startTime: '09:00', endTime: '18:00' },
+  evening: { startTime: '17:00', endTime: '23:00' },
+  flexible: { startTime: '07:00', endTime: '23:00' },
+};
+
+export function buildAvailabilityWindows(
+  days: number[],
+  period: AvailabilityPeriod,
+): GuidedAnswers['availability'] {
+  const window = AVAILABILITY_PERIODS[period];
+  return Array.from(new Set(days))
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
+    .sort((left, right) => left - right)
+    .map((dayOfWeek) => ({ dayOfWeek, ...window }));
+}
+
 export const EMPTY_ANSWERS: GuidedAnswers = {
   lifeAreas: [],
   availability: [],

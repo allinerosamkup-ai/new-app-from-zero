@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Habit, NotificationPreferences, Task } from '../features/aura/types';
-import { getHabitCompletionCount, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from '../features/aura/habit-helpers';
+import { getHabitCompletionCount, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnDate } from '../features/aura/habit-helpers';
 import {
   DEFAULT_EVENING_CHECKIN_TIME,
   DEFAULT_MORNING_CHECKIN_TIME,
@@ -53,7 +53,6 @@ export function useHabitReminders(
       if (Notification.permission !== 'granted') return;
       const now = new Date();
       const todayKey = getLocalDateKey(now);
-      const weekday = now.getDay();
       const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -86,7 +85,7 @@ export function useHabitReminders(
 
       habitsWithReminders
         .forEach((h) => {
-          if (!isHabitDueOnWeekday(h, weekday)) return;
+          if (!isHabitDueOnDate(h, now)) return;
           const startMinutes = timeToMinutes(h.reminderTime);
           if (startMinutes === null) return;
           const completed = isHabitCompleteForDate(h, todayKey);

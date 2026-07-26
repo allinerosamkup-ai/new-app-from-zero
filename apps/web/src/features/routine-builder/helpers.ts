@@ -1,7 +1,28 @@
-import type { RoutineBuilderStep, RoutinePlan, RoutinePlanEntry, RoutineSession } from './types';
+import type { RoutineBuilderStep, RoutineItem, RoutinePlan, RoutinePlanEntry, RoutineSession } from './types';
 
 export function shouldRestoreRoutineSession(incoming: { initialSource?: string; focus?: string }): boolean {
   return !incoming.initialSource?.trim() && !incoming.focus?.trim();
+}
+
+export function applyPlanEntryEdit(
+  items: RoutineItem[],
+  sourceItemId: string,
+  patch: {
+    date?: string;
+    startTime?: string;
+    durationMinutes?: number;
+    excluded?: boolean;
+  },
+): RoutineItem[] {
+  return items.map((item) => item.id !== sourceItemId
+    ? item
+    : {
+        ...item,
+        ...(patch.date ? { date: patch.date } : {}),
+        ...(patch.startTime ? { startTime: patch.startTime } : {}),
+        ...(patch.durationMinutes ? { durationMinutes: patch.durationMinutes } : {}),
+        reviewState: patch.excluded ? 'excluded' : 'confirmed',
+      });
 }
 
 export function nextBuilderStep(session: Pick<RoutineSession, 'status' | 'stage' | 'draftPlan'>): RoutineBuilderStep {

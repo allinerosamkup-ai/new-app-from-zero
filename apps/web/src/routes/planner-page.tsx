@@ -63,7 +63,7 @@ import {
 } from "../utils/task-metadata";
 import { getLocalDateKey, getLocalNoonDate, normalizeDateKey } from "../utils/day-context";
 import {
-  isHabitDueOnWeekday,
+  isHabitDueOnDate,
   getHabitCompletionCount,
   getHabitTargetCount,
 } from "../features/aura/habit-helpers";
@@ -2126,11 +2126,8 @@ export function PlannerPage() {
   const dueHabitsForDate = useMemo(() => {
     const parts = selectedDateKey.split("-").map(Number);
     if (parts.length !== 3 || parts.some(Number.isNaN)) return [];
-    const [yyyy, mm, dd] = parts;
-    const dateObj = new Date(yyyy, mm - 1, dd);
-    const weekday = dateObj.getDay();
     return (state.habits || []).filter((habit) => {
-      if (!isHabitDueOnWeekday(habit, weekday)) return false;
+      if (!isHabitDueOnDate(habit, selectedDateKey)) return false;
       if (getHabitCompletionCount(habit, selectedDateKey) >= getHabitTargetCount(habit)) return false;
       return true;
     });
