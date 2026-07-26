@@ -38,7 +38,6 @@ export const AuraCommandActionSchema = z.enum([
   'create_checklist',
   'create_goal',
   'create_agenda',
-  'start_routine_builder',
   'ask_clarification',
   'handoff_to_journal',
   'update_task',

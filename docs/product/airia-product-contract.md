@@ -63,7 +63,9 @@ Uma experiência da Airia só está correta quando entrega, em conjunto:
 
 ## Montador de Rotina
 
-Pedidos amplos como “monte meu dia”, “organize minha semana” ou “transforme este documento em rotina” não usam o gerador rápido de blocos. Eles abrem uma sessão persistente do Montador de Rotina.
+O Montador é a ferramenta do **onboarding** — o momento em que o app ainda não sabe nada da pessoa e precisa de uma primeira fonte para montar a semana com botões, sem digitação obrigatória.
+
+Depois do onboarding ele sai de cena. Pedidos como “monte meu dia”, “organize minha semana” ou “transforme isto em rotina” são atendidos **pela Airia, na conversa**: ela lê memória, fase e estado atual, propõe os itens já com dia, horário e duração, e o que a pessoa aceita é salvo automaticamente na página correspondente — Planner, Hábitos ou Metas. A Airia não manda a usuária para outra tela para fazer o que ela consegue fazer no chat.
 
 O caminho principal é guiado e funciona sem documento: a usuária escolhe áreas da vida, compromissos protegidos, fatores de energia, intenções e hábitos em controles de toque. A Airia transforma essas escolhas em itens classificados e apresenta a semana pronta para revisão.
 
@@ -80,7 +82,7 @@ Texto, transcrição, TXT, Markdown, PDF, DOCX ou XLSX são uma entrada opcional
 
 Um pedido simples como “monte minha rotina” abre o fluxo guiado. Uma lista ou documento com conteúdo operacional abre a revisão da fonte. Uma sessão antiga nunca substitui silenciosamente um novo pedido.
 
-Pedidos naturais com intenção equivalente — por exemplo, “preciso criar uma rotina”, “quero montar meu dia” ou “me ajude a organizar minha semana” — também abrem o Montador de forma determinística. Esse roteamento não depende da interpretação livre do modelo e prevalece sobre respostas conversacionais ou tentativas de criar blocos diretamente. Quando o pedido já contém conteúdo suficiente, a classificação começa automaticamente ao abrir o Montador, sem exigir outro clique. Negação, desabafo e mera menção ao tema não abrem o fluxo.
+Pedidos naturais com intenção equivalente — “preciso criar uma rotina”, “quero montar meu dia”, “me ajude a organizar minha semana” — são reconhecidos de forma determinística e montam a rotina na conversa. Esse roteamento não depende da interpretação livre do modelo. Negação, desabafo e mera menção ao tema não montam nada.
 
 Listas operacionais extensas, com caixas de seleção, recorrências, objetivos ou seções numeradas, também são fonte de rotina mesmo quando a usuária não escreve literalmente “monte uma rotina”. A conversa deve encaminhar esse conteúdo para classificação e revisão; uma resposta genérica não substitui a montagem.
 

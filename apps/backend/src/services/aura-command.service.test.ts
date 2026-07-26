@@ -11,14 +11,14 @@ async function run() {
     JSON.stringify({
       assistantMessage: 'Vou abrir o montador para separar, revisar e organizar sua semana.',
       intent: 'routine_builder',
-      action: 'start_routine_builder',
+      action: 'create_agenda',
       payload: { sourceText: 'Minha rotina está toda solta.' },
       needsConfirmation: false,
     }),
     'Monte minha rotina completa a partir disso.',
   );
   assert.equal(routineBuilder.intent, 'routine_builder');
-  assert.equal(routineBuilder.action, 'start_routine_builder');
+  assert.equal(routineBuilder.action, 'create_agenda');
 
   const routineBuilderOverridesWrongModelAction = parseAuraCommandResponse(
     JSON.stringify({
@@ -31,9 +31,12 @@ async function run() {
     explicitRoutineMessage,
   );
   assert.equal(routineBuilderOverridesWrongModelAction.intent, 'routine_builder');
-  assert.equal(routineBuilderOverridesWrongModelAction.action, 'start_routine_builder');
+  assert.equal(routineBuilderOverridesWrongModelAction.action, 'create_agenda');
   assert.equal(routineBuilderOverridesWrongModelAction.payload.sourceText, explicitRoutineMessage);
-  assert.match(routineBuilderOverridesWrongModelAction.assistantMessage, /montador|montagem|rotina/i);
+  // A fala confirma que montou aqui — e não anuncia ida para outra tela. Depois do
+  // onboarding, o Montador não aparece mais: quem monta é a Airia, na conversa.
+  assert.match(routineBuilderOverridesWrongModelAction.assistantMessage, /montar|semana|rotina/i);
+  assert.doesNotMatch(routineBuilderOverridesWrongModelAction.assistantMessage, /abrir o montador|vou abrir/i);
 
   const naturalShortRoutineRequest = parseAuraCommandResponse(
     JSON.stringify({
@@ -44,7 +47,7 @@ async function run() {
     }),
     'Quero montar meu dia.',
   );
-  assert.equal(naturalShortRoutineRequest.action, 'start_routine_builder');
+  assert.equal(naturalShortRoutineRequest.action, 'create_agenda');
 
   const structuredChecklistWithoutCommand = [
     'CHECKLIST — GOVERNO E ACELERAÇÃO',
@@ -69,7 +72,7 @@ async function run() {
     }),
     structuredChecklistWithoutCommand,
   );
-  assert.equal(structuredChecklistResult.action, 'start_routine_builder');
+  assert.equal(structuredChecklistResult.action, 'create_agenda');
   assert.equal(structuredChecklistResult.intent, 'routine_builder');
   assert.equal(structuredChecklistResult.payload.sourceText, structuredChecklistWithoutCommand);
 
@@ -221,7 +224,7 @@ async function run() {
   }, routineMustNotCallModelClient as any);
 
   assert.equal(deterministicRoutineResult.intent, 'routine_builder');
-  assert.equal(deterministicRoutineResult.action, 'start_routine_builder');
+  assert.equal(deterministicRoutineResult.action, 'create_agenda');
   assert.equal(deterministicRoutineResult.payload.sourceText, explicitRoutineMessage);
   assert.equal(deterministicRoutineResult.needsConfirmation, false);
   assert.equal(routineModelCalls, 0);
@@ -286,11 +289,12 @@ async function run() {
   assert.match(userPrompt, /create_checklist/i);
   assert.match(userPrompt, /handoff_to_journal/i);
   assert.match(userPrompt, /ask_clarification/i);
-  assert.match(userPrompt, /start_routine_builder/i);
+  assert.match(userPrompt, /MONTAR ROTINA AQUI NA CONVERSA/i);
+  assert.doesNotMatch(userPrompt, /start_routine_builder|abrir o Montador/i);
   assert.match(userPrompt, /needsConfirmation/i);
   assert.match(userPrompt, /recorrent/i);
   assert.match(userPrompt, /HIERARQUIA DE EXECUÇÃO/i);
-  assert.match(userPrompt, /MONTADOR DE ROTINA/i);
+  assert.match(userPrompt, /MONTAR ROTINA AQUI NA CONVERSA/i);
   assert.match(userPrompt, /MODO EXECUTOR/i);
   assert.match(userPrompt, /FORMATO OBRIGATÓRIO PARA CREATE_AGENDA/i);
   assert.match(userPrompt, /RELATO DE CONCLUSÃO/i);

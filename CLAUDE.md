@@ -48,6 +48,12 @@ packages/
 - A linguagem deve ser natural, próxima, firme e específica. Evitar resposta de suporte, pergunta prematura e sugestão genérica.
 - Metodologia interna: Aliança Divergente, TCC prática, exposição gradual, leitura de padrão, manobra concreta e autonomia.
 
+## Airia como centro de comando
+- Tudo que se faz por tela tem que dar para pedir falando: criar tarefa, compromisso, hábito, meta e checklist; concluir, apagar, mover, adiar e começar; **registrar check-in**; adaptar a agenda; abrir uma tela.
+- Uma fala pode conter mais de uma ação (`actions[]`, até 8). A segunda coisa dita nunca é descartada.
+- **Estado é captura paralela.** Sempre que a fala revela como a pessoa está — com pedido junto ou não — isso vira check-in registrado, sem sequestrar a resposta. É o dado que alimenta fase, capacidade do dia e toda sugestão de agendamento.
+- Antes de agir, a Airia confere o dia real: o que já existe, o que já foi feito, o que está ocupado. Ela conclui em vez de duplicar e reconhece em vez de sugerir o que já aconteceu.
+
 ## Contexto Diário e Agenda Adaptativa
 - Fonte central: `apps/backend/src/services/context-grounding.service.ts`.
 - `DailyContext` reúne agenda pendente/feita, hábitos pendentes/feitos, metas ativas/concluídas, subtarefas feitas, sugestões recentes, feedback de ações e memória RAG relevante.

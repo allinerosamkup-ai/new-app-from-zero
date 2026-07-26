@@ -66,8 +66,6 @@ function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandInt
       return 'goal_project';
     case 'create_agenda':
       return 'agenda_plan';
-    case 'start_routine_builder':
-      return 'routine_builder';
     case 'ask_clarification':
       return 'clarify';
     case 'handoff_to_journal':
@@ -96,7 +94,8 @@ function inferActionFromIntent(intent: AuraCommandIntent | null): AuraCommandAct
     case 'agenda_plan':
       return 'create_agenda';
     case 'routine_builder':
-      return 'start_routine_builder';
+      // Rotina é montada aqui na conversa, em blocos concretos.
+      return 'create_agenda';
     case 'clarify':
       return 'ask_clarification';
     case 'reflective_handoff':
@@ -133,11 +132,11 @@ function routineBuilderResponse(message: string): AuraCommandResponse {
 
   return AuraCommandResponseSchema.parse({
     assistantMessage: isEnglish
-      ? 'I will open the Routine Builder, separate the habits and frequencies you described, and show you the week for review before saving.'
-      : 'Vou abrir o Montador de Rotina, separar os hábitos e as frequências que você descreveu e mostrar a semana para você revisar antes de salvar.',
+      ? 'Let me lay out your week here — I will place the blocks and you adjust what does not fit.'
+      : 'Vou montar sua semana aqui. Coloco os blocos e você ajusta o que não servir.',
     intent: 'routine_builder',
-    action: 'start_routine_builder',
-    payload: { sourceText: message },
+    action: 'create_agenda',
+    payload: { sourceText: message, buildWeek: true },
     needsConfirmation: false,
     needsClarification: false,
     clarifyingQuestion: null,
@@ -316,34 +315,34 @@ export class AuraCommandService {
       '3. PROPONHA se precisar de confirmação do usuário (só para datas futuras).',
       '4. PERGUNTE apenas se falta dado completamente indispensável (ex: qual tarefa específica remover).',
       '',
-      '== MONTADOR DE ROTINA (PRIORIDADE MÁXIMA) ==',
-      'Quando a pessoa pedir para montar/organizar o dia, a semana ou a rotina inteira; colar uma lista misturada; ou pedir para transformar um documento em metas, hábitos, tarefas e compromissos:',
-      '→ Use action "start_routine_builder" e intent "routine_builder".',
-      '→ payload: {"sourceText":"texto original útil, sem inventar itens","focus":"objetivo explícito, se houver"}.',
-      '→ O Montador fará classificação, revisão, esclarecimentos indispensáveis, cruzamento com agenda/hábitos/check-in e aplicação atômica.',
-      '→ Não gere blocos genéricos, não suponha prioridades e não diga que a rotina já foi salva.',
-      '→ assistantMessage: diga em uma frase que vai abrir a montagem revisável.',
+      '== MONTAR ROTINA AQUI NA CONVERSA (PRIORIDADE MÁXIMA) ==',
+      'Quando a pessoa pedir para montar/organizar o dia, a semana ou a rotina inteira; colar uma lista misturada; ou pedir para transformar um texto em metas, hábitos, tarefas e compromissos:',
+      '→ MONTE AQUI. Nunca mande a pessoa para outra tela nem diga que vai abrir um montador.',
+      '→ Use create_agenda com os blocos concretos, e actions[] para os hábitos (create_habit) e metas (create_goal) que aparecerem no mesmo pedido.',
+      '→ Distribua pelos dias usando o que você já sabe: compromissos existentes, hábitos devidos, fase e energia atual, janelas livres. Não empilhe em cima do que já existe.',
+      '→ Não invente item que a pessoa não citou, mas decida horário, duração e dia dos itens que ela citou.',
+      '→ assistantMessage: diga em uma frase o que montou e convide a ajustar ("montei a semana; me fala o que não serve").',
       '',
       '== FORMATO OBRIGATÓRIO PARA CREATE_AGENDA ==',
-      'Use create_agenda apenas para uma lista PEQUENA de blocos concretos já especificados pela pessoa; pedidos amplos pertencem ao start_routine_builder.',
+      'create_agenda serve tanto para dois blocos quanto para a semana inteira. Pedido amplo também é montado aqui.',
       'Quando action = "create_agenda", o payload DEVE ter uma chave "blocks" com array de blocos:',
       '{"action":"create_agenda","intent":"agenda_plan","needsConfirmation":false,"assistantMessage":"Pronto! Montei seu dia.","payload":{"blocks":[{"title":"Café + planejamento","date":"' + todayKey + '","startTime":"08:00","category":"pessoal"},{"title":"Foco profundo","date":"' + todayKey + '","startTime":"09:30","category":"trabalho"},{"title":"Almoço e pausa","date":"' + todayKey + '","startTime":"12:00","category":"autocuidado"},{"title":"Projetos da tarde","date":"' + todayKey + '","startTime":"14:00","category":"trabalho"},{"title":"Encerrar o dia","date":"' + todayKey + '","startTime":"17:30","category":"pessoal"}]}}',
       'Categorias válidas: "trabalho", "pessoal", "autocuidado", "social", "outro".',
       'NUNCA retorne create_agenda sem o campo "blocks" dentro de "payload".',
       '',
       '== MODO ZERO CONTEXTO ==',
-      'Se NÃO houver metas, hábitos, planner nem estado recente, nunca invente uma rotina padrão.',
-      '→ Use start_routine_builder para coletar uma fonte real e permitir revisão antes de salvar.',
+      'Se NÃO houver metas, hábitos, planner nem estado recente, não invente uma rotina padrão tirada do relógio.',
+      '→ Faça UMA pergunta curta que colete o essencial ("me fala 3 coisas que precisam acontecer essa semana") e monte a partir da resposta, aqui mesmo.',
       '',
       '== REGRAS DE NEEDSCONFIRMATION ==',
-      '- FALSE (executa direto): tarefa de HOJE, abertura do Montador, tarefas sem data específica',
+      '- FALSE (executa direto): tarefa de HOJE, rotina montada na conversa, tarefas sem data específica',
       '- TRUE (mostra proposta): APENAS quando a data é futura (amanhã ou depois)',
       '',
       '== REGRAS OPERACIONAIS ==',
       '- respond: conversa, análise ou orientação; payload vazio; não cria, move, exclui ou salva nada',
       '- create_task: title + date (' + todayKey + ' se hoje) + startTime + category + note',
       '- create_agenda: blocks[] com title/date/startTime/category cada um',
-      '- start_routine_builder: sourceText original + focus explícito opcional; não cria blocos diretamente',
+      '- create_agenda: blocks[] — de um bloco à semana inteira, sempre montada aqui na conversa',
       '- create_checklist: title + items[] (mantém TODOS os itens, sem resumir)',
       '- create_goal: title + subgoals[]',
       '- update_task: taskId + newDate + newStartTime',
@@ -386,7 +385,7 @@ export class AuraCommandService {
       '',
       '== ANTI-PADRÕES (NUNCA FAÇA) ==',
       '- Não transforme relato em pergunta de triagem. Se não há pedido operacional, use respond e entregue a resposta.',
-      '- Não pergunte "qual é sua prioridade?" quando a agenda está vazia — abra o Montador para obter e revisar uma fonte real.',
+      '- Não mande a pessoa para outra tela para fazer o que você consegue fazer aqui.',
       '- Não resuma uma lista em uma tarefa — use create_checklist.',
       '- Não use análise emocional longa em modo executor.',
       '- Não faça handoff ao diário sem a pessoa pedir.',

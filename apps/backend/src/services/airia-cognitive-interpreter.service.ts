@@ -321,7 +321,45 @@ function extractMutationTargetText(message: string, action: AiriaMutationAction)
   return tokens.length > 0 && tokens.length <= 10 ? tokens.join(' ') : null;
 }
 
+/**
+ * A pessoa revelou como está?
+ *
+ * Largo de propósito. Estado é o sinal mais barato e mais valioso do app: alimenta
+ * fase, capacidade do dia e toda sugestão de agendamento. Perder isso porque a
+ * frase também tinha um pedido dentro seria jogar fora o dado principal.
+ */
+function hasStateSignal(text: string): boolean {
+  const stateWord = /\b(?:humor|energia|foco|animo|disposicao|sono|cansad[oa]|exaust[oa]|acabad[oa]|arrasad[oa]|mal|pessima|pessimo|horrivel|otim[oa]|bem|animad[oa]|acelerad[oa]|ansios[oa]|ansiedade|angustia|trist[e]|deprimid[oa]|irritad[oa]|sobrecarregad[oa]|travad[oa]|paralisad[oa]|lixo|no chao|zerad[oa]|sem energia|sem forcas|para baixo|surtand[oa]|no limite)\b/.test(text);
+  const stateFraming = /\b(?:to|tou|estou|estava|acordei|dormi|me sinto|sinto|sentindo|hoje foi|hoje ta|hoje esta|meu (?:humor|sono|foco|dia)|minha (?:energia|cabeca|semana))\b/.test(text);
+  const numericState = /\b(?:humor|energia|foco|sono)\b.{0,12}\b(?:10|[1-9])\b|\b(?:10|[1-9])\s*(?:de|\/)\s*10\b/.test(text);
+  return numericState || (stateWord && stateFraming);
+}
+
+/**
+ * Estado nunca é a ação principal quando existe um pedido junto: ele entra como
+ * ação paralela. Assim "estou ansiosa e quero fechar uma parte" vira as duas
+ * coisas — a parte fechada E o registro de que hoje veio ansiedade.
+ */
+function withStateCapture(judgment: AiriaCaptureJudgment, text: string): AiriaCaptureJudgment {
+  // Negação explícita ("não registra nada disso") vale para tudo, inclusive isso.
+  const isHardRefusal = judgment.captureMode === 'listen' && judgment.explicitness === 'explicit'
+    && /\bnao\b/.test(text);
+  if (isHardRefusal || !hasStateSignal(text)) return judgment;
+  if (judgment.allowedMutationActions.includes('log_checkin')) return judgment;
+
+  return {
+    ...judgment,
+    allowedMutationActions: [...judgment.allowedMutationActions, 'log_checkin'],
+    allowMemoryCapture: true,
+    reason: `${judgment.reason} A fala também revela como a pessoa está: isso é registrado como check-in.`,
+  };
+}
+
 function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
+  return withStateCapture(classifyBase(message), normalizeForClassification(message));
+}
+
+function classifyBase(message: string): AiriaCaptureJudgment {
   const text = normalizeForClassification(message);
   if (!text) {
     return {
@@ -371,11 +409,14 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
 
   const explicitRoutineBuilder = isExplicitRoutineBuilderRequest(message);
   if (explicitRoutineBuilder) {
+    // Pedir para montar a semana é pedir a semana montada — não é pedir para ser
+    // levada a outra tela. A Airia monta aqui e a pessoa ajusta o que não serviu.
     return {
-      captureAs: 'clarification', captureMode: 'listen', allowedMutationActions: [],
-      allowTaskCreation: false, allowDecisionMemory: false, allowMemoryCapture: false,
+      captureAs: 'task', captureMode: 'auto',
+      allowedMutationActions: ['create_agenda', 'create_task', 'create_habit', 'create_goal', 'create_checklist'],
+      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: true,
       explicitness: 'explicit', confidence: 'alta',
-      reason: 'A fala atual pede abrir uma montagem revisável; ainda não autoriza criar itens antes da revisão.',
+      reason: 'A fala pede a rotina montada: a Airia monta na conversa, com blocos, hábitos e metas concretos.',
     };
   }
 
@@ -532,7 +573,7 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
   }
 
   // Obrigação com prazo — "o relatório vence sexta", "tenho que entregar até segunda".
-  const obligationVerb = /\b(vence|venceu|expira|entregar|entrega|enviar|mandar|pagar|marcar|resolver|responder|renovar|comprar|ligar|buscar|levar)\b/.test(text);
+  const obligationVerb = /\b(vence|venceu|expira|entregar|entrega|enviar|mandar|pagar|marcar|resolver|responder|renovar|comprar|ligar|buscar|levar|terminar|acabar|fechar|finalizar|comecar|adiantar|estudar|escrever|revisar|montar|arrumar|organizar|limpar|lavar|agendar)\b/.test(text);
   const obligationFraming = /\b(tenho que|tenho de|preciso|nao posso esquecer|nao pode passar|esta atrasad|ta atrasad|prazo|deadline|ate (?:hoje|amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|o fim|sexta-feira))\b/.test(text);
   if (obligationVerb && (obligationFraming || looseTimeAnchor)) {
     return {
@@ -551,25 +592,6 @@ function classifyCurrentMessage(message: string): AiriaCaptureJudgment {
       allowTaskCreation: true, allowDecisionMemory: true,
       allowMemoryCapture: true, explicitness: 'implicit', confidence: 'media',
       reason: 'A fala declara intenção de retomar algo: a Airia monta o hábito ou a meta já dimensionada para a fase atual.',
-    };
-  }
-
-  const stateWord = /\b(?:humor|energia|foco|animo|disposicao|sono|cansad[oa]|exaust[oa]|acabad[oa]|arrasad[oa]|mal|pessima|pessimo|horrivel|otim[oa]|bem|animad[oa]|acelerad[oa]|ansios[oa]|trist[e]|para baixo|no chao|zerad[oa]|sem energia|sem forcas)\b/.test(text);
-  const stateFraming = /\b(?:to|tou|estou|acordei|dormi|me sinto|sinto|hoje (?:eu )?(?:to|tou|estou|acordei)|meu (?:humor|sono|foco)|minha energia)\b/.test(text);
-  const numericState = /\b(?:humor|energia|foco|sono)\b.{0,12}\b(?:10|[1-9])\b|\b(?:10|[1-9])\s*(?:de|\/)\s*10\b/.test(text);
-  // Fala que carrega intenção ("quero fechar uma parte") não é relato de estado —
-  // é pedido com emoção junto. Registrar check-in ali sequestraria a conversa.
-  const carriesIntention = /\b(?:quero|queria|preciso|vou|pretendo|tenho que|tenho de|me ajuda|preciso de)\b/.test(text);
-  const metricNoun = /\b(?:humor|energia|foco|animo|disposicao|sono)\b/.test(text);
-  const sleepOrWake = /\b(?:acordei|dormi|nao dormi)\b/.test(text);
-  const isStateReport = !carriesIntention
-    && (numericState || (metricNoun && stateFraming) || (sleepOrWake && stateWord));
-  if (isStateReport) {
-    return {
-      captureAs: 'task', captureMode: 'propose', allowedMutationActions: ['log_checkin'],
-      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: true,
-      explicitness: 'implicit', confidence: 'media',
-      reason: 'A fala descreve como a pessoa está hoje: vira check-in registrado, sem virar tarefa.',
     };
   }
 

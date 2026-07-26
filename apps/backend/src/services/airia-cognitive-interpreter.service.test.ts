@@ -244,17 +244,32 @@ async function run() {
     assert.deepEqual(result.captureJudgment.allowedMutationActions, [esperado], fala);
   }
 
-  // Fala com intenção junto não vira check-in: "quero fechar uma parte" é pedido,
-  // não relato de estado. Registrar ali sequestraria a conversa.
+  // Estado é captura PARALELA: a fala pode ter pedido e estado juntos, e as duas
+  // coisas acontecem. Perder o estado porque veio pedido junto seria jogar fora o
+  // dado que alimenta fase, capacidade do dia e toda sugestão de agendamento.
   for (const fala of [
     'Estou ansiosa com a mudança e quero fechar uma parte.',
-    'Tô cansada mas preciso terminar isso hoje.',
+    'Tô cansada mas preciso terminar o relatório hoje.',
+    'Hoje foi horrível, não consegui fazer nada e me sinto um lixo por isso.',
+    'Marquei consulta quinta às 15h e tô ansiosa com isso.',
   ]) {
     const result = await offline(fala);
     assert.ok(
-      !result.captureJudgment.allowedMutationActions.includes('log_checkin'),
-      fala,
+      result.captureJudgment.allowedMutationActions.includes('log_checkin'),
+      `estado deveria ser registrado: ${fala}`,
     );
+  }
+
+  // Pedido e estado na mesma fala geram as duas ações.
+  const pedidoComEstado = await offline('Marquei consulta quinta às 15h e tô ansiosa com isso.');
+  assert.ok(pedidoComEstado.captureJudgment.allowedMutationActions.includes('create_agenda'));
+  assert.ok(pedidoComEstado.captureJudgment.allowedMutationActions.includes('log_checkin'));
+
+  // Montar rotina acontece na conversa; não existe mais mandar para outra tela.
+  for (const fala of ['Monta minha semana pra mim, tô perdida.', 'Organiza meu dia.']) {
+    const result = await offline(fala);
+    assert.ok(result.captureJudgment.allowedMutationActions.includes('create_agenda'), fala);
+    assert.equal(result.captureJudgment.allowTaskCreation, true, fala);
   }
 
   // E negar continua valendo para os comandos novos.
@@ -285,24 +300,25 @@ async function run() {
   assert.equal(explicitSchedulePt.captureJudgment.allowTaskCreation, true);
   assert.deepEqual(explicitSchedulePt.captureJudgment.allowedMutationActions, ['create_agenda']);
 
+  // Pedido amplo de rotina é montado na conversa, com blocos concretos — não vira
+  // encaminhamento para outra tela nem fica esperando revisão para existir.
   const broadRoutinePt = await offline('Monte minha rotina completa a partir das minhas anotações.');
-  assert.equal(broadRoutinePt.captureJudgment.allowTaskCreation, false);
-  assert.deepEqual(broadRoutinePt.captureJudgment.allowedMutationActions, []);
+  assert.equal(broadRoutinePt.captureJudgment.allowTaskCreation, true);
+  assert.ok(broadRoutinePt.captureJudgment.allowedMutationActions.includes('create_agenda'));
 
   const naturalRoutineRequestPt = await offline(
     'Eu preciso criar uma rotina onde eu crie todo dia ou pelo menos três vezes por semana um vídeo dark e também faça pelo menos três publicações no meu perfil de cabeleireiro.',
   );
-  assert.equal(naturalRoutineRequestPt.captureJudgment.captureAs, 'clarification');
   assert.equal(naturalRoutineRequestPt.captureJudgment.explicitness, 'explicit');
-  assert.equal(naturalRoutineRequestPt.captureJudgment.allowTaskCreation, false);
-  assert.deepEqual(naturalRoutineRequestPt.captureJudgment.allowedMutationActions, []);
+  assert.equal(naturalRoutineRequestPt.captureJudgment.allowTaskCreation, true);
+  assert.ok(naturalRoutineRequestPt.captureJudgment.allowedMutationActions.includes('create_agenda'));
+  assert.ok(naturalRoutineRequestPt.captureJudgment.allowedMutationActions.includes('create_habit'));
 
   const naturalRoutineRequestEn = await offline(
     'I need to create a routine with three weekly videos and three posts for my professional profile.',
   );
-  assert.equal(naturalRoutineRequestEn.captureJudgment.captureAs, 'clarification');
   assert.equal(naturalRoutineRequestEn.captureJudgment.explicitness, 'explicit');
-  assert.deepEqual(naturalRoutineRequestEn.captureJudgment.allowedMutationActions, []);
+  assert.ok(naturalRoutineRequestEn.captureJudgment.allowedMutationActions.includes('create_agenda'));
 
   const explicitGoalEn = await offline('Could you create a goal to finish the course?');
   assert.equal(explicitGoalEn.captureJudgment.allowTaskCreation, true);
