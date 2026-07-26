@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { RoutineClassifiedItemSchema } from '../contracts/routine-builder.contract';
+import { RoutineApplyRequestSchema, RoutineClassifiedItemSchema } from '../contracts/routine-builder.contract';
 
 const PlanEntrySchema = z.object({
   sourceItemId: z.string().optional(),
@@ -22,6 +22,7 @@ export type RoutineApplyResult = {
   sessionId: string;
   counts: { objectives: number; habits: number; timelineBlocks: number };
   ids: { objectives: string[]; habits: string[]; timelineBlocks: string[] };
+  appliedSourceItemIds: string[];
 };
 
 type PrismaLike = {
@@ -52,7 +53,44 @@ function parseStoredResult(value: unknown): RoutineApplyResult | null {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as RoutineApplyResult;
   if (!candidate.sessionId || !candidate.counts || !candidate.ids) return null;
-  return candidate;
+  return {
+    ...candidate,
+    appliedSourceItemIds: Array.isArray(candidate.appliedSourceItemIds)
+      ? [...new Set(candidate.appliedSourceItemIds.filter((id) => typeof id === 'string' && id))]
+      : [],
+  };
+}
+
+function emptyResult(sessionId: string): RoutineApplyResult {
+  return {
+    sessionId,
+    counts: { objectives: 0, habits: 0, timelineBlocks: 0 },
+    ids: { objectives: [], habits: [], timelineBlocks: [] },
+    appliedSourceItemIds: [],
+  };
+}
+
+function mergeResults(
+  previous: RoutineApplyResult,
+  current: RoutineApplyResult,
+): RoutineApplyResult {
+  return {
+    sessionId: current.sessionId,
+    counts: {
+      objectives: previous.counts.objectives + current.counts.objectives,
+      habits: previous.counts.habits + current.counts.habits,
+      timelineBlocks: previous.counts.timelineBlocks + current.counts.timelineBlocks,
+    },
+    ids: {
+      objectives: [...new Set([...previous.ids.objectives, ...current.ids.objectives])],
+      habits: [...new Set([...previous.ids.habits, ...current.ids.habits])],
+      timelineBlocks: [...new Set([...previous.ids.timelineBlocks, ...current.ids.timelineBlocks])],
+    },
+    appliedSourceItemIds: [...new Set([
+      ...previous.appliedSourceItemIds,
+      ...current.appliedSourceItemIds,
+    ])],
+  };
 }
 
 function normalizeOperationalTitle(value: string): string {
@@ -123,7 +161,12 @@ function timeOfDayFromStartTime(startTime: string): 'morning' | 'afternoon' | 'e
 export class RoutineApplyService {
   constructor(private readonly prisma: PrismaLike) {}
 
-  async apply(input: { sessionId: string; userId: string }): Promise<RoutineApplyResult> {
+  async apply(input: {
+    sessionId: string;
+    userId: string;
+    sourceItemIds?: string[];
+  }): Promise<RoutineApplyResult> {
+    const selection = RoutineApplyRequestSchema.parse({ sourceItemIds: input.sourceItemIds });
     const previous = await this.prisma.routineBuildSession.findFirst({
       where: { id: input.sessionId, userId: input.userId },
     });
@@ -146,19 +189,48 @@ export class RoutineApplyService {
       }
       if (session.status !== 'ready') throw new Error('routine_session_not_ready');
 
+      const items = z.array(RoutineClassifiedItemSchema).max(200).parse(session.items);
+      const plan = DraftPlanSchema.parse(session.draftPlan);
+      const applicableSourceItemIds = new Set<string>();
+      for (const item of items) {
+        if (item.reviewState === 'excluded' || item.duplicateOf) continue;
+        if (['goal', 'project', 'habit'].includes(item.kind)) {
+          applicableSourceItemIds.add(item.id);
+        }
+      }
+      for (const entry of plan.entries) {
+        if (entry.persist && entry.sourceItemId && ['task', 'calendar', 'habit'].includes(entry.kind)) {
+          applicableSourceItemIds.add(entry.sourceItemId);
+        }
+      }
+
+      const storedResult = parseStoredResult(session.applyResult) ?? emptyResult(input.sessionId);
+      const alreadyApplied = new Set(storedResult.appliedSourceItemIds);
+      const requestedIds = selection.sourceItemIds ?? [...applicableSourceItemIds];
+      const unknownId = requestedIds.find((id) => !applicableSourceItemIds.has(id) && !alreadyApplied.has(id));
+      if (unknownId) throw new Error(`routine_apply_item_not_found:${unknownId}`);
+      const targetSourceItemIds = new Set(requestedIds.filter((id) => !alreadyApplied.has(id)));
+
+      if (targetSourceItemIds.size === 0) {
+        return storedResult;
+      }
+
       const claimed = await tx.routineBuildSession.updateMany({
         where: { id: input.sessionId, userId: input.userId, status: 'ready' },
         data: { status: 'applying', stage: 'apply' },
       });
       if (claimed.count !== 1) throw new Error('routine_session_apply_conflict');
 
-      const items = z.array(RoutineClassifiedItemSchema).max(200).parse(session.items);
-      const plan = DraftPlanSchema.parse(session.draftPlan);
       const objectiveIds: string[] = [];
       const habitIds: string[] = [];
       const timelineBlockIds: string[] = [];
       const planDates = [...new Set(plan.entries
-        .filter((entry) => entry.persist && ['task', 'calendar'].includes(entry.kind))
+        .filter((entry) => (
+          entry.persist
+          && !!entry.sourceItemId
+          && targetSourceItemIds.has(entry.sourceItemId)
+          && ['task', 'calendar'].includes(entry.kind)
+        ))
         .map((entry) => entry.date))];
       const weekStart = typeof (plan as any).weekStart === 'string'
         ? (plan as any).weekStart
@@ -200,6 +272,7 @@ export class RoutineApplyService {
 
       for (const item of items) {
         if (item.reviewState === 'excluded' || item.duplicateOf) continue;
+        if (!targetSourceItemIds.has(item.id)) continue;
         if (item.kind === 'goal' || item.kind === 'project') {
           const key = objectiveIdentity(item.title);
           const subgoals = items
@@ -280,6 +353,7 @@ export class RoutineApplyService {
 
       for (const entry of plan.entries) {
         if (!entry.persist || !['task', 'calendar'].includes(entry.kind)) continue;
+        if (!entry.sourceItemId || !targetSourceItemIds.has(entry.sourceItemId)) continue;
         const key = timelineIdentity(entry.title, entry.date, entry.startTime);
         if (timelineKeys.has(key)) continue;
         const fixed = entry.kind === 'calendar' || entry.isFixed;
@@ -323,7 +397,7 @@ export class RoutineApplyService {
         timelineKeys.add(key);
       }
 
-      const result: RoutineApplyResult = {
+      const operationResult: RoutineApplyResult = {
         sessionId: input.sessionId,
         counts: {
           objectives: objectiveIds.length,
@@ -335,17 +409,25 @@ export class RoutineApplyService {
           habits: habitIds,
           timelineBlocks: timelineBlockIds,
         },
+        appliedSourceItemIds: [...targetSourceItemIds],
       };
+      const result = mergeResults(storedResult, operationResult);
+      const allApplied = [...applicableSourceItemIds]
+        .every((id) => result.appliedSourceItemIds.includes(id));
 
       await tx.routineBuildSession.update({
         where: { id: input.sessionId },
         data: {
-          status: 'applied',
-          stage: 'applied',
+          status: allApplied ? 'applied' : 'ready',
+          stage: allApplied ? 'applied' : 'preview',
           applyResult: result,
-          appliedAt: new Date(),
-          sourceText: null,
-          sourceExpiresAt: null,
+          ...(allApplied
+            ? {
+                appliedAt: new Date(),
+                sourceText: null,
+                sourceExpiresAt: null,
+              }
+            : {}),
         },
       });
 

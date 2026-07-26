@@ -199,6 +199,12 @@ export const RoutineCreateSessionSchema = z.object({
 export const RoutineUpdateItemsSchema = z.object({ items: z.array(RoutineClassifiedItemSchema).min(1).max(200) });
 export const RoutineClarificationAnswerSchema = z.object({ questionId: z.string().min(1).max(80), answer: z.string().trim().min(1).max(1000) });
 export const RoutineClarificationAnswersSchema = z.object({ answers: z.array(RoutineClarificationAnswerSchema).max(5) });
+export const RoutineApplyRequestSchema = z.object({
+  sourceItemIds: z.array(z.string().trim().min(1).max(80))
+    .max(200)
+    .transform((values) => [...new Set(values)])
+    .optional(),
+});
 
 export type RoutineItemKind = z.infer<typeof RoutineItemKindSchema>;
 export type RoutineClassifiedItem = z.infer<typeof RoutineClassifiedItemSchema>;
@@ -210,6 +216,7 @@ export type RoutineGuidedHabit = z.infer<typeof RoutineGuidedHabitSchema>;
 export type RoutineGuidedAnswers = z.infer<typeof RoutineGuidedAnswersSchema>;
 export type RoutineCreateSessionInput = z.input<typeof RoutineCreateSessionSchema>;
 export type RoutineSource = z.infer<typeof RoutineSourceSchema>;
+export type RoutineApplyRequest = z.infer<typeof RoutineApplyRequestSchema>;
 
 const TRANSITIONS: Record<RoutineSessionStatus, ReadonlySet<RoutineSessionStatus>> = {
   draft: new Set(['classified', 'failed', 'cancelled']),

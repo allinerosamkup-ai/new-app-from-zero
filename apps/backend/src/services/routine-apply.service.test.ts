@@ -164,6 +164,40 @@ async function run(): Promise<void> {
 {
   const { prisma, state } = createFakePrisma();
   const service = new RoutineApplyService(prisma as any);
+
+  const partial = await service.apply({
+    sessionId: 'session-1',
+    userId: 'user-1',
+    sourceItemIds: ['habit-1'],
+  } as any);
+
+  assert.deepEqual(partial.counts, { objectives: 0, habits: 1, timelineBlocks: 0 });
+  assert.deepEqual(partial.appliedSourceItemIds, ['habit-1']);
+  assert.equal(state.session.status, 'ready');
+  assert.equal((state.session as any).stage, 'preview');
+  assert.equal(state.session.sourceText, 'fonte bruta temporária');
+  assert.equal(state.objectives.length, 0);
+  assert.equal(state.habits.length, 1);
+  assert.equal(state.blocks.length, 0);
+
+  const repeated = await service.apply({
+    sessionId: 'session-1',
+    userId: 'user-1',
+    sourceItemIds: ['habit-1'],
+  } as any);
+  assert.deepEqual(repeated, partial);
+  assert.equal(state.habits.length, 1, 'adicionar o mesmo card novamente não duplica o hábito');
+
+  const completed = await service.apply({ sessionId: 'session-1', userId: 'user-1' });
+  assert.deepEqual(completed.counts, { objectives: 1, habits: 1, timelineBlocks: 1 });
+  assert.deepEqual(completed.appliedSourceItemIds.sort(), ['goal-1', 'habit-1', 'task-1']);
+  assert.equal(state.session.status, 'applied');
+  assert.equal(state.session.sourceText, null);
+}
+
+{
+  const { prisma, state } = createFakePrisma();
+  const service = new RoutineApplyService(prisma as any);
   const result = await service.apply({ sessionId: 'session-1', userId: 'user-1' });
 
   assert.deepEqual(result.counts, { objectives: 1, habits: 1, timelineBlocks: 1 });
