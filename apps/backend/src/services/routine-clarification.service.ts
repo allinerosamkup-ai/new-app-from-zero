@@ -30,6 +30,14 @@ function isAmbiguousTask(item: RoutineClassifiedItem): boolean {
   return title.split(' ').length < 2 || AMBIGUOUS_TASK.test(title);
 }
 
+function hasOperationalCalendarSchedule(item: RoutineClassifiedItem): boolean {
+  if (!item.startTime) return false;
+  if (item.date) return true;
+  if (item.recurrence?.frequency === 'daily') return true;
+  return item.recurrence?.frequency === 'weekly'
+    && (item.recurrence.daysOfWeek?.length ?? 0) > 0;
+}
+
 export class RoutineClarificationService {
   static build(items: RoutineClassifiedItem[]): {
     needsClarification: boolean;
@@ -40,7 +48,7 @@ export class RoutineClarificationService {
     for (const item of items) {
       if (item.reviewState === 'excluded') continue;
 
-      if (item.kind === 'calendar' && (!item.date || !item.startTime)) {
+      if (item.kind === 'calendar' && !hasOperationalCalendarSchedule(item)) {
         candidates.push({
           id: `question:${item.id}:date_and_time`,
           itemId: item.id,

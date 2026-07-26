@@ -6,8 +6,10 @@ import {
   RoutineCreateSessionSchema,
   RoutineGuidedAnswersSchema,
   RoutineGuidedHabitSchema,
+  RoutinePrioritySchema,
   RoutineSessionStatusSchema,
   RoutineSourceSchema,
+  RoutineTimeWindowSchema,
   canTransitionRoutineSession,
 } from './routine-builder.contract';
 
@@ -71,6 +73,64 @@ const guidedAnswers = {
   });
   assert.equal(result.reviewState, 'pending');
   assert.equal(result.isFixed, true);
+}
+
+{
+  assert.ok(RoutinePrioritySchema, 'routine priority schema must be exported');
+  assert.equal(RoutinePrioritySchema.safeParse('urgent').success, true);
+  assert.equal(RoutinePrioritySchema.safeParse('medium').success, true);
+  assert.equal(RoutinePrioritySchema.safeParse('whenever').success, false);
+
+  const task = RoutineClassifiedItemSchema.parse({
+    id: 'task-priority',
+    kind: 'task',
+    title: 'Enviar proposta comercial',
+    sourceExcerpt: 'A proposta precisa sair até quarta.',
+    confidence: 0.94,
+    priority: 'high',
+    durationMinutes: 45,
+    deadline: '2026-07-29',
+  });
+  assert.equal(task.priority, 'high');
+  assert.equal(task.durationMinutes, 45);
+  assert.equal(task.deadline, '2026-07-29');
+}
+
+{
+  assert.ok(RoutineTimeWindowSchema, 'routine time window schema must be exported');
+  const window = RoutineTimeWindowSchema.parse({
+    startTime: '18:00',
+    endTime: '21:00',
+    minDurationMinutes: 10,
+    maxDurationMinutes: 30,
+  });
+  assert.equal(window.minDurationMinutes, 10);
+  assert.equal(window.maxDurationMinutes, 30);
+
+  assert.equal(RoutineTimeWindowSchema.safeParse({
+    startTime: '21:00',
+    endTime: '18:00',
+    minDurationMinutes: 10,
+    maxDurationMinutes: 30,
+  }).success, false, 'habit window must end after it starts');
+  assert.equal(RoutineTimeWindowSchema.safeParse({
+    startTime: '18:00',
+    endTime: '21:00',
+    minDurationMinutes: 30,
+    maxDurationMinutes: 10,
+  }).success, false, 'habit minimum duration cannot exceed maximum duration');
+
+  const habit = RoutineClassifiedItemSchema.parse({
+    id: 'habit-window',
+    kind: 'habit',
+    title: 'Caminhar depois do trabalho',
+    sourceExcerpt: 'Quero caminhar no começo da noite.',
+    confidence: 0.91,
+    durationMinutes: 25,
+    recurrence: { frequency: 'daily', daysOfWeek: [], interval: 1 },
+    timeWindow: window,
+  });
+  assert.deepEqual(habit.timeWindow, window);
 }
 
 {

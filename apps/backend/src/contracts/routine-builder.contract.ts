@@ -4,6 +4,7 @@ export const RoutineItemKindSchema = z.enum(['goal', 'project', 'task', 'habit',
 export const RoutineItemReviewStateSchema = z.enum(['pending', 'confirmed', 'excluded']);
 export const RoutineSessionStatusSchema = z.enum(['draft', 'classified', 'needs_clarification', 'ready', 'applying', 'applied', 'failed', 'cancelled']);
 export const RoutineBuilderModeSchema = z.enum(['guided', 'import']);
+export const RoutinePrioritySchema = z.enum(['low', 'medium', 'high', 'urgent']);
 
 const RoutineDayOfWeekSchema = z.number().int().min(0).max(6);
 const RoutineTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -31,6 +32,30 @@ function uniqueStringSelection(maxItems: number) {
     .max(maxItems)
     .transform((values) => [...new Set(values)]);
 }
+
+export const RoutineTimeWindowSchema = z.object({
+  startTime: RoutineTimeSchema,
+  endTime: RoutineTimeSchema,
+  minDurationMinutes: z.number().int().min(5).max(480),
+  maxDurationMinutes: z.number().int().min(5).max(480),
+}).superRefine((value, context) => {
+  validateTimeWindow(value, context);
+  if (value.maxDurationMinutes < value.minDurationMinutes) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'A duração máxima deve ser igual ou maior que a duração mínima.',
+      path: ['maxDurationMinutes'],
+    });
+  }
+  const windowMinutes = timeInMinutes(value.endTime) - timeInMinutes(value.startTime);
+  if (windowMinutes > 0 && value.minDurationMinutes > windowMinutes) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'A duração mínima precisa caber dentro da janela do hábito.',
+      path: ['minDurationMinutes'],
+    });
+  }
+});
 
 const RoutineGuidedDaysSchema = z.array(RoutineDayOfWeekSchema)
   .max(7)
@@ -118,6 +143,8 @@ export const RoutineClassifiedItemSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
   deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  priority: RoutinePrioritySchema.optional(),
+  timeWindow: RoutineTimeWindowSchema.nullable().optional(),
   recurrence: RoutineRecurrenceSchema.nullable().optional(),
   isFixed: z.boolean().optional().default(false),
   duplicateOf: z.string().max(120).nullable().optional(),
@@ -177,6 +204,8 @@ export type RoutineItemKind = z.infer<typeof RoutineItemKindSchema>;
 export type RoutineClassifiedItem = z.infer<typeof RoutineClassifiedItemSchema>;
 export type RoutineSessionStatus = z.infer<typeof RoutineSessionStatusSchema>;
 export type RoutineBuilderMode = z.infer<typeof RoutineBuilderModeSchema>;
+export type RoutinePriority = z.infer<typeof RoutinePrioritySchema>;
+export type RoutineTimeWindow = z.infer<typeof RoutineTimeWindowSchema>;
 export type RoutineGuidedHabit = z.infer<typeof RoutineGuidedHabitSchema>;
 export type RoutineGuidedAnswers = z.infer<typeof RoutineGuidedAnswersSchema>;
 export type RoutineCreateSessionInput = z.input<typeof RoutineCreateSessionSchema>;

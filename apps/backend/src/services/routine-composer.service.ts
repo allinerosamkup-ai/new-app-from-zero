@@ -1,4 +1,8 @@
-import type { RoutineClassifiedItem } from '../contracts/routine-builder.contract';
+import type {
+  RoutineClassifiedItem,
+  RoutinePriority,
+  RoutineTimeWindow,
+} from '../contracts/routine-builder.contract';
 
 export type RoutineCapacity = {
   level: 'low' | 'balanced' | 'high';
@@ -26,15 +30,41 @@ export type RoutinePlanEntry = {
   isFixed: boolean;
   persist: boolean;
   reason: string;
+  priority?: RoutinePriority;
+  deadline?: string | null;
+  timeWindow?: RoutineTimeWindow | null;
 };
+
+export type RoutineConflictAlternative = {
+  action: 'move' | 'shorten' | 'defer';
+  reason: string;
+  suggestedDate?: string;
+  suggestedStartTime?: string;
+  durationMinutes?: number;
+};
+
+export type RoutineLoadStatus = 'light' | 'balanced' | 'overloaded';
 
 export type RoutineWeekPlan = {
   weekStart: string;
   capacity: RoutineCapacity;
   entries: RoutinePlanEntry[];
-  days: Array<{ date: string; flexibleMinutes: number; fixedMinutes: number }>;
+  days: Array<{
+    date: string;
+    flexibleMinutes: number;
+    fixedMinutes: number;
+    predictedMinutes: number;
+    capacityMinutes: number;
+    utilizationPercent: number;
+    status: RoutineLoadStatus;
+  }>;
   contextItems: Array<{ sourceItemId: string; kind: RoutineClassifiedItem['kind']; title: string }>;
-  unscheduled: Array<{ sourceItemId: string; title: string; reason: string }>;
+  unscheduled: Array<{
+    sourceItemId: string;
+    title: string;
+    reason: string;
+    alternatives: RoutineConflictAlternative[];
+  }>;
 };
 
 type ComposeInput = {
@@ -53,6 +83,8 @@ type ComposeInput = {
     frequency: 'daily' | 'weekly' | 'monthly';
     targetDays: number[];
     durationMinutes?: number | null;
+    timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'anytime' | null;
+    reminderTime?: string | null;
   }>;
   capacity: RoutineCapacity;
 };
@@ -98,6 +130,13 @@ function capacityDailyLimit(input: ComposeInput): number {
 
 function adaptedDuration(item: RoutineClassifiedItem, capacity: RoutineCapacity): number {
   const requested = item.durationMinutes ?? (item.kind === 'habit' ? 20 : 30);
+  if (item.kind === 'habit' && item.timeWindow) {
+    if (capacity.level === 'low') return item.timeWindow.minDurationMinutes;
+    return Math.max(
+      item.timeWindow.minDurationMinutes,
+      Math.min(requested, item.timeWindow.maxDurationMinutes),
+    );
+  }
   if (capacity.level === 'low') return Math.min(requested, 30);
   return requested;
 }
@@ -107,12 +146,84 @@ function withinWeek(date: string, weekDates: string[]): boolean {
 }
 
 function sortedTasks(items: RoutineClassifiedItem[]): RoutineClassifiedItem[] {
+  const weight: Record<RoutinePriority, number> = {
+    urgent: 4,
+    high: 3,
+    medium: 2,
+    low: 1,
+  };
   return [...items].sort((left, right) => {
-    if (left.deadline && right.deadline) return left.deadline.localeCompare(right.deadline);
+    if (left.deadline && right.deadline) {
+      const deadlineDifference = left.deadline.localeCompare(right.deadline);
+      if (deadlineDifference !== 0) return deadlineDifference;
+    }
     if (left.deadline) return -1;
     if (right.deadline) return 1;
+    const priorityDifference = weight[right.priority ?? 'medium'] - weight[left.priority ?? 'medium'];
+    if (priorityDifference !== 0) return priorityDifference;
     return left.id.localeCompare(right.id);
   });
+}
+
+function statusForLoad(predictedMinutes: number, capacityMinutes: number): RoutineLoadStatus {
+  if (predictedMinutes > capacityMinutes) return 'overloaded';
+  if (predictedMinutes < capacityMinutes * 0.5) return 'light';
+  return 'balanced';
+}
+
+function defaultHabitWindow(
+  habit: NonNullable<ComposeInput['existingHabits']>[number],
+  wake: number,
+  sleep: number,
+): { start: number; end: number } {
+  if (habit.reminderTime) {
+    const start = Math.max(wake, toMinutes(habit.reminderTime));
+    return { start, end: Math.min(sleep, start + 120) };
+  }
+  if (habit.timeOfDay === 'morning') return { start: Math.max(wake, 6 * 60), end: Math.min(sleep, 12 * 60) };
+  if (habit.timeOfDay === 'afternoon') return { start: Math.max(wake, 12 * 60), end: Math.min(sleep, 18 * 60) };
+  if (habit.timeOfDay === 'evening') return { start: Math.max(wake, 18 * 60), end: Math.min(sleep, 22 * 60) };
+  return { start: wake, end: sleep };
+}
+
+function calendarDates(item: RoutineClassifiedItem, weekDates: string[]): string[] {
+  if (item.date) return withinWeek(item.date, weekDates) ? [item.date] : [];
+  if (item.recurrence?.frequency === 'daily') return weekDates;
+  if (item.recurrence?.frequency === 'weekly') {
+    const selectedDays = item.recurrence.daysOfWeek ?? [];
+    return weekDates.filter((date) => selectedDays.includes(utcDay(date)));
+  }
+  return [];
+}
+
+function conflictAlternatives(
+  item: RoutineClassifiedItem,
+  weekStart: string,
+): RoutineConflictAlternative[] {
+  const nextWeekStart = addUtcDays(weekStart, 7);
+  const requested = item.durationMinutes ?? (item.kind === 'habit' ? 20 : 30);
+  const minimum = item.kind === 'habit' && item.timeWindow
+    ? item.timeWindow.minDurationMinutes
+    : Math.min(15, requested);
+  return [
+    {
+      action: 'move',
+      suggestedDate: nextWeekStart,
+      suggestedStartTime: item.timeWindow?.startTime,
+      reason: item.deadline && item.deadline < nextWeekStart
+        ? 'Mover para a próxima semana exige revisar o prazo informado.'
+        : 'Mover para a próxima semana preserva a duração sem tocar nos compromissos protegidos.',
+    },
+    {
+      action: 'shorten',
+      durationMinutes: minimum,
+      reason: `Encurtar para ${minimum} minutos cria uma versão mínima, sem alterar outros compromissos.`,
+    },
+    {
+      action: 'defer',
+      reason: 'Adiar mantém este item fora da semana atual até uma nova confirmação.',
+    },
+  ];
 }
 
 export class RoutineComposerService {
@@ -126,6 +237,8 @@ export class RoutineComposerService {
     const unscheduled: RoutineWeekPlan['unscheduled'] = [];
     const busyByDate = new Map<string, BusyWindow[]>();
     const flexibleByDate = new Map(weekDates.map((date) => [date, 0]));
+    const committedByDate = new Map(weekDates.map((date) => [date, 0]));
+    const fixedByDate = new Map(weekDates.map((date) => [date, 0]));
 
     const markBusy = (date: string, start: number, end: number): void => {
       const windows = busyByDate.get(date) ?? [];
@@ -134,8 +247,14 @@ export class RoutineComposerService {
       busyByDate.set(date, windows);
     };
 
+    const addCommittedLoad = (date: string, duration: number, fixed: boolean): void => {
+      committedByDate.set(date, (committedByDate.get(date) ?? 0) + duration);
+      if (fixed) fixedByDate.set(date, (fixedByDate.get(date) ?? 0) + duration);
+    };
+
     for (const block of input.existingBlocks) {
       if (!withinWeek(block.date, weekDates)) continue;
+      const duration = durationBetween(block.startTime, block.endTime);
       entries.push({
         id: `existing:${block.id}`,
         kind: 'existing',
@@ -143,12 +262,13 @@ export class RoutineComposerService {
         startTime: block.startTime,
         endTime: block.endTime,
         title: block.title,
-        durationMinutes: durationBetween(block.startTime, block.endTime),
+        durationMinutes: duration,
         isFixed: block.isFixed,
         persist: false,
         reason: block.isFixed ? 'Compromisso existente protegido.' : 'Bloco já existente mantido na prévia.',
       });
       markBusy(block.date, toMinutes(block.startTime), toMinutes(block.endTime));
+      addCommittedLoad(block.date, duration, block.isFixed);
     }
 
     for (const window of input.limits.unavailable) {
@@ -166,10 +286,14 @@ export class RoutineComposerService {
       const duration = Math.max(5, habit.durationMinutes ?? 10);
       for (const date of dates) {
         const windows = busyByDate.get(date) ?? [];
+        const habitWindow = defaultHabitWindow(habit, wake, sleep);
         let placed = false;
-        for (let start = wake; start + duration <= sleep; start += SLOT_STEP_MINUTES) {
+        for (let start = habitWindow.start; start + duration <= habitWindow.end; start += SLOT_STEP_MINUTES) {
           const end = start + duration;
           if (windows.some((window) => overlaps(start, end, window))) continue;
+          const committed = committedByDate.get(date) ?? 0;
+          const used = flexibleByDate.get(date) ?? 0;
+          if (committed + used + duration > dayLimit) continue;
           entries.push({
             id: `existing-habit:${habit.id}:${date}`,
             kind: 'habit',
@@ -188,40 +312,60 @@ export class RoutineComposerService {
           break;
         }
         if (!placed) {
-          unscheduled.push({ sourceItemId: `existing-habit:${habit.id}`, title: habit.title, reason: `Sem janela segura em ${date}.` });
+          unscheduled.push({
+            sourceItemId: `existing-habit:${habit.id}`,
+            title: habit.title,
+            reason: `Sem janela segura em ${date}.`,
+            alternatives: [{
+              action: 'defer',
+              reason: 'Adiar esta ocorrência mantém o hábito nos outros dias previstos.',
+            }],
+          });
         }
       }
     }
 
     const placeFlexible = (item: RoutineClassifiedItem, preferredDates: string[], kind: 'task' | 'habit'): boolean => {
-      const duration = adaptedDuration(item, input.capacity);
+      const preferredDuration = adaptedDuration(item, input.capacity);
+      const durations = kind === 'habit' && item.timeWindow
+        ? [...new Set([preferredDuration, item.timeWindow.minDurationMinutes])]
+        : [preferredDuration];
       for (const date of preferredDates) {
         if (!withinWeek(date, weekDates)) continue;
-        const used = flexibleByDate.get(date) ?? 0;
-        if (used + duration > dayLimit) continue;
         const windows = busyByDate.get(date) ?? [];
-        for (let start = wake; start + duration <= sleep; start += SLOT_STEP_MINUTES) {
-          const end = start + duration;
-          if (windows.some((window) => overlaps(start, end, window))) continue;
-          const reduced = input.capacity.level === 'low' && (item.durationMinutes ?? duration) > duration;
-          entries.push({
-            id: `${kind}:${item.id}:${date}`,
-            sourceItemId: item.id,
-            kind,
-            date,
-            startTime: toTime(start),
-            endTime: toTime(end),
-            title: item.title,
-            durationMinutes: duration,
-            isFixed: false,
-            persist: true,
-            reason: reduced
-              ? `${input.capacity.reason} A semana começa com um bloco de entrada de ${duration} minutos, sem transformar baixa energia em abandono.`
-              : `${input.capacity.reason} Alocado em uma janela livre, respeitando compromissos e limite diário.`,
-          });
-          markBusy(date, start, end);
-          flexibleByDate.set(date, used + duration);
-          return true;
+        const startBoundary = item.timeWindow ? Math.max(wake, toMinutes(item.timeWindow.startTime)) : wake;
+        const endBoundary = item.timeWindow ? Math.min(sleep, toMinutes(item.timeWindow.endTime)) : sleep;
+        for (const duration of durations) {
+          const used = flexibleByDate.get(date) ?? 0;
+          const committed = committedByDate.get(date) ?? 0;
+          if (committed + used + duration > dayLimit) continue;
+          for (let start = startBoundary; start + duration <= endBoundary; start += SLOT_STEP_MINUTES) {
+            const end = start + duration;
+            if (windows.some((window) => overlaps(start, end, window))) continue;
+            const requested = item.durationMinutes ?? preferredDuration;
+            const reduced = requested > duration;
+            entries.push({
+              id: `${kind}:${item.id}:${date}`,
+              sourceItemId: item.id,
+              kind,
+              date,
+              startTime: toTime(start),
+              endTime: toTime(end),
+              title: item.title,
+              durationMinutes: duration,
+              isFixed: false,
+              persist: true,
+              reason: reduced
+                ? `${input.capacity.reason} Bloco reduzido para ${duration} minutos dentro do limite aceito, sem alterar compromissos protegidos.`
+                : `${input.capacity.reason} Alocado em uma janela livre, respeitando compromissos e limite diário.`,
+              priority: item.priority ?? 'medium',
+              deadline: item.deadline ?? null,
+              timeWindow: item.timeWindow ?? null,
+            });
+            markBusy(date, start, end);
+            flexibleByDate.set(date, used + duration);
+            return true;
+          }
         }
       }
       return false;
@@ -235,37 +379,63 @@ export class RoutineComposerService {
     }
 
     for (const item of reviewed.filter((candidate) => candidate.kind === 'calendar')) {
-      if (!item.date || !item.startTime || !withinWeek(item.date, weekDates)) {
-        unscheduled.push({ sourceItemId: item.id, title: item.title, reason: 'Compromisso sem data e horário válidos dentro desta semana.' });
+      const dates = calendarDates(item, weekDates);
+      if (!item.startTime || dates.length === 0) {
+        unscheduled.push({
+          sourceItemId: item.id,
+          title: item.title,
+          reason: 'Compromisso sem data ou recorrência semanal e horário válidos dentro desta semana.',
+          alternatives: [],
+        });
         continue;
       }
       const duration = item.durationMinutes ?? 60;
-      const start = toMinutes(item.startTime);
-      const end = start + duration;
-      if ((busyByDate.get(item.date) ?? []).some((window) => overlaps(start, end, window))) {
-        unscheduled.push({ sourceItemId: item.id, title: item.title, reason: 'Conflita com um compromisso protegido ou período indisponível.' });
-        continue;
+      for (const date of dates) {
+        const start = toMinutes(item.startTime);
+        const end = start + duration;
+        if ((busyByDate.get(date) ?? []).some((window) => overlaps(start, end, window))) {
+          unscheduled.push({
+            sourceItemId: item.id,
+            title: item.title,
+            reason: `O compromisso protegido de ${date} conflita com outro horário protegido ou indisponível.`,
+            alternatives: [{
+              action: 'defer',
+              reason: 'Revisar manualmente o conflito sem mover nem encurtar compromissos protegidos.',
+            }],
+          });
+          continue;
+        }
+        entries.push({
+          id: `calendar:${item.id}:${date}`,
+          sourceItemId: item.id,
+          kind: 'calendar',
+          date,
+          startTime: item.startTime,
+          endTime: toTime(end),
+          title: item.title,
+          durationMinutes: duration,
+          isFixed: true,
+          persist: true,
+          reason: item.date
+            ? 'Data e horário vieram da fonte e foram protegidos como compromisso fixo.'
+            : 'Dia recorrente e horário vieram da rotina guiada e foram protegidos como compromisso fixo.',
+          priority: item.priority ?? 'urgent',
+          deadline: item.deadline ?? null,
+        });
+        markBusy(date, start, end);
+        addCommittedLoad(date, duration, true);
       }
-      entries.push({
-        id: `calendar:${item.id}:${item.date}`,
-        sourceItemId: item.id,
-        kind: 'calendar',
-        date: item.date,
-        startTime: item.startTime,
-        endTime: toTime(end),
-        title: item.title,
-        durationMinutes: duration,
-        isFixed: true,
-        persist: true,
-        reason: 'Data e horário vieram da fonte e foram protegidos como compromisso fixo.',
-      });
-      markBusy(item.date, start, end);
     }
 
     for (const item of reviewed.filter((candidate) => candidate.kind === 'habit')) {
       const recurrence = item.recurrence;
       if (!recurrence) {
-        unscheduled.push({ sourceItemId: item.id, title: item.title, reason: 'Hábito sem frequência confirmada.' });
+        unscheduled.push({
+          sourceItemId: item.id,
+          title: item.title,
+          reason: 'Hábito sem frequência confirmada.',
+          alternatives: [],
+        });
         continue;
       }
       let dates: string[] = [];
@@ -278,7 +448,12 @@ export class RoutineComposerService {
       if (recurrence.frequency === 'monthly') dates = [weekDates[0]];
       for (const date of dates) {
         if (!placeFlexible(item, [date], 'habit')) {
-          unscheduled.push({ sourceItemId: item.id, title: item.title, reason: `Sem janela segura em ${date}.` });
+          unscheduled.push({
+            sourceItemId: item.id,
+            title: item.title,
+            reason: `Sem janela segura em ${date}.`,
+            alternatives: conflictAlternatives(item, input.weekStart),
+          });
         }
       }
     }
@@ -289,7 +464,12 @@ export class RoutineComposerService {
         ? [item.date]
         : weekDates.filter((date) => !item.deadline || date <= item.deadline);
       if (!placeFlexible(item, allowedDates.length > 0 ? allowedDates : weekDates, 'task')) {
-        unscheduled.push({ sourceItemId: item.id, title: item.title, reason: 'Não coube sem ultrapassar limites ou colidir com compromissos.' });
+        unscheduled.push({
+          sourceItemId: item.id,
+          title: item.title,
+          reason: 'Não coube sem ultrapassar a carga prevista ou colidir com compromissos protegidos.',
+          alternatives: conflictAlternatives(item, input.weekStart),
+        });
       }
     }
 
@@ -299,13 +479,20 @@ export class RoutineComposerService {
       weekStart: input.weekStart,
       capacity: input.capacity,
       entries,
-      days: weekDates.map((date) => ({
-        date,
-        flexibleMinutes: flexibleByDate.get(date) ?? 0,
-        fixedMinutes: entries
-          .filter((entry) => entry.date === date && entry.isFixed)
-          .reduce((total, entry) => total + entry.durationMinutes, 0),
-      })),
+      days: weekDates.map((date) => {
+        const flexibleMinutes = flexibleByDate.get(date) ?? 0;
+        const fixedMinutes = fixedByDate.get(date) ?? 0;
+        const predictedMinutes = (committedByDate.get(date) ?? 0) + flexibleMinutes;
+        return {
+          date,
+          flexibleMinutes,
+          fixedMinutes,
+          predictedMinutes,
+          capacityMinutes: dayLimit,
+          utilizationPercent: dayLimit > 0 ? Math.round((predictedMinutes / dayLimit) * 100) : 0,
+          status: statusForLoad(predictedMinutes, dayLimit),
+        };
+      }),
       contextItems,
       unscheduled,
     };

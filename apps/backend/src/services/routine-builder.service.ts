@@ -8,6 +8,8 @@ import {
   RoutineUpdateItemsSchema,
   type RoutineClassifiedItem,
   type RoutineCreateSessionInput,
+  type RoutineGuidedAnswers,
+  type RoutineTimeWindow,
 } from '../contracts/routine-builder.contract';
 import { transformGuidedAnswers } from './routine-guided-transform.service';
 import { AiActionFeedbackService } from './ai-action-feedback.service';
@@ -35,6 +37,65 @@ function addDays(date: string, days: number): string {
   const value = new Date(`${date}T12:00:00.000Z`);
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+}
+
+function minutesBetweenTimes(startTime: string, endTime: string): number {
+  const [startHours, startMinutes] = startTime.split(':').map(Number);
+  const [endHours, endMinutes] = endTime.split(':').map(Number);
+  return Math.max(5, ((endHours * 60) + endMinutes) - ((startHours * 60) + startMinutes));
+}
+
+function guidedHabitWindow(
+  timeOfDay: RoutineGuidedAnswers['selectedHabits'][number]['timeOfDay'],
+  durationMinutes: number,
+): RoutineTimeWindow {
+  const windows = {
+    morning: { startTime: '06:00', endTime: '12:00' },
+    afternoon: { startTime: '12:00', endTime: '18:00' },
+    evening: { startTime: '18:00', endTime: '22:00' },
+    anytime: { startTime: '07:00', endTime: '23:00' },
+  } as const;
+  const minimum = Math.max(5, Math.floor((durationMinutes / 2) / 5) * 5);
+  const maximum = Math.min(180, Math.max(
+    durationMinutes,
+    Math.ceil((durationMinutes * 1.5) / 5) * 5,
+  ));
+  return {
+    ...windows[timeOfDay],
+    minDurationMinutes: minimum,
+    maxDurationMinutes: maximum,
+  };
+}
+
+function enrichGuidedItems(
+  rawItems: RoutineClassifiedItem[],
+  answers: RoutineGuidedAnswers,
+  today: string,
+): RoutineClassifiedItem[] {
+  let commitmentIndex = 0;
+  let selectedHabitIndex = 0;
+  return rawItems.map((item) => {
+    if (item.kind === 'calendar' && commitmentIndex < answers.fixedCommitments.length) {
+      const commitment = answers.fixedCommitments[commitmentIndex++];
+      return RoutineClassifiedItemSchema.parse({
+        ...item,
+        durationMinutes: minutesBetweenTimes(commitment.startTime, commitment.endTime),
+        priority: 'urgent',
+      });
+    }
+    if (item.kind === 'habit' && selectedHabitIndex < answers.selectedHabits.length) {
+      const habit = answers.selectedHabits[selectedHabitIndex++];
+      return RoutineClassifiedItemSchema.parse({
+        ...item,
+        priority: 'medium',
+        timeWindow: guidedHabitWindow(habit.timeOfDay, habit.durationMinutes),
+      });
+    }
+    return RoutineClassifiedItemSchema.parse({
+      ...item,
+      priority: item.kind === 'task' && item.date === today ? 'high' : item.priority,
+    });
+  });
 }
 
 /**
@@ -222,7 +283,11 @@ export class RoutineBuilderService {
     }
 
     const answers = RoutineGuidedAnswersSchema.parse(input.answers);
-    const items = transformGuidedAnswers({ answers, today: input.today });
+    const items = enrichGuidedItems(
+      transformGuidedAnswers({ answers, today: input.today }),
+      answers,
+      input.today,
+    );
     if (items.length === 0) throw new Error('routine_guided_answers_empty');
 
     const updated = await this.prisma.routineBuildSession.update({
@@ -325,7 +390,15 @@ export class RoutineBuilderService {
       }),
       this.prisma.habit.findMany({
         where: { userId, archived: false },
-        select: { id: true, title: true, frequency: true, targetDays: true, durationMinutes: true },
+        select: {
+          id: true,
+          title: true,
+          frequency: true,
+          targetDays: true,
+          durationMinutes: true,
+          timeOfDay: true,
+          reminderTime: true,
+        },
       }),
       this.prisma.dailyCheckin.findFirst({
         where: { userId },
@@ -364,6 +437,10 @@ export class RoutineBuilderService {
         frequency: ['daily', 'weekly', 'monthly'].includes(habit.frequency) ? habit.frequency : 'daily',
         targetDays: Array.isArray(habit.targetDays) ? habit.targetDays : [],
         durationMinutes: habit.durationMinutes,
+        timeOfDay: ['morning', 'afternoon', 'evening', 'anytime'].includes(habit.timeOfDay)
+          ? habit.timeOfDay
+          : null,
+        reminderTime: habit.reminderTime,
       })),
       capacity,
     });

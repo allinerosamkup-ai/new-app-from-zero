@@ -96,4 +96,152 @@ function item(overrides: Partial<RoutineClassifiedItem>): RoutineClassifiedItem 
   assert.equal(plan.entries.some((entry) => entry.sourceItemId === 'excluded-1'), false);
 }
 
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [
+      item({
+        id: 'fixed-recurring',
+        kind: 'calendar',
+        title: 'Aula semanal',
+        startTime: '10:00',
+        durationMinutes: 90,
+        recurrence: { frequency: 'weekly', daysOfWeek: [2], interval: 1 },
+        isFixed: true,
+      }),
+      item({
+        id: 'task-near-fixed',
+        title: 'Preparar material da aula',
+        durationMinutes: 45,
+        date: '2026-07-28',
+      }),
+    ],
+    limits: { wakeTime: '08:00', sleepTime: '18:00', maxDailyLoadMinutes: 360, unavailable: [] },
+    existingBlocks: [],
+    existingHabits: [],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+
+  const fixed = plan.entries.find((entry) => entry.sourceItemId === 'fixed-recurring');
+  const task = plan.entries.find((entry) => entry.sourceItemId === 'task-near-fixed');
+  assert.equal(fixed?.date, '2026-07-28');
+  assert.equal(fixed?.startTime, '10:00');
+  assert.equal(fixed?.endTime, '11:30');
+  assert.equal(fixed?.isFixed, true);
+  assert.ok(task);
+  assert.equal(
+    task!.endTime <= '09:45' || task!.startTime >= '11:45',
+    true,
+    'a flexible task must not move or overlap a protected commitment',
+  );
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [
+      item({ id: 'a-low', title: 'Tarefa de baixa prioridade', priority: 'low', durationMinutes: 30, deadline: '2026-07-27' }),
+      item({ id: 'z-high', title: 'Tarefa de alta prioridade', priority: 'high', durationMinutes: 30, deadline: '2026-07-27' }),
+    ],
+    limits: { wakeTime: '08:00', sleepTime: '10:00', maxDailyLoadMinutes: 120, unavailable: [] },
+    existingBlocks: [],
+    existingHabits: [],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+  const low = plan.entries.find((entry) => entry.sourceItemId === 'a-low');
+  const high = plan.entries.find((entry) => entry.sourceItemId === 'z-high');
+  assert.ok(low);
+  assert.ok(high);
+  assert.ok(high!.startTime < low!.startTime, 'priority must win when deadlines are equal');
+  assert.equal(high?.priority, 'high');
+  assert.equal(high?.deadline, '2026-07-27');
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [item({
+      id: 'habit-evening',
+      kind: 'habit',
+      title: 'Caminhar no começo da noite',
+      durationMinutes: 25,
+      recurrence: { frequency: 'weekly', daysOfWeek: [1], interval: 1 },
+      timeWindow: {
+        startTime: '18:00',
+        endTime: '21:00',
+        minDurationMinutes: 10,
+        maxDurationMinutes: 30,
+      },
+    })],
+    limits: { wakeTime: '07:00', sleepTime: '22:00', maxDailyLoadMinutes: 360, unavailable: [] },
+    existingBlocks: [],
+    existingHabits: [],
+    capacity: { level: 'low', reason: 'Energia baixa informada hoje.' },
+  });
+  const habit = plan.entries.find((entry) => entry.sourceItemId === 'habit-evening');
+  assert.equal(habit?.startTime, '18:00');
+  assert.equal(habit?.durationMinutes, 10);
+  assert.match(habit?.reason ?? '', /reduzido|10 minutos/i);
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [item({ id: 'task-load', durationMinutes: 90, date: '2026-07-27' })],
+    limits: { wakeTime: '08:00', sleepTime: '18:00', maxDailyLoadMinutes: 240, unavailable: [] },
+    existingBlocks: [{
+      id: 'fixed-load',
+      date: '2026-07-27',
+      startTime: '08:00',
+      endTime: '11:00',
+      title: 'Compromisso fixo longo',
+      isFixed: true,
+    }],
+    existingHabits: [],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+  const day = plan.days.find((candidate) => candidate.date === '2026-07-27');
+  assert.equal(day?.fixedMinutes, 180);
+  assert.equal(day?.predictedMinutes, 180, 'fixed load must reduce the flexible capacity of the day');
+  assert.equal(day?.capacityMinutes, 240);
+  assert.equal(day?.utilizationPercent, 75);
+  assert.equal(day?.status, 'balanced');
+  assert.notEqual(
+    plan.entries.find((entry) => entry.sourceItemId === 'task-load')?.date,
+    '2026-07-27',
+    'a flexible task must move instead of overloading a day with protected time',
+  );
+}
+
+{
+  const plan = RoutineComposerService.compose({
+    weekStart: '2026-07-27',
+    items: [item({
+      id: 'task-conflict',
+      title: 'Fechar orçamento',
+      priority: 'urgent',
+      durationMinutes: 60,
+      date: '2026-07-27',
+      deadline: '2026-07-27',
+    })],
+    limits: {
+      wakeTime: '08:00',
+      sleepTime: '09:00',
+      maxDailyLoadMinutes: 60,
+      unavailable: [{ date: '2026-07-27', startTime: '08:00', endTime: '09:00', reason: 'Consulta' }],
+    },
+    existingBlocks: [],
+    existingHabits: [],
+    capacity: { level: 'balanced', reason: 'Energia estável.' },
+  });
+  const conflict = plan.unscheduled.find((entry) => entry.sourceItemId === 'task-conflict');
+  assert.ok(conflict);
+  assert.deepEqual(
+    conflict?.alternatives.map((alternative) => alternative.action),
+    ['move', 'shorten', 'defer'],
+  );
+  assert.equal(conflict?.alternatives[0].suggestedDate, '2026-08-03');
+  assert.equal(conflict?.alternatives[1].durationMinutes, 15);
+}
+
 console.log('routine-composer.service tests passed');

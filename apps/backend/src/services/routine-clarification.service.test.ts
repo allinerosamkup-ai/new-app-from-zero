@@ -54,4 +54,28 @@ function item(overrides: Partial<RoutineClassifiedItem>): RoutineClassifiedItem 
   assert.deepEqual(result.questions, []);
 }
 
+{
+  const result = RoutineClarificationService.build([
+    item({
+      id: 'calendar-weekly',
+      kind: 'calendar',
+      title: 'Aula de inglês',
+      startTime: '15:00',
+      durationMinutes: 90,
+      recurrence: {
+        frequency: 'weekly',
+        daysOfWeek: [4],
+        interval: 1,
+      },
+      isFixed: true,
+    }),
+  ]);
+  assert.equal(
+    result.needsClarification,
+    false,
+    'a weekly fixed commitment with weekday and start time is already complete',
+  );
+  assert.deepEqual(result.questions, []);
+}
+
 console.log('routine-clarification.service tests passed');
