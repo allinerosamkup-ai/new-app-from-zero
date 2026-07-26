@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { routineBuilderApi } from '../features/routine-builder/api';
-import { nextBuilderStep } from '../features/routine-builder/helpers';
+import { nextBuilderStep, shouldRestoreRoutineSession } from '../features/routine-builder/helpers';
 import { RoutineItemCard } from '../features/routine-builder/routine-item-card';
 import type { RoutineItem, RoutineItemKind, RoutineSession } from '../features/routine-builder/types';
 import { WeekPreview } from '../features/routine-builder/week-preview';
@@ -44,6 +44,10 @@ export function RoutineBuilderPage() {
   const kindLabels = t('routineBuilder.kinds', { returnObjects: true }) as Record<RoutineItemKind, string>;
 
   useEffect(() => {
+    if (!shouldRestoreRoutineSession(incoming)) {
+      localStorage.removeItem(SESSION_KEY);
+      return;
+    }
     const sessionId = localStorage.getItem(SESSION_KEY);
     if (!sessionId) return;
     setBusy(true);
@@ -51,7 +55,7 @@ export function RoutineBuilderPage() {
       .then((value) => { setSession(value); setItems(value.items ?? []); })
       .catch(() => localStorage.removeItem(SESSION_KEY))
       .finally(() => setBusy(false));
-  }, []);
+  }, [incoming.focus, incoming.initialSource]);
 
   useEffect(() => {
     if (!session) return;

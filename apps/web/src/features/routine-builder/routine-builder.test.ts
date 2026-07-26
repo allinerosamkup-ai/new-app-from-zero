@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep } from './helpers';
+import { buildRoutinePreviewSections, groupPlanByDay, nextBuilderStep, shouldRestoreRoutineSession } from './helpers';
 
 describe('routine builder helpers', () => {
   it('routes every persisted session state to one clear UI step', () => {
@@ -21,6 +21,12 @@ describe('routine builder helpers', () => {
     ] as any);
     expect(groups.map((group) => group.date)).toEqual(['2026-07-27', '2026-07-28']);
     expect(groups[0].entries.map((entry) => entry.title)).toEqual(['A1', 'A2']);
+  });
+
+  it('does not replace a new Aura request with an old saved builder session', () => {
+    expect(shouldRestoreRoutineSession({ initialSource: 'Minha rotina está solta', focus: '' })).toBe(false);
+    expect(shouldRestoreRoutineSession({ initialSource: '', focus: 'Organizar minha semana' })).toBe(false);
+    expect(shouldRestoreRoutineSession({})).toBe(true);
   });
 
   it('separates today, week, habits and objectives without duplicating entries', () => {

@@ -11,7 +11,7 @@ import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { getCurrentLanguage, resolveIntlLocale } from "../i18n";
 import { supabase } from "../lib/supabase";
 import { trackEvent } from "../lib/track";
-import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
+import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, hasSubstantiveRoutineSource, type TimelineBlock } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
@@ -280,10 +280,17 @@ export function AuraChatPage() {
   async function executeAuraAction(response: AuraCommandResponse): Promise<string | null> {
     try {
       if (response.action === "start_routine_builder") {
+        const sourceText = typeof response.payload.sourceText === "string" ? response.payload.sourceText : "";
+        if (!hasSubstantiveRoutineSource(sourceText)) {
+          navigate("/onboarding/guiado");
+          return null;
+        }
         navigate("/routine-builder", {
           state: {
-            initialSource: typeof response.payload.sourceText === "string" ? response.payload.sourceText : "",
-            focus: typeof response.payload.focus === "string" ? response.payload.focus : "",
+            initialSource: sourceText,
+            focus: typeof response.payload.focus === "string" && response.payload.focus.trim()
+              ? response.payload.focus
+              : t("routineBuilder.defaultFocus", { defaultValue: "Organizar minha rotina" }),
           },
         });
         return null;

@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
-import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests } from "./aura-chat-page.helpers.ts";
+import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests, hasSubstantiveRoutineSource } from "./aura-chat-page.helpers.ts";
 
 describe("aura chat page helpers", () => {
+  it("distinguishes a bare routine request from real source material", () => {
+    assert.equal(hasSubstantiveRoutineSource("Monte minha rotina para mim."), false);
+    assert.equal(hasSubstantiveRoutineSource("Segunda: academia às 8h\nTerça: terapia às 16h\nQuero caminhar três vezes por semana."), true);
+    assert.equal(hasSubstantiveRoutineSource("Trabalho de segunda a sexta e preciso organizar uma rotina que inclua estudo, academia, mercado e os cuidados da casa sem sobrecarregar meus dias. Também tenho terapia às terças."), true);
+  });
+
   it("builds a single timeline block with the default start time", () => {
     const blocks = buildTimelineBlocks(
       {

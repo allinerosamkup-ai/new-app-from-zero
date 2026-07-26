@@ -1,5 +1,9 @@
 import type { RoutineBuilderStep, RoutinePlan, RoutinePlanEntry, RoutineSession } from './types';
 
+export function shouldRestoreRoutineSession(incoming: { initialSource?: string; focus?: string }): boolean {
+  return !incoming.initialSource?.trim() && !incoming.focus?.trim();
+}
+
 export function nextBuilderStep(session: Pick<RoutineSession, 'status' | 'stage' | 'draftPlan'>): RoutineBuilderStep {
   if (session.status === 'applied') return 'done';
   if (session.draftPlan) return 'preview';

@@ -12,6 +12,14 @@ export type TimelineBlock = {
   intensity: "L" | "M" | "P";
 };
 
+export function hasSubstantiveRoutineSource(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const source = value.trim();
+  if (!source) return false;
+  const nonEmptyLines = source.split(/\r?\n/).filter((line) => line.trim().length >= 4);
+  return nonEmptyLines.length >= 2 || source.length >= 120;
+}
+
 export type TimelineSyncRequest = {
   date: string;
   forceSave: boolean;
