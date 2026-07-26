@@ -143,6 +143,22 @@ export type PlannerTaskLike = {
   adaptationPermission?: TimelineAdaptationPermission | null;
 };
 
+export function groupPlannerTasksForList<T extends PlannerTaskLike>(tasks: T[]): {
+  active: T[];
+  unscheduled: T[];
+  completed: T[];
+} {
+  const byTime = (left: T, right: T) =>
+    `${left.time}:${left.title}`.localeCompare(`${right.time}:${right.title}`, "pt-BR");
+  const isUnscheduled = (task: T) => task.time === "00:00" && task.endTime === "23:59";
+
+  return {
+    active: tasks.filter((task) => !task.done && !isUnscheduled(task)).sort(byTime),
+    unscheduled: tasks.filter((task) => !task.done && isUnscheduled(task)).sort(byTime),
+    completed: tasks.filter((task) => task.done).sort(byTime),
+  };
+}
+
 export function resolvePlannerTaskAdaptability(input: {
   source?: string | null;
   gcalEventId?: string | null;

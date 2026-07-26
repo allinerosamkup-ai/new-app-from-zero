@@ -22,6 +22,7 @@ import {
 } from "../components/planner/ConflictResolutionBanner";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
+import { TaskListView } from "../features/planner/task-list-view";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
 // AuraToggle removed — no longer needed in PlannerSheetBody
@@ -1953,6 +1954,7 @@ export function PlannerPage() {
   const [offsetDias, setOffsetDias] = useState(0);
   const [plannerTasks, setPlannerTasks] = useState<PlannerTask[]>([]);
   const [plannerLoading, setPlannerLoading] = useState(false);
+  const [plannerView, setPlannerView] = useState<"timeline" | "tasks">("timeline");
   const [focusActionTick, setFocusActionTick] = useState(0);
   const [showNewForm, setShowNewForm] = useState(false);
   // Sprint Frente 1 — Planner AI Suggestions (cards confirmar)
@@ -3198,7 +3200,9 @@ export function PlannerPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
           <div>
                 <span style={{ ...LABEL_STYLE, color: "var(--accent-peach-ink)", fontSize: 11, marginBottom: 4 }}>{t("planner.agenda")}</span>
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-1)", margin: 0, letterSpacing: "-0.02em" }}>Timeline do dia</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-1)", margin: 0, letterSpacing: "-0.02em" }}>
+              {plannerView === "timeline" ? "Timeline do dia" : "Tarefas do dia"}
+            </h1>
             <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
                 {t("planner.respectsEnergy")}
             </p>
@@ -3214,10 +3218,44 @@ export function PlannerPage() {
         <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.6, maxWidth: "85%", margin: 0 }}>
           {plannerSummary}
         </p>
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, marginTop: 16,
+          padding: 5, borderRadius: 17, background: "rgba(74,63,60,.055)",
+        }}>
+          {([
+            ["timeline", "Agenda"],
+            ["tasks", "Tarefas"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={plannerView === id}
+              onClick={() => setPlannerView(id)}
+              style={{
+                minHeight: 42, border: 0, borderRadius: 13, cursor: "pointer",
+                background: plannerView === id ? "#fff" : "transparent",
+                color: plannerView === id ? "var(--text-1)" : "var(--text-3)",
+                boxShadow: plannerView === id ? "0 4px 14px rgba(74,63,60,.07)" : "none",
+                fontSize: 12, fontWeight: 850,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <EnergyBattery used={usedEnergy} capacity={dailyCapacity} />
 
+      {plannerView === "tasks" ? (
+        <TaskListView
+          tasks={plannerTasks}
+          onOpen={openViewTask}
+          onToggle={handleCompleteTaskDirect}
+          onCreate={() => openNewFormAt(getCurrentTimeRounded())}
+        />
+      ) : (
+        <>
       {!conflictsDismissed && conflicts.length > 0 && (
         <ConflictResolutionBanner
           conflicts={conflicts}
@@ -3674,32 +3712,36 @@ export function PlannerPage() {
           );
         })}
       </div>
+        </>
+      )}
 
       {/* FAB — Novo bloco */}
-      <button
-        onClick={() => openNewFormAt(getCurrentTimeRounded())}
-        aria-label="Novo bloco"
-        style={{
-          position: "fixed",
-          bottom: "calc(100px + env(safe-area-inset-bottom))",
-          right: 20,
-          width: 56,
-          height: 56,
-          borderRadius: "50%",
-          background: "#FFFFFF",
-          color: "#4A3B37",
-          border: "1.5px solid rgba(184,109,76,0.12)",
-          boxShadow: "0 12px 30px rgba(184,109,76,0.15)",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 40,
-          transition: "transform 150ms, box-shadow 150ms",
-        }}
-      >
-        <span style={{ fontSize: 24, color: "rgba(184,109,76,0.8)", fontWeight: 300 }}>+</span>
-      </button>
+      {plannerView === "timeline" && (
+        <button
+          onClick={() => openNewFormAt(getCurrentTimeRounded())}
+          aria-label="Novo bloco"
+          style={{
+            position: "fixed",
+            bottom: "calc(100px + env(safe-area-inset-bottom))",
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: "#FFFFFF",
+            color: "#4A3B37",
+            border: "1.5px solid rgba(184,109,76,0.12)",
+            boxShadow: "0 12px 30px rgba(184,109,76,0.15)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 40,
+            transition: "transform 150ms, box-shadow 150ms",
+          }}
+        >
+          <span style={{ fontSize: 24, color: "rgba(184,109,76,0.8)", fontWeight: 300 }}>+</span>
+        </button>
+      )}
 
 
       <AiriaBottomSheet

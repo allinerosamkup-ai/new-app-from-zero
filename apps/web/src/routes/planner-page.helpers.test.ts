@@ -21,6 +21,7 @@ import {
   type FormStateLike,
   type PlannerTaskLike,
   resolveTimelinePolicySelection,
+  groupPlannerTasksForList,
 } from "./planner-page.helpers.ts";
 
 describe("planner page helpers", () => {
@@ -336,5 +337,18 @@ describe("planner page helpers", () => {
       temporalPolicy: "flexible",
       adaptationPermission: "eligible",
     }), true);
+  });
+
+  it("groups one source of truth into active, unscheduled and completed task views", () => {
+    const grouped = groupPlannerTasksForList([
+      { id: "scheduled", title: "Enviar proposta", time: "14:00", endTime: "14:30", done: false },
+      { id: "unscheduled", title: "Comprar tinta", time: "00:00", endTime: "23:59", done: false },
+      { id: "done", title: "Ligar para Julia", time: "09:00", endTime: "09:15", done: true },
+      { id: "event", title: "Consulta", time: "11:00", endTime: "12:00", done: false, source: "gcal" },
+    ]);
+
+    assert.deepEqual(grouped.active.map((task) => task.id), ["event", "scheduled"]);
+    assert.deepEqual(grouped.unscheduled.map((task) => task.id), ["unscheduled"]);
+    assert.deepEqual(grouped.completed.map((task) => task.id), ["done"]);
   });
 });
