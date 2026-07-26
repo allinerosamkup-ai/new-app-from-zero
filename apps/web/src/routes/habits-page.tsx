@@ -4,10 +4,24 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import type { Habit } from "../features/aura/types";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
-import { getHabitCompletionCount, getHabitProgressLabel, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnWeekday } from "../features/aura/habit-helpers";
+import { HABIT_SUGGESTIONS, type HabitSuggestion } from "../features/aura/habit-presets";
+import {
+  buildHabitDraftFromSuggestion,
+  categorizeHabitsForDate,
+  formatHabitFrequency,
+  formatHabitTimeOfDay,
+  getHabitCompletionCount,
+  getHabitProgressLabel,
+  getHabitTargetCount,
+  isHabitCompleteForDate,
+  isHabitDueOnDate,
+  parseHabitDayDecisions,
+  type HabitDayDecision,
+  type HabitDayDecisions,
+} from "../features/aura/habit-helpers";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useToast } from "../components/Toast";
-import { ChevronLeft, Plus, Flame, Check, ChevronDown, Archive, Pencil, Sparkles } from "lucide-react";
+import { ChevronLeft, Plus, Flame, Check, ChevronDown, Pause, Pencil, RotateCcw, SkipForward, Sparkles, TimerReset } from "lucide-react";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { getLocalDateKey } from "../utils/day-context";
@@ -145,6 +159,17 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string
   geral:        { label: "Geral",         color: "var(--text-3)",    bg: "rgba(150,150,150,0.10)" },
 };
 
+const CATALOG_THEME_LABELS: Record<HabitSuggestion["theme"], { pt: string; en: string }> = {
+  starter: { pt: "Rotina leve", en: "Light routine" },
+  autocuidado: { pt: "Autocuidado", en: "Self-care" },
+  casa: { pt: "Casa", en: "Home" },
+  social: { pt: "Relações", en: "Relationships" },
+  criativo: { pt: "Criatividade", en: "Creativity" },
+  natureza: { pt: "Ao ar livre", en: "Outdoors" },
+};
+
+const HABIT_DAY_DECISIONS_PREFIX = "airia:habit-day:";
+
 // ─── Streak dots visualization ─────────────────────────────────────────────
 function StreakDots({ streakCount, completedToday }: { streakCount: number; completedToday: boolean }) {
   const totalDots = 7;
@@ -184,21 +209,32 @@ function HabitCard({
   dateKey,
   onToggle,
   onEdit,
-  onArchive,
+  onPostpone,
+  onSkip,
+  onPause,
+  onRestore,
+  dayDecision,
   isToggling,
 }: {
   habit: Habit;
   dateKey: string;
   onToggle: () => void;
   onEdit: () => void;
-  onArchive: () => void;
+  onPostpone: () => void;
+  onSkip: () => void;
+  onPause: () => void;
+  onRestore: () => void;
+  dayDecision?: HabitDayDecision;
   isToggling: boolean;
 }) {
+  const { i18n } = useTranslation();
+  const l = useLocalizedCopy();
+  const language = i18n.resolvedLanguage?.startsWith("en") ? "en" : "pt";
   const completedToday = isHabitCompleteForDate(habit, dateKey);
   const progressLabel = getHabitProgressLabel(habit, dateKey);
   const targetCount = getHabitTargetCount(habit);
   const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
-  const [archiving, setArchiving] = useState(false);
+  const [pausing, setPausing] = useState(false);
 
   return (
     <div
@@ -253,6 +289,10 @@ function HabitCard({
         >
           {habit.title}
         </p>
+        <p style={{ margin: "3px 0 0", fontSize: 10.5, color: "var(--text-3)", lineHeight: 1.35 }}>
+          {formatHabitFrequency(habit, language)} · {formatHabitTimeOfDay(habit.timeOfDay, language)}
+          {habit.durationMinutes ? ` · ${habit.durationMinutes} min` : ""}
+        </p>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
           <StreakDots streakCount={habit.streakCount} completedToday={completedToday} />
           <span style={{ fontSize: 10, color: "var(--accent-peach)", fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}>
@@ -264,9 +304,108 @@ function HabitCard({
             </span>
           )}
         </div>
+        {!completedToday && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+            {dayDecision === "postponed" ? (
+              <button
+                type="button"
+                onClick={onRestore}
+                style={{
+                  minHeight: 30,
+                  borderRadius: 999,
+                  border: "1px solid rgba(99,152,169,.28)",
+                  background: "rgba(99,152,169,.09)",
+                  color: "var(--accent-sky)",
+                  padding: "5px 10px",
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                <RotateCcw size={12} />
+                {l("Retomar agora", "Resume now")}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onPostpone}
+                  style={{
+                    minHeight: 30,
+                    borderRadius: 999,
+                    border: "1px solid rgba(99,152,169,.24)",
+                    background: "rgba(99,152,169,.07)",
+                    color: "var(--accent-sky)",
+                    padding: "5px 10px",
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <TimerReset size={12} />
+                  {l("Adiar", "Postpone")}
+                </button>
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  style={{
+                    minHeight: 30,
+                    borderRadius: 999,
+                    border: "1px solid var(--warm-border)",
+                    background: "rgba(255,255,255,.72)",
+                    color: "var(--text-2)",
+                    padding: "5px 10px",
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <SkipForward size={12} />
+                  {l("Pular hoje", "Skip today")}
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={async () => {
+                if (pausing) return;
+                setPausing(true);
+                await onPause();
+                setPausing(false);
+              }}
+              disabled={pausing}
+              style={{
+                minHeight: 30,
+                borderRadius: 999,
+                border: "none",
+                background: "transparent",
+                color: "var(--text-3)",
+                padding: "5px 8px",
+                fontSize: 10.5,
+                fontWeight: 800,
+                cursor: pausing ? "default" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <Pause size={12} />
+              {pausing ? l("Pausando...", "Pausing...") : l("Pausar", "Pause")}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Actions (Surgem quando não completado para facilitar edição) */}
+      {/* Edição rápida sem tirar o foco da ação principal. */}
       {!completedToday && (
         <div style={{ display: "flex", gap: 4, marginRight: 4 }}>
           <button
@@ -286,31 +425,6 @@ function HabitCard({
           >
             <Pencil size={13} />
           </button>
-          <button
-            onClick={async (e) => {
-              e.stopPropagation();
-              if (archiving) return;
-              // Sem modal de confirmação: a ação executa na hora e o toast oferece "Desfazer"
-              setArchiving(true);
-              await onArchive();
-              setArchiving(false);
-            }}
-            disabled={archiving}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              border: "1.5px solid rgba(215,137,127,0.2)",
-              background: "rgba(215,137,127,0.04)",
-              color: archiving ? "var(--text-3)" : "var(--accent-peach)",
-              cursor: archiving ? "default" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Archive size={13} />
-          </button>
         </div>
       )}
 
@@ -318,6 +432,9 @@ function HabitCard({
       <button
         onClick={onToggle}
         disabled={isToggling}
+        aria-label={completedToday
+          ? l(`Desmarcar ${habit.title}`, `Uncheck ${habit.title}`)
+          : l(`Fazer ${habit.title}`, `Do ${habit.title}`)}
         style={{
           width: 44,
           height: 44,
@@ -434,7 +551,9 @@ function HabitCalendar({ habitId, color }: { habitId: string; color: string }) {
 
 // ─── All habits card (expandable with calendar) ───────────────────────────
 function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dateKey: string; onArchive: () => void; onEdit: () => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
+  const language = i18n.resolvedLanguage?.startsWith("en") ? "en" : "pt";
   const cat = CATEGORY_CONFIG[habit.category] ?? CATEGORY_CONFIG.geral;
   const completedToday = isHabitCompleteForDate(habit, dateKey);
   const [expanded, setExpanded] = useState(false);
@@ -498,6 +617,13 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 13, fontWeight: 700, margin: 0, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{habit.title}</p>
             <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 10, color: "var(--text-2)", fontWeight: 700 }}>
+                {formatHabitFrequency(habit, language)}
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 600 }}>
+                {formatHabitTimeOfDay(habit.timeOfDay, language)}
+                {habit.durationMinutes ? ` · ${habit.durationMinutes} min` : ""}
+              </span>
               <span
                 style={{
                   fontSize: 10,
@@ -577,7 +703,7 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
               await onArchive();
             }}
             disabled={archiving}
-            aria-label={`Excluir ${habit.title}`}
+            aria-label={l(`Pausar ${habit.title}`, `Pause ${habit.title}`)}
             style={{
               width: 30,
               height: 30,
@@ -591,7 +717,7 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
               justifyContent: "center",
             }}
           >
-            <Archive size={13} />
+            <Pause size={13} />
           </button>
         </div>
       </div>
@@ -657,12 +783,138 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
               transition: "all 0.15s",
             }}
           >
-            <Archive size={13} />
-            {archiving ? t("habits.deleting") : t("habits.delete")}
+            <Pause size={13} />
+            {archiving ? l("Pausando...", "Pausing...") : l("Pausar hábito", "Pause habit")}
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+function HabitCatalog({
+  onChoose,
+  onCreateCustom,
+}: {
+  onChoose: (suggestion: HabitSuggestion) => void;
+  onCreateCustom: () => void;
+}) {
+  const { i18n } = useTranslation();
+  const l = useLocalizedCopy();
+  const language = i18n.resolvedLanguage?.startsWith("en") ? "en" : "pt";
+  const [theme, setTheme] = useState<HabitSuggestion["theme"]>("starter");
+  const suggestions = HABIT_SUGGESTIONS.filter((suggestion) => suggestion.theme === theme).slice(0, 8);
+
+  return (
+    <section
+      aria-labelledby="habit-catalog-title"
+      style={{
+        marginBottom: 22,
+        padding: "18px 16px",
+        borderRadius: 24,
+        border: "1.5px solid rgba(215,137,127,.18)",
+        background: "linear-gradient(145deg, rgba(255,255,255,.94), rgba(215,137,127,.07))",
+        boxShadow: "0 12px 32px rgba(74,63,60,.06)",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+        <div>
+          <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)" }}>
+            {l("Catálogo por toque", "Tap-first catalog")}
+          </p>
+          <h2 id="habit-catalog-title" style={{ margin: 0, fontSize: 18, lineHeight: 1.25, color: "var(--text-1)" }}>
+            {l("Comece com uma ideia pronta", "Start with a ready-made idea")}
+          </h2>
+          <p style={{ margin: "5px 0 0", fontSize: 12, lineHeight: 1.45, color: "var(--text-2)" }}>
+            {l(
+              "Toque em uma opção e ajuste apenas os dias que combinam com sua semana.",
+              "Tap an option and adjust only the days that fit your week.",
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onCreateCustom}
+          style={{
+            minHeight: 38,
+            borderRadius: 999,
+            border: "1px solid rgba(215,137,127,.28)",
+            background: "rgba(255,255,255,.9)",
+            color: "var(--nectarine-11, #8B4A43)",
+            padding: "8px 12px",
+            fontSize: 11,
+            fontWeight: 900,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {l("Criar do zero", "Create from scratch")}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 8, marginBottom: 10 }}>
+        {(Object.keys(CATALOG_THEME_LABELS) as HabitSuggestion["theme"][]).map((item) => {
+          const active = item === theme;
+          return (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setTheme(item)}
+              aria-pressed={active}
+              style={{
+                minHeight: 34,
+                borderRadius: 999,
+                border: active ? "1px solid var(--accent-peach)" : "1px solid var(--warm-border)",
+                background: active ? "rgba(215,137,127,.13)" : "rgba(255,255,255,.76)",
+                color: active ? "var(--nectarine-11, #8B4A43)" : "var(--text-2)",
+                padding: "7px 11px",
+                fontSize: 10.5,
+                fontWeight: 800,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {language === "en" ? CATALOG_THEME_LABELS[item].en : CATALOG_THEME_LABELS[item].pt}
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 9 }}>
+        {suggestions.map((suggestion) => (
+          <button
+            key={`${suggestion.theme}:${suggestion.title}`}
+            type="button"
+            onClick={() => onChoose(suggestion)}
+            style={{
+              minHeight: 116,
+              borderRadius: 18,
+              border: "1px solid rgba(74,63,60,.09)",
+              background: "rgba(255,255,255,.86)",
+              padding: 12,
+              textAlign: "left",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: 9,
+              boxShadow: "0 6px 16px rgba(74,63,60,.04)",
+            }}
+          >
+            <span style={{ fontSize: 24 }}>{suggestion.icon}</span>
+            <span>
+              <span style={{ display: "block", fontSize: 12.5, lineHeight: 1.28, fontWeight: 850, color: "var(--text-1)" }}>
+                {suggestion.title}
+              </span>
+              <span style={{ display: "block", marginTop: 5, fontSize: 10, fontWeight: 750, color: "var(--text-3)" }}>
+                {formatHabitTimeOfDay(suggestion.timeOfDay, language)}
+                {suggestion.durationMinutes ? ` · ${suggestion.durationMinutes} min` : ""}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -673,37 +925,51 @@ export function HabitsPage() {
   const { state, addHabit, updateHabit, toggleHabit, archiveHabit, unarchiveHabit } = useAuraStore();
   const navigate = useNavigate();
   const { showSuccess, showError, showUndo } = useToast();
+  const todayKey = getLocalDateKey();
 
   async function handleArchiveHabit(habit: Habit) {
     try {
       await archiveHabit(habit.id);
-      showUndo(`"${habit.title}" excluído`, () => {
-        unarchiveHabit(habit.id).catch(() => showError(t("habits.restoreError")));
+      showUndo(`"${habit.title}" pausado`, () => {
+        unarchiveHabit(habit.id).catch(() => showError(l("Não consegui retomar o hábito.", "I couldn't resume the habit.")));
       });
     } catch {
-      showError(t("habits.deleteError"));
+      showError(l("Não consegui pausar o hábito.", "I couldn't pause the habit."));
     }
   }
   const [tab, setTab] = useState<"today" | "all" | "badges">("today");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [newHabitDraft, setNewHabitDraft] = useState<ReturnType<typeof buildHabitDraftFromSuggestion> | undefined>();
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const habitsOpenedRef = useRef(false);
-
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   const [showConfetti, setShowConfetti] = useState(false);
+  const [dayDecisions, setDayDecisions] = useState<HabitDayDecisions>(() => {
+    if (typeof window === "undefined") return {};
+    return parseHabitDayDecisions(window.localStorage.getItem(`${HABIT_DAY_DECISIONS_PREFIX}${todayKey}`));
+  });
 
   const habits = state.habits || [];
-  const todayKey = getLocalDateKey();
-  const todayWeekday = new Date(`${todayKey}T12:00:00`).getDay();
-  const todayHabits = habits.filter((h) => isHabitDueOnWeekday(h, todayWeekday));
-  const completedToday = todayHabits.filter((h) => isHabitCompleteForDate(h, todayKey)).length;
+  const todayGroups = useMemo(
+    () => categorizeHabitsForDate(habits, todayKey, dayDecisions),
+    [dayDecisions, habits, todayKey],
+  );
+  const todayHabits = habits.filter((habit) => isHabitDueOnDate(habit, todayKey));
+  const completedToday = todayGroups.done.length;
   const bestStreak = habits.reduce((max, h) => Math.max(max, h.streakCount), 0);
-  const pendingToday = todayHabits.filter((h) => !isHabitCompleteForDate(h, todayKey));
-  const doneToday = todayHabits.filter((h) => isHabitCompleteForDate(h, todayKey));
+  const pendingToday = todayGroups.pending;
+  const postponedToday = todayGroups.postponed;
+  const skippedToday = todayGroups.skipped;
+  const doneToday = todayGroups.done;
   const editingHabitDraft = useMemo(
     () => (editingHabit ? buildHabitEditDraft(editingHabit) : undefined),
     [editingHabit],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(`${HABIT_DAY_DECISIONS_PREFIX}${todayKey}`, JSON.stringify(dayDecisions));
+  }, [dayDecisions, todayKey]);
 
   useEffect(() => {
     if (habitsOpenedRef.current) return;
@@ -724,8 +990,14 @@ export function HabitsPage() {
     setTogglingIds((prev) => new Set([...prev, habitId]));
     try {
       await toggleHabit(habitId);
+      setDayDecisions((current) => {
+        if (!current[habitId]) return current;
+        const next = { ...current };
+        delete next[habitId];
+        return next;
+      });
       // Disparar confetti se acabou de completar o último hábito pendente
-      if (willComplete && pendingToday.length === 1 && todayHabits.length > 0) {
+      if (willComplete && pendingToday.length + postponedToday.length === 1 && todayHabits.length > 0) {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 3000);
       }
@@ -740,10 +1012,33 @@ export function HabitsPage() {
     }
   }
 
+  function setHabitDayDecision(habitId: string, decision?: HabitDayDecision) {
+    setDayDecisions((current) => {
+      if (!decision) {
+        if (!current[habitId]) return current;
+        const next = { ...current };
+        delete next[habitId];
+        return next;
+      }
+      return { ...current, [habitId]: decision };
+    });
+  }
+
+  function openBlankHabit() {
+    setNewHabitDraft(undefined);
+    setShowAddModal(true);
+  }
+
+  function openHabitSuggestion(suggestion: HabitSuggestion) {
+    setNewHabitDraft(buildHabitDraftFromSuggestion(suggestion));
+    setShowAddModal(true);
+  }
+
   async function handleAddHabit(data: HabitModalPayload) {
     try {
       await addHabit(data);
       setShowAddModal(false);
+      setNewHabitDraft(undefined);
       showSuccess(t("habits.created"));
       return true;
     } catch {
@@ -803,7 +1098,8 @@ export function HabitsPage() {
             </p>
           </div>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openBlankHabit}
+            aria-label={l("Adicionar hábito", "Add habit")}
             style={{
               width: 36,
               height: 36,
@@ -860,7 +1156,7 @@ export function HabitsPage() {
                 {bestStreak}
               </p>
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0, fontWeight: 600, textTransform: "uppercase" }}>
-                Melhor streak
+                {l("Melhor sequência", "Best streak")}
               </p>
             </div>
           </div>
@@ -893,7 +1189,7 @@ export function HabitsPage() {
                 transition: "all 0.18s",
               }}
             >
-              {t === "today" ? l("Hoje", "Today") : t === "all" ? l("Todos", "All") : "🏆"}
+              {t === "today" ? l("Hoje", "Today") : t === "all" ? l("Todos", "All") : l("Marcos", "Milestones")}
             </button>
           ))}
         </div>
@@ -904,14 +1200,26 @@ export function HabitsPage() {
             {todayHabits.length === 0 ? (
               <SmartEmptyState
                 icon={Sparkles}
-                title={t("habits.emptyTitle")}
-                description={t("habits.emptyDescription")}
-                ctaLabel={l("Criar hábito", "Create habit")}
-                onAction={() => setShowAddModal(true)}
+                title={habits.length > 0
+                  ? l("Nenhum hábito para hoje", "No habits for today")
+                  : l("Crie um hábito pequeno", "Create a small habit")}
+                description={habits.length > 0
+                  ? l(
+                    "Os hábitos dos outros dias continuam guardados. Hoje só aparece o que realmente vence agora.",
+                    "Habits for other days stay saved. Today only shows what is actually due now.",
+                  )
+                  : l(
+                    "Escolha uma ideia pronta e ajuste os dias sem preencher um formulário longo.",
+                    "Choose a ready-made idea and adjust the days without filling out a long form.",
+                  )}
+                ctaLabel={habits.length > 0
+                  ? l("Ver todos os hábitos", "View all habits")
+                  : l("Escolher uma ideia", "Choose an idea")}
+                onAction={() => setTab("all")}
                 examples={[
-                  { title: l("Abrir o planner de manhã", "Open the planner in the morning"), description: l("Para orientar o dia antes de começar.", "Set direction before the day begins.") },
-                  { title: l("Revisar uma pendência às 16h", "Review a pending item at 4 PM"), description: l("Para evitar peso acumulado no fim do dia.", "Avoid accumulated weight at the end of the day.") },
-                  { title: l("Registrar uma linha no diário", "Write one line in the journal"), description: l("Para dar contexto quando o dia oscilar.", "Provide context when the day fluctuates.") },
+                  { title: l("Beber água ao acordar", "Drink water after waking up"), description: l("2 minutos · todos os dias", "2 minutes · every day") },
+                  { title: l("Caminhada curta", "Short walk"), description: l("20 minutos · escolha os dias", "20 minutes · choose the days") },
+                  { title: l("Preparar a bolsa de amanhã", "Prepare tomorrow's bag"), description: l("6 minutos · à noite", "6 minutes · in the evening") },
                 ]}
               />
             ) : (
@@ -930,9 +1238,82 @@ export function HabitsPage() {
                           dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
                           onEdit={() => setEditingHabit(h)}
-                          onArchive={() => handleArchiveHabit(h)}
+                          onPostpone={() => setHabitDayDecision(h.id, "postponed")}
+                          onSkip={() => setHabitDayDecision(h.id, "skipped")}
+                          onPause={() => handleArchiveHabit(h)}
+                          onRestore={() => setHabitDayDecision(h.id)}
                           isToggling={togglingIds.has(h.id)}
                         />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {postponedToday.length > 0 && (
+                  <div style={{ marginBottom: 18 }}>
+                    <p style={{ fontSize: 11, fontWeight: 800, color: "var(--accent-sky)", textTransform: "uppercase", margin: "0 0 10px" }}>
+                      {l(`Para mais tarde (${postponedToday.length})`, `For later (${postponedToday.length})`)}
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {postponedToday.map((habit) => (
+                        <HabitCard
+                          key={habit.id}
+                          habit={habit}
+                          dateKey={todayKey}
+                          dayDecision="postponed"
+                          onToggle={() => handleToggle(habit.id)}
+                          onEdit={() => setEditingHabit(habit)}
+                          onPostpone={() => setHabitDayDecision(habit.id, "postponed")}
+                          onSkip={() => setHabitDayDecision(habit.id, "skipped")}
+                          onPause={() => handleArchiveHabit(habit)}
+                          onRestore={() => setHabitDayDecision(habit.id)}
+                          isToggling={togglingIds.has(habit.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {skippedToday.length > 0 && (
+                  <div
+                    style={{
+                      marginBottom: 18,
+                      padding: "12px 14px",
+                      borderRadius: 16,
+                      border: "1px dashed var(--warm-border)",
+                      background: "rgba(255,255,255,.55)",
+                    }}
+                  >
+                    <p style={{ margin: "0 0 9px", fontSize: 11, lineHeight: 1.4, color: "var(--text-2)", fontWeight: 750 }}>
+                      {l(
+                        `Pulados hoje (${skippedToday.length}). Sem cobrança — você pode trazer qualquer um de volta.`,
+                        `Skipped today (${skippedToday.length}). No pressure — you can bring any of them back.`,
+                      )}
+                    </p>
+                    <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                      {skippedToday.map((habit) => (
+                        <button
+                          key={habit.id}
+                          type="button"
+                          onClick={() => setHabitDayDecision(habit.id)}
+                          style={{
+                            minHeight: 32,
+                            borderRadius: 999,
+                            border: "1px solid var(--warm-border)",
+                            background: "rgba(255,255,255,.85)",
+                            color: "var(--text-2)",
+                            padding: "6px 10px",
+                            fontSize: 10.5,
+                            fontWeight: 800,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          <RotateCcw size={12} />
+                          {habit.icon || "✨"} {habit.title}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -952,7 +1333,10 @@ export function HabitsPage() {
                           dateKey={todayKey}
                           onToggle={() => handleToggle(h.id)}
                           onEdit={() => setEditingHabit(h)}
-                          onArchive={() => handleArchiveHabit(h)}
+                          onPostpone={() => setHabitDayDecision(h.id, "postponed")}
+                          onSkip={() => setHabitDayDecision(h.id, "skipped")}
+                          onPause={() => handleArchiveHabit(h)}
+                          onRestore={() => setHabitDayDecision(h.id)}
                           isToggling={togglingIds.has(h.id)}
                         />
                       ))}
@@ -961,7 +1345,7 @@ export function HabitsPage() {
                 )}
 
                 {/* Motivational if all done */}
-                {pendingToday.length === 0 && doneToday.length > 0 && (
+                {pendingToday.length === 0 && postponedToday.length === 0 && doneToday.length > 0 && (
                   <div
                     style={{
                       marginTop: 20,
@@ -989,17 +1373,18 @@ export function HabitsPage() {
         {/* ── ALL TAB ──────────────────────────────────────────── */}
         {tab === "all" && (
           <div>
+            <HabitCatalog onChoose={openHabitSuggestion} onCreateCustom={openBlankHabit} />
             {habits.length === 0 ? (
               <SmartEmptyState
                 icon={Sparkles}
-                title={t("habits.noneTitle")}
-                description={l("Comece com algo que ajude a Airia a sustentar seu ritmo, sem virar lista pesada.", "Start with something that helps Airia support your rhythm without becoming a heavy list.")}
-                ctaLabel={l("Criar primeiro hábito", "Create first habit")}
-                onAction={() => setShowAddModal(true)}
+                title={l("Sua biblioteca ainda está vazia", "Your library is still empty")}
+                description={l("Escolha uma ideia acima ou crie algo específico da sua rotina.", "Choose an idea above or create something specific to your routine.")}
+                ctaLabel={l("Criar hábito do zero", "Create a habit from scratch")}
+                onAction={openBlankHabit}
                 examples={[
-                  { title: l("Check-in da manhã", "Morning check-in"), description: l("Humor e energia antes da agenda.", "Mood and energy before the agenda.") },
+                  { title: l("Check-in da manhã", "Morning check-in"), description: l("Humor e energia antes da agenda.", "Mood and energy before planning.") },
                   { title: l("Fechamento do dia", "End-of-day review"), description: l("Olhar o que ficou pendente.", "Review what remains pending.") },
-                  { title: l("Planejar uma janela leve", "Plan a light window"), description: l("Proteger energia em dias sensíveis.", "Protect energy on sensitive days.") },
+                  { title: l("Pausa curta", "Short break"), description: l("Proteger energia sem abandonar o dia.", "Protect energy without abandoning the day.") },
                 ]}
               />
             ) : (
@@ -1136,7 +1521,8 @@ export function HabitsPage() {
 
       {/* FAB — quick add fixo no bottom */}
       <button
-        onClick={() => setShowAddModal(true)}
+        onClick={openBlankHabit}
+        aria-label={l("Adicionar hábito", "Add habit")}
         style={{
           position: "fixed",
           bottom: 88,
@@ -1163,8 +1549,16 @@ export function HabitsPage() {
       {/* Add modal */}
       {showAddModal && (
         <HabitIdeasModal
-          onClose={() => setShowAddModal(false)}
+          onClose={() => {
+            setShowAddModal(false);
+            setNewHabitDraft(undefined);
+          }}
           onSave={handleAddHabit}
+          initialDraft={newHabitDraft}
+          title={newHabitDraft
+            ? l("Ajuste esta ideia à sua semana", "Fit this idea to your week")
+            : l("Adicionar hábito", "Add habit")}
+          subtitle={l("Escolha a frequência e os dias. Você pode mudar tudo depois.", "Choose the frequency and days. You can change everything later.")}
         />
       )}
 
