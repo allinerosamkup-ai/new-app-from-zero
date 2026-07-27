@@ -3155,7 +3155,13 @@ export function createApp(dependencies: AppDependencies = {}) {
         if (decompositionSteps.length > 0) {
           Object.assign(responsePayload, {
             steps: decompositionSteps,
-            checklist: decompositionSteps.map((step) => ({ text: step.title, done: false })),
+            // O id é obrigatório: o Planner descarta item de checklist sem id, e os
+            // passos gerados sumiriam em silêncio.
+            checklist: decompositionSteps.map((step, index) => ({
+              id: `step-${Date.now()}-${index}`,
+              text: step.title,
+              done: false,
+            })),
             wasDecomposed: true,
           });
         }

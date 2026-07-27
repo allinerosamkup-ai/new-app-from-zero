@@ -243,6 +243,9 @@ export default function App() {
         <Route path="/onboarding/sleep" element={<OnboardingSleepPage />} />
         <Route path="/onboarding/preferences" element={<OnboardingPreferencesPage />} />
         <Route path="/onboarding/done" element={<OnboardingDonePage />} />
+        {/* Execução: tela cheia, sem bottom nav. Um passo por vez quer dizer
+            nada mais na tela competindo com o passo. */}
+        <Route path="/run" element={<RunPage />} />
         <Route path="/editorial-showcase" element={<EditorialShowcase />} />
         <Route path="/auth-v2" element={<AuthV2Page />} />
         <Route path="/auth/callback" element={<Navigate to={`/planner${location.search}`} replace />} />
@@ -289,7 +292,6 @@ export default function App() {
           <Route path="/conteudo" element={<ConteudoPage />} />
           <Route path="/contexto" element={<ContextoPage />} />
           <Route path="/routine-builder" element={<RoutineBuilderPage />} />
-          <Route path="/run" element={<RunPage />} />
         </Route>
       </Routes>
       </div>
