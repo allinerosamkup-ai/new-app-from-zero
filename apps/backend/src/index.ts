@@ -3151,6 +3151,13 @@ export function createApp(dependencies: AppDependencies = {}) {
           title: decompositionTitle,
           durationMinutes: typeof responsePayload.durationMinutes === 'number' ? responsePayload.durationMinutes : null,
           locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+          // A quebra acompanha a capacidade de hoje: em fase baixa, menos passos
+          // e mais curtos. Cinco passos de quinze minutos num dia ruim é o mesmo
+          // que não ter quebrado.
+          phase: typeof (req.body as any)?.phase === 'string' ? (req.body as any).phase : null,
+          energyScore: typeof (req.body as any)?.energyScore === 'number' ? (req.body as any).energyScore : null,
+          category: typeof responsePayload.category === 'string' ? responsePayload.category : null,
+          note: typeof responsePayload.note === 'string' ? responsePayload.note : null,
         }).catch(() => []);
         if (decompositionSteps.length > 0) {
           Object.assign(responsePayload, {
