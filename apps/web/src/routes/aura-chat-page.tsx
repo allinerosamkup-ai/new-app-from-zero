@@ -410,12 +410,14 @@ export function AuraChatPage() {
       if (response.action === "start_task") {
         const taskId = typeof response.payload.taskId === "string" ? response.payload.taskId : "";
         if (!taskId) return null;
-        await api.post(`/timeline/${taskId}/started`, {});
-        await refreshData();
-        setActionCard({
-          eyebrow: l("COMEÇOU", "STARTED"),
-          title: typeof response.payload.title === "string" ? response.payload.title : l("Cronômetro rodando", "Timer running"),
-          items: [l("Começar é a parte cara. Essa parte já foi.", "Starting is the expensive part. That part is done.")],
+        // Dizer que começou abre a execução passo a passo, não só registra.
+        navigate("/run", {
+          state: {
+            taskId,
+            title: typeof response.payload.title === "string" ? response.payload.title : undefined,
+            steps: Array.isArray(response.payload.steps) ? response.payload.steps : undefined,
+            checklist: Array.isArray(response.payload.checklist) ? response.payload.checklist : undefined,
+          },
         });
         return null;
       }

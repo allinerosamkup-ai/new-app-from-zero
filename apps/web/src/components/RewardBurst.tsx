@@ -40,7 +40,6 @@ export function RewardBurst({ reward, onDone }: { reward: Reward | null; onDone?
       onDone?.();
     }, big ? DURATION_MS.big : DURATION_MS.small);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reward]);
 
   if (!reward || !visible) return null;

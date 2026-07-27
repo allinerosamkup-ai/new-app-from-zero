@@ -20,6 +20,13 @@
 | `/goals` | `goals-page.tsx` | Hub de Metas & GTD (Captura Glass + Organização) |
 | `/pomodoro` | `pomodoro-page.tsx` | Timer de foco integrado |
 | `/config` | `config-page.tsx` | Preferências do usuário |
+| `/run` | `run-page.tsx` | Execução passo a passo: um passo por vez, prévia do próximo, pular sem custo |
+
+## Execução e Recompensa
+- `RewardBurst` (`components/RewardBurst.tsx`) é o retorno de cada conclusão. Dura pouco, sai sozinho e respeita `prefers-reduced-motion`. O texto vem do backend para ser igual no chat, no Planner e nos Hábitos.
+- `ProgressStrip` (`components/ProgressStrip.tsx`) mostra nível, XP e sequência na Home a partir de `GET /api/progress`. Não existe meta diária, aviso de sequência em risco nem comparação com ontem.
+- Reabrir um bloco não comemora. Só fechar.
+- Na tela de execução, pular é saída legítima: não pede justificativa e não conta tempo.
 
 ## Core Logic — MoodCycleEngine
 Arquivo: `src/utils/mood-cycle-engine.ts`

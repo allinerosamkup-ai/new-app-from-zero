@@ -41,7 +41,7 @@ import { AgendaPatternRecognitionService } from './services/agenda-pattern-recog
 import { ContextGroundingService } from './services/context-grounding.service';
 import { ReasoningContextService } from './services/reasoning-context.service';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './services/airia-operational-reasoning.service';
-import { buildCompletionReward } from './services/progress-rewards.service';
+import { buildCompletionReward, computeProgress, streakMessage, type ProgressEvent } from './services/progress-rewards.service';
 import { TaskDecompositionService } from './services/task-decomposition.service';
 import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-interpreter.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
@@ -3465,6 +3465,68 @@ export function createApp(dependencies: AppDependencies = {}) {
   ...
 
    */
+  /**
+   * GET /api/progress
+   * XP, nível e sequência calculados do que já existe — sem tabela nova e sem
+   * risco de o número divergir do que a pessoa realmente fez.
+   */
+  app.get('/api/progress', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const localDate = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+        ? req.query.date
+        : new Date().toISOString().slice(0, 10);
+      const since = new Date(`${localDate}T00:00:00.000Z`);
+      since.setUTCDate(since.getUTCDate() - 120);
+
+      const [completions, doneBlocks, checkins, journalSessions] = await Promise.all([
+        prisma.habitCompletion.findMany({
+          where: { date: { gte: since }, habit: { userId } },
+          select: { date: true },
+        }).catch(() => []),
+        prisma.timelineBlock.findMany({
+          where: { userId, status: 'completed', localDate: { gte: since } },
+          select: { localDate: true },
+        }).catch(() => []),
+        prisma.dailyCheckin.findMany({
+          where: { userId, localDate: { gte: since } },
+          select: { localDate: true, stateLabel: true },
+        }).catch(() => []),
+        prisma.journalSession.findMany({
+          where: { userId, status: 'completed', finalizedAt: { not: null } },
+          select: { finalizedAt: true },
+        }).catch(() => []),
+      ]);
+
+      const dayOf = (value: Date | string | null) => (
+        value ? new Date(value).toISOString().slice(0, 10) : null
+      );
+
+      const events: ProgressEvent[] = [
+        ...completions.map((row: { date: Date }) => ({ date: dayOf(row.date)!, kind: 'habit_done' as const })),
+        ...doneBlocks.map((row: { localDate: Date }) => ({ date: dayOf(row.localDate)!, kind: 'task_done' as const })),
+        ...checkins.map((row: { localDate: Date }) => ({ date: dayOf(row.localDate)!, kind: 'checkin' as const })),
+        ...journalSessions
+          .map((row: { finalizedAt: Date | null }) => dayOf(row.finalizedAt))
+          .filter((day): day is string => Boolean(day))
+          .map((day) => ({ date: day, kind: 'journal' as const })),
+      ].filter((event) => Boolean(event.date));
+
+      // A fase de cada dia é o que decide se a sequência pausa ou continua.
+      const phaseByDate: Record<string, string | undefined> = {};
+      for (const checkin of checkins as Array<{ localDate: Date; stateLabel: string | null }>) {
+        const day = dayOf(checkin.localDate);
+        if (day && checkin.stateLabel) phaseByDate[day] = checkin.stateLabel;
+      }
+
+      const progress = computeProgress({ events, today: localDate, phaseByDate });
+      return res.json({ ...progress, streakMessage: streakMessage(progress.streak) });
+    } catch (error) {
+      console.error('[progress] Error:', error);
+      return res.status(500).json({ error: 'Failed to compute progress' });
+    }
+  });
+
   app.get('/api/insights/weekly', async (req: Request, res: Response) => {
   const userId = (req as AuthRequest).userId;
   const { weekStart } = req.query;

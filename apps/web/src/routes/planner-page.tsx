@@ -2997,13 +2997,16 @@ export function PlannerPage() {
   }
 
   async function handleStartedTask(task: PlannerTask) {
-    try {
-      await api.post(`/timeline/${task.id}/started`, {});
-      const isAppear = task.taskMode === 'appear';
-      showSuccess(isAppear ? "Você apareceu. Isso já é uma vitória. 🌀" : "Registrado. Começar já é uma vitória. 🟡");
-    } catch {
-      // silent
-    }
+    // Começar abre a execução passo a passo: um passo por vez, com o próximo
+    // como prévia. Ver a lista inteira é o que trava.
+    navigate("/run", {
+      state: {
+        taskId: task.id,
+        title: task.title,
+        checklist: normalizeChecklist(task.checklist),
+        durationMinutes: diffMinutes(task.time, task.endTime),
+      },
+    });
   }
 
   // ─── Deriva com prazo — seletor de horário ───────────────────────────────

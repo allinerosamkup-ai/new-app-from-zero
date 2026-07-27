@@ -14,6 +14,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { JornadaHomeCard } from "../components/JornadaHomeCard";
+import { ProgressStrip } from "../components/ProgressStrip";
 import { aggregateCheckinsByDay, computeDailyPhaseMap, computeMoodCycle, forecastEnergy7d, forecastMood7d, getPhaseColor, getStabilityLabel, phaseFromMoodValue, PHASE_CONFIG, type MoodPhase } from "../utils/mood-cycle-engine";
 import { Card, SectionTitle, Stat } from "../components/ui/card";
 import { computeDaysSinceLastCheckin, REENTRY_GAP_DAYS } from "./checkin-page.helpers";
@@ -1706,6 +1707,12 @@ export function HomePage() {
             </div>
           );
         })()}
+
+        {/* Nível, XP e sequência. Só o que já aconteceu — sem meta diária, sem
+            aviso de sequência em risco, sem comparação com ontem. */}
+        <div style={{ margin: "0 0 12px" }}>
+          <ProgressStrip />
+        </div>
 
         <JornadaHomeCard />
 

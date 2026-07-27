@@ -39,6 +39,7 @@ const loadConteudoPage = () => import("./routes/conteudo-page");
 const loadContextoPage = () => import("./routes/contexto-page");
 const loadRoutineBuilderPage = () => import("./routes/routine-builder-page");
 const loadGuidedOnboardingPage = () => import("./routes/guided-onboarding-page");
+const loadRunPage = () => import("./routes/run-page");
 
 const AuraLayout = lazy(() => loadAuraLayout().then((module) => ({ default: module.AuraLayout })));
 const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
@@ -76,6 +77,7 @@ const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: 
 const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: module.ContextoPage })));
 const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
 const GuidedOnboardingPage = lazy(() => loadGuidedOnboardingPage().then((module) => ({ default: module.GuidedOnboardingPage })));
+const RunPage = lazy(() => loadRunPage().then((module) => ({ default: module.RunPage })));
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
@@ -287,6 +289,7 @@ export default function App() {
           <Route path="/conteudo" element={<ConteudoPage />} />
           <Route path="/contexto" element={<ContextoPage />} />
           <Route path="/routine-builder" element={<RoutineBuilderPage />} />
+          <Route path="/run" element={<RunPage />} />
         </Route>
       </Routes>
       </div>
