@@ -57,3 +57,23 @@
 - Executar fluxo autenticado da API, fluxo visual do comando central, conflitos, retries, Google e persistência.
 - Aplicar `skills/airia-pr-review/SKILL.md`, revisar timezone, grounding, risco, i18n e ausência de estado falso.
 - Documentar migration/deploy sem declarar produção pronta antes de confirmar schema e persistência reais.
+
+## Hardening de produção — 2026-07-28
+
+A validação autenticada da primeira publicação revelou quatro fronteiras que os
+testes isolados não cobriam:
+
+- o entendimento determinístico reconhecia tarefa e check-in, mas uma resposta
+  probabilística `respond`/`ask_clarification` ainda conseguia impedir a execução;
+- “quero como meta” e “página de metas” não eram reconhecidos como meta;
+- o gate inventava um horário antes de o agendador consultar conflitos, humor e
+  energia;
+- check-in exigia irritabilidade mesmo quando a usuária informou os três sinais
+  centrais, e a memória recusava as origens `aura` e `canonical`.
+
+O contrato corrigido dá precedência à ordem explícita atual, recupera de forma
+tipada tarefa/meta/check-in quando o modelo contradiz esse entendimento, deixa a
+hora ausente para o ranking contextual, decompõe metas antes da persistência e
+aceita irritabilidade ausente sem inventar valor. A migration
+`20260728170000_fix_aura_command_memory_and_checkin.sql` alinha o banco com esse
+contrato e libera as origens reais da memória.

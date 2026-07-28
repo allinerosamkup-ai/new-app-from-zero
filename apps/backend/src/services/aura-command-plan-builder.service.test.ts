@@ -65,11 +65,11 @@ function run() {
 
   const checkin = AuraCommandPlanBuilderService.build({
     response: {
-      assistantMessage: 'Complete os dois sinais que faltam.',
+      assistantMessage: 'Registrei os sinais que você informou.',
       intent: 'checkin',
       action: 'create_checkin',
-      payload: { moodScore: 3, energyScore: 2, clarityScore: null, irritabilityScore: null },
-      needsConfirmation: true,
+      payload: { moodScore: 7, energyScore: 6, clarityScore: 8, irritabilityScore: null },
+      needsConfirmation: false,
       needsClarification: false,
       clarifyingQuestion: null,
     },
@@ -81,8 +81,34 @@ function run() {
     busyWindows: [],
     idFactory,
   });
-  assert.deepEqual(checkin.missingFields.sort(), ['clarityScore', 'irritabilityScore']);
-  assert.equal(checkin.executionPolicy, 'review_required');
+  assert.deepEqual(checkin.missingFields, []);
+  assert.equal(checkin.executionPolicy, 'auto_apply');
+
+  const adaptiveTask = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Escolhi o melhor horário livre para amanhã.',
+      intent: 'planner_task',
+      action: 'create_task',
+      payload: { title: 'Revisar o portfólio', date: '2026-07-29' },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    },
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28',
+    currentTime: '09:00',
+    phase: 'recolhimento',
+    energyScore: 2,
+    moodScore: 2,
+    defaultCalendarId: 'primary',
+    busyWindows: [{ startTime: '09:00', endTime: '10:00', fixed: true }],
+    idFactory,
+  });
+  assert.equal(adaptiveTask.operations[0]?.type, 'create_planner_task');
+  if (adaptiveTask.operations[0]?.type === 'create_planner_task') {
+    assert.equal(adaptiveTask.operations[0].payload.startTime, '11:00');
+  }
 
   const goal = AuraCommandPlanBuilderService.build({
     response: {

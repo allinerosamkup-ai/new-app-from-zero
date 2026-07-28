@@ -229,8 +229,8 @@ export class AuraCommandPlanBuilderService {
         break;
       }
       case 'create_checkin': {
-        const scores = ['moodScore', 'energyScore', 'clarityScore', 'irritabilityScore'] as const;
-        scores.forEach((key) => {
+        const coreScores = ['moodScore', 'energyScore', 'clarityScore'] as const;
+        coreScores.forEach((key) => {
           if (typeof payload[key] !== 'number') missingFields.push(key);
         });
         operations.push({
@@ -330,7 +330,6 @@ export class AuraCommandPlanBuilderService {
       || missingFields.length > 0
       || operations.some((operation) =>
         operation.type === 'create_goal'
-        || operation.type === 'create_checkin'
         || operation.type === 'create_calendar_event'
         || operation.type === 'update_item'
         || operation.type === 'delete_item');

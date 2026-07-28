@@ -366,7 +366,7 @@ export class AuraCommandService {
       '- create_checklist: title + items[] (mantém TODOS os itens, sem resumir)',
       '- create_goal: title + subgoals[]',
       '- create_capture: kind "note"|"checklist" + title + content + items[]; use para "anote isso" e checklists soltas',
-      '- create_checkin: localDate + moodScore + energyScore + clarityScore + irritabilityScore; use null para sinal não expresso e sempre peça revisão',
+      '- create_checkin: localDate + moodScore + energyScore + clarityScore; irritabilityScore pode ser null quando não expresso; nunca invente sinal ausente',
       '- create_habit: title + frequency + targetDays + durationMinutes + reminderTime',
       '- create_calendar_event: compromisso fixo com title + date + startTime + durationMinutes + calendarId; se faltar data, pergunte; se faltar horário, proponha',
       '- update_task: taskId + newDate + newStartTime',

@@ -246,7 +246,7 @@ model DailyCheckin {
   moodScore         Int      @map("mood_score")
   energyScore       Int      @map("energy_score")
   clarityScore      Int      @map("clarity_score")
-  irritabilityScore Int      @map("irritability_score")
+  irritabilityScore Int?     @map("irritability_score")
   physicalScore     Int      @map("physical_score")
   socialScore       Int      @map("social_score")
   sleepScore        Int?     @map("sleep_score")

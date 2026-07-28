@@ -68,6 +68,7 @@ function createPrismaFixture(executionPolicy = 'review_required') {
     },
   ];
   const timelineCreates: Array<Record<string, unknown>> = [];
+  const checkinUpserts: Array<Record<string, unknown>> = [];
   const plan = {
     id: '20000000-0000-4000-8000-000000000001',
     userId: '30000000-0000-4000-8000-000000000001',
@@ -96,10 +97,16 @@ function createPrismaFixture(executionPolicy = 'review_required') {
         return { id: `timeline-${timelineCreates.length}`, ...data };
       },
     },
+    dailyCheckin: {
+      upsert: async (input: Record<string, unknown>) => {
+        checkinUpserts.push(input);
+        return { id: 'checkin-1' };
+      },
+    },
     $transaction: async (callback: (tx: any) => Promise<unknown>) => callback(prisma),
   };
 
-  return { prisma, plan, operations, timelineCreates };
+  return { prisma, plan, operations, timelineCreates, checkinUpserts };
 }
 
 async function main() {
@@ -137,6 +144,42 @@ async function main() {
   assert.equal(fixture.timelineCreates[1].sourceCommandOperationId, fixture.operations[1].id);
   assert.equal(fixture.operations[0].status, 'applied');
   assert.equal(fixture.operations[1].status, 'applied');
+
+  const partialCheckin = createPrismaFixture('auto_apply');
+  partialCheckin.operations.push({
+    id: '10000000-0000-4000-8000-000000000003',
+    planId: partialCheckin.plan.id,
+    userId: partialCheckin.plan.userId,
+    clientOperationId: 'checkin-1',
+    type: 'create_checkin',
+    status: 'proposed',
+    selected: true,
+    payload: {
+      localDate: '2026-07-28',
+      moodScore: 7,
+      energyScore: 6,
+      clarityScore: 8,
+      irritabilityScore: null,
+      note: null,
+      emotions: [],
+    },
+    result: null,
+    error: null,
+    idempotencyKey: null,
+    appliedAt: null,
+  });
+  await AuraCommandExecutorService.apply({
+    prisma: partialCheckin.prisma,
+    calendarGateway,
+    userId: partialCheckin.plan.userId,
+    planId: partialCheckin.plan.id,
+    operationIds: ['checkin-1'],
+    idempotencyKey: 'command-checkin-0001',
+    now: new Date('2026-07-28T15:00:00.000Z'),
+  });
+  const partialUpsert = partialCheckin.checkinUpserts[0] as any;
+  assert.equal(partialUpsert.create.irritabilityScore, null);
+  assert.equal('irritabilityScore' in partialUpsert.update, false, 'sinal omitido não apaga o valor anterior');
 
   const second = await AuraCommandExecutorService.apply({
     prisma: fixture.prisma,

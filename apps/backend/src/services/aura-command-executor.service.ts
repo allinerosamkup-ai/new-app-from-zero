@@ -301,9 +301,8 @@ async function executeInternalOperation(
         scores.moodScore === null
         || scores.energyScore === null
         || scores.clarityScore === null
-        || scores.irritabilityScore === null
       ) {
-        throw new Error('O check-in precisa dos quatro indicadores antes de ser salvo.');
+        throw new Error('O check-in precisa de humor, energia e clareza antes de ser salvo.');
       }
       const checkin = await tx.dailyCheckin.upsert({
         where: {
@@ -318,7 +317,9 @@ async function executeInternalOperation(
           moodScore: scores.moodScore,
           energyScore: scores.energyScore,
           clarityScore: scores.clarityScore,
-          irritabilityScore: scores.irritabilityScore,
+          ...(scores.irritabilityScore === null
+            ? {}
+            : { irritabilityScore: scores.irritabilityScore }),
           note: scores.note ?? null,
           emotions: scores.emotions,
         },
@@ -330,7 +331,7 @@ async function executeInternalOperation(
           moodScore: scores.moodScore,
           energyScore: scores.energyScore,
           clarityScore: scores.clarityScore,
-          irritabilityScore: scores.irritabilityScore,
+          irritabilityScore: scores.irritabilityScore ?? null,
           physicalScore: 3,
           socialScore: 3,
           note: scores.note ?? null,

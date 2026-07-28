@@ -578,6 +578,12 @@ async function run() {
   } as any);
   assert.deepEqual(hostileModelActionMismatch.captureJudgment.allowedMutationActions, ['create_task']);
 
+  const naturalGoalPt = await offline(
+    'Quero como meta [TESTE DE PUBLICAÇÃO] organizar meu portfólio profissional. Divida em pequenas ações e adicione à minha página de metas.',
+  );
+  assert.deepEqual(naturalGoalPt.captureJudgment.allowedMutationActions, ['create_goal']);
+  assert.equal(naturalGoalPt.frame.intent, 'execution');
+
   const formatted = AiriaCognitiveInterpreterService.formatForPrompt(explicitTaskEn);
   assert.match(formatted, /Captura permitida: task/i);
   assert.match(formatted, /Criar tarefa: sim/i);

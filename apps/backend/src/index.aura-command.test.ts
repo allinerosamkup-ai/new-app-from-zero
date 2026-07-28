@@ -132,7 +132,7 @@ async function run() {
     assert.equal(incompleteCreation.action, 'ask_clarification', action);
   }
 
-  // Com título e sem horário, a Airia decide o horário em vez de devolver a pergunta.
+  // Com título e sem horário, o gate preserva a lacuna para o agendador adaptativo.
   const completedTask = enforceAuraCaptureGate({
     assistantMessage: 'Created.', intent: 'planner_task', action: 'create_task',
     payload: { title: 'Comprar ração' }, needsConfirmation: false,
@@ -142,11 +142,11 @@ async function run() {
   }, 'pt-BR', { localDate: '2026-04-07', currentHour: 10, currentMinute: 5 });
   assert.equal(completedTask.action, 'create_task');
   assert.equal((completedTask.payload as any).date, '2026-04-07');
-  assert.equal((completedTask.payload as any).startTime, '10:30');
+  assert.equal((completedTask.payload as any).startTime, undefined);
   assert.equal((completedTask.payload as any).timingWasInferred, true);
   assert.equal((completedTask.payload as any).inferredFromContext, true);
 
-  // Tarde demais para encaixar hoje: cai para a manhã seguinte, nunca de madrugada.
+  // O gate não inventa horário nem move a data; isso pertence ao ranking com agenda e energia.
   const nextMorning = enforceAuraCaptureGate({
     assistantMessage: 'Created.', intent: 'planner_task', action: 'create_task',
     payload: { title: 'Ligar para a escola' }, needsConfirmation: false,
@@ -154,8 +154,8 @@ async function run() {
   }, {
     captureJudgment: { allowedMutationActions: ['create_task'], captureMode: 'propose' },
   }, 'pt-BR', { localDate: '2026-04-07', currentHour: 23, currentMinute: 40 });
-  assert.equal((nextMorning.payload as any).date, '2026-04-08');
-  assert.equal((nextMorning.payload as any).startTime, '09:00');
+  assert.equal((nextMorning.payload as any).date, '2026-04-07');
+  assert.equal((nextMorning.payload as any).startTime, undefined);
 
   // Horário informado pela usuária é preservado sem arredondamento.
   const respectsGivenTime = enforceAuraCaptureGate({
