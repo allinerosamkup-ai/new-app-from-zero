@@ -89,7 +89,11 @@ function run() {
       assistantMessage: 'Escolhi o melhor horário livre para amanhã.',
       intent: 'planner_task',
       action: 'create_task',
-      payload: { title: 'Revisar o portfólio', date: '2026-07-29' },
+      payload: {
+        title: 'Revisar o portfólio',
+        date: '2026-07-29',
+        autoScheduleRequested: true,
+      },
       needsConfirmation: false,
       needsClarification: false,
       clarifyingQuestion: null,
@@ -109,6 +113,31 @@ function run() {
   if (adaptiveTask.operations[0]?.type === 'create_planner_task') {
     assert.equal(adaptiveTask.operations[0].payload.startTime, '11:00');
   }
+  assert.equal(adaptiveTask.executionPolicy, 'auto_apply');
+
+  const explicitGoal = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Vou adicionar a meta e o primeiro passo.',
+      intent: 'goal_project',
+      action: 'create_goal',
+      payload: {
+        title: 'Organizar meu portfólio profissional',
+        subgoals: ['Reunir trabalhos atuais', 'Escolher os melhores trabalhos', 'Montar a primeira versão'],
+      },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    },
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28',
+    currentTime: '09:00',
+    defaultCalendarId: 'primary',
+    busyWindows: [],
+    idFactory,
+  });
+  assert.equal(explicitGoal.operations[0]?.type, 'create_goal');
+  assert.equal(explicitGoal.executionPolicy, 'auto_apply');
 
   const goal = AuraCommandPlanBuilderService.build({
     response: {

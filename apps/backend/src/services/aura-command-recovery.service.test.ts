@@ -29,6 +29,7 @@ function run() {
   assert.equal(task.payload.title, '[TESTE DE PUBLICAÇÃO] revisar o portfólio');
   assert.equal(task.payload.date, '2026-07-29');
   assert.equal(task.payload.startTime, undefined, 'o agendador adaptativo deve escolher a hora');
+  assert.equal(task.payload.autoScheduleRequested, true);
 
   const taskWithInventedTime = recoverAuraCommandResponse({
     response: { ...baseResponse, payload: { startTime: '09:30', category: 'inventada' } },

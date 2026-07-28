@@ -326,11 +326,14 @@ export class AuraCommandPlanBuilderService {
     }
 
     const needsReview = input.response.needsConfirmation
-      || inferredValue
+      || (
+        inferredValue
+        && input.response.action !== 'create_goal'
+        && payload.autoScheduleRequested !== true
+      )
       || missingFields.length > 0
       || operations.some((operation) =>
-        operation.type === 'create_goal'
-        || operation.type === 'create_calendar_event'
+        operation.type === 'create_calendar_event'
         || operation.type === 'update_item'
         || operation.type === 'delete_item');
 

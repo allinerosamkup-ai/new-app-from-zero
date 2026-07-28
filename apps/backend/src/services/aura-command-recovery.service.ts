@@ -89,6 +89,7 @@ function recoverTask(input: RecoveryInput): AuraCommandResponse | null {
     payload: {
       title,
       date: relativeDate(input.message, input.localDate),
+      autoScheduleRequested: true,
     },
     needsConfirmation: false,
     needsClarification: false,
