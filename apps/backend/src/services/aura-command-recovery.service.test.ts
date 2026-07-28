@@ -45,6 +45,30 @@ function run() {
   assert.equal(taskMisclassifiedAsImplicit.action, 'create_task');
   assert.equal(taskMisclassifiedAsImplicit.payload.autoScheduleRequested, true);
 
+  const mutatingTaskStillNeedsRecovery = recoverAuraCommandResponse({
+    response: {
+      ...baseResponse,
+      intent: 'agenda_plan',
+      action: 'create_task',
+      payload: {
+        title: '[TESTE DE PUBLICAÇÃO] revisar o portfólio',
+        date: '2026-07-29',
+      },
+      needsConfirmation: true,
+    },
+    message: 'Crie no Planner uma tarefa [TESTE DE PUBLICAÇÃO] revisar o portfólio amanhã. Não defini horário; escolha o melhor horário considerando minha agenda e energia.',
+    localDate: '2026-07-28',
+    captureJudgment: {
+      captureAs: 'task',
+      captureMode: 'propose',
+      explicitness: 'implicit',
+      allowedMutationActions: ['create_task', 'create_checklist'],
+    },
+  });
+  assert.equal(mutatingTaskStillNeedsRecovery.action, 'create_task');
+  assert.equal(mutatingTaskStillNeedsRecovery.payload.autoScheduleRequested, true);
+  assert.equal(mutatingTaskStillNeedsRecovery.needsConfirmation, false);
+
   const taskWithInventedTime = recoverAuraCommandResponse({
     response: { ...baseResponse, payload: { startTime: '09:30', category: 'inventada' } },
     message: 'Crie no Planner uma tarefa revisar o portfólio amanhã.',

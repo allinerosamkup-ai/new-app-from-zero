@@ -77,6 +77,11 @@ function isExplicitTypedTaskCommand(message: string): boolean {
     .test(normalized(message));
 }
 
+function hasExplicitTaskTime(message: string): boolean {
+  const source = normalized(message);
+  return /\b(?:as|a)\s+\d{1,2}(?::\d{2})?\s*h?\b|\b\d{1,2}:\d{2}\b/.test(source);
+}
+
 function extractScore(message: string, labels: string[]): number | null {
   const source = normalized(message);
   const labelPattern = labels.join('|');
@@ -154,14 +159,23 @@ function recoverCheckin(input: RecoveryInput): AuraCommandResponse | null {
  * pergunta apesar de a fala atual conter uma ordem explícita e tipada.
  */
 export function recoverAuraCommandResponse(input: RecoveryInput): AuraCommandResponse {
-  if (
-    MUTATING_ACTIONS.has(input.response.action)
-    && input.captureJudgment.allowedMutationActions.includes(input.response.action)
-  ) return input.response;
   const allowed = new Set(input.captureJudgment.allowedMutationActions);
   const typedTaskCommand = input.captureJudgment.captureAs === 'task'
     && allowed.has('create_task')
     && isExplicitTypedTaskCommand(input.message);
+  if (
+    MUTATING_ACTIONS.has(input.response.action)
+    && allowed.has(input.response.action)
+  ) {
+    if (
+      input.response.action === 'create_task'
+      && typedTaskCommand
+      && !hasExplicitTaskTime(input.message)
+    ) {
+      return recoverTask(input) ?? input.response;
+    }
+    return input.response;
+  }
   if (input.captureJudgment.explicitness !== 'explicit' && !typedTaskCommand) return input.response;
 
   if (allowed.has('create_goal')) return recoverGoal(input) ?? input.response;
