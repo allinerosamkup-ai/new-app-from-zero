@@ -72,6 +72,11 @@ function normalized(value: string): string {
     .toLowerCase();
 }
 
+function isExplicitTypedTaskCommand(message: string): boolean {
+  return /\b(?:crie|cria|adicione|adiciona|inclua|inclui|registre)\b.{0,40}\b(?:tarefa|lembrete)\b/
+    .test(normalized(message));
+}
+
 function extractScore(message: string, labels: string[]): number | null {
   const source = normalized(message);
   const labelPattern = labels.join('|');
@@ -153,9 +158,12 @@ export function recoverAuraCommandResponse(input: RecoveryInput): AuraCommandRes
     MUTATING_ACTIONS.has(input.response.action)
     && input.captureJudgment.allowedMutationActions.includes(input.response.action)
   ) return input.response;
-  if (input.captureJudgment.explicitness !== 'explicit') return input.response;
-
   const allowed = new Set(input.captureJudgment.allowedMutationActions);
+  const typedTaskCommand = input.captureJudgment.captureAs === 'task'
+    && allowed.has('create_task')
+    && isExplicitTypedTaskCommand(input.message);
+  if (input.captureJudgment.explicitness !== 'explicit' && !typedTaskCommand) return input.response;
+
   if (allowed.has('create_goal')) return recoverGoal(input) ?? input.response;
   if (input.captureJudgment.captureAs === 'checkin' && (allowed.has('log_checkin') || allowed.has('create_checkin'))) {
     return recoverCheckin(input) ?? input.response;

@@ -44,6 +44,14 @@ function normalizeCategory(value: unknown) {
   return CATEGORY_ALIASES[value.trim().toLowerCase()] ?? value;
 }
 
+export function normalizeTimelineCategory(value: unknown): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
+  const normalized = normalizeCategory(value);
+  return typeof normalized === 'string'
+    && ['trabalho', 'pessoal', 'autocuidado', 'social', 'casa', 'outro'].includes(normalized)
+    ? normalized as 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro'
+    : 'outro';
+}
+
 function normalizeIntensity(value: unknown) {
   if (typeof value !== 'string') {
     return value;

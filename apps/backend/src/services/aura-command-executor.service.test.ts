@@ -69,6 +69,7 @@ function createPrismaFixture(executionPolicy = 'review_required') {
   ];
   const timelineCreates: Array<Record<string, unknown>> = [];
   const checkinUpserts: Array<Record<string, unknown>> = [];
+  const objectiveCreates: Array<Record<string, unknown>> = [];
   const plan = {
     id: '20000000-0000-4000-8000-000000000001',
     userId: '30000000-0000-4000-8000-000000000001',
@@ -103,10 +104,16 @@ function createPrismaFixture(executionPolicy = 'review_required') {
         return { id: 'checkin-1' };
       },
     },
+    objective: {
+      create: async ({ data }: any) => {
+        objectiveCreates.push(data);
+        return { id: 'objective-1', ...data };
+      },
+    },
     $transaction: async (callback: (tx: any) => Promise<unknown>) => callback(prisma),
   };
 
-  return { prisma, plan, operations, timelineCreates, checkinUpserts };
+  return { prisma, plan, operations, timelineCreates, checkinUpserts, objectiveCreates };
 }
 
 async function main() {
@@ -180,6 +187,44 @@ async function main() {
   const partialUpsert = partialCheckin.checkinUpserts[0] as any;
   assert.equal(partialUpsert.create.irritabilityScore, null);
   assert.equal('irritabilityScore' in partialUpsert.update, false, 'sinal omitido não apaga o valor anterior');
+
+  const explicitGoal = createPrismaFixture('auto_apply');
+  explicitGoal.operations.push({
+    id: '10000000-0000-4000-8000-000000000004',
+    planId: explicitGoal.plan.id,
+    userId: explicitGoal.plan.userId,
+    clientOperationId: 'goal-1',
+    type: 'create_goal',
+    status: 'proposed',
+    selected: true,
+    payload: {
+      title: 'Organizar portfólio',
+      description: null,
+      category: 'geral',
+      subgoals: [{ id: 'item-1', title: 'Abrir a pasta', done: false }],
+      firstAction: {
+        title: 'Abrir a pasta',
+        date: '2026-07-28',
+        startTime: '20:00',
+        durationMinutes: 25,
+      },
+    },
+    result: null,
+    error: null,
+    idempotencyKey: null,
+    appliedAt: null,
+  });
+  await AuraCommandExecutorService.apply({
+    prisma: explicitGoal.prisma,
+    calendarGateway,
+    userId: explicitGoal.plan.userId,
+    planId: explicitGoal.plan.id,
+    operationIds: ['goal-1'],
+    idempotencyKey: 'command-goal-0001',
+    now: new Date('2026-07-28T15:00:00.000Z'),
+  });
+  assert.equal(explicitGoal.objectiveCreates[0]?.category, 'geral');
+  assert.equal(explicitGoal.timelineCreates[0]?.category, 'pessoal');
 
   const second = await AuraCommandExecutorService.apply({
     prisma: fixture.prisma,

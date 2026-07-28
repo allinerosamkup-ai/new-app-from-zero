@@ -31,6 +31,20 @@ function run() {
   assert.equal(task.payload.startTime, undefined, 'o agendador adaptativo deve escolher a hora');
   assert.equal(task.payload.autoScheduleRequested, true);
 
+  const taskMisclassifiedAsImplicit = recoverAuraCommandResponse({
+    response: baseResponse,
+    message: 'Crie no Planner uma tarefa revisar o portfólio amanhã.',
+    localDate: '2026-07-28',
+    captureJudgment: {
+      captureAs: 'task',
+      captureMode: 'propose',
+      explicitness: 'implicit',
+      allowedMutationActions: ['create_task', 'create_checklist'],
+    },
+  });
+  assert.equal(taskMisclassifiedAsImplicit.action, 'create_task');
+  assert.equal(taskMisclassifiedAsImplicit.payload.autoScheduleRequested, true);
+
   const taskWithInventedTime = recoverAuraCommandResponse({
     response: { ...baseResponse, payload: { startTime: '09:30', category: 'inventada' } },
     message: 'Crie no Planner uma tarefa revisar o portfólio amanhã.',

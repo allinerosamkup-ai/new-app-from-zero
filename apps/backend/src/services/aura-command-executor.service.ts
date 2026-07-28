@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { AuraCommandOperationSchema, type AuraCommandOperation } from '../contracts/aura-command-plan.contract';
 import { deriveCheckinSlot } from '../contracts/checkin-slot';
-import { PlannerService } from './planner.service';
+import { normalizeTimelineCategory, PlannerService } from './planner.service';
 
 export type CommandCalendarResult = {
   calendarId: string;
@@ -265,7 +265,7 @@ async function executeInternalOperation(
             startAt,
             endAt: addMinutes(startAt, firstAction.durationMinutes),
             title: firstAction.title,
-            category: operation.payload.category,
+            category: normalizeTimelineCategory(operation.payload.category),
             intensity: 'M',
             isAiSuggested: true,
             sourceCommandOperationId: databaseOperationId,
