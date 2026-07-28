@@ -136,6 +136,43 @@ async function run() {
   assert.equal(recoveredClarification.action, 'respond');
   assert.equal(recoveredClarification.needsClarification, false);
 
+  const captureNote = parseAuraCommandResponse(JSON.stringify({
+    assistantMessage: 'Anotei para você revisar nas Capturas.',
+    intent: 'capture',
+    action: 'create_capture',
+    payload: { kind: 'note', title: 'Endereço', content: 'Rua das Flores, 20' },
+    needsConfirmation: false,
+  }), 'Anota o endereço Rua das Flores, 20');
+  assert.equal(captureNote.intent, 'capture');
+  assert.equal(captureNote.action, 'create_capture');
+
+  const naturalCheckin = parseAuraCommandResponse(JSON.stringify({
+    assistantMessage: 'Montei seu check-in para revisão.',
+    intent: 'checkin',
+    action: 'create_checkin',
+    payload: { moodScore: 3, energyScore: 2, clarityScore: null, irritabilityScore: 7 },
+    needsConfirmation: true,
+  }), 'Fazer check-in: estou cansada, irritada e sem foco');
+  assert.equal(naturalCheckin.action, 'create_checkin');
+
+  const habit = parseAuraCommandResponse(JSON.stringify({
+    assistantMessage: 'Preparei o hábito.',
+    intent: 'habit',
+    action: 'create_habit',
+    payload: { title: 'Caminhar', frequency: 'daily' },
+    needsConfirmation: true,
+  }), 'Cria o hábito de caminhar todos os dias');
+  assert.equal(habit.action, 'create_habit');
+
+  const appointment = parseAuraCommandResponse(JSON.stringify({
+    assistantMessage: 'Preparei o compromisso no Google Agenda.',
+    intent: 'calendar_event',
+    action: 'create_calendar_event',
+    payload: { title: 'Dentista', date: '2026-07-29', startTime: '10:00' },
+    needsConfirmation: true,
+  }), 'Marque dentista amanhã às 10h');
+  assert.equal(appointment.action, 'create_calendar_event');
+
   const capturedMessages: Array<{ role: string; content: string }> = [];
   const capturedModels: string[] = [];
   const queuedResponses = [

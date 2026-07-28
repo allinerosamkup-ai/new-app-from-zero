@@ -298,7 +298,7 @@ async function run() {
   const explicitSchedulePt = await offline('Marcar dentista amanhã às 14h.');
   assert.equal(explicitSchedulePt.captureJudgment.captureAs, 'calendar_commitment');
   assert.equal(explicitSchedulePt.captureJudgment.allowTaskCreation, true);
-  assert.deepEqual(explicitSchedulePt.captureJudgment.allowedMutationActions, ['create_agenda']);
+  assert.deepEqual(explicitSchedulePt.captureJudgment.allowedMutationActions, ['create_calendar_event']);
 
   // Pedido amplo de rotina é montado na conversa, com blocos concretos — não vira
   // encaminhamento para outra tela nem fica esperando revisão para existir.
@@ -387,9 +387,18 @@ async function run() {
   assert.equal(commitment.captureJudgment.allowDecisionMemory, false);
 
   const note = await offline('Remember that my mother prefers calls in the morning.');
-  assert.equal(note.captureJudgment.captureAs, 'memory_fact');
+  assert.equal(note.captureJudgment.captureAs, 'capture');
+  assert.deepEqual(note.captureJudgment.allowedMutationActions, ['create_capture']);
   assert.equal(note.captureJudgment.allowTaskCreation, false);
   assert.equal(note.captureJudgment.allowDecisionMemory, false);
+
+  const habitCommand = await offline('Crie um hábito de caminhar todo dia.');
+  assert.equal(habitCommand.captureJudgment.captureAs, 'habit');
+  assert.deepEqual(habitCommand.captureJudgment.allowedMutationActions, ['create_habit']);
+
+  const checkinCommand = await offline('Quero fazer meu check-in: estou cansada e irritada.');
+  assert.equal(checkinCommand.captureJudgment.captureAs, 'checkin');
+  assert.deepEqual(checkinCommand.captureJudgment.allowedMutationActions, ['create_checkin']);
 
   const reflection = await offline('Percebi que fico sobrecarregada quando aceito tudo de uma vez.');
   assert.equal(reflection.captureJudgment.captureAs, 'reflection');

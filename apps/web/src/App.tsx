@@ -40,6 +40,7 @@ const loadContextoPage = () => import("./routes/contexto-page");
 const loadRoutineBuilderPage = () => import("./routes/routine-builder-page");
 const loadGuidedOnboardingPage = () => import("./routes/guided-onboarding-page");
 const loadRunPage = () => import("./routes/run-page");
+const loadCapturesPage = () => import("./routes/captures-page");
 
 const AuraLayout = lazy(() => loadAuraLayout().then((module) => ({ default: module.AuraLayout })));
 const LoginPage = lazy(() => loadLoginPage().then((module) => ({ default: module.LoginPage })));
@@ -78,6 +79,7 @@ const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: 
 const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
 const GuidedOnboardingPage = lazy(() => loadGuidedOnboardingPage().then((module) => ({ default: module.GuidedOnboardingPage })));
 const RunPage = lazy(() => loadRunPage().then((module) => ({ default: module.RunPage })));
+const CapturesPage = lazy(() => loadCapturesPage().then((module) => ({ default: module.CapturesPage })));
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
@@ -122,6 +124,7 @@ const DEV_SCREENS = [
   { path: "daily-summary", label: "Resumo" },
   { path: "preferences", label: "Config" },
   { path: "aura", label: "Airia" },
+  { path: "captures", label: "Notas" },
   { path: "ui-kit", label: "UI Kit" },
 ];
 
@@ -269,6 +272,7 @@ export default function App() {
           <Route path="preferences" element={<PreferencesPage />} />
           <Route path="pomodoro" element={<PomodoroPage />} />
           <Route path="aura" element={<AuraChatPage />} />
+          <Route path="captures" element={<CapturesPage />} />
           <Route path="ui-kit" element={<UIKitPage />} />
         </Route>
 
@@ -289,6 +293,7 @@ export default function App() {
           <Route path="/jornada" element={<JornadaPage />} />
           <Route path="/checkin-result" element={<CheckinResultPage />} />
           <Route path="/aura" element={<AuraChatPage />} />
+          <Route path="/captures" element={<CapturesPage />} />
           <Route path="/conteudo" element={<ConteudoPage />} />
           <Route path="/contexto" element={<ContextoPage />} />
           <Route path="/routine-builder" element={<RoutineBuilderPage />} />

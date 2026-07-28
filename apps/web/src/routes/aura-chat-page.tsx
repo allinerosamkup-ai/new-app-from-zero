@@ -3,15 +3,24 @@ import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { CommandPlanCard } from "../components/aura/CommandPlanCard";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
+import type { AuraCommandExecution, AuraCommandPlan } from "../features/aura/command-types";
 import i18n from "../i18n";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { getCurrentLanguage, resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { supabase } from "../lib/supabase";
 import { trackEvent } from "../lib/track";
-import { buildAuraObjectiveInput, buildTimelineBlocks, buildTimelineSyncRequests, formatTimelineBlock, type TimelineBlock } from "./aura-chat-page.helpers";
+import {
+  buildAuraObjectiveInput,
+  buildTimelineBlocks,
+  buildTimelineSyncRequests,
+  formatTimelineBlock,
+  hasSubstantiveRoutineSource,
+  type TimelineBlock,
+} from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 
@@ -30,7 +39,14 @@ type AuraCommandIntent =
   | "agenda_plan"
   | "routine_builder"
   | "clarify"
-  | "reflective_handoff";
+  | "reflective_handoff"
+  | "reschedule"
+  | "delete_task"
+  | "complete_items"
+  | "capture"
+  | "checkin"
+  | "habit"
+  | "calendar_event";
 
 type AuraCommandAction =
   | "respond"
@@ -44,11 +60,15 @@ type AuraCommandAction =
   | "delete_task"
   | "complete_items"
   | "log_checkin"
-  | "create_habit"
   | "postpone_task"
   | "start_task"
   | "adapt_agenda"
-  | "open_screen";
+  | "open_screen"
+  | "create_capture"
+  | "create_checkin"
+  | "create_habit"
+  | "create_calendar_event"
+  | "start_routine_builder";
 
 type AuraCommandStep = {
   action: AuraCommandAction;
@@ -104,42 +124,6 @@ const QUICK_ACTIONS: Array<{ labelKey: string; promptKey: string }> = [
   { labelKey: "aura.suggestions.patterns", promptKey: "aura.quickPrompts.patterns" },
   { labelKey: "aura.suggestions.falling", promptKey: "aura.quickPrompts.falling" },
 ];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function pickString(source: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = source[key];
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-
-  return null;
-}
-
-function extractStringList(source: Record<string, unknown>, keys: string[]): string[] {
-  for (const key of keys) {
-    const value = source[key];
-    if (!Array.isArray(value)) continue;
-
-    const items = value
-      .map((entry) => {
-        if (typeof entry === "string") return entry.trim();
-        if (!isRecord(entry)) return null;
-        return pickString(entry, ["title", "text", "name", "label", "task"]);
-      })
-      .filter((item): item is string => Boolean(item));
-
-    if (items.length > 0) {
-      return items;
-    }
-  }
-
-  return [];
-}
 
 function buildInitialAssistantMessage(initialPrompt: string, contextLabel: string, mode: "conversation" | "executor") {
   if (!initialPrompt) {
@@ -223,12 +207,14 @@ export function AuraChatPage() {
   }, [sessionId]);
   const [input, setInput] = useState(autoSend ? "" : initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
-  const [actionCard, setActionCard] = useState<ActionCard | null>(null);
   const [lastRiskSafety, setLastRiskSafety] = useState<RiskSafety | null>(null);
   const [pendingTaskConfirmation, setPendingTaskConfirmation] = useState<PendingTaskConfirmation | null>(null);
   const [routineProposal, setRoutineProposal] = useState<RoutineProposal | null>(null);
   const l = useLocalizedCopy();
   const [isApplyingPendingAction, setIsApplyingPendingAction] = useState(false);
+  const [commandPlan, setCommandPlan] = useState<AuraCommandPlan | null>(null);
+  const [isApplyingPlan, setIsApplyingPlan] = useState(false);
+  const applyKeyRef = useRef<Record<string, string>>({});
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -240,7 +226,11 @@ export function AuraChatPage() {
 
     let isMounted = true;
 
-    api.post("/aura/command/start", { moodCycleContext: cycleReport.aiContext })
+    api.post("/aura/command/start", {
+      moodCycleContext: cycleReport.aiContext,
+      locale: resolveIntlLocale(i18n.language),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
+    })
       .then((res: any) => {
         if (!isMounted) return;
         setSessionId(res.sessionId);
@@ -254,7 +244,7 @@ export function AuraChatPage() {
       isMounted = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [sessionId]);
 
   // Auto-send quando a rotina automática é acionada da Home
   const autoSendFiredRef = useRef(false);
@@ -267,39 +257,17 @@ export function AuraChatPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, actionCard, pendingTaskConfirmation]);
+  }, [messages, isTyping, commandPlan]);
 
-  async function syncTimelineBlocks(blocks: TimelineBlock[]) {
-    for (const request of buildTimelineSyncRequests(blocks)) {
-      await api.post("/timeline", request);
-    }
-
-    await refreshData();
-  }
-
-  async function createObjectiveFromPayload(
-    payload: Record<string, unknown>,
+  function updatePlanOperation(
+    operationId: string,
+    patch: { selected?: boolean; payload?: Record<string, unknown> },
   ) {
-    const parsed = buildAuraObjectiveInput(payload);
-    if (!parsed) return null;
-    const objective = {
-      title: parsed.title,
-      subgoals: parsed.itemTitles.map((item, index) => ({
-        id: `aura-${Date.now()}-${index}`,
-        title: item,
-        done: false,
-        aiGenerated: true,
-      })),
-    };
-
-    await api.post("/objectives", {
-      title: objective.title,
-      category: typeof payload.category === "string" ? payload.category : "geral",
-      subgoals: objective.subgoals,
-    });
-    await refreshData();
-
-    return objective;
+    setCommandPlan((current) => current ? {
+      ...current,
+      operations: current.operations.map((operation) =>
+        operation.id === operationId ? { ...operation, ...patch } : operation),
+    } : current);
   }
 
   async function executeAuraAction(response: AuraCommandResponse): Promise<string | null> {
@@ -554,9 +522,60 @@ export function AuraChatPage() {
       if (message.toLowerCase().includes("conflitos de horário")) {
         return t("aura.conflict");
       }
-
       throw error;
     }
+  }
+
+  async function applyCommandPlan() {
+    if (!commandPlan || isApplyingPlan) return;
+    const selectedOperations = commandPlan.operations.filter((operation) => operation.selected && operation.status !== "applied");
+    if (selectedOperations.length === 0) return;
+
+    setIsApplyingPlan(true);
+    try {
+      const patched = await api.patch(`/aura/command/plans/${commandPlan.id}`, {
+        operations: commandPlan.operations.map((operation) => ({
+          id: operation.id,
+          selected: operation.selected,
+          payload: operation.payload,
+        })),
+      }) as { plan: AuraCommandPlan };
+      const key = applyKeyRef.current[commandPlan.id]
+        ?? `${commandPlan.id}:${typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
+      applyKeyRef.current[commandPlan.id] = key;
+      const applied = await api.post(`/aura/command/plans/${commandPlan.id}/apply`, {
+        operationIds: selectedOperations.map((operation) => operation.id),
+        idempotencyKey: key,
+      }) as { plan: AuraCommandPlan; execution: AuraCommandExecution };
+      setCommandPlan(applied.plan ?? patched.plan);
+      await refreshData();
+      if (applied.execution.status === "applied") {
+        showSuccess(t("aura.commandPlan.success", "Ações aplicadas."));
+      } else {
+        showError(t("aura.commandPlan.partial", "Algumas ações não foram aplicadas. Veja os detalhes."));
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : t("aura.errors.execute"));
+    } finally {
+      setIsApplyingPlan(false);
+    }
+  }
+
+  function handleNavigationAction(response: AuraCommandResponse) {
+    if (response.action !== "start_routine_builder") return;
+    const sourceText = typeof response.payload.sourceText === "string" ? response.payload.sourceText : "";
+    if (!hasSubstantiveRoutineSource(sourceText)) {
+      navigate("/onboarding/guiado");
+      return;
+    }
+    navigate("/routine-builder", {
+      state: {
+        initialSource: sourceText,
+        focus: typeof response.payload.focus === "string" && response.payload.focus.trim()
+          ? response.payload.focus
+          : t("routineBuilder.defaultFocus", { defaultValue: "Organizar minha rotina" }),
+      },
+    });
   }
 
   async function send(text: string) {
@@ -572,9 +591,8 @@ export function AuraChatPage() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
-    setActionCard(null);
+    setCommandPlan(null);
     setLastRiskSafety(null);
-    setPendingTaskConfirmation(null);
 
     try {
       const { data: { session: auth } } = await supabase.auth.getSession();
@@ -601,6 +619,11 @@ export function AuraChatPage() {
         }),
       });
 
+      if (response.status === 404) {
+        sessionStorage.removeItem(STORAGE_KEY_SESSION);
+        setSessionId(null);
+        throw new Error(t("aura.errors.sessionExpired", "Reabri a Airia. Envie o pedido mais uma vez."));
+      }
       if (!response.ok || !response.body) {
         throw new Error(t("aura.errors.process"));
       }
@@ -608,6 +631,8 @@ export function AuraChatPage() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let completedResponse: AuraCommandResponse | null = null;
+      let completedPlan: AuraCommandPlan | null = null;
+      let completedExecution: AuraCommandExecution | null = null;
       let buffered = "";
 
       while (true) {
@@ -628,6 +653,8 @@ export function AuraChatPage() {
           const data = JSON.parse(dataLine.slice(6));
           if (data.response) {
             completedResponse = data.response as AuraCommandResponse;
+            completedPlan = data.plan as AuraCommandPlan | null;
+            completedExecution = data.execution as AuraCommandExecution | null;
           } else if (data.error) {
             throw new Error(typeof data.error === "string" ? data.error : t("aura.errors.stream"));
           }
@@ -642,6 +669,13 @@ export function AuraChatPage() {
         ...prev,
         { role: "assistant", content: completedResponse!.assistantMessage },
       ]);
+      if (completedPlan) {
+        setCommandPlan(completedPlan);
+        if (completedExecution?.status === "applied") {
+          await refreshData();
+          showSuccess(t("aura.commandPlan.success", "Ações aplicadas."));
+        }
+      }
 
       const riskSafety = completedResponse.riskSafety ?? null;
       setLastRiskSafety(riskSafety);
@@ -666,8 +700,24 @@ export function AuraChatPage() {
           actions: undefined,
         })),
       ];
+      const planManagedActions = new Set<AuraCommandAction>([
+        "create_task",
+        "create_agenda",
+        "create_goal",
+        "create_checklist",
+        "create_capture",
+        "create_checkin",
+        "create_habit",
+        "create_calendar_event",
+        "update_task",
+        "delete_task",
+        "complete_items",
+        "handoff_to_journal",
+      ]);
       let executionFollowUp: string | null = null;
       for (const step of steps) {
+        handleNavigationAction(step);
+        if (completedPlan && planManagedActions.has(step.action)) continue;
         const followUp = await executeAuraAction(step);
         if (followUp && !executionFollowUp) executionFollowUp = followUp;
       }
@@ -713,48 +763,6 @@ export function AuraChatPage() {
     recognition.start();
     recognitionRef.current = recognition;
     setIsRecording(true);
-  }
-
-  async function confirmPendingTask() {
-    if (!pendingTaskConfirmation || isApplyingPendingAction) return;
-
-    setIsApplyingPendingAction(true);
-    try {
-      await syncTimelineBlocks(pendingTaskConfirmation.blocks);
-      const total = pendingTaskConfirmation.blocks.length;
-      setActionCard({
-        eyebrow: total > 1 ? t("aura.scheduleConfirmed") : t("aura.commitmentConfirmed"),
-        title: total > 1 ? t("aura.commitmentsSaved", { count: total }) : t("aura.oneCommitmentSaved"),
-        items: pendingTaskConfirmation.blocks.slice(0, 6).map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
-        ctaLabel: t("aura.openPlanner"),
-        ctaPath: "/planner",
-      });
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: total > 1
-            ? t("aura.savedMany")
-            : t("aura.savedOne"),
-        },
-      ]);
-      setPendingTaskConfirmation(null);
-      showSuccess(total > 1 ? t("aura.confirmedMany") : t("aura.confirmedOne"));
-    } catch (error) {
-      showError(error instanceof Error ? error.message : t("aura.errors.confirm"));
-    } finally {
-      setIsApplyingPendingAction(false);
-    }
-  }
-
-  function cancelPendingTask() {
-    if (!pendingTaskConfirmation || isApplyingPendingAction) return;
-
-    setPendingTaskConfirmation(null);
-    setMessages((prev) => [
-      ...prev,
-      { role: "assistant", content: t("aura.cancelledCommitment") },
-    ]);
   }
 
   return (
@@ -1098,6 +1106,15 @@ export function AuraChatPage() {
           </div>
         )}
 
+        {commandPlan && (
+          <CommandPlanCard
+            plan={commandPlan}
+            applying={isApplyingPlan}
+            onChange={updatePlanOperation}
+            onApply={applyCommandPlan}
+          />
+        )}
+
         <div style={{ margin: lastRiskSafety && lastRiskSafety.route !== "self_support" ? "6px 0 10px 33px" : 0 }}>
           <SafetyProtocolCard
             riskSafety={lastRiskSafety}
@@ -1105,79 +1122,6 @@ export function AuraChatPage() {
             onAdaptDay={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
           />
         </div>
-
-        {pendingTaskConfirmation && (
-          <div
-            style={{
-              margin: "6px 0 10px 33px",
-              background: "rgba(255,255,255,.72)",
-              border: "1px solid rgba(255,255,255,.84)",
-              borderRadius: 18,
-              padding: "12px 14px",
-              boxShadow: "0 12px 24px rgba(243,176,140,.08)",
-              backdropFilter: "blur(18px)",
-            }}
-          >
-            <p
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                color: "var(--accent-peach)",
-                margin: "0 0 8px",
-              }}
-            >
-              Confirmar compromisso
-            </p>
-            <p
-              style={{
-                margin: "0 0 8px",
-                fontSize: 14,
-                fontWeight: 700,
-                color: "var(--text-1)",
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-              }}
-            >
-                {t("goals.reviewBeforeSave")}
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-              {pendingTaskConfirmation.blocks.map((block) => (
-                <p
-                  key={`${block.title}-${block.date}-${block.startTime}`}
-                  style={{
-                    margin: 0,
-                    fontSize: 12.5,
-                    color: "var(--text-2)",
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
-                  }}
-                >
-                  {formatTimelineBlock(block, resolveIntlLocale(i18n.language))}
-                </p>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <AuraButtonV2
-                onClick={cancelPendingTask}
-                disabled={isApplyingPendingAction}
-                variant="glass"
-                size="sm"
-                style={{ flex: 1 }}
-              >
-                  {t("common.cancel")}
-              </AuraButtonV2>
-              <AuraButtonV2
-                onClick={confirmPendingTask}
-                disabled={isApplyingPendingAction}
-                variant="primary"
-                size="sm"
-                style={{ flex: 1 }}
-              >
-                {isApplyingPendingAction ? "Salvando..." : "Confirmar"}
-              </AuraButtonV2>
-            </div>
-          </div>
-        )}
 
         <div ref={chatEndRef} />
       </div>

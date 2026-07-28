@@ -34,6 +34,9 @@ import {
 } from './contracts/preferences.contract';
 import { JournalService } from './services/journal.service';
 import { AuraCommandService } from './services/aura-command.service';
+import { AuraCommandPlanBuilderService } from './services/aura-command-plan-builder.service';
+import { AuraCommandExecutorService } from './services/aura-command-executor.service';
+import { AuraCommandPersistenceService } from './services/aura-command-persistence.service';
 import { MemoryService } from './services/memory.service';
 import { CanonicalMemoryService } from './services/canonical-memory.service';
 import { AuraMemoryIngestionService, conservativeAuraExtractor } from './services/aura-memory-ingestion.service';
@@ -102,6 +105,11 @@ import {
   AuraCommandStartSchema,
   type AuraCommandResponse,
 } from './contracts/aura-command.contract';
+import {
+  AuraCommandOperationSchema,
+  AuraCommandPlanApplySchema,
+  AuraCommandPlanPatchSchema,
+} from './contracts/aura-command-plan.contract';
 import { z } from 'zod';
 import { startOfDay, subDays, format } from 'date-fns';
 
@@ -136,9 +144,12 @@ const MUTATING_AURA_ACTIONS = new Set<AuraCommandResponse['action']>([
   'delete_task',
   'complete_items',
   'log_checkin',
-  'create_habit',
   'postpone_task',
   'start_task',
+  'create_capture',
+  'create_checkin',
+  'create_habit',
+  'create_calendar_event',
 ]);
 
 /** Ações que só fazem sentido sobre um item que já existe. */
@@ -337,6 +348,15 @@ export function enforceAuraCaptureGate(
           if (!block || typeof block !== 'object') return false;
           return hasText(titleFrom(block as Record<string, unknown>));
         });
+      case 'create_capture':
+        return hasText(titleFrom(payload)) && (hasText(payload.content) || hasTitledItems(payload.items));
+      case 'create_checkin':
+        return validDate(payload.localDate ?? payload.date)
+          && ['moodScore', 'energyScore', 'clarityScore', 'irritabilityScore'].some((key) => typeof payload[key] === 'number');
+      case 'create_habit':
+        return hasText(titleFrom(payload));
+      case 'create_calendar_event':
+        return hasText(titleFrom(payload)) && validDate(payload.date);
       case 'handoff_to_journal':
         return true;
       case 'update_task':
@@ -618,9 +638,150 @@ function writeSseEvent(res: Response, event: string, data: unknown) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+function serializeAuraCommandPlan(plan: any) {
+  return {
+    id: plan.id,
+    sessionId: plan.sessionId,
+    sourceMessageId: plan.sourceMessageId,
+    status: plan.status,
+    executionPolicy: plan.executionPolicy,
+    confidence: plan.confidence,
+    assistantMessage: plan.assistantMessage,
+    missingFields: plan.missingFields ?? [],
+    operations: (plan.operations ?? []).map((operation: any) => ({
+      id: operation.clientOperationId ?? operation.id,
+      type: operation.type,
+      status: operation.status,
+      selected: operation.selected,
+      payload: operation.payload,
+      result: operation.result ?? null,
+      error: operation.error ?? null,
+    })),
+  };
+}
+
 /** Formata hora UTC de um Date como HH:MM */
 function fmtUtcTime(d: Date): string {
   return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+}
+
+function formatTimeInZone(value: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value);
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
+async function buildCommandBusyWindows(input: {
+  prisma: PrismaClient;
+  userId: string;
+  date: string;
+  calendarId: string;
+  timezone: string;
+}): Promise<Array<{ startTime: string; endTime: string }>> {
+  const dayStart = new Date(`${input.date}T00:00:00.000Z`);
+  const dayEnd = new Date(`${input.date}T23:59:59.999Z`);
+  const blocks = await input.prisma.timelineBlock.findMany({
+    where: {
+      userId: input.userId,
+      localDate: { gte: dayStart, lte: dayEnd },
+      status: { not: 'cancelled' },
+    },
+    select: { startAt: true, endAt: true },
+  }).catch(() => []);
+  const windows = blocks.map((block) => ({
+    startTime: fmtUtcTime(block.startAt),
+    endTime: fmtUtcTime(block.endAt),
+  }));
+
+  try {
+    const token = await GCalService.getValidToken(input.prisma, input.userId);
+    if (!token) return windows;
+    const timeMin = encodeURIComponent(`${input.date}T00:00:00-03:00`);
+    const timeMax = encodeURIComponent(`${input.date}T23:59:59-03:00`);
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(input.calendarId)}/events?timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime&maxResults=100`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!response.ok) return windows;
+    const body = await response.json() as {
+      items?: Array<{ status?: string; start?: { dateTime?: string }; end?: { dateTime?: string } }>;
+    };
+    for (const event of body.items ?? []) {
+      if (event.status === 'cancelled' || !event.start?.dateTime || !event.end?.dateTime) continue;
+      windows.push({
+        startTime: formatTimeInZone(new Date(event.start.dateTime), input.timezone),
+        endTime: formatTimeInZone(new Date(event.end.dateTime), input.timezone),
+      });
+    }
+  } catch {
+    // A agenda interna ainda permite sugerir um horário; falha externa fica visível ao aplicar.
+  }
+  return windows;
+}
+
+function normalizeCommandTarget(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function resolveAuraCompletionTargets(input: {
+  prisma: PrismaClient;
+  userId: string;
+  localDate: string;
+  items: unknown;
+}) {
+  if (!Array.isArray(input.items)) return [];
+  const dayStart = new Date(`${input.localDate}T00:00:00.000Z`);
+  const dayEnd = new Date(`${input.localDate}T23:59:59.999Z`);
+  const [blocks, habits] = await Promise.all([
+    input.prisma.timelineBlock.findMany({
+      where: {
+        userId: input.userId,
+        localDate: { gte: dayStart, lte: dayEnd },
+        status: { not: 'completed' },
+      },
+      select: { id: true, title: true },
+    }),
+    input.prisma.habit.findMany({
+      where: { userId: input.userId, archived: false },
+      select: { id: true, title: true },
+    }),
+  ]);
+
+  return input.items.map((item) => {
+    const source: Record<string, unknown> = item && typeof item === 'object'
+      ? item as Record<string, unknown>
+      : { title: item };
+    if (typeof source.targetId === 'string' && source.targetId.trim()) return source;
+    const title = typeof source.title === 'string' ? source.title : '';
+    const normalized = normalizeCommandTarget(title);
+    const isHabit = source.type === 'habit' || source.targetType === 'habit';
+    const candidates = isHabit ? habits : blocks;
+    const match = candidates.find((candidate) => {
+      const candidateTitle = normalizeCommandTarget(candidate.title);
+      return candidateTitle === normalized
+        || candidateTitle.includes(normalized)
+        || normalized.includes(candidateTitle);
+    });
+    return match
+      ? {
+        ...source,
+        targetId: match.id,
+        targetType: isHabit ? 'habit' : 'timeline',
+      }
+      : source;
+  });
 }
 
 /**
@@ -2997,12 +3158,18 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.post('/api/aura/command/start', async (req: Request, res: Response) => {
     try {
-      AuraCommandStartSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+      const data = AuraCommandStartSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+      const session = await AuraCommandPersistenceService.createSession({
+        prisma,
+        userId: data.userId,
+        locale: data.locale,
+        timezone: data.timezone,
+      });
 
       return res.json({
-        sessionId: randomUUID(),
+        sessionId: session.id,
         sessionStatus: 'ready',
-        startedAt: new Date().toISOString(),
+        startedAt: session.createdAt.toISOString(),
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -3021,6 +3188,19 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.post('/api/aura/command/stream', async (req: Request, res: Response) => {
     try {
       const data = AuraCommandMessageStreamSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+      const commandSession = await prisma.auraCommandSession.findFirst({
+        where: { id: data.sessionId, userId: data.userId, status: 'active' },
+      });
+      if (!commandSession) {
+        return res.status(404).json({ error: 'Airia command session not found' });
+      }
+      const sourceMessage = await AuraCommandPersistenceService.appendMessage({
+        prisma,
+        userId: data.userId,
+        sessionId: data.sessionId,
+        role: 'user',
+        content: data.message,
+      });
       const [runtimeContext, recentSuggestionItems] = await Promise.all([
         resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
         SuggestionMemoryService.getRecent(prisma, data.userId),
@@ -3041,9 +3221,9 @@ export function createApp(dependencies: AppDependencies = {}) {
         userId: data.userId,
         query: data.message,
         limit: 8,
-        locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+        locale: data.locale,
       }).catch(() => null);
-      const commandRagContext = commandMemories ? canonicalMemoryService.formatForPrompt(commandMemories, typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR') : '';
+      const commandRagContext = commandMemories ? canonicalMemoryService.formatForPrompt(commandMemories, data.locale) : '';
 
       // Planner Brain: injeta agenda completa de hoje (planner interno + Google Calendar)
       const plannerContext = await buildTodayPlannerContext(prisma, data.userId);
@@ -3051,7 +3231,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         userId: data.userId,
         type: 'aura-command',
         context: {
-          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+          localDate: data.localDate,
         },
         recentSuggestionItems,
         ragContext: commandRagContext,
@@ -3064,7 +3244,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         surface: 'aura-chat',
         requestContext: {
           ...extractAdaptiveFromRequest(req.body),
-          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+          localDate: data.localDate,
         },
         currentMessage: data.message,
         ragContext: commandRagContext,
@@ -3075,7 +3255,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         surface: 'aura-chat',
         requestContext: {
           ...extractAdaptiveFromRequest(req.body),
-          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+          localDate: data.localDate,
         },
         currentMessage: data.message,
         ragContext: commandRagContext,
@@ -3087,7 +3267,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         dailyContext: commandGroundingContext.grounding as any,
         requestContext: {
           ...extractAdaptiveFromRequest(req.body),
-          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+          localDate: data.localDate,
         },
         currentMessage: data.message,
         history: data.history,
@@ -3119,7 +3299,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
         plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
         interactionMode: data.mode,
-        localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+        localDate: data.localDate,
         priorDiagnoses: runtimeContext.priorDiagnoses,
         ...extractAdaptiveFromRequest(req.body),
       });
@@ -3129,28 +3309,28 @@ export function createApp(dependencies: AppDependencies = {}) {
       const resolvedCommandTask = rawTaskId && (rawCommandResponse.action === 'update_task' || rawCommandResponse.action === 'delete_task')
         ? await prisma.timelineBlock.findFirst({ where: { id: rawTaskId, userId: data.userId } })
         : null;
-      const commandResponse = enforceAuraCaptureGateAll(
+      const gatedCommandResponse = enforceAuraCaptureGateAll(
         rawCommandResponse,
         commandCognitive,
-        typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+        data.locale,
         {
           resolvedTaskTitle: resolvedCommandTask?.title ?? null,
-          localDate: typeof (req.body as any)?.localDate === 'string' ? (req.body as any).localDate : undefined,
+          localDate: data.localDate,
           currentHour: Number.isInteger((req.body as any)?.currentHour) ? (req.body as any).currentHour : undefined,
           currentMinute: Number.isInteger((req.body as any)?.currentMinute) ? (req.body as any).currentMinute : undefined,
         },
       );
 
-      const responsePayload = { ...commandResponse.payload };
+      const responsePayload = { ...gatedCommandResponse.payload };
 
       // Tarefa vaga ou longa já nasce quebrada: a usuária não precisa pedir para
       // dividir, e o primeiro passo já vem com o movimento físico que destrava.
-      if (commandResponse.action === 'create_task') {
+      if (gatedCommandResponse.action === 'create_task') {
         const decompositionTitle = typeof responsePayload.title === 'string' ? responsePayload.title : '';
         const decompositionSteps = await TaskDecompositionService.decompose({
           title: decompositionTitle,
           durationMinutes: typeof responsePayload.durationMinutes === 'number' ? responsePayload.durationMinutes : null,
-          locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+          locale: data.locale,
           // A quebra acompanha a capacidade de hoje: em fase baixa, menos passos
           // e mais curtos. Cinco passos de quinze minutos num dia ruim é o mesmo
           // que não ter quebrado.
@@ -3174,151 +3354,151 @@ export function createApp(dependencies: AppDependencies = {}) {
         }
       }
 
-      // Check-in pela Airia. A pessoa contou como está; isso vira registro sem ela
-      // precisar abrir outra tela. Campos não ditos ficam no meio da escala em vez
-      // de virar pergunta — o valor do check-in está em existir, não em ser exato.
-      if (commandResponse.action === 'log_checkin') {
-        try {
-          const scoreOf = (value: unknown, fallback: number) => (
-            typeof value === 'number' && value >= 1 && value <= 10 ? Math.round(value) : fallback
-          );
-          const mood = scoreOf(responsePayload.moodScore, 5);
-          const energy = scoreOf(responsePayload.energyScore, mood);
-          const localDateKey = typeof (req.body as any)?.localDate === 'string'
-            ? (req.body as any).localDate
-            : new Date().toISOString().slice(0, 10);
-          const hour = Number.isInteger((req.body as any)?.currentHour) ? (req.body as any).currentHour : new Date().getHours();
-          const slot = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+      const normalizeCommandResponse = (response: AuraCommandResponse): AuraCommandResponse => {
+        if (response.action !== 'log_checkin') return response;
+        const payload = response.payload as Record<string, unknown>;
+        return {
+          ...response,
+          intent: 'checkin',
+          action: 'create_checkin',
+          payload: {
+            ...payload,
+            localDate: typeof payload.localDate === 'string' ? payload.localDate : data.localDate,
+            clarityScore: typeof payload.clarityScore === 'number' ? payload.clarityScore : payload.focusScore,
+            note: typeof payload.note === 'string' ? payload.note : data.message.slice(0, 500),
+          },
+        };
+      };
+      const normalizedPrimary = normalizeCommandResponse({
+        ...gatedCommandResponse,
+        payload: responsePayload,
+      });
+      const normalizedActions = (gatedCommandResponse.actions ?? []).map((step) => normalizeCommandResponse({
+        ...gatedCommandResponse,
+        action: step.action,
+        payload: step.payload,
+        actions: undefined,
+      }));
+      const commandResponse: AuraCommandResponse = {
+        ...normalizedPrimary,
+        actions: normalizedActions.map((step) => ({ action: step.action, payload: step.payload })),
+      };
 
-          const checkin = await prisma.dailyCheckin.upsert({
-            where: {
-              userId_localDate_checkinSlot: {
+      const now = new Date();
+      const localDate = data.localDate ?? getSaoPauloDateContext(now).dateKey;
+      const currentTime = data.currentTime ?? formatTimeInZone(now, commandSession.timezone);
+      const planResponses = await Promise.all(
+        [commandResponse, ...normalizedActions].map(async (response) => response.action === 'complete_items'
+          ? {
+            ...response,
+            payload: {
+              ...response.payload,
+              items: await resolveAuraCompletionTargets({
+                prisma,
                 userId: data.userId,
-                localDate: new Date(`${localDateKey}T00:00:00.000Z`),
-                checkinSlot: slot,
-              },
+                localDate,
+                items: response.payload.items,
+              }),
             },
-            create: {
-              userId: data.userId,
-              localDate: new Date(`${localDateKey}T00:00:00.000Z`),
-              checkinSlot: slot,
-              moodScore: mood,
-              energyScore: energy,
-              clarityScore: scoreOf(responsePayload.focusScore, energy),
-              irritabilityScore: scoreOf(responsePayload.irritabilityScore, 5),
-              physicalScore: scoreOf(responsePayload.physicalScore, energy),
-              socialScore: scoreOf(responsePayload.socialScore, 5),
-              sleepScore: typeof responsePayload.sleepScore === 'number' ? Math.round(responsePayload.sleepScore) : null,
-              focusScore: typeof responsePayload.focusScore === 'number' ? Math.round(responsePayload.focusScore) : null,
-              note: typeof responsePayload.note === 'string' ? responsePayload.note : data.message.slice(0, 500),
-              stateLabel: typeof responsePayload.stateLabel === 'string' ? responsePayload.stateLabel : null,
-            },
-            update: {
-              moodScore: mood,
-              energyScore: energy,
-              clarityScore: scoreOf(responsePayload.focusScore, energy),
-              note: typeof responsePayload.note === 'string' ? responsePayload.note : data.message.slice(0, 500),
-            },
-          });
-
-          Object.assign(responsePayload, {
-            checkinId: checkin.id,
-            checkinSlot: slot,
-            loggedMoodScore: mood,
-            loggedEnergyScore: energy,
-          });
-        } catch (checkinError) {
-          console.error('[aura/command] log_checkin error:', checkinError);
-        }
-      }
-
-      // Executar update de tarefa existente
-      if (commandResponse.action === 'update_task') {
-        try {
-          const { taskId, newDate, newStartTime } = commandResponse.payload as Record<string, string>;
-          if (taskId && newDate && newStartTime) {
-            const block = resolvedCommandTask?.id === taskId ? resolvedCommandTask : null;
-            if (block) {
-              const durationMs = block.endAt.getTime() - block.startAt.getTime();
-              const newStartAt = new Date(`${newDate}T${newStartTime}:00.000Z`);
-              const newEndAt = new Date(newStartAt.getTime() + durationMs);
-              const newEndTime = fmtUtcTime(newEndAt);
-
-              await prisma.timelineBlock.update({
-                where: { id: taskId },
-                data: {
-                  localDate: new Date(`${newDate}T00:00:00.000Z`),
-                  startAt: newStartAt,
-                  endAt: newEndAt,
-                },
-              });
-
-              if (block.gcalEventId) {
-                await GCalService.updatePrimaryEvent(prisma, data.userId, block.gcalEventId, {
-                  date: newDate,
-                  title: block.title,
-                  startTime: newStartTime,
-                  endTime: newEndTime,
-                }).catch(() => null);
-              }
-
-              Object.assign(responsePayload, {
-                updatedTaskId: taskId,
-                updatedBlock: { id: taskId, title: block.title, newDate, newStartTime, newEndTime },
-              });
-            }
           }
-        } catch (updateErr) {
-          console.error('[aura/command] update_task error:', updateErr);
-        }
-      }
+          : response),
+      );
+      const planResponse = planResponses[0] ?? commandResponse;
+      const preference = await prisma.userPreference.findUnique({
+        where: { userId: data.userId },
+        select: { gcalWriteCalendarId: true },
+      }).catch(() => null);
+      const defaultCalendarId = preference?.gcalWriteCalendarId || 'primary';
+      const rawPayload = planResponse.payload as Record<string, unknown>;
+      const targetDate = [rawPayload.date, rawPayload.localDate, rawPayload.newDate, localDate]
+        .find((value): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value))
+        ?? localDate;
+      const busyWindows = await buildCommandBusyWindows({
+        prisma,
+        userId: data.userId,
+        date: targetDate,
+        calendarId: defaultCalendarId,
+        timezone: commandSession.timezone,
+      });
+      const builtPlans = planResponses.map((response) => AuraCommandPlanBuilderService.build({
+        response,
+        userMessage: data.message,
+        sessionId: data.sessionId,
+        sourceMessageId: sourceMessage.id,
+        localDate,
+        currentTime,
+        defaultCalendarId,
+        busyWindows,
+        phase: typeof (req.body as any)?.phase === 'string' ? (req.body as any).phase : null,
+        moodScore: runtimeContext.latestCheckinSignals?.moodScore ?? null,
+        energyScore: runtimeContext.latestCheckinSignals?.energyScore ?? null,
+      }));
+      const primaryPlan = builtPlans[0] ?? AuraCommandPlanBuilderService.build({
+        response: planResponse,
+        userMessage: data.message,
+        sessionId: data.sessionId,
+        sourceMessageId: sourceMessage.id,
+        localDate,
+        currentTime,
+        defaultCalendarId,
+        busyWindows,
+      });
+      const combinedOperations = builtPlans.flatMap((plan) => plan.operations);
+      const combinedMissingFields = [...new Set(builtPlans.flatMap((plan) => plan.missingFields))];
+      const commandPlan = {
+        ...primaryPlan,
+        status: combinedOperations.length > 0 ? 'proposed' as const : 'draft' as const,
+        executionPolicy: builtPlans.some((plan) => plan.executionPolicy === 'review_required')
+          ? 'review_required' as const
+          : builtPlans.some((plan) => plan.executionPolicy === 'auto_apply')
+            ? 'auto_apply' as const
+            : 'clarification' as const,
+        confidence: builtPlans.length > 0 ? Math.min(...builtPlans.map((plan) => plan.confidence)) : primaryPlan.confidence,
+        missingFields: combinedMissingFields,
+        operations: combinedOperations,
+      };
+      const persistedPlan = await AuraCommandPersistenceService.persistPlan({
+        prisma,
+        userId: data.userId,
+        plan: commandPlan,
+      });
+      await AuraCommandPersistenceService.appendMessage({
+        prisma,
+        userId: data.userId,
+        sessionId: data.sessionId,
+        role: 'assistant',
+        content: commandResponse.assistantMessage,
+      });
 
-      // Executar delete de tarefa existente
-      if (commandResponse.action === 'delete_task') {
-        try {
-          const { taskId } = commandResponse.payload as Record<string, string>;
-          if (taskId) {
-            const block = resolvedCommandTask?.id === taskId ? resolvedCommandTask : null;
-            if (block) {
-              await prisma.timelineBlock.delete({ where: { id: taskId } });
-              if (block.gcalEventId) {
-                await GCalService.deletePrimaryEvent(prisma, data.userId, block.gcalEventId).catch(() => null);
-              }
-              Object.assign(responsePayload, { deletedTaskId: taskId, deletedTitle: block.title });
-            }
-          }
-        } catch (deleteErr) {
-          console.error('[aura/command] delete_task error:', deleteErr);
-        }
-      }
-
-      if (commandResponse.action === 'handoff_to_journal') {
-        const journalEntry = await persistAuraJournalSummary({
+      const execution = data.mode === 'executor'
+        && commandPlan.executionPolicy === 'auto_apply'
+        && commandPlan.operations.length > 0
+        ? await AuraCommandExecutorService.apply({
           prisma,
-          aiService,
-          memoryService,
+          calendarGateway: GCalService,
           userId: data.userId,
-          history: data.history,
-          latestUserMessage: data.message,
-          assistantMessage: commandResponse.assistantMessage,
-        });
-
-        Object.assign(responsePayload, {
-          journalSessionId: journalEntry.sessionId,
-          journalSummary: journalEntry.summary,
-          journalEmotions: journalEntry.emotions,
-          journalThemes: journalEntry.themes,
-          journalSuggestions: journalEntry.suggestions,
-        });
-      }
+          planId: commandPlan.id,
+          operationIds: commandPlan.operations.filter((operation) => operation.selected).map((operation) => operation.id),
+          idempotencyKey: `${data.sessionId}:${sourceMessage.id}`,
+          now,
+        })
+        : null;
+      const freshPlan = execution
+        ? await prisma.auraCommandPlan.findFirst({
+          where: { id: commandPlan.id, userId: data.userId },
+          include: { operations: { orderBy: { createdAt: 'asc' } } },
+        })
+        : persistedPlan;
 
       writeSseEvent(res, 'assistant.completed', {
         sessionId: data.sessionId,
         response: {
-          ...commandResponse,
+          ...planResponse,
           riskSafety: commandRiskSafety,
-          payload: responsePayload,
+          actions: planResponses.slice(1).map((step) => ({ action: step.action, payload: step.payload })),
         },
+        plan: serializeAuraCommandPlan(freshPlan ?? persistedPlan),
+        execution,
       });
 
       // Longitudinal memory is best-effort and never delays/changes the answer.
@@ -3328,7 +3508,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         message: data.message,
         assistantReply: commandResponse.assistantMessage,
         history: data.history,
-        locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+        locale: data.locale,
         allowDecisions: AiriaCognitiveInterpreterService.allowsMemoryDecisionExtraction(commandCognitive),
       }).catch((error) => console.warn('[aura/memory-ingestion]', error));
 
@@ -3349,6 +3529,146 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       return res.end();
     }
+  });
+
+  app.get('/api/aura/command/session/:sessionId', async (req: Request, res: Response) => {
+    try {
+      const session = await AuraCommandPersistenceService.getSession({
+        prisma,
+        userId: (req as AuthRequest).userId,
+        sessionId: req.params.sessionId,
+      });
+      if (!session) return res.status(404).json({ error: 'Airia command session not found' });
+      return res.json({
+        id: session.id,
+        status: session.status,
+        locale: session.locale,
+        timezone: session.timezone,
+        messages: session.messages,
+        plans: session.plans.map(serializeAuraCommandPlan),
+      });
+    } catch (error) {
+      console.error('[aura/command/session] Error:', error);
+      return res.status(500).json({ error: 'Failed to load Airia command session' });
+    }
+  });
+
+  app.patch('/api/aura/command/plans/:planId', async (req: Request, res: Response) => {
+    try {
+      const data = AuraCommandPlanPatchSchema.parse(req.body);
+      const plan = await AuraCommandPersistenceService.updatePlan({
+        prisma,
+        userId: (req as AuthRequest).userId,
+        planId: req.params.planId,
+        changes: data.operations,
+      });
+      return res.json({ plan: serializeAuraCommandPlan(plan) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      const message = error instanceof Error ? error.message : 'Failed to update Airia command plan';
+      const status = /não encontrado|not found/i.test(message) ? 404 : /não pode/i.test(message) ? 409 : 500;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  app.post('/api/aura/command/plans/:planId/apply', async (req: Request, res: Response) => {
+    try {
+      const data = AuraCommandPlanApplySchema.parse(req.body);
+      const execution = await AuraCommandExecutorService.apply({
+        prisma,
+        calendarGateway: GCalService,
+        userId: (req as AuthRequest).userId,
+        planId: req.params.planId,
+        operationIds: data.operationIds,
+        idempotencyKey: data.idempotencyKey,
+      });
+      const plan = await prisma.auraCommandPlan.findFirst({
+        where: { id: req.params.planId, userId: (req as AuthRequest).userId },
+        include: { operations: { orderBy: { createdAt: 'asc' } } },
+      });
+      return res.json({ execution, plan: serializeAuraCommandPlan(plan) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      const message = error instanceof Error ? error.message : 'Failed to apply Airia command plan';
+      const status = /não encontrado|not found/i.test(message) ? 404 : /clarification|nenhuma ação/i.test(message) ? 409 : 500;
+      return res.status(status).json({ error: message });
+    }
+  });
+
+  const CaptureCreateSchema = z.object({
+    kind: z.enum(['note', 'checklist']),
+    title: z.string().trim().min(1).max(500),
+    content: z.string().trim().max(30000).optional().default(''),
+    items: z.array(z.object({
+      id: z.string().trim().min(1).max(120).optional(),
+      title: z.string().trim().min(1).max(500),
+      done: z.boolean().optional().default(false),
+    })).max(200).optional().default([]),
+  });
+  const CapturePatchSchema = CaptureCreateSchema.partial().extend({
+    status: z.enum(['inbox', 'completed', 'archived']).optional(),
+  });
+
+  app.get('/api/captures', async (req: Request, res: Response) => {
+    const status = typeof req.query.status === 'string' ? req.query.status : 'inbox';
+    if (!['inbox', 'completed', 'archived', 'all'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid capture status' });
+    }
+    const captures = await prisma.capture.findMany({
+      where: {
+        userId: (req as AuthRequest).userId,
+        ...(status === 'all' ? {} : { status }),
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return res.json(captures);
+  });
+
+  app.post('/api/captures', async (req: Request, res: Response) => {
+    try {
+      const data = CaptureCreateSchema.parse(req.body);
+      const capture = await prisma.capture.create({
+        data: {
+          userId: (req as AuthRequest).userId,
+          ...data,
+        },
+      });
+      return res.status(201).json(capture);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      return res.status(500).json({ error: 'Failed to create capture' });
+    }
+  });
+
+  app.patch('/api/captures/:id', async (req: Request, res: Response) => {
+    try {
+      const data = CapturePatchSchema.parse(req.body);
+      const updated = await prisma.capture.updateMany({
+        where: { id: req.params.id, userId: (req as AuthRequest).userId },
+        data,
+      });
+      if (updated.count === 0) return res.status(404).json({ error: 'Capture not found' });
+      return res.json(await prisma.capture.findUnique({ where: { id: req.params.id } }));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      return res.status(500).json({ error: 'Failed to update capture' });
+    }
+  });
+
+  app.delete('/api/captures/:id', async (req: Request, res: Response) => {
+    const deleted = await prisma.capture.deleteMany({
+      where: { id: req.params.id, userId: (req as AuthRequest).userId },
+    });
+    if (deleted.count === 0) return res.status(404).json({ error: 'Capture not found' });
+    return res.status(204).end();
   });
 
   /**
@@ -6041,7 +6361,7 @@ JSON APENAS: {"profileSummary":"..."}`,
       // Also fetch user's saved selection
       const pref = await prisma.userPreference.findUnique({
         where: { userId },
-        select: { gcalSelectedCalendars: true }
+        select: { gcalSelectedCalendars: true, gcalWriteCalendarId: true }
       });
       const savedSelectedIds = Array.isArray(pref?.gcalSelectedCalendars)
         ? (pref?.gcalSelectedCalendars as unknown[]).map((id) => String(id).trim()).filter(Boolean)
@@ -6056,8 +6376,14 @@ JSON APENAS: {"profileSummary":"..."}`,
         ...(savedSelectedIds.length > 0 ? savedSelectedIds : defaultSelectedIds),
         ...requiredSelectedIds,
       ]));
+      const writableIds = calendars
+        .filter((calendar: any) => calendar.accessRole === 'owner' || calendar.accessRole === 'writer')
+        .map((calendar: any) => calendar.id);
+      const writeCalendarId = pref?.gcalWriteCalendarId && writableIds.includes(pref.gcalWriteCalendarId)
+        ? pref.gcalWriteCalendarId
+        : writableIds.includes('primary') ? 'primary' : writableIds[0] ?? 'primary';
 
-      return res.json({ connected: true, calendars, selectedIds });
+      return res.json({ connected: true, calendars, selectedIds, writeCalendarId });
     } catch (err) {
       console.error('[gcal/calendars]', err);
       return res.json({ connected: false, calendars: [] });
@@ -6069,18 +6395,35 @@ JSON APENAS: {"profileSummary":"..."}`,
    */
   app.put('/api/gcal/calendars', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
-    const { calendarIds } = req.body as { calendarIds: string[] };
-    if (!Array.isArray(calendarIds) || calendarIds.length === 0) {
-      return res.status(400).json({ error: 'At least one calendar must be selected' });
-    }
     try {
+      const data = z.object({
+        calendarIds: z.array(z.string().trim().min(1).max(500)).min(1).max(100),
+        writeCalendarId: z.string().trim().min(1).max(500),
+      }).parse(req.body);
+      if (!data.calendarIds.includes(data.writeCalendarId)) {
+        return res.status(400).json({ error: 'Write calendar must be included in the selected calendars' });
+      }
       await prisma.userPreference.upsert({
         where: { userId },
-        update: { gcalSelectedCalendars: calendarIds } as any,
-        create: { userId, gcalSelectedCalendars: calendarIds } as any,
+        update: {
+          gcalSelectedCalendars: data.calendarIds,
+          gcalWriteCalendarId: data.writeCalendarId,
+        } as any,
+        create: {
+          userId,
+          gcalSelectedCalendars: data.calendarIds,
+          gcalWriteCalendarId: data.writeCalendarId,
+        } as any,
       });
-      return res.json({ ok: true, calendarIds });
+      return res.json({
+        ok: true,
+        calendarIds: data.calendarIds,
+        writeCalendarId: data.writeCalendarId,
+      });
     } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: err.errors });
+      }
       console.error('[gcal/calendars PUT]', err);
       return res.status(500).json({ error: 'Failed to save calendar selection' });
     }
@@ -6147,7 +6490,12 @@ JSON APENAS: {"profileSummary":"..."}`,
     const userId = (req as AuthRequest).userId;
     await prisma.userPreference.update({
       where: { userId },
-      data: { gcalAccessToken: null, gcalRefreshToken: null, gcalSelectedCalendars: [] } as any,
+      data: {
+        gcalAccessToken: null,
+        gcalRefreshToken: null,
+        gcalSelectedCalendars: [],
+        gcalWriteCalendarId: null,
+      } as any,
     }).catch(() => {});
     return res.json({ disconnected: true });
   });

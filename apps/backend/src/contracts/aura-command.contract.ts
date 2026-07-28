@@ -24,8 +24,10 @@ export const AuraCommandIntentSchema = z.enum([
   'complete_items',
   // A Airia é o centro de comando: o que dá para fazer numa tela do app tem que
   // dar para pedir falando com ela.
+  'capture',
   'checkin',
   'habit',
+  'calendar_event',
   'postpone',
   'start_task',
   'adapt_agenda',
@@ -45,6 +47,9 @@ export const AuraCommandActionSchema = z.enum([
   'complete_items',
   /** Registra humor, energia, foco e sono a partir do que a pessoa contou. */
   'log_checkin',
+  'create_checkin',
+  'create_capture',
+  'create_calendar_event',
   'create_habit',
   /** Empurra um bloco existente para outro dia. */
   'postpone_task',
@@ -85,6 +90,8 @@ export const AuraCommandResponseSchema = z.object({
 export const AuraCommandStartSchema = z.object({
   userId: z.string().uuid(),
   moodCycleContext: z.string().optional().nullable(),
+  locale: z.string().trim().min(2).max(20).optional().default('pt-BR'),
+  timezone: z.string().trim().min(1).max(100).optional().default('America/Sao_Paulo'),
 });
 
 export const AuraCommandMessageStreamSchema = z.object({
@@ -94,6 +101,9 @@ export const AuraCommandMessageStreamSchema = z.object({
   history: z.array(AuraCommandHistoryMessageSchema).max(20).optional().default([]),
   moodCycleContext: z.string().optional().nullable(),
   mode: z.enum(['conversation', 'executor']).optional().default('executor'),
+  locale: z.string().trim().min(2).max(20).optional().default('pt-BR'),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  currentTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
 });
 
 export type AuraCommandHistoryMessage = z.infer<typeof AuraCommandHistoryMessageSchema>;

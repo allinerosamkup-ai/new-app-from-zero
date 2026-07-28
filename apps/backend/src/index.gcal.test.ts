@@ -17,6 +17,7 @@ async function run() {
     gcalAccessToken: 'access-token',
     gcalRefreshToken: 'refresh-token',
     gcalSelectedCalendars: null as string[] | null,
+    gcalWriteCalendarId: null as string | null,
   };
 
   process.env.GOOGLE_CLIENT_ID = 'google-client';
@@ -163,6 +164,7 @@ async function run() {
     const calendarsBody = await calendarsResponse.json();
     assert.equal(calendarsResponse.status, 200);
     assert.deepEqual(calendarsBody.selectedIds, ['primary', 'terapia@example.com', 'minha-agenda@example.com']);
+    assert.equal(calendarsBody.writeCalendarId, 'primary');
 
     const eventsResponse = await fetch(`${baseUrl}/api/gcal/events?date=2026-04-13`);
     const eventsBody = await eventsResponse.json();
@@ -176,10 +178,11 @@ async function run() {
     const saveCalendarsResponse = await fetch(`${baseUrl}/api/gcal/calendars`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ calendarIds: ['terapia@example.com'] }),
+      body: JSON.stringify({ calendarIds: ['terapia@example.com'], writeCalendarId: 'terapia@example.com' }),
     });
     assert.equal(saveCalendarsResponse.status, 200);
     assert.deepEqual(userPreference.gcalSelectedCalendars, ['terapia@example.com']);
+    assert.equal(userPreference.gcalWriteCalendarId, 'terapia@example.com');
 
     calendarEventRequests.length = 0;
     const savedEventsResponse = await fetch(`${baseUrl}/api/gcal/events?date=2026-04-13`);

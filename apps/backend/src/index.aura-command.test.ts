@@ -11,6 +11,9 @@ async function run() {
   const createdSessions: any[] = [];
   const savedMessages: any[] = [];
   const updatedBlocks: any[] = [];
+  const commandMessages: any[] = [];
+  const commandPlans: any[] = [];
+  const commandOperations: any[] = [];
   const previousOpenAiKey = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
 
@@ -223,6 +226,76 @@ async function run() {
   const prisma = {
     $queryRaw: async () => [],
     $executeRaw: async () => ({}),
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback(prisma),
+    auraCommandSession: {
+      findFirst: async ({ where }: any) => ({
+        id: where.id,
+        userId: where.userId,
+        status: 'active',
+        locale: 'pt-BR',
+        timezone: 'America/Sao_Paulo',
+      }),
+      update: async () => ({}),
+      create: async ({ data }: any) => ({
+        id: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6affff',
+        createdAt: new Date(),
+        ...data,
+      }),
+    },
+    auraCommandMessage: {
+      create: async ({ data }: any) => {
+        const message = {
+          id: `40000000-0000-4000-8000-${String(commandMessages.length + 1).padStart(12, '0')}`,
+          createdAt: new Date(),
+          ...data,
+        };
+        commandMessages.push(message);
+        return message;
+      },
+    },
+    auraCommandPlan: {
+      create: async ({ data }: any) => {
+        const operations = data.operations.create.map((operation: any, index: number) => {
+          const row = {
+            id: `50000000-0000-4000-8000-${String(commandOperations.length + index + 1).padStart(12, '0')}`,
+            planId: data.id,
+            status: operation.status,
+            result: null,
+            error: null,
+            idempotencyKey: null,
+            appliedAt: null,
+            createdAt: new Date(),
+            ...operation,
+          };
+          return row;
+        });
+        commandOperations.push(...operations);
+        const plan = { ...data, operations, createdAt: new Date(), appliedAt: null };
+        commandPlans.push(plan);
+        return plan;
+      },
+      findFirst: async ({ where }: any) => {
+        const plan = commandPlans.find((item) => item.id === where.id && item.userId === where.userId);
+        return plan ?? null;
+      },
+      update: async ({ where, data }: any) => {
+        const plan = commandPlans.find((item) => item.id === where.id);
+        if (!plan) throw new Error('plan not found');
+        Object.assign(plan, data);
+        return plan;
+      },
+    },
+    auraCommandOperation: {
+      update: async ({ where, data }: any) => {
+        const operation = commandOperations.find((item) => item.id === where.id);
+        if (!operation) throw new Error('operation not found');
+        Object.assign(operation, data);
+        return operation;
+      },
+    },
+    userPreference: {
+      findUnique: async () => ({ gcalWriteCalendarId: 'primary' }),
+    },
     profile: {
       findUnique: async () => ({ fullName: 'Teste Aura' }),
     },
@@ -265,6 +338,7 @@ async function run() {
       delete: async () => ({}),
     },
     journalSession: {
+      findFirst: async () => null,
       create: async ({ data }: any) => {
         const session = { id: `session-${createdSessions.length + 1}`, ...data };
         createdSessions.push(session);
@@ -276,6 +350,7 @@ async function run() {
       }),
     },
     journalMessage: {
+      findFirst: async () => null,
       create: async ({ data }: any) => {
         savedMessages.push(data);
         return { id: `message-${savedMessages.length}`, ...data };
@@ -356,6 +431,15 @@ async function run() {
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
   try {
+    const startResponse = await fetch(`${baseUrl}/api/aura/command/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ locale: 'pt-BR', timezone: 'America/Sao_Paulo' }),
+    });
+    const started = await startResponse.json() as { sessionId?: string };
+    assert.equal(startResponse.status, 200);
+    assert.equal(started.sessionId, '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6affff');
+
     const response = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',
       headers: {
@@ -376,10 +460,10 @@ async function run() {
     const streamBody = await readResponseText(response);
 
     assert.equal(createdSessions.length, 1);
-    assert.ok(savedMessages.length >= 2);
+    assert.equal(savedMessages.length, 1);
     assert.match(streamBody, /assistant\.completed/);
-    assert.match(streamBody, /Resumo salvo pela Aura/);
-    assert.match(streamBody, /journalSummary/i);
+    assert.match(streamBody, /handoff_to_journal/);
+    assert.match(streamBody, /"status":"applied"/);
 
     const longCommandResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',
@@ -409,9 +493,29 @@ async function run() {
     });
     const explicitMoveBody = await readResponseText(explicitMoveResponse);
     assert.equal(explicitMoveResponse.status, 200);
-    assert.equal(updatedBlocks.length, 1);
+    assert.equal(updatedBlocks.length, 0);
     assert.match(explicitMoveBody, /update_task/);
-    assert.match(explicitMoveBody, /updatedTaskId/);
+    assert.match(explicitMoveBody, /review_required/);
+    assert.match(explicitMoveBody, /update_item/);
+    const completedFrame = explicitMoveBody
+      .split('\n')
+      .find((line) => line.startsWith('data: ') && line.includes('"plan"'));
+    assert.ok(completedFrame);
+    const completedData = JSON.parse(completedFrame.slice(6));
+    const movePlanId = completedData.plan.id as string;
+    const moveOperationId = completedData.plan.operations[0].id as string;
+    const applyMoveResponse = await fetch(`${baseUrl}/api/aura/command/plans/${movePlanId}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        operationIds: [moveOperationId],
+        idempotencyKey: 'authenticated-move-apply-0001',
+      }),
+    });
+    const appliedMove = await applyMoveResponse.json() as any;
+    assert.equal(applyMoveResponse.status, 200);
+    assert.equal(appliedMove.execution.status, 'applied');
+    assert.equal(updatedBlocks.length, 1);
 
     const blockedVentResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',

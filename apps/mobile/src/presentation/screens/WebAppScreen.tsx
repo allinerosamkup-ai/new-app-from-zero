@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BackHandler, Linking, Platform, StyleSheet, View, StatusBar } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
-import type { Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 import { supabase } from '../../lib/supabase';
 import { buildInjectedSessionScript, getSupabaseWebStorageKey, getWebAppStartPath, getWebAppUrl } from '../../lib/web-app';
@@ -63,7 +63,7 @@ export default function WebAppScreen() {
       setHasLoadError(true);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       if (!isMountedRef.current) return;
       setWebSession(session);
       

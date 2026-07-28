@@ -57,6 +57,9 @@ export type AiriaCaptureKind =
   | 'decision'
   | 'task'
   | 'calendar_commitment'
+  | 'capture'
+  | 'checkin'
+  | 'habit'
   | 'reflection'
   | 'clarification';
 
@@ -211,11 +214,16 @@ const CognitiveModelSchema = z.object({
     ),
   }),
   captureJudgment: z.object({
-    captureAs: z.enum(['conversation', 'memory_fact', 'decision', 'task', 'calendar_commitment', 'reflection', 'clarification']),
+    captureAs: z.enum([
+      'conversation', 'memory_fact', 'decision', 'task', 'calendar_commitment',
+      'capture', 'checkin', 'habit', 'reflection', 'clarification',
+    ]),
     captureMode: z.enum(['auto', 'propose', 'listen']).optional().default('propose'),
     allowedMutationActions: z.array(z.enum([
       'create_task', 'create_checklist', 'create_goal', 'create_agenda',
       'handoff_to_journal', 'update_task', 'delete_task', 'complete_items',
+      'create_capture', 'create_checkin', 'create_habit', 'create_calendar_event',
+      'log_checkin', 'postpone_task', 'start_task', 'adapt_agenda', 'open_screen',
     ])).optional().default([]),
     allowTaskCreation: z.boolean(),
     allowDecisionMemory: z.boolean(),
@@ -345,7 +353,10 @@ function withStateCapture(judgment: AiriaCaptureJudgment, text: string): AiriaCa
   const isHardRefusal = judgment.captureMode === 'listen' && judgment.explicitness === 'explicit'
     && /\bnao\b/.test(text);
   if (isHardRefusal || !hasStateSignal(text)) return judgment;
-  if (judgment.allowedMutationActions.includes('log_checkin')) return judgment;
+  if (
+    judgment.allowedMutationActions.includes('log_checkin')
+    || judgment.allowedMutationActions.includes('create_checkin')
+  ) return judgment;
 
   return {
     ...judgment,
@@ -465,38 +476,27 @@ function classifyBase(message: string): AiriaCaptureJudgment {
 
   const explicitChecklist = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|monte) (?:uma? )?(?:checklist|lista)\b|\b(?:quebra|quebre|divida) .{1,80}\bem (?:passos|etapas)\b|\b(?:create|add|make|build) (?:a )?(?:checklist|list)\b|\bbreak .{1,80}\binto (?:steps|stages)\b/.test(text);
   const explicitGoal = /\b(?:crie|cria|adicione|adiciona|inclua|inclui) (?:uma? )?meta\b|\b(?:quero|preciso|vamos) criar (?:uma? )?meta\b|\b(?:create|add|make) (?:a )?goal\b/.test(text);
-  const explicitHabit = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|monte|monta) (?:um )?habito\b|\b(?:quero|preciso|vamos) (?:criar|adicionar) (?:um )?habito\b|\b(?:create|add|make) (?:a )?habit\b/.test(text);
-  if (explicitHabit) {
-    return {
-      captureAs: 'task', captureMode: 'auto', allowedMutationActions: ['create_habit'],
-      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: false,
-      explicitness: 'explicit', confidence: 'alta',
-      reason: 'A fala pede explicitamente a criação de um hábito.',
-    };
-  }
-
-  // Check-in pela Airia: "faz meu check-in", "registra que tô mal hoje".
-  const explicitCheckin = /\b(?:faz|faca|fazer|registra|registre|registrar|anota|anote|atualiza|atualize)\s+(?:o\s+|meu\s+|um\s+)?(?:check.?in|checkin)\b|\bcheck.?in\s+(?:de\s+)?(?:hoje|agora)\b/.test(text);
-  if (explicitCheckin) {
-    return {
-      captureAs: 'task', captureMode: 'auto', allowedMutationActions: ['log_checkin'],
-      allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: true,
-      explicitness: 'explicit', confidence: 'alta',
-      reason: 'A fala pede explicitamente para registrar o check-in.',
-    };
-  }
   const explicitAgendaAction = /\b(?:agende|marque|marcar) .{0,60}\b(?:consulta|dentista|reuniao|compromisso|sessao|bloco|evento)\b|\b(?:schedule) .{0,60}\b(?:appointment|meeting|commitment|block|event)\b/.test(text);
   const explicitTask = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|registre) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:quero|preciso|vamos) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:pode|consegue) (?:criar|adicionar|incluir) (?:uma? )?(?:tarefa|lembrete)\b|\b(?:transforme|coloque) (?:isto|isso) (?:em|como) (?:uma? )?tarefa\b|\b(?:please |can you |could you |i want you to |i need you to )?(?:create|add|make) (?:a )?(?:task|reminder)\b|\b(?:turn|put) (?:this|that|it) (?:down )?(?:into|as) (?:a )?(?:task|reminder)\b/.test(text);
-  if (explicitChecklist || explicitGoal || explicitAgendaAction || explicitTask) {
+  const explicitHabit = /\b(?:crie|cria|adicione|adiciona|inclua|inclui|monte|monta|configure|configura) (?:um |o )?habito\b|\b(?:quero|preciso|vamos) (?:criar|adicionar) (?:um )?habito\b|\b(?:create|add|make|set up) (?:a )?habit\b/.test(text);
+  const explicitCheckin = /\b(?:faz|faca|fazer|registra|registre|registrar|anota|anote|atualiza|atualize|quero fazer)\s+(?:o\s+|meu\s+|um\s+)?check-?in\b|\bcheck-?in\s+(?:de\s+)?(?:hoje|agora)\b|\b(?:do|record|make) (?:a |my )?check-?in\b/.test(text);
+  const explicitTypedCheckin = /\b(?:quero|preciso|vamos)\s+fazer\s+(?:o\s+|meu\s+|um\s+)?check-?in\b/.test(text);
+  if (explicitChecklist || explicitGoal || explicitAgendaAction || explicitTask || explicitHabit || explicitCheckin) {
     const allowedMutationActions: AiriaMutationAction[] = explicitChecklist
       ? ['create_checklist']
       : explicitGoal
         ? ['create_goal']
         : explicitAgendaAction
-          ? ['create_agenda']
-          : ['create_task'];
+          ? ['create_calendar_event']
+            : explicitHabit
+              ? ['create_habit']
+            : explicitCheckin
+              ? [explicitTypedCheckin ? 'create_checkin' : 'log_checkin']
+              : ['create_task'];
     return {
-      captureAs: explicitAgendaAction ? 'calendar_commitment' : 'task',
+      captureAs: explicitAgendaAction
+        ? 'calendar_commitment'
+        : explicitHabit ? 'habit' : explicitCheckin ? 'checkin' : 'task',
       captureMode: 'auto',
       allowedMutationActions, allowTaskCreation: true, allowDecisionMemory: false, allowMemoryCapture: false,
       explicitness: 'explicit', confidence: 'alta',
@@ -534,12 +534,23 @@ function classifyBase(message: string): AiriaCaptureJudgment {
     };
   }
 
-  const explicitMemory = /\b(anote|anota|guarde|lembre|registre) (que|isto|isso)\b|\b(remember|note|keep in mind) (that|this)\b/.test(text);
+  const explicitCapture = /\b(anote|anota|registre|salve) (isto|isso|uma nota|essa nota)\b|\b(save|note down) (this|that)\b/.test(text);
+  if (explicitCapture) {
+    return {
+      captureAs: 'capture', captureMode: 'auto', allowedMutationActions: ['create_capture'],
+      allowTaskCreation: false, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual pede explicitamente criar uma nota visível na Caixa de Captura.',
+    };
+  }
+
+  const explicitMemory = /\b(anote|anota|guarde|lembre|registre) que\b|\b(remember|note|keep in mind) that\b/.test(text);
   if (explicitMemory) {
     return {
-      captureAs: 'memory_fact', captureMode: 'listen', allowedMutationActions: [], allowTaskCreation: false, allowDecisionMemory: false,
-      allowMemoryCapture: true, explicitness: 'explicit', confidence: 'alta',
-      reason: 'A fala atual pede explicitamente que um fato seja lembrado, sem convertê-lo em ação.',
+      captureAs: 'capture', captureMode: 'auto', allowedMutationActions: ['create_capture'],
+      allowTaskCreation: false, allowDecisionMemory: false, allowMemoryCapture: false,
+      explicitness: 'explicit', confidence: 'alta',
+      reason: 'A fala atual pede explicitamente criar uma nota visível na Caixa de Captura.',
     };
   }
 
@@ -630,7 +641,7 @@ function inferIntent(surface: DecisionSurface, message: string, judgment: AiriaC
       ? 'conversation'
       : inferSurfaceIntent(surface);
   }
-  if (judgment.captureAs === 'task' || (judgment.captureAs === 'calendar_commitment' && judgment.allowTaskCreation)) return 'execution';
+  if (judgment.captureAs === 'task' || judgment.captureAs === 'capture' || judgment.captureAs === 'checkin' || judgment.captureAs === 'habit' || (judgment.captureAs === 'calendar_commitment' && judgment.allowTaskCreation)) return 'execution';
   if (judgment.captureAs === 'decision') return 'decision';
   if (judgment.captureAs === 'reflection') return surface === 'journal' ? 'journal_reflection' : 'conversation';
   if (judgment.captureAs === 'memory_fact' || judgment.explicitness === 'explicit') return 'conversation';

@@ -76,6 +76,14 @@ function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandInt
       return 'delete_task';
     case 'complete_items':
       return 'complete_items';
+    case 'create_capture':
+      return 'capture';
+    case 'create_checkin':
+      return 'checkin';
+    case 'create_habit':
+      return 'habit';
+    case 'create_calendar_event':
+      return 'calendar_event';
     default:
       return null;
   }
@@ -106,12 +114,24 @@ function inferActionFromIntent(intent: AuraCommandIntent | null): AuraCommandAct
       return 'delete_task';
     case 'complete_items':
       return 'complete_items';
+    case 'capture':
+      return 'create_capture';
+    case 'checkin':
+      return 'create_checkin';
+    case 'habit':
+      return 'create_habit';
+    case 'calendar_event':
+      return 'create_calendar_event';
     default:
       return null;
   }
 }
 
 function inferActionFromPayload(payload: Record<string, unknown>): AuraCommandAction | null {
+  if (asString(payload.kind) === 'note' || asString(payload.kind) === 'checklist') return 'create_capture';
+  if ('moodScore' in payload || 'energyScore' in payload || 'clarityScore' in payload || 'irritabilityScore' in payload) return 'create_checkin';
+  if (asString(payload.frequency) && asString(payload.title)) return 'create_habit';
+  if (asString(payload.calendarId) && asString(payload.date) && (asString(payload.startTime) || asString(payload.time))) return 'create_calendar_event';
   if (Array.isArray(payload.blocks) || isRecord(payload.recurrence)) return 'create_agenda';
   if (asString(payload.taskId) && (asString(payload.newDate) || asString(payload.newStartTime))) return 'update_task';
   if (asString(payload.taskId)) return 'delete_task';
@@ -180,7 +200,7 @@ function buildPayloadFromRoot(value: unknown): Record<string, unknown> {
   }
 
   const payload: Record<string, unknown> = {};
-  for (const key of ['title', 'date', 'startTime', 'time', 'category', 'blocks', 'items', 'steps', 'checklist', 'subgoals', 'subtasks', 'recurrence', 'taskId', 'newDate', 'newStartTime']) {
+  for (const key of ['title', 'date', 'startTime', 'time', 'category', 'blocks', 'items', 'steps', 'checklist', 'subgoals', 'subtasks', 'recurrence', 'taskId', 'newDate', 'newStartTime', 'kind', 'content', 'frequency', 'targetDays', 'durationMinutes', 'moodScore', 'energyScore', 'clarityScore', 'irritabilityScore', 'note', 'emotions', 'calendarId', 'location', 'description']) {
     if (key in root) {
       payload[key] = root[key];
     }
@@ -345,6 +365,10 @@ export class AuraCommandService {
       '- create_agenda: blocks[] — de um bloco à semana inteira, sempre montada aqui na conversa',
       '- create_checklist: title + items[] (mantém TODOS os itens, sem resumir)',
       '- create_goal: title + subgoals[]',
+      '- create_capture: kind "note"|"checklist" + title + content + items[]; use para "anote isso" e checklists soltas',
+      '- create_checkin: localDate + moodScore + energyScore + clarityScore + irritabilityScore; use null para sinal não expresso e sempre peça revisão',
+      '- create_habit: title + frequency + targetDays + durationMinutes + reminderTime',
+      '- create_calendar_event: compromisso fixo com title + date + startTime + durationMinutes + calendarId; se faltar data, pergunte; se faltar horário, proponha',
       '- update_task: taskId + newDate + newStartTime',
       '- delete_task: taskId',
       '- Para update_task/delete_task, use taskId somente quando o título do bloco corresponder ao alvo atual indicado no frame cognitivo; se não houver correspondência segura, use ask_clarification.',

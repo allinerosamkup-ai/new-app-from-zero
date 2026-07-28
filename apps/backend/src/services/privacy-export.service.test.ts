@@ -26,6 +26,11 @@ async function run() {
     journalSession: { findMany: async () => [{ id: 'session-1', summary: 'Dia pesado' }] },
     journalMessage: { findMany: async () => [{ id: 'message-1', content: 'texto da usuaria' }] },
     timelineBlock: { findMany: async () => [{ id: 'block-1', title: 'Foco', status: 'pending' }] },
+    auraCommandSession: { findMany: async () => [{ id: 'command-session-1', status: 'active' }] },
+    auraCommandMessage: { findMany: async () => [{ id: 'command-message-1', content: 'marque dentista' }] },
+    auraCommandPlan: { findMany: async () => [{ id: 'command-plan-1', status: 'applied' }] },
+    auraCommandOperation: { findMany: async () => [{ id: 'command-operation-1', type: 'create_calendar_event' }] },
+    capture: { findMany: async () => [{ id: 'capture-1', title: 'Lista da viagem' }] },
     objective: { findMany: async () => [{ id: 'goal-1', title: 'Dormir melhor' }] },
     habit: { findMany: async () => [{ id: 'habit-1', title: 'Agua', completions: [] }] },
     weeklyInsight: { findMany: async () => [{ id: 'insight-1', summary: 'Semana oscilou' }] },
@@ -48,6 +53,8 @@ async function run() {
   assert.equal(payload.preferences?.gcalAccessToken, undefined);
   assert.equal(payload.preferences?.gcalRefreshToken, undefined);
   assert.equal(payload.data.checkins.length, 1);
+  assert.equal(payload.data.commandCenter.operations.length, 1);
+  assert.equal(payload.data.captures.length, 1);
   const firstJournalMessage = payload.data.journal.messages[0] as { content?: string };
   const firstHabit = payload.data.habits[0] as { title?: string };
   const firstPushSubscription = payload.data.pushSubscriptions[0] as { endpoint?: string };

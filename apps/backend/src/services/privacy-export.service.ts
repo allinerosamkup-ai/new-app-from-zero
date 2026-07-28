@@ -22,6 +22,13 @@ export type PrivacyExportPayload = {
       messages: unknown[];
     };
     planner: unknown[];
+    commandCenter: {
+      sessions: unknown[];
+      messages: unknown[];
+      plans: unknown[];
+      operations: unknown[];
+    };
+    captures: unknown[];
     objectives: unknown[];
     habits: unknown[];
     insights: unknown[];
@@ -84,6 +91,11 @@ export async function buildPrivacyExport(
     journalSessions,
     journalMessages,
     planner,
+    commandSessions,
+    commandMessages,
+    commandPlans,
+    commandOperations,
+    captures,
     objectives,
     habits,
     insights,
@@ -106,6 +118,11 @@ export async function buildPrivacyExport(
     findMany(prisma.journalSession, { where: { userId }, orderBy: { startedAt: 'asc' } }),
     findMany(prisma.journalMessage, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.timelineBlock, { where: { userId }, orderBy: { startAt: 'asc' } }),
+    findMany(prisma.auraCommandSession, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.auraCommandMessage, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.auraCommandPlan, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.auraCommandOperation, { where: { userId }, orderBy: { createdAt: 'asc' } }),
+    findMany(prisma.capture, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.objective, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.habit, {
       where: { userId },
@@ -139,6 +156,13 @@ export async function buildPrivacyExport(
         messages: journalMessages,
       },
       planner,
+      commandCenter: {
+        sessions: commandSessions,
+        messages: commandMessages,
+        plans: commandPlans,
+        operations: commandOperations,
+      },
+      captures,
       objectives,
       habits,
       insights,

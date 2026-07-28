@@ -39,6 +39,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
   const [loading, setLoading] = useState(true);
   const [calendars, setCalendars] = useState<GCalCalendar[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [writeCalendarId, setWriteCalendarId] = useState("primary");
   const [saving, setSaving] = useState(false);
   const [calendarsOpen, setCalendarsOpen] = useState(false);
 
@@ -53,6 +54,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
         const saved = Array.isArray(res.selectedIds) ? (res.selectedIds as string[]) : [];
         setCalendars(nextCalendars);
         setSelectedIds(saved.length > 0 ? saved : getDefaultSelectedCalendarIds(nextCalendars));
+        setWriteCalendarId(typeof res.writeCalendarId === "string" ? res.writeCalendarId : "primary");
       }
     } catch {
       setConnected(false);
@@ -71,6 +73,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
         setCalendars(nextCalendars);
         const saved = Array.isArray(res.selectedIds) ? (res.selectedIds as string[]) : [];
         setSelectedIds(saved.length > 0 ? saved : getDefaultSelectedCalendarIds(nextCalendars));
+        setWriteCalendarId(typeof res.writeCalendarId === "string" ? res.writeCalendarId : "primary");
         setCalendarsOpen(true);
       }
     } catch {
@@ -101,6 +104,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
       setConnected(false);
       setCalendars([]);
       setSelectedIds([]);
+      setWriteCalendarId("primary");
       setCalendarsOpen(false);
       onStatusChange(t("config.gcal.disconnected"));
     } catch {
@@ -112,7 +116,13 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
     setSelectedIds(prev => {
       if (prev.includes(calId)) {
         if (prev.length <= 1) return prev; // at least 1
-        return prev.filter(id => id !== calId);
+        const next = prev.filter(id => id !== calId);
+        if (writeCalendarId === calId) {
+          const nextWritable = calendars.find((calendar) =>
+            next.includes(calendar.id) && (calendar.accessRole === "owner" || calendar.accessRole === "writer"));
+          setWriteCalendarId(nextWritable?.id ?? next[0]);
+        }
+        return next;
       }
       return [...prev, calId];
     });
@@ -121,7 +131,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
   async function saveSelection() {
     setSaving(true);
     try {
-      await api.put("/gcal/calendars", { calendarIds: selectedIds });
+      await api.put("/gcal/calendars", { calendarIds: selectedIds, writeCalendarId });
       onStatusChange(t("config.gcal.saved"));
       setTimeout(() => onStatusChange(null), 2000);
     } catch {
@@ -246,6 +256,35 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
                   </label>
                 ))}
               </div>
+              <label style={{ display: "block", marginTop: 12 }}>
+                <span style={{ display: "block", fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6 }}>
+                  {t("config.gcal.writeCalendar")}
+                </span>
+                <select
+                  value={writeCalendarId}
+                  onChange={(event) => setWriteCalendarId(event.target.value)}
+                  style={{
+                    width: "100%",
+                    border: "1px solid var(--warm-border-2)",
+                    borderRadius: 9,
+                    background: "var(--surface)",
+                    color: "var(--text-1)",
+                    padding: "8px 10px",
+                    fontSize: 12,
+                  }}
+                >
+                  {calendars
+                    .filter((calendar) =>
+                      selectedIds.includes(calendar.id)
+                      && (calendar.accessRole === "owner" || calendar.accessRole === "writer"))
+                    .map((calendar) => (
+                      <option key={calendar.id} value={calendar.id}>{calendar.summary}</option>
+                    ))}
+                </select>
+                <span style={{ display: "block", fontSize: 10, color: "var(--text-3)", marginTop: 5 }}>
+                  {t("config.gcal.writeCalendarHint")}
+                </span>
+              </label>
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, gap: 8 }}>
                 <button
                   onClick={handleDisconnect}

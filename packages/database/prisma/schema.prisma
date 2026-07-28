@@ -38,6 +38,11 @@ model Profile {
   userPatterns      UserPattern[]
   userOpenDecisions UserOpenDecision[]
   routineBuildSessions RoutineBuildSession[]
+  auraCommandSessions AuraCommandSession[]
+  auraCommandMessages AuraCommandMessage[]
+  auraCommandPlans AuraCommandPlan[]
+  auraCommandOperations AuraCommandOperation[]
+  captures Capture[]
 
   @@map("profiles")
 }
@@ -205,6 +210,7 @@ model UserPreference {
   gcalAccessToken    String?  @map("gcal_access_token") @db.Text
   gcalRefreshToken   String?  @map("gcal_refresh_token") @db.Text
   gcalSelectedCalendars Json? @map("gcal_selected_calendars")
+  gcalWriteCalendarId String? @map("gcal_write_calendar_id")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -332,6 +338,9 @@ model TimelineBlock {
   status        String   @default("planned")
   isAiSuggested Boolean  @default(false) @map("is_ai_suggested")
   gcalEventId   String?  @map("gcal_event_id")
+  gcalCalendarId String? @map("gcal_calendar_id")
+  gcalSyncStatus String @default("not_applicable") @map("gcal_sync_status")
+  sourceCommandOperationId String? @unique @map("source_command_operation_id") @db.Uuid
   temporalPolicy String  @default("flexible") @map("temporal_policy")
   adaptationPermission String @default("eligible") @map("adaptation_permission")
   adaptabilitySource String @default("default") @map("adaptability_source")
@@ -358,9 +367,116 @@ model TimelineBlock {
 
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceCommandOperation AuraCommandOperation? @relation(fields: [sourceCommandOperationId], references: [id], onDelete: SetNull)
 
   @@index([userId, localDate, startAt], name: "idx_timeline_user_date_time")
+  @@index([userId, gcalCalendarId, gcalEventId], name: "idx_timeline_gcal_identity")
+  @@index([sourceCommandOperationId])
   @@map("timeline_blocks")
+}
+
+model AuraCommandSession {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  status    String   @default("active")
+  locale    String   @default("pt-BR")
+  timezone  String   @default("America/Sao_Paulo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     Profile              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AuraCommandMessage[]
+  plans    AuraCommandPlan[]
+
+  @@index([userId, updatedAt(sort: Desc)], name: "idx_aura_command_sessions_user_updated")
+  @@map("aura_command_sessions")
+}
+
+model AuraCommandMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session     AuraCommandSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user        Profile            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourcePlans AuraCommandPlan[]   @relation("AuraPlanSourceMessage")
+
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("aura_command_messages")
+}
+
+model AuraCommandPlan {
+  id               String   @id @default(uuid()) @db.Uuid
+  sessionId        String   @map("session_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  sourceMessageId  String   @map("source_message_id") @db.Uuid
+  status           String   @default("draft")
+  executionPolicy  String   @map("execution_policy")
+  confidence       Float
+  assistantMessage String   @map("assistant_message") @db.Text
+  missingFields    String[] @default([]) @map("missing_fields")
+  appliedAt        DateTime? @map("applied_at") @db.Timestamptz(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session       AuraCommandSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user          Profile              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceMessage AuraCommandMessage   @relation("AuraPlanSourceMessage", fields: [sourceMessageId], references: [id], onDelete: Cascade)
+  operations    AuraCommandOperation[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([sessionId, status])
+  @@map("aura_command_plans")
+}
+
+model AuraCommandOperation {
+  id                String   @id @default(uuid()) @db.Uuid
+  planId            String   @map("plan_id") @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  clientOperationId String   @map("client_operation_id")
+  type              String
+  status            String   @default("proposed")
+  selected          Boolean  @default(true)
+  payload           Json
+  result            Json?
+  error             Json?
+  idempotencyKey    String?  @unique @map("idempotency_key")
+  appliedAt         DateTime? @map("applied_at") @db.Timestamptz(6)
+  undoneAt          DateTime? @map("undone_at") @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  plan           AuraCommandPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  user           Profile         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  captures       Capture[]
+  timelineBlocks TimelineBlock[]
+
+  @@unique([planId, clientOperationId])
+  @@index([userId, status, updatedAt(sort: Desc)])
+  @@map("aura_command_operations")
+}
+
+model Capture {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  kind              String
+  title             String
+  content           String   @default("") @db.Text
+  items             Json     @default("[]")
+  status            String   @default("inbox")
+  sourceOperationId String?  @unique @map("source_operation_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user            Profile              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceOperation AuraCommandOperation? @relation(fields: [sourceOperationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, createdAt(sort: Desc)], name: "idx_captures_user_status")
+  @@map("captures")
 }
 
 model Objective {

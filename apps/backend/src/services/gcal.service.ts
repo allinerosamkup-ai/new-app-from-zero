@@ -57,6 +57,131 @@ export class GCalService {
     }
   }
 
+  /**
+   * Cria um compromisso no calendário escolhido sem duplicar a operação.
+   * A identidade estável fica também no Google, então uma repetição após queda
+   * de rede encontra o evento já criado antes de tentar um novo POST.
+   */
+  static async createOrGetEvent(input: {
+    prisma: PrismaClient;
+    userId: string;
+    operationId: string;
+    calendarId: string;
+    title: string;
+    date: string;
+    startTime: string;
+    durationMinutes: number;
+    location?: string | null;
+    description?: string | null;
+  }): Promise<{ calendarId: string; eventId: string; htmlLink?: string | null }> {
+    const calendarId = input.calendarId || 'primary';
+    const encodedCalendarId = encodeURIComponent(calendarId);
+    let token = await this.getValidToken(input.prisma, input.userId);
+    if (!token) {
+      throw new Error('Google Agenda não está conectado.');
+    }
+
+    const request = async (url: string, init: RequestInit, allowRefresh = true): Promise<Response> => {
+      const response = await fetch(url, {
+        ...init,
+        headers: {
+          ...init.headers,
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (response.status !== 401 || !allowRefresh) return response;
+
+      const preference = await input.prisma.userPreference.findUnique({
+        where: { userId: input.userId },
+        select: { gcalRefreshToken: true },
+      });
+      if (!preference?.gcalRefreshToken) return response;
+      const refreshed = await this.refreshAccessToken(
+        input.prisma,
+        input.userId,
+        preference.gcalRefreshToken,
+      );
+      if (!refreshed) return response;
+      token = refreshed;
+      return request(url, init, false);
+    };
+
+    const marker = `airiaOperationId=${input.operationId}`;
+    const lookupUrl = new URL(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodedCalendarId}/events`,
+    );
+    lookupUrl.searchParams.set('privateExtendedProperty', marker);
+    lookupUrl.searchParams.set('maxResults', '1');
+    lookupUrl.searchParams.set('singleEvents', 'true');
+    lookupUrl.searchParams.set('showDeleted', 'false');
+
+    const lookupResponse = await request(lookupUrl.toString(), { method: 'GET' });
+    if (!lookupResponse.ok) {
+      const details = await lookupResponse.text();
+      throw new Error(`Não consegui consultar o Google Agenda (${lookupResponse.status}): ${details.slice(0, 300)}`);
+    }
+    const lookup = await lookupResponse.json() as {
+      items?: Array<{ id?: string; htmlLink?: string | null; status?: string }>;
+    };
+    const existing = lookup.items?.find((item) => item.id && item.status !== 'cancelled');
+    if (existing?.id) {
+      return {
+        calendarId,
+        eventId: existing.id,
+        htmlLink: existing.htmlLink ?? null,
+      };
+    }
+
+    const [hours, minutes] = input.startTime.split(':').map(Number);
+    const startMinutes = hours * 60 + minutes;
+    const endMinutes = startMinutes + input.durationMinutes;
+    const endDate = new Date(`${input.date}T00:00:00.000Z`);
+    endDate.setUTCMinutes(endMinutes);
+    const endDateKey = endDate.toISOString().slice(0, 10);
+    const endTime = `${String(endDate.getUTCHours()).padStart(2, '0')}:${String(endDate.getUTCMinutes()).padStart(2, '0')}`;
+    const event = {
+      summary: input.title,
+      description: input.description ?? undefined,
+      location: input.location ?? undefined,
+      start: {
+        dateTime: this.buildLocalDateTime(input.date, input.startTime),
+        timeZone: this.getTimeZone(),
+      },
+      end: {
+        dateTime: this.buildLocalDateTime(endDateKey, endTime),
+        timeZone: this.getTimeZone(),
+      },
+      extendedProperties: {
+        private: {
+          airiaOperationId: input.operationId,
+          airiaSource: 'command_center',
+        },
+      },
+    };
+
+    const createResponse = await request(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodedCalendarId}/events`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+      },
+    );
+    if (!createResponse.ok) {
+      const details = await createResponse.text();
+      throw new Error(`Não consegui criar o compromisso no Google Agenda (${createResponse.status}): ${details.slice(0, 300)}`);
+    }
+    const created = await createResponse.json() as { id?: string; htmlLink?: string | null };
+    if (!created.id) {
+      throw new Error('O Google Agenda não retornou a identificação do compromisso.');
+    }
+    return {
+      calendarId,
+      eventId: created.id,
+      htmlLink: created.htmlLink ?? null,
+    };
+  }
+
   static async syncBlockToGcal(prisma: PrismaClient, userId: string, block: any, date: string): Promise<string | null> {
     const token = await this.getValidToken(prisma, userId);
     if (!token) return null;
