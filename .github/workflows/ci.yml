@@ -1,9 +1,8 @@
 name: CI
 
 # Espelha o build que a VPS roda no deploy + os testes do repo.
-# Gate bloqueante = exatamente o que quebra produção: backend tsc, db build, web vite build.
-# O typecheck estrito do web (tsc --noEmit) roda como AVISO (não bloqueia), porque o
-# deploy usa vite build (esbuild) e a base tem ruído legado de unused-vars.
+# Gates bloqueantes cobrem backend tsc, db build, web vite build e o typecheck
+# estrito do web, impedindo JavaScript inválido de chegar à produção.
 
 on:
   push:
