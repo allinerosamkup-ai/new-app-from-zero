@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import type { TFunction } from "i18next";
 
 import { AuraButtonV2 } from "../editorial/AuraButtonV2";
 import type { AuraCommandOperation, AuraCommandPlan } from "../../features/aura/command-types";
@@ -31,7 +32,7 @@ function itemLabels(value: unknown): string[] {
   }).filter(Boolean);
 }
 
-function operationTitle(operation: AuraCommandOperation, t: (key: string, fallback?: string) => string) {
+function operationTitle(operation: AuraCommandOperation, t: TFunction) {
   const titles: Record<AuraCommandOperation["type"], string> = {
     create_planner_task: t("aura.commandPlan.task", "Tarefa no Planner"),
     create_calendar_event: t("aura.commandPlan.appointment", "Compromisso no Google Agenda"),

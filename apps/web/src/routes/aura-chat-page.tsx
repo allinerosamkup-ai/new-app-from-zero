@@ -125,6 +125,42 @@ const QUICK_ACTIONS: Array<{ labelKey: string; promptKey: string }> = [
   { labelKey: "aura.suggestions.falling", promptKey: "aura.quickPrompts.falling" },
 ];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function pickString(source: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function extractStringList(source: Record<string, unknown>, keys: string[]): string[] {
+  for (const key of keys) {
+    const value = source[key];
+    if (!Array.isArray(value)) continue;
+
+    const items = value
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim();
+        if (!isRecord(entry)) return null;
+        return pickString(entry, ["title", "text", "name", "label", "task"]);
+      })
+      .filter((item): item is string => Boolean(item));
+
+    if (items.length > 0) {
+      return items;
+    }
+  }
+
+  return [];
+}
+
 function buildInitialAssistantMessage(initialPrompt: string, contextLabel: string, mode: "conversation" | "executor") {
   if (!initialPrompt) {
     return i18n.t("aura.initialIdle", "Me diga o que precisa sair da cabeça e virar próximo passo.");
@@ -207,6 +243,7 @@ export function AuraChatPage() {
   }, [sessionId]);
   const [input, setInput] = useState(autoSend ? "" : initialPrompt);
   const [isTyping, setIsTyping] = useState(false);
+  const [actionCard, setActionCard] = useState<ActionCard | null>(null);
   const [lastRiskSafety, setLastRiskSafety] = useState<RiskSafety | null>(null);
   const [pendingTaskConfirmation, setPendingTaskConfirmation] = useState<PendingTaskConfirmation | null>(null);
   const [routineProposal, setRoutineProposal] = useState<RoutineProposal | null>(null);
@@ -257,7 +294,7 @@ export function AuraChatPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping, commandPlan]);
+  }, [messages, isTyping, actionCard, pendingTaskConfirmation, commandPlan]);
 
   function updatePlanOperation(
     operationId: string,
@@ -268,6 +305,39 @@ export function AuraChatPage() {
       operations: current.operations.map((operation) =>
         operation.id === operationId ? { ...operation, ...patch } : operation),
     } : current);
+  }
+
+  async function syncTimelineBlocks(blocks: TimelineBlock[]) {
+    for (const request of buildTimelineSyncRequests(blocks)) {
+      await api.post("/timeline", request);
+    }
+
+    await refreshData();
+  }
+
+  async function createObjectiveFromPayload(
+    payload: Record<string, unknown>,
+  ) {
+    const parsed = buildAuraObjectiveInput(payload);
+    if (!parsed) return null;
+    const objective = {
+      title: parsed.title,
+      subgoals: parsed.itemTitles.map((item, index) => ({
+        id: `aura-${Date.now()}-${index}`,
+        title: item,
+        done: false,
+        aiGenerated: true,
+      })),
+    };
+
+    await api.post("/objectives", {
+      title: objective.title,
+      category: typeof payload.category === "string" ? payload.category : "geral",
+      subgoals: objective.subgoals,
+    });
+    await refreshData();
+
+    return objective;
   }
 
   async function executeAuraAction(response: AuraCommandResponse): Promise<string | null> {
@@ -591,8 +661,10 @@ export function AuraChatPage() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
+    setActionCard(null);
     setCommandPlan(null);
     setLastRiskSafety(null);
+    setPendingTaskConfirmation(null);
 
     try {
       const { data: { session: auth } } = await supabase.auth.getSession();
@@ -733,6 +805,48 @@ export function AuraChatPage() {
     } finally {
       setIsTyping(false);
     }
+  }
+
+  async function confirmPendingTask() {
+    if (!pendingTaskConfirmation || isApplyingPendingAction) return;
+
+    setIsApplyingPendingAction(true);
+    try {
+      await syncTimelineBlocks(pendingTaskConfirmation.blocks);
+      const total = pendingTaskConfirmation.blocks.length;
+      setActionCard({
+        eyebrow: total > 1 ? t("aura.scheduleConfirmed") : t("aura.commitmentConfirmed"),
+        title: total > 1 ? t("aura.commitmentsSaved", { count: total }) : t("aura.oneCommitmentSaved"),
+        items: pendingTaskConfirmation.blocks
+          .slice(0, 6)
+          .map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
+        ctaLabel: t("aura.openPlanner"),
+        ctaPath: "/planner",
+      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: total > 1 ? t("aura.savedMany") : t("aura.savedOne"),
+        },
+      ]);
+      setPendingTaskConfirmation(null);
+      showSuccess(total > 1 ? t("aura.confirmedMany") : t("aura.confirmedOne"));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : t("aura.errors.confirm"));
+    } finally {
+      setIsApplyingPendingAction(false);
+    }
+  }
+
+  function cancelPendingTask() {
+    if (!pendingTaskConfirmation || isApplyingPendingAction) return;
+
+    setPendingTaskConfirmation(null);
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: t("aura.cancelledCommitment") },
+    ]);
   }
 
   function toggleVoice() {
@@ -1113,6 +1227,79 @@ export function AuraChatPage() {
             onChange={updatePlanOperation}
             onApply={applyCommandPlan}
           />
+        )}
+
+        {pendingTaskConfirmation && (
+          <div
+            style={{
+              margin: "6px 0 10px 33px",
+              background: "rgba(255,255,255,.72)",
+              border: "1px solid rgba(255,255,255,.84)",
+              borderRadius: 18,
+              padding: "12px 14px",
+              boxShadow: "0 12px 24px rgba(243,176,140,.08)",
+              backdropFilter: "blur(18px)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                color: "var(--accent-peach)",
+                margin: "0 0 8px",
+              }}
+            >
+              {l("CONFIRMAR COMPROMISSO", "CONFIRM COMMITMENT")}
+            </p>
+            <p
+              style={{
+                margin: "0 0 8px",
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--text-1)",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+              }}
+            >
+              {t("goals.reviewBeforeSave")}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+              {pendingTaskConfirmation.blocks.map((block) => (
+                <p
+                  key={`${block.title}-${block.date}-${block.startTime}`}
+                  style={{
+                    margin: 0,
+                    fontSize: 12.5,
+                    color: "var(--text-2)",
+                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  }}
+                >
+                  {formatTimelineBlock(block, resolveIntlLocale(i18n.language))}
+                </p>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <AuraButtonV2
+                onClick={cancelPendingTask}
+                disabled={isApplyingPendingAction}
+                variant="glass"
+                size="sm"
+                style={{ flex: 1 }}
+              >
+                {t("common.cancel")}
+              </AuraButtonV2>
+              <AuraButtonV2
+                onClick={confirmPendingTask}
+                disabled={isApplyingPendingAction}
+                variant="primary"
+                size="sm"
+                style={{ flex: 1 }}
+              >
+                {isApplyingPendingAction ? l("Salvando...", "Saving...") : l("Confirmar", "Confirm")}
+              </AuraButtonV2>
+            </div>
+          </div>
         )}
 
         <div style={{ margin: lastRiskSafety && lastRiskSafety.route !== "self_support" ? "6px 0 10px 33px" : 0 }}>

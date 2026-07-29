@@ -53,10 +53,9 @@ jobs:
       - name: Build web (vite)
         run: npm run build -w apps/web
 
-      # ---- Typecheck estrito do web: AVISO, não bloqueia ----
-      - name: Typecheck web (aviso)
+      # ---- Typecheck estrito do web: bloqueia regressões antes da publicação ----
+      - name: Typecheck web
         run: npm run typecheck -w apps/web
-        continue-on-error: true
 
       # ---- Testes ----
       - name: Test web (vitest)
