@@ -66,7 +66,9 @@ describe("goal experience helpers", () => {
   });
 
   it("builds a real task schedule from an explicit placement choice", () => {
-    const now = new Date("2026-07-26T14:17:00-03:00");
+    // The helper intentionally follows the user's browser timezone. Build the
+    // fixture as local civil time so the assertion means the same thing in CI.
+    const now = new Date(2026, 6, 26, 14, 17, 0);
 
     expect(buildGoalTaskSchedule("now", now)).toEqual({
       date: "2026-07-26",
@@ -83,7 +85,7 @@ describe("goal experience helpers", () => {
   });
 
   it("never places the later option in a time that has already passed", () => {
-    const lateNight = new Date("2026-07-26T23:40:00-03:00");
+    const lateNight = new Date(2026, 6, 26, 23, 40, 0);
 
     expect(buildGoalTaskSchedule("later", lateNight)).toEqual({
       date: "2026-07-27",
