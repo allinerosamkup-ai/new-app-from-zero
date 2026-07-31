@@ -4,6 +4,7 @@ set -eu
 PROJECT_DIR="${1:-/opt/airia/app}"
 COMPOSE_FILE="$PROJECT_DIR/deploy/airia/compose.yml"
 ENV_FILE=".env.web.build"
+CHECKIN_MIGRATION="$PROJECT_DIR/supabase/migrations/20260731120000_unify_checkin_signals.sql"
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
 
@@ -25,10 +26,23 @@ for VAR in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; do
   fi
 done
 
+if [ ! -f "$CHECKIN_MIGRATION" ]; then
+  echo "ERRO: migration de check-in não encontrada em $CHECKIN_MIGRATION"
+  exit 1
+fi
+
 docker network inspect easypanel >/dev/null
 
+echo "== Build =="
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+
+echo "== Database migration =="
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps -T airia_backend \
+  npx prisma db execute --schema=/app/packages/database/prisma/schema.prisma --stdin \
+  < "$CHECKIN_MIGRATION"
+
 echo "== Deploy =="
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-build
 
 echo "== Validate =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
