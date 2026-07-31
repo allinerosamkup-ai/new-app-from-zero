@@ -564,7 +564,7 @@ export function CheckinPage() {
         emotion: primaryEmotion,
         emotions: emotionsSelected.length > 0 ? emotionsSelected : [primaryEmotion],
         // Inclui dados capturados pela voz (ou preenchidos manualmente)
-        sono: detailEnabled.sono ? Math.min(10, sonoHoras) : undefined,
+        sleepHours: detailEnabled.sono ? sonoHoras : undefined,
         factors: selectedFactors.length > 0 ? selectedFactors : undefined,
         note: note.trim() || undefined,
       });
@@ -595,7 +595,7 @@ export function CheckinPage() {
         energia,
         emotion: primaryEmotion,
         emotions: emotionsSelected,
-        sono: detailEnabled.sono ? Math.min(10, sonoHoras) : undefined,
+        sleepHours: detailEnabled.sono ? sonoHoras : undefined,
         fisico: detailEnabled.fisico ? fisico : undefined,
         social: detailEnabled.social ? social : undefined,
         factors: selectedFactors.length > 0 ? selectedFactors : undefined,

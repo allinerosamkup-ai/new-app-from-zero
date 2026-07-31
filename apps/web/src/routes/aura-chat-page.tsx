@@ -8,6 +8,7 @@ import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyPr
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
 import type { AuraCommandExecution, AuraCommandPlan } from "../features/aura/command-types";
+import { checkinReceiptFromExecution, shouldRenderCommandPlan } from "../features/aura/command-checkin-receipt";
 import i18n from "../i18n";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { getCurrentLanguage, resolveIntlLocale, useLocalizedCopy } from "../i18n";
@@ -66,6 +67,7 @@ type AuraCommandAction =
   | "open_screen"
   | "create_capture"
   | "create_checkin"
+  | "record_checkin"
   | "create_habit"
   | "create_calendar_event"
   | "start_routine_builder";
@@ -383,32 +385,6 @@ export function AuraChatPage() {
         return null;
       }
 
-      // Check-in pela conversa: a pessoa contou como está e isso vira registro,
-      // sem precisar abrir a tela de check-in.
-      if (response.action === "log_checkin") {
-        const mood = typeof response.payload.loggedMoodScore === "number"
-          ? response.payload.loggedMoodScore
-          : typeof response.payload.moodScore === "number" ? response.payload.moodScore : null;
-        const energy = typeof response.payload.loggedEnergyScore === "number"
-          ? response.payload.loggedEnergyScore
-          : typeof response.payload.energyScore === "number" ? response.payload.energyScore : null;
-        if (mood === null && energy === null) return null;
-
-        await refreshData();
-        setActionCard({
-          eyebrow: l("CHECK-IN REGISTRADO", "CHECK-IN LOGGED"),
-          title: l("Anotei como você está hoje", "I noted how you are today"),
-          items: [
-            mood !== null ? l(`Humor ${mood}/10`, `Mood ${mood}/10`) : "",
-            energy !== null ? l(`Energia ${energy}/10`, `Energy ${energy}/10`) : "",
-            l("Isso entra na leitura da sua fase e no tamanho do que eu proponho.", "This feeds your phase reading and the size of what I suggest."),
-          ].filter(Boolean),
-          ctaLabel: l("Ver padrões", "See patterns"),
-          ctaPath: "/insights",
-        });
-        return null;
-      }
-
       if (response.action === "create_habit") {
         const title = typeof response.payload.title === "string" ? response.payload.title.trim() : "";
         if (!title) return null;
@@ -620,6 +596,7 @@ export function AuraChatPage() {
       setCommandPlan(applied.plan ?? patched.plan);
       await refreshData();
       if (applied.execution.status === "applied") {
+        showAppliedCheckinReceipt(applied.execution);
         showSuccess(t("aura.commandPlan.success", "Ações aplicadas."));
       } else {
         showError(t("aura.commandPlan.partial", "Algumas ações não foram aplicadas. Veja os detalhes."));
@@ -629,6 +606,22 @@ export function AuraChatPage() {
     } finally {
       setIsApplyingPlan(false);
     }
+  }
+
+  function showAppliedCheckinReceipt(execution: AuraCommandExecution | null | undefined) {
+    const receipt = checkinReceiptFromExecution(execution);
+    if (!receipt) return;
+    setActionCard({
+      eyebrow: l("CHECK-IN REGISTRADO", "CHECK-IN LOGGED"),
+      title: receipt.stateLabel ?? l("Anotei como você está agora", "I saved how you are right now"),
+      items: [
+        l(`Humor ${receipt.moodScore}/10`, `Mood ${receipt.moodScore}/10`),
+        l(`Energia ${receipt.energyScore}/10`, `Energy ${receipt.energyScore}/10`),
+        receipt.stateSummary ?? "",
+      ].filter(Boolean),
+      ctaLabel: l("Ajustar check-in", "Adjust check-in"),
+      ctaPath: "/checkin",
+    });
   }
 
   function handleNavigationAction(response: AuraCommandResponse) {
@@ -745,6 +738,7 @@ export function AuraChatPage() {
         setCommandPlan(completedPlan);
         if (completedExecution?.status === "applied") {
           await refreshData();
+          showAppliedCheckinReceipt(completedExecution);
           showSuccess(t("aura.commandPlan.success", "Ações aplicadas."));
         }
       }
@@ -779,6 +773,7 @@ export function AuraChatPage() {
         "create_checklist",
         "create_capture",
         "create_checkin",
+        "record_checkin",
         "create_habit",
         "create_calendar_event",
         "update_task",
@@ -1220,7 +1215,7 @@ export function AuraChatPage() {
           </div>
         )}
 
-        {commandPlan && (
+        {shouldRenderCommandPlan(commandPlan) && commandPlan && (
           <CommandPlanCard
             plan={commandPlan}
             applying={isApplyingPlan}

@@ -55,6 +55,7 @@ export type CheckinEntry = {
   recordedAt?: string;
   checkinSlot?: 'morning' | 'midday' | 'evening' | string;
   sono?: number;
+  sleepHours?: number;
   fisico?: number;
   social?: number;
   cyclePhase?: string;

@@ -7,6 +7,7 @@ export type AuraCommandOperation = {
     | "create_habit"
     | "create_capture"
     | "create_checkin"
+    | "record_checkin"
     | "update_item"
     | "complete_item"
     | "delete_item"

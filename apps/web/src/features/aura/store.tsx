@@ -18,6 +18,7 @@ import { supabase } from "../../lib/supabase";
 import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
 import { successHaptic, tapHaptic } from "../../utils/haptics";
 import { postNativeShellMessage } from "../../utils/native-shell";
+import { buildCheckinSubmission } from "./checkin-submission";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -542,29 +543,12 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (!session) return null;
 
         try {
-          const checkinResponse = await api.post('/checkins', {
+          const checkinResponse = await api.post('/checkins', buildCheckinSubmission({
             localDate: today,
             checkinSlot,
-            moodScore: entry.humor,
-            energyScore: entry.energia,
-            clarityScore: 5,
-            irritabilityScore: 5,
-            physicalScore: entry.fisico,
-            socialScore: entry.social,
-            sleepScore: entry.sono,
-            note: entry.note ?? state.journal,
-            factors: entry.factors,
-            emotions: entry.emotions,
-            isFlowing: entry.isFlowing,
-            flowDay: entry.flowDay,
-            flowIntensity: entry.flowIntensity,
-            symptomLevels: entry.symptomLevels,
-            medicationTakenToday: entry.medicationTakenToday,
-            focusScore: entry.focusScore,
-            hyperfocusOccurred: entry.hyperfocusOccurred,
-            mixedEpisodeNote: entry.mixedEpisodeNote,
-            dayType: entry.dayType,
-          }) as any;
+            entry,
+            fallbackNote: state.journal,
+          })) as any;
 
           await refreshData();
 

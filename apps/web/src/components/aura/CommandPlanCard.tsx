@@ -19,6 +19,7 @@ const TYPE_DESTINATION: Partial<Record<AuraCommandOperation["type"], string>> = 
   create_habit: "/habits",
   create_capture: "/captures",
   create_checkin: "/checkin",
+  record_checkin: "/checkin",
   handoff_to_journal: "/journal",
 };
 
@@ -40,6 +41,7 @@ function operationTitle(operation: AuraCommandOperation, t: TFunction) {
     create_habit: t("aura.commandPlan.habit", "Hábito"),
     create_capture: t("aura.commandPlan.capture", "Nota ou checklist"),
     create_checkin: t("aura.commandPlan.checkin", "Check-in"),
+    record_checkin: t("aura.commandPlan.checkin", "Check-in"),
     update_item: t("aura.commandPlan.update", "Alteração"),
     complete_item: t("aura.commandPlan.complete", "Conclusão"),
     delete_item: t("aura.commandPlan.delete", "Exclusão"),
@@ -163,7 +165,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
                 </div>
               )}
 
-              {operation.type === "create_checkin" && (
+              {(operation.type === "create_checkin" || operation.type === "record_checkin") && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6, marginTop: 8 }}>
                   {(["moodScore", "energyScore", "clarityScore", "irritabilityScore"] as const).map((key) => (
                     <label key={key} style={{ fontSize: 10, color: "var(--text-3)" }}>
