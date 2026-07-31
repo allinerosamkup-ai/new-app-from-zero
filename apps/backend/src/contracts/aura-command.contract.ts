@@ -48,6 +48,7 @@ export const AuraCommandActionSchema = z.enum([
   /** Registra humor, energia, foco e sono a partir do que a pessoa contou. */
   'log_checkin',
   'create_checkin',
+  'record_checkin',
   'create_capture',
   'create_calendar_event',
   'create_habit',

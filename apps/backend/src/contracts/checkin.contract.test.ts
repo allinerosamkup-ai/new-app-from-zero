@@ -22,6 +22,34 @@ const validCheckin = {
 
 {
   const result = CheckinCreateSchema.safeParse({
+    userId: validCheckin.userId,
+    localDate: validCheckin.localDate,
+    moodScore: 3,
+    energyScore: 3,
+    source: 'aura_text',
+    sourceMessageId: 'message-1',
+    idempotencyKey: 'session-1:message-1',
+    signalMetadata: {
+      mood: { provenance: 'inferred', confidence: 0.9, evidence: ['chateada'] },
+      energy: { provenance: 'inferred', confidence: 0.95, evidence: ['cansada'] },
+    },
+  });
+
+  assert.equal(result.success, true, 'sinais opcionais não podem ser inventados para validar o check-in');
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
+    userId: validCheckin.userId,
+    localDate: validCheckin.localDate,
+    energyScore: 3,
+  });
+
+  assert.equal(result.success, false, 'humor e energia continuam sendo os dois sinais centrais');
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
     ...validCheckin,
     checkinSlot: 'midday',
   });

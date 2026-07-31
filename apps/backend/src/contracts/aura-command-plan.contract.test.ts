@@ -49,7 +49,7 @@ function run() {
       },
       {
         id: 'checkin-1',
-        type: 'create_checkin',
+        type: 'record_checkin',
         status: 'proposed',
         selected: true,
         payload: {
@@ -59,6 +59,14 @@ function run() {
           clarityScore: null,
           irritabilityScore: 7,
           note: 'Cansada e irritada.',
+          source: 'aura_text',
+          sourceMessageId: 'message-1',
+          idempotencyKey: 'session-1:message-1',
+          rawText: 'Cansada e irritada.',
+          signalMetadata: {
+            mood: { provenance: 'inferred', confidence: 0.8, evidence: ['irritada'] },
+            energy: { provenance: 'inferred', confidence: 0.9, evidence: ['cansada'] },
+          },
         },
       },
     ],
@@ -66,6 +74,7 @@ function run() {
 
   assert.equal(mixedPlan.operations.length, 3);
   assert.equal(mixedPlan.executionPolicy, 'review_required');
+  assert.equal(mixedPlan.operations[2].type, 'record_checkin');
 
   assert.throws(() => AuraCommandOperationSchema.parse({
     id: 'unsafe',

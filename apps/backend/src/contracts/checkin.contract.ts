@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RiskSafetySchema } from './risk-safety.contract';
+import { CheckinSignalMetadataSchema, CheckinSourceSchema } from './checkin-draft.contract';
 
 export const CheckinSlotSchema = z.string().regex(/^(morning|midday|evening)(-[a-zA-Z0-9:_-]+)?$/);
 
@@ -11,12 +12,17 @@ export const CheckinCreateSchema = z.object({
   checkinSlot: CheckinSlotSchema.optional(),
   moodScore: z.number().min(1).max(10),
   energyScore: z.number().min(1).max(10),
-  clarityScore: z.number().min(1).max(10),
-  irritabilityScore: z.number().min(1).max(10),
-  physicalScore: z.number().min(1).max(10).optional(),
-  socialScore: z.number().min(1).max(10).optional(),
-  sleepScore: z.number().min(1).max(10).optional(),
-  note: z.string().optional(),
+  clarityScore: z.number().min(1).max(10).nullable().optional(),
+  irritabilityScore: z.number().min(1).max(10).nullable().optional(),
+  physicalScore: z.number().min(1).max(10).nullable().optional(),
+  socialScore: z.number().min(1).max(10).nullable().optional(),
+  sleepScore: z.number().min(1).max(10).nullable().optional(),
+  sleepHours: z.number().min(0).max(24).nullable().optional(),
+  source: CheckinSourceSchema.optional().default('screen'),
+  sourceMessageId: z.string().trim().min(1).max(200).nullable().optional(),
+  idempotencyKey: z.string().trim().min(8).max(300).nullable().optional(),
+  signalMetadata: CheckinSignalMetadataSchema.nullable().optional(),
+  note: z.string().trim().max(5_000).optional(),
   // Módulo de Saúde Feminina
   isFlowing: z.boolean().optional(),
   flowDay: z.number().int().min(1).max(7).optional(),

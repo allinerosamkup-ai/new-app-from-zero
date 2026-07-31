@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CheckinSignalMetadataSchema, CheckinSourceSchema } from './checkin-draft.contract';
 
 const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const TimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -99,6 +100,30 @@ const CheckinOperationSchema = z.object({
   }),
 });
 
+const RecordCheckinOperationSchema = z.object({
+  ...OperationBase,
+  type: z.literal('record_checkin'),
+  payload: z.object({
+    localDate: DateSchema,
+    moodScore: z.number().int().min(1).max(10),
+    energyScore: z.number().int().min(1).max(10),
+    clarityScore: z.number().int().min(1).max(10).nullable().default(null),
+    irritabilityScore: z.number().int().min(1).max(10).nullable().default(null),
+    physicalScore: z.number().int().min(1).max(10).nullable().default(null),
+    socialScore: z.number().int().min(1).max(10).nullable().default(null),
+    sleepScore: z.number().int().min(1).max(10).nullable().default(null),
+    sleepHours: z.number().min(0).max(24).nullable().default(null),
+    note: z.string().trim().max(5000).nullable().optional(),
+    emotions: z.array(z.string().trim().min(1).max(100)).max(3).default([]),
+    factors: z.array(z.string().trim().min(1).max(100)).max(12).default([]),
+    source: CheckinSourceSchema,
+    sourceMessageId: z.string().trim().min(1).max(200).nullable().default(null),
+    idempotencyKey: z.string().trim().min(8).max(300).nullable().default(null),
+    rawText: z.string().trim().min(1).max(30_000).nullable().default(null),
+    signalMetadata: CheckinSignalMetadataSchema,
+  }),
+});
+
 const ExistingItemOperationSchema = z.object({
   ...OperationBase,
   type: z.enum(['update_item', 'complete_item', 'delete_item']),
@@ -125,6 +150,7 @@ export const AuraCommandOperationSchema = z.union([
   HabitOperationSchema,
   CaptureOperationSchema,
   CheckinOperationSchema,
+  RecordCheckinOperationSchema,
   ExistingItemOperationSchema,
   JournalOperationSchema,
 ]);
