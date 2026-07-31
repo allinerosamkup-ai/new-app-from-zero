@@ -14,6 +14,7 @@ async function run() {
   const commandMessages: any[] = [];
   const commandPlans: any[] = [];
   const commandOperations: any[] = [];
+  const savedCheckins: any[] = [];
   const previousOpenAiKey = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
 
@@ -364,8 +365,36 @@ async function run() {
       next();
     },
     prisma: prisma as any,
+    checkinApplicationService: {
+      record: async (input: any) => {
+        const existing = savedCheckins.find((item) => item.idempotencyKey === input.idempotencyKey);
+        if (existing) return existing;
+        const receipt = {
+          ...input,
+          status: 'persisted' as const,
+          checkinId: `checkin-${savedCheckins.length + 1}`,
+          persistedAt: '2026-04-07T12:00:00.000Z',
+          stateLabel: 'Energia protegida',
+          stateSummary: 'Hoje pede carga menor.',
+          riskSafety: { route: 'standard', riskLevel: 'none', matchedSignals: [] },
+        };
+        savedCheckins.push(receipt);
+        return receipt;
+      },
+    },
     auraCommandService: {
       interpretCommand: async ({ message }: any) => {
+        if (/chateada e cansada/i.test(message)) {
+          return {
+            assistantMessage: 'Entendi como você está.',
+            intent: 'conversation',
+            action: 'respond',
+            payload: {},
+            needsConfirmation: false,
+            needsClarification: false,
+            clarifyingQuestion: null,
+          };
+        }
         if (/mova|desabafando|do not want you to create/i.test(message)) {
           return {
             assistantMessage: 'Pronto, movi a tarefa.',
@@ -464,6 +493,32 @@ async function run() {
     assert.match(streamBody, /assistant\.completed/);
     assert.match(streamBody, /handoff_to_journal/);
     assert.match(streamBody, /"status":"applied"/);
+
+    const naturalCheckinResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7c20',
+        message: 'Estou chateada e cansada.',
+        localDate: '2026-04-07',
+        mode: 'executor',
+        history: [],
+      }),
+    });
+    const naturalCheckinBody = await readResponseText(naturalCheckinResponse);
+    const naturalCompletedFrame = naturalCheckinBody
+      .split('\n')
+      .find((line) => line.startsWith('data: ') && line.includes('"plan"'));
+    assert.equal(naturalCheckinResponse.status, 200);
+    assert.ok(naturalCompletedFrame);
+    const naturalCompleted = JSON.parse(naturalCompletedFrame.slice(6));
+    assert.equal(naturalCompleted.response.action, 'record_checkin');
+    assert.equal(naturalCompleted.plan.operations.length, 1);
+    assert.equal(naturalCompleted.plan.operations[0].type, 'record_checkin');
+    assert.equal(naturalCompleted.execution.status, 'applied');
+    assert.equal(savedCheckins.length, 1);
+    assert.equal(savedCheckins[0].moodScore, 3);
+    assert.equal(savedCheckins[0].energyScore, 3);
 
     const longCommandResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',

@@ -68,7 +68,6 @@ function createPrismaFixture(executionPolicy = 'review_required') {
     },
   ];
   const timelineCreates: Array<Record<string, unknown>> = [];
-  const checkinUpserts: Array<Record<string, unknown>> = [];
   const objectiveCreates: Array<Record<string, unknown>> = [];
   const plan = {
     id: '20000000-0000-4000-8000-000000000001',
@@ -98,12 +97,6 @@ function createPrismaFixture(executionPolicy = 'review_required') {
         return { id: `timeline-${timelineCreates.length}`, ...data };
       },
     },
-    dailyCheckin: {
-      upsert: async (input: Record<string, unknown>) => {
-        checkinUpserts.push(input);
-        return { id: 'checkin-1' };
-      },
-    },
     objective: {
       create: async ({ data }: any) => {
         objectiveCreates.push(data);
@@ -113,7 +106,7 @@ function createPrismaFixture(executionPolicy = 'review_required') {
     $transaction: async (callback: (tx: any) => Promise<unknown>) => callback(prisma),
   };
 
-  return { prisma, plan, operations, timelineCreates, checkinUpserts, objectiveCreates };
+  return { prisma, plan, operations, timelineCreates, objectiveCreates };
 }
 
 async function main() {
@@ -152,41 +145,69 @@ async function main() {
   assert.equal(fixture.operations[0].status, 'applied');
   assert.equal(fixture.operations[1].status, 'applied');
 
-  const partialCheckin = createPrismaFixture('auto_apply');
-  partialCheckin.operations.push({
+  const canonicalCheckin = createPrismaFixture('auto_apply');
+  canonicalCheckin.operations.push({
     id: '10000000-0000-4000-8000-000000000003',
-    planId: partialCheckin.plan.id,
-    userId: partialCheckin.plan.userId,
+    planId: canonicalCheckin.plan.id,
+    userId: canonicalCheckin.plan.userId,
     clientOperationId: 'checkin-1',
-    type: 'create_checkin',
+    type: 'record_checkin',
     status: 'proposed',
     selected: true,
     payload: {
       localDate: '2026-07-28',
-      moodScore: 7,
-      energyScore: 6,
-      clarityScore: 8,
+      moodScore: 3,
+      energyScore: 3,
+      clarityScore: null,
       irritabilityScore: null,
-      note: null,
-      emotions: [],
+      physicalScore: null,
+      socialScore: null,
+      sleepScore: null,
+      sleepHours: null,
+      note: 'Estou chateada e cansada',
+      emotions: ['sad', 'tired'],
+      factors: [],
+      source: 'aura_text',
+      sourceMessageId: 'message-1',
+      idempotencyKey: 'session-message-checkin-0001',
+      rawText: 'Estou chateada e cansada',
+      signalMetadata: {
+        mood: { provenance: 'inferred', confidence: 0.92, evidence: ['chateada'] },
+        energy: { provenance: 'inferred', confidence: 0.95, evidence: ['cansada'] },
+      },
     },
     result: null,
     error: null,
     idempotencyKey: null,
     appliedAt: null,
   });
-  await AuraCommandExecutorService.apply({
-    prisma: partialCheckin.prisma,
+  const recorded: Array<Record<string, unknown>> = [];
+  const canonicalResult = await AuraCommandExecutorService.apply({
+    prisma: canonicalCheckin.prisma,
     calendarGateway,
-    userId: partialCheckin.plan.userId,
-    planId: partialCheckin.plan.id,
+    userId: canonicalCheckin.plan.userId,
+    planId: canonicalCheckin.plan.id,
     operationIds: ['checkin-1'],
     idempotencyKey: 'command-checkin-0001',
     now: new Date('2026-07-28T15:00:00.000Z'),
+    recordCheckin: async (input) => {
+      recorded.push(input);
+      return {
+        status: 'persisted',
+        checkinId: 'checkin-1',
+        persistedAt: '2026-07-28T15:00:00.000Z',
+        stateLabel: 'Energia protegida',
+        stateSummary: 'Hoje pede carga menor.',
+        riskSafety: { route: 'standard' },
+      };
+    },
   });
-  const partialUpsert = partialCheckin.checkinUpserts[0] as any;
-  assert.equal(partialUpsert.create.irritabilityScore, null);
-  assert.equal('irritabilityScore' in partialUpsert.update, false, 'sinal omitido não apaga o valor anterior');
+  assert.equal(canonicalResult.status, 'applied');
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].moodScore, 3);
+  assert.equal(recorded[0].energyScore, 3);
+  assert.equal(recorded[0].clarityScore, null);
+  assert.equal(canonicalResult.operations[0]?.result?.checkinId, 'checkin-1');
 
   const explicitGoal = createPrismaFixture('auto_apply');
   explicitGoal.operations.push({

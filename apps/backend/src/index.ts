@@ -149,6 +149,7 @@ const MUTATING_AURA_ACTIONS = new Set<AuraCommandResponse['action']>([
   'start_task',
   'create_capture',
   'create_checkin',
+  'record_checkin',
   'create_habit',
   'create_calendar_event',
 ]);
@@ -361,6 +362,10 @@ export function enforceAuraCaptureGate(
       case 'create_checkin':
         return validDate(payload.localDate ?? payload.date)
           && ['moodScore', 'energyScore', 'clarityScore', 'irritabilityScore'].some((key) => typeof payload[key] === 'number');
+      case 'record_checkin':
+        return validDate(payload.localDate ?? payload.date)
+          && typeof payload.moodScore === 'number'
+          && typeof payload.energyScore === 'number';
       case 'create_habit':
         return hasText(titleFrom(payload));
       case 'create_calendar_event':
@@ -459,6 +464,7 @@ type AppDependencies = {
   memoryService?: Pick<MemoryService, 'store' | 'retrieve' | 'formatForPrompt' | 'deleteAll'>;
   auraMemoryIngestionService?: Pick<AuraMemoryIngestionService, 'ingest'>;
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
+  checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
   routineBuilderService?: Pick<RoutineBuilderService,
@@ -1911,7 +1917,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
   const contextGroundingService = new ContextGroundingService(prisma);
   const routineBuilderService = dependencies.routineBuilderService ?? new RoutineBuilderService(prisma);
-  const checkinApplicationService = new CheckinApplicationService({
+  const checkinApplicationService = dependencies.checkinApplicationService ?? new CheckinApplicationService({
     repository: new PrismaCheckinApplicationRepository(prisma),
     evaluate: async (data) => {
       const requestContext = data.applicationContext as any;
@@ -3300,41 +3306,22 @@ export function createApp(dependencies: AppDependencies = {}) {
         }
       }
 
-      const normalizeCommandResponse = (response: AuraCommandResponse): AuraCommandResponse => {
-        if (response.action !== 'log_checkin') return response;
-        const payload = response.payload as Record<string, unknown>;
-        return {
-          ...response,
-          intent: 'checkin',
-          action: 'create_checkin',
-          payload: {
-            ...payload,
-            localDate: typeof payload.localDate === 'string' ? payload.localDate : data.localDate,
-            clarityScore: typeof payload.clarityScore === 'number' ? payload.clarityScore : payload.focusScore,
-            note: typeof payload.note === 'string' ? payload.note : data.message.slice(0, 500),
-          },
-        };
-      };
-      const normalizedPrimary = normalizeCommandResponse({
+      const commandResponse: AuraCommandResponse = {
         ...gatedCommandResponse,
         payload: responsePayload,
-      });
-      const normalizedActions = (gatedCommandResponse.actions ?? []).map((step) => normalizeCommandResponse({
+      };
+      const secondaryResponses = (gatedCommandResponse.actions ?? []).map((step): AuraCommandResponse => ({
         ...gatedCommandResponse,
         action: step.action,
         payload: step.payload,
         actions: undefined,
       }));
-      const commandResponse: AuraCommandResponse = {
-        ...normalizedPrimary,
-        actions: normalizedActions.map((step) => ({ action: step.action, payload: step.payload })),
-      };
 
       const now = new Date();
       const localDate = data.localDate ?? getSaoPauloDateContext(now).dateKey;
       const currentTime = data.currentTime ?? formatTimeInZone(now, commandSession.timezone);
       const planResponses = await Promise.all(
-        [commandResponse, ...normalizedActions].map(async (response) => response.action === 'complete_items'
+        [commandResponse, ...secondaryResponses].map(async (response) => response.action === 'complete_items'
           ? {
             ...response,
             payload: {
@@ -3427,6 +3414,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           operationIds: commandPlan.operations.filter((operation) => operation.selected).map((operation) => operation.id),
           idempotencyKey: `${data.sessionId}:${sourceMessage.id}`,
           now,
+          recordCheckin: (input, context) => checkinApplicationService.record(input, context),
         })
         : null;
       const freshPlan = execution
@@ -3529,6 +3517,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         planId: req.params.planId,
         operationIds: data.operationIds,
         idempotencyKey: data.idempotencyKey,
+        recordCheckin: (input, context) => checkinApplicationService.record(input, context),
       });
       const plan = await prisma.auraCommandPlan.findFirst({
         where: { id: req.params.planId, userId: (req as AuthRequest).userId },

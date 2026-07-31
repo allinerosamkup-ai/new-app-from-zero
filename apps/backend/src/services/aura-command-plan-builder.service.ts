@@ -228,27 +228,45 @@ export class AuraCommandPlanBuilderService {
         });
         break;
       }
-      case 'create_checkin': {
-        const coreScores = ['moodScore', 'energyScore', 'clarityScore'] as const;
+      case 'record_checkin': {
+        const coreScores = ['moodScore', 'energyScore'] as const;
         coreScores.forEach((key) => {
           if (typeof payload[key] !== 'number') missingFields.push(key);
         });
+        if (missingFields.length > 0) break;
         operations.push({
           id: makeId(),
-          type: 'create_checkin',
+          type: 'record_checkin',
           status: 'proposed',
           selected: true,
           payload: {
             localDate: text(payload.localDate) ?? text(payload.date) ?? input.localDate,
-            moodScore: typeof payload.moodScore === 'number' ? payload.moodScore : null,
-            energyScore: typeof payload.energyScore === 'number' ? payload.energyScore : null,
+            moodScore: payload.moodScore as number,
+            energyScore: payload.energyScore as number,
             clarityScore: typeof payload.clarityScore === 'number' ? payload.clarityScore : null,
             irritabilityScore: typeof payload.irritabilityScore === 'number' ? payload.irritabilityScore : null,
+            physicalScore: typeof payload.physicalScore === 'number' ? payload.physicalScore : null,
+            socialScore: typeof payload.socialScore === 'number' ? payload.socialScore : null,
+            sleepScore: typeof payload.sleepScore === 'number' ? payload.sleepScore : null,
+            sleepHours: typeof payload.sleepHours === 'number' ? payload.sleepHours : null,
             note: text(payload.note),
             emotions: itemTitles(payload.emotions).slice(0, 3),
+            factors: itemTitles(payload.factors).slice(0, 12),
+            source: payload.source === 'aura_voice' ? 'aura_voice' : 'aura_text',
+            sourceMessageId: text(payload.sourceMessageId) ?? input.sourceMessageId,
+            idempotencyKey: text(payload.idempotencyKey) ?? `${input.sessionId}:${input.sourceMessageId}`,
+            rawText: text(payload.rawText) ?? text(input.userMessage),
+            signalMetadata: record(payload.signalMetadata),
           },
         });
         break;
+      }
+      case 'create_checkin': {
+        const legacyResponse = {
+          ...input,
+          response: { ...input.response, action: 'record_checkin' as const },
+        };
+        return this.build(legacyResponse);
       }
       case 'handoff_to_journal':
         operations.push({

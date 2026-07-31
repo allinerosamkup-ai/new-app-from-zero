@@ -67,8 +67,28 @@ function run() {
     response: {
       assistantMessage: 'Registrei os sinais que você informou.',
       intent: 'checkin',
-      action: 'create_checkin',
-      payload: { moodScore: 7, energyScore: 6, clarityScore: 8, irritabilityScore: null },
+      action: 'record_checkin',
+      payload: {
+        moodScore: 3,
+        energyScore: 3,
+        clarityScore: null,
+        irritabilityScore: null,
+        physicalScore: null,
+        socialScore: null,
+        sleepScore: null,
+        sleepHours: null,
+        note: 'Estou chateada e cansada',
+        emotions: ['sad', 'tired'],
+        factors: [],
+        source: 'aura_text',
+        sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+        idempotencyKey: 'session-message-checkin-0001',
+        rawText: 'Estou chateada e cansada',
+        signalMetadata: {
+          mood: { provenance: 'inferred', confidence: 0.92, evidence: ['chateada'] },
+          energy: { provenance: 'inferred', confidence: 0.95, evidence: ['cansada'] },
+        },
+      },
       needsConfirmation: false,
       needsClarification: false,
       clarifyingQuestion: null,
@@ -83,6 +103,11 @@ function run() {
   });
   assert.deepEqual(checkin.missingFields, []);
   assert.equal(checkin.executionPolicy, 'auto_apply');
+  assert.equal(checkin.operations[0]?.type, 'record_checkin');
+  if (checkin.operations[0]?.type === 'record_checkin') {
+    assert.equal(checkin.operations[0].payload.clarityScore, null);
+    assert.equal(checkin.operations[0].payload.source, 'aura_text');
+  }
 
   const adaptiveTask = AuraCommandPlanBuilderService.build({
     response: {

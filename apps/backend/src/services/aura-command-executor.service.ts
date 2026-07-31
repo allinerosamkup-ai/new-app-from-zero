@@ -2,6 +2,7 @@ import type { PrismaClient } from '@app/database';
 import { z } from 'zod';
 
 import { AuraCommandOperationSchema, type AuraCommandOperation } from '../contracts/aura-command-plan.contract';
+import type { CheckinCreateInput } from '../contracts/checkin.contract';
 import { deriveCheckinSlot } from '../contracts/checkin-slot';
 import { normalizeTimelineCategory, PlannerService } from './planner.service';
 
@@ -47,6 +48,10 @@ type ApplyInput = {
   operationIds: string[];
   idempotencyKey: string;
   now?: Date;
+  recordCheckin?: (
+    input: CheckinCreateInput,
+    context?: { now?: Date; requestContext?: Record<string, unknown> },
+  ) => Promise<Record<string, unknown>>;
 };
 
 type AppliedOperation = {
@@ -224,6 +229,8 @@ async function executeInternalOperation(
   now: Date,
 ): Promise<Record<string, unknown>> {
   switch (operation.type) {
+    case 'record_checkin':
+      throw new Error('O check-in precisa passar pelo gravador canônico da Airia.');
     case 'create_planner_task':
       return createTimelineTask(tx, userId, databaseOperationId, operation);
     case 'create_capture': {
@@ -586,7 +593,23 @@ export class AuraCommandExecutorService {
         let result: Record<string, unknown>;
         let statusStoredAtomically = false;
 
-        if (operation.type === 'create_calendar_event') {
+        if (operation.type === 'record_checkin') {
+          if (!input.recordCheckin) {
+            throw new Error('O gravador canônico de check-in não está disponível.');
+          }
+          result = await input.recordCheckin({
+            ...operation.payload,
+            userId: input.userId,
+            idempotencyKey: operation.payload.idempotencyKey ?? operationKey,
+            note: operation.payload.note ?? undefined,
+          }, {
+            now,
+            requestContext: {
+              sourceMessageId: operation.payload.sourceMessageId,
+              rawText: operation.payload.rawText,
+            },
+          });
+        } else if (operation.type === 'create_calendar_event') {
           const event = await input.calendarGateway.createOrGetEvent({
             prisma: input.prisma,
             userId: input.userId,
