@@ -198,11 +198,11 @@ export class CheckinService {
     checkinSlot?: string;
     moodScore: number;
     energyScore: number;
-    clarityScore: number;
-    irritabilityScore: number;
-    physicalScore?: number;
-    socialScore?: number;
-    sleepScore?: number;
+    clarityScore?: number | null;
+    irritabilityScore?: number | null;
+    physicalScore?: number | null;
+    socialScore?: number | null;
+    sleepScore?: number | null;
     note?: string;
     userName?: string;
     profileSummary?: string | null;

@@ -14,9 +14,9 @@ import { KnowledgeGraphBackfillService } from './services/knowledge-graph-backfi
 import { PlannerService, buildPostponeAdaptabilityUpdate, resolveTimelineAdaptability, resolveTimelineAdaptabilityProvenance, type TimelineBlockInput } from './services/planner.service';
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
+import { CheckinApplicationService, PrismaCheckinApplicationRepository } from './services/checkin-application.service';
 import { GCalService } from './services/gcal.service';
 import { CheckinCreateSchema } from './contracts/checkin.contract';
-import { deriveCheckinSlot } from './contracts/checkin-slot';
 import { PlannerSyncSchema, PlannerAISuggestionRequestSchema } from './contracts/planner.contract';
 import { PlannerAIService } from './services/planner-ai.service';
 import { LearningContextService } from './services/learning-context.service';
@@ -1911,6 +1911,182 @@ export function createApp(dependencies: AppDependencies = {}) {
   const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
   const contextGroundingService = new ContextGroundingService(prisma);
   const routineBuilderService = dependencies.routineBuilderService ?? new RoutineBuilderService(prisma);
+  const checkinApplicationService = new CheckinApplicationService({
+    repository: new PrismaCheckinApplicationRepository(prisma),
+    evaluate: async (data) => {
+      const requestContext = data.applicationContext as any;
+      const checkinRagQuery = [
+        data.note,
+        data.emotions?.join(' '),
+        data.factors?.join(' '),
+        `humor ${data.moodScore} energia ${data.energyScore}`,
+      ].filter(Boolean).join(' ');
+      const riskSafety = assessRiskSafety({
+        text: [data.note, data.emotions?.join(' '), data.factors?.join(' ')].filter(Boolean).join(' '),
+        moodScore: data.moodScore,
+        energyScore: data.energyScore,
+        sleepScore: data.sleepScore ?? undefined,
+        irritabilityScore: data.irritabilityScore ?? undefined,
+      });
+      const [runtimeContext, plannerContext, completionContext, recentSuggestionItems, memories] = await Promise.all([
+        resolveAiRuntimeContext(prisma, data.userId, {}),
+        buildTodayPlannerContext(prisma, data.userId),
+        buildTodayCompletionContext(prisma, data.userId),
+        SuggestionMemoryService.getRecent(prisma, data.userId),
+        memoryService.retrieve(data.userId, checkinRagQuery || 'check-in de hoje e padrões anteriores', 3).catch(() => []),
+      ]);
+      const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
+      const ragContext = memoryService.formatForPrompt(memories);
+      const groundingContext = await contextGroundingService.buildForSuggest({
+        userId: data.userId,
+        type: 'checkin',
+        context: {
+          localDate: data.localDate,
+          adhdProfile: Array.isArray(runtimeContext.priorDiagnoses) && runtimeContext.priorDiagnoses.includes('adhd'),
+          hyperfocusOccurred: data.hyperfocusOccurred === true,
+        },
+        recentSuggestionItems,
+        ragContext,
+      });
+      const groundingText = typeof groundingContext.groundingContext === 'string'
+        ? groundingContext.groundingContext
+        : '';
+      const adaptiveContext = extractAdaptiveFromRequest(requestContext);
+      const reasoning = ReasoningContextService.buildForPrompt({
+        dailyContext: groundingContext.grounding as any,
+        surface: 'checkin',
+        requestContext: {
+          ...adaptiveContext,
+          localDate: data.localDate,
+          moodScore: data.moodScore,
+          energyScore: data.energyScore,
+          sleepScore: data.sleepScore,
+          currentHour: requestContext.currentHour,
+          currentMinute: requestContext.currentMinute,
+        },
+        currentMessage: data.note ?? null,
+        ragContext,
+        decisionBrain: (groundingContext as any).decisionBrain ?? null,
+      });
+      const actionPlan = AiriaOperationalReasoningService.build({
+        dailyContext: groundingContext.grounding as any,
+        surface: 'checkin',
+        requestContext: {
+          ...adaptiveContext,
+          localDate: data.localDate,
+          moodScore: data.moodScore,
+          energyScore: data.energyScore,
+          sleepScore: data.sleepScore,
+          currentHour: requestContext.currentHour,
+          currentMinute: requestContext.currentMinute,
+        },
+        currentMessage: data.note ?? null,
+        ragContext,
+        decisionBrain: (groundingContext as any).decisionBrain ?? null,
+        trace: reasoning.trace,
+      });
+      const cognitive = await AiriaCognitiveInterpreterService.interpret({
+        surface: 'checkin',
+        dailyContext: groundingContext.grounding as any,
+        requestContext: {
+          ...adaptiveContext,
+          localDate: data.localDate,
+          moodScore: data.moodScore,
+          energyScore: data.energyScore,
+          sleepScore: data.sleepScore,
+          currentHour: requestContext.currentHour,
+          currentMinute: requestContext.currentMinute,
+        },
+        currentMessage: data.note ?? null,
+        ragContext,
+        moodCycleContext: [runtimeContext.moodCycleContext, groundingText].filter(Boolean).join('\n'),
+        plannerContext: [plannerContext, groundingText].filter(Boolean).join('\n'),
+        activeGoalsContext: runtimeContext.activeGoalsContext,
+        recentSuggestionMemory,
+        actionPlan,
+      });
+      const aiState = await CheckinService.evaluateDayState({
+        checkinSlot: data.checkinSlot,
+        moodScore: data.moodScore,
+        energyScore: data.energyScore,
+        clarityScore: data.clarityScore,
+        irritabilityScore: data.irritabilityScore,
+        physicalScore: data.physicalScore,
+        socialScore: data.socialScore,
+        sleepScore: data.sleepScore,
+        note: data.note,
+        userName: runtimeContext.userName,
+        profileSummary: runtimeContext.userProfileSummary,
+        moodCycleContext: [runtimeContext.moodCycleContext, groundingText].filter(Boolean).join('\n'),
+        contextualMemory: ragContext,
+        activeGoalsContext: runtimeContext.activeGoalsContext,
+        recentSuggestionMemory,
+        reasoningTraceContext: [
+          riskSafetyPromptPolicy(riskSafety),
+          reasoning.context,
+          AiriaOperationalReasoningService.formatForPrompt(actionPlan),
+          AiriaCognitiveInterpreterService.formatForPrompt(cognitive),
+        ].join('\n\n'),
+        airiaActionPlan: actionPlan,
+        operationalRecommendation: AiriaOperationalReasoningService.visibleSuggestion(actionPlan),
+        completionContext: completionContext.text,
+        avoidRecommendationTitles: uniqueByKey([
+          ...completionContext.titles,
+          ...((groundingContext.blockedActionTitles as string[] | undefined) ?? []),
+          ...((groundingContext.completedTaskTitles as string[] | undefined) ?? []),
+          ...((groundingContext.completedHabitTitles as string[] | undefined) ?? []),
+          ...((groundingContext.completedGoalTitles as string[] | undefined) ?? []),
+          ...((groundingContext.completedSubgoalTitles as string[] | undefined) ?? []),
+        ]),
+        emotions: data.emotions,
+        factors: data.factors,
+        plannerContext: [plannerContext, groundingText].filter(Boolean).join('\n'),
+        priorDiagnoses: runtimeContext.priorDiagnoses,
+        ...adaptiveContext,
+      });
+      return {
+        stateLabel: aiState.stateLabel,
+        stateLabelType: aiState.stateLabelType,
+        stateSummary: aiState.analysis,
+        aiState: { ...aiState, emotions: data.emotions ?? [], factors: data.factors ?? [] } as any,
+        riskSafety: riskSafety as any,
+      };
+    },
+    afterPersist: async ({ data, checkin, evaluation, applicationContext }) => {
+      if (data.note && data.note.trim().length >= 10) {
+        void memoryService.store({
+          userId: data.userId,
+          contentType: 'checkin_note',
+          contentId: checkin.id,
+          content: `${data.localDate}: ${data.note.trim()}`,
+          metadata: {
+            moodScore: data.moodScore,
+            energyScore: data.energyScore,
+            date: data.localDate,
+            stateLabel: evaluation.stateLabel,
+            riskLevel: evaluation.riskSafety.riskLevel,
+          },
+        }).catch(() => {});
+      }
+      const recommendations = Array.isArray(evaluation.aiState.recommendations)
+        ? evaluation.aiState.recommendations.map(String)
+        : [];
+      void SuggestionMemoryService.append(prisma, data.userId, 'checkin', recommendations).catch(() => {});
+      void AiBackgroundService.scheduleJob(data.userId, 'rag-indexing', '1h').catch(() => {});
+      void AiBackgroundService.scheduleJob(data.userId, 'profile-update', '6h').catch(() => {});
+      if (data.note && data.note.trim().length >= 12) {
+        setImmediate(() => {
+          void KnowledgeGraphService.extractFromMessage(data.userId, data.note!.trim(), {
+            source: 'checkin',
+            canonicalMemoryService,
+            locale: typeof applicationContext.locale === 'string' ? applicationContext.locale : 'pt-BR',
+            sourceId: checkin.id,
+            observedAt: checkin.recordedAt ?? new Date(),
+          }).catch((err) => console.warn('[checkin/kg] extração falhou:', err));
+        });
+      }
+    },
+  });
 
   const matchesAllowedHost = (origin: string, allowed: string) => {
     try {
@@ -2319,284 +2495,20 @@ export function createApp(dependencies: AppDependencies = {}) {
    * Salva o check-in diário e dispara a IA para avaliação de estado.
    */
   app.post('/api/checkins', async (req: Request, res: Response) => {
-  try {
-    const data = CheckinCreateSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
-    const date = parseLocalDateInput(data.localDate);
-    const recordedAt = new Date();
-    const checkinSlot = data.checkinSlot ?? deriveCheckinSlot(recordedAt);
-
-    // 1. Salvar Check-in Inicial
-    // Mapear campos de ciclo menstrual para colunas do schema
-    const menstrualPhase = data.isFlowing
-      ? (data.flowIntensity ?? 'menstruada')
-      : (data.isFlowing === false ? null : undefined);
-    const cycleDay = data.isFlowing ? (data.flowDay ?? null) : null;
-    const physicalSymptoms: string[] = [];
-    if (data.isFlowing && data.symptomLevels) {
-      if (data.symptomLevels.colica) physicalSymptoms.push(`colica:${data.symptomLevels.colica}`);
-      if (data.symptomLevels.dorCabeca) physicalSymptoms.push(`dorCabeca:${data.symptomLevels.dorCabeca}`);
-    }
-
-    const checkin = await prisma.dailyCheckin.upsert({
-      where: {
-        userId_localDate_checkinSlot: {
-          userId: data.userId,
-          localDate: date,
-          checkinSlot,
-        }
-      },
-      update: {
-        recordedAt,
-        moodScore: data.moodScore,
-        energyScore: data.energyScore,
-        clarityScore: data.clarityScore,
-        irritabilityScore: data.irritabilityScore,
-        physicalScore: data.physicalScore || 3,
-        socialScore: data.socialScore || 3,
-        sleepScore: data.sleepScore,
-        note: data.note,
-        factors: data.factors ?? [],
-        emotions: data.emotions ?? [],
-        ...(menstrualPhase !== undefined && { menstrualPhase }),
-        ...(cycleDay !== undefined && { cycleDay }),
-        ...(physicalSymptoms.length > 0 && { physicalSymptoms }),
-        isFlowing: data.isFlowing,
-        flowDay: data.flowDay,
-        flowIntensity: data.flowIntensity,
-        symptomColica: data.symptomLevels?.colica,
-        symptomDorCabeca: data.symptomLevels?.dorCabeca,
-        medicationTakenToday: data.medicationTakenToday ?? null,
-        focusScore: data.focusScore ?? null,
-        hyperfocusOccurred: data.hyperfocusOccurred ?? null,
-        mixedEpisodeNote: data.mixedEpisodeNote ?? null,
-        dayType: data.dayType ?? null,
-      },
-      create: {
-        userId: data.userId,
-        localDate: date,
-        recordedAt,
-        checkinSlot,
-        moodScore: data.moodScore,
-        energyScore: data.energyScore,
-        clarityScore: data.clarityScore,
-        irritabilityScore: data.irritabilityScore,
-        physicalScore: data.physicalScore || 3,
-        socialScore: data.socialScore || 3,
-        sleepScore: data.sleepScore,
-        note: data.note,
-        factors: data.factors ?? [],
-        emotions: data.emotions ?? [],
-        menstrualPhase: menstrualPhase ?? null,
-        cycleDay: cycleDay ?? null,
-        physicalSymptoms,
-        isFlowing: data.isFlowing,
-        flowDay: data.flowDay,
-        flowIntensity: data.flowIntensity,
-        symptomColica: data.symptomLevels?.colica,
-        symptomDorCabeca: data.symptomLevels?.dorCabeca,
-        medicationTakenToday: data.medicationTakenToday ?? null,
-        focusScore: data.focusScore ?? null,
-        hyperfocusOccurred: data.hyperfocusOccurred ?? null,
-        mixedEpisodeNote: data.mixedEpisodeNote ?? null,
-        dayType: data.dayType ?? null,
-      },
-    });
-
-    // 2. Chamar IA para Avaliar Estado (com contexto completo do dia)
-    const checkinRagQuery = [
-      data.note,
-      data.emotions?.join(' '),
-      data.factors?.join(' '),
-      `humor ${data.moodScore} energia ${data.energyScore}`,
-    ].filter(Boolean).join(' ');
-    const riskSafety = assessRiskSafety({
-      text: [data.note, data.emotions?.join(' '), data.factors?.join(' ')].filter(Boolean).join(' '),
-      moodScore: data.moodScore,
-      energyScore: data.energyScore,
-      sleepScore: data.sleepScore,
-      irritabilityScore: data.irritabilityScore,
-    });
-    const [checkinRuntimeContext, checkinPlannerContext, checkinCompletionContext, recentSuggestionItems, checkinMemories] = await Promise.all([
-      resolveAiRuntimeContext(prisma, data.userId, {}),
-      buildTodayPlannerContext(prisma, data.userId),
-      buildTodayCompletionContext(prisma, data.userId),
-      SuggestionMemoryService.getRecent(prisma, data.userId),
-      memoryService.retrieve(data.userId, checkinRagQuery || 'check-in de hoje e padrões anteriores', 3).catch(() => []),
-    ]);
-    const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
-    const checkinRagContext = memoryService.formatForPrompt(checkinMemories);
-    const checkinGroundingContext = await contextGroundingService.buildForSuggest({
-      userId: data.userId,
-      type: 'checkin',
-      context: {
-        localDate: data.localDate,
-        adhdProfile: Array.isArray(checkinRuntimeContext.priorDiagnoses) && checkinRuntimeContext.priorDiagnoses.includes('adhd'),
-        hyperfocusOccurred: (data as any).hyperfocusOccurred === true,
-      },
-      recentSuggestionItems,
-      ragContext: checkinRagContext,
-    });
-    const checkinGroundingText = typeof checkinGroundingContext.groundingContext === 'string'
-      ? checkinGroundingContext.groundingContext
-      : '';
-    const checkinReasoning = ReasoningContextService.buildForPrompt({
-      dailyContext: checkinGroundingContext.grounding as any,
-      surface: 'checkin',
-      requestContext: {
-        ...extractAdaptiveFromRequest(req.body),
-        localDate: data.localDate,
-        moodScore: data.moodScore,
-        energyScore: data.energyScore,
-        sleepScore: data.sleepScore,
-        currentHour: (req.body as any)?.currentHour,
-        currentMinute: (req.body as any)?.currentMinute,
-      },
-      currentMessage: data.note ?? null,
-      ragContext: checkinRagContext,
-      decisionBrain: (checkinGroundingContext as any).decisionBrain ?? null,
-    });
-    const checkinActionPlan = AiriaOperationalReasoningService.build({
-      dailyContext: checkinGroundingContext.grounding as any,
-      surface: 'checkin',
-      requestContext: {
-        ...extractAdaptiveFromRequest(req.body),
-        localDate: data.localDate,
-        moodScore: data.moodScore,
-        energyScore: data.energyScore,
-        sleepScore: data.sleepScore,
-        currentHour: (req.body as any)?.currentHour,
-        currentMinute: (req.body as any)?.currentMinute,
-      },
-      currentMessage: data.note ?? null,
-      ragContext: checkinRagContext,
-      decisionBrain: (checkinGroundingContext as any).decisionBrain ?? null,
-      trace: checkinReasoning.trace,
-    });
-    const checkinCognitive = await AiriaCognitiveInterpreterService.interpret({
-      surface: 'checkin',
-      dailyContext: checkinGroundingContext.grounding as any,
-      requestContext: {
-        ...extractAdaptiveFromRequest(req.body),
-        localDate: data.localDate,
-        moodScore: data.moodScore,
-        energyScore: data.energyScore,
-        sleepScore: data.sleepScore,
-        currentHour: (req.body as any)?.currentHour,
-        currentMinute: (req.body as any)?.currentMinute,
-      },
-      currentMessage: data.note ?? null,
-      ragContext: checkinRagContext,
-      moodCycleContext: [checkinRuntimeContext.moodCycleContext, checkinGroundingText].filter(Boolean).join('\n'),
-      plannerContext: [checkinPlannerContext, checkinGroundingText].filter(Boolean).join('\n'),
-      activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
-      recentSuggestionMemory,
-      actionPlan: checkinActionPlan,
-    });
-    const aiState = await CheckinService.evaluateDayState({
-      checkinSlot,
-      moodScore: data.moodScore,
-      energyScore: data.energyScore,
-      clarityScore: data.clarityScore,
-      irritabilityScore: data.irritabilityScore,
-      physicalScore: data.physicalScore,
-      socialScore: data.socialScore,
-      sleepScore: data.sleepScore,
-      note: data.note,
-      userName: checkinRuntimeContext.userName,
-      profileSummary: checkinRuntimeContext.userProfileSummary,
-      moodCycleContext: [checkinRuntimeContext.moodCycleContext, checkinGroundingText].filter(Boolean).join('\n'),
-      contextualMemory: checkinRagContext,
-      activeGoalsContext: checkinRuntimeContext.activeGoalsContext,
-      recentSuggestionMemory,
-      reasoningTraceContext: [
-        riskSafetyPromptPolicy(riskSafety),
-        checkinReasoning.context,
-        AiriaOperationalReasoningService.formatForPrompt(checkinActionPlan),
-        AiriaCognitiveInterpreterService.formatForPrompt(checkinCognitive),
-      ].join('\n\n'),
-      airiaActionPlan: checkinActionPlan,
-      operationalRecommendation: AiriaOperationalReasoningService.visibleSuggestion(checkinActionPlan),
-      completionContext: checkinCompletionContext.text,
-      avoidRecommendationTitles: uniqueByKey([
-        ...checkinCompletionContext.titles,
-        ...((checkinGroundingContext.blockedActionTitles as string[] | undefined) ?? []),
-        ...((checkinGroundingContext.completedTaskTitles as string[] | undefined) ?? []),
-        ...((checkinGroundingContext.completedHabitTitles as string[] | undefined) ?? []),
-        ...((checkinGroundingContext.completedGoalTitles as string[] | undefined) ?? []),
-        ...((checkinGroundingContext.completedSubgoalTitles as string[] | undefined) ?? []),
-      ]),
-      emotions: (data as any).emotions,
-      factors: data.factors,
-      plannerContext: [checkinPlannerContext, checkinGroundingText].filter(Boolean).join('\n'),
-      priorDiagnoses: checkinRuntimeContext.priorDiagnoses,
-      ...extractAdaptiveFromRequest(req.body),
-    });
-
-    // 3. Atualizar com Resultado da IA
-    const updatedCheckin = await prisma.dailyCheckin.update({
-      where: { id: checkin.id },
-      data: {
-        stateLabel: aiState.stateLabel,
-        stateLabelType: aiState.stateLabelType,
-        stateSummary: aiState.analysis, // Mapeado para o novo campo analysis da IA
-        aiState: {
-          ...(aiState as any),
-          riskSafety,
-          emotions: data.emotions ?? [],
-          factors: data.factors ?? [],
-        } as any,
-      }
-    });
-
-
-    // 4. Vetorizar nota do check-in (assíncrono — não bloqueia resposta)
-    if (data.note && data.note.trim().length >= 10) {
-      memoryService.store({
-        userId: data.userId,
-        contentType: 'checkin_note',
-        contentId: checkin.id,
-        content: `${data.localDate}: ${data.note.trim()}`,
-        metadata: {
-          moodScore: data.moodScore,
-          energyScore: data.energyScore,
-          date: data.localDate,
-          stateLabel: aiState.stateLabel,
-          riskLevel: riskSafety.riskLevel,
-        },
-      }).catch(() => {}); // fire-and-forget
-    }
-
-    SuggestionMemoryService.append(prisma, data.userId, 'checkin', aiState.recommendations).catch(() => {});
-
-    // 5. Agendar jobs de background para manter IA atualizada
-    AiBackgroundService.scheduleJob(data.userId, 'rag-indexing', '1h').catch(() => {});
-    AiBackgroundService.scheduleJob(data.userId, 'profile-update', '6h').catch(() => {});
-
-    // 6. Trigger automático de extração no Knowledge Graph quando há nota textual.
-    //    Roda em background — não atrasa response.
-    if (data.note && data.note.trim().length >= 12) {
-      setImmediate(() => {
-        void KnowledgeGraphService.extractFromMessage(data.userId, data.note!.trim(), {
-          source: 'checkin',
-          canonicalMemoryService,
-          locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
-          sourceId: checkin.id,
-          observedAt: checkin.recordedAt ?? new Date(),
-        }).catch((err) => console.warn('[checkin/kg] extração falhou:', err));
+    try {
+      const data = CheckinCreateSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
+      const result = await checkinApplicationService.record(data, {
+        requestContext: req.body as Record<string, unknown>,
       });
+      return res.json(result);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[checkins/create] Error:', error);
+      return res.status(500).json({ error: 'Failed to process check-in' });
     }
-
-    return res.json({ ...updatedCheckin, riskSafety });
-
-  } catch (error: any) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation failed', details: error.errors });
-    }
-    console.error('[checkins/create] Error:', error);
-    return res.status(500).json({ error: 'Failed to process check-in' });
-  }
   });
-
   /**
    * GET /api/journal/sessions
    * Lista sessões de diário do usuário, mais recentes primeiro.
