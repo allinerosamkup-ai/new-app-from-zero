@@ -44,6 +44,16 @@ const canonicalMemoryMigration = fs.readFileSync(
   path.resolve(__dirname, '../../../../supabase/migrations/20260714200000_add_canonical_memory.sql'),
   'utf8',
 );
+const checkinMigrationPath = path.resolve(
+  __dirname,
+  '../../../../supabase/migrations/20260731120000_unify_checkin_signals.sql',
+);
+assert.ok(fs.existsSync(checkinMigrationPath), 'canonical check-in migration must exist');
+const checkinMigration = fs.readFileSync(checkinMigrationPath, 'utf8');
+const prismaSchema = fs.readFileSync(
+  path.resolve(__dirname, '../../../../packages/database/prisma/schema.prisma'),
+  'utf8',
+);
 
 assert.match(migration, /suggestions\s+text\[\]/);
 assert.match(migration, /age\s+integer/);
@@ -116,5 +126,25 @@ assert.ok(
     < canonicalMemoryMigration.indexOf('alter table public.memory_embeddings add column if not exists memory_id'),
   'clean migration creates memory_embeddings before altering/backfilling it',
 );
+
+assert.match(prismaSchema, /clarityScore\s+Int\?/);
+assert.match(prismaSchema, /physicalScore\s+Int\?/);
+assert.match(prismaSchema, /socialScore\s+Int\?/);
+assert.match(prismaSchema, /source\s+String\s+@default\("screen"\)/);
+assert.match(prismaSchema, /sourceMessageId\s+String\?\s+@map\("source_message_id"\)/);
+assert.match(prismaSchema, /idempotencyKey\s+String\?\s+@map\("idempotency_key"\)/);
+assert.match(prismaSchema, /signalMetadata\s+Json\?\s+@map\("signal_metadata"\)/);
+assert.match(prismaSchema, /sleepHours\s+Float\?\s+@map\("sleep_hours"\)/);
+
+assert.match(checkinMigration, /drop constraint if exists daily_checkins_slot_check/i);
+assert.match(checkinMigration, /alter column clarity_score drop not null/i);
+assert.match(checkinMigration, /alter column physical_score drop not null/i);
+assert.match(checkinMigration, /alter column social_score drop not null/i);
+assert.match(checkinMigration, /add column if not exists source text not null default 'screen'/i);
+assert.match(checkinMigration, /add column if not exists source_message_id text/i);
+assert.match(checkinMigration, /add column if not exists idempotency_key text/i);
+assert.match(checkinMigration, /add column if not exists signal_metadata jsonb/i);
+assert.match(checkinMigration, /add column if not exists sleep_hours double precision/i);
+assert.match(checkinMigration, /create unique index if not exists idx_daily_checkins_user_idempotency/i);
 
 console.log('schema alignment tests passed');

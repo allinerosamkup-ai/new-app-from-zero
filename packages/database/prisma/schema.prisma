@@ -245,11 +245,16 @@ model DailyCheckin {
   checkinSlot       String   @map("checkin_slot")
   moodScore         Int      @map("mood_score")
   energyScore       Int      @map("energy_score")
-  clarityScore      Int      @map("clarity_score")
+  clarityScore      Int?     @map("clarity_score")
   irritabilityScore Int?     @map("irritability_score")
-  physicalScore     Int      @map("physical_score")
-  socialScore       Int      @map("social_score")
+  physicalScore     Int?     @map("physical_score")
+  socialScore       Int?     @map("social_score")
   sleepScore        Int?     @map("sleep_score")
+  sleepHours        Float?   @map("sleep_hours")
+  source            String   @default("screen")
+  sourceMessageId   String?  @map("source_message_id")
+  idempotencyKey    String?  @map("idempotency_key")
+  signalMetadata    Json?    @map("signal_metadata")
   
   // Módulo de Saúde Feminina (Plus)
   menstrualPhase    String?  @map("menstrual_phase")
@@ -283,6 +288,7 @@ model DailyCheckin {
   @@unique([userId, localDate, checkinSlot])
   @@index([userId, localDate(sort: Desc)], name: "idx_checkins_user_date")
   @@index([userId, localDate(sort: Desc), recordedAt(sort: Desc)], name: "idx_checkins_user_date_recorded")
+  @@index([userId, idempotencyKey], name: "idx_checkins_user_idempotency_lookup")
   @@map("daily_checkins")
 }
 
