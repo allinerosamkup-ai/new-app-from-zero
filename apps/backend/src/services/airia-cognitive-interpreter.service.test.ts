@@ -232,11 +232,11 @@ async function run() {
   // A Airia é o centro de comando: check-in, hábito e início de execução também
   // se pedem falando com ela.
   for (const [fala, esperado] of [
-    ['Faz meu check-in de hoje.', 'log_checkin'],
-    ['Registra meu check-in.', 'log_checkin'],
-    ['Tô num 3 hoje, humor lá embaixo.', 'log_checkin'],
-    ['Acordei péssima, dormi mal e não tenho energia nenhuma.', 'log_checkin'],
-    ['Minha energia hoje é 8.', 'log_checkin'],
+    ['Faz meu check-in de hoje.', 'record_checkin'],
+    ['Registra meu check-in.', 'record_checkin'],
+    ['Tô num 3 hoje, humor lá embaixo.', 'record_checkin'],
+    ['Acordei péssima, dormi mal e não tenho energia nenhuma.', 'record_checkin'],
+    ['Minha energia hoje é 8.', 'record_checkin'],
     ['Cria um hábito de tomar remédio toda noite.', 'create_habit'],
     ['Comecei o relatório agora.', 'start_task'],
   ] as const) {
@@ -255,7 +255,7 @@ async function run() {
   ]) {
     const result = await offline(fala);
     assert.ok(
-      result.captureJudgment.allowedMutationActions.includes('log_checkin'),
+      result.captureJudgment.allowedMutationActions.includes('record_checkin'),
       `estado deveria ser registrado: ${fala}`,
     );
   }
@@ -263,7 +263,16 @@ async function run() {
   // Pedido e estado na mesma fala geram as duas ações.
   const pedidoComEstado = await offline('Marquei consulta quinta às 15h e tô ansiosa com isso.');
   assert.ok(pedidoComEstado.captureJudgment.allowedMutationActions.includes('create_agenda'));
-  assert.ok(pedidoComEstado.captureJudgment.allowedMutationActions.includes('log_checkin'));
+  assert.ok(pedidoComEstado.captureJudgment.allowedMutationActions.includes('record_checkin'));
+
+  const naturalState = await offline('Estou chateada e cansada.');
+  assert.equal(naturalState.captureJudgment.captureAs, 'checkin');
+  assert.equal(naturalState.captureJudgment.captureMode, 'auto');
+  assert.deepEqual(naturalState.captureJudgment.allowedMutationActions, ['record_checkin']);
+  assert.equal(naturalState.frame.intent, 'execution');
+
+  const refusedNaturalState = await offline('Só estou desabafando; não registre: estou chateada e cansada.');
+  assert.deepEqual(refusedNaturalState.captureJudgment.allowedMutationActions, []);
 
   // Montar rotina acontece na conversa; não existe mais mandar para outra tela.
   for (const fala of ['Monta minha semana pra mim, tô perdida.', 'Organiza meu dia.']) {
@@ -398,7 +407,7 @@ async function run() {
 
   const checkinCommand = await offline('Quero fazer meu check-in: estou cansada e irritada.');
   assert.equal(checkinCommand.captureJudgment.captureAs, 'checkin');
-  assert.deepEqual(checkinCommand.captureJudgment.allowedMutationActions, ['create_checkin']);
+  assert.deepEqual(checkinCommand.captureJudgment.allowedMutationActions, ['record_checkin']);
 
   const reflection = await offline('Percebi que fico sobrecarregada quando aceito tudo de uma vez.');
   assert.equal(reflection.captureJudgment.captureAs, 'reflection');

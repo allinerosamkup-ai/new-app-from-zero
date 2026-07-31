@@ -1,4 +1,6 @@
 import type { AuraCommandAction, AuraCommandResponse } from '../contracts/aura-command.contract';
+import type { CheckinSignal } from '../contracts/checkin-draft.contract';
+import { CheckinUnderstandingService } from './checkin-understanding.service';
 
 type CaptureJudgment = {
   captureAs?: string;
@@ -25,6 +27,7 @@ const MUTATING_ACTIONS = new Set<AuraCommandAction>([
   'complete_items',
   'log_checkin',
   'create_checkin',
+  'record_checkin',
   'create_capture',
   'create_calendar_event',
   'create_habit',
@@ -130,23 +133,67 @@ function recoverGoal(input: RecoveryInput): AuraCommandResponse | null {
 }
 
 function recoverCheckin(input: RecoveryInput): AuraCommandResponse | null {
-  const moodScore = extractScore(input.message, ['humor']);
-  const energyScore = extractScore(input.message, ['energia']);
-  const clarityScore = extractScore(input.message, ['clareza', 'foco']);
-  const irritabilityScore = extractScore(input.message, ['irritabilidade', 'irritacao']);
-  if ([moodScore, energyScore, clarityScore, irritabilityScore].every((value) => value === null)) return null;
+  const draft = CheckinUnderstandingService.understand({
+    message: input.message,
+    localDate: input.localDate,
+    source: 'aura_text',
+    candidate: input.response.payload,
+  });
+  if (draft.status === 'unsupported') return null;
+  if (draft.status === 'needs_clarification') {
+    const missingMood = draft.mood.value === null;
+    return {
+      assistantMessage: missingMood
+        ? 'Entendi sua energia. Como está seu humor agora, de 1 a 10 ou em uma palavra?'
+        : 'Entendi seu humor. Como está sua energia agora, de 1 a 10 ou em uma palavra?',
+      intent: 'clarify',
+      action: 'ask_clarification',
+      payload: {
+        pendingIntent: 'record_checkin',
+        draft,
+      },
+      needsConfirmation: false,
+      needsClarification: true,
+      clarifyingQuestion: missingMood
+        ? 'Como está seu humor agora?'
+        : 'Como está sua energia agora?',
+    };
+  }
+  const observation = (signal: CheckinSignal) => ({
+    provenance: signal.provenance,
+    confidence: signal.confidence,
+    evidence: signal.evidence,
+  });
   return {
-    assistantMessage: 'Preparei o check-in de hoje com os sinais que você informou.',
+    assistantMessage: 'Entendi como você está agora. Vou registrar este check-in e ajustar a leitura do seu dia.',
     intent: 'checkin',
-    action: input.captureJudgment.allowedMutationActions.includes('log_checkin') ? 'log_checkin' : 'create_checkin',
+    action: 'record_checkin',
     payload: {
-      ...input.response.payload,
       localDate: input.localDate,
-      moodScore,
-      energyScore,
-      clarityScore,
-      irritabilityScore,
-      note: input.message.slice(0, 500),
+      moodScore: draft.mood.value,
+      energyScore: draft.energy.value,
+      clarityScore: draft.clarity.value,
+      irritabilityScore: draft.irritability.value,
+      physicalScore: draft.physical.value,
+      socialScore: draft.social.value,
+      sleepScore: draft.sleepScore.value,
+      sleepHours: draft.sleepHours,
+      note: draft.note,
+      emotions: draft.emotions,
+      factors: draft.factors,
+      source: draft.source,
+      sourceMessageId: draft.sourceMessageId,
+      idempotencyKey: draft.idempotencyKey,
+      rawText: draft.rawText,
+      signalMetadata: {
+        mood: observation(draft.mood),
+        energy: observation(draft.energy),
+        clarity: observation(draft.clarity),
+        irritability: observation(draft.irritability),
+        physical: observation(draft.physical),
+        social: observation(draft.social),
+        sleepScore: observation(draft.sleepScore),
+      },
     },
     needsConfirmation: false,
     needsClarification: false,
@@ -167,6 +214,9 @@ export function recoverAuraCommandResponse(input: RecoveryInput): AuraCommandRes
     MUTATING_ACTIONS.has(input.response.action)
     && allowed.has(input.response.action)
   ) {
+    if (input.response.action === 'record_checkin') {
+      return recoverCheckin(input) ?? input.response;
+    }
     if (
       input.response.action === 'create_task'
       && typedTaskCommand
@@ -176,10 +226,11 @@ export function recoverAuraCommandResponse(input: RecoveryInput): AuraCommandRes
     }
     return input.response;
   }
-  if (input.captureJudgment.explicitness !== 'explicit' && !typedTaskCommand) return input.response;
+  const checkinAuthorized = input.captureJudgment.captureAs === 'checkin' && allowed.has('record_checkin');
+  if (input.captureJudgment.explicitness !== 'explicit' && !typedTaskCommand && !checkinAuthorized) return input.response;
 
   if (allowed.has('create_goal')) return recoverGoal(input) ?? input.response;
-  if (input.captureJudgment.captureAs === 'checkin' && (allowed.has('log_checkin') || allowed.has('create_checkin'))) {
+  if (input.captureJudgment.captureAs === 'checkin' && (allowed.has('record_checkin') || allowed.has('log_checkin') || allowed.has('create_checkin'))) {
     return recoverCheckin(input) ?? input.response;
   }
   if (input.captureJudgment.captureAs === 'task' && allowed.has('create_task')) {

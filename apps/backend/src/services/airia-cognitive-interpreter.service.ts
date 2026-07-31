@@ -6,6 +6,7 @@ import type { AiriaActionPlan } from './airia-operational-reasoning.service';
 import type { AuraCommandAction } from '../contracts/aura-command.contract';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
 import { isExplicitRoutineBuilderRequest } from '../lib/routine-request';
+import { CheckinUnderstandingService } from './checkin-understanding.service';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -98,7 +99,7 @@ export const CREATION_ONLY_ACTIONS: AiriaMutationAction[] = [
   'create_habit',
   // Registrar como a pessoa está é dado, não mexida na agenda. É a escrita mais
   // barata do app e a que mais alimenta tudo o resto.
-  'log_checkin',
+  'record_checkin',
 ];
 
 export type AiriaCognitiveFrame = {
@@ -223,7 +224,7 @@ const CognitiveModelSchema = z.object({
       'create_task', 'create_checklist', 'create_goal', 'create_agenda',
       'handoff_to_journal', 'update_task', 'delete_task', 'complete_items',
       'create_capture', 'create_checkin', 'create_habit', 'create_calendar_event',
-      'log_checkin', 'postpone_task', 'start_task', 'adapt_agenda', 'open_screen',
+      'log_checkin', 'record_checkin', 'postpone_task', 'start_task', 'adapt_agenda', 'open_screen',
     ])).optional().default([]),
     allowTaskCreation: z.boolean(),
     allowDecisionMemory: z.boolean(),
@@ -349,19 +350,31 @@ function hasStateSignal(text: string): boolean {
  * coisas — a parte fechada E o registro de que hoje veio ansiedade.
  */
 function withStateCapture(judgment: AiriaCaptureJudgment, text: string): AiriaCaptureJudgment {
-  // Negação explícita ("não registra nada disso") vale para tudo, inclusive isso.
-  const isHardRefusal = judgment.captureMode === 'listen' && judgment.explicitness === 'explicit'
-    && /\bnao\b/.test(text);
-  if (isHardRefusal || !hasStateSignal(text)) return judgment;
-  if (
-    judgment.allowedMutationActions.includes('log_checkin')
-    || judgment.allowedMutationActions.includes('create_checkin')
-  ) return judgment;
+  const understood = CheckinUnderstandingService.understand({
+    message: text,
+    localDate: '2000-01-01',
+    occurredAt: '2000-01-01T12:00:00.000Z',
+    source: 'aura_text',
+  });
+  if (understood.status === 'unsupported') return judgment;
+  const withoutLegacyCheckin = judgment.allowedMutationActions.filter((action) =>
+    action !== 'log_checkin' && action !== 'create_checkin' && action !== 'record_checkin');
+  const hasBroaderRequest = /\b(?:quero|preciso|tenho que|vou|vamos|marquei|agende|crie|adicione|termine|terminar|fechar)\b/.test(text);
+  const checkinIsPrimary = judgment.captureAs === 'checkin'
+    || judgment.captureAs === 'clarification'
+    || (judgment.captureAs === 'conversation' && (understood.status === 'ready' || !hasBroaderRequest));
 
   return {
     ...judgment,
-    allowedMutationActions: [...judgment.allowedMutationActions, 'log_checkin'],
+    captureAs: checkinIsPrimary ? 'checkin' : judgment.captureAs,
+    captureMode: checkinIsPrimary
+      ? (understood.status === 'ready' ? 'auto' : 'propose')
+      : judgment.captureMode,
+    allowedMutationActions: [...withoutLegacyCheckin, 'record_checkin'],
+    allowTaskCreation: true,
     allowMemoryCapture: true,
+    explicitness: judgment.explicitness === 'explicit' ? 'explicit' : 'implicit',
+    confidence: understood.status === 'ready' ? 'alta' : judgment.confidence,
     reason: `${judgment.reason} A fala também revela como a pessoa está: isso é registrado como check-in.`,
   };
 }
@@ -491,7 +504,7 @@ function classifyBase(message: string): AiriaCaptureJudgment {
             : explicitHabit
               ? ['create_habit']
             : explicitCheckin
-              ? [explicitTypedCheckin ? 'create_checkin' : 'log_checkin']
+              ? ['record_checkin']
               : ['create_task'];
     return {
       captureAs: explicitAgendaAction
@@ -806,7 +819,7 @@ Retorne apenas JSON neste formato:
     "allowedActionSource": "agenda|habit|goal|user_report|memory_pattern|none"
   },
   "captureJudgment": {
-    "captureAs": "conversation|memory_fact|decision|task|calendar_commitment|reflection|clarification",
+    "captureAs": "conversation|memory_fact|decision|task|calendar_commitment|capture|checkin|habit|reflection|clarification",
     "allowedMutationActions": [],
     "allowTaskCreation": false,
     "allowDecisionMemory": false,
@@ -833,7 +846,8 @@ function normalizeParsed(input: AiriaCognitiveInput, parsed: z.infer<typeof Cogn
       : true;
   const safeIntent = gate.captureAs === 'decision'
     ? 'decision'
-    : gate.captureAs === 'task' || (gate.captureAs === 'calendar_commitment' && gate.allowTaskCreation)
+    : gate.captureAs === 'task' || gate.captureAs === 'capture' || gate.captureAs === 'checkin' || gate.captureAs === 'habit'
+      || (gate.captureAs === 'calendar_commitment' && gate.allowTaskCreation)
       ? 'execution'
       : gate.captureAs === 'reflection'
         ? (input.surface === 'journal' ? 'journal_reflection' : 'conversation')
@@ -843,7 +857,8 @@ function normalizeParsed(input: AiriaCognitiveInput, parsed: z.infer<typeof Cogn
             ? fallback.frame.intent
             : parsed.frame.intent;
   const modelRequestsExecution = parsed.responsePlan.responseMode === 'executar' || parsed.responsePlan.responseMode === 'adaptar_agenda';
-  const canUseOperationalPlan = gate.allowTaskCreation;
+  const canUseOperationalPlan = gate.allowTaskCreation
+    && gate.allowedMutationActions.some((action) => action !== 'record_checkin');
   const shouldSanitizeOperationalOutput = !canUseOperationalPlan
     && (modelRequestsExecution || parsed.responsePlan.allowedActionSource !== 'none');
   const safeMode = gate.captureAs === 'conversation' && gate.explicitness === 'explicit'

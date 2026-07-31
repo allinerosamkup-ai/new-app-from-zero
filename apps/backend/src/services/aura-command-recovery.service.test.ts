@@ -106,10 +106,10 @@ function run() {
       captureAs: 'checkin',
       captureMode: 'auto',
       explicitness: 'explicit',
-      allowedMutationActions: ['log_checkin'],
+      allowedMutationActions: ['record_checkin'],
     },
   });
-  assert.equal(checkin.action, 'log_checkin');
+  assert.equal(checkin.action, 'record_checkin');
   assert.equal(checkin.payload.moodScore, 7);
   assert.equal(checkin.payload.energyScore, 6);
   assert.equal(checkin.payload.clarityScore, 8);
@@ -129,10 +129,27 @@ function run() {
       captureAs: 'checkin',
       captureMode: 'auto',
       explicitness: 'explicit',
-      allowedMutationActions: ['log_checkin'],
+      allowedMutationActions: ['record_checkin'],
     },
   });
-  assert.equal(checkinAfterWrongMutation.action, 'log_checkin');
+  assert.equal(checkinAfterWrongMutation.action, 'record_checkin');
+
+  const naturalCheckin = recoverAuraCommandResponse({
+    response: { ...baseResponse, intent: 'conversation', action: 'respond' },
+    message: 'Estou chateada e cansada.',
+    localDate: '2026-07-31',
+    captureJudgment: {
+      captureAs: 'checkin',
+      captureMode: 'auto',
+      explicitness: 'implicit',
+      allowedMutationActions: ['record_checkin'],
+    },
+  });
+  assert.equal(naturalCheckin.action, 'record_checkin');
+  assert.equal(naturalCheckin.payload.moodScore, 3);
+  assert.equal(naturalCheckin.payload.energyScore, 3);
+  assert.equal(naturalCheckin.payload.clarityScore, null);
+  assert.equal(naturalCheckin.payload.source, 'aura_text');
 
   const listenOnly = recoverAuraCommandResponse({
     response: { ...baseResponse, intent: 'conversation', action: 'respond' },
