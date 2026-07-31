@@ -402,7 +402,7 @@ export function CheckinPage() {
       setVoiceLoading(true);
       try {
         // Usa o mesmo endpoint de voz para extrair padrão dos dias
-        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number; energia: number; emotions: string[]; factors: string[]; note: string | null };
+        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number | null; energia: number | null; emotions: string[]; factors: string[]; note: string | null };
         // Infere pattern a partir do humor extraído
         const h = result.humor ?? 5;
         const inferred = h >= 8 ? "good" : h >= 6 ? "stable" : h >= 4 ? "mixed" : h >= 3 ? "hard" : "crisis";
@@ -463,10 +463,10 @@ export function CheckinPage() {
       if (!transcript) return;
       setVoiceLoading(true);
       try {
-        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number; energia: number; sono: number | null; emotions: string[]; factors: string[]; note: string | null };
-        if (result.humor) setHumor(result.humor);
-        if (result.energia) setEnergia(result.energia);
-        if (result.sono) { setSonoHoras(result.sono); setDetailEnabled(c => ({ ...c, sono: true })); }
+        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number | null; energia: number | null; sleepHours: number | null; emotions: string[]; factors: string[]; note: string | null };
+        if (result.humor !== null) setHumor(result.humor);
+        if (result.energia !== null) setEnergia(result.energia);
+        if (result.sleepHours !== null) { setSonoHoras(result.sleepHours); setDetailEnabled(c => ({ ...c, sono: true })); }
         if (result.emotions?.length) setEmotionsSelected(result.emotions.slice(0, 1));
         if (result.factors?.length) setSelectedFactors(result.factors);
         if (result.note) setNote(result.note);

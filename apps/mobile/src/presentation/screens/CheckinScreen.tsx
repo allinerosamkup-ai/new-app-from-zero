@@ -30,6 +30,11 @@ const FLUENT_EMOJI_3D: Record<number, string> = {
   3: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Neutral%20face/3D/neutral_face_3d.png',
   4: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20smiling%20face/3D/slightly_smiling_face_3d.png',
   5: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Beaming%20face%20with%20smiling%20eyes/3D/beaming_face_with_smiling_eyes_3d.png',
+  6: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Neutral%20face/3D/neutral_face_3d.png',
+  7: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20smiling%20face/3D/slightly_smiling_face_3d.png',
+  8: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Slightly%20smiling%20face/3D/slightly_smiling_face_3d.png',
+  9: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Beaming%20face%20with%20smiling%20eyes/3D/beaming_face_with_smiling_eyes_3d.png',
+  10: 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/main/assets/Beaming%20face%20with%20smiling%20eyes/3D/beaming_face_with_smiling_eyes_3d.png',
 };
 
 /**
@@ -40,10 +45,10 @@ export default function CheckinScreen() {
   const { isLoading, submitCheckin, error } = useCheckinStore();
   const { userId } = useAuthStore();
 
-  const [mood, setMood] = useState(3);
-  const [energy, setEnergy] = useState(3);
-  const [clarity, setClarity] = useState(3);
-  const [irritability, setIrritability] = useState(3);
+  const [mood, setMood] = useState(5);
+  const [energy, setEnergy] = useState(5);
+  const [clarity, setClarity] = useState<number | null>(null);
+  const [irritability, setIrritability] = useState<number | null>(null);
   const [note, setNote] = useState('');
 
   // Estados Saúde Feminina
@@ -75,8 +80,8 @@ export default function CheckinScreen() {
       localDate: new Date().toISOString().split('T')[0],
       moodScore: mood,
       energyScore: energy,
-      clarityScore: clarity,
-      irritabilityScore: irritability,
+      ...(clarity !== null ? { clarityScore: clarity } : {}),
+      ...(irritability !== null ? { irritabilityScore: irritability } : {}),
       note,
       // Novos campos
       menstrualPhase,
@@ -120,7 +125,7 @@ export default function CheckinScreen() {
           <ScoreSelector 
             label="Como está seu nível de energia?" 
             value={energy} 
-            onSelect={setEnergy} 
+            onSelect={(value) => { if (value !== null) setEnergy(value); }}
           />
           
           <View style={{ height: 1, backgroundColor: appColors.borderSubtle, marginVertical: appSpacing.md, opacity: 0.5 }} />
@@ -129,6 +134,7 @@ export default function CheckinScreen() {
             label="Como está sua clareza mental?" 
             value={clarity} 
             onSelect={setClarity} 
+            optional
           />
 
           <View style={{ height: 1, backgroundColor: appColors.borderSubtle, marginVertical: appSpacing.md, opacity: 0.5 }} />
@@ -137,6 +143,7 @@ export default function CheckinScreen() {
             label="Nível de irritabilidade" 
             value={irritability} 
             onSelect={setIrritability} 
+            optional
           />
         </Card.Content>
       </Card>
@@ -176,7 +183,7 @@ export default function CheckinScreen() {
 }
 
 function Emoji3D({ score, isSelected, onSelect }: { score: number; isSelected: boolean; onSelect: () => void }) {
-  const labels = ['Muito mal', 'Mal', 'Neutro', 'Bem', 'Muito bem'];
+  const labels = ['Muito mal', 'Muito mal', 'Mal', 'Mal', 'Neutro', 'Neutro', 'Bem', 'Bem', 'Muito bem', 'Muito bem'];
 
   const scale     = useSharedValue(1);
   const translateY = useSharedValue(0);
@@ -242,14 +249,14 @@ function Emoji3D({ score, isSelected, onSelect }: { score: number; isSelected: b
   }));
 
   return (
-    <Pressable onPress={handlePress} style={{ alignItems: 'center', flex: 1, paddingVertical: 8 }}>
+    <Pressable onPress={handlePress} style={{ alignItems: 'center', width: '20%', paddingVertical: 8 }}>
       <Animated.View style={[
         animStyle,
         glowStyle,
         {
-          width: 62,
-          height: 62,
-          borderRadius: 31,
+          width: 48,
+          height: 48,
+          borderRadius: 24,
           backgroundColor: isSelected ? appColors.primarySoft : 'rgba(0,0,0,0.04)',
           borderWidth: 2,
           borderColor: isSelected ? appColors.primary : 'transparent',
@@ -262,7 +269,7 @@ function Emoji3D({ score, isSelected, onSelect }: { score: number; isSelected: b
       ]}>
         <Image
           source={{ uri: FLUENT_EMOJI_3D[score] }}
-          style={{ width: 46, height: 46 }}
+          style={{ width: 36, height: 36 }}
           resizeMode="contain"
         />
       </Animated.View>
@@ -281,8 +288,8 @@ function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number
       <Text variant="titleMedium" style={{ fontWeight: '700', marginBottom: appSpacing.md }}>
         Como está seu humor agora?
       </Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: appSpacing.sm }}>
-        {[1, 2, 3, 4, 5].map((score) => (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingVertical: appSpacing.sm }}>
+        {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
           <Emoji3D
             key={score}
             score={score}
@@ -295,21 +302,28 @@ function MoodSelector({ value, onSelect }: { value: number; onSelect: (v: number
   );
 }
 
-function ScoreSelector({ label, value, onSelect }: { label: string; value: number; onSelect: (v: number) => void }) {
+function ScoreSelector({ label, value, onSelect, optional = false }: { label: string; value: number | null; onSelect: (v: number | null) => void; optional?: boolean }) {
   return (
     <View>
       <Text variant="labelLarge" style={{ color: appColors.textPrimary, fontWeight: '600', marginBottom: appSpacing.sm }}>
         {label}
       </Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: appColors.background, borderRadius: appRadius.md, padding: 4 }}>
-        {[1, 2, 3, 4, 5].map((score) => {
+      {optional && (
+        <TouchableRipple onPress={() => onSelect(null)} style={{ alignSelf: 'flex-start', marginBottom: 6, borderRadius: appRadius.sm, paddingHorizontal: 8, paddingVertical: 4 }}>
+          <Text variant="labelSmall" style={{ color: value === null ? appColors.primary : appColors.textSecondary }}>
+            {value === null ? 'Não informado' : 'Limpar'}
+          </Text>
+        </TouchableRipple>
+      )}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', backgroundColor: appColors.background, borderRadius: appRadius.md, padding: 4 }}>
+        {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => {
           const isSelected = value === score;
           return (
             <TouchableRipple
               key={score}
               onPress={() => onSelect(score)}
               style={{
-                flex: 1,
+                width: '20%',
                 paddingVertical: 10,
                 borderRadius: appRadius.sm,
                 backgroundColor: isSelected ? appColors.surface : 'transparent',

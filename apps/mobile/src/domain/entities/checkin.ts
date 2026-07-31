@@ -51,12 +51,14 @@ export interface Checkin {
   id: string;
   date: string;           // ISO date: "2026-03-13"
   period: CheckinPeriod;
-  moodScore: number;      // 1-5
-  energyScore: number;    // 1-5
-  clarityScore: number;   // 1-5
-  irritabilityScore: number; // 1-5
-  physicalScore: number;  // 1-5
-  socialScore: number;    // 1-5
+  moodScore: number;      // 1-10
+  energyScore: number;    // 1-10
+  clarityScore?: number | null;   // 1-10
+  irritabilityScore?: number | null; // 1-10
+  physicalScore?: number | null;  // 1-10
+  socialScore?: number | null;    // 1-10
+  sleepScore?: number | null;
+  sleepHours?: number | null;
   
   // Saúde Feminina
   menstrualPhase?: MenstrualPhase;
@@ -82,10 +84,12 @@ export interface CheckinCreateInput {
   period: CheckinPeriod;
   moodScore: number;
   energyScore: number;
-  clarityScore: number;
-  irritabilityScore: number;
-  physicalScore: number;
-  socialScore: number;
+  clarityScore?: number | null;
+  irritabilityScore?: number | null;
+  physicalScore?: number | null;
+  socialScore?: number | null;
+  sleepScore?: number | null;
+  sleepHours?: number | null;
   
   // Saúde Feminina (Opcional)
   menstrualPhase?: MenstrualPhase;

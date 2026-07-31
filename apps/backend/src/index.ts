@@ -15,6 +15,11 @@ import { PlannerService, buildPostponeAdaptabilityUpdate, resolveTimelineAdaptab
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
 import { CheckinApplicationService, PrismaCheckinApplicationRepository } from './services/checkin-application.service';
+import {
+  CHECKIN_CANONICAL_EMOTIONS,
+  CHECKIN_CANONICAL_FACTORS,
+  CheckinUnderstandingService,
+} from './services/checkin-understanding.service';
 import { GCalService } from './services/gcal.service';
 import { CheckinCreateSchema } from './contracts/checkin.contract';
 import { PlannerSyncSchema, PlannerAISuggestionRequestSchema } from './contracts/planner.contract';
@@ -7104,96 +7109,91 @@ JSON APENAS: {"profileSummary":"..."}`,
    * POST /api/ai/voice-checkin
    * Recebe transcrição de voz e extrai dados estruturados do check-in.
    */
-  app.post('/api/ai/voice-checkin', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/ai/voice-checkin', async (req: Request, res: Response) => {
     try {
-      const { transcript } = req.body as { transcript?: string };
+      const { transcript, localDate, sourceMessageId } = req.body as {
+        transcript?: string;
+        localDate?: string;
+        sourceMessageId?: string;
+      };
       if (!transcript || transcript.trim().length < 3) {
         return res.status(400).json({ error: 'transcript_required' });
       }
 
-      const EMOTION_OPTIONS = [
-        'radiant','calm','happy','anxious','tired','focused',
-        'sad','angry','stressed','sensitive','exhausted','agitated',
-      ];
-      const FACTOR_OPTIONS = [
-        'Dormi bem (7h+)','Dormi pouco (<6h)','Acordei no meio da noite',
-        'Tomei minha medicação','Esqueci a medicação',
-        'Consegui me concentrar','Hyperfoco travado — não consigo parar',
-        'Dissociada / no piloto automático','Nada parece interessante',
-        'Paralisada — não consegui começar','Ansiedade alta hoje',
-        'Irritabilidade fácil','Me senti sobrecarregada','Sintomas de TPM',
-        'Ciclo intenso hoje','Dor física hoje','Pouca fome','Fome demais',
-        'Tive um momento bom','Me conectei com alguém','Isolamento social',
-        'Exercitei hoje','Saí de casa','Passei o dia em casa',
-        'Trabalho pesado hoje','Reunião difícil','Conflito interpessoal',
-        'Boa notícia hoje','Crise de ansiedade','Choro sem motivo claro',
-        'Fiquei no celular demais','Não consegui dormir direito','Cansaço físico',
-        'Clareza mental boa','Senti gratidão hoje',
-      ];
-
-      const emotionList = EMOTION_OPTIONS.join(', ');
-      const factorList = FACTOR_OPTIONS.join(', ');
-
-      const systemPrompt = [
-        'Você é um extrator de dados de check-in emocional.',
-        'Analise o relato da usuária e extraia as seguintes informações em JSON:',
-        '{',
-        '  "humor": <número 1-10, sendo 1=muito ruim e 10=excelente>,',
-        '  "energia": <número 1-10, sendo 1=sem energia e 10=energia máxima>,',
-        '  "sono": <horas de sono como número inteiro 3-12, ou null se não mencionado>,',
-        '  "emotions": <array com 1-3 emoções da lista: ' + emotionList + '>,',
-        '  "factors": <array com os fatores relevantes da lista abaixo>,',
-        '  "note": <frase curta resumindo o que a pessoa disse, ou null>',
-        '}',
-        '',
-        'Lista de fatores: ' + factorList + '.',
-        '',
-        'Regras:',
-        '- Humor e energia são independentes.',
-        '- Escolha apenas emotions claramente presentes no relato.',
-        '- Escolha apenas factors claramente mencionados ou fortemente implícitos.',
-        '- Se mencionar medicação tomada → "Tomei minha medicação"; se esqueceu → "Esqueci a medicação".',
-        '- note deve soar natural, como a própria pessoa escreveria.',
-        '- Responda APENAS com o JSON, sem markdown, sem explicação.',
-      ].join('\n');
-
-      const openai = new (await import('openai')).default({ apiKey: process.env.OPENAI_API_KEY });
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: 'Relato: "' + transcript.slice(0, 1200) + '"' },
-        ],
-        temperature: 0.2,
-        max_tokens: 300,
-      });
-
-      const raw = completion.choices[0]?.message?.content?.trim() ?? '{}';
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        return res.status(422).json({ error: 'parse_failed', raw });
+      let candidate: Record<string, unknown> = {};
+      if (process.env.OPENAI_API_KEY) {
+        try {
+          const systemPrompt = [
+            'Você extrai candidatos de um check-in emocional em JSON.',
+            '{"humor":1-10|null,"energia":1-10|null,"sleepHours":0-24|null,"emotions":[],"factors":[]}',
+            `Emotions permitidas: ${CHECKIN_CANONICAL_EMOTIONS.join(', ')}.`,
+            `Factors permitidos: ${CHECKIN_CANONICAL_FACTORS.join(', ')}.`,
+            'Não traduza IDs. Não invente sinais ausentes. Sono em horas vai somente em sleepHours.',
+            'Responda apenas JSON.',
+          ].join('\n');
+          const openai = new (await import('openai')).default({ apiKey: process.env.OPENAI_API_KEY });
+          const completion = await openai.chat.completions.create({
+            model: getOpenAiModel(),
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: `Relato: "${transcript.slice(0, 1200)}"` },
+            ],
+            response_format: { type: 'json_object' },
+            max_completion_tokens: getOpenAiMaxCompletionTokens(500),
+            ...openAiTemperature(getOpenAiModel(), 0.2),
+          } as any);
+          const content = completion.choices[0]?.message?.content?.trim();
+          candidate = content ? JSON.parse(content) as Record<string, unknown> : {};
+        } catch (modelError) {
+          console.warn('[voice-checkin] extração por modelo indisponível; usando entendimento determinístico:', modelError);
+        }
       }
 
-      const humor = Math.max(1, Math.min(10, Math.round(Number(parsed.humor) || 5)));
-      const energia = Math.max(1, Math.min(10, Math.round(Number(parsed.energia) || 5)));
-      const emotions = (Array.isArray(parsed.emotions) ? parsed.emotions : [])
-        .filter((e: unknown) => typeof e === 'string' && EMOTION_OPTIONS.includes(e as string))
-        .slice(0, 3);
-      const factors = (Array.isArray(parsed.factors) ? parsed.factors : [])
-        .filter((f: unknown) => typeof f === 'string' && FACTOR_OPTIONS.includes(f as string))
-        .slice(0, 8);
-      const note = typeof parsed.note === 'string' && parsed.note.trim() ? parsed.note.trim() : null;
-      const sono = typeof parsed.sono === 'number' && parsed.sono >= 3 && parsed.sono <= 12 ? Math.round(parsed.sono) : null;
+      const now = new Date();
+      const draft = CheckinUnderstandingService.understand({
+        message: transcript,
+        localDate: typeof localDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(localDate)
+          ? localDate
+          : getSaoPauloDateContext(now).dateKey,
+        occurredAt: now.toISOString(),
+        source: 'aura_voice',
+        sourceMessageId: typeof sourceMessageId === 'string' && sourceMessageId.trim()
+          ? sourceMessageId.trim()
+          : null,
+        idempotencyKey: null,
+        candidate,
+      });
+      const observation = (signal: typeof draft.mood) => ({
+        provenance: signal.provenance,
+        confidence: signal.confidence,
+        evidence: signal.evidence,
+      });
 
-      return res.json({ humor, energia, sono, emotions, factors, note });
+      return res.json({
+        status: draft.status,
+        humor: draft.mood.value,
+        energia: draft.energy.value,
+        sleepHours: draft.sleepHours,
+        emotions: draft.emotions,
+        factors: draft.factors,
+        note: draft.note,
+        source: draft.source,
+        rawText: draft.rawText,
+        signalMetadata: {
+          mood: observation(draft.mood),
+          energy: observation(draft.energy),
+          clarity: observation(draft.clarity),
+          irritability: observation(draft.irritability),
+          physical: observation(draft.physical),
+          social: observation(draft.social),
+          sleepScore: observation(draft.sleepScore),
+        },
+      });
     } catch (err: unknown) {
       console.error('[voice-checkin] Error:', err);
       return res.status(500).json({ error: 'voice_checkin_failed' });
     }
   });
-
 
   /**
    * POST /api/checkins/backfill

@@ -115,10 +115,13 @@ export class AIService {
     localDate: string;
     moodScore: number;
     energyScore: number;
-    clarityScore: number;
-    irritabilityScore: number;
-    physicalScore?: number;
-    socialScore?: number;
+    clarityScore?: number | null;
+    irritabilityScore?: number | null;
+    physicalScore?: number | null;
+    socialScore?: number | null;
+    sleepScore?: number | null;
+    sleepHours?: number | null;
+    source?: 'mobile';
     menstrualPhase?: string;
     cycleDay?: number;
     physicalSymptoms?: string[];
@@ -131,7 +134,20 @@ export class AIService {
     };
     note?: string;
   }): Promise<CheckinResponse> {
-    const response = await api.post<CheckinResponse>('/api/checkins', data);
+    const response = await api.post<CheckinResponse>('/api/checkins', {
+      ...data,
+      source: 'mobile',
+      signalMetadata: {
+        mood: { provenance: 'reported', confidence: 1, evidence: ['mobile:mood'] },
+        energy: { provenance: 'reported', confidence: 1, evidence: ['mobile:energy'] },
+        ...(data.clarityScore != null
+          ? { clarity: { provenance: 'reported', confidence: 1, evidence: ['mobile:clarity'] } }
+          : {}),
+        ...(data.irritabilityScore != null
+          ? { irritability: { provenance: 'reported', confidence: 1, evidence: ['mobile:irritability'] } }
+          : {}),
+      },
+    });
     return response.data;
   }
 

@@ -10,10 +10,12 @@ export interface CheckinFormData {
   localDate: string;
   moodScore: number;
   energyScore: number;
-  clarityScore: number;
-  irritabilityScore: number;
-  physicalScore?: number;
-  socialScore?: number;
+  clarityScore?: number | null;
+  irritabilityScore?: number | null;
+  physicalScore?: number | null;
+  socialScore?: number | null;
+  sleepScore?: number | null;
+  sleepHours?: number | null;
   menstrualPhase?: string;
   cycleDay?: number;
   physicalSymptoms?: string[];

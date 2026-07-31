@@ -469,6 +469,21 @@ async function run() {
     assert.equal(startResponse.status, 200);
     assert.equal(started.sessionId, '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6affff');
 
+    const voiceCheckinResponse = await fetch(`${baseUrl}/api/ai/voice-checkin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript: 'Estou chateada e cansada.', localDate: '2026-04-07' }),
+    });
+    const voiceCheckin = await voiceCheckinResponse.json() as any;
+    assert.equal(voiceCheckinResponse.status, 200);
+    assert.equal(voiceCheckin.status, 'ready');
+    assert.equal(voiceCheckin.humor, 3);
+    assert.equal(voiceCheckin.energia, 3);
+    assert.equal(voiceCheckin.source, 'aura_voice');
+    assert.deepEqual(voiceCheckin.emotions, ['sad', 'tired']);
+    assert.equal(voiceCheckin.sleepHours, null);
+    assert.equal(voiceCheckin.signalMetadata.mood.provenance, 'inferred');
+
     const response = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',
       headers: {

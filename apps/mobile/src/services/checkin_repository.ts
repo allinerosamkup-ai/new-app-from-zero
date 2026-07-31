@@ -17,10 +17,12 @@ type BackendCheckin = {
   checkinSlot?: BackendCheckinSlot;
   moodScore: number;
   energyScore: number;
-  clarityScore?: number;
-  irritabilityScore?: number;
-  physicalScore?: number;
-  socialScore?: number;
+  clarityScore?: number | null;
+  irritabilityScore?: number | null;
+  physicalScore?: number | null;
+  socialScore?: number | null;
+  sleepScore?: number | null;
+  sleepHours?: number | null;
   note?: string | null;
   stateLabel?: string | null;
   stateLabelType?: string | null;
@@ -68,10 +70,12 @@ function mapBackendCheckin(input: BackendCheckin): Checkin {
     period,
     moodScore: input.moodScore,
     energyScore: input.energyScore,
-    clarityScore: input.clarityScore ?? 3,
-    irritabilityScore: input.irritabilityScore ?? 3,
-    physicalScore: input.physicalScore ?? 3,
-    socialScore: input.socialScore ?? 3,
+    clarityScore: input.clarityScore ?? null,
+    irritabilityScore: input.irritabilityScore ?? null,
+    physicalScore: input.physicalScore ?? null,
+    socialScore: input.socialScore ?? null,
+    sleepScore: input.sleepScore ?? null,
+    sleepHours: input.sleepHours ?? null,
     note: input.note ?? undefined,
     stateLabel: input.stateLabel ?? undefined,
     stateLabelType: input.stateLabelType ?? undefined,
@@ -92,10 +96,13 @@ class ApiCheckinRepository implements CheckinRepository {
       checkinSlot: PERIOD_TO_SLOT[data.period],
       moodScore: data.moodScore,
       energyScore: data.energyScore,
-      clarityScore: data.clarityScore,
-      irritabilityScore: data.irritabilityScore,
-      physicalScore: data.physicalScore,
-      socialScore: data.socialScore,
+      ...(data.clarityScore != null ? { clarityScore: data.clarityScore } : {}),
+      ...(data.irritabilityScore != null ? { irritabilityScore: data.irritabilityScore } : {}),
+      ...(data.physicalScore != null ? { physicalScore: data.physicalScore } : {}),
+      ...(data.socialScore != null ? { socialScore: data.socialScore } : {}),
+      ...(data.sleepScore != null ? { sleepScore: data.sleepScore } : {}),
+      ...(data.sleepHours != null ? { sleepHours: data.sleepHours } : {}),
+      source: 'mobile',
       note: data.note,
     };
 
@@ -117,10 +124,10 @@ class ApiCheckinRepository implements CheckinRepository {
         period: fallbackPeriodFromDate(checkin.date),
         moodScore: checkin.moodScore,
         energyScore: checkin.energyScore,
-        clarityScore: 3,
-        irritabilityScore: 3,
-        physicalScore: 3,
-        socialScore: 3,
+        clarityScore: null,
+        irritabilityScore: null,
+        physicalScore: null,
+        socialScore: null,
         stateLabel: checkin.stateLabel ?? undefined,
         stateLabelType: checkin.stateLabelType ?? undefined,
       })),

@@ -45,12 +45,12 @@ const ENERGY_SIGNALS: LexicalSignal[] = [
   { pattern: /\b(?:acelerad[oa]|agitad[oa])\b/, value: 8, confidence: 0.82, emotion: 'agitated' },
 ];
 
-const CANONICAL_EMOTIONS = new Set([
+export const CHECKIN_CANONICAL_EMOTIONS = [
   'radiant', 'calm', 'happy', 'anxious', 'tired', 'focused',
   'sad', 'angry', 'stressed', 'sensitive', 'exhausted', 'agitated',
-]);
+] as const;
 
-const CANONICAL_FACTORS = new Set([
+export const CHECKIN_CANONICAL_FACTORS = [
   'slept_well', 'slept_little', 'woke_up_night', 'exercise', 'no_exercise',
   'healthy_meal', 'skipped_meals', 'took_meds', 'forgot_meds', 'fresh_air',
   'good_talk', 'kind_words', 'support', 'social_drain', 'loneliness',
@@ -59,7 +59,10 @@ const CANONICAL_FACTORS = new Set([
   'hard_decision', 'dissociated', 'low_dopamine', 'stuck', 'overwhelmed',
   'self_trust', 'rest', 'fiz_algo_gosto', 'financial_stress', 'bad_news',
   'pms_symptoms', 'heavy_period',
-]);
+] as const;
+
+const CANONICAL_EMOTIONS = new Set<string>(CHECKIN_CANONICAL_EMOTIONS);
+const CANONICAL_FACTORS = new Set<string>(CHECKIN_CANONICAL_FACTORS);
 
 function normalize(value: string): string {
   return value
