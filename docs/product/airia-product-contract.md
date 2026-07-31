@@ -61,6 +61,20 @@ Uma experiência da Airia só está correta quando entrega, em conjunto:
 4. um próximo passo específico quando existe âncora atual, ou uma pergunta curta quando ela não existe;
 5. memória que dá continuidade sem criar autoridade operacional.
 
+## Check-in canônico e comando central
+
+Check-in é o registro do estado atual de humor e energia. Ele pode começar na tela, na voz, no mobile ou na conversa com a Airia, mas todas essas entradas terminam no mesmo gravador. Não existem históricos paralelos nem sucesso baseado apenas no texto gerado pela IA.
+
+- Humor e energia são os dois sinais centrais obrigatórios, sempre na escala de 1 a 10.
+- Clareza, irritabilidade, físico, social, sono e horas de sono são opcionais. Ausência é `null`, nunca um valor neutro inventado.
+- Uma frase natural com os dois sinais, como “estou chateada e cansada”, pode ser aplicada automaticamente com valores inferidos e proveniência visível.
+- Um único sinal pede somente o complemento necessário. Recusa explícita ou desabafo sem autorização não grava.
+- Estado e pedido operacional podem coexistir na mesma fala; registrar o estado não apaga a tarefa, meta ou compromisso pedido.
+- Cada entrada registra origem, mensagem de origem quando aplicável, proveniência e chave de idempotência. Repetir a mesma mensagem não duplica; uma nova mensagem no mesmo período pode gerar um novo registro.
+- A confirmação visível vem do recurso persistido e oferece “Ajustar check-in”. Plano sem operação não é mostrado.
+
+Depois de persistir, o mesmo fluxo executa protocolo de risco, grounding do dia, leitura do estado, atualização de memória e grafo e recarrega as superfícies consumidoras. Home, Planner, Check-in, Padrões, Diário e Airia passam a enxergar a mesma fonte atual.
+
 ## Montador de Rotina
 
 O Montador é a ferramenta do **onboarding** — o momento em que o app ainda não sabe nada da pessoa e precisa de uma primeira fonte para montar a semana com botões, sem digitação obrigatória.

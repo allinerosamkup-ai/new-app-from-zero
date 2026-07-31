@@ -22,7 +22,15 @@ async function run() {
       }),
     },
     consent: { findMany: async () => [{ consentType: 'privacy', granted: true }] },
-    dailyCheckin: { findMany: async () => [{ moodScore: 4, energyScore: 2 }] },
+    dailyCheckin: { findMany: async () => [{
+      moodScore: 4,
+      energyScore: 2,
+      sleepHours: 6.5,
+      source: 'aura_text',
+      sourceMessageId: 'message-private-1',
+      idempotencyKey: 'session-private:message-private-1',
+      signalMetadata: { mood: { provenance: 'inferred' } },
+    }] },
     journalSession: { findMany: async () => [{ id: 'session-1', summary: 'Dia pesado' }] },
     journalMessage: { findMany: async () => [{ id: 'message-1', content: 'texto da usuaria' }] },
     timelineBlock: { findMany: async () => [{ id: 'block-1', title: 'Foco', status: 'pending' }] },
@@ -53,6 +61,12 @@ async function run() {
   assert.equal(payload.preferences?.gcalAccessToken, undefined);
   assert.equal(payload.preferences?.gcalRefreshToken, undefined);
   assert.equal(payload.data.checkins.length, 1);
+  const firstCheckin = payload.data.checkins[0] as Record<string, unknown>;
+  assert.equal(firstCheckin.sleepHours, 6.5);
+  assert.equal(firstCheckin.source, 'aura_text');
+  assert.deepEqual(firstCheckin.signalMetadata, { mood: { provenance: 'inferred' } });
+  assert.equal(firstCheckin.sourceMessageId, undefined);
+  assert.equal(firstCheckin.idempotencyKey, undefined);
   assert.equal(payload.data.commandCenter.operations.length, 1);
   assert.equal(payload.data.captures.length, 1);
   const firstJournalMessage = payload.data.journal.messages[0] as { content?: string };

@@ -68,6 +68,15 @@ function redactPreferences(value: unknown): PrivacyExportPayload['preferences'] 
   };
 }
 
+function redactCheckins(values: unknown[]): unknown[] {
+  return values.map((value) => {
+    const checkin = asRecord(value);
+    if (!checkin) return value;
+    const { sourceMessageId: _sourceMessageId, idempotencyKey: _idempotencyKey, ...safeCheckin } = checkin;
+    return safeCheckin;
+  });
+}
+
 async function findUnique(model: PrivacyExportModel | undefined, args: FindUniqueArgs) {
   if (!model?.findUnique) return null;
   return model.findUnique(args);
@@ -150,7 +159,7 @@ export async function buildPrivacyExport(
     preferences: redactPreferences(preferences),
     consents,
     data: {
-      checkins,
+      checkins: redactCheckins(checkins),
       journal: {
         sessions: journalSessions,
         messages: journalMessages,

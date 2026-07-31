@@ -129,6 +129,9 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'physicalScore',
       'socialScore',
       'sleepScore',
+      'sleepHours',
+      'source',
+      'signalMetadata',
       'menstrualPhase',
       'cycleDay',
       'physicalSymptoms',
@@ -152,7 +155,7 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'createdAt',
       'updatedAt',
     ],
-    redact: [],
+    redact: ['sourceMessageId', 'idempotencyKey'],
   },
   JournalSession: {
     include: [
