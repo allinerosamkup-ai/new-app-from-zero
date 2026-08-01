@@ -10,13 +10,10 @@ import { trackEvent } from "../lib/track";
 import { getClientDayContext } from "../utils/day-context";
 import {
   baseSlotFromDate,
-  computeDaysSinceLastCheckin,
   deriveExpressEmotion,
-  buildReentryVoiceNote,
   mergeVoiceFactors,
   predictCheckinDefaults,
   QUICK_LEVELS,
-  REENTRY_GAP_DAYS,
 } from "./checkin-page.helpers";
 import { ChevronLeft, Check, Mic, MicOff, Loader } from "lucide-react";
 import { api } from "../lib/api";
@@ -315,13 +312,6 @@ export function CheckinPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const daysSinceLastCheckin = useMemo(
-    () => computeDaysSinceLastCheckin(state.checkinHistory ?? [], dayContext.localDate),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-  const isReentry = (daysSinceLastCheckin ?? 0) >= REENTRY_GAP_DAYS;
-
   // ── mode: expresso (default) ou wizard completo
   const [mode, setMode] = useState<"express" | "wizard">("express");
 
@@ -333,106 +323,10 @@ export function CheckinPage() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
-  // ── reentry backfill state
-  const [reentryDone, setReentryDone] = useState(false);
-  const [reentryPattern, setReentryPattern] = useState<string | null>(null);
-  const [reentryNote, setReentryNote] = useState("");
-  const [reentrySubmitting, setReentrySubmitting] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
 
   // ── sono em horas (para o wizard detalhado)
   const [sonoHoras, setSonoHoras] = useState(7);
-
-  async function submitReentry(pattern = reentryPattern, note = reentryNote) {
-    if (!pattern) return;
-    setReentrySubmitting(true);
-    try {
-      const history = state.checkinHistory ?? [];
-      const lastDate = history
-        .map((e) => e.date)
-        .filter(Boolean)
-        .sort()
-        .reverse()[0];
-      if (lastDate) {
-        // periodStart = dia após o último check-in, periodEnd = hoje
-        const periodStart = (() => {
-          const d = new Date(lastDate + "T12:00:00.000Z");
-          d.setUTCDate(d.getUTCDate() + 1);
-          return d.toISOString().slice(0, 10);
-        })();
-        const periodEnd = dayContext.localDate;
-        await api.post("/checkins/backfill", {
-          periodStart,
-          periodEnd,
-          pattern,
-          note: note.trim() || null,
-        });
-      }
-    } catch {
-      // silencia — não bloqueia o check-in de hoje
-    } finally {
-      setReentrySubmitting(false);
-      setReentryDone(true);
-    }
-  }
-
-  function startReentryVoice() {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) { setVoiceError(t("checkin.voiceUnsupported")); return; }
-    if (recognitionRef.current) {
-      stopActiveRecognition(recognitionRef);
-      setIsListening(false);
-      return;
-    }
-    setVoiceError(null);
-    const recognition = new SpeechRecognition();
-    recognition.lang = resolveIntlLocale();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognitionRef.current = recognition;
-    const transcriptSession = new TranscriptSession();
-    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-    recognition.onstart = () => setIsListening(true);
-    recognition.onerror = () => {
-      transcriptSession.reset();
-      if (!releaseRecognition(recognitionRef, recognition)) return;
-      setIsListening(false);
-      setVoiceError(t("checkin.voiceRetry"));
-    };
-    recognition.onresult = (event: any) => {
-      if (silenceTimer) clearTimeout(silenceTimer);
-      transcriptSession.update(event.results);
-      silenceTimer = setTimeout(() => recognition.stop(), 2500);
-    };
-    recognition.onend = async () => {
-      if (silenceTimer) clearTimeout(silenceTimer);
-      const transcript = transcriptSession.snapshot().finalText;
-      transcriptSession.reset();
-      if (!releaseRecognition(recognitionRef, recognition)) return;
-      setIsListening(false);
-      if (!transcript) return;
-      setVoiceLoading(true);
-      try {
-        // Usa o mesmo endpoint de voz para extrair padrão dos dias
-        const result = await api.post("/ai/voice-checkin", { transcript }) as { humor: number | null; energia: number | null; emotions: string[]; factors: string[]; note: string | null };
-        // Infere pattern a partir do humor extraído
-        const h = result.humor ?? 5;
-        const inferred = h >= 8 ? "good" : h >= 6 ? "stable" : h >= 4 ? "mixed" : h >= 3 ? "hard" : "crisis";
-        const noteWithFactors = buildReentryVoiceNote(result.note, result.factors);
-        setReentryPattern(inferred);
-        if (noteWithFactors) setReentryNote(noteWithFactors);
-        // Auto-avança
-        await new Promise(r => setTimeout(r, 400));
-        await submitReentry(inferred, noteWithFactors);
-      } catch {
-        setVoiceError(t("checkin.voiceChoose"));
-      } finally {
-        setVoiceLoading(false);
-      }
-    };
-    recognition.start();
-  }
-
 
   function startVoiceCheckin() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -504,8 +398,8 @@ export function CheckinPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   // ── step 1: humor + energia (pré-marcados pela predição; re-entrada usa neutro)
-  const [humor, setHumor] = useState(isReentry ? 6 : prediction.humor);
-  const [energia, setEnergia] = useState(isReentry ? 6 : prediction.energia);
+  const [humor, setHumor] = useState(prediction.humor);
+  const [energia, setEnergia] = useState(prediction.energia);
 
   // ── step 2: emoção (até 3)
   const [emotionsSelected, setEmotionsSelected] = useState<string[]>(INITIAL_EMOTIONS_SELECTED);
@@ -673,128 +567,8 @@ export function CheckinPage() {
           </p>
         </div>
 
-        {/* ── TELA DE RETORNO — dias sem check-in ──────────────── */}
-        {isReentry && !reentryDone && (
-          <div className="checkin-step-enter-fwd">
-            <div style={{ marginBottom: 24 }}>
-              <h2 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", color: "var(--text-1)", lineHeight: 1.25 }}>
-                {t("checkin.missedTitle", { count: daysSinceLastCheckin ?? 0 })}
-              </h2>
-              <p style={{ fontSize: 14, color: "var(--text-3)", margin: 0, lineHeight: 1.6 }}>
-                {t("checkin.missedBody")}
-              </p>
-            </div>
-
-            {/* Opção de falar */}
-            <button
-              type="button"
-              onClick={startReentryVoice}
-              disabled={voiceLoading}
-              style={{
-                width: "100%", padding: "13px 16px", borderRadius: 14, marginBottom: 18,
-                border: isListening ? "2px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
-                background: isListening ? "rgba(215,137,127,0.08)" : "rgba(255,255,255,.70)",
-                cursor: voiceLoading ? "wait" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-              }}
-            >
-              {voiceLoading ? <Loader size={16} style={{ color: "var(--accent-peach)", animation: "aura-spin 1s linear infinite" }} /> :
-               isListening ? <MicOff size={16} style={{ color: "var(--accent-peach)" }} /> :
-               <Mic size={16} style={{ color: "var(--text-2)" }} />}
-              <span style={{ fontSize: 13, fontWeight: 700, color: isListening ? "var(--accent-peach)" : "var(--text-2)" }}>
-                {voiceLoading ? t("checkin.processing") : isListening ? t("checkin.listening") : t("checkin.talkAboutDays")}
-              </span>
-            </button>
-
-            {voiceError && <p style={{ fontSize: 12, color: "var(--accent-peach-ink)", marginBottom: 12 }}>{voiceError}</p>}
-
-            {/* Cards de padrão */}
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 10px" }}>
-              {t("checkin.daysOverall")}
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
-              {[
-                { id: "good", emoji: "✨" },
-                { id: "stable", emoji: "🌤" },
-                { id: "mixed", emoji: "🌊" },
-                { id: "hard", emoji: "🌧" },
-                { id: "crisis", emoji: "⛈" },
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setReentryPattern(reentryPattern === opt.id ? null : opt.id)}
-                  style={{
-                    width: "100%", padding: "12px 14px", borderRadius: 14, textAlign: "left",
-                    border: reentryPattern === opt.id ? "2px solid var(--accent-peach)" : "1.5px solid var(--warm-border-2)",
-                    background: reentryPattern === opt.id ? "rgba(215,137,127,0.08)" : "rgba(255,255,255,.75)",
-                    cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  <span style={{ fontSize: 22 }}>{opt.emoji}</span>
-                  <div>
-                    <p style={{ fontSize: 13, fontWeight: 800, margin: 0, color: "var(--text-1)" }}>{t(`checkin.reentry.${opt.id}.label`)}</p>
-                    <p style={{ fontSize: 11.5, margin: 0, color: "var(--text-3)", lineHeight: 1.4 }}>{t(`checkin.reentry.${opt.id}.sub`)}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Nota opcional */}
-            {reentryPattern && (
-              <div style={{ marginBottom: 18 }}>
-                <textarea
-                  value={reentryNote}
-                  onChange={(e) => setReentryNote(e.target.value)}
-                  placeholder={t("checkin.reentryNote")}
-                  rows={2}
-                  style={{
-                    width: "100%", padding: "10px 12px", borderRadius: 12,
-                    border: "1.5px solid var(--warm-border-2)", background: "rgba(255,255,255,.85)",
-                    fontSize: 13, color: "var(--text-1)", resize: "none", outline: "none",
-                    boxSizing: "border-box", lineHeight: 1.5,
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
-                  }}
-                />
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => setReentryDone(true)}
-                style={{
-                  flex: "none", padding: "12px 18px", borderRadius: 14,
-                  border: "1.5px solid var(--warm-border)", background: "transparent",
-                  fontSize: 13, fontWeight: 700, color: "var(--text-3)", cursor: "pointer",
-                  fontFamily: "'Plus Jakarta Sans', sans-serif",
-                }}
-              >
-                {t("checkin.skip")}
-              </button>
-              <button
-                type="button"
-                onClick={submitReentry}
-                disabled={!reentryPattern || reentrySubmitting}
-                style={{
-                  flex: 1, padding: "13px", borderRadius: 14,
-                  border: "none", background: reentryPattern ? "var(--accent-peach)" : "var(--warm-border-2)",
-                  fontSize: 14, fontWeight: 800, color: reentryPattern ? "#fff" : "var(--text-3)",
-                  cursor: reentryPattern ? "pointer" : "not-allowed",
-                  fontFamily: "'Plus Jakarta Sans', sans-serif", transition: "all 0.2s",
-                }}
-              >
-                {reentrySubmitting ? t("checkin.saving") : t("checkin.confirmToday")}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* ── MODO EXPRESSO — emoção primeiro ─────────────────────── */}
-        {mode === "express" && (!isReentry || reentryDone) && (
+        {mode === "express" && (
           <div className="checkin-step-enter-fwd">
 
             {/* ── Fase: selecionar emoção ── */}
@@ -804,11 +578,6 @@ export function CheckinPage() {
                   <h2 style={{ fontSize: 23, fontWeight: 900, margin: "0 0 4px", color: "var(--text-1)", lineHeight: 1.2 }}>
                     {t("checkin.howNow")}
                   </h2>
-                  {isReentry && (
-                    <p style={{ fontSize: 13, color: "var(--text-3)", margin: "6px 0 0", lineHeight: 1.5 }}>
-                      {t("checkin.welcomeBack")}
-                    </p>
-                  )}
                 </div>
 
                 {/* ── Voz como entrada principal ── */}
@@ -1080,7 +849,7 @@ export function CheckinPage() {
                   </div>
                 ))}
 
-                {!isReentry && prediction.source !== "neutral" && (
+                {prediction.source !== "neutral" && (
                   <p style={{ fontSize: 11.5, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
                     {t("checkin.presetPattern")}
                   </p>
@@ -1128,7 +897,7 @@ export function CheckinPage() {
           </div>
         )}
 
-        {mode === "wizard" && (!isReentry || reentryDone) && (<>
+        {mode === "wizard" && (<>
 
         {/* ── Progress dots ──────────────────────────────────────────── */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>

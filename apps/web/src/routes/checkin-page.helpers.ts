@@ -141,11 +141,3 @@ export function mergeVoiceFactors(existing: string[], extracted: string[] | null
     return true;
   });
 }
-
-/** Backfill stores one note, so preserve all voice factors inside that context. */
-export function buildReentryVoiceNote(note: string | null | undefined, factors: string[] | null | undefined): string {
-  const base = note?.trim() ?? "";
-  const uniqueFactors = mergeVoiceFactors([], factors);
-  const factorLine = uniqueFactors.length > 0 ? `Fatores relatados: ${uniqueFactors.join(", ")}` : "";
-  return [base, factorLine].filter(Boolean).join("\n");
-}

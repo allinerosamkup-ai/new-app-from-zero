@@ -8,7 +8,6 @@ describe("manual check-in submission", () => {
       localDate: "2026-07-31",
       checkinSlot: "morning",
       entry: { humor: 3, energia: 3, emotion: "sad" },
-      fallbackNote: "",
     });
     expect(payload).not.toHaveProperty("clarityScore");
     expect(payload).not.toHaveProperty("irritabilityScore");
@@ -21,9 +20,18 @@ describe("manual check-in submission", () => {
       localDate: "2026-07-31",
       checkinSlot: "morning",
       entry: { humor: 6, energia: 5, emotion: "calm", sleepHours: 7.5 },
-      fallbackNote: "",
     });
     expect(payload.sleepHours).toBe(7.5);
     expect(payload).not.toHaveProperty("sleepScore");
+  });
+
+  it("never turns an older journal draft into the check-in note", () => {
+    const payload = buildCheckinSubmission({
+      localDate: "2026-08-01",
+      checkinSlot: "morning",
+      entry: { humor: 3, energia: 7, emotion: "angry" },
+    });
+
+    expect(payload).not.toHaveProperty("note");
   });
 });

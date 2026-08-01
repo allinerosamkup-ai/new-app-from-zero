@@ -4,11 +4,10 @@ type Input = {
   localDate: string;
   checkinSlot: string;
   entry: Omit<CheckinEntry, "date">;
-  fallbackNote: string;
 };
 
-export function buildCheckinSubmission({ localDate, checkinSlot, entry, fallbackNote }: Input) {
-  const note = entry.note?.trim() || fallbackNote.trim() || undefined;
+export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input) {
+  const note = entry.note?.trim() || undefined;
   return {
     localDate,
     checkinSlot,
@@ -33,7 +32,7 @@ export function buildCheckinSubmission({ localDate, checkinSlot, entry, fallback
         ? { sleepScore: { provenance: "reported" as const, confidence: 1, evidence: ["screen:sleep"] } }
         : {}),
     },
-    note,
+    ...(note ? { note } : {}),
     factors: entry.factors,
     emotions: entry.emotions,
     isFlowing: entry.isFlowing,

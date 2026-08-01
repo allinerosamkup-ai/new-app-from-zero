@@ -20,6 +20,7 @@ import { successHaptic, tapHaptic } from "../../utils/haptics";
 import { postNativeShellMessage } from "../../utils/native-shell";
 import { buildCheckinSubmission } from "./checkin-submission";
 import { resolveMoodFromCheckin } from "./checkin-mood";
+import { hydrateCheckinEntry } from "./checkin-hydration";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -47,12 +48,6 @@ function addMinutesToTime(time: string, minutesToAdd: number): string {
   const nextHours = Math.floor(normalized / 60).toString().padStart(2, '0');
   const nextMinutes = (normalized % 60).toString().padStart(2, '0');
   return `${nextHours}:${nextMinutes}`;
-}
-
-function toScore(value: unknown, fallback = 5): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(1, Math.min(10, Math.round(n)));
 }
 
 function diffMinutes(startTime: string, endTime?: string | null): number {
@@ -229,24 +224,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
 
         const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : null;
         const mappedCheckins = checkins
-          ? checkins.map((c: any) => ({
-            date: normalizeDateKey(c.localDate ?? c.recordedAt ?? c.date),
-            recordedAt: c.recordedAt,
-            checkinSlot: c.checkinSlot,
-            humor: toScore(c.moodScore),
-            energia: toScore(c.energyScore),
-            emotion: c.stateLabelType || 'calm',
-            stateLabel: typeof c.stateLabel === 'string' ? c.stateLabel : null,
-            stateLabelType: typeof c.stateLabelType === 'string' ? c.stateLabelType : null,
-            emotions: Array.isArray(c.emotions)
-              ? c.emotions
-              : (Array.isArray(c.aiState?.emotions) ? c.aiState.emotions : undefined),
-            fisico: c.physicalScore != null ? toScore(c.physicalScore) : undefined,
-            social: c.socialScore != null ? toScore(c.socialScore) : undefined,
-            sono: c.sleepScore != null ? toScore(c.sleepScore) : undefined,
-            factors: Array.isArray(c.factors) && c.factors.length > 0 ? c.factors : undefined,
-            note: typeof c.note === 'string' ? c.note : undefined,
-          })).filter((entry) => Boolean(entry.date))
+          ? checkins.map((c: any) => hydrateCheckinEntry(c)).filter((entry) => Boolean(entry.date))
           : null;
 
         const timeline = Array.isArray(timelineRaw) ? timelineRaw : null;
@@ -562,7 +540,6 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             localDate: today,
             checkinSlot,
             entry,
-            fallbackNote: state.journal,
           })) as any;
 
           await refreshData();

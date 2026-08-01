@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
 import {
-  buildReentryVoiceNote,
   computeDaysSinceLastCheckin,
   deriveExpressEmotion,
   mergeVoiceFactors,
@@ -112,10 +111,4 @@ describe("voice check-in context", () => {
     );
   });
 
-  it("keeps re-entry factors in the persisted context note", () => {
-    assert.equal(
-      buildReentryVoiceNote("Semana cansativa", ["sono ruim", "dor de cabeca"]),
-      "Semana cansativa\nFatores relatados: sono ruim, dor de cabeca",
-    );
-  });
 });

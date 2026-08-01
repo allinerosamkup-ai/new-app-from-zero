@@ -58,6 +58,8 @@ export type CheckinEntry = {
   checkinSlot?: 'morning' | 'midday' | 'evening' | string;
   sono?: number;
   sleepHours?: number;
+  clareza?: number;
+  irritabilidade?: number;
   fisico?: number;
   social?: number;
   cyclePhase?: string;
@@ -71,6 +73,8 @@ export type CheckinEntry = {
   };
   factors?: string[];
   note?: string;
+  source?: string;
+  signalMetadata?: Record<string, unknown>;
   // Diagnostic-aware optional signals (TDAH, bipolar, ciclotimia)
   medicationTakenToday?: boolean | null;
   focusScore?: number | null;
