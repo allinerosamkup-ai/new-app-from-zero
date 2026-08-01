@@ -13,12 +13,17 @@ import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodO
 import { createEmptyOnboardingDraft, type OnboardingDraft } from "./onboarding";
 import { normalizeReminderPreferences } from "./settings";
 import { api } from "../../lib/api";
-import { queueCheckin } from "../../lib/offline-checkin";
+import {
+  queueCheckin,
+  registerOfflineSync,
+  syncPendingCheckins,
+  type QueuedCheckinReceipt,
+} from "../../lib/offline-checkin";
 import { supabase } from "../../lib/supabase";
 import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
 import { successHaptic, tapHaptic } from "../../utils/haptics";
 import { postNativeShellMessage } from "../../utils/native-shell";
-import { buildCheckinSubmission } from "./checkin-submission";
+import { buildCheckinSubmission, type CheckinSubmission } from "./checkin-submission";
 import { resolveMoodFromCheckin } from "./checkin-mood";
 import { hydrateCheckinEntry } from "./checkin-hydration";
 
@@ -85,7 +90,14 @@ type AuraStoreContextValue = {
   saveProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   prepareJournalFromMood: () => void;
-  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<{ stateLabel: string | null; analysis: string | null; recommendations: string[]; suggestedIntensity: string | null; riskSafety?: unknown }>;
+  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<QueuedCheckinReceipt | {
+    status: "persisted";
+    stateLabel: string | null;
+    analysis: string | null;
+    recommendations: string[];
+    suggestedIntensity: string | null;
+    riskSafety?: unknown;
+  }>;
   addGoal: (title: string) => Promise<void>;
   addGoalWithSubGoals: (title: string, subgoals: string[]) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
@@ -331,6 +343,25 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const submitQueuedCheckin = async (payload: CheckinSubmission) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão necessária para sincronizar o check-in.");
+      await api.post('/checkins', payload);
+      await refreshData();
+    };
+    const unregisterOnlineSync = registerOfflineSync(submitQueuedCheckin);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        void syncPendingCheckins(submitQueuedCheckin);
+      }
+    });
+    return () => {
+      unregisterOnlineSync();
+      subscription.unsubscribe();
+    };
+  }, [refreshData]);
+
+  useEffect(() => {
     try {
       const storedQuietMode = window.localStorage.getItem("airia.quietMode");
       if (storedQuietMode === "true" || storedQuietMode === "false") {
@@ -521,29 +552,25 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const today = getLocalDateKey();
         const recordedAtDate = new Date();
         const checkinSlot = deriveCheckinSlotToken(recordedAtDate);
+        const payload = buildCheckinSubmission({
+          localDate: today,
+          checkinSlot,
+          entry,
+        });
 
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Sessão necessária para salvar o check-in.");
 
         let checkinResponse: any;
         try {
-          checkinResponse = await api.post('/checkins', buildCheckinSubmission({
-            localDate: today,
-            checkinSlot,
-            entry,
-          }));
+          checkinResponse = await api.post('/checkins', payload);
         } catch (err) {
           console.error("Failed to persist checkin.", err);
-          // Salva na fila offline para sincronizar quando a conexão voltar
+          // Preserve o payload canônico completo, sem anunciar persistência remota.
           if (!navigator.onLine) {
-            queueCheckin({
-              date: today,
-              humor: entry.humor,
-              energia: entry.energia,
-              sono: entry.sono,
-              checkinSlot,
-            });
+            const queued = queueCheckin(payload);
             console.log("[offline-sync] Check-in enfileirado para sync posterior.");
+            return queued;
           }
           throw err;
         }
@@ -568,6 +595,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
 
         // Retorna dados ricos da IA para uso na tela de resultado
         return {
+          status: "persisted" as const,
           stateLabel: checkinResponse?.stateLabel ?? null,
           analysis: checkinResponse?.stateSummary ?? checkinResponse?.aiState?.analysis ?? null,
           recommendations: checkinResponse?.aiState?.recommendations ?? [],

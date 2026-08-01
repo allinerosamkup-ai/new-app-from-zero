@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
@@ -55,5 +57,17 @@ describe("CheckinPage integrated flow", () => {
     expect(html).toContain('for="checkin-note"');
     expect(html).toContain('id="checkin-note"');
     expect(html).toContain('aria-live="polite"');
+    expect(html).toContain('data-choice-group="menstrual-status"');
+    expect(html).toContain('data-choice-group="medication-status"');
+    expect(html).toContain('data-choice-group="hyperfocus-status"');
+    expect(html).toContain('data-choice-group="day-type"');
+  });
+
+  it("keeps conditional flow controls semantically grouped and never navigates a queued receipt", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/routes/checkin-page.tsx"), "utf8");
+
+    expect(source).toContain('data-choice-group="flow-day"');
+    expect(source).toContain('data-choice-group="flow-intensity"');
+    expect(source).toMatch(/outcome\.status === "queued"[\s\S]{0,900}return;[\s\S]{0,180}finalizeContextualCheckin/);
   });
 });

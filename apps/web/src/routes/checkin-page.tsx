@@ -150,17 +150,22 @@ function ScorePicker({ label, value, onChange }: {
   );
 }
 
-function BooleanChoice({ value, onChange, yes, no }: {
+function BooleanChoice({ value, onChange, yes, no, legend, group }: {
   value: boolean | null;
   onChange: (value: boolean | null) => void;
   yes: string;
   no: string;
+  legend: string;
+  group: string;
 }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-      <ChoiceButton active={value === true} onClick={() => onChange(value === true ? null : true)}>{yes}</ChoiceButton>
-      <ChoiceButton active={value === false} onClick={() => onChange(value === false ? null : false)}>{no}</ChoiceButton>
-    </div>
+    <fieldset data-choice-group={group} style={{ margin: 0, padding: 0, border: 0 }}>
+      <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800 }}>{legend}</legend>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <ChoiceButton active={value === true} onClick={() => onChange(value === true ? null : true)}>{yes}</ChoiceButton>
+        <ChoiceButton active={value === false} onClick={() => onChange(value === false ? null : false)}>{no}</ChoiceButton>
+      </div>
+    </fieldset>
   );
 }
 
@@ -311,8 +316,21 @@ export function CheckinPage() {
         ...(mixedEpisodeNote.trim() ? { mixedEpisodeNote } : {}),
         ...(note.trim() ? { note } : {}),
       });
+      const outcome = await addCheckin(entry);
+      if (outcome.status === "queued") {
+        trackEvent("checkin_queued", {
+          flow: "contextual",
+          idempotency_key: outcome.idempotencyKey,
+          factors_count: factors.length,
+        });
+        setSubmitError(l(
+          "Sem conexão. O check-in completo ficou guardado neste dispositivo e será enviado quando a internet voltar. Ele ainda não foi confirmado.",
+          "You are offline. The complete check-in is stored on this device and will be sent when the connection returns. It is not confirmed yet.",
+        ));
+        return;
+      }
       await finalizeContextualCheckin({
-        persist: () => addCheckin(entry),
+        persist: async () => outcome,
         onConfirmed: (checkinAI) => {
           if (entry.emotion) setMood(EMOTION_TO_MOOD[entry.emotion] ?? "equilibrada");
           trackEvent("checkin_completed", {
@@ -415,7 +433,6 @@ export function CheckinPage() {
             <ScorePicker label={l("Carga social", "Social load")} value={social} onChange={setSocial} />
 
             <div>
-              <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800, color: "var(--text-2)" }}>{l("Está menstruada hoje?", "Are you menstruating today?")}</p>
               <BooleanChoice value={isFlowing} onChange={(value) => {
                 setIsFlowing(value);
                 if (value !== true) {
@@ -423,22 +440,25 @@ export function CheckinPage() {
                   setFlowIntensity(null);
                   setSymptomLevels({});
                 }
-              }} yes={l("Sim", "Yes")} no={l("Não", "No")} />
+              }} legend={l("Está menstruada hoje?", "Are you menstruating today?")} group="menstrual-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
               {isFlowing === true && (
                 <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-                  <div>
-                    <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700 }}>{l("Dia do fluxo", "Flow day")}</p>
+                  <fieldset data-choice-group="flow-day" style={{ margin: 0, padding: 0, border: 0 }}>
+                    <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 700 }}>{l("Dia do fluxo", "Flow day")}</legend>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 }}>
                       {[1, 2, 3, 4, 5, 6, 7].map((day) => <ChoiceButton key={day} active={flowDay === day} onClick={() => setFlowDay(flowDay === day ? null : day)}>{day}</ChoiceButton>)}
                     </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
-                    {(["leve", "moderado", "intenso"] as FlowIntensity[]).map((intensity) => (
-                      <ChoiceButton key={intensity} active={flowIntensity === intensity} onClick={() => setFlowIntensity(flowIntensity === intensity ? null : intensity)}>
-                        {{ leve: l("Leve", "Light"), moderado: l("Moderado", "Moderate"), intenso: l("Intenso", "Heavy") }[intensity]}
-                      </ChoiceButton>
-                    ))}
-                  </div>
+                  </fieldset>
+                  <fieldset data-choice-group="flow-intensity" style={{ margin: 0, padding: 0, border: 0 }}>
+                    <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 700 }}>{l("Intensidade do fluxo", "Flow intensity")}</legend>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
+                      {(["leve", "moderado", "intenso"] as FlowIntensity[]).map((intensity) => (
+                        <ChoiceButton key={intensity} active={flowIntensity === intensity} onClick={() => setFlowIntensity(flowIntensity === intensity ? null : intensity)}>
+                          {{ leve: l("Leve", "Light"), moderado: l("Moderado", "Moderate"), intenso: l("Intenso", "Heavy") }[intensity]}
+                        </ChoiceButton>
+                      ))}
+                    </div>
+                  </fieldset>
                   {(["colica", "dorCabeca"] as const).map((symptom) => (
                     <div key={symptom}>
                       <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700 }}>{symptom === "colica" ? l("Cólica", "Cramps") : l("Dor de cabeça", "Headache")}</p>
@@ -452,16 +472,14 @@ export function CheckinPage() {
             </div>
 
             <div>
-              <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>{l("Tomou a medicação hoje?", "Did you take medication today?")}</p>
-              <BooleanChoice value={medicationTakenToday} onChange={setMedicationTakenToday} yes={l("Sim", "Yes")} no={l("Não", "No")} />
+              <BooleanChoice value={medicationTakenToday} onChange={setMedicationTakenToday} legend={l("Tomou a medicação hoje?", "Did you take medication today?")} group="medication-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
             </div>
             <ScorePicker label={l("Foco", "Focus")} value={focusScore} onChange={setFocusScore} />
             <div>
-              <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>{l("Teve hiperfoco?", "Did hyperfocus occur?")}</p>
-              <BooleanChoice value={hyperfocusOccurred} onChange={setHyperfocusOccurred} yes={l("Sim", "Yes")} no={l("Não", "No")} />
+              <BooleanChoice value={hyperfocusOccurred} onChange={setHyperfocusOccurred} legend={l("Teve hiperfoco?", "Did hyperfocus occur?")} group="hyperfocus-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
             </div>
-            <div>
-              <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>{l("Tipo do dia", "Day type")}</p>
+            <fieldset data-choice-group="day-type" style={{ margin: 0, padding: 0, border: 0 }}>
+              <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800 }}>{l("Tipo do dia", "Day type")}</legend>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 }}>
                 {(["up", "down", "mixed", "stable"] as DayType[]).map((type) => (
                   <ChoiceButton key={type} active={dayType === type} onClick={() => setDayType(dayType === type ? null : type)}>
@@ -470,7 +488,7 @@ export function CheckinPage() {
                 ))}
               </div>
               {dayType === "mixed" && <input value={mixedEpisodeNote} onChange={(event) => setMixedEpisodeNote(event.target.value)} maxLength={500} placeholder={t("checkin.mixedPlaceholder")} style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 11, borderRadius: 10, border: "1.5px solid var(--warm-border-2)" }} />}
-            </div>
+            </fieldset>
             <div>
               <label htmlFor="checkin-note" style={{ display: "block", margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>
                 {l("Nota livre", "Free note")}
