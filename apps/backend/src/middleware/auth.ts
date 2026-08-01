@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { PrismaClient } from '@app/database';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Lazy singleton — criado na primeira requisição, quando dotenv já carregou os env vars
@@ -13,6 +14,54 @@ function getClient(): SupabaseClient {
     );
   }
   return _client;
+}
+
+type ProfileRepository = {
+  upsert(args: {
+    where: { id: string };
+    update: Record<string, never>;
+    create: { id: string; fullName: string | null };
+  }): Promise<unknown>;
+};
+
+type AuthProfileUser = {
+  id: string;
+  user_metadata?: Record<string, unknown>;
+};
+
+export function createProfileBootstrapper(profileRepository: ProfileRepository) {
+  const ensured = new Map<string, Promise<void>>();
+
+  return (user: AuthProfileUser): Promise<void> => {
+    const existing = ensured.get(user.id);
+    if (existing) return existing;
+
+    const rawName = user.user_metadata?.full_name ?? user.user_metadata?.name;
+    const fullName = typeof rawName === 'string' && rawName.trim()
+      ? rawName.trim().slice(0, 80)
+      : null;
+
+    const pending = profileRepository.upsert({
+      where: { id: user.id },
+      update: {},
+      create: { id: user.id, fullName },
+    }).then(() => undefined).catch((error) => {
+      ensured.delete(user.id);
+      throw error;
+    });
+
+    ensured.set(user.id, pending);
+    return pending;
+  };
+}
+
+let _profilePrisma: PrismaClient | null = null;
+let _bootstrapProfile: ReturnType<typeof createProfileBootstrapper> | null = null;
+
+function getProfileBootstrapper() {
+  if (!_profilePrisma) _profilePrisma = new PrismaClient();
+  if (!_bootstrapProfile) _bootstrapProfile = createProfileBootstrapper(_profilePrisma.profile);
+  return _bootstrapProfile;
 }
 
 export interface AuthRequest extends Request {
@@ -44,6 +93,14 @@ export async function requireAuth(
 
   if (error || !data.user) {
     res.status(401).json({ error: 'Token inválido ou expirado.' });
+    return;
+  }
+
+  try {
+    await getProfileBootstrapper()(data.user);
+  } catch (profileError) {
+    console.error('[auth/profile-bootstrap] Error:', profileError);
+    res.status(500).json({ error: 'Não foi possível preparar seu perfil agora.' });
     return;
   }
 

@@ -61,4 +61,4 @@ jobs:
         run: npm run test -w apps/web
 
       - name: Test backend (contract + unit)
-        run: npm run test -w apps/backend
+        run: npm run test:auth -w apps/backend && npm run test -w apps/backend
