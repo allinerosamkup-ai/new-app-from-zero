@@ -104,7 +104,8 @@ import {
   shouldSendJournalNudge,
 } from './lib/notification-filters';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
-import { ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
+import { normalizeObjectiveSubgoals, ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
+import { ObjectiveProgressionError, ObjectiveProgressionService } from './services/objective-progression.service';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
   AuraCommandMessageStreamSchema,
@@ -157,6 +158,7 @@ const MUTATING_AURA_ACTIONS = new Set<AuraCommandResponse['action']>([
   'record_checkin',
   'create_habit',
   'create_calendar_event',
+  'adapt_agenda',
 ]);
 
 /** Ações que só fazem sentido sobre um item que já existe. */
@@ -348,6 +350,13 @@ export function enforceAuraCaptureGate(
     });
     completedPayload.timingWasInferred = inferred;
   }
+  if (response.action === 'adapt_agenda') {
+    completedPayload.localDate = validDate(payload.localDate ?? payload.date)
+      ? String(payload.localDate ?? payload.date)
+      : validDate(targetContext.localDate)
+        ? String(targetContext.localDate)
+        : new Date().toISOString().slice(0, 10);
+  }
 
   const payloadIsSufficient = (() => {
     switch (response.action) {
@@ -400,6 +409,8 @@ export function enforceAuraCaptureGate(
       case 'start_task':
         return hasText(payload.taskId)
           && targetMatches(cognitive.captureJudgment.mutationTargetText, targetContext.resolvedTaskTitle);
+      case 'adapt_agenda':
+        return validDate(completedPayload.localDate);
       default:
         return true;
     }
@@ -1921,6 +1932,45 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
   const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
   const contextGroundingService = new ContextGroundingService(prisma);
+  const objectiveProgressionService = new ObjectiveProgressionService(prisma as any);
+  const applyAuraAgendaAdaptation = async ({
+    userId,
+    localDate,
+  }: {
+    userId: string;
+    localDate: string;
+    operationId: string;
+    now: Date;
+  }) => {
+    const [recentSuggestionItems, memories] = await Promise.all([
+      SuggestionMemoryService.getRecent(prisma, userId),
+      canonicalMemoryService.retrieve({
+        userId,
+        query: `adaptação de agenda e rotina real em ${localDate}`,
+        limit: 8,
+      }),
+    ]);
+    const dailyContext = await contextGroundingService.buildDailyContext({
+      userId,
+      type: 'agenda-adapt',
+      context: { localDate },
+      recentSuggestionItems,
+      ragContext: canonicalMemoryService.formatForPrompt(memories, 'pt-BR'),
+    });
+    const result = await AgendaAdaptationService.apply({
+      prisma,
+      userId,
+      dailyContext,
+      requestContext: { source: 'aura_command' },
+      trigger: 'planner',
+    });
+    return {
+      date: result.date,
+      applied: result.applied,
+      appliedChanges: result.appliedChanges.map((change) => ({ id: change.id, title: change.title, type: change.type })),
+      skippedChanges: result.skippedChanges.map((change) => ({ id: change.id, title: change.title, type: change.type, reason: change.reason })),
+    };
+  };
   const routineBuilderService = dependencies.routineBuilderService ?? new RoutineBuilderService(prisma);
   const checkinApplicationService = dependencies.checkinApplicationService ?? new CheckinApplicationService({
     repository: new PrismaCheckinApplicationRepository(prisma),
@@ -3243,7 +3293,12 @@ export function createApp(dependencies: AppDependencies = {}) {
       const rawTaskId = typeof recoveredCommandResponse.payload?.taskId === 'string'
         ? recoveredCommandResponse.payload.taskId.trim()
         : '';
-      const resolvedCommandTask = rawTaskId && (recoveredCommandResponse.action === 'update_task' || recoveredCommandResponse.action === 'delete_task')
+      const resolvedCommandTask = rawTaskId && (
+        recoveredCommandResponse.action === 'update_task'
+        || recoveredCommandResponse.action === 'delete_task'
+        || recoveredCommandResponse.action === 'postpone_task'
+        || recoveredCommandResponse.action === 'start_task'
+      )
         ? await prisma.timelineBlock.findFirst({ where: { id: rawTaskId, userId: data.userId } })
         : null;
       const gatedCommandResponse = enforceAuraCaptureGateAll(
@@ -3424,6 +3479,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           idempotencyKey: `${data.sessionId}:${sourceMessage.id}`,
           now,
           recordCheckin: (input, context) => checkinApplicationService.record(input, context),
+          adaptAgenda: applyAuraAgendaAdaptation,
         })
         : null;
       const freshPlan = execution
@@ -3527,6 +3583,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         operationIds: data.operationIds,
         idempotencyKey: data.idempotencyKey,
         recordCheckin: (input, context) => checkinApplicationService.record(input, context),
+        adaptAgenda: applyAuraAgendaAdaptation,
       });
       const plan = await prisma.auraCommandPlan.findFirst({
         where: { id: req.params.planId, userId: (req as AuthRequest).userId },
@@ -4354,7 +4411,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         description: o.description,
         category: o.category,
         progress: o.progress,
-        subgoals: o.subgoals,
+        subgoals: normalizeObjectiveSubgoals(Array.isArray(o.subgoals) ? o.subgoals : []),
         aiInsight: o.aiInsight,
         createdAt: o.createdAt.toISOString(),
       })));
@@ -4389,11 +4446,28 @@ export function createApp(dependencies: AppDependencies = {}) {
         content: `Meta: ${data.title}${data.description ? `. ${data.description}` : ''}`,
         metadata: { category: data.category, objectiveId: obj.id, progress: obj.progress, archived: obj.archived },
       }).catch(() => {});
-      return res.status(201).json({ id: obj.id, title: obj.title, category: obj.category, progress: obj.progress, subgoals: obj.subgoals, createdAt: obj.createdAt.toISOString() });
+      return res.status(201).json({ id: obj.id, title: obj.title, category: obj.category, progress: obj.progress, subgoals: normalizeObjectiveSubgoals(Array.isArray(obj.subgoals) ? obj.subgoals : []), createdAt: obj.createdAt.toISOString() });
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
       console.error('[objectives/create] Error:', error);
       return res.status(500).json({ error: 'Failed to create objective' });
+    }
+  });
+
+  app.post('/api/objectives/:id/subgoals/:subgoalId/complete', async (req: Request, res: Response) => {
+    try {
+      const result = await objectiveProgressionService.completeActiveAction({
+        userId: (req as AuthRequest).userId,
+        objectiveId: req.params.id,
+        subgoalId: req.params.subgoalId,
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof ObjectiveProgressionError) {
+        return res.status(error.code === 'objective_not_found' ? 404 : 409).json({ error: error.code });
+      }
+      console.error('[objectives/complete-subgoal] Error:', error);
+      return res.status(500).json({ error: 'Failed to complete objective action' });
     }
   });
 
@@ -4434,7 +4508,9 @@ export function createApp(dependencies: AppDependencies = {}) {
           },
         }).catch(() => {});
       }
-      return res.json(updated);
+      return res.json(updated
+        ? { ...updated, subgoals: normalizeObjectiveSubgoals(Array.isArray(updated.subgoals) ? updated.subgoals : []) }
+        : updated);
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
       console.error('[objectives/patch] Error:', error);

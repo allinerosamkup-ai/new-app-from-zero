@@ -135,6 +135,40 @@ const ExistingItemOperationSchema = z.object({
   }),
 });
 
+const PostponeTimelineTaskOperationSchema = z.object({
+  ...OperationBase,
+  type: z.literal('postpone_timeline_task'),
+  payload: z.object({
+    taskId: z.string().trim().min(1).max(500),
+    targetDate: DateSchema,
+    reason: z.string().trim().max(240).nullable().optional(),
+  }),
+});
+
+const StartTimelineTaskOperationSchema = z.object({
+  ...OperationBase,
+  type: z.literal('start_timeline_task'),
+  payload: z.object({
+    taskId: z.string().trim().min(1).max(500),
+  }),
+});
+
+const AdaptAgendaOperationSchema = z.object({
+  ...OperationBase,
+  type: z.literal('adapt_agenda'),
+  payload: z.object({
+    localDate: DateSchema,
+  }),
+});
+
+const OpenScreenOperationSchema = z.object({
+  ...OperationBase,
+  type: z.literal('open_screen'),
+  payload: z.object({
+    screen: z.enum(['home', 'planner', 'habits', 'goals', 'insights', 'journal', 'checkin']),
+  }),
+});
+
 const JournalOperationSchema = z.object({
   ...OperationBase,
   type: z.literal('handoff_to_journal'),
@@ -152,6 +186,10 @@ export const AuraCommandOperationSchema = z.union([
   CheckinOperationSchema,
   RecordCheckinOperationSchema,
   ExistingItemOperationSchema,
+  PostponeTimelineTaskOperationSchema,
+  StartTimelineTaskOperationSchema,
+  AdaptAgendaOperationSchema,
+  OpenScreenOperationSchema,
   JournalOperationSchema,
 ]);
 

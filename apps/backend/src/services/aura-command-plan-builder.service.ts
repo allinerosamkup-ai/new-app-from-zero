@@ -56,6 +56,12 @@ function checklistItems(value: unknown) {
   }));
 }
 
+function nextDate(date: string): string {
+  const value = new Date(`${date}T12:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + 1);
+  return value.toISOString().slice(0, 10);
+}
+
 export class AuraCommandPlanBuilderService {
   static build(input: BuildInput): AuraCommandPlan {
     const makeId = input.idFactory ?? randomUUID;
@@ -328,6 +334,64 @@ export class AuraCommandPlanBuilderService {
             targetId,
             changes: {},
           },
+        });
+        break;
+      }
+      case 'postpone_task': {
+        const taskId = text(payload.taskId);
+        if (!taskId) {
+          missingFields.push('taskId');
+          break;
+        }
+        operations.push({
+          id: makeId(),
+          type: 'postpone_timeline_task',
+          status: 'proposed',
+          selected: true,
+          payload: {
+            taskId,
+            targetDate: text(payload.targetDate) ?? text(payload.newDate) ?? nextDate(input.localDate),
+            reason: text(payload.reason),
+          },
+        });
+        break;
+      }
+      case 'start_task': {
+        const taskId = text(payload.taskId);
+        if (!taskId) {
+          missingFields.push('taskId');
+          break;
+        }
+        operations.push({
+          id: makeId(),
+          type: 'start_timeline_task',
+          status: 'proposed',
+          selected: true,
+          payload: { taskId },
+        });
+        break;
+      }
+      case 'adapt_agenda':
+        operations.push({
+          id: makeId(),
+          type: 'adapt_agenda',
+          status: 'proposed',
+          selected: true,
+          payload: { localDate: text(payload.localDate) ?? text(payload.date) ?? input.localDate },
+        });
+        break;
+      case 'open_screen': {
+        const screen = text(payload.screen);
+        if (!screen) {
+          missingFields.push('screen');
+          break;
+        }
+        operations.push({
+          id: makeId(),
+          type: 'open_screen',
+          status: 'proposed',
+          selected: true,
+          payload: { screen: screen as 'home' | 'planner' | 'habits' | 'goals' | 'insights' | 'journal' | 'checkin' },
         });
         break;
       }

@@ -217,7 +217,7 @@ function buildPayloadFromRoot(value: unknown): Record<string, unknown> {
   }
 
   const payload: Record<string, unknown> = {};
-  for (const key of ['title', 'date', 'startTime', 'time', 'category', 'blocks', 'items', 'steps', 'checklist', 'subgoals', 'subtasks', 'recurrence', 'taskId', 'newDate', 'newStartTime', 'kind', 'content', 'frequency', 'targetDays', 'durationMinutes', 'moodScore', 'energyScore', 'clarityScore', 'irritabilityScore', 'note', 'emotions', 'calendarId', 'location', 'description']) {
+  for (const key of ['title', 'date', 'startTime', 'time', 'category', 'blocks', 'items', 'steps', 'checklist', 'subgoals', 'subtasks', 'recurrence', 'taskId', 'newDate', 'newStartTime', 'targetDate', 'reason', 'screen', 'kind', 'content', 'frequency', 'targetDays', 'durationMinutes', 'moodScore', 'energyScore', 'clarityScore', 'irritabilityScore', 'note', 'emotions', 'calendarId', 'location', 'description']) {
     if (key in root) {
       payload[key] = root[key];
     }

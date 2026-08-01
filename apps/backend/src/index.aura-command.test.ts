@@ -121,6 +121,46 @@ async function run() {
   }, 'en-US', { resolvedTaskTitle: 'Send proposal' });
   assert.equal(incompleteUpdate.action, 'ask_clarification');
 
+  for (const action of ['postpone_task', 'start_task'] as const) {
+    const allowedExistingTask = enforceAuraCaptureGate({
+      assistantMessage: 'Pronto.',
+      intent: action === 'postpone_task' ? 'postpone' : 'start_task',
+      action,
+      payload: action === 'postpone_task'
+        ? { taskId: 'task-1', targetDate: '2026-04-08' }
+        : { taskId: 'task-1' },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    }, {
+      captureJudgment: { allowedMutationActions: [action], mutationTargetText: 'proposal' },
+    }, 'en-US', { resolvedTaskTitle: 'Send proposal' });
+    assert.equal(allowedExistingTask.action, action);
+  }
+
+  const blockedAgendaAdaptation = enforceAuraCaptureGate({
+    assistantMessage: 'Ajustei seu dia.',
+    intent: 'adapt_agenda',
+    action: 'adapt_agenda',
+    payload: {},
+    needsConfirmation: false,
+    needsClarification: false,
+    clarifyingQuestion: null,
+  }, { captureJudgment: { allowedMutationActions: [] } }, 'en-US', { localDate: '2026-04-07' });
+  assert.equal(blockedAgendaAdaptation.action, 'ask_clarification');
+
+  const allowedAgendaAdaptation = enforceAuraCaptureGate({
+    assistantMessage: 'Ajustei seu dia.',
+    intent: 'adapt_agenda',
+    action: 'adapt_agenda',
+    payload: {},
+    needsConfirmation: false,
+    needsClarification: false,
+    clarifyingQuestion: null,
+  }, { captureJudgment: { allowedMutationActions: ['adapt_agenda'] } }, 'en-US', { localDate: '2026-04-07' });
+  assert.equal(allowedAgendaAdaptation.action, 'adapt_agenda');
+  assert.equal((allowedAgendaAdaptation.payload as any).localDate, '2026-04-07');
+
   // Sem título não há o que criar — isso a Airia não inventa.
   for (const [action, payload] of [
     ['create_goal', {}],

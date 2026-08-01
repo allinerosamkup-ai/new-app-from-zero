@@ -298,6 +298,136 @@ async function main() {
     /invalid|validation/i,
   );
 
+  const actionRows: StoredOperation[] = [
+    {
+      id: '10000000-0000-4000-8000-000000000101',
+      planId: '20000000-0000-4000-8000-000000000101',
+      userId: '30000000-0000-4000-8000-000000000101',
+      clientOperationId: 'postpone-1',
+      type: 'postpone_timeline_task', status: 'proposed', selected: true,
+      payload: { taskId: 'timeline-1', targetDate: '2026-07-30', reason: 'dia cheio' },
+      result: null, error: null, idempotencyKey: null, appliedAt: null,
+    },
+    {
+      id: '10000000-0000-4000-8000-000000000102',
+      planId: '20000000-0000-4000-8000-000000000101',
+      userId: '30000000-0000-4000-8000-000000000101',
+      clientOperationId: 'start-1',
+      type: 'start_timeline_task', status: 'proposed', selected: true,
+      payload: { taskId: 'timeline-1' },
+      result: null, error: null, idempotencyKey: null, appliedAt: null,
+    },
+    {
+      id: '10000000-0000-4000-8000-000000000103',
+      planId: '20000000-0000-4000-8000-000000000101',
+      userId: '30000000-0000-4000-8000-000000000101',
+      clientOperationId: 'adapt-1',
+      type: 'adapt_agenda', status: 'proposed', selected: true,
+      payload: { localDate: '2026-07-30' },
+      result: null, error: null, idempotencyKey: null, appliedAt: null,
+    },
+    {
+      id: '10000000-0000-4000-8000-000000000104',
+      planId: '20000000-0000-4000-8000-000000000101',
+      userId: '30000000-0000-4000-8000-000000000101',
+      clientOperationId: 'screen-1',
+      type: 'open_screen', status: 'proposed', selected: true,
+      payload: { screen: 'planner' },
+      result: null, error: null, idempotencyKey: null, appliedAt: null,
+    },
+  ];
+  const actionPlan: any = {
+    id: '20000000-0000-4000-8000-000000000101',
+    userId: '30000000-0000-4000-8000-000000000101',
+    executionPolicy: 'auto_apply', status: 'proposed', operations: actionRows,
+  };
+  const timeline = {
+    id: 'timeline-1', userId: actionPlan.userId, title: 'Enviar proposta', status: 'planned',
+    localDate: new Date('2026-07-28T00:00:00.000Z'),
+    startAt: new Date('2026-07-28T14:00:00.000Z'),
+    endAt: new Date('2026-07-28T15:00:00.000Z'),
+    gcalEventId: null, temporalPolicy: 'flexible', adaptationPermission: 'eligible',
+  };
+  const protectedTimeline = {
+    ...timeline,
+    id: 'timeline-protected', title: 'Consulta fixa', gcalEventId: 'gcal-1',
+    temporalPolicy: 'fixed', adaptationPermission: 'protected',
+  };
+  const actionEvents: Array<Record<string, unknown>> = [];
+  const actionPrisma: any = {
+    auraCommandPlan: {
+      findFirst: async ({ where }: any) => where.id === actionPlan.id && where.userId === actionPlan.userId ? actionPlan : null,
+      update: async ({ data }: any) => Object.assign(actionPlan, data),
+    },
+    auraCommandOperation: {
+      update: async ({ where, data }: any) => {
+        const row = actionRows.find((item) => item.id === where.id);
+        if (!row) throw new Error('operation not found');
+        Object.assign(row, data);
+        return row;
+      },
+    },
+    timelineBlock: {
+      findFirst: async ({ where }: any) => [timeline, protectedTimeline].find((block) => block.id === where.id && block.userId === where.userId) ?? null,
+      updateMany: async ({ where, data }: any) => {
+        const block = [timeline, protectedTimeline].find((candidate) => candidate.id === where.id && candidate.userId === where.userId);
+        if (!block || (where.gcalEventId === null && block.gcalEventId !== null)
+          || (where.temporalPolicy?.not && block.temporalPolicy === where.temporalPolicy.not)
+          || (where.adaptationPermission?.not && block.adaptationPermission === where.adaptationPermission.not)
+          || (where.status?.not && block.status === where.status.not)) return { count: 0 };
+        Object.assign(block, data);
+        return { count: 1 };
+      },
+    },
+    eventLog: { create: async ({ data }: any) => { actionEvents.push(data); return data; } },
+    $transaction: async (callback: (tx: any) => Promise<unknown>) => callback(actionPrisma),
+  };
+  let adaptationCalls = 0;
+  const actionInput = {
+    prisma: actionPrisma,
+    calendarGateway,
+    userId: actionPlan.userId,
+    planId: actionPlan.id,
+    operationIds: actionRows.map((row) => row.clientOperationId),
+    idempotencyKey: 'command-action-0001',
+    now: new Date('2026-07-28T15:00:00.000Z'),
+    adaptAgenda: async ({ localDate }: any) => {
+      adaptationCalls += 1;
+      return { localDate, applied: true, appliedChanges: [{ id: 'change-1' }] };
+    },
+  };
+  const actionExecution = await AuraCommandExecutorService.apply(actionInput);
+  assert.equal(actionExecution.status, 'applied');
+  assert.equal(timeline.localDate.toISOString().slice(0, 10), '2026-07-30');
+  assert.equal(timeline.status, 'in_progress');
+  assert.equal(adaptationCalls, 1);
+  assert.deepEqual(actionExecution.operations.find((item) => item.id === 'screen-1')?.result, { screen: 'planner' });
+  assert.ok(actionEvents.some((event) => event.eventName === 'timeline.block_postponed'));
+  assert.ok(actionEvents.some((event) => event.eventName === 'timeline.block_started'));
+
+  const idempotentActionExecution = await AuraCommandExecutorService.apply(actionInput);
+  assert.equal(idempotentActionExecution.status, 'applied');
+  assert.equal(adaptationCalls, 1, 'agenda adaptation must not be applied twice');
+
+  const protectedRow: StoredOperation = {
+    id: '10000000-0000-4000-8000-000000000105',
+    planId: actionPlan.id,
+    userId: actionPlan.userId,
+    clientOperationId: 'postpone-protected',
+    type: 'postpone_timeline_task', status: 'proposed', selected: true,
+    payload: { taskId: 'timeline-protected', targetDate: '2026-07-30', reason: null },
+    result: null, error: null, idempotencyKey: null, appliedAt: null,
+  };
+  actionRows.push(protectedRow);
+  const protectedExecution = await AuraCommandExecutorService.apply({
+    ...actionInput,
+    operationIds: ['postpone-protected'],
+    idempotencyKey: 'command-action-protected-0001',
+  });
+  assert.equal(protectedExecution.status, 'failed');
+  assert.match(protectedExecution.operations[0]?.error?.message ?? '', /protegido/i);
+  assert.equal(protectedTimeline.localDate.toISOString().slice(0, 10), '2026-07-28');
+
   console.log('aura-command-executor.service tests passed');
 }
 

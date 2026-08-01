@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { AuraCommandOperationSchema, type AuraCommandOperation } from '../contracts/aura-command-plan.contract';
 import type { CheckinCreateInput } from '../contracts/checkin.contract';
 import { deriveCheckinSlot } from '../contracts/checkin-slot';
-import { normalizeTimelineCategory, PlannerService } from './planner.service';
+import { isTimelineBlockProtected, normalizeTimelineCategory, PlannerService } from './planner.service';
 
 export type CommandCalendarResult = {
   calendarId: string;
@@ -52,6 +52,12 @@ type ApplyInput = {
     input: CheckinCreateInput,
     context?: { now?: Date; requestContext?: Record<string, unknown> },
   ) => Promise<Record<string, unknown>>;
+  adaptAgenda?: (input: {
+    userId: string;
+    localDate: string;
+    operationId: string;
+    now: Date;
+  }) => Promise<Record<string, unknown>>;
 };
 
 type AppliedOperation = {
@@ -347,6 +353,31 @@ async function executeInternalOperation(
       });
       return { checkinId: checkin.id };
     }
+    case 'start_timeline_task': {
+      const block = await tx.timelineBlock.findFirst({
+        where: { id: operation.payload.taskId, userId },
+      });
+      if (!block) throw new Error('Tarefa não encontrada.');
+      if (block.status === 'completed') throw new Error('Essa tarefa já foi concluída.');
+      const updated = await tx.timelineBlock.updateMany({
+        where: { id: block.id, userId, status: { not: 'completed' } },
+        data: {
+          status: 'in_progress',
+          snoozedUntil: addMinutes(now, 60),
+        },
+      });
+      if (updated.count !== 1) throw new Error('Não foi possível iniciar essa tarefa.');
+      await tx.eventLog?.create?.({
+        data: {
+          userId,
+          eventName: 'timeline.block_started',
+          properties: { blockId: block.id, title: block.title, startedAt: now.toISOString() },
+        },
+      });
+      return { timelineBlockId: block.id, startedAt: now.toISOString() };
+    }
+    case 'open_screen':
+      return { screen: operation.payload.screen };
     case 'handoff_to_journal': {
       const date = localDate(now.toISOString().slice(0, 10));
       let session = await tx.journalSession.findFirst({
@@ -468,6 +499,58 @@ async function executeInternalOperation(
       }
       throw new Error('Esta exclusão precisa de um executor específico.');
   }
+}
+
+async function executePostponeTimelineTask(
+  input: ApplyInput,
+  operation: Extract<AuraCommandOperation, { type: 'postpone_timeline_task' }>,
+  now: Date,
+): Promise<Record<string, unknown>> {
+  const block = await input.prisma.timelineBlock.findFirst({
+    where: { id: operation.payload.taskId, userId: input.userId },
+  });
+  if (!block) throw new Error('Tarefa não encontrada.');
+  if (isTimelineBlockProtected(block)) {
+    throw new Error('Bloco fixo ou protegido; adiamento automático recusado.');
+  }
+
+  const targetDate = operation.payload.targetDate;
+  const baseDate = localDate(targetDate);
+  const startTime = `${String(block.startAt.getUTCHours()).padStart(2, '0')}:${String(block.startAt.getUTCMinutes()).padStart(2, '0')}`;
+  const startAt = PlannerService.parseTimeToDate(baseDate, startTime);
+  const durationMs = Math.max(5 * 60_000, block.endAt.getTime() - block.startAt.getTime());
+  const updated = await input.prisma.timelineBlock.updateMany({
+    where: {
+      id: block.id,
+      userId: input.userId,
+      gcalEventId: null,
+      temporalPolicy: { not: 'fixed' },
+      adaptationPermission: { not: 'protected' },
+    },
+    data: {
+      localDate: baseDate,
+      startAt,
+      endAt: addMinutes(startAt, Math.ceil(durationMs / 60_000)),
+      status: 'planned',
+    },
+  });
+  if (updated.count !== 1) {
+    throw new Error('Bloco fixo ou protegido; adiamento automático recusado.');
+  }
+  await input.prisma.eventLog?.create?.({
+    data: {
+      userId: input.userId,
+      eventName: 'timeline.block_postponed',
+      properties: {
+        blockId: block.id,
+        title: block.title,
+        originalDate: block.localDate.toISOString().slice(0, 10),
+        targetDate,
+        reason: operation.payload.reason ?? 'aura_command',
+      },
+    },
+  });
+  return { timelineBlockId: block.id, targetDate };
 }
 
 async function executeTimelineMutation(
@@ -609,6 +692,16 @@ export class AuraCommandExecutorService {
               rawText: operation.payload.rawText,
             },
           });
+        } else if (operation.type === 'adapt_agenda') {
+          if (!input.adaptAgenda) {
+            throw new Error('O adaptador de agenda da Airia não está disponível.');
+          }
+          result = await input.adaptAgenda({
+            userId: input.userId,
+            localDate: operation.payload.localDate,
+            operationId: row.id,
+            now,
+          });
         } else if (operation.type === 'create_calendar_event') {
           const event = await input.calendarGateway.createOrGetEvent({
             prisma: input.prisma,
@@ -646,6 +739,8 @@ export class AuraCommandExecutorService {
           && operation.payload.targetType === 'timeline'
         ) {
           result = await executeTimelineMutation(input, operation as Parameters<typeof executeTimelineMutation>[1]);
+        } else if (operation.type === 'postpone_timeline_task') {
+          result = await executePostponeTimelineTask(input, operation, now);
         } else {
           result = await input.prisma.$transaction(async (tx: any) => {
             const nextResult = await executeInternalOperation(tx, input.userId, row.id, operation, now);

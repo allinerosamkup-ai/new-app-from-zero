@@ -248,6 +248,94 @@ function run() {
   });
   assert.equal(completed.operations[0]?.type, 'complete_item');
   assert.equal(completed.executionPolicy, 'auto_apply');
+
+  const postponed = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Adiei a proposta para amanhã.',
+      intent: 'postpone',
+      action: 'postpone_task',
+      payload: {
+        taskId: '660e8400-e29b-41d4-a716-446655440001',
+        targetDate: '2026-07-29',
+        reason: 'dia cheio',
+      },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    },
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28',
+    currentTime: '09:00',
+    defaultCalendarId: 'primary',
+    busyWindows: [],
+    idFactory,
+  });
+  assert.equal(postponed.operations[0]?.type, 'postpone_timeline_task');
+  assert.equal(postponed.executionPolicy, 'auto_apply');
+
+  const started = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Começamos a proposta agora.',
+      intent: 'start_task',
+      action: 'start_task',
+      payload: { taskId: '660e8400-e29b-41d4-a716-446655440001' },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    },
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28',
+    currentTime: '09:00',
+    defaultCalendarId: 'primary',
+    busyWindows: [],
+    idFactory,
+  });
+  assert.equal(started.operations[0]?.type, 'start_timeline_task');
+  assert.equal(started.executionPolicy, 'auto_apply');
+
+  const adapted = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Ajustei o seu dia.',
+      intent: 'adapt_agenda',
+      action: 'adapt_agenda',
+      payload: {},
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    },
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28',
+    currentTime: '09:00',
+    defaultCalendarId: 'primary',
+    busyWindows: [],
+    idFactory,
+  });
+  assert.equal(adapted.operations[0]?.type, 'adapt_agenda');
+  assert.equal(adapted.executionPolicy, 'auto_apply');
+
+  const opened = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Abrindo o check-in.',
+      intent: 'navigate',
+      action: 'open_screen',
+      payload: { screen: 'checkin' },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    },
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28',
+    currentTime: '09:00',
+    defaultCalendarId: 'primary',
+    busyWindows: [],
+    idFactory,
+  });
+  assert.equal(opened.operations[0]?.type, 'open_screen');
+  assert.equal(opened.executionPolicy, 'auto_apply');
 }
 
 run();
