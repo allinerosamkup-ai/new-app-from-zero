@@ -1,5 +1,10 @@
 export const AIRIA_RELEASE_QUERY_PARAM = "__airia_release";
 
+export interface ReleaseWindowClient {
+  url: string;
+  navigate(url: string): Promise<unknown>;
+}
+
 export function getReleaseNavigationUrl(
   clientUrl: string,
   buildId: string,
@@ -14,4 +19,16 @@ export function getReleaseNavigationUrl(
 
   url.searchParams.set(AIRIA_RELEASE_QUERY_PARAM, release);
   return url.href;
+}
+
+export async function navigateClientsToRelease(
+  clients: ReleaseWindowClient[],
+  buildId: string,
+): Promise<void> {
+  await Promise.allSettled(
+    clients.map(async (client) => {
+      const navigationUrl = getReleaseNavigationUrl(client.url, buildId);
+      if (navigationUrl) await client.navigate(navigationUrl);
+    }),
+  );
 }

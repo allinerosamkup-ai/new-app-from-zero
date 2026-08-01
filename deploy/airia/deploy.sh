@@ -50,14 +50,66 @@ for VAR in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY; do
   fi
 done
 
+DESTRUCTIVE_MIGRATION_PATTERN='drop[[:space:]]+(table|column)|truncate[[:space:]]+|delete[[:space:]]+from|alter[[:space:]]+column[^;]*[[:space:]]type[[:space:]]|rename[[:space:]]+(to|column)'
 for MIGRATION_FILE in $MIGRATION_FILES; do
   if [ ! -f "$MIGRATION_FILE" ]; then
     echo "ERRO: migration não encontrada em $MIGRATION_FILE"
     exit 1
   fi
+  # Rollback só é seguro porque estas migrations mantêm o contrato do backend
+  # anterior: adições são opcionais/idempotentes e nenhuma operação destrói dados.
+  if grep -Eiq "$DESTRUCTIVE_MIGRATION_PATTERN" "$MIGRATION_FILE"; then
+    echo "ERRO: migration incompatível com rollback automático em $MIGRATION_FILE"
+    exit 1
+  fi
 done
 
 docker network inspect easypanel >/dev/null
+
+PREVIOUS_BACKEND_IMAGE="$(docker inspect --format '{{.Image}}' airia_backend 2>/dev/null || true)"
+PREVIOUS_WEB_IMAGE="$(docker inspect --format '{{.Image}}' airia_web 2>/dev/null || true)"
+if [ -z "$PREVIOUS_BACKEND_IMAGE" ] || [ -z "$PREVIOUS_WEB_IMAGE" ]; then
+  echo "ERRO: não foi possível capturar as imagens atuais para rollback"
+  exit 1
+fi
+PREVIOUS_RELEASE="$(docker image inspect "$PREVIOUS_WEB_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' 2>/dev/null || true)"
+case "$PREVIOUS_RELEASE" in
+  ""|"<no value>") PREVIOUS_RELEASE="previous" ;;
+esac
+docker image tag "$PREVIOUS_BACKEND_IMAGE" airia-backend:rollback
+docker image tag "$PREVIOUS_WEB_IMAGE" airia-web:rollback
+
+rollback_on_error() {
+  STATUS="$?"
+  trap - EXIT
+  set +e
+  echo "== Rollback automático =="
+  docker image tag airia-backend:rollback airia-backend:current
+  docker image tag airia-web:rollback airia-web:current
+  export AIRIA_RELEASE="${PREVIOUS_RELEASE:-previous}"
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-build --force-recreate
+  ROLLBACK_STATUS="$?"
+  if [ "$ROLLBACK_STATUS" -eq 0 ]; then
+    ROLLBACK_CODE="000"
+    ROLLBACK_ATTEMPT=1
+    while [ "$ROLLBACK_ATTEMPT" -le 10 ]; do
+      ROLLBACK_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 'https://airia.pro/api/health' 2>/dev/null)" || ROLLBACK_CODE="000"
+      if [ "$ROLLBACK_CODE" = "200" ]; then
+        break
+      fi
+      ROLLBACK_ATTEMPT=$((ROLLBACK_ATTEMPT + 1))
+      sleep 3
+    done
+    if [ "$ROLLBACK_CODE" = "200" ]; then
+      echo "Rollback concluído e healthcheck anterior restaurado"
+    else
+      echo "FALHA CRÍTICA: imagens anteriores restauradas, mas healthcheck retornou HTTP $ROLLBACK_CODE"
+    fi
+  else
+    echo "FALHA CRÍTICA: rollback dos contêineres não concluiu"
+  fi
+  exit "$STATUS"
+}
 
 echo "== Build =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
@@ -71,6 +123,7 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
 done
 
 echo "== Deploy =="
+trap rollback_on_error EXIT
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-build
 
 echo "== Validate =="
@@ -102,6 +155,25 @@ if [ "$CODE" != "200" ]; then
   exit 1
 fi
 
+echo "== Public routes =="
+for PUBLIC_PATH in /home /aura /sw.js; do
+  CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "https://airia.pro${PUBLIC_PATH}" 2>/dev/null)" || CODE="000"
+  if [ "$CODE" != "200" ]; then
+    echo "FALHA: ${PUBLIC_PATH} retornou HTTP ${CODE}"
+    exit 1
+  fi
+  echo "${PUBLIC_PATH}: HTTP 200"
+done
+
+PUBLIC_SW="$(curl -fsS --max-time 10 'https://airia.pro/sw.js')"
+case "$PUBLIC_SW" in
+  *"$AIRIA_RELEASE"*) echo "sw.js contém a release $AIRIA_RELEASE" ;;
+  *)
+    echo "FALHA: sw.js público não contém a release $AIRIA_RELEASE"
+    exit 1
+    ;;
+esac
+
 echo "== Release identity =="
 CONTAINER_RELEASE="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' airia_web)"
 PUBLIC_RELEASE=""
@@ -125,3 +197,5 @@ if [ "$GITHUB_RELEASE" != "$VPS_RELEASE" ] || \
   echo "FALHA: GitHub, VPS, contêiner e release pública não apontam para o mesmo commit"
   exit 1
 fi
+
+trap - EXIT

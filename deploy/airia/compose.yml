@@ -1,6 +1,7 @@
 services:
   airia_backend:
     container_name: airia_backend
+    image: airia-backend:current
     build:
       context: ../..
       dockerfile: deploy/airia/Dockerfile.backend
@@ -20,6 +21,7 @@ services:
 
   airia_web:
     container_name: airia_web
+    image: airia-web:current
     build:
       context: ../..
       dockerfile: deploy/airia/Dockerfile.web

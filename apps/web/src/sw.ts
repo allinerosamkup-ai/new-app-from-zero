@@ -1,7 +1,12 @@
 /// <reference lib="webworker" />
 import { clientsClaim } from 'workbox-core';
-import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
-import { getReleaseNavigationUrl } from './features/pwa/release-update';
+import {
+  cleanupOutdatedCaches,
+  createHandlerBoundToURL,
+  precacheAndRoute,
+} from 'workbox-precaching';
+import { NavigationRoute, registerRoute } from 'workbox-routing';
+import { navigateClientsToRelease } from './features/pwa/release-update';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -11,6 +16,9 @@ self.skipWaiting();
 clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), {
+  denylist: [/^\/api\//],
+}));
 
 self.addEventListener('activate', (event) => {
   if (!appRelease) return;
@@ -22,10 +30,7 @@ self.addEventListener('activate', (event) => {
       includeUncontrolled: false,
     }) as WindowClient[];
 
-    await Promise.all(clients.map(async (client) => {
-      const navigationUrl = getReleaseNavigationUrl(client.url, appRelease);
-      if (navigationUrl) await client.navigate(navigationUrl);
-    }));
+    await navigateClientsToRelease(clients, appRelease);
   })());
 });
 
