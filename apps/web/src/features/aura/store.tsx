@@ -94,8 +94,9 @@ type AuraStoreContextValue = {
   addGoal: (title: string) => Promise<void>;
   addGoalWithSubGoals: (title: string, subgoals: string[]) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
+  linkGoalActionToPlannerBlock: (goalId: string | number, subGoalId: string | number, plannerBlockId: string | number) => Promise<void>;
   setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
-  toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<void>;
+  toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<GoalActionCompletion | null>;
   removeGoal: (goalId: string | number) => Promise<void>;
   updateGoal: (goalId: string | number, updates: Partial<{ title: string; progress: number }>) => Promise<void>;
   addTask: (
@@ -157,6 +158,14 @@ type AuraStoreContextValue = {
   setLastProfileUpdate: (isoDate: string) => void;
   setProactiveNudge: (nudge: ProactiveNudge | null) => void;
   refreshData: () => Promise<void>;
+};
+
+export type GoalActionCompletion = {
+  objectiveId: string;
+  progress: number;
+  nextAction: { id: string; title: string; order: number; plannerBlockId?: string | null } | null;
+  completedNow: boolean;
+  objectiveCompletedNow: boolean;
 };
 
 const AuraStoreContext = createContext<AuraStoreContextValue | null>(null);
@@ -279,10 +288,12 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
               title: o.title,
               progress: o.description || 'Em andamento',
               completedPct: o.progress,
-              subtasks: Array.isArray(o.subgoals) ? o.subgoals.map((s: any) => ({
+              subtasks: Array.isArray(o.subgoals) ? o.subgoals.map((s: any, index: number) => ({
                 id: s.id,
                 title: s.title,
-                done: s.done
+                done: s.done ?? s.completed ?? false,
+                order: s.order ?? index,
+                plannerBlockId: s.plannerBlockId ?? null,
               })) : []
             }))
             : current.goals,
@@ -607,6 +618,7 @@ queueCheckin({
             id: `ai-${Date.now()}-${index}`,
             title: item.trim(),
             done: false,
+            order: index,
             aiGenerated: true,
           }))
           .filter((item) => item.title.length > 0);
@@ -621,11 +633,33 @@ queueCheckin({
       addSubGoals: async (goalId, titles) => {
         const goal = state.goals.find(g => g.id === goalId);
         if (!goal) return;
-        const existing = goal.subtasks.map(s => ({ id: String(s.id), title: s.title, done: s.done, aiGenerated: false }));
-        const newSubs = titles.map((t, i) => ({ id: `ai-${Date.now()}-${i}`, title: t, done: false, aiGenerated: true }));
+        const existing = goal.subtasks.map((s, index) => ({
+          id: String(s.id), title: s.title, done: s.done, order: s.order ?? index,
+          plannerBlockId: s.plannerBlockId ?? null, aiGenerated: false,
+        }));
+        const newSubs = titles.map((t, i) => ({
+          id: `ai-${Date.now()}-${i}`, title: t, done: false, order: existing.length + i, aiGenerated: true,
+        }));
         const merged = [...existing, ...newSubs];
         const pct = merged.length > 0 ? Math.round(merged.filter(s => s.done).length / merged.length * 100) : 0;
         await api.patch(`/objectives/${goalId}`, { progress: pct, subgoals: merged });
+        await refreshData();
+      },
+      linkGoalActionToPlannerBlock: async (goalId, subGoalId, plannerBlockId) => {
+        const goal = state.goals.find((item) => item.id === goalId);
+        if (!goal) return;
+        await api.patch(`/objectives/${goalId}`, {
+          subgoals: goal.subtasks.map((subgoal, index) => ({
+            id: String(subgoal.id),
+            title: subgoal.title,
+            done: subgoal.done,
+            order: subgoal.order ?? index,
+            plannerBlockId: String(subgoal.id) === String(subGoalId)
+              ? String(plannerBlockId)
+              : subgoal.plannerBlockId ?? null,
+            aiGenerated: false,
+          })),
+        });
         await refreshData();
       },
       setGoalStatus: async (goalId, progress) => {
@@ -633,25 +667,17 @@ queueCheckin({
         if (!goal) return;
         await api.patch(`/objectives/${goalId}`, {
           progress,
-          subgoals: goal.subtasks.map(s => ({ id: String(s.id), title: s.title, done: progress === 100 ? true : s.done }))
+          subgoals: goal.subtasks.map((s, index) => ({
+            id: String(s.id), title: s.title, done: progress === 100 ? true : s.done,
+            order: s.order ?? index, plannerBlockId: s.plannerBlockId ?? null,
+          }))
         });
         await refreshData();
       },
       toggleSubGoal: async (goalId, subGoalId) => {
-        const goal = state.goals.find(g => g.id === goalId);
-        if (!goal) return;
-
-        const subtasks = goal.subtasks.map((s) =>
-          s.id === subGoalId ? { ...s, done: !s.done } : s
-        );
-        const done = subtasks.filter((s) => s.done).length;
-        const pct = subtasks.length > 0 ? Math.round((done / subtasks.length) * 100) : 0;
-
-        await api.patch(`/objectives/${goalId}`, {
-          progress: pct,
-          subgoals: subtasks.map(s => ({ ...s, id: String(s.id), aiGenerated: false }))
-        });
+        const result = await api.post(`/objectives/${goalId}/subgoals/${subGoalId}/complete`, {}) as GoalActionCompletion;
         await refreshData();
+        return result;
       },
       removeGoal: async (goalId) => {
         await api.delete(`/objectives/${goalId}`);
@@ -663,7 +689,7 @@ queueCheckin({
         await api.patch(`/objectives/${goalId}`, {
           title: updates.title ?? goal.title,
           progress: updates.progress ?? goal.completedPct,
-          subgoals: goal.subtasks.map(s => ({ ...s, id: String(s.id), aiGenerated: false }))
+          subgoals: goal.subtasks.map((s, index) => ({ ...s, id: String(s.id), order: s.order ?? index, aiGenerated: false }))
         });
         await refreshData();
       },

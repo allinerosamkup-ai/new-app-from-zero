@@ -6,7 +6,7 @@ import { useLocalizedCopy } from "../i18n";
 interface GoalNudgeCardProps {
   goals: Goal[];
   tasks: Task[];
-  onAddTask?: (title: string, goalId: number) => void;
+  onAddTask?: (title: string, goalId: string | number) => void;
 }
 
 function pickMicroAction(goal: Goal): string {

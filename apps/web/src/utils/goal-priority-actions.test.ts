@@ -27,6 +27,21 @@ describe("goal experience helpers", () => {
     expect(model.progressLabel).toBe("1 movimento concluído");
   });
 
+  it("uses persisted action order instead of the order a stale screen happened to receive", () => {
+    const model = buildGoalCardModel({
+      id: "goal-ordered",
+      title: "Organizar o lançamento",
+      completedPct: 0,
+      subtasks: [
+        { id: "third", title: "Publicar", done: false, order: 2 },
+        { id: "first", title: "Reunir material", done: false, order: 0 },
+        { id: "second", title: "Revisar", done: false, order: 1 },
+      ],
+    });
+
+    expect(model.nextAction).toEqual({ id: "first", title: "Reunir material" });
+  });
+
   it("does not invent a next action when the goal has none", () => {
     const model = buildGoalCardModel({
       id: "goal-1",

@@ -31,13 +31,15 @@ export type Task = {
 };
 
 export type SubGoal = {
-  id: number;
+  id: string | number;
   title: string;
   done: boolean;
+  order?: number;
+  plannerBlockId?: string | null;
 };
 
 export type Goal = {
-  id: number;
+  id: string | number;
   title: string;
   progress: string;
   subtasks: SubGoal[];

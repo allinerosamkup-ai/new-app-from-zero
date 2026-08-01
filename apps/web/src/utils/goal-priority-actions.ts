@@ -12,7 +12,7 @@ export type GoalPrioritySource = {
   id: string | number;
   title: string;
   completedPct?: number;
-  subtasks?: Array<{ id: string | number; title: string; done: boolean }>;
+  subtasks?: Array<{ id: string | number; title: string; done: boolean; order?: number }>;
 };
 
 export type GoalCardModel = {
@@ -90,7 +90,7 @@ export function buildGoalPriorityActions(
   const goalActions = goals
     .filter((goal) => (goal.completedPct ?? 0) < 100)
     .map((goal) => {
-      const nextSub = goal.subtasks?.find((subtask) => !subtask.done);
+      const nextSub = orderedSubtasks(goal.subtasks).find((subtask) => !subtask.done);
       if (!nextSub) return null;
 
       return {
@@ -119,7 +119,7 @@ export function buildGoalPriorityActions(
 }
 
 export function buildGoalCardModel(goal: GoalPrioritySource): GoalCardModel {
-  const subtasks = goal.subtasks ?? [];
+  const subtasks = orderedSubtasks(goal.subtasks);
   const completedActions = subtasks.filter((subtask) => subtask.done).length;
   const nextAction = subtasks.find((subtask) => !subtask.done) ?? null;
   const completed = (goal.completedPct ?? 0) >= 100;
@@ -141,6 +141,13 @@ export function buildGoalCardModel(goal: GoalPrioritySource): GoalCardModel {
     progressLabel,
     completed,
   };
+}
+
+function orderedSubtasks<T extends { id: string | number; order?: number }>(subtasks: T[] | undefined): T[] {
+  return [...(subtasks ?? [])]
+    .map((subtask, index) => ({ subtask, index }))
+    .sort((left, right) => (left.subtask.order ?? left.index) - (right.subtask.order ?? right.index) || left.index - right.index)
+    .map(({ subtask }) => subtask);
 }
 
 export function parsePausedGoalIds(raw: string | null): string[] {

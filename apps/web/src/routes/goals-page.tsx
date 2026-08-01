@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { useToast } from "../components/Toast";
+import { RewardBurst, type Reward } from "../components/RewardBurst";
 import { useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
@@ -38,7 +39,7 @@ type GoalLike = {
   id: string | number;
   title: string;
   completedPct: number;
-  subtasks: Array<{ id: string | number; title: string; done: boolean }>;
+  subtasks: Array<{ id: string | number; title: string; done: boolean; order?: number; plannerBlockId?: string | null }>;
 };
 
 type GoalTemplate = {
@@ -141,28 +142,25 @@ function CreationSheet({
   open: boolean;
   saving: boolean;
   onClose: () => void;
-  onCreate: (result: string, nextAction: string) => Promise<void>;
+  onCreate: (result: string) => Promise<void>;
 }) {
   const l = useLocalizedCopy();
   const [result, setResult] = useState("");
-  const [nextAction, setNextAction] = useState("");
   const [selectedDirection, setSelectedDirection] = useState("");
 
   useEffect(() => {
     if (!open) {
       setResult("");
-      setNextAction("");
       setSelectedDirection("");
     }
   }, [open]);
 
   if (!open) return null;
 
-  const ready = result.trim().length >= 3 && nextAction.trim().length >= 3;
+  const ready = result.trim().length >= 3;
   const chooseTemplate = (template: GoalTemplate) => {
     setSelectedDirection(template.direction);
     setResult(template.result);
-    setNextAction(template.nextAction);
   };
 
   return (
@@ -262,36 +260,13 @@ function CreationSheet({
           />
         </label>
 
-        <label style={{ display: "block", marginBottom: 18 }}>
-          <span style={{ display: "block", marginBottom: 6, color: "var(--text-2)", fontSize: 12, fontWeight: 800 }}>
-            {l("Primeira ação concreta", "First concrete action")}
-          </span>
-          <input
-            value={nextAction}
-            onChange={(event) => setNextAction(event.target.value)}
-            placeholder={l("Ex.: separar por 15 minutos o que não pertence à sala", "E.g. sort misplaced items for 15 minutes")}
-            maxLength={180}
-            style={{
-              width: "100%",
-              minHeight: 48,
-              boxSizing: "border-box",
-              border: "1.5px solid rgba(150,199,179,.45)",
-              borderRadius: 14,
-              background: "#fff",
-              color: "var(--text-1)",
-              padding: "12px 14px",
-              fontSize: 15,
-              outline: "none",
-            }}
-          />
-          <span style={{ display: "block", marginTop: 6, color: "var(--text-3)", fontSize: 11, lineHeight: 1.4 }}>
-            {l("Essa ação ainda não entra na agenda. Você escolhe quando colocá-la no seu dia.", "This action is not scheduled yet. You choose when to place it in your day.")}
-          </span>
-        </label>
+        <p style={{ margin: "0 0 18px", color: "var(--text-3)", fontSize: 12, lineHeight: 1.45 }}>
+          {l("A Airia organiza o caminho em microações e deixa só o primeiro movimento em foco.", "Airia turns this into micro-actions and keeps only the first move in focus.")}
+        </p>
 
         <button
           disabled={!ready || saving}
-          onClick={() => ready && onCreate(result.trim(), nextAction.trim())}
+          onClick={() => ready && onCreate(result.trim())}
           style={{
             width: "100%",
             minHeight: 52,
@@ -304,7 +279,7 @@ function CreationSheet({
             cursor: ready && !saving ? "pointer" : "default",
           }}
         >
-          {saving ? l("Criando…", "Creating…") : l("Criar objetivo com primeiro passo", "Create goal with first step")}
+          {saving ? l("Organizando ações…", "Organizing actions…") : l("Criar caminho com a Airia", "Create path with Airia")}
         </button>
       </div>
     </div>
@@ -414,6 +389,7 @@ function GoalCard({
   scheduledActions,
   loadingSuggestion,
   suggestionDraft,
+  completingActionId,
   onToggleAction,
   onAddAction,
   onRequestSuggestion,
@@ -429,6 +405,7 @@ function GoalCard({
   scheduledActions: Record<string, ScheduledAction>;
   loadingSuggestion: boolean;
   suggestionDraft: string[];
+  completingActionId: string | number | null;
   onToggleAction: (actionId: string | number) => Promise<void>;
   onAddAction: (title: string) => Promise<void>;
   onRequestSuggestion: () => Promise<void>;
@@ -453,6 +430,13 @@ function GoalCard({
 
   const scheduled = model.nextAction
     ? scheduledActions[actionKey(goal.id, model.nextAction.id)]
+    : null;
+  const orderedActions = [...goal.subtasks]
+    .map((action, index) => ({ action, index }))
+    .sort((left, right) => (left.action.order ?? left.index) - (right.action.order ?? right.index) || left.index - right.index)
+    .map(({ action }) => action);
+  const linkedPlannerBlockId = model.nextAction
+    ? orderedActions.find((action) => action.id === model.nextAction?.id)?.plannerBlockId
     : null;
 
   return (
@@ -528,6 +512,7 @@ function GoalCard({
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <button
                     aria-label={l("Marcar ação como concluída", "Mark action as completed")}
+                    disabled={completingActionId !== null}
                     onClick={() => onToggleAction(model.nextAction!.id)}
                     style={{
                       width: 26,
@@ -538,7 +523,8 @@ function GoalCard({
                       color: "var(--menthe)",
                       display: "grid",
                       placeItems: "center",
-                      cursor: "pointer",
+                      cursor: completingActionId === null ? "pointer" : "default",
+                      opacity: completingActionId === null ? 1 : 0.55,
                       flexShrink: 0,
                     }}
                   >
@@ -562,6 +548,11 @@ function GoalCard({
                     <CalendarPlus size={14} />
                     {l("No seu dia em", "In your day on")} {scheduled.date} · {scheduled.time}
                   </div>
+                ) : linkedPlannerBlockId ? (
+                  <p style={{ margin: "11px 0 0", color: "var(--lagune)", fontSize: 11, fontWeight: 750 }}>
+                    <CalendarPlus size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />
+                    {l("Esta ação já está no seu Planner.", "This action is already in your Planner.")}
+                  </p>
                 ) : (
                   <button
                     onClick={() => onPlanAction({
@@ -694,20 +685,27 @@ function GoalCard({
                 {l("Ver caminho completo", "View full path")} · {model.completedActions}/{model.totalActions}
               </summary>
               <div style={{ display: "grid", gap: 7, marginTop: 9 }}>
-                {goal.subtasks.map((action) => (
+                {orderedActions.map((action) => {
+                  const active = !action.done && model.nextAction?.id === action.id;
+                  const actionable = active && completingActionId === null;
+                  return (
                   <button
                     key={action.id}
-                    onClick={() => onToggleAction(action.id)}
+                    type="button"
+                    disabled={!actionable}
+                    onClick={() => actionable && onToggleAction(action.id)}
                     style={{
-                      border: 0,
-                      background: "transparent",
+                      border: active ? "1px solid rgba(150,199,179,.55)" : 0,
+                      borderRadius: active ? 10 : 0,
+                      background: active ? "rgba(150,199,179,.14)" : "transparent",
                       display: "flex",
                       alignItems: "flex-start",
                       gap: 9,
-                      padding: "4px 0",
+                      padding: active ? "8px" : "4px 0",
                       color: action.done ? "var(--text-3)" : "var(--text-2)",
                       textAlign: "left",
-                      cursor: "pointer",
+                      cursor: actionable ? "pointer" : "default",
+                      opacity: action.done || active ? 1 : 0.7,
                     }}
                   >
                     <span style={{
@@ -725,9 +723,11 @@ function GoalCard({
                     </span>
                     <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
                       {action.title}
+                      {active ? <small style={{ display: "block", marginTop: 2, color: "var(--menthe)", fontWeight: 800 }}>{l("Agora", "Now")}</small> : null}
                     </span>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </details>
           )}
@@ -797,6 +797,7 @@ export function GoalsPage() {
     state,
     addGoalWithSubGoals,
     addSubGoals,
+    linkGoalActionToPlannerBlock,
     toggleSubGoal,
     removeGoal,
     updateGoal,
@@ -811,6 +812,8 @@ export function GoalsPage() {
   const [completedOpen, setCompletedOpen] = useState(false);
   const [pausedOpen, setPausedOpen] = useState(false);
   const [loadingSuggestion, setLoadingSuggestion] = useState<string | number | null>(null);
+  const [completingActionId, setCompletingActionId] = useState<string | number | null>(null);
+  const [reward, setReward] = useState<Reward | null>(null);
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
   const [pausedIds, setPausedIds] = useState<string[]>(() => {
     try {
@@ -860,12 +863,24 @@ export function GoalsPage() {
     return () => window.clearTimeout(timer);
   }, [focusedGoalId]);
 
-  async function createGoal(result: string, nextAction: string) {
+  async function createGoal(result: string) {
     setCreating(true);
     try {
-      await addGoalWithSubGoals(result, [nextAction]);
+      const response = await api.post("/ai/suggest", {
+        type: "goal-subtasks",
+        context: { goalTitle: result, existingSubtasks: [] },
+      }) as { suggestion?: unknown };
+      const parsed = parseAiSuggestion<{ items?: string[] } | string[]>(response.suggestion);
+      const actions = (Array.isArray(parsed) ? parsed : parsed?.items ?? [])
+        .map((item) => String(item).trim())
+        .filter((item, index, all) => item.length >= 3 && all.indexOf(item) === index)
+        .slice(0, 5);
+      if (actions.length < 2) {
+        throw new Error(l("A Airia não conseguiu montar um caminho executável agora.", "Airia could not assemble an executable path right now."));
+      }
+      await addGoalWithSubGoals(result, actions);
       setCreationOpen(false);
-      showSuccess(l("Objetivo criado com um primeiro passo real.", "Goal created with a real first step."));
+      showSuccess(l("Objetivo criado com o primeiro movimento em foco.", "Goal created with the first move in focus."));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível criar o objetivo.", "Could not create the goal."));
     } finally {
@@ -943,6 +958,7 @@ export function GoalsPage() {
         note: `${l("Próxima ação de", "Next action for")}: ${taskDraft.goalTitle}`,
       });
       if (!created) throw new Error(l("A tarefa não foi criada.", "The task was not created."));
+      await linkGoalActionToPlannerBlock(taskDraft.goalId, taskDraft.actionId, created.id);
 
       setScheduledActions((current) => ({
         ...current,
@@ -970,11 +986,24 @@ export function GoalsPage() {
       scheduledActions={scheduledActions}
       loadingSuggestion={loadingSuggestion === goal.id}
       suggestionDraft={suggestionDrafts[String(goal.id)] ?? []}
+      completingActionId={completingActionId}
       onToggleAction={async (actionId) => {
+        if (completingActionId !== null) return;
+        setCompletingActionId(actionId);
         try {
-          await toggleSubGoal(goal.id, actionId);
+          const outcome = await toggleSubGoal(goal.id, actionId);
+          if (outcome?.objectiveCompletedNow) {
+            setReward({
+              headline: l("Objetivo concluído", "Goal completed"),
+              detail: l("Você percorreu todas as ações previstas.", "You completed every planned action."),
+              animation: "confetti",
+              intensity: "big",
+            });
+          }
         } catch (error) {
           showError(error instanceof Error ? error.message : l("Não foi possível atualizar a ação.", "Could not update the action."));
+        } finally {
+          setCompletingActionId(null);
         }
       }}
       onAddAction={(title) => addAction(goal.id, title)}
@@ -1115,6 +1144,7 @@ export function GoalsPage() {
 
       <CreationSheet open={creationOpen} saving={creating} onClose={() => !creating && setCreationOpen(false)} onCreate={createGoal} />
       <TaskPlacementSheet draft={taskDraft} saving={scheduling} onClose={() => !scheduling && setTaskDraft(null)} onChoose={placeAction} />
+      <RewardBurst reward={reward} onDone={() => setReward(null)} />
     </div>
   );
 }
