@@ -106,6 +106,12 @@ import {
 } from './lib/notification-filters';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
 import { normalizeObjectiveSubgoals, ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
+import {
+  buildGoalSubtasksPrompt,
+  ObjectiveActionRecoveryService,
+  type GoalSubtasksSuggestionGenerator,
+  type GoalSubtasksSuggestionRequest,
+} from './services/objective-action-recovery.service';
 import { ObjectiveProgressionError, ObjectiveProgressionService } from './services/objective-progression.service';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
@@ -484,6 +490,7 @@ type AppDependencies = {
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
+  generateGoalSubtasks?: GoalSubtasksSuggestionGenerator;
   routineBuilderService?: Pick<RoutineBuilderService,
     'createSession' | 'getSession' | 'ingestSource' | 'submitGuidedAnswers' | 'updateItems' | 'answerClarifications' | 'compose' | 'apply'>;
 };
@@ -1914,6 +1921,32 @@ function getRagIntent(type: string, context: any): string {
   }
 }
 
+async function generateGoalSubtasksForRecovery(
+  request: GoalSubtasksSuggestionRequest,
+): Promise<unknown> {
+  const OpenAI = (await import('openai')).default;
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const generationConfig = resolveSuggestGenerationConfig(request.type, false);
+  const completion = await openai.chat.completions.create({
+    model: getOpenAiModel(),
+    messages: [
+      {
+        role: 'system' as const,
+        content: buildAuraSystemPrompt({ domain: 'goal-execution' }),
+      },
+      {
+        role: 'user' as const,
+        content: buildGoalSubtasksPrompt(request.context),
+      },
+    ],
+    max_completion_tokens: getOpenAiMaxCompletionTokens(generationConfig.maxTokens),
+    ...openAiTemperature(getOpenAiModel(), generationConfig.temperature),
+    response_format: { type: 'json_object' as const },
+  });
+  const rawSuggestion = completion.choices[0]?.message?.content?.trim() ?? '';
+  return normalizeAiSuggestion(request.type, rawSuggestion);
+}
+
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const prisma = dependencies.prisma ?? defaultPrisma;
@@ -1934,6 +1967,10 @@ export function createApp(dependencies: AppDependencies = {}) {
   const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
   const contextGroundingService = new ContextGroundingService(prisma);
   const objectiveProgressionService = new ObjectiveProgressionService(prisma as any);
+  const objectiveActionRecoveryService = new ObjectiveActionRecoveryService(
+    prisma as any,
+    dependencies.generateGoalSubtasks ?? generateGoalSubtasksForRecovery,
+  );
   const applyAuraAgendaAdaptation = async ({
     userId,
     localDate,
@@ -4455,6 +4492,17 @@ export function createApp(dependencies: AppDependencies = {}) {
     }
   });
 
+  app.post('/api/objectives/recover-actions', async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const result = await objectiveActionRecoveryService.recover({ userId });
+      return res.json(result);
+    } catch (error) {
+      console.error('[objectives/recover-actions] Error:', error);
+      return res.status(500).json({ error: 'Failed to recover objective actions' });
+    }
+  });
+
   app.post('/api/objectives/:id/subgoals/:subgoalId/complete', async (req: Request, res: Response) => {
     try {
       const result = await objectiveProgressionService.completeActiveAction({
@@ -5348,25 +5396,13 @@ EXEMPLOS DE FORMATO BOM:
 
 Retorne SOMENTE um array JSON: [{"title":"tarefa concreta","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
       } else if (type === 'goal-subtasks') {
-        const existing = context.existingSubtasks?.length ? `\nSubtarefas já existentes: ${context.existingSubtasks.join(', ')}` : '';
-        prompt = `${userName} pode estar com energia baixa ou oscilante. Gere micro-passos sem carga cognitiva e sem abstrações.
-
-Meta: "${context.goalTitle}"${existing}
-
-Gere 4-5 MICRO-AÇÕES físicas e hiper-específicas. Regras OBRIGATÓRIAS:
-- Cada ação é executável em 2-10 minutos
-- Comece com VERBO físico: Abrir, Separar, Mandar, Verificar, Ligar, Escrever, Pegar, Colocar, Escolher
-- NUNCA use: "planejar", "organizar", "pesquisar sobre", "considerar", "preparar-se para", "pensar"
-- Nomeie objetos reais, apps e locais específicos quando possível
-- Cada ação = mínima unidade de esforço, zero carga cognitiva
-
-Exemplos para "ir à praia": ["Abrir o calendário e marcar um dia nos próximos 7 dias", "Verificar a previsão do tempo no celular para esse dia", "Separar o biquíni/sunga e o protetor solar agora", "Mandar mensagem para alguém: 'Vamos à praia [dia]?'", "Abrir Google Maps e ver quanto tempo leva para chegar"]
-
-- As ações não podem se repetir de forma disfarçada.
-- A primeira ação deve ser a mais fácil de começar em menos de 2 minutos.
-- Se já houver subtarefas parecidas, evite duplicar.
-
-JSON APENAS: {"items":["micro-ação 1","micro-ação 2","micro-ação 3","micro-ação 4"]}`;
+        prompt = buildGoalSubtasksPrompt({
+          goalTitle: String(context.goalTitle ?? ''),
+          existingSubtasks: Array.isArray(context.existingSubtasks)
+            ? context.existingSubtasks.filter((item: unknown): item is string => typeof item === 'string')
+            : [],
+          userName,
+        });
       } else if (type === 'weekly-insight') {
         prompt = `${userName} precisa de uma leitura semanal realmente útil, como uma assistente pessoal autônoma que acompanha o ciclo ao longo do tempo.
 

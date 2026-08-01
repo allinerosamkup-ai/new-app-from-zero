@@ -152,6 +152,7 @@ type AuraStoreContextValue = {
   resolveFollowUp: (response: "done" | "skip") => void;
   setLastProfileUpdate: (isoDate: string) => void;
   setProactiveNudge: (nudge: ProactiveNudge | null) => void;
+  recoverGoalActions: () => Promise<void>;
   refreshData: () => Promise<void>;
 };
 
@@ -668,6 +669,12 @@ queueCheckin({
           progress: updates.progress ?? goal.completedPct,
           subgoals: goal.subtasks.map((s, index) => ({ ...s, id: String(s.id), order: s.order ?? index, aiGenerated: false }))
         });
+        await refreshData();
+      },
+      recoverGoalActions: async () => {
+        await api.post('/objectives/recover-actions', {});
+        const refreshAlreadyRunning = refreshInFlightRef.current;
+        if (refreshAlreadyRunning) await refreshAlreadyRunning;
         await refreshData();
       },
       addTask: async (title, time, category = 'geral', options) => {

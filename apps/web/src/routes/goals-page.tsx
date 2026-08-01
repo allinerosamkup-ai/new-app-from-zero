@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Archive,
@@ -63,6 +63,15 @@ type ScheduledAction = {
 
 const PAUSED_GOALS_KEY = "airia-paused-goals-v1";
 const SCHEDULED_ACTIONS_KEY = "airia-goal-action-tasks-v1";
+
+export async function recoverGoalActionsOnce(
+  guard: { started: boolean },
+  recoverGoalActions: () => Promise<void>,
+): Promise<void> {
+  if (guard.started) return;
+  guard.started = true;
+  await recoverGoalActions();
+}
 
 export const GOAL_STARTER_TEMPLATES: GoalTemplate[] = [
   {
@@ -802,6 +811,7 @@ export function GoalsPage() {
     removeGoal,
     updateGoal,
     addTask,
+    recoverGoalActions,
   } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
@@ -814,6 +824,7 @@ export function GoalsPage() {
   const [loadingSuggestion, setLoadingSuggestion] = useState<string | number | null>(null);
   const [completingActionId, setCompletingActionId] = useState<string | number | null>(null);
   const [reward, setReward] = useState<Reward | null>(null);
+  const recoveryGuardRef = useRef({ started: false });
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
   const [pausedIds, setPausedIds] = useState<string[]>(() => {
     try {
@@ -850,6 +861,16 @@ export function GoalsPage() {
   useEffect(() => {
     localStorage.setItem(PAUSED_GOALS_KEY, JSON.stringify(pausedIds));
   }, [pausedIds]);
+
+  useEffect(() => {
+    void recoverGoalActionsOnce(recoveryGuardRef.current, recoverGoalActions).catch((error) => {
+      console.error('Failed to recover legacy objective actions.', error);
+      showError(l(
+        'Não foi possível atualizar os passos dos objetivos antigos agora.',
+        'Could not update older goal actions right now.',
+      ));
+    });
+  }, [l, recoverGoalActions, showError]);
 
   useEffect(() => {
     localStorage.setItem(SCHEDULED_ACTIONS_KEY, JSON.stringify(scheduledActions));
