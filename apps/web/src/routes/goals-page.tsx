@@ -65,12 +65,65 @@ const PAUSED_GOALS_KEY = "airia-paused-goals-v1";
 const SCHEDULED_ACTIONS_KEY = "airia-goal-action-tasks-v1";
 
 export async function recoverGoalActionsOnce(
-  guard: { started: boolean },
+  guard: { status: 'idle' | 'inFlight' | 'completed' },
   recoverGoalActions: () => Promise<void>,
 ): Promise<void> {
-  if (guard.started) return;
-  guard.started = true;
-  await recoverGoalActions();
+  if (guard.status !== 'idle') return;
+  guard.status = 'inFlight';
+  try {
+    await recoverGoalActions();
+    guard.status = 'completed';
+  } catch (error) {
+    guard.status = 'idle';
+    throw error;
+  }
+}
+
+export function GoalRecoveryNotice({
+  message,
+  retryLabel,
+  retrying,
+  onRetry,
+}: {
+  message: string;
+  retryLabel: string;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <section
+      role="alert"
+      style={{
+        marginBottom: 14,
+        padding: '13px 14px',
+        border: '1px solid rgba(215,137,127,.35)',
+        borderRadius: 16,
+        background: 'rgba(255,255,255,.9)',
+      }}
+    >
+      <p style={{ margin: '0 0 10px', color: 'var(--text-2)', fontSize: 12, lineHeight: 1.45 }}>
+        {message}
+      </p>
+      <button
+        type="button"
+        disabled={retrying}
+        onClick={onRetry}
+        style={{
+          minHeight: 40,
+          border: '1px solid var(--nectarine)',
+          borderRadius: 12,
+          background: 'transparent',
+          color: 'var(--nectarine)',
+          padding: '8px 12px',
+          fontSize: 12,
+          fontWeight: 800,
+          cursor: retrying ? 'wait' : 'pointer',
+        }}
+      >
+        {retrying ? '…' : retryLabel}
+      </button>
+    </section>
+  );
 }
 
 export const GOAL_STARTER_TEMPLATES: GoalTemplate[] = [
@@ -824,7 +877,9 @@ export function GoalsPage() {
   const [loadingSuggestion, setLoadingSuggestion] = useState<string | number | null>(null);
   const [completingActionId, setCompletingActionId] = useState<string | number | null>(null);
   const [reward, setReward] = useState<Reward | null>(null);
-  const recoveryGuardRef = useRef({ started: false });
+  const recoveryGuardRef = useRef<{ status: 'idle' | 'inFlight' | 'completed' }>({ status: 'idle' });
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveringGoals, setRecoveringGoals] = useState(false);
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
   const [pausedIds, setPausedIds] = useState<string[]>(() => {
     try {
@@ -862,15 +917,35 @@ export function GoalsPage() {
     localStorage.setItem(PAUSED_GOALS_KEY, JSON.stringify(pausedIds));
   }, [pausedIds]);
 
-  useEffect(() => {
-    void recoverGoalActionsOnce(recoveryGuardRef.current, recoverGoalActions).catch((error) => {
-      console.error('Failed to recover legacy objective actions.', error);
-      showError(l(
-        'Não foi possível atualizar os passos dos objetivos antigos agora.',
-        'Could not update older goal actions right now.',
-      ));
+  async function executeGoalRecovery() {
+    await recoverGoalActionsOnce(recoveryGuardRef.current, async () => {
+      setRecoveringGoals(true);
+      setRecoveryError(null);
+      try {
+        await recoverGoalActions();
+      } catch (error) {
+        const message = error instanceof Error
+          ? error.message
+          : l(
+              'Não foi possível atualizar os passos dos objetivos antigos agora.',
+              'Could not update older goal actions right now.',
+            );
+        console.error('Failed to recover legacy objective actions.', error);
+        setRecoveryError(message);
+        showError(message);
+        throw error;
+      } finally {
+        setRecoveringGoals(false);
+      }
     });
-  }, [l, recoverGoalActions, showError]);
+  }
+
+  useEffect(() => {
+    void executeGoalRecovery().catch(() => {});
+    // Uma tentativa automática por montagem. Falha volta o guard para idle e
+    // fica sob controle explícito do botão de retry, sem loop de custo de IA.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(SCHEDULED_ACTIONS_KEY, JSON.stringify(scheduledActions));
@@ -1109,6 +1184,15 @@ export function GoalsPage() {
               </div>
             </div>
           </section>
+        )}
+
+        {recoveryError && (
+          <GoalRecoveryNotice
+            message={recoveryError}
+            retryLabel={l('Tentar novamente', 'Try again')}
+            retrying={recoveringGoals}
+            onRetry={() => { void executeGoalRecovery().catch(() => {}); }}
+          />
         )}
 
         <main style={{ display: "grid", gap: 12 }}>

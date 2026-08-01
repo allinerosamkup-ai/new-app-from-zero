@@ -4495,7 +4495,10 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.post('/api/objectives/recover-actions', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
-      const result = await objectiveActionRecoveryService.recover({ userId });
+      const locale = typeof (req.body as any)?.locale === 'string'
+        ? String((req.body as any).locale)
+        : 'pt-BR';
+      const result = await objectiveActionRecoveryService.recover({ userId, locale });
       return res.json(result);
     } catch (error) {
       console.error('[objectives/recover-actions] Error:', error);
@@ -5402,6 +5405,7 @@ Retorne SOMENTE um array JSON: [{"title":"tarefa concreta","category":"trabalho|
             ? context.existingSubtasks.filter((item: unknown): item is string => typeof item === 'string')
             : [],
           userName,
+          locale: typeof context.locale === 'string' ? context.locale : 'pt-BR',
         });
       } else if (type === 'weekly-insight') {
         prompt = `${userName} precisa de uma leitura semanal realmente útil, como uma assistente pessoal autônoma que acompanha o ciclo ao longo do tempo.

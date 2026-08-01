@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { initialAuraState, labelMood } from "./data";
-import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, MoodOption, NotificationPreferences, PhaseTransitionAlert, ProactiveNudge } from "./types";
+import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, Goal, MoodOption, NotificationPreferences, PhaseTransitionAlert, ProactiveNudge } from "./types";
 import { createEmptyOnboardingDraft, type OnboardingDraft } from "./onboarding";
 import { normalizeReminderPreferences } from "./settings";
 import { api } from "../../lib/api";
@@ -62,6 +62,78 @@ function diffMinutes(startTime: string, endTime?: string | null): number {
   const delta = endTotal - startTotal;
 
   return delta > 0 ? delta : 30;
+}
+
+export type GoalActionRecoveryResult = {
+  eligible: number;
+  attempted: number;
+  recovered: number;
+  failed: number;
+  deferred: number;
+  retryAfterMs: number | null;
+};
+
+export class GoalActionRecoveryError extends Error {
+  constructor(public readonly result: GoalActionRecoveryResult) {
+    const retrySeconds = result.retryAfterMs && result.retryAfterMs > 0
+      ? ` Tente novamente em ${Math.ceil(result.retryAfterMs / 1000)} segundos.`
+      : ' Tente novamente para continuar.';
+    super(`Ainda faltam micro-ações em ${result.eligible - result.recovered} objetivo(s).${retrySeconds}`);
+  }
+}
+
+function parseGoalActionRecoveryResult(value: unknown): GoalActionRecoveryResult {
+  if (!value || typeof value !== 'object') throw new Error('Resposta inválida ao recuperar ações dos objetivos.');
+  const payload = value as Record<string, unknown>;
+  const numericKeys = ['eligible', 'attempted', 'recovered', 'failed', 'deferred'] as const;
+  for (const key of numericKeys) {
+    if (!Number.isInteger(payload[key]) || Number(payload[key]) < 0) {
+      throw new Error('Resposta inválida ao recuperar ações dos objetivos.');
+    }
+  }
+  if (payload.retryAfterMs !== null && (!Number.isFinite(payload.retryAfterMs) || Number(payload.retryAfterMs) < 0)) {
+    throw new Error('Resposta inválida ao recuperar ações dos objetivos.');
+  }
+  const result = payload as unknown as GoalActionRecoveryResult;
+  if (
+    result.recovered + result.failed + result.deferred !== result.eligible
+    || result.attempted > result.eligible
+    || result.attempted < result.recovered + result.failed
+  ) {
+    throw new Error('Resposta inválida ao recuperar ações dos objetivos.');
+  }
+  return result;
+}
+
+function mapCanonicalObjectives(value: unknown): Goal[] {
+  if (!Array.isArray(value)) throw new Error('Não foi possível carregar os objetivos atualizados.');
+  return value.map((objective: any) => ({
+    id: objective.id,
+    title: objective.title,
+    progress: objective.description || 'Em andamento',
+    completedPct: objective.progress,
+    subtasks: Array.isArray(objective.subgoals) ? objective.subgoals.map((subgoal: any, index: number) => ({
+      id: subgoal.id,
+      title: subgoal.title,
+      done: subgoal.done ?? subgoal.completed ?? false,
+      order: subgoal.order ?? index,
+      plannerBlockId: subgoal.plannerBlockId ?? null,
+    })) : [],
+  }));
+}
+
+export async function recoverGoalActionsWithCanonicalHydration(input: {
+  recover: () => Promise<unknown>;
+  loadObjectives: () => Promise<unknown>;
+  commitObjectives: (objectives: Goal[]) => Promise<void>;
+}): Promise<GoalActionRecoveryResult> {
+  const result = parseGoalActionRecoveryResult(await input.recover());
+  const objectives = mapCanonicalObjectives(await input.loadObjectives());
+  await input.commitObjectives(objectives);
+  if (result.failed > 0 || result.deferred > 0 || result.recovered < result.eligible) {
+    throw new GoalActionRecoveryError(result);
+  }
+  return result;
 }
 
 type AuraStoreContextValue = {
@@ -152,7 +224,7 @@ type AuraStoreContextValue = {
   resolveFollowUp: (response: "done" | "skip") => void;
   setLastProfileUpdate: (isoDate: string) => void;
   setProactiveNudge: (nudge: ProactiveNudge | null) => void;
-  recoverGoalActions: () => Promise<void>;
+  recoverGoalActions: () => Promise<GoalActionRecoveryResult>;
   refreshData: () => Promise<void>;
 };
 
@@ -184,6 +256,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
   const refreshInFlightRef = useRef<Promise<void> | null>(null);
+  const objectiveCommitResolversRef = useRef<Array<() => void>>([]);
 
   useEffect(() => {
     const isDark = state.theme === "dark" || state.theme === "Tema escuro";
@@ -194,6 +267,11 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       /* ignore */
     }
   }, [state.theme]);
+
+  useEffect(() => {
+    const resolvers = objectiveCommitResolversRef.current.splice(0);
+    resolvers.forEach((resolve) => resolve());
+  }, [state.goals]);
 
   const refreshData = useCallback(async () => {
     if (refreshInFlightRef.current) {
@@ -261,21 +339,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
               note: t.note ?? null,
             }))
             : current.tasks,
-          goals: objectives
-            ? objectives.map((o: any) => ({
-              id: o.id,
-              title: o.title,
-              progress: o.description || 'Em andamento',
-              completedPct: o.progress,
-              subtasks: Array.isArray(o.subgoals) ? o.subgoals.map((s: any, index: number) => ({
-                id: s.id,
-                title: s.title,
-                done: s.done ?? s.completed ?? false,
-                order: s.order ?? index,
-                plannerBlockId: s.plannerBlockId ?? null,
-              })) : []
-            }))
-            : current.goals,
+          goals: objectives ? mapCanonicalObjectives(objectives) : current.goals,
           habits: habits
             ? habits.map((h: any) => ({
               id: h.id,
@@ -672,10 +736,16 @@ queueCheckin({
         await refreshData();
       },
       recoverGoalActions: async () => {
-        await api.post('/objectives/recover-actions', {});
         const refreshAlreadyRunning = refreshInFlightRef.current;
         if (refreshAlreadyRunning) await refreshAlreadyRunning;
-        await refreshData();
+        return recoverGoalActionsWithCanonicalHydration({
+          recover: () => api.post('/objectives/recover-actions', {}),
+          loadObjectives: () => api.get('/objectives'),
+          commitObjectives: (objectives) => new Promise<void>((resolve) => {
+            objectiveCommitResolversRef.current.push(resolve);
+            setState((current) => ({ ...current, goals: objectives }));
+          }),
+        });
       },
       addTask: async (title, time, category = 'geral', options) => {
         const today = options?.date ?? getLocalDateKey();
