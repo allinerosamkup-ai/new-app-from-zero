@@ -1,0 +1,4 @@
+interface:
+  display_name: "Comando central Airia"
+  short_description: "Execute pedidos naturais com contexto real."
+  default_prompt: "Use $airia-command-execution para tornar a Airia executora."

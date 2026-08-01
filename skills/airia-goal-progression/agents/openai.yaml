@@ -1,0 +1,4 @@
+interface:
+  display_name: "Progresso de objetivos"
+  short_description: "Organize microacoes em sequencia executavel."
+  default_prompt: "Use $airia-goal-progression para corrigir objetivos da Airia."

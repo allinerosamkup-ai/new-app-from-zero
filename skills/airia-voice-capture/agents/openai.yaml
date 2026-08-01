@@ -1,0 +1,4 @@
+interface:
+  display_name: "Voz Airia"
+  short_description: "Capture voz sem repeticoes ou envio duplicado."
+  default_prompt: "Use $airia-voice-capture para corrigir a transcricao por voz da Airia."

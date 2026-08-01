@@ -1,0 +1,4 @@
+interface:
+  display_name: "Padroes de humor"
+  short_description: "Produza leituras reais e seguras de humor."
+  default_prompt: "Use $airia-mood-reporting para aprimorar relatorios da Airia."

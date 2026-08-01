@@ -1,0 +1,4 @@
+interface:
+  display_name: "Integridade Airia"
+  short_description: "Audite rotas e contratos reais do produto."
+  default_prompt: "Use $airia-code-integrity para corrigir integracoes da Airia."

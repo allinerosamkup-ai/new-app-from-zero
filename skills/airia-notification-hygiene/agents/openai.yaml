@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notificacoes Airia"
+  short_description: "Garanta alertas reais, futuros e deduplicados."
+  default_prompt: "Use $airia-notification-hygiene para corrigir alertas da Airia."

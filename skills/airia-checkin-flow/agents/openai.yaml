@@ -1,0 +1,4 @@
+interface:
+  display_name: "Check-in integrado"
+  short_description: "Una humor, energia e contexto com precisao."
+  default_prompt: "Use $airia-checkin-flow para corrigir o check-in da Airia."
