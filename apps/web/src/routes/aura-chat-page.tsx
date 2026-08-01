@@ -24,7 +24,12 @@ import {
 } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
-import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
+import {
+  createTranscriptResultHandler,
+  releaseRecognition,
+  stopActiveRecognition,
+  TranscriptSession,
+} from "../features/voice/transcript-session";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -861,11 +866,10 @@ export function AuraChatPage() {
     recognition.interimResults = true;
     const transcriptSession = new TranscriptSession();
     voiceInputBaseRef.current = input;
-    recognition.onresult = (event: any) => {
-      const snapshot = transcriptSession.update(event.results);
+    recognition.onresult = createTranscriptResultHandler(transcriptSession, (snapshot) => {
       setInput([voiceInputBaseRef.current.trim(), snapshot.text].filter(Boolean).join(" "));
       inputRef.current?.focus();
-    };
+    });
     recognition.onend = () => {
       transcriptSession.reset();
       if (!releaseRecognition(recognitionRef, recognition)) return;
