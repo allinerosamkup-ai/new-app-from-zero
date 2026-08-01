@@ -53,6 +53,78 @@ describe("TranscriptSession", () => {
       text: "nova sessao",
     });
   });
+
+  it("merges cumulative final phrases reported under different Android indexes", () => {
+    const session = new TranscriptSession();
+
+    session.update(resultList([
+      { isFinal: true, transcript: "Hoje eu tenho praia" },
+    ]));
+
+    assert.deepEqual(session.update(resultList([
+      { isFinal: true, transcript: "Hoje eu tenho praia" },
+      { isFinal: true, transcript: "Hoje eu tenho praia com a Erica" },
+    ])), {
+      finalText: "Hoje eu tenho praia com a Erica",
+      interimText: "",
+      text: "Hoje eu tenho praia com a Erica",
+    });
+  });
+
+  it("ignores an exact phrase repeated under a new result index", () => {
+    const session = new TranscriptSession();
+
+    assert.deepEqual(session.update(resultList([
+      { isFinal: true, transcript: "Estou muito cansada hoje" },
+      { isFinal: true, transcript: "Estou muito cansada hoje" },
+    ])), {
+      finalText: "Estou muito cansada hoje",
+      interimText: "",
+      text: "Estou muito cansada hoje",
+    });
+  });
+
+  it("merges suffix and prefix overlap while preserving the original spelling", () => {
+    const session = new TranscriptSession();
+
+    assert.deepEqual(session.update(resultList([
+      { isFinal: true, transcript: "Eu tenho praia com a Érica" },
+      { isFinal: true, transcript: "com a Erica e estou cansada" },
+    ])), {
+      finalText: "Eu tenho praia com a Érica e estou cansada",
+      interimText: "",
+      text: "Eu tenho praia com a Érica e estou cansada",
+    });
+  });
+
+  it("accepts a corrected final phrase for the same result index", () => {
+    const session = new TranscriptSession();
+
+    session.update(resultList([
+      { isFinal: true, transcript: "Hoje eu tenho prala" },
+    ]));
+
+    assert.deepEqual(session.update(resultList([
+      { isFinal: true, transcript: "Hoje eu tenho praia" },
+    ])), {
+      finalText: "Hoje eu tenho praia",
+      interimText: "",
+      text: "Hoje eu tenho praia",
+    });
+  });
+
+  it("keeps only the new interim suffix when Android repeats the final phrase cumulatively", () => {
+    const session = new TranscriptSession();
+
+    assert.deepEqual(session.update(resultList([
+      { isFinal: true, transcript: "Hoje eu tenho praia" },
+      { isFinal: false, transcript: "hoje eu tenho praia com a Erica" },
+    ])), {
+      finalText: "Hoje eu tenho praia",
+      interimText: "com a Erica",
+      text: "Hoje eu tenho praia com a Erica",
+    });
+  });
 });
 
 describe("recognition lifecycle", () => {
