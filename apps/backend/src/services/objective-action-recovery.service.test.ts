@@ -31,6 +31,7 @@ function createRepository(initial: ObjectiveFixture[]) {
     lastError: string | null;
   }> = [];
   let writes = 0;
+  let transactionDepth = 0;
 
   const repository = {
     objective: {
@@ -42,6 +43,7 @@ function createRepository(initial: ObjectiveFixture[]) {
         && objective.progress < 100
       )) ?? null,
       updateMany: async ({ where, data }: any) => {
+        if (transactionDepth === 0) throw new Error('objective recovery write must be transactional');
         const objective = objectives.find((item) => item.id === where.id && item.userId === where.userId);
         if (!objective || objective.archived || objective.progress >= 100) return { count: 0 };
         if (where.title !== undefined && objective.title !== where.title) return { count: 0 };
@@ -58,9 +60,10 @@ function createRepository(initial: ObjectiveFixture[]) {
         if (!claim) return { count: 0 };
         if (where.leaseToken !== undefined) {
           if (claim.leaseToken !== where.leaseToken) return { count: 0 };
+          if (where.leaseUntil?.gt && claim.leaseUntil <= where.leaseUntil.gt) return { count: 0 };
           claim.leaseUntil = data.leaseUntil;
-          claim.retryNotBefore = data.retryNotBefore;
-          claim.lastError = data.lastError;
+          if ('retryNotBefore' in data) claim.retryNotBefore = data.retryNotBefore;
+          if ('lastError' in data) claim.lastError = data.lastError;
           return { count: 1 };
         }
         if (claim.leaseUntil > where.leaseUntil.lte) return { count: 0 };
@@ -98,8 +101,18 @@ function createRepository(initial: ObjectiveFixture[]) {
       },
     },
   };
+  const repositoryWithTransaction = Object.assign(repository, {
+    $transaction: async <T>(operation: (transaction: typeof repository) => Promise<T>): Promise<T> => {
+      transactionDepth += 1;
+      try {
+        return await operation(repository);
+      } finally {
+        transactionDepth -= 1;
+      }
+    },
+  });
 
-  return { repository, objectives, claims, getWrites: () => writes };
+  return { repository: repositoryWithTransaction, objectives, claims, getWrites: () => writes };
 }
 
 async function run() {
@@ -257,6 +270,65 @@ async function run() {
     assert.equal(getWrites(), 1);
     assert.equal(replicaResults.filter((result) => result.attempted === 1).length, 1);
     assert.equal(replicaResults.filter((result) => result.deferred === 1).length, 1);
+  }
+
+  {
+    let now = 20_000;
+    const { repository, getWrites } = createRepository([{
+      id: 'fenced-worker', userId: USER_ID, title: 'Publicar relatório', progress: 0, archived: false,
+      subgoals: [], updatedAt: new Date('2026-08-01T12:00:00.000Z'),
+    }]);
+    let releaseWorkerA!: (items: { items: string[] }) => void;
+    let releaseWorkerB!: (items: { items: string[] }) => void;
+    const workerAResult = new Promise<{ items: string[] }>((resolve) => { releaseWorkerA = resolve; });
+    const workerBResult = new Promise<{ items: string[] }>((resolve) => { releaseWorkerB = resolve; });
+    const workerA = new ObjectiveActionRecoveryService(repository, async () => workerAResult, {
+      now: () => now,
+      leaseMs: 100,
+      generationTimeoutMs: 90,
+    });
+    const workerB = new ObjectiveActionRecoveryService(repository, async () => workerBResult, {
+      now: () => now,
+      leaseMs: 100,
+      generationTimeoutMs: 90,
+    });
+
+    const first = workerA.recover({ userId: USER_ID });
+    await new Promise((resolve) => setImmediate(resolve));
+    now += 101;
+    const second = workerB.recover({ userId: USER_ID });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    releaseWorkerA({ items: ['Abrir o relatório antigo', 'Copiar o primeiro indicador'] });
+    const staleWorker = await first;
+    assert.equal(staleWorker.deferred, 1, 'worker com token vencido não pode gravar depois que outro assumiu');
+    assert.equal(getWrites(), 0, 'fencing deve ocorrer antes do CAS do objetivo');
+
+    releaseWorkerB({ items: ['Abrir o relatório atual', 'Escrever o primeiro indicador'] });
+    const currentWorker = await second;
+    assert.equal(currentWorker.recovered, 1);
+    assert.equal(getWrites(), 1, 'somente o worker dono da lease renovada pode persistir');
+  }
+
+  {
+    const { repository, getWrites } = createRepository([{
+      id: 'generation-timeout', userId: USER_ID, title: 'Objetivo com IA lenta', progress: 0, archived: false,
+      subgoals: [],
+    }]);
+    const service = new ObjectiveActionRecoveryService(repository, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return { items: ['Abrir o arquivo', 'Escrever uma linha'] };
+    }, { leaseMs: 60, generationTimeoutMs: 20 } as any);
+
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+      const result = await service.recover({ userId: USER_ID });
+      assert.equal(result.failed, 1, 'geração deve encerrar antes da lease e entrar em backoff');
+      assert.equal(getWrites(), 0);
+    } finally {
+      console.warn = originalWarn;
+    }
   }
 
   {

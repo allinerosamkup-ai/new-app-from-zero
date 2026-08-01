@@ -28,7 +28,6 @@ model Profile {
   eventLogs        EventLog[]
   weeklyInsights   WeeklyInsight[]
   objectives       Objective[]
-  objectiveActionRecoveryClaims ObjectiveActionRecoveryClaim[]
   memoryEmbeddings  MemoryEmbedding[]
   userMemories      UserMemory[]
   userMemoryEvidence UserMemoryEvidence[]
@@ -502,6 +501,7 @@ model Objective {
   user                 Profile                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   actionRecoveryClaims ObjectiveActionRecoveryClaim[]
 
+  @@unique([userId, id], name: "uq_objectives_user_id_id", map: "uq_objectives_user_id_id")
   @@index([userId, archived, createdAt(sort: Desc)], name: "idx_objectives_user")
   @@map("objectives")
 }
@@ -518,10 +518,9 @@ model ObjectiveActionRecoveryClaim {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user      Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  objective Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  objective Objective @relation(fields: [userId, objectiveId], references: [userId, id], onDelete: Cascade)
 
-  @@unique([userId, objectiveId], name: "uq_objective_action_recovery_claim")
+  @@unique([userId, objectiveId], name: "uq_objective_action_recovery_claim", map: "uq_objective_action_recovery_claim")
   @@index([leaseUntil], name: "idx_objective_action_recovery_lease")
   @@index([retryNotBefore], name: "idx_objective_action_recovery_retry")
   @@map("objective_action_recovery_claims")

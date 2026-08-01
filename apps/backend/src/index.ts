@@ -1923,26 +1923,30 @@ function getRagIntent(type: string, context: any): string {
 
 async function generateGoalSubtasksForRecovery(
   request: GoalSubtasksSuggestionRequest,
+  options?: { signal?: AbortSignal },
 ): Promise<unknown> {
   const OpenAI = (await import('openai')).default;
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const generationConfig = resolveSuggestGenerationConfig(request.type, false);
-  const completion = await openai.chat.completions.create({
-    model: getOpenAiModel(),
-    messages: [
-      {
-        role: 'system' as const,
-        content: buildAuraSystemPrompt({ domain: 'goal-execution' }),
-      },
-      {
-        role: 'user' as const,
-        content: buildGoalSubtasksPrompt(request.context),
-      },
-    ],
-    max_completion_tokens: getOpenAiMaxCompletionTokens(generationConfig.maxTokens),
-    ...openAiTemperature(getOpenAiModel(), generationConfig.temperature),
-    response_format: { type: 'json_object' as const },
-  });
+  const completion = await openai.chat.completions.create(
+    {
+      model: getOpenAiModel(),
+      messages: [
+        {
+          role: 'system' as const,
+          content: buildAuraSystemPrompt({ domain: 'goal-execution' }),
+        },
+        {
+          role: 'user' as const,
+          content: buildGoalSubtasksPrompt(request.context),
+        },
+      ],
+      max_completion_tokens: getOpenAiMaxCompletionTokens(generationConfig.maxTokens),
+      ...openAiTemperature(getOpenAiModel(), generationConfig.temperature),
+      response_format: { type: 'json_object' as const },
+    },
+    { signal: options?.signal },
+  );
   const rawSuggestion = completion.choices[0]?.message?.content?.trim() ?? '';
   return normalizeAiSuggestion(request.type, rawSuggestion);
 }

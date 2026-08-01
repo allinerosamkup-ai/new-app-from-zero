@@ -12,7 +12,7 @@ type ObjectiveRecoveryRow = {
   updatedAt?: Date | string | null;
 };
 
-type ObjectiveActionRecoveryPrisma = {
+type ObjectiveActionRecoveryTransaction = {
   objective: {
     findMany(args: unknown): Promise<ObjectiveRecoveryRow[]>;
     findFirst(args: unknown): Promise<ObjectiveRecoveryRow | null>;
@@ -24,6 +24,10 @@ type ObjectiveActionRecoveryPrisma = {
     findFirst(args: unknown): Promise<RecoveryClaimRow | null>;
     deleteMany(args: unknown): Promise<{ count: number }>;
   };
+};
+
+type ObjectiveActionRecoveryPrisma = ObjectiveActionRecoveryTransaction & {
+  $transaction<T>(operation: (transaction: ObjectiveActionRecoveryTransaction) => Promise<T>): Promise<T>;
 };
 
 type RecoveryClaimRow = {
@@ -47,6 +51,7 @@ export type GoalSubtasksSuggestionRequest = {
 
 export type GoalSubtasksSuggestionGenerator = (
   request: GoalSubtasksSuggestionRequest,
+  options?: { signal?: AbortSignal },
 ) => Promise<unknown>;
 
 export type ObjectiveActionRecoveryResult = {
@@ -68,12 +73,15 @@ type ObjectiveActionRecoveryOptions = {
   maxPerRequest?: number;
   backoffMs?: number;
   leaseMs?: number;
+  generationTimeoutMs?: number;
   now?: () => number;
 };
 
 const DEFAULT_MAX_PER_REQUEST = 3;
 const DEFAULT_BACKOFF_MS = 60_000;
 const DEFAULT_LEASE_MS = 120_000;
+const DEFAULT_GENERATION_TIMEOUT_MS = 90_000;
+const LEASE_FENCE_MARGIN_MS = 1;
 
 export function buildGoalSubtasksPrompt(input: {
   goalTitle: string;
@@ -145,6 +153,7 @@ export class ObjectiveActionRecoveryService {
   private readonly maxPerRequest: number;
   private readonly backoffMs: number;
   private readonly leaseMs: number;
+  private readonly generationTimeoutMs: number;
   private readonly now: () => number;
 
   constructor(
@@ -154,7 +163,11 @@ export class ObjectiveActionRecoveryService {
   ) {
     this.maxPerRequest = Math.max(1, options.maxPerRequest ?? DEFAULT_MAX_PER_REQUEST);
     this.backoffMs = Math.max(1, options.backoffMs ?? DEFAULT_BACKOFF_MS);
-    this.leaseMs = Math.max(1, options.leaseMs ?? DEFAULT_LEASE_MS);
+    this.leaseMs = Math.max(2, options.leaseMs ?? DEFAULT_LEASE_MS);
+    this.generationTimeoutMs = Math.max(
+      1,
+      Math.min(options.generationTimeoutMs ?? DEFAULT_GENERATION_TIMEOUT_MS, this.leaseMs - LEASE_FENCE_MARGIN_MS),
+    );
     this.now = options.now ?? Date.now;
   }
 
@@ -269,13 +282,16 @@ export class ObjectiveActionRecoveryService {
     }
 
     try {
-      const suggestion = await this.generateGoalSubtasks({
-        type: 'goal-subtasks',
-        context: {
-          goalTitle: titleSnapshot,
-          existingSubtasks: [],
-          locale: input.locale,
+      const suggestion = await this.generateWithLeaseTimeout({
+        request: {
+          type: 'goal-subtasks',
+          context: {
+            goalTitle: titleSnapshot,
+            existingSubtasks: [],
+            locale: input.locale,
+          },
         },
+        leaseUntilMs: claim.leaseUntilMs,
       });
       const actions = recoveredActions(input.objective.id, suggestionItems(suggestion));
       if (actions.length < 2) {
@@ -283,25 +299,18 @@ export class ObjectiveActionRecoveryService {
         return { status: 'failed', attempted: true, retryAfterMs: this.backoffMs };
       }
 
-      const updated = await this.prisma.objective.updateMany({
-        where: {
-          id: input.objective.id,
-          userId: input.userId,
-          title: titleSnapshot,
-          archived: false,
-          progress: { lt: 100 },
-          subgoals: { equals: subgoalsSnapshot },
-          ...(updatedAtSnapshot !== undefined
-            ? { updatedAt: updatedAtSnapshot }
-            : {}),
-        },
-        data: { subgoals: actions as any },
+      const committed = await this.commitWithFence({
+        objective: input.objective,
+        userId: input.userId,
+        token: claim.token,
+        titleSnapshot,
+        updatedAtSnapshot,
+        subgoalsSnapshot,
+        actions,
       });
-      if (updated.count !== 1) {
-        await this.releaseClaim(input.userId, input.objective.id, claim.token);
+      if (!committed) {
         return { status: 'deferred', attempted: true, retryAfterMs: 0 };
       }
-      await this.releaseClaim(input.userId, input.objective.id, claim.token);
       return { status: 'recovered', attempted: true, retryAfterMs: null };
     } catch (error) {
       await this.markFailure(
@@ -315,8 +324,86 @@ export class ObjectiveActionRecoveryService {
     }
   }
 
+  private async generateWithLeaseTimeout(input: {
+    request: GoalSubtasksSuggestionRequest;
+    leaseUntilMs: number;
+  }): Promise<unknown> {
+    const remainingLeaseMs = input.leaseUntilMs - this.now() - LEASE_FENCE_MARGIN_MS;
+    const timeoutMs = Math.min(this.generationTimeoutMs, remainingLeaseMs);
+    if (timeoutMs <= 0) throw new GenerationLeaseTimeoutError();
+
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const generation = Promise.resolve().then(() => this.generateGoalSubtasks(
+      input.request,
+      { signal: controller.signal },
+    ));
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new GenerationLeaseTimeoutError());
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([generation, timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  private async commitWithFence(input: {
+    objective: ObjectiveRecoveryRow;
+    userId: string;
+    token: string;
+    titleSnapshot: string;
+    updatedAtSnapshot: Date | string | null | undefined;
+    subgoalsSnapshot: unknown;
+    actions: ObjectiveSubgoal[];
+  }): Promise<boolean> {
+    return this.prisma.$transaction(async (transaction) => {
+      const nowMs = this.now();
+      const renewed = await transaction.objectiveActionRecoveryClaim.updateMany({
+        where: {
+          userId: input.userId,
+          objectiveId: input.objective.id,
+          leaseToken: input.token,
+          leaseUntil: { gt: new Date(nowMs) },
+        },
+        data: { leaseUntil: new Date(nowMs + this.leaseMs) },
+      });
+      if (renewed.count !== 1) return false;
+
+      const updated = await transaction.objective.updateMany({
+        where: {
+          id: input.objective.id,
+          userId: input.userId,
+          title: input.titleSnapshot,
+          archived: false,
+          progress: { lt: 100 },
+          subgoals: { equals: input.subgoalsSnapshot },
+          ...(input.updatedAtSnapshot !== undefined
+            ? { updatedAt: input.updatedAtSnapshot }
+            : {}),
+        },
+        data: { subgoals: input.actions as any },
+      });
+      const deleted = await transaction.objectiveActionRecoveryClaim.deleteMany({
+        where: {
+          userId: input.userId,
+          objectiveId: input.objective.id,
+          leaseToken: input.token,
+        },
+      });
+      if (deleted.count !== 1) {
+        throw new Error('objective_recovery_claim_delete_failed');
+      }
+      return updated.count === 1;
+    });
+  }
+
   private async acquireClaim(userId: string, objectiveId: string): Promise<
-    { acquired: true; token: string } | { acquired: false; retryAfterMs: number }
+    { acquired: true; token: string; leaseUntilMs: number } | { acquired: false; retryAfterMs: number }
   > {
     const nowMs = this.now();
     const now = new Date(nowMs);
@@ -340,7 +427,7 @@ export class ObjectiveActionRecoveryService {
         lastError: null,
       },
     });
-    if (acquired.count === 1) return { acquired: true, token };
+    if (acquired.count === 1) return { acquired: true, token, leaseUntilMs: leaseUntil.getTime() };
 
     try {
       await this.prisma.objectiveActionRecoveryClaim.create({
@@ -354,7 +441,7 @@ export class ObjectiveActionRecoveryService {
           lastError: null,
         },
       });
-      return { acquired: true, token };
+      return { acquired: true, token, leaseUntilMs: leaseUntil.getTime() };
     } catch (error) {
       if (!isUniqueConstraintError(error)) throw error;
     }
@@ -402,4 +489,11 @@ function sameInstant(left: Date | string | null | undefined, right: Date | strin
 
 function isUniqueConstraintError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: unknown }).code === 'P2002');
+}
+
+class GenerationLeaseTimeoutError extends Error {
+  constructor() {
+    super('objective_recovery_generation_timeout');
+    this.name = 'GenerationLeaseTimeoutError';
+  }
 }

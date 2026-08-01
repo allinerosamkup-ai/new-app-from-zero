@@ -50,6 +50,10 @@ const checkinMigrationPath = path.resolve(
 );
 assert.ok(fs.existsSync(checkinMigrationPath), 'canonical check-in migration must exist');
 const checkinMigration = fs.readFileSync(checkinMigrationPath, 'utf8');
+const objectiveRecoveryMigration = fs.readFileSync(
+  path.resolve(__dirname, '../../../../supabase/migrations/20260801163000_add_objective_action_recovery_claims.sql'),
+  'utf8',
+);
 const prismaSchema = fs.readFileSync(
   path.resolve(__dirname, '../../../../packages/database/prisma/schema.prisma'),
   'utf8',
@@ -146,5 +150,31 @@ assert.match(checkinMigration, /add column if not exists idempotency_key text/i)
 assert.match(checkinMigration, /add column if not exists signal_metadata jsonb/i);
 assert.match(checkinMigration, /add column if not exists sleep_hours double precision/i);
 assert.match(checkinMigration, /create unique index if not exists idx_daily_checkins_user_idempotency/i);
+
+assert.match(objectiveRecoveryMigration, /objective_action_recovery_claims enable row level security/i);
+assert.match(objectiveRecoveryMigration, /unique\s*\(user_id,\s*id\)/i,
+  'objective ownership must be addressable by a composite key');
+assert.match(
+  objectiveRecoveryMigration,
+  /foreign key\s*\(user_id,\s*objective_id\)\s*references public\.objectives\s*\(user_id,\s*id\)\s*on delete cascade/i,
+  'a claim cannot point to an objective owned by another user',
+);
+assert.doesNotMatch(objectiveRecoveryMigration, /references public\.objectives\s*\(id\)/i);
+assert.doesNotMatch(objectiveRecoveryMigration, /create policy|auth\.uid\(\)|for all/i,
+  'internal lease tokens must not be exposed through an authenticated-user RLS policy');
+assert.match(objectiveRecoveryMigration, /revoke all on table public\.objective_action_recovery_claims from anon, authenticated/i);
+assert.match(objectiveRecoveryMigration, /grant select, insert, update, delete on table public\.objective_action_recovery_claims to service_role/i);
+assert.match(
+  prismaSchema,
+  /@@unique\(\[userId, id\], name: "uq_objectives_user_id_id", map: "uq_objectives_user_id_id"\)/,
+);
+assert.match(
+  prismaSchema,
+  /@@unique\(\[userId, objectiveId\], name: "uq_objective_action_recovery_claim", map: "uq_objective_action_recovery_claim"\)/,
+);
+assert.match(
+  prismaSchema,
+  /objective\s+Objective\s+@relation\(fields: \[userId, objectiveId\], references: \[userId, id\], onDelete: Cascade\)/,
+);
 
 console.log('schema alignment tests passed');
