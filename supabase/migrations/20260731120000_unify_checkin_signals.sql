@@ -15,6 +15,14 @@ alter table if exists public.daily_checkins
   drop constraint if exists daily_checkins_source_check,
   drop constraint if exists daily_checkins_sleep_hours_check;
 
+-- Older visual check-ins were stored as "manual". Keep that provenance while
+-- moving them into the canonical screen source used by every current client.
+update public.daily_checkins
+set signal_metadata = coalesce(signal_metadata, '{}'::jsonb)
+      || jsonb_build_object('legacySource', source),
+    source = 'screen'
+where source not in ('screen', 'aura_text', 'aura_voice', 'mobile');
+
 alter table if exists public.daily_checkins
   add constraint daily_checkins_source_check
     check (source in ('screen', 'aura_text', 'aura_voice', 'mobile')),

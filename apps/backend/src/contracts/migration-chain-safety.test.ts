@@ -25,6 +25,13 @@ assert.match(legacyRls, /execute\s+'create policy "memory_embeddings_manage_own"
 const checkinMigration = fs.readFileSync(path.join(migrationsDir, checkinName), 'utf8');
 assert.match(checkinMigration, /where idempotency_key is not null/i,
   'nullable idempotency keys need a partial unique index');
+assert.match(checkinMigration, /jsonb_build_object\('legacySource', source\)/i,
+  'legacy manual sources must be preserved in metadata before normalization');
+assert.ok(
+  checkinMigration.indexOf("update public.daily_checkins")
+    < checkinMigration.indexOf("add constraint daily_checkins_source_check"),
+  'legacy sources must be normalized before the canonical source constraint is added',
+);
 assert.doesNotMatch(checkinMigration, /drop table|truncate/i,
   'the migration must preserve existing check-in history');
 
