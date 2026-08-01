@@ -24,9 +24,16 @@ export const ObjectiveSubgoalSchema = z.object({
 export type ObjectiveSubgoalInput = z.input<typeof ObjectiveSubgoalInputSchema>;
 export type ObjectiveSubgoal = z.output<typeof ObjectiveSubgoalSchema>;
 
-export function normalizeObjectiveSubgoals(subgoals: ObjectiveSubgoalInput[]): ObjectiveSubgoal[] {
-  const parsed = z.array(ObjectiveSubgoalInputSchema).parse(subgoals);
-  return parsed
+export function normalizeObjectiveSubgoals(subgoals: unknown): ObjectiveSubgoal[] {
+  if (!Array.isArray(subgoals)) return [];
+
+  const parsedSubgoals = subgoals.flatMap((value) => {
+      const parsed = ObjectiveSubgoalInputSchema.safeParse(value);
+      if (!parsed.success) return [];
+      return [parsed.data];
+    });
+
+  return parsedSubgoals
     .map((subgoal, index) => {
       const normalized: Record<string, unknown> = {
         id: subgoal.id,
