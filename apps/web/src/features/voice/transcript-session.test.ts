@@ -10,6 +10,7 @@ import {
   TranscriptSession,
   type SpeechResultListLike,
 } from "./transcript-session";
+import * as recognitionLifecycle from "./transcript-session";
 
 function resultList(
   items: Array<{ isFinal: boolean; transcript: string }>,
@@ -265,6 +266,16 @@ describe("TranscriptSession", () => {
 });
 
 describe("recognition lifecycle", () => {
+  it("manual stop keeps the active reference so onend can process the transcript", () => {
+    expect(typeof recognitionLifecycle.requestRecognitionStop).toBe("function");
+    const recognition = { stop: vi.fn() };
+    const ref = { current: recognition };
+
+    expect(recognitionLifecycle.requestRecognitionStop!(ref)).toBe(recognition);
+    expect(recognition.stop).toHaveBeenCalledOnce();
+    expect(ref.current).toBe(recognition);
+  });
+
   it("clears the active reference before stopping so a second recording cannot overlap", () => {
     const ref: { current: { stop: () => void } | null } = { current: null };
     let stopCalls = 0;

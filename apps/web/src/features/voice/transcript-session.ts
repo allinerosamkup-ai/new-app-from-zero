@@ -35,6 +35,18 @@ export function stopActiveRecognition<T extends RecognitionLike>(ref: MutableRec
   return active;
 }
 
+/** Requests a normal stop while preserving the ref so the current onend can commit the transcript. */
+export function requestRecognitionStop<T extends RecognitionLike>(ref: MutableRecognitionRef<T>): T | null {
+  const active = ref.current;
+  if (!active) return null;
+  try {
+    active.stop();
+  } catch {
+    // The browser may already be ending; onend still owns releasing this ref.
+  }
+  return active;
+}
+
 /** Ignores late end/error events from an older recognizer after a restart. */
 export function releaseRecognition<T>(ref: MutableRecognitionRef<T>, recognition: T): boolean {
   if (ref.current !== recognition) return false;

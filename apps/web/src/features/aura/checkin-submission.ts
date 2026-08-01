@@ -46,3 +46,5 @@ export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input)
     dayType: entry.dayType,
   };
 }
+
+export type CheckinSubmission = ReturnType<typeof buildCheckinSubmission>;
