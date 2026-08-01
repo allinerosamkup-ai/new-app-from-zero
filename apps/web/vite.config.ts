@@ -1,7 +1,20 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
+
+const appRelease = process.env.VITE_APP_RELEASE?.trim() ?? "";
+
+const releaseMetadataPlugin = (): Plugin => ({
+  name: "airia-release-metadata",
+  generateBundle() {
+    this.emitFile({
+      type: "asset",
+      fileName: "release.json",
+      source: `${JSON.stringify({ release: appRelease })}\n`,
+    });
+  },
+});
 
 const addComponentDataPlugin = () => {
   return {
@@ -56,11 +69,14 @@ export default defineConfig({
   plugins: [
     react(),
     addComponentDataPlugin(),
+    releaseMetadataPlugin(),
     VitePWA({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
-      registerType: 'autoUpdate',
+      // O SW navega clientes antigos para a release exata. O modo automático
+      // também recarregaria no evento activated e poderia disputar essa navegação.
+      registerType: 'prompt',
       includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         id: '/',
@@ -167,6 +183,9 @@ export default defineConfig({
       },
     }),
   ],
+  define: {
+    "import.meta.env.VITE_APP_RELEASE": JSON.stringify(appRelease),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

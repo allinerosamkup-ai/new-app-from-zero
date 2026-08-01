@@ -12,14 +12,16 @@ import "./i18n";
 
 // Register Service Worker for PWA
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-  const reloadLockKey = "airia:pwa-update-reload-at";
+  const appRelease = import.meta.env.VITE_APP_RELEASE?.trim() ?? "";
+  const reloadLockKey = "airia:pwa-update-reload";
   let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
   updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
-      const lastReload = Number(sessionStorage.getItem(reloadLockKey) || 0);
-      if (Date.now() - lastReload < 30_000) return;
-      sessionStorage.setItem(reloadLockKey, String(Date.now()));
+      if (!appRelease || sessionStorage.getItem(reloadLockKey) === appRelease) {
+        return;
+      }
+      sessionStorage.setItem(reloadLockKey, appRelease);
       void updateSW?.(true);
     },
     onRegisteredSW(_swUrl, registration) {

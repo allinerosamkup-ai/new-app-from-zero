@@ -28,6 +28,7 @@ services:
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
         VITE_APK_URL: ${VITE_APK_URL}
+        VITE_APP_RELEASE: ${AIRIA_RELEASE}
     restart: unless-stopped
     depends_on:
       - airia_backend
@@ -42,6 +43,7 @@ services:
       - traefik.http.services.airia-web.loadbalancer.server.port=80
       - managed-by=vps-ops
       - deployed-at=${DEPLOYED_AT}
+      - airia.release=${AIRIA_RELEASE}
 
 networks:
   easypanel:

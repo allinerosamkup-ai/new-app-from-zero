@@ -1,20 +1,33 @@
 /// <reference lib="webworker" />
 import { clientsClaim } from 'workbox-core';
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
+import { getReleaseNavigationUrl } from './features/pwa/release-update';
 
 declare const self: ServiceWorkerGlobalScope;
+
+const appRelease = import.meta.env.VITE_APP_RELEASE?.trim() ?? '';
 
 self.skipWaiting();
 clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
-// NÃO force client.navigate() no activate. Combinado com skipWaiting +
-// clientsClaim + o reload do autoUpdate, isso criava um loop de reload
-// (página "tremelicando", botões não respondiam) em redes instáveis: cada
-// ativação re-navegava a janela, que re-registrava o SW, que reativava.
-// clientsClaim() já entrega os assets novos na próxima navegação e o
-// autoUpdate do vite-plugin-pwa recarrega a aba ativa uma única vez.
+self.addEventListener('activate', (event) => {
+  if (!appRelease) return;
+
+  event.waitUntil((async () => {
+    await self.clients.claim();
+    const clients = await self.clients.matchAll({
+      type: 'window',
+      includeUncontrolled: false,
+    }) as WindowClient[];
+
+    await Promise.all(clients.map(async (client) => {
+      const navigationUrl = getReleaseNavigationUrl(client.url, appRelease);
+      if (navigationUrl) await client.navigate(navigationUrl);
+    }));
+  })());
+});
 
 // Handle push events
 self.addEventListener('push', (event) => {

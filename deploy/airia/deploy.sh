@@ -11,6 +11,17 @@ $PROJECT_DIR/supabase/migrations/20260801002000_ensure_auth_profiles.sql
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
 
+VPS_RELEASE="$(git -C "$PROJECT_DIR" rev-parse HEAD)"
+GITHUB_RELEASE="$(git -C "$PROJECT_DIR" rev-parse refs/remotes/origin/master)"
+export AIRIA_RELEASE="$VPS_RELEASE"
+
+echo "GitHub release: $GITHUB_RELEASE"
+echo "VPS release:    $VPS_RELEASE"
+if [ "$GITHUB_RELEASE" != "$VPS_RELEASE" ]; then
+  echo "ERRO: origin/master e o checkout da VPS não apontam para o mesmo commit"
+  exit 1
+fi
+
 cd "$PROJECT_DIR/deploy/airia"
 
 echo "== Pre-check =="
@@ -79,6 +90,30 @@ if command -v curl >/dev/null 2>&1; then
   done
   if [ "$CODE" != "200" ]; then
     echo "FALHA: health não retornou 200 após ~$((ATTEMPTS * DELAY))s (último: HTTP ${CODE})"
+    exit 1
+  fi
+
+  echo "== Release identity =="
+  CONTAINER_RELEASE="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' airia_web)"
+  PUBLIC_RELEASE=""
+  i=1
+  while [ "$i" -le "$ATTEMPTS" ]; do
+    RELEASE_JSON="$(curl -fsS --max-time 10 'https://airia.pro/release.json' 2>/dev/null)" || RELEASE_JSON=""
+    PUBLIC_RELEASE="$(printf '%s' "$RELEASE_JSON" | sed -n 's/.*"release":"\([^"]*\)".*/\1/p')"
+    if [ "$PUBLIC_RELEASE" = "$AIRIA_RELEASE" ]; then
+      break
+    fi
+    echo "tentativa ${i}/${ATTEMPTS}: release pública '${PUBLIC_RELEASE:-indisponível}' — aguardando ${AIRIA_RELEASE}..."
+    i=$((i + 1))
+    sleep "$DELAY"
+  done
+
+  echo "Container release: $CONTAINER_RELEASE"
+  echo "Public release:    $PUBLIC_RELEASE"
+  if [ "$GITHUB_RELEASE" != "$VPS_RELEASE" ] || \
+     [ "$VPS_RELEASE" != "$CONTAINER_RELEASE" ] || \
+     [ "$CONTAINER_RELEASE" != "$PUBLIC_RELEASE" ]; then
+    echo "FALHA: GitHub, VPS, contêiner e release pública não apontam para o mesmo commit"
     exit 1
   fi
 fi
