@@ -79,11 +79,20 @@ function inferIntentFromAction(action: AuraCommandAction | null): AuraCommandInt
     case 'create_capture':
       return 'capture';
     case 'create_checkin':
+    case 'log_checkin':
       return 'checkin';
     case 'create_habit':
       return 'habit';
     case 'create_calendar_event':
       return 'calendar_event';
+    case 'postpone_task':
+      return 'postpone';
+    case 'start_task':
+      return 'start_task';
+    case 'adapt_agenda':
+      return 'adapt_agenda';
+    case 'open_screen':
+      return 'navigate';
     default:
       return null;
   }
@@ -117,11 +126,19 @@ function inferActionFromIntent(intent: AuraCommandIntent | null): AuraCommandAct
     case 'capture':
       return 'create_capture';
     case 'checkin':
-      return 'create_checkin';
+      return 'record_checkin';
     case 'habit':
       return 'create_habit';
     case 'calendar_event':
       return 'create_calendar_event';
+    case 'postpone':
+      return 'postpone_task';
+    case 'start_task':
+      return 'start_task';
+    case 'adapt_agenda':
+      return 'adapt_agenda';
+    case 'navigate':
+      return 'open_screen';
     default:
       return null;
   }
@@ -243,8 +260,8 @@ export function parseAuraCommandResponse(content: string, originalMessage = ''):
     asString(root.assistantMessage) ??
     asString(root.message) ??
     (needsClarification
-      ? 'Recebi bastante coisa de uma vez. Posso transformar isso em tarefa, checklist, agenda ou só organizar a ideia?'
-      : 'Recebi seu texto e já organizei a próxima ação.');
+      ? 'Preciso apenas do item exato para concluir essa alteração.'
+      : 'Entendi o que você trouxe.');
 
   const normalized = {
     assistantMessage,
@@ -255,7 +272,7 @@ export function parseAuraCommandResponse(content: string, originalMessage = ''):
     needsClarification,
     clarifyingQuestion:
       asString(root.clarifyingQuestion) ??
-      (needsClarification ? 'Você quer que eu transforme isso em tarefa, checklist, agenda ou só organize a ideia?' : null),
+      (needsClarification ? 'Qual item exato devo alterar?' : null),
   };
 
   return AuraCommandResponseSchema.parse(normalized);
@@ -330,7 +347,7 @@ export class AuraCommandService {
       input.reasoningTraceContext ? ('== CONTEXTO OPERACIONAL ==\n' + input.reasoningTraceContext) : '',
       '',
       '== HIERARQUIA DE EXECUÇÃO (CRÍTICO) ==',
-      '1. CONVERSE quando a pessoa trouxer relato, dúvida, reflexão ou contexto sem pedir alteração no app: use respond/conversation e entregue leitura + direção.',
+      '1. CONVERSE quando a pessoa trouxer relato, dúvida, reflexão ou contexto sem pedir alteração no app: use respond/conversation e entregue leitura curta, sem transformar o relato em interrogatório.',
       '2. EXECUTE quando houver pedido operacional claro.',
       '3. PROPONHA se precisar de confirmação do usuário (só para datas futuras).',
       '4. PERGUNTE apenas se falta dado completamente indispensável (ex: qual tarefa específica remover).',
@@ -350,9 +367,8 @@ export class AuraCommandService {
       'Categorias válidas: "trabalho", "pessoal", "autocuidado", "social", "outro".',
       'NUNCA retorne create_agenda sem o campo "blocks" dentro de "payload".',
       '',
-      '== MODO ZERO CONTEXTO ==',
-      'Se NÃO houver metas, hábitos, planner nem estado recente, não invente uma rotina padrão tirada do relógio.',
-      '→ Faça UMA pergunta curta que colete o essencial ("me fala 3 coisas que precisam acontecer essa semana") e monte a partir da resposta, aqui mesmo.',
+      '== SEM CONTEXTO ANTERIOR ==',
+      'Se NÃO houver metas, hábitos, planner nem estado recente, não invente uma rotina padrão tirada do relógio e não faça entrevista. Execute somente o item nomeado na fala atual; se não houver item nem pedido operacional, responda com leitura breve e pare.',
       '',
       '== REGRAS DE NEEDSCONFIRMATION ==',
       '- FALSE (executa direto): tarefa de HOJE, rotina montada na conversa, tarefas sem data específica',
@@ -366,7 +382,7 @@ export class AuraCommandService {
       '- create_checklist: title + items[] (mantém TODOS os itens, sem resumir)',
       '- create_goal: title + subgoals[]',
       '- create_capture: kind "note"|"checklist" + title + content + items[]; use para "anote isso" e checklists soltas',
-      '- create_checkin: localDate + moodScore + energyScore + clarityScore; irritabilityScore pode ser null quando não expresso; nunca invente sinal ausente',
+      '- record_checkin: localDate + moodScore + energyScore; clareza, irritabilidade, sono e fatores ficam null/ausentes quando não expressos. Preserve todos os fatores mencionados em factors[] e nunca substitua relato por nota neutra.',
       '- create_habit: title + frequency + targetDays + durationMinutes + reminderTime',
       '- create_calendar_event: compromisso fixo com title + date + startTime + durationMinutes + calendarId; se faltar data, pergunte; se faltar horário, proponha',
       '- update_task: taskId + newDate + newStartTime',
@@ -374,12 +390,7 @@ export class AuraCommandService {
       '- Para update_task/delete_task, use taskId somente quando o título do bloco corresponder ao alvo atual indicado no frame cognitivo; se não houver correspondência segura, use ask_clarification.',
       '- ask_clarification: só quando falta dado COMPLETAMENTE INDISPENSÁVEL',
       '- handoff_to_journal: APENAS quando a pessoa pedir EXPLICITAMENTE "salva no diário"',
-      '- log_checkin: moodScore/energyScore/focusScore de 1 a 10 + sleepScore opcional + note. Use quando a pessoa contar como está ("tô num 3", "acordei péssima", "energia lá em cima") ou pedir o check-in. Estime o que ela não disse a partir do que disse; não pergunte nota por nota.',
       '- create_habit: title + frequency (daily|weekly) + daysOfWeek[] + timeOfDay (morning|afternoon|evening|anytime) + durationMinutes',
-      '- postpone_task: taskId + targetDate',
-      '- start_task: taskId — quando ela disser que começou agora',
-      '- adapt_agenda: payload vazio — quando ela pedir para ajustar/refazer o dia inteiro',
-      '- open_screen: screen (home|planner|habits|goals|insights|journal|checkin) — quando ela só quiser VER algo',
       '',
       '== MODO ' + interactionMode.toUpperCase() + ' ==',
       interactionMode === 'executor'

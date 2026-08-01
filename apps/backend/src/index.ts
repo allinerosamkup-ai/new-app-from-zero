@@ -3395,11 +3395,15 @@ export function createApp(dependencies: AppDependencies = {}) {
         missingFields: combinedMissingFields,
         operations: combinedOperations,
       };
-      const persistedPlan = await AuraCommandPersistenceService.persistPlan({
-        prisma,
-        userId: data.userId,
-        plan: commandPlan,
-      });
+      // Conversa, leitura de estado e recusa protegida não são um plano. Persistir
+      // um card vazio faz a UI mostrar "0 ações" como se algo tivesse dado errado.
+      const persistedPlan = commandPlan.operations.length > 0
+        ? await AuraCommandPersistenceService.persistPlan({
+          prisma,
+          userId: data.userId,
+          plan: commandPlan,
+        })
+        : null;
       await AuraCommandPersistenceService.appendMessage({
         prisma,
         userId: data.userId,
@@ -3436,7 +3440,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           riskSafety: commandRiskSafety,
           actions: planResponses.slice(1).map((step) => ({ action: step.action, payload: step.payload })),
         },
-        plan: serializeAuraCommandPlan(freshPlan ?? persistedPlan),
+        plan: freshPlan ? serializeAuraCommandPlan(freshPlan) : null,
         execution,
       });
 

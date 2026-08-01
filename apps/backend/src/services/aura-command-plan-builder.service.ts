@@ -261,6 +261,24 @@ export class AuraCommandPlanBuilderService {
         });
         break;
       }
+      case 'log_checkin': {
+        return this.build({
+          ...input,
+          response: {
+            ...input.response,
+            action: 'record_checkin',
+            payload: {
+              ...payload,
+              clarityScore: typeof payload.clarityScore === 'number'
+                ? payload.clarityScore
+                : typeof payload.focusScore === 'number'
+                  ? payload.focusScore
+                  : null,
+              source: payload.source === 'aura_voice' ? 'aura_voice' : 'aura_text',
+            },
+          },
+        });
+      }
       case 'create_checkin': {
         const legacyResponse = {
           ...input,

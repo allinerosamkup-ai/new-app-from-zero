@@ -109,6 +109,39 @@ function run() {
     assert.equal(checkin.operations[0].payload.source, 'aura_text');
   }
 
+  const legacyCheckinAction = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Entendi o estado que você descreveu.',
+      intent: 'checkin',
+      action: 'log_checkin',
+      payload: {
+        moodScore: 3,
+        energyScore: 7,
+        focusScore: 4,
+        note: 'Irritada, dormi mal e tenho praia com a Érica.',
+        emotions: ['irritada'],
+        factors: ['sono ruim', 'praia com a Érica'],
+      },
+      needsConfirmation: false,
+      needsClarification: false,
+      clarifyingQuestion: null,
+    },
+    userMessage: 'Estou irritada, dormi mal e tenho praia com a Érica.',
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28',
+    currentTime: '09:00',
+    defaultCalendarId: 'primary',
+    busyWindows: [],
+    idFactory,
+  });
+  assert.equal(legacyCheckinAction.operations[0]?.type, 'record_checkin');
+  if (legacyCheckinAction.operations[0]?.type === 'record_checkin') {
+    assert.equal(legacyCheckinAction.operations[0].payload.clarityScore, 4);
+    assert.deepEqual(legacyCheckinAction.operations[0].payload.factors, ['sono ruim', 'praia com a Érica']);
+    assert.equal(legacyCheckinAction.operations[0].payload.source, 'aura_text');
+  }
+
   const adaptiveTask = AuraCommandPlanBuilderService.build({
     response: {
       assistantMessage: 'Escolhi o melhor horário livre para amanhã.',

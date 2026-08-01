@@ -655,6 +655,7 @@ async function run() {
     assert.equal(appliedMove.execution.status, 'applied');
     assert.equal(updatedBlocks.length, 1);
 
+    const plansBeforeBlockedVent = commandPlans.length;
     const blockedVentResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
@@ -669,6 +670,13 @@ async function run() {
     assert.equal(updatedBlocks.length, 1);
     assert.match(blockedVentBody, /ask_clarification/);
     assert.doesNotMatch(blockedVentBody, /Pronto, movi a tarefa/);
+    const blockedVentCompletedFrame = blockedVentBody
+      .split('\n')
+      .find((line) => line.startsWith('data: ') && line.includes('"plan"'));
+    assert.ok(blockedVentCompletedFrame);
+    const blockedVentCompleted = JSON.parse(blockedVentCompletedFrame.slice(6));
+    assert.equal(blockedVentCompleted.plan, null);
+    assert.equal(commandPlans.length, plansBeforeBlockedVent);
 
     const blockedEnglishNegationResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',

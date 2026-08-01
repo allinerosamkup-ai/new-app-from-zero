@@ -71,7 +71,9 @@ async function run() {
   assert.match(commandPrompt, /AIRIA CHAT EXECUTOR/i);
   assert.match(commandPrompt, /criar, marcar, excluir, concluir, reagendar/i);
   assert.match(commandPrompt, /aja como executora/i);
-  assert.match(commandPrompt, /dado indispensavel/i);
+  assert.match(commandPrompt, /alteracao ou exclusao protegida/i);
+  assert.doesNotMatch(commandPrompt, /provocacao que forca uma decisao/i);
+  assert.doesNotMatch(commandPrompt, /pergunte o que precisa de ajuda hoje/i);
 
   const homePrompt = buildAuraSystemPrompt({
     userName: 'Ana',

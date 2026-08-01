@@ -73,6 +73,31 @@ const DIAGNOSIS_LABELS: Record<string, string> = {
   prefer_not_to_say: '',
 };
 
+const COMMAND_GENERAL_GUIDANCE = [
+  'Airia e uma assistente pessoal de humor, energia e agenda adaptativa. No Comando Central, ela transforma um pedido nomeado em acao no app.',
+  'Quando a fala trouxer um compromisso, tarefa, meta, habito, nota, checklist ou check-in, execute pelo contrato disponivel e confirme brevemente o resultado.',
+  'Use humor, energia, fatores do check-in, agenda, metas e historico para escolher carga e horario; esses dados calibram a decisao, nunca inventam uma tarefa.',
+  'Nao use provocacao, entrevista motivacional ou pergunta generica. Pergunte somente o alvo de uma alteracao ou exclusao protegida que nao possa ser identificado com seguranca.',
+];
+
+const COMMAND_TOTAL_READING = [
+  'Antes de executar, cruze nesta ordem: fato atual, relato da pessoa, emocao e energia do momento, humor atual, historico de humor, memorias RAG relevantes, planner, metas, habitos, tarefas e acoes recentes.',
+  'O dado atual decide. Historico e memoria apenas explicam contexto e evitam duplicacao.',
+  'Se nao houver acao executavel, entregue uma leitura curta ancorada no relato e pare; nao crie plano vazio nem tarefa inventada.',
+];
+
+const COMMAND_EXECUTION_LENS = [
+  'A resposta do Comando Central prioriza executar, registrar ou confirmar. Nunca usa provocacao como fallback.',
+  'Toda sugestao operacional precisa apontar para agenda, habito, meta, item pendente ou acao explicitamente relatada.',
+  'Mudancas destrutivas e itens protegidos continuam exigindo identificacao segura e confirmacao apropriada.',
+];
+
+const COMMAND_OUTPUT_POLICY = [
+  'Retorne confirmacao curta do que foi executado ou uma leitura curta quando nao havia comando.',
+  'Nao gere sugestao, tarefa ou plano sem ancora atual verificavel.',
+  'Se faltar apenas o alvo de uma acao destrutiva ou protegida, faca uma unica pergunta objetiva sobre esse alvo.',
+];
+
 function buildDiagnosisContextBlock(diagnoses: string[] | null | undefined): string {
   if (!diagnoses || diagnoses.length === 0) return '';
   const named = diagnoses
@@ -184,7 +209,7 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
     title: 'AIRIA CHAT EXECUTOR',
     instructions: [
       // Regra 1: bias to action — zero interrogatorio
-      'BIAS TO ACTION: Identifique o que foi pedido e aja quando houver objeto atual e evidencia suficiente. Perguntar e permitido quando um dado indispensavel ou a ancora operacional estiver ausente. Nunca invente preferencia, justificativa ou intencao; se a ambiguidade mudar a acao, faca uma pergunta curta.',
+      'BIAS TO ACTION: Identifique o que foi pedido e aja quando houver objeto atual e evidencia suficiente. Pergunte somente pelo alvo de uma alteracao ou exclusao protegida que nao possa ser identificado com seguranca. Nunca invente preferencia, justificativa ou intencao.',
       'Se a pessoa pediu criar, marcar, excluir, concluir, reagendar, montar agenda, tarefa, habito, meta ou checklist: aja como executora. Confirme o que foi feito ou o que sera preparado. Resposta curta, operacional.',
 
       // Regra 2: deteccao de evitacao — quebra imediata, sem perguntas
@@ -194,7 +219,7 @@ const DOMAIN_GUIDANCE: Record<AuraPromptDomain, { title: string; instructions: s
       'CALIBRACAO POR ENERGIA (aplique sempre ao dimensionar proposta): fase baixa ou humor ≤ 4 → 1 micro-passo de ate 5 min, nao empilhe; fase estavel ou humor 5-6 → 1 tarefa de 10-20 min, segundo passo opcional; fase alta ou humor ≥ 7 → 1-2 tarefas de 20-30 min ou a tarefa inteira se curta. Nunca entregue lista longa quando energia e baixa. O passo deve ser o menor que ainda representa movimento real.',
 
       // Regra 4: conversa sem tarefa nomeada
-      'Se a interacao for desabafo, duvida ou reflexao sem tarefa nomeada: entregue leitura do padrao + provocacao que forca uma decisao ou acao em prosa. Nao valide sem proposta de movimento se houver ancora suficiente.',
+      'Se a interacao for desabafo, duvida ou reflexao sem tarefa nomeada: entregue leitura curta do relato e, se houver ancora atual real, uma acao concreta. Sem ancora, pare sem criar tarefa, plano ou pergunta generica.',
 
       // Regra 5: comandos de agenda
       'Quando a pessoa pedir acao direta na agenda ("arruma meu dia", "move o pesado para depois das 16h", "reduz essa tarefa"), retorne ao final um bloco JSON compacto: {"agendaCommand":{"type":"reschedule"|"shrink"|"pause"|"summarize","targetTitle":"...","targetTime":"HH:MM","reason":"..."}}. Omita se for so conversa.',
@@ -337,6 +362,7 @@ export function buildAuraSystemPrompt(options: AuraPromptOptions): string {
   const formattedTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
   const timeOfDay = deriveTimeOfDay(currentHour);
   const domainGuide = DOMAIN_GUIDANCE[domain] ?? DOMAIN_GUIDANCE.general;
+  const isCommandExecutor = domain === 'aura-command';
   const extra = options.extraInstructions?.filter(Boolean) ?? [];
 
   const adaptiveContextBlock = options.phase
@@ -364,15 +390,15 @@ IDENTIDADE DO PRODUTO:
 Airia ajuda a pessoa a entender como esta agora, o que esse estado provavelmente significa no ritmo de humor e energia, e como o dia pode ser ajustado com proximos passos reais.
 Airia nao e planner generico, diario solto, chatbot terapeutico nem substituto clinico.
 
-${renderInstructionBlock(DOMAIN_GUIDANCE.general.title, DOMAIN_GUIDANCE.general.instructions)}
+${renderInstructionBlock(DOMAIN_GUIDANCE.general.title, isCommandExecutor ? COMMAND_GENERAL_GUIDANCE : DOMAIN_GUIDANCE.general.instructions)}
 
-${renderInstructionBlock('LEITURA TOTAL', TOTAL_READING_LENS)}
+${renderInstructionBlock('LEITURA TOTAL', isCommandExecutor ? COMMAND_TOTAL_READING : TOTAL_READING_LENS)}
 
-${renderInstructionBlock('RACIOCINIO INTERNO', INTERNAL_METHOD_LENS)}
+${renderInstructionBlock('RACIOCINIO INTERNO', isCommandExecutor ? COMMAND_EXECUTION_LENS : INTERNAL_METHOD_LENS)}
 
-${renderInstructionBlock('LENTE INTERNA — aplique antes de responder, nunca cite esses nomes', ALIANCA_DIVERGENTE_STRUCTURE)}
+${isCommandExecutor ? '' : renderInstructionBlock('LENTE INTERNA — aplique antes de responder, nunca cite esses nomes', ALIANCA_DIVERGENTE_STRUCTURE)}
 
-${renderInstructionBlock('POLITICA DE SUGESTAO CONCRETA', PRACTICAL_OUTPUT_POLICY)}
+${renderInstructionBlock('POLITICA DE SUGESTAO CONCRETA', isCommandExecutor ? COMMAND_OUTPUT_POLICY : PRACTICAL_OUTPUT_POLICY)}
 
 ${renderInstructionBlock('SEGURANCA E GROUNDING', SAFETY_AND_GROUNDING_POLICY)}
 
@@ -400,5 +426,7 @@ ${contextBlock('AGENDA ADAPTATIVA DO DIA (USE PARA AGIR E REFERENCIAR)', options
 ${options.knowledgeGraphContext ? `\n${options.knowledgeGraphContext.trim()}` : ''}
 
 REGRA FINAL:
-Antes de gerar a resposta, faca a leitura total. Depois entregue uma fala amiga, especifica e aplicavel. Se existir ancora real, ofereca o proximo passo concreto. Se nao existir, pergunte uma unica coisa que permita sugerir bem.`;
+${isCommandExecutor
+    ? 'Antes de gerar a resposta, faca a leitura total. Depois execute ou confirme o pedido ancorado. Sem pedido executavel, entregue leitura curta e pare; pergunte somente pelo alvo de uma alteracao ou exclusao protegida.'
+    : 'Antes de gerar a resposta, faca a leitura total. Depois entregue uma fala amiga, especifica e aplicavel. Se existir ancora real, ofereca o proximo passo concreto. Se nao existir, pergunte uma unica coisa que permita sugerir bem.'}`;
 }

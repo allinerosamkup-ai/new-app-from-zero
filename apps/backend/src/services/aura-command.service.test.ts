@@ -136,6 +136,15 @@ async function run() {
   assert.equal(recoveredClarification.action, 'respond');
   assert.equal(recoveredClarification.needsClarification, false);
 
+  const malformedModelReply = parseAuraCommandResponse(
+    JSON.stringify({ payload: {} }),
+    'Estou cansada e tenho praia com a Érica.',
+  );
+  assert.equal(malformedModelReply.action, 'respond');
+  assert.equal(malformedModelReply.needsClarification, false);
+  assert.equal(malformedModelReply.clarifyingQuestion, null);
+  assert.doesNotMatch(malformedModelReply.assistantMessage, /tarefa, checklist, agenda ou.*ideia/i);
+
   const captureNote = parseAuraCommandResponse(JSON.stringify({
     assistantMessage: 'Anotei para você revisar nas Capturas.',
     intent: 'capture',
@@ -315,9 +324,8 @@ async function run() {
   assert.match(systemPrompt, /humor atual, historico de humor/i);
   assert.match(systemPrompt, /memorias RAG relevantes/i);
   assert.match(systemPrompt, /POLITICA DE SUGESTAO CONCRETA/i);
-  // INTERNAL_METHOD_LENS reescrita — checa concept-key estável em vez de "termos proprietarios"
-  assert.match(systemPrompt, /UM PROBLEMA POR VEZ/i);
-  assert.match(systemPrompt, /APOIO, NAO SOLUCAO/i);
+  assert.match(systemPrompt, /Comando Central prioriza executar, registrar ou confirmar/i);
+  assert.match(systemPrompt, /Nunca usa provocacao como fallback/i);
   assert.doesNotMatch(systemPrompt, /Aliança Divergente/i);
   assert.doesNotMatch(systemPrompt, /Marca Passo/i);
   assert.doesNotMatch(systemPrompt, /Ponto Cego/i);
@@ -335,6 +343,11 @@ async function run() {
   assert.match(userPrompt, /MODO EXECUTOR/i);
   assert.match(userPrompt, /FORMATO OBRIGATÓRIO PARA CREATE_AGENDA/i);
   assert.match(userPrompt, /RELATO DE CONCLUSÃO/i);
+  assert.match(userPrompt, /record_checkin/i);
+  assert.doesNotMatch(userPrompt, /MODO ZERO CONTEXTO/i);
+  assert.doesNotMatch(userPrompt, /me fala 3 coisas que precisam acontecer/i);
+  assert.doesNotMatch(userPrompt, /\blog_checkin\b/i);
+  assert.doesNotMatch(userPrompt, /\bpostpone_task\b|\bstart_task\b|\badapt_agenda\b|\bopen_screen\b/i);
   assert.match(userPrompt, /taskId.*t[ií]tulo.*alvo atual/i);
   assert.match(userPrompt, /nunca diga que j[aá] salvou|n[aã]o diga que j[aá] salvou/i);
   assert.ok(capturedModels.every((model) => model === getOpenAiModel()));
