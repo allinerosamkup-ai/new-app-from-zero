@@ -74,6 +74,7 @@ export default defineConfig({
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
+      injectRegister: false,
       // O SW navega clientes antigos para a release exata. O modo automático
       // também recarregaria no evento activated e poderia disputar essa navegação.
       registerType: 'prompt',

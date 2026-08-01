@@ -1,7 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { registerSW } from "virtual:pwa-register";
 import { AuraStoreProvider } from "./features/aura/store";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -10,34 +9,27 @@ import "./styles/globals.css";
 import "./styles/aura.css";
 import "./i18n";
 
-// Register Service Worker for PWA
+// O service worker é a única autoridade de navegação entre releases. A página
+// apenas registra e procura atualizações, evitando uma segunda navegação.
 if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-  const appRelease = import.meta.env.VITE_APP_RELEASE?.trim() ?? "";
-  const reloadLockKey = "airia:pwa-update-reload";
-  let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
-  updateSW = registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      if (!appRelease || sessionStorage.getItem(reloadLockKey) === appRelease) {
-        return;
-      }
-      sessionStorage.setItem(reloadLockKey, appRelease);
-      void updateSW?.(true);
-    },
-    onRegisteredSW(_swUrl, registration) {
-      if (!registration) return;
+  void navigator.serviceWorker
+    .register("/sw.js", { scope: "/" })
+    .then((registration) => {
       const checkForUpdate = () => {
-        if (document.visibilityState === "visible") void registration.update();
+        if (document.visibilityState === "visible") {
+          void registration.update().catch((error) => {
+            console.error("SW Update Error:", error);
+          });
+        }
       };
       checkForUpdate();
       window.addEventListener("focus", checkForUpdate);
       document.addEventListener("visibilitychange", checkForUpdate);
       window.setInterval(checkForUpdate, 15 * 60 * 1000);
-    },
-    onRegisterError(error) {
+    })
+    .catch((error) => {
       console.error("SW Registration Error:", error);
-    },
-  });
+    });
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
