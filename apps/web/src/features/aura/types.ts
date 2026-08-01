@@ -50,7 +50,7 @@ export type CheckinEntry = {
   date: string;
   humor: number;
   energia: number;
-  emotion: string;
+  emotion?: string;
   stateLabel?: string | null;
   stateLabelType?: string | null;
   emotions?: string[];
