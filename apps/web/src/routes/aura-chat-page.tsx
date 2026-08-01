@@ -24,6 +24,7 @@ import {
 } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
+import { TranscriptSession } from "../features/voice/transcript-session";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -257,6 +258,7 @@ export function AuraChatPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+  const voiceInputBaseRef = useRef("");
   const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
@@ -857,18 +859,23 @@ export function AuraChatPage() {
     recognition.lang = resolveIntlLocale();
     recognition.continuous = true;
     recognition.interimResults = true;
+    const transcriptSession = new TranscriptSession();
+    voiceInputBaseRef.current = input;
     recognition.onresult = (event: any) => {
-      let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) transcript += event.results[i][0].transcript;
-      }
-      if (transcript) {
-        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
-        inputRef.current?.focus();
-      }
+      const snapshot = transcriptSession.update(event.results);
+      setInput([voiceInputBaseRef.current.trim(), snapshot.text].filter(Boolean).join(" "));
+      inputRef.current?.focus();
     };
-    recognition.onend = () => { recognitionRef.current = null; setIsRecording(false); };
-    recognition.onerror = () => { recognitionRef.current = null; setIsRecording(false); };
+    recognition.onend = () => {
+      transcriptSession.reset();
+      recognitionRef.current = null;
+      setIsRecording(false);
+    };
+    recognition.onerror = () => {
+      transcriptSession.reset();
+      recognitionRef.current = null;
+      setIsRecording(false);
+    };
     recognition.start();
     recognitionRef.current = recognition;
     setIsRecording(true);

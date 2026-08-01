@@ -12,7 +12,8 @@ import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
 import { buildJournalClosePrompt, buildJournalPlannerSlot } from "./journal-page.helpers";
-import { extractTranscript, isSpeechRecognitionSupported, mergeTranscript, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
+import { isSpeechRecognitionSupported, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
+import { TranscriptSession } from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import { appendStoredGtdAction } from "../utils/goal-priority-actions";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
@@ -174,6 +175,8 @@ export function JournalPage() {
   const [liveReplyPending, setLiveReplyPending] = useState(false);
   const liveReplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
+  const voiceInputBaseRef = useRef("");
+  const transcriptSessionRef = useRef<TranscriptSession | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const hasAutoOpenedRef = useRef(false);
   const journalOpenedRef = useRef(false);
@@ -446,6 +449,8 @@ export function JournalPage() {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch { /* ignore */ }
     }
+    transcriptSessionRef.current?.reset();
+    transcriptSessionRef.current = null;
     setInterimVoice("");
     setIsRecording(false);
   }
@@ -464,10 +469,13 @@ export function JournalPage() {
     // Contínuo + interim: aguenta pausas ("falar 30s") e mostra o texto ao vivo.
     recognition.continuous = true;
     recognition.interimResults = true;
+    const transcriptSession = new TranscriptSession();
+    transcriptSessionRef.current = transcriptSession;
+    voiceInputBaseRef.current = input;
     recognition.onresult = (event: any) => {
-      const { finalText, interimText } = extractTranscript(event.results, event.resultIndex ?? 0);
-      if (finalText) setInput((prev) => mergeTranscript(prev, finalText));
-      setInterimVoice(interimText);
+      const snapshot = transcriptSession.update(event.results);
+      setInput([voiceInputBaseRef.current.trim(), snapshot.finalText].filter(Boolean).join(" "));
+      setInterimVoice(snapshot.interimText);
     };
     recognition.onend = () => stopVoice();
     recognition.onerror = () => stopVoice();

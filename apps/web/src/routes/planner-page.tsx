@@ -72,6 +72,7 @@ import {
 import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
+import { TranscriptSession } from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -640,6 +641,7 @@ const NoteSection = React.memo(function NoteSection({
   const l = useLocalizedCopy();
   const [aiLoading, setAiLoading] = useState<null | "content" | "split">(null);
   const recognitionRef = useRef<any>(null);
+  const voiceNoteBaseRef = useRef("");
   const [isRecording, setIsRecording] = useState(false);
   const { showError } = useToast();
 
@@ -718,21 +720,23 @@ const NoteSection = React.memo(function NoteSection({
     recognition.lang = resolveIntlLocale();
     recognition.continuous = true;
     recognition.interimResults = true;
+    const transcriptSession = new TranscriptSession();
+    voiceNoteBaseRef.current = form.note;
     recognition.onresult = (event: any) => {
-      let transcript = "";
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        if (event.results[index].isFinal) {
-          transcript += event.results[index][0].transcript;
-        }
-      }
-      if (!transcript) return;
-
+      const snapshot = transcriptSession.update(event.results);
       setForm((current) => ({
         ...current,
-        note: current.note ? `${current.note} ${transcript}` : transcript,
+        note: [voiceNoteBaseRef.current.trim(), snapshot.text].filter(Boolean).join(" "),
       }));
     };
-    recognition.onend = () => setIsRecording(false);
+    recognition.onend = () => {
+      transcriptSession.reset();
+      setIsRecording(false);
+    };
+    recognition.onerror = () => {
+      transcriptSession.reset();
+      setIsRecording(false);
+    };
     recognition.start();
     recognitionRef.current = recognition;
     setIsRecording(true);

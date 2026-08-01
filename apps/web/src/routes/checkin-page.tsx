@@ -19,6 +19,7 @@ import {
 import { ChevronLeft, Check, Mic, MicOff, Loader } from "lucide-react";
 import { api } from "../lib/api";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
+import { TranscriptSession } from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -382,22 +383,24 @@ export function CheckinPage() {
     recognition.continuous = true;
     recognition.interimResults = true;
     recognitionRef.current = recognition;
+    const transcriptSession = new TranscriptSession();
     let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-    let finalTranscript = "";
     recognition.onstart = () => setIsListening(true);
-    recognition.onerror = () => { setIsListening(false); setVoiceError(t("checkin.voiceRetry")); };
+    recognition.onerror = () => {
+      transcriptSession.reset();
+      setIsListening(false);
+      setVoiceError(t("checkin.voiceRetry"));
+    };
     recognition.onresult = (event: any) => {
       if (silenceTimer) clearTimeout(silenceTimer);
-      finalTranscript = "";
-      for (let i = 0; i < event.results.length; i++) {
-        finalTranscript += event.results[i][0]?.transcript ?? "";
-      }
+      transcriptSession.update(event.results);
       silenceTimer = setTimeout(() => recognition.stop(), 2500);
     };
     recognition.onend = async () => {
       if (silenceTimer) clearTimeout(silenceTimer);
       setIsListening(false);
-      const transcript = finalTranscript.trim();
+      const transcript = transcriptSession.snapshot().finalText;
+      transcriptSession.reset();
       if (!transcript) return;
       setVoiceLoading(true);
       try {
@@ -438,28 +441,27 @@ export function CheckinPage() {
     recognition.continuous = true;
     recognition.interimResults = true;
     recognitionRef.current = recognition;
+    const transcriptSession = new TranscriptSession();
 
     let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-    let finalTranscript = "";
 
     recognition.onstart = () => setIsListening(true);
     recognition.onerror = () => {
+      transcriptSession.reset();
       setIsListening(false);
       setVoiceError(t("checkin.voiceHearRetry"));
     };
     recognition.onresult = (event: any) => {
       if (silenceTimer) clearTimeout(silenceTimer);
-      finalTranscript = "";
-      for (let i = 0; i < event.results.length; i++) {
-        finalTranscript += event.results[i][0]?.transcript ?? "";
-      }
-      setVoiceTranscript(finalTranscript);
+      const snapshot = transcriptSession.update(event.results);
+      setVoiceTranscript(snapshot.text);
       silenceTimer = setTimeout(() => recognition.stop(), 2500);
     };
     recognition.onend = async () => {
       if (silenceTimer) clearTimeout(silenceTimer);
       setIsListening(false);
-      const transcript = finalTranscript.trim();
+      const transcript = transcriptSession.snapshot().finalText;
+      transcriptSession.reset();
       if (!transcript) return;
       setVoiceLoading(true);
       try {
