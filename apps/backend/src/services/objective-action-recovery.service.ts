@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { normalizeObjectiveSubgoals, type ObjectiveSubgoal } from '../lib/objective-subgoals';
 
 type ObjectiveRecoveryRow = {
@@ -13,8 +15,25 @@ type ObjectiveRecoveryRow = {
 type ObjectiveActionRecoveryPrisma = {
   objective: {
     findMany(args: unknown): Promise<ObjectiveRecoveryRow[]>;
+    findFirst(args: unknown): Promise<ObjectiveRecoveryRow | null>;
     updateMany(args: unknown): Promise<{ count: number }>;
   };
+  objectiveActionRecoveryClaim: {
+    updateMany(args: unknown): Promise<{ count: number }>;
+    create(args: unknown): Promise<RecoveryClaimRow>;
+    findFirst(args: unknown): Promise<RecoveryClaimRow | null>;
+    deleteMany(args: unknown): Promise<{ count: number }>;
+  };
+};
+
+type RecoveryClaimRow = {
+  userId: string;
+  objectiveId: string;
+  leaseToken: string;
+  leaseUntil: Date;
+  retryNotBefore: Date | null;
+  attempts: number;
+  lastError: string | null;
 };
 
 export type GoalSubtasksSuggestionRequest = {
@@ -48,11 +67,13 @@ type RecoveryOutcome = {
 type ObjectiveActionRecoveryOptions = {
   maxPerRequest?: number;
   backoffMs?: number;
+  leaseMs?: number;
   now?: () => number;
 };
 
 const DEFAULT_MAX_PER_REQUEST = 3;
 const DEFAULT_BACKOFF_MS = 60_000;
+const DEFAULT_LEASE_MS = 120_000;
 
 export function buildGoalSubtasksPrompt(input: {
   goalTitle: string;
@@ -121,10 +142,9 @@ function recoveredActions(objectiveId: string, titles: string[]): ObjectiveSubgo
 }
 
 export class ObjectiveActionRecoveryService {
-  private readonly inFlight = new Map<string, Promise<RecoveryOutcome>>();
-  private readonly retryNotBefore = new Map<string, number>();
   private readonly maxPerRequest: number;
   private readonly backoffMs: number;
+  private readonly leaseMs: number;
   private readonly now: () => number;
 
   constructor(
@@ -134,6 +154,7 @@ export class ObjectiveActionRecoveryService {
   ) {
     this.maxPerRequest = Math.max(1, options.maxPerRequest ?? DEFAULT_MAX_PER_REQUEST);
     this.backoffMs = Math.max(1, options.backoffMs ?? DEFAULT_BACKOFF_MS);
+    this.leaseMs = Math.max(1, options.leaseMs ?? DEFAULT_LEASE_MS);
     this.now = options.now ?? Date.now;
   }
 
@@ -169,29 +190,17 @@ export class ObjectiveActionRecoveryService {
     const retryDelays: number[] = [];
 
     for (const objective of eligible) {
-      const key = `${input.userId}:${objective.id}`;
-      const shared = this.inFlight.get(key);
-      const waitMs = Math.max(0, (this.retryNotBefore.get(key) ?? 0) - this.now());
       let outcome: RecoveryOutcome;
 
-      if (shared) {
-        outcome = await shared;
-      } else if (waitMs > 0) {
-        outcome = { status: 'deferred', attempted: false, retryAfterMs: waitMs };
-      } else if (started >= this.maxPerRequest) {
+      if (started >= this.maxPerRequest) {
         outcome = { status: 'deferred', attempted: false, retryAfterMs: 0 };
       } else {
-        started += 1;
-        const operation = this.recoverObjective({
+        outcome = await this.recoverObjective({
           objective,
           userId: input.userId,
           locale: input.locale ?? 'pt-BR',
-          key,
         });
-        this.inFlight.set(key, operation);
-        outcome = await operation.finally(() => {
-          if (this.inFlight.get(key) === operation) this.inFlight.delete(key);
-        });
+        if (outcome.attempted) started += 1;
       }
 
       if (outcome.attempted) attempted += 1;
@@ -215,7 +224,6 @@ export class ObjectiveActionRecoveryService {
     objective: ObjectiveRecoveryRow;
     userId: string;
     locale: string;
-    key: string;
   }): Promise<RecoveryOutcome> {
     const titleSnapshot = input.objective.title;
     const updatedAtSnapshot = input.objective.updatedAt instanceof Date
@@ -224,6 +232,42 @@ export class ObjectiveActionRecoveryService {
     const subgoalsSnapshot = input.objective.subgoals === undefined
       ? undefined
       : JSON.parse(JSON.stringify(input.objective.subgoals));
+
+    const claim = await this.acquireClaim(input.userId, input.objective.id);
+    if (!claim.acquired) {
+      return { status: 'deferred', attempted: false, retryAfterMs: claim.retryAfterMs };
+    }
+
+    const fresh = await this.prisma.objective.findFirst({
+      where: {
+        id: input.objective.id,
+        userId: input.userId,
+        archived: false,
+        progress: { lt: 100 },
+      },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        progress: true,
+        archived: true,
+        subgoals: true,
+        updatedAt: true,
+      },
+    });
+    if (!fresh) {
+      await this.releaseClaim(input.userId, input.objective.id, claim.token);
+      return { status: 'deferred', attempted: false, retryAfterMs: 0 };
+    }
+    if (normalizeObjectiveSubgoals(fresh.subgoals).length > 0) {
+      await this.releaseClaim(input.userId, input.objective.id, claim.token);
+      return { status: 'recovered', attempted: false, retryAfterMs: null };
+    }
+    if (fresh.title !== titleSnapshot || !sameInstant(fresh.updatedAt, updatedAtSnapshot)) {
+      await this.releaseClaim(input.userId, input.objective.id, claim.token);
+      return { status: 'deferred', attempted: false, retryAfterMs: 0 };
+    }
+
     try {
       const suggestion = await this.generateGoalSubtasks({
         type: 'goal-subtasks',
@@ -234,8 +278,8 @@ export class ObjectiveActionRecoveryService {
         },
       });
       const actions = recoveredActions(input.objective.id, suggestionItems(suggestion));
-      if (actions.length === 0) {
-        this.retryNotBefore.set(input.key, this.now() + this.backoffMs);
+      if (actions.length < 2) {
+        await this.markFailure(input.userId, input.objective.id, claim.token, 'generation_returned_fewer_than_two_actions');
         return { status: 'failed', attempted: true, retryAfterMs: this.backoffMs };
       }
 
@@ -254,14 +298,108 @@ export class ObjectiveActionRecoveryService {
         data: { subgoals: actions as any },
       });
       if (updated.count !== 1) {
+        await this.releaseClaim(input.userId, input.objective.id, claim.token);
         return { status: 'deferred', attempted: true, retryAfterMs: 0 };
       }
-      this.retryNotBefore.delete(input.key);
+      await this.releaseClaim(input.userId, input.objective.id, claim.token);
       return { status: 'recovered', attempted: true, retryAfterMs: null };
     } catch (error) {
-      this.retryNotBefore.set(input.key, this.now() + this.backoffMs);
+      await this.markFailure(
+        input.userId,
+        input.objective.id,
+        claim.token,
+        error instanceof Error ? error.message : String(error),
+      );
       console.warn(`[objective-action-recovery] objetivo ${input.objective.id} preservado após falha:`, error);
       return { status: 'failed', attempted: true, retryAfterMs: this.backoffMs };
     }
   }
+
+  private async acquireClaim(userId: string, objectiveId: string): Promise<
+    { acquired: true; token: string } | { acquired: false; retryAfterMs: number }
+  > {
+    const nowMs = this.now();
+    const now = new Date(nowMs);
+    const token = randomUUID();
+    const leaseUntil = new Date(nowMs + this.leaseMs);
+    const acquired = await this.prisma.objectiveActionRecoveryClaim.updateMany({
+      where: {
+        userId,
+        objectiveId,
+        leaseUntil: { lte: now },
+        OR: [
+          { retryNotBefore: null },
+          { retryNotBefore: { lte: now } },
+        ],
+      },
+      data: {
+        leaseToken: token,
+        leaseUntil,
+        retryNotBefore: null,
+        attempts: { increment: 1 },
+        lastError: null,
+      },
+    });
+    if (acquired.count === 1) return { acquired: true, token };
+
+    try {
+      await this.prisma.objectiveActionRecoveryClaim.create({
+        data: {
+          userId,
+          objectiveId,
+          leaseToken: token,
+          leaseUntil,
+          retryNotBefore: null,
+          attempts: 1,
+          lastError: null,
+        },
+      });
+      return { acquired: true, token };
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+    }
+
+    const current = await this.prisma.objectiveActionRecoveryClaim.findFirst({
+      where: { userId, objectiveId },
+      select: { leaseUntil: true, retryNotBefore: true },
+    });
+    const retryAt = Math.max(
+      current?.leaseUntil?.getTime() ?? nowMs,
+      current?.retryNotBefore?.getTime() ?? nowMs,
+    );
+    return { acquired: false, retryAfterMs: Math.max(0, retryAt - nowMs) };
+  }
+
+  private async releaseClaim(userId: string, objectiveId: string, token: string): Promise<void> {
+    await this.prisma.objectiveActionRecoveryClaim.deleteMany({
+      where: { userId, objectiveId, leaseToken: token },
+    });
+  }
+
+  private async markFailure(
+    userId: string,
+    objectiveId: string,
+    token: string,
+    lastError: string,
+  ): Promise<void> {
+    const nowMs = this.now();
+    await this.prisma.objectiveActionRecoveryClaim.updateMany({
+      where: { userId, objectiveId, leaseToken: token },
+      data: {
+        leaseUntil: new Date(nowMs),
+        retryNotBefore: new Date(nowMs + this.backoffMs),
+        lastError: lastError.slice(0, 500),
+      },
+    });
+  }
+}
+
+function sameInstant(left: Date | string | null | undefined, right: Date | string | null | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  if (left === null || right === null) return left === right;
+  return new Date(left).getTime() === new Date(right).getTime();
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: unknown }).code === 'P2002');
 }

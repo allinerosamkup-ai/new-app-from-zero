@@ -21,7 +21,7 @@ import {
 
 import { useToast } from "../components/Toast";
 import { RewardBurst, type Reward } from "../components/RewardBurst";
-import { useAuraStore } from "../features/aura/store";
+import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
@@ -924,9 +924,14 @@ export function GoalsPage() {
       try {
         await recoverGoalActions();
       } catch (error) {
-        const message = error instanceof Error
-          ? error.message
-          : l(
+        const message = error instanceof GoalActionRecoveryError
+          ? l(
+              `Ainda faltam microações em ${error.result.eligible - error.result.recovered} objetivo(s). Tente novamente para continuar.`,
+              `${error.result.eligible - error.result.recovered} goal(s) still need micro-actions. Try again to continue.`,
+            )
+          : error instanceof Error
+            ? error.message
+            : l(
               'Não foi possível atualizar os passos dos objetivos antigos agora.',
               'Could not update older goal actions right now.',
             );

@@ -28,6 +28,7 @@ model Profile {
   eventLogs        EventLog[]
   weeklyInsights   WeeklyInsight[]
   objectives       Objective[]
+  objectiveActionRecoveryClaims ObjectiveActionRecoveryClaim[]
   memoryEmbeddings  MemoryEmbedding[]
   userMemories      UserMemory[]
   userMemoryEvidence UserMemoryEvidence[]
@@ -498,10 +499,32 @@ model Objective {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 Profile                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actionRecoveryClaims ObjectiveActionRecoveryClaim[]
 
   @@index([userId, archived, createdAt(sort: Desc)], name: "idx_objectives_user")
   @@map("objectives")
+}
+
+model ObjectiveActionRecoveryClaim {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  objectiveId    String    @map("objective_id") @db.Uuid
+  leaseToken     String    @map("lease_token")
+  leaseUntil     DateTime  @map("lease_until") @db.Timestamptz(6)
+  retryNotBefore DateTime? @map("retry_not_before") @db.Timestamptz(6)
+  attempts       Int       @default(1)
+  lastError      String?   @map("last_error") @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user      Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objective Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, objectiveId], name: "uq_objective_action_recovery_claim")
+  @@index([leaseUntil], name: "idx_objective_action_recovery_lease")
+  @@index([retryNotBefore], name: "idx_objective_action_recovery_retry")
+  @@map("objective_action_recovery_claims")
 }
 
 model Habit {

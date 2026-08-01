@@ -21,11 +21,26 @@ type ObjectiveFixture = {
 
 function createRepository(initial: ObjectiveFixture[]) {
   const objectives = structuredClone(initial);
+  const claims: Array<{
+    userId: string;
+    objectiveId: string;
+    leaseToken: string;
+    leaseUntil: Date;
+    retryNotBefore: Date | null;
+    attempts: number;
+    lastError: string | null;
+  }> = [];
   let writes = 0;
 
   const repository = {
     objective: {
       findMany: async () => objectives,
+      findFirst: async ({ where }: any) => objectives.find((objective) => (
+        objective.id === where.id
+        && objective.userId === where.userId
+        && objective.archived === false
+        && objective.progress < 100
+      )) ?? null,
       updateMany: async ({ where, data }: any) => {
         const objective = objectives.find((item) => item.id === where.id && item.userId === where.userId);
         if (!objective || objective.archived || objective.progress >= 100) return { count: 0 };
@@ -37,9 +52,54 @@ function createRepository(initial: ObjectiveFixture[]) {
         return { count: 1 };
       },
     },
+    objectiveActionRecoveryClaim: {
+      updateMany: async ({ where, data }: any) => {
+        const claim = claims.find((item) => item.userId === where.userId && item.objectiveId === where.objectiveId);
+        if (!claim) return { count: 0 };
+        if (where.leaseToken !== undefined) {
+          if (claim.leaseToken !== where.leaseToken) return { count: 0 };
+          claim.leaseUntil = data.leaseUntil;
+          claim.retryNotBefore = data.retryNotBefore;
+          claim.lastError = data.lastError;
+          return { count: 1 };
+        }
+        if (claim.leaseUntil > where.leaseUntil.lte) return { count: 0 };
+        const retryAllowed = claim.retryNotBefore === null || claim.retryNotBefore <= where.OR[1].retryNotBefore.lte;
+        if (!retryAllowed) return { count: 0 };
+        claim.leaseToken = data.leaseToken;
+        claim.leaseUntil = data.leaseUntil;
+        claim.retryNotBefore = data.retryNotBefore;
+        claim.attempts += data.attempts.increment;
+        claim.lastError = data.lastError;
+        return { count: 1 };
+      },
+      create: async ({ data }: any) => {
+        if (claims.some((item) => item.userId === data.userId && item.objectiveId === data.objectiveId)) {
+          throw Object.assign(new Error('unique claim'), { code: 'P2002' });
+        }
+        const claim = { ...data };
+        claims.push(claim);
+        return claim;
+      },
+      findFirst: async ({ where }: any) => claims.find((claim) => (
+        claim.userId === where.userId
+        && claim.objectiveId === where.objectiveId
+        && (where.leaseToken === undefined || claim.leaseToken === where.leaseToken)
+      )) ?? null,
+      deleteMany: async ({ where }: any) => {
+        const index = claims.findIndex((claim) => (
+          claim.userId === where.userId
+          && claim.objectiveId === where.objectiveId
+          && claim.leaseToken === where.leaseToken
+        ));
+        if (index < 0) return { count: 0 };
+        claims.splice(index, 1);
+        return { count: 1 };
+      },
+    },
   };
 
-  return { repository, objectives, getWrites: () => writes };
+  return { repository, objectives, claims, getWrites: () => writes };
 }
 
 async function run() {
@@ -180,19 +240,23 @@ async function run() {
     let releaseGeneration!: (items: { items: string[] }) => void;
     const generated = new Promise<{ items: string[] }>((resolve) => { releaseGeneration = resolve; });
     let aiCalls = 0;
-    const service = new ObjectiveActionRecoveryService(repository, async () => {
+    const generator = async () => {
       aiCalls += 1;
       return generated;
-    });
+    };
+    const firstReplica = new ObjectiveActionRecoveryService(repository, generator);
+    const secondReplica = new ObjectiveActionRecoveryService(repository, generator);
 
-    const first = service.recover({ userId: USER_ID, locale: 'pt-BR' });
-    const second = service.recover({ userId: USER_ID, locale: 'pt-BR' });
+    const first = firstReplica.recover({ userId: USER_ID, locale: 'pt-BR' });
+    const second = secondReplica.recover({ userId: USER_ID, locale: 'pt-BR' });
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(aiCalls, 1, 'duas requisições concorrentes devem compartilhar a mesma geração');
-    releaseGeneration({ items: ['Abrir o arquivo do projeto'] });
-    await Promise.all([first, second]);
+    releaseGeneration({ items: ['Abrir o arquivo do projeto', 'Escrever o título do projeto'] });
+    const replicaResults = await Promise.all([first, second]);
     assert.equal(aiCalls, 1);
     assert.equal(getWrites(), 1);
+    assert.equal(replicaResults.filter((result) => result.attempted === 1).length, 1);
+    assert.equal(replicaResults.filter((result) => result.deferred === 1).length, 1);
   }
 
   {
@@ -204,7 +268,7 @@ async function run() {
     const service = new ObjectiveActionRecoveryService(repository, async () => {
       objectives[0].title = 'Nome novo';
       objectives[0].updatedAt = new Date('2026-08-01T12:01:00.000Z');
-      return { items: ['Abrir o arquivo referente ao nome antigo'] };
+      return { items: ['Abrir o arquivo referente ao nome antigo', 'Escrever o nome antigo no arquivo'] };
     });
 
     const result = await service.recover({ userId: USER_ID });
@@ -225,7 +289,7 @@ async function run() {
     let aiCalls = 0;
     const service = new ObjectiveActionRecoveryService(repository, async () => {
       aiCalls += 1;
-      return { items: ['Abrir o material'] };
+      return { items: ['Abrir o material', 'Separar a primeira página'] };
     });
 
     const first = await service.recover({ userId: USER_ID });
@@ -244,17 +308,19 @@ async function run() {
       subgoals: [],
     }]);
     let aiCalls = 0;
-    const service = new ObjectiveActionRecoveryService(repository, async () => {
+    const generator = async () => {
       aiCalls += 1;
       throw new Error('AI unavailable');
-    }, { now: () => now, backoffMs: 60_000 });
+    };
+    const service = new ObjectiveActionRecoveryService(repository, generator, { now: () => now, backoffMs: 60_000 });
     const originalWarn = console.warn;
     console.warn = () => {};
     try {
       const failed = await service.recover({ userId: USER_ID });
-      const deferred = await service.recover({ userId: USER_ID });
+      const restartedService = new ObjectiveActionRecoveryService(repository, generator, { now: () => now, backoffMs: 60_000 });
+      const deferred = await restartedService.recover({ userId: USER_ID });
       now += 30_000;
-      const stillDeferred = await service.recover({ userId: USER_ID });
+      const stillDeferred = await restartedService.recover({ userId: USER_ID });
 
       assert.deepEqual(failed, {
         eligible: 1, attempted: 1, recovered: 0, failed: 1, deferred: 0, retryAfterMs: 60_000,
@@ -264,6 +330,64 @@ async function run() {
       });
       assert.equal(stillDeferred.retryAfterMs, 30_000);
       assert.equal(aiCalls, 1, 'backoff não pode repetir custo enquanto ainda está ativo');
+      assert.equal(getWrites(), 0);
+    } finally {
+      console.warn = originalWarn;
+    }
+  }
+
+  {
+    let now = 10_000;
+    const { repository, claims, getWrites } = createRepository([{
+      id: 'expired-lease', userId: USER_ID, title: 'Objetivo após queda', progress: 0, archived: false,
+      subgoals: [],
+    }]);
+    claims.push({
+      userId: USER_ID,
+      objectiveId: 'expired-lease',
+      leaseToken: 'worker-that-crashed',
+      leaseUntil: new Date(now + 120_000),
+      retryNotBefore: null,
+      attempts: 1,
+      lastError: null,
+    });
+    let aiCalls = 0;
+    const generator = async () => {
+      aiCalls += 1;
+      return { items: ['Abrir o documento', 'Escrever a primeira linha'] };
+    };
+
+    const beforeExpiry = await new ObjectiveActionRecoveryService(repository, generator, { now: () => now })
+      .recover({ userId: USER_ID });
+    now += 120_001;
+    const afterRestart = await new ObjectiveActionRecoveryService(repository, generator, { now: () => now })
+      .recover({ userId: USER_ID });
+
+    assert.deepEqual(beforeExpiry, {
+      eligible: 1, attempted: 0, recovered: 0, failed: 0, deferred: 1, retryAfterMs: 120_000,
+    });
+    assert.deepEqual(afterRestart, {
+      eligible: 1, attempted: 1, recovered: 1, failed: 0, deferred: 0, retryAfterMs: null,
+    });
+    assert.equal(aiCalls, 1, 'lease expirada deve permitir recuperação segura após queda/restart');
+    assert.equal(getWrites(), 1);
+  }
+
+  {
+    const { repository, getWrites } = createRepository([{
+      id: 'one-action', userId: USER_ID, title: 'Objetivo amplo', progress: 0, archived: false,
+      subgoals: [],
+    }]);
+    const service = new ObjectiveActionRecoveryService(repository, async () => ({
+      items: ['Abrir o material'],
+    }));
+
+    const originalWarn = console.warn;
+    console.warn = () => {};
+    try {
+      const result = await service.recover({ userId: USER_ID });
+      assert.equal(result.failed, 1, 'uma única microação não satisfaz o contrato de objetivo');
+      assert.equal(result.recovered, 0);
       assert.equal(getWrites(), 0);
     } finally {
       console.warn = originalWarn;
