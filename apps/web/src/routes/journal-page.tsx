@@ -13,7 +13,12 @@ import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
 import { buildJournalClosePrompt, buildJournalPlannerSlot } from "./journal-page.helpers";
 import { isSpeechRecognitionSupported, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
-import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
+import {
+  createTranscriptResultHandler,
+  releaseRecognition,
+  stopActiveRecognition,
+  TranscriptSession,
+} from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import { appendStoredGtdAction } from "../utils/goal-priority-actions";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
@@ -470,11 +475,10 @@ export function JournalPage() {
     const transcriptSession = new TranscriptSession();
     transcriptSessionRef.current = transcriptSession;
     voiceInputBaseRef.current = input;
-    recognition.onresult = (event: any) => {
-      const snapshot = transcriptSession.update(event.results);
+    recognition.onresult = createTranscriptResultHandler(transcriptSession, (snapshot) => {
       setInput([voiceInputBaseRef.current.trim(), snapshot.finalText].filter(Boolean).join(" "));
       setInterimVoice(snapshot.interimText);
-    };
+    });
     recognition.onend = () => {
       if (!releaseRecognition(recognitionRef, recognition)) return;
       stopVoice();
