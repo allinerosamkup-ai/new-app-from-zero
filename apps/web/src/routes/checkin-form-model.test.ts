@@ -97,4 +97,76 @@ describe("integrated contextual check-in model", () => {
 
     expect(entry).toEqual({ humor: 6, energia: 5 });
   });
+
+  it("does not run success effects when persistence resolves to null", async () => {
+    expect(typeof model.finalizeContextualCheckin).toBe("function");
+    const effects: string[] = [];
+
+    await expect(model.finalizeContextualCheckin!({
+      persist: async () => null,
+      onConfirmed: () => effects.push("confirmed"),
+    })).rejects.toThrow(/salvar/i);
+    expect(effects).toEqual([]);
+  });
+
+  it("does not run success effects when persistence rejects", async () => {
+    expect(typeof model.finalizeContextualCheckin).toBe("function");
+    const effects: string[] = [];
+
+    await expect(model.finalizeContextualCheckin!({
+      persist: async () => { throw new Error("offline"); },
+      onConfirmed: () => effects.push("confirmed"),
+    })).rejects.toThrow("offline");
+    expect(effects).toEqual([]);
+  });
+
+  it("runs success effects only after a persisted receipt", async () => {
+    expect(typeof model.finalizeContextualCheckin).toBe("function");
+    const effects: string[] = [];
+    const receipt = { stateLabel: "Estado confirmado" };
+
+    await expect(model.finalizeContextualCheckin!({
+      persist: async () => receipt,
+      onConfirmed: (value) => effects.push(value.stateLabel),
+    })).resolves.toEqual(receipt);
+    expect(effects).toEqual(["Estado confirmado"]);
+  });
+
+  it("accepts only canonical and plausible fields from voice", () => {
+    expect(typeof model.parseVoiceCheckinResponse).toBe("function");
+    expect(model.parseVoiceCheckinResponse!({
+      humor: 4,
+      energia: 7,
+      sleepHours: 5.5,
+      emotions: ["angry", "not-canonical", 3],
+      factors: ["work_pressure", "invented_factor", null],
+      note: "  Pressão real hoje.  ",
+    })).toEqual({
+      humor: 4,
+      energia: 7,
+      sleepHours: 5.5,
+      emotions: ["angry"],
+      factors: ["work_pressure"],
+      note: "Pressão real hoje.",
+    });
+  });
+
+  it("turns invalid or missing voice values into absent context", () => {
+    expect(typeof model.parseVoiceCheckinResponse).toBe("function");
+    expect(model.parseVoiceCheckinResponse!({
+      humor: 4.5,
+      energia: 11,
+      sleepHours: -2,
+      emotions: "angry",
+      factors: ["invented_factor"],
+      note: 123,
+    })).toEqual({
+      humor: null,
+      energia: null,
+      sleepHours: null,
+      emotions: [],
+      factors: [],
+      note: null,
+    });
+  });
 });

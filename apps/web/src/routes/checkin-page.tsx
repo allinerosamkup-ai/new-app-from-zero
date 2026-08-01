@@ -9,6 +9,7 @@ import type { MoodOption } from "../features/aura/types";
 import {
   createTranscriptResultHandler,
   releaseRecognition,
+  requestRecognitionStop,
   stopActiveRecognition,
   TranscriptSession,
 } from "../features/voice/transcript-session";
@@ -20,6 +21,8 @@ import { mergeVoiceFactors } from "./checkin-page.helpers";
 import {
   buildContextualCheckinEntry,
   canSubmitContextualCheckin,
+  finalizeContextualCheckin,
+  parseVoiceCheckinResponse,
 } from "./checkin-form-model";
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -134,8 +137,8 @@ function ScorePicker({ label, value, onChange }: {
   onChange: (value: number | null) => void;
 }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800, color: "var(--text-2)" }}>{label}</p>
+    <fieldset style={{ margin: "0 0 16px", padding: 0, border: 0 }}>
+      <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800, color: "var(--text-2)" }}>{label}</legend>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 7 }}>
         {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
           <ChoiceButton key={score} active={value === score} onClick={() => onChange(value === score ? null : score)}>
@@ -143,7 +146,7 @@ function ScorePicker({ label, value, onChange }: {
           </ChoiceButton>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -191,6 +194,7 @@ export function CheckinPage() {
   const [mixedEpisodeNote, setMixedEpisodeNote] = useState("");
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [isListening, setIsListening] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
@@ -199,9 +203,17 @@ export function CheckinPage() {
   const recognitionRef = useRef<any>(null);
   const voiceSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => () => {
+  function clearVoiceSilenceTimer() {
     if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
-    stopActiveRecognition(recognitionRef);
+    voiceSilenceTimerRef.current = null;
+  }
+
+  useEffect(() => {
+    return () => {
+      if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
+      voiceSilenceTimerRef.current = null;
+      stopActiveRecognition(recognitionRef);
+    };
   }, []);
 
   function startVoiceCheckin() {
@@ -211,9 +223,8 @@ export function CheckinPage() {
       return;
     }
     if (recognitionRef.current) {
-      if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
-      stopActiveRecognition(recognitionRef);
-      setIsListening(false);
+      clearVoiceSilenceTimer();
+      requestRecognitionStop(recognitionRef);
       return;
     }
 
@@ -227,33 +238,28 @@ export function CheckinPage() {
     recognitionRef.current = recognition;
     recognition.onstart = () => setIsListening(true);
     recognition.onerror = () => {
+      clearVoiceSilenceTimer();
       transcriptSession.reset();
       if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsListening(false);
       setVoiceError(t("checkin.voiceHearRetry"));
     };
     recognition.onresult = createTranscriptResultHandler(transcriptSession, (snapshot) => {
-      if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
+      clearVoiceSilenceTimer();
       setVoiceTranscript(snapshot.text);
-      voiceSilenceTimerRef.current = setTimeout(() => recognition.stop(), 2500);
+      voiceSilenceTimerRef.current = setTimeout(() => requestRecognitionStop(recognitionRef), 2500);
     });
     recognition.onend = async () => {
-      if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
-      const transcript = transcriptSession.snapshot().finalText;
+      clearVoiceSilenceTimer();
+      const snapshot = transcriptSession.snapshot();
+      const transcript = snapshot.finalText || snapshot.text;
       transcriptSession.reset();
       if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsListening(false);
       if (!transcript) return;
       setVoiceLoading(true);
       try {
-        const result = await api.post("/ai/voice-checkin", { transcript }) as {
-          humor: number | null;
-          energia: number | null;
-          sleepHours: number | null;
-          emotions: string[];
-          factors: string[];
-          note: string | null;
-        };
+        const result = parseVoiceCheckinResponse(await api.post("/ai/voice-checkin", { transcript }));
         if (result.humor !== null) setHumor(result.humor);
         if (result.energia !== null) setEnergia(result.energia);
         if (result.sleepHours !== null) setSleepHours(result.sleepHours);
@@ -281,6 +287,7 @@ export function CheckinPage() {
 
   async function handleSubmit() {
     if (!canSubmit || isSaving) return;
+    setSubmitError(null);
     setIsSaving(true);
     try {
       const entry = buildContextualCheckinEntry({
@@ -304,19 +311,27 @@ export function CheckinPage() {
         ...(mixedEpisodeNote.trim() ? { mixedEpisodeNote } : {}),
         ...(note.trim() ? { note } : {}),
       });
-      if (entry.emotion) setMood(EMOTION_TO_MOOD[entry.emotion] ?? "equilibrada");
-      const checkinAI = await addCheckin(entry);
-      trackEvent("checkin_completed", {
-        flow: "contextual",
-        factors_count: factors.length,
-        explicit_no_factor: noFactorIdentified,
-        emotions_count: emotions.length,
-        has_voice_context: Boolean(voiceTranscript.trim()),
-        has_optional_context: [sono, sleepHours, fisico, social, isFlowing, medicationTakenToday, focusScore, hyperfocusOccurred, dayType].some((value) => value !== null),
+      await finalizeContextualCheckin({
+        persist: () => addCheckin(entry),
+        onConfirmed: (checkinAI) => {
+          if (entry.emotion) setMood(EMOTION_TO_MOOD[entry.emotion] ?? "equilibrada");
+          trackEvent("checkin_completed", {
+            flow: "contextual",
+            factors_count: factors.length,
+            explicit_no_factor: noFactorIdentified,
+            emotions_count: emotions.length,
+            has_voice_context: Boolean(voiceTranscript.trim()),
+            has_optional_context: [sono, sleepHours, fisico, social, isFlowing, medicationTakenToday, focusScore, hyperfocusOccurred, dayType].some((value) => value !== null),
+          });
+          navigate("/checkin-result", { state: checkinAI });
+        },
       });
-      navigate("/checkin-result", { state: checkinAI ?? undefined });
     } catch (error) {
       console.error("Erro ao registrar check-in contextual:", error);
+      setSubmitError(l(
+        "Não foi possível salvar o check-in. Seus dados continuam nesta tela para você tentar novamente.",
+        "Could not save the check-in. Your data remains on this screen so you can try again.",
+      ));
     } finally {
       setIsSaving(false);
     }
@@ -337,8 +352,10 @@ export function CheckinPage() {
             {voiceLoading ? <Loader size={19} /> : isListening ? <MicOff size={19} /> : <Mic size={19} />}
             {voiceLoading ? t("checkin.processing") : isListening ? t("checkin.listeningStop") : t("checkin.speakHow")}
           </button>
-          {voiceTranscript && <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5 }}>“{voiceTranscript}”</p>}
-          {voiceError && <p role="alert" style={{ fontSize: 12, color: "var(--accent-peach-ink)" }}>{voiceError}</p>}
+          <div aria-live="polite" aria-atomic="true">
+            {voiceTranscript && <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5 }}>“{voiceTranscript}”</p>}
+            {voiceError && <p role="alert" style={{ fontSize: 12, color: "var(--accent-peach-ink)" }}>{voiceError}</p>}
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 14 }}>
             {EMOTIONS.map((emotion) => (
               <ChoiceButton key={emotion.id} active={emotions.includes(emotion.id)} onClick={() => setEmotions((current) => toggleEmotionSelection(current, emotion.id))}>
@@ -416,7 +433,11 @@ export function CheckinPage() {
                     </div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
-                    {(["leve", "moderado", "intenso"] as FlowIntensity[]).map((intensity) => <ChoiceButton key={intensity} active={flowIntensity === intensity} onClick={() => setFlowIntensity(flowIntensity === intensity ? null : intensity)}>{intensity}</ChoiceButton>)}
+                    {(["leve", "moderado", "intenso"] as FlowIntensity[]).map((intensity) => (
+                      <ChoiceButton key={intensity} active={flowIntensity === intensity} onClick={() => setFlowIntensity(flowIntensity === intensity ? null : intensity)}>
+                        {{ leve: l("Leve", "Light"), moderado: l("Moderado", "Moderate"), intenso: l("Intenso", "Heavy") }[intensity]}
+                      </ChoiceButton>
+                    ))}
                   </div>
                   {(["colica", "dorCabeca"] as const).map((symptom) => (
                     <div key={symptom}>
@@ -442,14 +463,24 @@ export function CheckinPage() {
             <div>
               <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>{l("Tipo do dia", "Day type")}</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 7 }}>
-                {(["up", "down", "mixed", "stable"] as DayType[]).map((type) => <ChoiceButton key={type} active={dayType === type} onClick={() => setDayType(dayType === type ? null : type)}>{t(`checkin.dayTypes.${type}`, type)}</ChoiceButton>)}
+                {(["up", "down", "mixed", "stable"] as DayType[]).map((type) => (
+                  <ChoiceButton key={type} active={dayType === type} onClick={() => setDayType(dayType === type ? null : type)}>
+                    {{ up: l("Para cima", "Up"), down: l("Para baixo", "Down"), mixed: l("Misto", "Mixed"), stable: l("Estável", "Stable") }[type]}
+                  </ChoiceButton>
+                ))}
               </div>
               {dayType === "mixed" && <input value={mixedEpisodeNote} onChange={(event) => setMixedEpisodeNote(event.target.value)} maxLength={500} placeholder={t("checkin.mixedPlaceholder")} style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 11, borderRadius: 10, border: "1.5px solid var(--warm-border-2)" }} />}
             </div>
-            <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={5000} placeholder={t("checkin.notePlaceholder")} style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12, border: "1.5px solid var(--warm-border-2)", resize: "vertical" }} />
+            <div>
+              <label htmlFor="checkin-note" style={{ display: "block", margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>
+                {l("Nota livre", "Free note")}
+              </label>
+              <textarea id="checkin-note" value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={5000} placeholder={t("checkin.notePlaceholder")} style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12, border: "1.5px solid var(--warm-border-2)", resize: "vertical" }} />
+            </div>
           </div>
         </Section>
 
+        {submitError && <p role="alert" aria-live="assertive" style={{ color: "#A24B43", fontSize: 13, lineHeight: 1.5 }}>{submitError}</p>}
         <AuraButtonV2 variant="primary" onClick={handleSubmit} disabled={!canSubmit || isSaving} style={{ width: "100%", minHeight: 54, fontWeight: 800 }}>
           {isSaving ? l("Registrando...", "Saving...") : <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{l("Registrar", "Save")} <Check size={16} /></span>}
         </AuraButtonV2>

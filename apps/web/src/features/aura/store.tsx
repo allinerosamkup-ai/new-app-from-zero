@@ -85,7 +85,7 @@ type AuraStoreContextValue = {
   saveProfile: () => Promise<void>;
   signOut: () => Promise<void>;
   prepareJournalFromMood: () => void;
-  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<{ stateLabel: string | null; analysis: string | null; recommendations: string[]; suggestedIntensity: string | null; riskSafety?: unknown } | null>;
+  addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<{ stateLabel: string | null; analysis: string | null; recommendations: string[]; suggestedIntensity: string | null; riskSafety?: unknown }>;
   addGoal: (title: string) => Promise<void>;
   addGoalWithSubGoals: (title: string, subgoals: string[]) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
@@ -520,56 +520,23 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       addCheckin: async (entry) => {
         const today = getLocalDateKey();
         const recordedAtDate = new Date();
-        const recordedAt = recordedAtDate.toISOString();
         const checkinSlot = deriveCheckinSlotToken(recordedAtDate);
 
-        // Atualiza estado local para o fluxo seguir mesmo sem sessão/sem backend
-        setState((current) => ({
-          ...current,
-          checkinHistory: [
-            { date: today, recordedAt, checkinSlot, ...entry },
-            ...current.checkinHistory.filter((c) => !(c.date === today && c.checkinSlot === checkinSlot)),
-          ],
-        }));
-
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return null;
+        if (!session) throw new Error("Sessão necessária para salvar o check-in.");
 
+        let checkinResponse: any;
         try {
-          const checkinResponse = await api.post('/checkins', buildCheckinSubmission({
+          checkinResponse = await api.post('/checkins', buildCheckinSubmission({
             localDate: today,
             checkinSlot,
             entry,
-          })) as any;
-
-          await refreshData();
-
-          // Sincronizar nota com o Diário (Journal)
-          if (entry.note && entry.note.trim().length > 0) {
-            try {
-              await api.post('/journal/external-message', {
-                message: entry.note.trim(),
-                referenceDate: today
-              });
-            } catch (journalErr) {
-              console.warn('[Sync] Falha ao enviar nota para o diário:', journalErr);
-            }
-          }
-
-          // Retorna dados ricos da IA para uso na tela de resultado
-          const extracted = {
-            stateLabel: checkinResponse?.stateLabel ?? null,
-            analysis: checkinResponse?.stateSummary ?? (checkinResponse?.aiState as any)?.analysis ?? null,
-            recommendations: (checkinResponse?.aiState as any)?.recommendations ?? [],
-            suggestedIntensity: (checkinResponse?.aiState as any)?.suggestedIntensity ?? null,
-            riskSafety: checkinResponse?.riskSafety ?? (checkinResponse?.aiState as any)?.riskSafety,
-          };
-          return extracted;
+          }));
         } catch (err) {
-          console.error("Failed to persist checkin; kept local copy.", err);
+          console.error("Failed to persist checkin.", err);
           // Salva na fila offline para sincronizar quando a conexão voltar
           if (!navigator.onLine) {
-queueCheckin({
+            queueCheckin({
               date: today,
               humor: entry.humor,
               energia: entry.energia,
@@ -578,8 +545,35 @@ queueCheckin({
             });
             console.log("[offline-sync] Check-in enfileirado para sync posterior.");
           }
-          return null;
+          throw err;
         }
+
+        try {
+          await refreshData();
+        } catch (refreshErr) {
+          console.warn("[Sync] Check-in salvo, mas o histórico ainda não foi atualizado.", refreshErr);
+        }
+
+        // Sincronizar nota com o Diário (Journal)
+        if (entry.note && entry.note.trim().length > 0) {
+          try {
+            await api.post('/journal/external-message', {
+              message: entry.note.trim(),
+              referenceDate: today
+            });
+          } catch (journalErr) {
+            console.warn('[Sync] Falha ao enviar nota para o diário:', journalErr);
+          }
+        }
+
+        // Retorna dados ricos da IA para uso na tela de resultado
+        return {
+          stateLabel: checkinResponse?.stateLabel ?? null,
+          analysis: checkinResponse?.stateSummary ?? checkinResponse?.aiState?.analysis ?? null,
+          recommendations: checkinResponse?.aiState?.recommendations ?? [],
+          suggestedIntensity: checkinResponse?.aiState?.suggestedIntensity ?? null,
+          riskSafety: checkinResponse?.riskSafety ?? checkinResponse?.aiState?.riskSafety,
+        };
       },
       addGoal: async (title) => {
         await api.post('/objectives', {

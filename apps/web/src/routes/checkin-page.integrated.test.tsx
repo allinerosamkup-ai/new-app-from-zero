@@ -50,5 +50,10 @@ describe("CheckinPage integrated flow", () => {
     expect(html).toContain("Registrar");
     expect(html).not.toContain("Adicionar contexto");
     expect(html).not.toContain("checkin.stepOf");
+    expect(html).toContain("<fieldset");
+    expect(html).toContain("<legend");
+    expect(html).toContain('for="checkin-note"');
+    expect(html).toContain('id="checkin-note"');
+    expect(html).toContain('aria-live="polite"');
   });
 });
