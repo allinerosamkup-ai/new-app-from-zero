@@ -209,7 +209,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       try {
         const today = getLocalDateKey();
         const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw, profileRaw] = await Promise.all([
-          api.get('/checkins?days=45').catch(e => { console.error(e); return null; }),
+          api.get('/checkins?days=90').catch(e => { console.error(e); return null; }),
           api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; }),
           api.get('/objectives').catch(e => { console.error(e); return null; }),
           api.get('/preferences').catch(e => { console.error(e); return null; }),

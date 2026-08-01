@@ -18,6 +18,12 @@ import {
   resolveMoodDayHighlights,
   type InsightActionDecision,
 } from "./insights-page.helpers";
+import {
+  buildFactorAssociations,
+  buildMoodReportEvidence,
+  buildNumericAssociation,
+  classifyStability,
+} from "./mood-reporting";
 import { WeeklyShareCard } from "../components/WeeklyShareCard";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import "../styles/aura.css";
@@ -79,18 +85,6 @@ function polygonPoints(r: number): string {
       return `${point.x},${point.y}`;
     })
     .join(" ");
-}
-
-// ── Pearson correlation ────────────────────────────────────────────
-function pearson(xs: number[], ys: number[]): number {
-  const n = Math.min(xs.length, ys.length);
-  if (n < 3) return 0;
-  const mx = xs.slice(0, n).reduce((a, b) => a + b) / n;
-  const my = ys.slice(0, n).reduce((a, b) => a + b) / n;
-  const num = xs.slice(0, n).reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0);
-  const dx = Math.sqrt(xs.slice(0, n).reduce((s, x) => s + (x - mx) ** 2, 0));
-  const dy = Math.sqrt(ys.slice(0, n).reduce((s, _, i) => s + (ys[i] - my) ** 2, 0));
-  return dx === 0 || dy === 0 ? 0 : Math.max(-1, Math.min(1, num / (dx * dy)));
 }
 
 // ── SVG Line Chart ─────────────────────────────────────────────────
@@ -166,7 +160,7 @@ export function InsightsPage() {
   const [weeklyQuestion, setWeeklyQuestion] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '180d' | '365d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
   const [insightTab, setInsightTab] = useState<'agora' | 'padroes'>('agora');
   const [monthlyReport, setMonthlyReport] = useState<string | null>(null);
   const [monthlyReportPhase, setMonthlyReportPhase] = useState<'idle' | 'loading' | 'done'>('idle');
@@ -176,7 +170,7 @@ export function InsightsPage() {
   const allHistory = state.checkinHistory || [];
   const habits = state.habits || [];
   const journalSessions = state.journal?.trim() ? 1 : 0;
-  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : period === '180d' ? 180 : 365;
+  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
   const history = useMemo(() => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - periodDays);
@@ -185,6 +179,9 @@ export function InsightsPage() {
   }, [allHistory, periodDays]);
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
+  const reportEvidence = useMemo(() => buildMoodReportEvidence(history, periodDays), [history, periodDays]);
+  const stabilityReading = useMemo(() => classifyStability(history), [history]);
+  const factorAssociations = useMemo(() => buildFactorAssociations(history), [history]);
   const consistencyScore = useMemo(
     () => computeConsistencyScore(history, habits, journalSessions),
     [history, habits, journalSessions],
@@ -463,6 +460,24 @@ export function InsightsPage() {
           stabilityScore: cycleReport.stabilityScore,
           warningFlags: cycleReport.warningFlags,
           moodCycleContext: cycleReport.aiContext,
+          evidence: {
+            windowDays: reportEvidence.windowDays,
+            observedDays: reportEvidence.observedDays,
+            missingDays: reportEvidence.missingDays,
+            confidence: reportEvidence.confidence,
+          },
+          stabilityReading: {
+            kind: stabilityReading.kind,
+            sampleCount: stabilityReading.sampleCount,
+            volatility: stabilityReading.volatility,
+            trend: stabilityReading.trend,
+          },
+          factorAssociations: factorAssociations.slice(0, 5).map((association) => ({
+            factor: association.factor,
+            difference: association.difference,
+            sampleCount: association.sampleCount,
+            confidence: association.confidence,
+          })),
         },
       }) as { suggestion: string };
       setMonthlyReport(res.suggestion);
@@ -486,8 +501,8 @@ export function InsightsPage() {
           </p>
           {/* Seletor de período + Export */}
           <div style={{ display: "flex", gap: "6px", marginTop: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            {(['7d', '30d', '90d', '180d', '365d'] as const).map(p => {
-              const label = p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : p === '180d' ? 'Semestral' : 'Anual';
+            {(['7d', '30d', '90d'] as const).map(p => {
+              const label = p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias';
               const active = period === p;
               return (
                 <button
@@ -574,6 +589,23 @@ export function InsightsPage() {
                 { title: "Depois de 30 dias", description: "Insights semanais ficam bem mais precisos." },
               ]}
             />
+          </div>
+        )}
+
+        {insightTab === "padroes" && (
+          <div style={{
+            borderRadius: 14, border: "1px solid var(--warm-border)", background: "rgba(255,255,255,.54)",
+            padding: "11px 12px", marginBottom: "calc(var(--a))",
+          }}>
+            <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 5px" }}>
+              Base da leitura
+            </p>
+            <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.45, margin: 0 }}>
+              Janela de {reportEvidence.windowDays} dias · {reportEvidence.observedDays} dias com registro · {reportEvidence.missingDays} sem registro · {reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}.
+            </p>
+            <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.45, margin: "5px 0 0" }}>
+              {stabilityReading.description}
+            </p>
           </div>
         )}
 
@@ -981,12 +1013,10 @@ export function InsightsPage() {
         </>)}
 
         {/* ── Correlações ─────────────────────────────────────── */}
-        {insightTab === "padroes" && history.length >= 5 && (() => {
-          const humorVals  = history.map(h => h.humor);
-          const energyVals = history.map(h => h.energia);
+        {insightTab === "padroes" && (() => {
           const sleepArr   = history.filter(h => h.sono != null).map(h => ({ humor: h.humor, sono: h.sono! }));
-          const corSleepMood = sleepArr.length >= 3 ? pearson(sleepArr.map(x => x.sono), sleepArr.map(x => x.humor)) : null;
-          const corEnergyMood = pearson(energyVals, humorVals);
+          const corSleepMood = buildNumericAssociation(sleepArr.map(x => ({ left: x.sono, right: x.humor })));
+          const corEnergyMood = buildNumericAssociation(history.map(h => ({ left: h.energia, right: h.humor })));
           const habits = state.habits || [];
           const habitsByDate = history.map(h => {
             const dateStr = h.date;
@@ -994,15 +1024,13 @@ export function InsightsPage() {
             const total = habits.filter(hab => hab.frequency === 'daily').length;
             return { pct: total > 0 ? done / total : 0, humor: h.humor };
           });
-          const corHabitsMood = habitsByDate.length >= 3
-            ? pearson(habitsByDate.map(x => x.pct), habitsByDate.map(x => x.humor))
-            : null;
+          const corHabitsMood = buildNumericAssociation(habitsByDate.map(x => ({ left: x.pct, right: x.humor })));
 
           const corItems = [
-            { label: l("Sono → Humor", "Sleep → Mood"), cor: corSleepMood, icon: "🌙", desc: l("bom sono eleva o humor?", "does good sleep lift your mood?") },
-            { label: l("Energia ↔ Humor", "Energy ↔ Mood"), cor: corEnergyMood, icon: "⚡", desc: l("energia e humor caminham juntos?", "do energy and mood move together?") },
-            ...(corHabitsMood !== null ? [{ label: l("Hábitos → Humor", "Habits → Mood"), cor: corHabitsMood, icon: "🔁", desc: l("completar hábitos melhora o estado?", "does completing habits improve your state?") }] : []),
-          ].filter(x => x.cor !== null) as Array<{ label: string; cor: number; icon: string; desc: string }>;
+            { label: l("Sono ↔ Humor", "Sleep ↔ Mood"), association: corSleepMood, icon: "🌙" },
+            { label: l("Energia ↔ Humor", "Energy ↔ Mood"), association: corEnergyMood, icon: "⚡" },
+            { label: l("Hábitos ↔ Humor", "Habits ↔ Mood"), association: corHabitsMood, icon: "🔁" },
+          ].flatMap(item => item.association ? [{ ...item, cor: item.association.coefficient, sampleCount: item.association.sampleCount, confidence: item.association.confidence }] : []);
 
           if (corItems.length === 0) return null;
 
@@ -1036,7 +1064,9 @@ export function InsightsPage() {
                       <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
                         <div style={{ width: `${abs * 100}%`, height: "100%", borderRadius: 999, background: barColor, transition: "width 0.5s ease" }} />
                       </div>
-                      <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>{item.desc}</p>
+                      <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
+                        {l(`Associação em ${item.sampleCount} dias (${item.confidence === "high" ? "boa base" : "base inicial"}). Não prova causa.`, `Association across ${item.sampleCount} days (${item.confidence === "high" ? "good evidence" : "initial evidence"}). It does not prove cause.`)}
+                      </p>
                     </div>
                   );
                 })}
@@ -1046,9 +1076,7 @@ export function InsightsPage() {
         })()}
 
         {/* ── Fatores: o que influencia seu humor ── */}
-        {insightTab === "padroes" && history.length >= 5 && (() => {
-          const withFactors = history.filter(h => (h as any).factors?.length > 0);
-          if (withFactors.length < 3) return null;
+        {insightTab === "padroes" && factorAssociations.length > 0 && (() => {
 
           const FACTOR_LABELS: Record<string, { label: string; icon: string }> = {
             good_sleep:     { label: l("Sono bom", "Good sleep"), icon: "😴" },
@@ -1068,21 +1096,16 @@ export function InsightsPage() {
             rest:           { label: l("Descanso", "Rest"), icon: "🛋️" },
           };
 
-          // Calcular delta numérico por fator: humor médio COM vs SEM
-          const allFactorIds = Array.from(
-            new Set(withFactors.flatMap(h => (h as any).factors as string[]))
-          );
-
-          const factorDeltas = allFactorIds.map(fid => {
-            const withFactor = history.filter(h => ((h as any).factors ?? []).includes(fid));
-            const withoutFactor = history.filter(h => !((h as any).factors ?? []).includes(fid));
-            const avgWith = withFactor.length > 0 ? withFactor.reduce((s, h) => s + h.humor, 0) / withFactor.length : null;
-            const avgWithout = withoutFactor.length > 0 ? withoutFactor.reduce((s, h) => s + h.humor, 0) / withoutFactor.length : null;
-            const delta = (avgWith !== null && avgWithout !== null) ? avgWith - avgWithout : null;
-            return { fid, avgWith, avgWithout, delta, count: withFactor.length };
-          }).filter(x => x.delta !== null && x.count >= 2) as Array<{
-            fid: string; avgWith: number; avgWithout: number; delta: number; count: number;
-          }>;
+          const factorDeltas = factorAssociations.map((association) => ({
+            fid: association.factor,
+            avgWith: association.averageWith,
+            avgWithout: association.averageWithout,
+            delta: association.difference,
+            count: association.withFactorCount,
+            sampleCount: association.sampleCount,
+            confidence: association.confidence,
+            description: association.description,
+          }));
 
           const positive = factorDeltas.filter(x => x.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 5);
           const negative = factorDeltas.filter(x => x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 3);
@@ -1102,7 +1125,7 @@ export function InsightsPage() {
               {positive.length > 0 && (
                 <>
                   <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-sage)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 10px" }}>
-                    ✨ Nos seus dias de bom humor
+                    ✨ Associações em registros de humor mais alto
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: negative.length > 0 ? 16 : 0 }}>
                     {positive.map(item => {
@@ -1121,7 +1144,7 @@ export function InsightsPage() {
                             <div style={{ width: `${Math.min(100, (item.delta / 10) * 100 * 3)}%`, height: "100%", borderRadius: 999, background: "var(--accent-sage)", transition: "width .5s ease" }} />
                           </div>
                           <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
-                            Com esse fator: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10
+                            Com: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10 · {item.sampleCount} dias ({item.confidence === "high" ? "boa base" : "base inicial"}). Associação não prova causa.
                           </p>
                         </div>
                       );
@@ -1133,7 +1156,7 @@ export function InsightsPage() {
               {negative.length > 0 && (
                 <>
                   <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 10px" }}>
-                    😔 O que tende a pesar
+                    😔 Associações em registros de humor mais baixo
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {negative.map(item => {
@@ -1152,7 +1175,7 @@ export function InsightsPage() {
                             <div style={{ width: `${Math.min(100, (Math.abs(item.delta) / 10) * 100 * 3)}%`, height: "100%", borderRadius: 999, background: "var(--accent-peach)", transition: "width .5s ease" }} />
                           </div>
                           <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
-                            Com esse fator: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10
+                            Com: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10 · {item.sampleCount} dias ({item.confidence === "high" ? "boa base" : "base inicial"}). Associação não prova causa.
                           </p>
                         </div>
                       );
@@ -1769,6 +1792,9 @@ export function InsightsPage() {
         }}>
           <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
             {t("insights.reportTitle")}
+          </p>
+          <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.45, margin: "0 0 12px" }}>
+            Base: {reportEvidence.observedDays} dias com registro na janela de {reportEvidence.windowDays}; {reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}. Leituras mostram associações, não causas nem diagnósticos.
           </p>
 
           {monthlyReportPhase === 'idle' && (
