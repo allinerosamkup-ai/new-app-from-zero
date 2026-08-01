@@ -8,6 +8,7 @@ import {
   shouldSendCheckinNudge,
   shouldSendHabitReminderToday,
   shouldSendJournalNudge,
+  shouldSendPersistentReminder,
 } from './notification-filters';
 
 function run() {
@@ -124,6 +125,28 @@ function run() {
     shouldSendJournalNudge({ currentTime: '21:00', journalTimes: ['10:00', '21:00'], nudgesSentToday: 0 }).send,
     true,
   );
+
+  assert.deepEqual(
+    shouldSendCheckinNudge({ currentTime: '06:30', nudgeTime: '06:30', hasCheckinToday: false, nudgesSentToday: 0 }),
+    { send: false, reason: 'janela de silêncio' },
+  );
+
+  const today = new Date('2026-08-01T00:00:00.000Z');
+  assert.equal(shouldSendPersistentReminder({
+    taskLocalDate: today, todayLocalDate: today,
+    startAt: new Date('2026-08-01T12:00:00.000Z'), now: new Date('2026-08-01T13:00:00.000Z'),
+    intervalMinutes: 30, sentToday: 0,
+  }).send, true);
+  assert.deepEqual(shouldSendPersistentReminder({
+    taskLocalDate: new Date('2026-07-31T00:00:00.000Z'), todayLocalDate: today,
+    startAt: new Date('2026-07-31T12:00:00.000Z'), now: new Date('2026-08-01T13:00:00.000Z'),
+    intervalMinutes: 30, sentToday: 0,
+  }), { send: false, reason: 'tarefa fora do dia atual' });
+  assert.deepEqual(shouldSendPersistentReminder({
+    taskLocalDate: today, todayLocalDate: today,
+    startAt: new Date('2026-08-01T12:00:00.000Z'), now: new Date('2026-08-01T13:30:00.000Z'),
+    intervalMinutes: 30, sentToday: 3,
+  }), { send: false, reason: 'limite de lembretes da tarefa atingido' });
 }
 
 run();

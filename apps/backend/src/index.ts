@@ -102,6 +102,7 @@ import {
   shouldSendCheckinNudge,
   shouldSendHabitReminderToday,
   shouldSendJournalNudge,
+  shouldSendPersistentReminder,
 } from './lib/notification-filters';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
 import { normalizeObjectiveSubgoals, ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
@@ -7275,90 +7276,6 @@ JSON APENAS: {"profileSummary":"..."}`,
     }
   });
 
-  /**
-   * POST /api/checkins/backfill
-   * Cria entradas sintéticas para dias sem check-in, baseadas na sondagem de retorno.
-   * pattern: 'stable' | 'good' | 'mixed' | 'hard' | 'crisis'
-   */
-  app.post('/api/checkins/backfill', requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = (req as AuthRequest).userId;
-      const { periodStart, periodEnd, pattern, note } = req.body as {
-        periodStart?: string;
-        periodEnd?: string;
-        pattern?: string;
-        note?: string;
-      };
-
-      if (!periodStart || !periodEnd || !pattern) {
-        return res.status(400).json({ error: 'periodStart, periodEnd e pattern são obrigatórios' });
-      }
-
-      const PATTERN_DELTAS: Record<string, { humor: number; energia: number }> = {
-        stable: { humor: 0, energia: 0 },
-        good:   { humor: 2, energia: 2 },
-        mixed:  { humor: 0, energia: 0 },
-        hard:   { humor: -2, energia: -2 },
-        crisis: { humor: -4, energia: -3 },
-      };
-      const delta = PATTERN_DELTAS[pattern] ?? { humor: 0, energia: 0 };
-
-      // Busca último check-in do usuário antes do período
-      const lastCheckin = await prisma.dailyCheckin.findFirst({
-        where: { userId, localDate: { lt: new Date(periodStart) } },
-        orderBy: { localDate: 'desc' },
-      });
-
-      const baseHumor = lastCheckin ? lastCheckin.moodScore ?? 6 : 6;
-      const baseEnergia = lastCheckin ? lastCheckin.energyScore ?? 6 : 6;
-
-      // Gera datas entre periodStart e periodEnd (exclusive today)
-      const dates: string[] = [];
-      const cursor = new Date(periodStart + 'T12:00:00.000Z');
-      const end = new Date(periodEnd + 'T12:00:00.000Z');
-      while (cursor < end) {
-        dates.push(cursor.toISOString().slice(0, 10));
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
-      }
-
-      let created = 0;
-      for (let i = 0; i < dates.length; i++) {
-        const dateKey = dates[i];
-        // Evita duplicata
-        const existing = await prisma.dailyCheckin.findFirst({
-          where: { userId, localDate: new Date(dateKey) },
-        });
-        if (existing) continue;
-
-        // Para 'mixed', alterna positivo/negativo
-        const mixedSign = pattern === 'mixed' ? (i % 2 === 0 ? 1 : -1) : 1;
-        const moodScore = Math.max(1, Math.min(10, baseHumor + delta.humor * mixedSign));
-        const energyScore = Math.max(1, Math.min(10, baseEnergia + delta.energia * mixedSign));
-
-        await prisma.dailyCheckin.create({
-          data: {
-            userId,
-            localDate: new Date(dateKey),
-            checkinSlot: 'midday-backfill',
-            moodScore,
-            energyScore,
-            clarityScore: moodScore,
-            irritabilityScore: Math.max(1, 10 - moodScore),
-            physicalScore: energyScore,
-            socialScore: moodScore,
-          },
-        });
-        created++;
-      }
-
-      return res.json({ created, dates: dates.length });
-    } catch (err: unknown) {
-      console.error('[checkins/backfill] Error:', err);
-      return res.status(500).json({ error: 'backfill_failed' });
-    }
-  });
-
-
   return app;
 }
 
@@ -7408,7 +7325,7 @@ function buildPersistentReminderMessage(
   if (fireCount === 3) {
     return {
       title: `🎯 ${taskTitle}`,
-      body: 'Qual é o menor pedaço que dá pra fazer agora mesmo?',
+      body: microStep ? `Próximo passo: ${microStep}` : 'Abra a tarefa para retomar pelo próximo passo.',
     };
   }
   // 4+: alterna entre ajuda e presença
@@ -7566,6 +7483,7 @@ if (require.main === module) {
       const now = new Date();
       const currentTimeStr = getSaoPauloHHMM(now);
       const saoPauloToday = getSaoPauloDateContext(now);
+      const spDayStartUtc = getSaoPauloDayStartUtc(saoPauloToday.dateKey);
 
       const habitsNow = await defaultPrisma.habit.findMany({
         where: { archived: false, reminderEnabled: true, reminderTime: currentTimeStr },
@@ -7684,21 +7602,40 @@ if (require.main === module) {
             select: { userId: true, notificationPreferences: true },
           })).map((p) => [p.userId, p.notificationPreferences as any]),
         );
-        const postponeEvents = await defaultPrisma.eventLog.findMany({
-          where: { eventName: 'timeline.block_postponed', userId: { in: persistentUserIds } },
-          select: { properties: true },
-        });
+        const [postponeEvents, persistentDeliveryEvents] = await Promise.all([
+          defaultPrisma.eventLog.findMany({
+            where: { eventName: 'timeline.block_postponed', userId: { in: persistentUserIds } },
+            select: { properties: true },
+          }),
+          defaultPrisma.eventLog.findMany({
+            where: { eventName: 'push.persistent_sent', userId: { in: persistentUserIds }, createdAt: { gte: spDayStartUtc } },
+            select: { properties: true },
+          }),
+        ]);
         const postponeCountMap = new Map<string, number>();
         for (const ev of postponeEvents) {
           const blockId = (ev.properties as any)?.blockId;
           if (blockId) postponeCountMap.set(blockId, (postponeCountMap.get(blockId) ?? 0) + 1);
         }
+        const persistentCountMap = new Map<string, number>();
+        for (const event of persistentDeliveryEvents) {
+          const blockId = (event.properties as any)?.blockId;
+          if (typeof blockId === 'string') persistentCountMap.set(blockId, (persistentCountMap.get(blockId) ?? 0) + 1);
+        }
         for (const task of persistentTasks) {
           const prefs = persistentPrefsByUser.get(task.userId);
           if (!prefs || (prefs as any).planner === false) continue;
-          const intervalMin = task.persistentReminderIntervalMinutes ?? 30;
+          const intervalMin = Math.max(15, task.persistentReminderIntervalMinutes ?? 30);
+          const deliveryDecision = shouldSendPersistentReminder({
+            taskLocalDate: task.localDate,
+            todayLocalDate: saoPauloToday.dbDate,
+            startAt: task.startAt,
+            now,
+            intervalMinutes: intervalMin,
+            sentToday: persistentCountMap.get(task.id) ?? 0,
+          });
+          if (!deliveryDecision.send) continue;
           const minutesPast = Math.floor((now.getTime() - task.startAt.getTime()) / 60000);
-          if (minutesPast <= 0 || minutesPast % intervalMin !== 0) continue;
           const fireCount = Math.floor(minutesPast / intervalMin);
           const postponeCount = postponeCountMap.get(task.id) ?? 0;
           const isAppear = (task as any).taskMode === 'appear';
@@ -7717,11 +7654,13 @@ if (require.main === module) {
               { action: 'help', title: '💬 Preciso de ajuda' },
             ],
           });
+          await defaultPrisma.eventLog.create({
+            data: { userId: task.userId, eventName: 'push.persistent_sent', properties: { blockId: task.id, localDate: saoPauloToday.dateKey, fireCount } },
+          }).catch((error) => console.warn('[push-cron] falha ao registrar lembrete persistente:', error));
         }
       }
 
       const prefsCheckin = await defaultPrisma.userPreference.findMany({ where: { notificationsOn: true } });
-      const spDayStartUtc = getSaoPauloDayStartUtc(saoPauloToday.dateKey);
       for (const pref of prefsCheckin) {
         const notifPrefs = (pref.notificationPreferences as any) || {};
         const journalTimes = notifPrefs.journal
@@ -7780,62 +7719,6 @@ if (require.main === module) {
       }
     } catch (e) {
       console.error('[push-cron] error:', e);
-    }
-  });
-
-  cron.schedule('0 6 * * *', async () => {
-    try {
-      const now = new Date();
-      const overdueTasks = await defaultPrisma.timelineBlock.findMany({
-        where: { status: 'planned', startAt: { lt: now } },
-        take: 200,
-      });
-      if (overdueTasks.length === 0) return;
-
-      const byUser = new Map<string, typeof overdueTasks>();
-      for (const t of overdueTasks) {
-        const arr = byUser.get(t.userId) || [];
-        arr.push(t);
-        byUser.set(t.userId, arr);
-      }
-
-      let migrated = 0;
-      let paused = 0;
-      for (const [userId, tasks] of byUser.entries()) {
-        const recent = await defaultPrisma.dailyCheckin.findMany({
-          where: { userId },
-          orderBy: { localDate: 'desc' },
-          take: 7,
-          select: { moodScore: true, energyScore: true },
-        });
-        const { phase, warningFlags } = inferPhaseFromRecentCheckins(
-          recent.map((c) => ({ moodScore: c.moodScore, energyScore: c.energyScore })),
-        );
-        const ctx = deriveAdaptiveContextFromPhase({ phase, warningFlags });
-
-        for (const task of tasks) {
-          if (ctx.preFallActive || ctx.pauseHabits) {
-            await defaultPrisma.timelineBlock
-              .update({ where: { id: task.id }, data: { status: 'paused' } })
-              .catch(() => null);
-            paused++;
-          } else {
-            const newStart = new Date(now);
-            newStart.setHours(task.startAt.getHours(), task.startAt.getMinutes(), 0, 0);
-            const duration = task.endAt.getTime() - task.startAt.getTime();
-            await defaultPrisma.timelineBlock
-              .update({
-                where: { id: task.id },
-                data: { startAt: newStart, endAt: new Date(newStart.getTime() + duration) },
-              })
-              .catch(() => null);
-            migrated++;
-          }
-        }
-      }
-      console.log(`[auto-reschedule] migrated=${migrated} paused=${paused}`);
-    } catch (e) {
-      console.error('[auto-reschedule] error:', e);
     }
   });
 

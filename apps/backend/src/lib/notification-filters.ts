@@ -87,6 +87,7 @@ export function allowsHabitNotifications(preference: NotificationPreferencesLike
 
 export const NUDGE_EVENT_NAME = 'nudge.sent';
 export const MAX_DAILY_NUDGES = 1;
+export const MAX_PERSISTENT_REMINDERS_PER_DAY = 3;
 
 // Janela de silêncio: nenhum nudge antes das 07:00 nem depois das 22:00.
 const NUDGE_EARLIEST_MINUTES = 7 * 60;
@@ -99,6 +100,11 @@ function timeToMinutes(time: unknown): number | null {
   if (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
   const [hour, minute] = time.split(':').map(Number);
   return hour * 60 + minute;
+}
+
+function isWithinNudgeWindow(time: string): boolean {
+  const minutes = timeToMinutes(time);
+  return minutes !== null && minutes >= NUDGE_EARLIEST_MINUTES && minutes <= NUDGE_LATEST_MINUTES;
 }
 
 function minutesToTime(totalMinutes: number): string {
@@ -144,6 +150,7 @@ export function shouldSendCheckinNudge(opts: {
   hasCheckinToday: boolean;
   nudgesSentToday: number;
 }): NudgeDecision {
+  if (!isWithinNudgeWindow(opts.currentTime)) return { send: false, reason: 'janela de silêncio' };
   if (opts.currentTime !== opts.nudgeTime) return { send: false, reason: 'fora do horário do nudge' };
   if (opts.hasCheckinToday) return { send: false, reason: 'check-in já registrado hoje' };
   if (opts.nudgesSentToday >= MAX_DAILY_NUDGES) return { send: false, reason: 'limite diário de nudges atingido' };
@@ -155,7 +162,25 @@ export function shouldSendJournalNudge(opts: {
   journalTimes: string[];
   nudgesSentToday: number;
 }): NudgeDecision {
+  if (!isWithinNudgeWindow(opts.currentTime)) return { send: false, reason: 'janela de silêncio' };
   if (!opts.journalTimes.includes(opts.currentTime)) return { send: false, reason: 'fora do horário do nudge' };
   if (opts.nudgesSentToday >= MAX_DAILY_NUDGES) return { send: false, reason: 'limite diário de nudges atingido' };
   return { send: true, reason: 'nudge de diário dentro do limite diário' };
+}
+
+export function shouldSendPersistentReminder(opts: {
+  taskLocalDate: Date;
+  todayLocalDate: Date;
+  startAt: Date;
+  now: Date;
+  intervalMinutes: number;
+  sentToday: number;
+}): NudgeDecision {
+  if (opts.taskLocalDate.getTime() !== opts.todayLocalDate.getTime()) return { send: false, reason: 'tarefa fora do dia atual' };
+  if (opts.startAt.getTime() >= opts.now.getTime()) return { send: false, reason: 'tarefa ainda não começou' };
+  if (!Number.isFinite(opts.intervalMinutes) || opts.intervalMinutes < 15) return { send: false, reason: 'intervalo inválido' };
+  if (opts.sentToday >= MAX_PERSISTENT_REMINDERS_PER_DAY) return { send: false, reason: 'limite de lembretes da tarefa atingido' };
+  const minutesPast = Math.floor((opts.now.getTime() - opts.startAt.getTime()) / 60000);
+  if (minutesPast % opts.intervalMinutes !== 0) return { send: false, reason: 'fora do intervalo' };
+  return { send: true, reason: 'lembrete persistente elegível' };
 }

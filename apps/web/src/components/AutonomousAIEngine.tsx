@@ -282,6 +282,8 @@ export function AutonomousAIEngine() {
     const history = state.checkinHistory || [];
     const goals = state.goals || [];
     const now = Date.now();
+    const localHour = new Date(now).getHours();
+    const isNudgeWindow = localHour >= 7 && localHour <= 22;
 
     if (!state.notificationPreferences.aiSuggestions) {
       if (state.proactiveNudge) setProactiveNudge(null);
@@ -308,7 +310,7 @@ export function AutonomousAIEngine() {
     // Priority 1a: smart timing — notifica no horário histórico da usuária (sem check-in hoje)
     const today = getLocalDateKey();
     const todayCheckin = history.find(h => h.date === today);
-    if (!todayCheckin && history.length >= 5 && !shouldThrottleSameNudge("checkin_missing")) {
+    if (isNudgeWindow && !todayCheckin && history.length >= 5 && !shouldThrottleSameNudge("checkin_missing")) {
       // Descobrir a hora mais frequente de check-in nos últimos 30 registros
       const hourCounts: Record<number, number> = {};
       history.slice(-30).forEach(h => {
@@ -342,7 +344,7 @@ export function AutonomousAIEngine() {
       }
     }
 
-    if (daysSince >= 2) {
+    if (isNudgeWindow && daysSince >= 2) {
       const days = Math.floor(daysSince);
       if (shouldThrottleSameNudge("checkin_missing")) return;
       const nudge: ProactiveNudge = {
@@ -360,39 +362,16 @@ export function AutonomousAIEngine() {
       return;
     }
 
-    // Priority 2: GTD inbox overloaded (3+ itens sem clarificar)
-    try {
-      const gtdItems: Array<{ clarified?: boolean; archived?: boolean; capturedAt: string }> =
-        JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
-      const unclarified = gtdItems.filter(i => !i.clarified && !i.archived);
-      const oldest = unclarified[unclarified.length - 1];
-      const oldestAge = oldest
-        ? (now - new Date(oldest.capturedAt).getTime()) / 86_400_000
-        : 0;
-      if (unclarified.length >= 3 && oldestAge >= 1) {
-        if (shouldThrottleSameNudge("inbox_overdue")) return;
-        const nudge: ProactiveNudge = {
-          type: "inbox_overdue",
-          title: `${unclarified.length} itens esperando clarificação`,
-          message: "Seu inbox GTD está cheio. Clarificar agora libera espaço mental.",
-          action: { label: "Ir para Metas & GTD", path: "/goals" },
-          priority: unclarified.length >= 5 ? "high" : "medium",
-          generatedAt: new Date().toISOString(),
-        };
-        if (isProactiveNudgeDismissedToday(nudge)) return;
-        setProactiveNudge(nudge);
-        return;
-      }
-    } catch {}
-
-    // Priority 3: goal stagnant (goal com subtarefas mas 0% progresso há muito tempo)
-    const stagnantGoal = goals.find(g => g.completedPct === 0 && g.subtasks.length > 0);
-    if (stagnantGoal) {
+    // Próxima ação existente da meta, nunca uma cobrança genérica ou item local sem fonte.
+    const activeGoal = goals
+      .map((goal) => ({ goal, action: goal.subtasks.find((subtask) => !subtask.done) }))
+      .find((item) => item.action);
+    if (activeGoal?.action) {
       if (shouldThrottleSameNudge("goal_stagnant")) return;
       const nudge: ProactiveNudge = {
         type: "goal_stagnant",
-        title: "Meta esperando por você",
-        message: `"${stagnantGoal.title}" ainda não começou. Qual é o primeiro passo de hoje?`,
+        title: "Próxima ação da sua meta",
+        message: `"${activeGoal.action.title}" está pronta em "${activeGoal.goal.title}".`,
         action: { label: "Ver metas", path: "/goals" },
         priority: "medium",
         generatedAt: new Date().toISOString(),
@@ -400,31 +379,6 @@ export function AutonomousAIEngine() {
       if (isProactiveNudgeDismissedToday(nudge)) return;
       setProactiveNudge(nudge);
       return;
-    }
-
-    // Priority 4: weekly review (sexta, sábado ou domingo + itens pendentes)
-    const weekday = new Date().getDay(); // 0=dom, 5=sex, 6=sab
-    const isReviewDay = weekday === 0 || weekday === 5 || weekday === 6;
-    const hasOpenGoals = goals.some(g => g.completedPct < 100);
-    if (isReviewDay && hasOpenGoals && history.length > 0) {
-      const lastReview = localStorage.getItem("aura_last_weekly_review");
-      const daysSinceReview = lastReview
-        ? (now - new Date(lastReview).getTime()) / 86_400_000
-        : Infinity;
-      if (daysSinceReview >= 5) {
-        if (shouldThrottleSameNudge("weekly_review")) return;
-        const nudge: ProactiveNudge = {
-          type: "weekly_review",
-          title: "Revisão semanal 📋",
-          message: "Fim de semana é hora de revisar seus projetos e definir a próxima ação de cada meta.",
-          action: { label: "Revisar metas", path: "/goals" },
-          priority: "low",
-          generatedAt: new Date().toISOString(),
-        };
-        if (isProactiveNudgeDismissedToday(nudge)) return;
-        setProactiveNudge(nudge);
-        return;
-      }
     }
 
     // No nudge needed — clear any stale one
