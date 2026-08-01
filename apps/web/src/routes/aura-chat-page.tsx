@@ -24,7 +24,7 @@ import {
 } from "./aura-chat-page.helpers";
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
-import { TranscriptSession } from "../features/voice/transcript-session";
+import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
@@ -849,8 +849,8 @@ export function AuraChatPage() {
   function toggleVoice() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
-    if (isRecording && recognitionRef.current) {
-      recognitionRef.current.stop();
+    if (recognitionRef.current) {
+      stopActiveRecognition(recognitionRef);
       setIsRecording(false);
       return;
     }
@@ -868,12 +868,12 @@ export function AuraChatPage() {
     };
     recognition.onend = () => {
       transcriptSession.reset();
-      recognitionRef.current = null;
+      if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsRecording(false);
     };
     recognition.onerror = () => {
       transcriptSession.reset();
-      recognitionRef.current = null;
+      if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsRecording(false);
     };
     recognition.start();

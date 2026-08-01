@@ -130,3 +130,22 @@ export function deriveExpressEmotion(humor: number, energia: number): string {
   if (humor >= 3) return energia <= 4 ? "exhausted" : "sensitive";
   return "sad";
 }
+
+/** Keeps context already chosen in the check-in when speech adds more detail. */
+export function mergeVoiceFactors(existing: string[], extracted: string[] | null | undefined): string[] {
+  const seen = new Set<string>();
+  return [...existing, ...(extracted ?? [])].filter((factor) => {
+    const normalized = factor.trim();
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+/** Backfill stores one note, so preserve all voice factors inside that context. */
+export function buildReentryVoiceNote(note: string | null | undefined, factors: string[] | null | undefined): string {
+  const base = note?.trim() ?? "";
+  const uniqueFactors = mergeVoiceFactors([], factors);
+  const factorLine = uniqueFactors.length > 0 ? `Fatores relatados: ${uniqueFactors.join(", ")}` : "";
+  return [base, factorLine].filter(Boolean).join("\n");
+}

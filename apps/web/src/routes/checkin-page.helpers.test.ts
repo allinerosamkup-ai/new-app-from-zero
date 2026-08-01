@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
 import {
+  buildReentryVoiceNote,
   computeDaysSinceLastCheckin,
   deriveExpressEmotion,
+  mergeVoiceFactors,
   nearestQuickLevel,
   predictCheckinDefaults,
   type CheckinHistoryLike,
@@ -99,5 +101,21 @@ describe("deriveExpressEmotion", () => {
 
   it("maps the lowest mood to sad", () => {
     assert.equal(deriveExpressEmotion(2, 6), "sad");
+  });
+});
+
+describe("voice check-in context", () => {
+  it("keeps existing factors and adds only new factors extracted from speech", () => {
+    assert.deepEqual(
+      mergeVoiceFactors(["sono ruim", "trabalho"], ["trabalho", "dor de cabeca"]),
+      ["sono ruim", "trabalho", "dor de cabeca"],
+    );
+  });
+
+  it("keeps re-entry factors in the persisted context note", () => {
+    assert.equal(
+      buildReentryVoiceNote("Semana cansativa", ["sono ruim", "dor de cabeca"]),
+      "Semana cansativa\nFatores relatados: sono ruim, dor de cabeca",
+    );
   });
 });

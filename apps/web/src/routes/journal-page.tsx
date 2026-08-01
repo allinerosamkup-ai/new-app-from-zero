@@ -13,7 +13,7 @@ import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
 import { buildJournalClosePrompt, buildJournalPlannerSlot } from "./journal-page.helpers";
 import { isSpeechRecognitionSupported, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
-import { TranscriptSession } from "../features/voice/transcript-session";
+import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import { appendStoredGtdAction } from "../utils/goal-priority-actions";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
@@ -446,9 +446,7 @@ export function JournalPage() {
       clearTimeout(voiceTimerRef.current);
       voiceTimerRef.current = null;
     }
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { /* ignore */ }
-    }
+    stopActiveRecognition(recognitionRef);
     transcriptSessionRef.current?.reset();
     transcriptSessionRef.current = null;
     setInterimVoice("");
@@ -477,8 +475,14 @@ export function JournalPage() {
       setInput([voiceInputBaseRef.current.trim(), snapshot.finalText].filter(Boolean).join(" "));
       setInterimVoice(snapshot.interimText);
     };
-    recognition.onend = () => stopVoice();
-    recognition.onerror = () => stopVoice();
+    recognition.onend = () => {
+      if (!releaseRecognition(recognitionRef, recognition)) return;
+      stopVoice();
+    };
+    recognition.onerror = () => {
+      if (!releaseRecognition(recognitionRef, recognition)) return;
+      stopVoice();
+    };
     recognition.start();
     recognitionRef.current = recognition;
     setIsRecording(true);
@@ -490,7 +494,9 @@ export function JournalPage() {
   useEffect(() => {
     return () => {
       if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
-      if (recognitionRef.current) { try { recognitionRef.current.stop(); } catch { /* ignore */ } }
+      stopActiveRecognition(recognitionRef);
+      transcriptSessionRef.current?.reset();
+      transcriptSessionRef.current = null;
     };
   }, []);
 

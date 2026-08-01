@@ -14,6 +14,29 @@ export type TranscriptSnapshot = {
   text: string;
 };
 
+export type RecognitionLike = { stop: () => void };
+export type MutableRecognitionRef<T> = { current: T | null };
+
+/** Clears before stopping: browser end events cannot leave a stale recognizer active. */
+export function stopActiveRecognition<T extends RecognitionLike>(ref: MutableRecognitionRef<T>): T | null {
+  const active = ref.current;
+  ref.current = null;
+  if (!active) return null;
+  try {
+    active.stop();
+  } catch {
+    // The browser can already have ended the recognizer; the ref is still clean.
+  }
+  return active;
+}
+
+/** Ignores late end/error events from an older recognizer after a restart. */
+export function releaseRecognition<T>(ref: MutableRecognitionRef<T>, recognition: T): boolean {
+  if (ref.current !== recognition) return false;
+  ref.current = null;
+  return true;
+}
+
 function joinTranscript(parts: string[]): string {
   return parts
     .map((part) => part.trim())

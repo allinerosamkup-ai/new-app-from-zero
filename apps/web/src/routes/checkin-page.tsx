@@ -12,6 +12,8 @@ import {
   baseSlotFromDate,
   computeDaysSinceLastCheckin,
   deriveExpressEmotion,
+  buildReentryVoiceNote,
+  mergeVoiceFactors,
   predictCheckinDefaults,
   QUICK_LEVELS,
   REENTRY_GAP_DAYS,
@@ -19,7 +21,7 @@ import {
 import { ChevronLeft, Check, Mic, MicOff, Loader } from "lucide-react";
 import { api } from "../lib/api";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
-import { TranscriptSession } from "../features/voice/transcript-session";
+import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -341,8 +343,8 @@ export function CheckinPage() {
   // ── sono em horas (para o wizard detalhado)
   const [sonoHoras, setSonoHoras] = useState(7);
 
-  async function submitReentry() {
-    if (!reentryPattern) return;
+  async function submitReentry(pattern = reentryPattern, note = reentryNote) {
+    if (!pattern) return;
     setReentrySubmitting(true);
     try {
       const history = state.checkinHistory ?? [];
@@ -362,8 +364,8 @@ export function CheckinPage() {
         await api.post("/checkins/backfill", {
           periodStart,
           periodEnd,
-          pattern: reentryPattern,
-          note: reentryNote.trim() || null,
+          pattern,
+          note: note.trim() || null,
         });
       }
     } catch {
@@ -377,6 +379,11 @@ export function CheckinPage() {
   function startReentryVoice() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) { setVoiceError(t("checkin.voiceUnsupported")); return; }
+    if (recognitionRef.current) {
+      stopActiveRecognition(recognitionRef);
+      setIsListening(false);
+      return;
+    }
     setVoiceError(null);
     const recognition = new SpeechRecognition();
     recognition.lang = resolveIntlLocale();
@@ -388,6 +395,7 @@ export function CheckinPage() {
     recognition.onstart = () => setIsListening(true);
     recognition.onerror = () => {
       transcriptSession.reset();
+      if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsListening(false);
       setVoiceError(t("checkin.voiceRetry"));
     };
@@ -398,9 +406,10 @@ export function CheckinPage() {
     };
     recognition.onend = async () => {
       if (silenceTimer) clearTimeout(silenceTimer);
-      setIsListening(false);
       const transcript = transcriptSession.snapshot().finalText;
       transcriptSession.reset();
+      if (!releaseRecognition(recognitionRef, recognition)) return;
+      setIsListening(false);
       if (!transcript) return;
       setVoiceLoading(true);
       try {
@@ -409,11 +418,12 @@ export function CheckinPage() {
         // Infere pattern a partir do humor extraído
         const h = result.humor ?? 5;
         const inferred = h >= 8 ? "good" : h >= 6 ? "stable" : h >= 4 ? "mixed" : h >= 3 ? "hard" : "crisis";
+        const noteWithFactors = buildReentryVoiceNote(result.note, result.factors);
         setReentryPattern(inferred);
-        if (result.note) setReentryNote(result.note);
+        if (noteWithFactors) setReentryNote(noteWithFactors);
         // Auto-avança
         await new Promise(r => setTimeout(r, 400));
-        await submitReentry();
+        await submitReentry(inferred, noteWithFactors);
       } catch {
         setVoiceError(t("checkin.voiceChoose"));
       } finally {
@@ -430,8 +440,9 @@ export function CheckinPage() {
       setVoiceError(t("checkin.voiceRecognitionUnsupported"));
       return;
     }
-    if (isListening) {
-      recognitionRef.current?.stop();
+    if (recognitionRef.current) {
+      stopActiveRecognition(recognitionRef);
+      setIsListening(false);
       return;
     }
     setVoiceError(null);
@@ -448,6 +459,7 @@ export function CheckinPage() {
     recognition.onstart = () => setIsListening(true);
     recognition.onerror = () => {
       transcriptSession.reset();
+      if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsListening(false);
       setVoiceError(t("checkin.voiceHearRetry"));
     };
@@ -459,9 +471,10 @@ export function CheckinPage() {
     };
     recognition.onend = async () => {
       if (silenceTimer) clearTimeout(silenceTimer);
-      setIsListening(false);
       const transcript = transcriptSession.snapshot().finalText;
       transcriptSession.reset();
+      if (!releaseRecognition(recognitionRef, recognition)) return;
+      setIsListening(false);
       if (!transcript) return;
       setVoiceLoading(true);
       try {
@@ -470,12 +483,8 @@ export function CheckinPage() {
         if (result.energia !== null) setEnergia(result.energia);
         if (result.sleepHours !== null) { setSonoHoras(result.sleepHours); setDetailEnabled(c => ({ ...c, sono: true })); }
         if (result.emotions?.length) setEmotionsSelected(result.emotions.slice(0, 1));
-        if (result.factors?.length) setSelectedFactors(result.factors);
+        if (result.factors?.length) setSelectedFactors((current) => mergeVoiceFactors(current, result.factors));
         if (result.note) setNote(result.note);
-        if (result.emotions?.[0]) {
-          const vals = emotionToValues[result.emotions[0]];
-          if (vals) { setHumor(vals.humor); setEnergia(vals.energia); }
-        }
         setExpressPhase("confirm");
       } catch {
         setVoiceError(t("checkin.voiceEmotionRetry"));

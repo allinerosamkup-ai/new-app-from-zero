@@ -72,7 +72,7 @@ import {
 import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
-import { TranscriptSession } from "../features/voice/transcript-session";
+import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -710,8 +710,8 @@ const NoteSection = React.memo(function NoteSection({
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
 
-    if (isRecording && recognitionRef.current) {
-      recognitionRef.current.stop();
+    if (recognitionRef.current) {
+      stopActiveRecognition(recognitionRef);
       setIsRecording(false);
       return;
     }
@@ -731,10 +731,12 @@ const NoteSection = React.memo(function NoteSection({
     };
     recognition.onend = () => {
       transcriptSession.reset();
+      if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsRecording(false);
     };
     recognition.onerror = () => {
       transcriptSession.reset();
+      if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsRecording(false);
     };
     recognition.start();
