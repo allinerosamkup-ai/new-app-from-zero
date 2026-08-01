@@ -7,6 +7,7 @@ ENV_FILE=".env.web.build"
 MIGRATION_FILES="
 $PROJECT_DIR/supabase/migrations/20260731120000_unify_checkin_signals.sql
 $PROJECT_DIR/supabase/migrations/20260801002000_ensure_auth_profiles.sql
+$PROJECT_DIR/supabase/migrations/20260801163000_add_objective_action_recovery_claims.sql
 "
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
