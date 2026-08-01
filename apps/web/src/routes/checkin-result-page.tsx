@@ -13,6 +13,7 @@ import { successHaptic } from "../utils/haptics";
 import { useToast } from "../components/Toast";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import type { MoodOption } from "../features/aura/types";
+import { resolveMoodFromCheckin } from "../features/aura/checkin-mood";
 import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
@@ -264,8 +265,11 @@ export function CheckinResultPage() {
   // Check-in salvo = pequena vitória: confirmação tátil única na chegada.
   useEffect(() => { successHaptic(); }, []);
 
-  const rawVariant = variants[state.mood] ?? variants.equilibrada;
-  const englishVariant = VARIANT_EN[state.mood] ?? VARIANT_EN.equilibrada;
+  const latestCheckin = state.checkinHistory?.[0] ?? null;
+  const resultMood = resolveMoodFromCheckin(latestCheckin, state.mood);
+  const persistedStateLabel = checkinAI?.stateLabel ?? latestCheckin?.stateLabel ?? null;
+  const rawVariant = variants[resultMood] ?? variants.equilibrada;
+  const englishVariant = VARIANT_EN[resultMood] ?? VARIANT_EN.equilibrada;
   const v = {
     ...rawVariant,
     label: l(rawVariant.label, englishVariant.label),
@@ -384,7 +388,7 @@ export function CheckinResultPage() {
       recommendations_count: checkinAI?.recommendations?.length ?? 0,
       riskLevel: checkinAI?.riskSafety?.riskLevel ?? "none",
       riskRoute: checkinAI?.riskSafety?.route ?? "self_support",
-      mood: state.mood,
+      mood: resultMood,
     });
 
     if (checkinAI?.riskSafety?.route === "human_support" || checkinAI?.riskSafety?.route === "crisis_protocol") {
@@ -409,8 +413,8 @@ export function CheckinResultPage() {
   const [recalibrateResult, setRecalibrateResult] = useState<string | null>(null);
 
   const recalibrateSignal: "day_hard" | "day_great" | null = (() => {
-    if (state.mood === "focada") return "day_great";
-    if (state.mood === "sobrecarregada" || state.mood === "cansada" || state.mood === "sensivel") return "day_hard";
+    if (resultMood === "focada") return "day_great";
+    if (resultMood === "sobrecarregada" || resultMood === "cansada" || resultMood === "sensivel") return "day_hard";
     return null;
   })();
 
@@ -434,7 +438,7 @@ export function CheckinResultPage() {
       } else {
         setRecalibrateResult(`Dia difícil — ${paused} bloco${paused !== 1 ? "s" : ""} pausado${paused !== 1 ? "s" : ""}. Só o essencial ficou.`);
       }
-      trackEvent("agenda_recalibrated", { signal: recalibrateSignal, mood: state.mood });
+      trackEvent("agenda_recalibrated", { signal: recalibrateSignal, mood: resultMood });
     } catch {
       showError(t("checkin.result.recalibrateError"));
     } finally {
@@ -493,7 +497,7 @@ export function CheckinResultPage() {
       const res = await api.post("/ai/suggest", {
         type: "day-tasks",
         context: {
-          mood: state.mood,
+          mood: resultMood,
           moodLabel: v.label,
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
@@ -542,7 +546,7 @@ export function CheckinResultPage() {
       const res = await api.post("/ai/suggest", {
         type: "day-tasks",
         context: {
-          mood: state.mood,
+          mood: resultMood,
           moodLabel: v.label,
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
@@ -830,9 +834,9 @@ export function CheckinResultPage() {
                 <AuraIcon size={8} /> IA
               </span>
             )}
-            {checkinAI?.stateLabel && !auraMsgLoading && (
+            {persistedStateLabel && !auraMsgLoading && (
               <span style={{ fontSize: 9, background: "rgba(0,0,0,.05)", color: "var(--text-2)", borderRadius: 999, padding: "2px 7px", fontWeight: 600 }}>
-                {checkinAI.stateLabel}
+                {persistedStateLabel}
               </span>
             )}
             {checkinAI?.suggestedIntensity && !auraMsgLoading && (

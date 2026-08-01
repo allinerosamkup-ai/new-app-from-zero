@@ -19,6 +19,7 @@ import { getLocalDateKey, normalizeDateKey } from "../../utils/day-context";
 import { successHaptic, tapHaptic } from "../../utils/haptics";
 import { postNativeShellMessage } from "../../utils/native-shell";
 import { buildCheckinSubmission } from "./checkin-submission";
+import { resolveMoodFromCheckin } from "./checkin-mood";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -253,6 +254,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           checkinHistory: mappedCheckins && mappedCheckins.length > 0
             ? mappedCheckins
             : current.checkinHistory,
+          mood: mappedCheckins && mappedCheckins.length > 0
+            ? resolveMoodFromCheckin(mappedCheckins[0], current.mood)
+            : current.mood,
           tasks: timeline
             ? timeline.map((t: any) => ({
               id: t.id,
