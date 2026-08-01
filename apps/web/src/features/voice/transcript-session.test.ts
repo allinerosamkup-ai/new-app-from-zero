@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
 import {
+  createTranscriptResultHandler,
   releaseRecognition,
   stopActiveRecognition,
   TranscriptSession,
@@ -125,6 +126,59 @@ describe("TranscriptSession", () => {
       text: "Hoje eu tenho praia com a Erica",
     });
   });
+
+  it("moves Android automatic punctuation to the end of a cumulative phrase", () => {
+    const session = new TranscriptSession();
+
+    assert.deepEqual(session.update(resultList([
+      { isFinal: true, transcript: "Hoje eu tenho praia." },
+      { isFinal: true, transcript: "Hoje eu tenho praia com a Erica" },
+    ])), {
+      finalText: "Hoje eu tenho praia com a Erica.",
+      interimText: "",
+      text: "Hoje eu tenho praia com a Erica.",
+    });
+  });
+
+  it("preserves legitimate one-word emotional repetition between independent results", () => {
+    const emphasis = new TranscriptSession();
+    const paralysis = new TranscriptSession();
+
+    assert.equal(emphasis.update(resultList([
+      { isFinal: true, transcript: "muito" },
+      { isFinal: true, transcript: "muito cansada" },
+    ])).finalText, "muito muito cansada");
+
+    assert.equal(paralysis.update(resultList([
+      { isFinal: true, transcript: "não" },
+      { isFinal: true, transcript: "não consigo" },
+    ])).finalText, "não não consigo");
+  });
+
+  it("compacts final entries absorbed by a long cumulative Android sequence", () => {
+    const session = new TranscriptSession();
+    const cumulative = Array.from({ length: 200 }, (_, index) => ({
+      isFinal: true,
+      transcript: ["Hoje", "eu", "contei", ...Array.from({ length: index + 1 }, (__, part) => `parte${part}`)].join(" "),
+    }));
+
+    const snapshot = session.update(resultList(cumulative));
+    const storedFinals = (session as unknown as { finalByIndex: Map<number, string> }).finalByIndex;
+
+    assert.equal(snapshot.finalText, cumulative.at(-1)?.transcript);
+    assert.equal(storedFinals.size, 1);
+  });
+
+  it("removes the latest hypothesis when the same final index becomes empty", () => {
+    const session = new TranscriptSession();
+    session.update(resultList([{ isFinal: true, transcript: "hipótese incorreta" }]));
+
+    assert.deepEqual(session.update(resultList([{ isFinal: true, transcript: "   " }])), {
+      finalText: "",
+      interimText: "",
+      text: "",
+    });
+  });
 });
 
 describe("recognition lifecycle", () => {
@@ -153,5 +207,26 @@ describe("recognition lifecycle", () => {
     assert.equal(ref.current, newRecognition);
     assert.equal(releaseRecognition(ref, newRecognition), true);
     assert.equal(ref.current, null);
+  });
+});
+
+describe("recognition onresult integration", () => {
+  it("delivers one merged snapshot through the handler used by the central Airia consumer", () => {
+    let received: ReturnType<TranscriptSession["snapshot"]> | null = null;
+    const handler = createTranscriptResultHandler(new TranscriptSession(), (snapshot) => {
+      received = snapshot;
+    });
+    handler({
+      results: resultList([
+        { isFinal: true, transcript: "Hoje eu tenho praia." },
+        { isFinal: true, transcript: "Hoje eu tenho praia com a Erica" },
+      ]),
+    });
+
+    assert.deepEqual(received, {
+      finalText: "Hoje eu tenho praia com a Erica.",
+      interimText: "",
+      text: "Hoje eu tenho praia com a Erica.",
+    });
   });
 });

@@ -14,6 +14,8 @@ export type TranscriptSnapshot = {
   text: string;
 };
 
+export type SpeechResultEventLike = { results: SpeechResultListLike };
+
 export type RecognitionLike = { stop: () => void };
 export type MutableRecognitionRef<T> = { current: T | null };
 
@@ -48,40 +50,87 @@ function comparisonToken(token: string): string {
     .toLowerCase();
 }
 
+const TERMINAL_PUNCTUATION = /([.!?]+)$/u;
+const MINIMUM_CUMULATIVE_OVERLAP = 2;
+
+function comparableTokens(tokens: string[]): string[] {
+  return tokens.map((token, index) => comparisonToken(
+    index === tokens.length - 1 ? token.replace(TERMINAL_PUNCTUATION, "") : token,
+  ));
+}
+
 function hasPrefix(values: string[], prefix: string[]): boolean {
   return prefix.length <= values.length && prefix.every((value, index) => values[index] === value);
 }
 
-function mergeTranscript(left: string, right: string): string {
+type TranscriptMerge = { text: string; absorbed: boolean };
+
+function mergeWithOverlap(leftTokens: string[], rightTokens: string[], overlap: number): string {
+  const preservedLeft = [...leftTokens];
+  const rightRemainder = rightTokens.slice(overlap);
+  const inheritedPunctuation = preservedLeft.at(-1)?.match(TERMINAL_PUNCTUATION)?.[1] ?? "";
+
+  if (rightRemainder.length && inheritedPunctuation) {
+    preservedLeft[preservedLeft.length - 1] = preservedLeft.at(-1)?.replace(TERMINAL_PUNCTUATION, "") ?? "";
+  }
+
+  const merged = [...preservedLeft, ...rightRemainder];
+  if (rightRemainder.length && inheritedPunctuation && !TERMINAL_PUNCTUATION.test(merged.at(-1) ?? "")) {
+    merged[merged.length - 1] = `${merged.at(-1)}${inheritedPunctuation}`;
+  }
+  return merged.join(" ");
+}
+
+function mergeTranscript(left: string, right: string): TranscriptMerge {
   const leftTokens = transcriptTokens(left);
   const rightTokens = transcriptTokens(right);
-  if (!leftTokens.length) return rightTokens.join(" ");
-  if (!rightTokens.length) return leftTokens.join(" ");
+  if (!leftTokens.length) return { text: rightTokens.join(" "), absorbed: false };
+  if (!rightTokens.length) return { text: leftTokens.join(" "), absorbed: true };
 
-  const comparableLeft = leftTokens.map(comparisonToken);
-  const comparableRight = rightTokens.map(comparisonToken);
+  const comparableLeft = comparableTokens(leftTokens);
+  const comparableRight = comparableTokens(rightTokens);
 
-  if (hasPrefix(comparableRight, comparableLeft)) {
-    return [...leftTokens, ...rightTokens.slice(leftTokens.length)].join(" ");
+  if (leftTokens.length >= MINIMUM_CUMULATIVE_OVERLAP && hasPrefix(comparableRight, comparableLeft)) {
+    return { text: mergeWithOverlap(leftTokens, rightTokens, leftTokens.length), absorbed: true };
   }
-  if (hasPrefix(comparableLeft, comparableRight)) {
-    return leftTokens.join(" ");
+  if (rightTokens.length >= MINIMUM_CUMULATIVE_OVERLAP && hasPrefix(comparableLeft, comparableRight)) {
+    return { text: leftTokens.join(" "), absorbed: true };
   }
 
   const maximumOverlap = Math.min(leftTokens.length, rightTokens.length);
-  for (let overlap = maximumOverlap; overlap > 0; overlap -= 1) {
+  for (let overlap = maximumOverlap; overlap >= MINIMUM_CUMULATIVE_OVERLAP; overlap -= 1) {
     const leftSuffix = comparableLeft.slice(-overlap);
     const rightPrefix = comparableRight.slice(0, overlap);
     if (leftSuffix.every((value, index) => value === rightPrefix[index])) {
-      return [...leftTokens, ...rightTokens.slice(overlap)].join(" ");
+      return { text: mergeWithOverlap(leftTokens, rightTokens, overlap), absorbed: true };
     }
   }
 
-  return [...leftTokens, ...rightTokens].join(" ");
+  return { text: [...leftTokens, ...rightTokens].join(" "), absorbed: false };
 }
 
 function mergeTranscripts(parts: string[]): string {
-  return parts.reduce(mergeTranscript, "");
+  return parts.reduce((merged, part) => mergeTranscript(merged, part).text, "");
+}
+
+function compactTranscriptEntries(entries: Map<number, string>): void {
+  const compacted: Array<[number, string]> = [];
+  const ordered = [...entries.entries()].sort(([left], [right]) => left - right);
+
+  for (const [index, transcript] of ordered) {
+    const previous = compacted.at(-1);
+    if (!previous) {
+      compacted.push([index, transcript]);
+      continue;
+    }
+
+    const merged = mergeTranscript(previous[1], transcript);
+    if (merged.absorbed) compacted[compacted.length - 1] = [index, merged.text];
+    else compacted.push([index, transcript]);
+  }
+
+  entries.clear();
+  compacted.forEach(([index, transcript]) => entries.set(index, transcript));
 }
 
 /**
@@ -101,15 +150,17 @@ export class TranscriptSession {
       const transcript = result[0]?.transcript?.trim() ?? "";
 
       if (result.isFinal) {
-        if (transcript) {
-          this.finalByIndex.set(index, transcript);
-        }
+        if (transcript) this.finalByIndex.set(index, transcript);
+        else this.finalByIndex.delete(index);
         this.interimByIndex.delete(index);
       } else if (!this.finalByIndex.has(index)) {
         if (transcript) this.interimByIndex.set(index, transcript);
         else this.interimByIndex.delete(index);
       }
     }
+
+    compactTranscriptEntries(this.finalByIndex);
+    compactTranscriptEntries(this.interimByIndex);
 
     return this.snapshot();
   }
@@ -135,4 +186,11 @@ export class TranscriptSession {
     this.finalByIndex.clear();
     this.interimByIndex.clear();
   }
+}
+
+export function createTranscriptResultHandler(
+  session: TranscriptSession,
+  onSnapshot: (snapshot: TranscriptSnapshot) => void,
+): (event: SpeechResultEventLike) => void {
+  return (event) => onSnapshot(session.update(event.results));
 }
