@@ -231,7 +231,7 @@ async function executeInternalOperation(
   tx: any,
   userId: string,
   databaseOperationId: string,
-  operation: Exclude<AuraCommandOperation, { type: 'create_calendar_event' }>,
+  operation: Exclude<AuraCommandOperation, { type: 'create_calendar_event' | 'adapt_agenda' | 'postpone_timeline_task' }>,
   now: Date,
 ): Promise<Record<string, unknown>> {
   switch (operation.type) {
@@ -802,3 +802,4 @@ export class AuraCommandExecutorService {
     return { planId: plan.id, status, operations: results };
   }
 }
+
