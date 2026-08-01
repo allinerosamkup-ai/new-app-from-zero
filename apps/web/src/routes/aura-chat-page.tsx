@@ -267,6 +267,12 @@ export function AuraChatPage() {
   const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
+    return () => {
+      stopActiveRecognition(recognitionRef);
+    };
+  }, []);
+
+  useEffect(() => {
     // Se já tem sessão persistida, reusa — não cria nova
     if (sessionId) return;
 

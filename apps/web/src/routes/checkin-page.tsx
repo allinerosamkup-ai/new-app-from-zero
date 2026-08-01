@@ -1,5 +1,5 @@
 // Checkin Page v6 — modo expresso (1 tela, predição) + wizard completo opcional
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { useNavigate } from "react-router-dom";
@@ -327,6 +327,17 @@ export function CheckinPage() {
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const voiceSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (voiceSilenceTimerRef.current) {
+        clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = null;
+      }
+      stopActiveRecognition(recognitionRef);
+    };
+  }, []);
 
   const [showAdjust, setShowAdjust] = useState(false);
 
@@ -340,6 +351,10 @@ export function CheckinPage() {
       return;
     }
     if (recognitionRef.current) {
+      if (voiceSilenceTimerRef.current) {
+        clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = null;
+      }
       stopActiveRecognition(recognitionRef);
       setIsListening(false);
       return;
@@ -353,22 +368,27 @@ export function CheckinPage() {
     recognitionRef.current = recognition;
     const transcriptSession = new TranscriptSession();
 
-    let silenceTimer: ReturnType<typeof setTimeout> | null = null;
-
     recognition.onstart = () => setIsListening(true);
     recognition.onerror = () => {
+      if (voiceSilenceTimerRef.current) {
+        clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = null;
+      }
       transcriptSession.reset();
       if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsListening(false);
       setVoiceError(t("checkin.voiceHearRetry"));
     };
     recognition.onresult = createTranscriptResultHandler(transcriptSession, (snapshot) => {
-      if (silenceTimer) clearTimeout(silenceTimer);
+      if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
       setVoiceTranscript(snapshot.text);
-      silenceTimer = setTimeout(() => recognition.stop(), 2500);
+      voiceSilenceTimerRef.current = setTimeout(() => recognition.stop(), 2500);
     });
     recognition.onend = async () => {
-      if (silenceTimer) clearTimeout(silenceTimer);
+      if (voiceSilenceTimerRef.current) {
+        clearTimeout(voiceSilenceTimerRef.current);
+        voiceSilenceTimerRef.current = null;
+      }
       const transcript = transcriptSession.snapshot().finalText;
       transcriptSession.reset();
       if (!releaseRecognition(recognitionRef, recognition)) return;

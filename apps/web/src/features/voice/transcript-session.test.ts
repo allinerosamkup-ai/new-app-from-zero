@@ -138,6 +138,31 @@ describe("TranscriptSession", () => {
     });
   });
 
+  it("removes interim indexes that disappear while preserving confirmed finals", () => {
+    const interimOnly = new TranscriptSession();
+    interimOnly.update(resultList([{ isFinal: false, transcript: "frase provisória" }]));
+
+    assert.deepEqual(interimOnly.update(resultList([])), {
+      finalText: "",
+      interimText: "",
+      text: "",
+    });
+
+    const withFinal = new TranscriptSession();
+    withFinal.update(resultList([
+      { isFinal: true, transcript: "frase confirmada" },
+      { isFinal: false, transcript: "continuação provisória" },
+    ]));
+
+    assert.deepEqual(withFinal.update(resultList([
+      { isFinal: true, transcript: "frase confirmada" },
+    ]), 1), {
+      finalText: "frase confirmada",
+      interimText: "",
+      text: "frase confirmada",
+    });
+  });
+
   it("moves Android automatic punctuation to the end of a cumulative phrase", () => {
     const session = new TranscriptSession();
 
@@ -313,5 +338,19 @@ describe("voice consumer wiring", () => {
   it("avoids Array.at in the shared module for older PWA runtimes", () => {
     const source = readFileSync(resolve(webSourceRoot, "features/voice/transcript-session.ts"), "utf8");
     assert.doesNotMatch(source, /\.at\(/);
+  });
+
+  it("stops active recognition on unmount in all four voice surfaces", () => {
+    voiceRoutes.forEach((route) => {
+      const source = readFileSync(resolve(webSourceRoot, "routes", route), "utf8");
+      const cleanup = /useEffect\(\(\) => \{\s*return \(\) => \{[\s\S]{0,500}?stopActiveRecognition\(recognitionRef\);[\s\S]{0,300}?\};\s*\}, \[\]\);/;
+      assert.equal(cleanup.test(source), true, `${route} precisa encerrar o reconhecimento no unmount`);
+    });
+  });
+
+  it("clears the check-in silence timer during voice cleanup", () => {
+    const source = readFileSync(resolve(webSourceRoot, "routes/checkin-page.tsx"), "utf8");
+    assert.equal(/voiceSilenceTimerRef/.test(source), true, "check-in precisa manter o timer em ref");
+    assert.equal(/clearTimeout\(voiceSilenceTimerRef\.current\)/.test(source), true, "check-in precisa limpar o timer");
   });
 });

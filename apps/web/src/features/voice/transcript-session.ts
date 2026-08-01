@@ -159,6 +159,10 @@ export class TranscriptSession {
   private readonly interimByIndex = new Map<number, string>();
 
   update(results: SpeechResultListLike, resultIndex = 0): TranscriptSnapshot {
+    for (const index of this.interimByIndex.keys()) {
+      if (index >= results.length) this.interimByIndex.delete(index);
+    }
+
     for (let index = Math.max(0, resultIndex); index < results.length; index += 1) {
       const result = results[index];
       if (!result) continue;
