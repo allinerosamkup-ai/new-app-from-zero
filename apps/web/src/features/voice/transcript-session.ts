@@ -14,7 +14,10 @@ export type TranscriptSnapshot = {
   text: string;
 };
 
-export type SpeechResultEventLike = { results: SpeechResultListLike };
+export type SpeechResultEventLike = {
+  results: SpeechResultListLike;
+  resultIndex: number;
+};
 
 export type RecognitionLike = { stop: () => void };
 export type MutableRecognitionRef<T> = { current: T | null };
@@ -45,18 +48,16 @@ function transcriptTokens(text: string): string[] {
 
 function comparisonToken(token: string): string {
   return token
+    .replace(/^\p{P}+|\p{P}+$/gu, "")
     .normalize("NFD")
     .replace(/\p{M}/gu, "")
     .toLowerCase();
 }
 
 const TERMINAL_PUNCTUATION = /([.!?]+)$/u;
-const MINIMUM_CUMULATIVE_OVERLAP = 2;
 
 function comparableTokens(tokens: string[]): string[] {
-  return tokens.map((token, index) => comparisonToken(
-    index === tokens.length - 1 ? token.replace(TERMINAL_PUNCTUATION, "") : token,
-  ));
+  return tokens.map(comparisonToken);
 }
 
 function hasPrefix(values: string[], prefix: string[]): boolean {
@@ -65,18 +66,29 @@ function hasPrefix(values: string[], prefix: string[]): boolean {
 
 type TranscriptMerge = { text: string; absorbed: boolean };
 
+/**
+ * One or two repeated words can be intentional emphasis ("eu não, eu não consigo").
+ * Treat them as cumulative only when the recognizer adds at least two new words;
+ * overlaps of three or more words are strong enough evidence by themselves.
+ */
+function hasCumulativeEvidence(overlap: number, addedTokens: number): boolean {
+  return overlap > 2 || addedTokens > 1;
+}
+
 function mergeWithOverlap(leftTokens: string[], rightTokens: string[], overlap: number): string {
   const preservedLeft = [...leftTokens];
   const rightRemainder = rightTokens.slice(overlap);
-  const inheritedPunctuation = preservedLeft.at(-1)?.match(TERMINAL_PUNCTUATION)?.[1] ?? "";
+  const lastLeftIndex = preservedLeft.length - 1;
+  const inheritedPunctuation = preservedLeft[lastLeftIndex]?.match(TERMINAL_PUNCTUATION)?.[1] ?? "";
 
   if (rightRemainder.length && inheritedPunctuation) {
-    preservedLeft[preservedLeft.length - 1] = preservedLeft.at(-1)?.replace(TERMINAL_PUNCTUATION, "") ?? "";
+    preservedLeft[lastLeftIndex] = preservedLeft[lastLeftIndex]?.replace(TERMINAL_PUNCTUATION, "") ?? "";
   }
 
   const merged = [...preservedLeft, ...rightRemainder];
-  if (rightRemainder.length && inheritedPunctuation && !TERMINAL_PUNCTUATION.test(merged.at(-1) ?? "")) {
-    merged[merged.length - 1] = `${merged.at(-1)}${inheritedPunctuation}`;
+  const lastMergedIndex = merged.length - 1;
+  if (rightRemainder.length && inheritedPunctuation && !TERMINAL_PUNCTUATION.test(merged[lastMergedIndex] ?? "")) {
+    merged[lastMergedIndex] = `${merged[lastMergedIndex]}${inheritedPunctuation}`;
   }
   return merged.join(" ");
 }
@@ -90,18 +102,21 @@ function mergeTranscript(left: string, right: string): TranscriptMerge {
   const comparableLeft = comparableTokens(leftTokens);
   const comparableRight = comparableTokens(rightTokens);
 
-  if (leftTokens.length >= MINIMUM_CUMULATIVE_OVERLAP && hasPrefix(comparableRight, comparableLeft)) {
+  const rightGrowth = rightTokens.length - leftTokens.length;
+  if (hasCumulativeEvidence(leftTokens.length, rightGrowth) && hasPrefix(comparableRight, comparableLeft)) {
     return { text: mergeWithOverlap(leftTokens, rightTokens, leftTokens.length), absorbed: true };
   }
-  if (rightTokens.length >= MINIMUM_CUMULATIVE_OVERLAP && hasPrefix(comparableLeft, comparableRight)) {
+  if (hasCumulativeEvidence(rightTokens.length, 0) && hasPrefix(comparableLeft, comparableRight)) {
     return { text: leftTokens.join(" "), absorbed: true };
   }
 
   const maximumOverlap = Math.min(leftTokens.length, rightTokens.length);
-  for (let overlap = maximumOverlap; overlap >= MINIMUM_CUMULATIVE_OVERLAP; overlap -= 1) {
+  for (let overlap = maximumOverlap; overlap > 0; overlap -= 1) {
     const leftSuffix = comparableLeft.slice(-overlap);
     const rightPrefix = comparableRight.slice(0, overlap);
-    if (leftSuffix.every((value, index) => value === rightPrefix[index])) {
+    const addedTokens = rightTokens.length - overlap;
+    if (hasCumulativeEvidence(overlap, addedTokens)
+      && leftSuffix.every((value, index) => value === rightPrefix[index])) {
       return { text: mergeWithOverlap(leftTokens, rightTokens, overlap), absorbed: true };
     }
   }
@@ -118,7 +133,7 @@ function compactTranscriptEntries(entries: Map<number, string>): void {
   const ordered = [...entries.entries()].sort(([left], [right]) => left - right);
 
   for (const [index, transcript] of ordered) {
-    const previous = compacted.at(-1);
+    const previous = compacted[compacted.length - 1];
     if (!previous) {
       compacted.push([index, transcript]);
       continue;
@@ -143,8 +158,8 @@ export class TranscriptSession {
   private readonly finalByIndex = new Map<number, string>();
   private readonly interimByIndex = new Map<number, string>();
 
-  update(results: SpeechResultListLike): TranscriptSnapshot {
-    for (let index = 0; index < results.length; index += 1) {
+  update(results: SpeechResultListLike, resultIndex = 0): TranscriptSnapshot {
+    for (let index = Math.max(0, resultIndex); index < results.length; index += 1) {
       const result = results[index];
       if (!result) continue;
       const transcript = result[0]?.transcript?.trim() ?? "";
@@ -192,5 +207,5 @@ export function createTranscriptResultHandler(
   session: TranscriptSession,
   onSnapshot: (snapshot: TranscriptSnapshot) => void,
 ): (event: SpeechResultEventLike) => void {
-  return (event) => onSnapshot(session.update(event.results));
+  return (event) => onSnapshot(session.update(event.results, event.resultIndex));
 }

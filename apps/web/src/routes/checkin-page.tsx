@@ -18,7 +18,12 @@ import {
 import { ChevronLeft, Check, Mic, MicOff, Loader } from "lucide-react";
 import { api } from "../lib/api";
 import { computeMenstrualPhase } from "../utils/menstrual-phase";
-import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
+import {
+  createTranscriptResultHandler,
+  releaseRecognition,
+  stopActiveRecognition,
+  TranscriptSession,
+} from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -357,12 +362,11 @@ export function CheckinPage() {
       setIsListening(false);
       setVoiceError(t("checkin.voiceHearRetry"));
     };
-    recognition.onresult = (event: any) => {
+    recognition.onresult = createTranscriptResultHandler(transcriptSession, (snapshot) => {
       if (silenceTimer) clearTimeout(silenceTimer);
-      const snapshot = transcriptSession.update(event.results);
       setVoiceTranscript(snapshot.text);
       silenceTimer = setTimeout(() => recognition.stop(), 2500);
-    };
+    });
     recognition.onend = async () => {
       if (silenceTimer) clearTimeout(silenceTimer);
       const transcript = transcriptSession.snapshot().finalText;

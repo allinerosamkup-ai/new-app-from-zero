@@ -71,7 +71,12 @@ import {
 import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
-import { releaseRecognition, stopActiveRecognition, TranscriptSession } from "../features/voice/transcript-session";
+import {
+  createTranscriptResultHandler,
+  releaseRecognition,
+  stopActiveRecognition,
+  TranscriptSession,
+} from "../features/voice/transcript-session";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -721,13 +726,12 @@ const NoteSection = React.memo(function NoteSection({
     recognition.interimResults = true;
     const transcriptSession = new TranscriptSession();
     voiceNoteBaseRef.current = form.note;
-    recognition.onresult = (event: any) => {
-      const snapshot = transcriptSession.update(event.results);
+    recognition.onresult = createTranscriptResultHandler(transcriptSession, (snapshot) => {
       setForm((current) => ({
         ...current,
         note: [voiceNoteBaseRef.current.trim(), snapshot.text].filter(Boolean).join(" "),
       }));
-    };
+    });
     recognition.onend = () => {
       transcriptSession.reset();
       if (!releaseRecognition(recognitionRef, recognition)) return;

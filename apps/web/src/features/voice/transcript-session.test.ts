@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it } from "vitest";
 
 import {
@@ -9,10 +11,19 @@ import {
   type SpeechResultListLike,
 } from "./transcript-session";
 
-function resultList(items: Array<{ isFinal: boolean; transcript: string }>): SpeechResultListLike {
+function resultList(
+  items: Array<{ isFinal: boolean; transcript: string }>,
+  onRead?: () => void,
+): SpeechResultListLike {
   const list: Record<string | number, unknown> = { length: items.length };
   items.forEach((item, index) => {
-    list[index] = { isFinal: item.isFinal, 0: { transcript: item.transcript } };
+    Object.defineProperty(list, index, {
+      enumerable: true,
+      get: () => {
+        onRead?.();
+        return { isFinal: item.isFinal, 0: { transcript: item.transcript } };
+      },
+    });
   });
   return list as unknown as SpeechResultListLike;
 }
@@ -155,18 +166,65 @@ describe("TranscriptSession", () => {
     ])).finalText, "não não consigo");
   });
 
-  it("compacts final entries absorbed by a long cumulative Android sequence", () => {
-    const session = new TranscriptSession();
-    const cumulative = Array.from({ length: 200 }, (_, index) => ({
-      isFinal: true,
-      transcript: ["Hoje", "eu", "contei", ...Array.from({ length: index + 1 }, (__, part) => `parte${part}`)].join(" "),
-    }));
+  it("preserves short emotional prefix and exact repetition with at most one new token", () => {
+    const paralysis = new TranscriptSession();
+    const repeated = new TranscriptSession();
 
-    const snapshot = session.update(resultList(cumulative));
+    assert.equal(paralysis.update(resultList([
+      { isFinal: true, transcript: "eu não" },
+      { isFinal: true, transcript: "eu não consigo" },
+    ])).finalText, "eu não eu não consigo");
+
+    assert.equal(repeated.update(resultList([
+      { isFinal: true, transcript: "não consigo" },
+      { isFinal: true, transcript: "não consigo" },
+    ])).finalText, "não consigo não consigo");
+  });
+
+  it("ignores Unicode edge punctuation only for comparison while preserving displayed punctuation", () => {
+    const prefix = new TranscriptSession();
+    const overlap = new TranscriptSession();
+
+    assert.equal(prefix.update(resultList([
+      { isFinal: true, transcript: "Hoje, eu tenho praia" },
+      { isFinal: true, transcript: "“Hoje” eu tenho praia com a Erica" },
+    ])).finalText, "Hoje, eu tenho praia com a Erica");
+
+    assert.equal(overlap.update(resultList([
+      { isFinal: true, transcript: "Eu falei: com a Érica;" },
+      { isFinal: true, transcript: "“com a Erica” e descansei" },
+    ])).finalText, "Eu falei: com a Érica; e descansei");
+  });
+
+  it("processes and compacts 200 successive cumulative Android events from resultIndex", () => {
+    const session = new TranscriptSession();
+    const cumulative: Array<{ isFinal: boolean; transcript: string }> = [];
+    let resultReads = 0;
+    let snapshot = session.snapshot();
+
+    for (let index = 0; index < 200; index += 1) {
+      cumulative.push({
+        isFinal: true,
+        transcript: ["Hoje", "eu", "contei", ...Array.from({ length: index + 1 }, (__, part) => `parte${part}`)].join(" "),
+      });
+      snapshot = session.update(resultList(cumulative, () => { resultReads += 1; }), index);
+    }
+
     const storedFinals = (session as unknown as { finalByIndex: Map<number, string> }).finalByIndex;
 
-    assert.equal(snapshot.finalText, cumulative.at(-1)?.transcript);
+    assert.equal(snapshot.finalText, cumulative[cumulative.length - 1]?.transcript);
     assert.equal(storedFinals.size, 1);
+    assert.equal(resultReads, 200);
+  });
+
+  it("does not reprocess stable indexes before resultIndex", () => {
+    const session = new TranscriptSession();
+    session.update(resultList([{ isFinal: true, transcript: "trecho preservado" }]));
+
+    assert.equal(session.update(resultList([
+      { isFinal: true, transcript: "trecho que não deve voltar" },
+      { isFinal: true, transcript: "novo trecho" },
+    ]), 1).finalText, "trecho preservado novo trecho");
   });
 
   it("removes the latest hypothesis when the same final index becomes empty", () => {
@@ -211,22 +269,49 @@ describe("recognition lifecycle", () => {
 });
 
 describe("recognition onresult integration", () => {
-  it("delivers one merged snapshot through the handler used by the central Airia consumer", () => {
+  it("forwards event.resultIndex through the handler used by voice consumers", () => {
     let received: ReturnType<TranscriptSession["snapshot"]> | null = null;
-    const handler = createTranscriptResultHandler(new TranscriptSession(), (snapshot) => {
+    const session = new TranscriptSession();
+    session.update(resultList([{ isFinal: true, transcript: "trecho preservado" }]));
+    const handler = createTranscriptResultHandler(session, (snapshot) => {
       received = snapshot;
     });
     handler({
       results: resultList([
-        { isFinal: true, transcript: "Hoje eu tenho praia." },
-        { isFinal: true, transcript: "Hoje eu tenho praia com a Erica" },
+        { isFinal: true, transcript: "trecho que não deve voltar" },
+        { isFinal: true, transcript: "novo trecho" },
       ]),
+      resultIndex: 1,
     });
 
     assert.deepEqual(received, {
-      finalText: "Hoje eu tenho praia com a Erica.",
+      finalText: "trecho preservado novo trecho",
       interimText: "",
-      text: "Hoje eu tenho praia com a Erica.",
+      text: "trecho preservado novo trecho",
     });
+  });
+});
+
+describe("voice consumer wiring", () => {
+  const webSourceRoot = existsSync(resolve(process.cwd(), "src/features/voice/transcript-session.ts"))
+    ? resolve(process.cwd(), "src")
+    : resolve(process.cwd(), "apps/web/src");
+  const voiceRoutes = [
+    "aura-chat-page.tsx",
+    "checkin-page.tsx",
+    "journal-page.tsx",
+    "planner-page.tsx",
+  ];
+
+  it("uses the shared resultIndex-aware handler on all four voice surfaces", () => {
+    voiceRoutes.forEach((route) => {
+      const source = readFileSync(resolve(webSourceRoot, "routes", route), "utf8");
+      assert.match(source, /recognition\.onresult\s*=\s*createTranscriptResultHandler\(/, route);
+    });
+  });
+
+  it("avoids Array.at in the shared module for older PWA runtimes", () => {
+    const source = readFileSync(resolve(webSourceRoot, "features/voice/transcript-session.ts"), "utf8");
+    assert.doesNotMatch(source, /\.at\(/);
   });
 });
