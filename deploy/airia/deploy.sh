@@ -38,7 +38,7 @@ docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
 
 echo "== Database migration =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" run --rm --no-deps -T airia_backend \
-  npx prisma db execute --schema=/app/packages/database/prisma/schema.prisma --stdin \
+  sh -lc 'npx prisma db execute --url="$DIRECT_URL" --stdin' \
   < "$CHECKIN_MIGRATION"
 
 echo "== Deploy =="
