@@ -51,9 +51,18 @@ function cleanTitle(value: string): string {
 }
 
 function extractTaskTitle(message: string): string | null {
-  const match = /(?:tarefa|lembrete)\s+(.+?)(?=\s+(?:amanh[ãa]|hoje|depois\s+de\s+amanh[ãa])(?:\s|[.!?]|$)|[.!?](?:\s|$)|$)/i.exec(message);
-  const title = cleanTitle(match?.[1] ?? '');
+  const typed = /(?:tarefa|lembrete)\s+(.+?)(?=\s+(?:amanh[ãa]|hoje|depois\s+de\s+amanh[ãa])(?:\s|[.!?]|$)|[.!?](?:\s|$)|$)/i.exec(message);
+  const implicit = /(?:preciso|tenho\s+(?:que|de)|n[aã]o\s+posso\s+esquecer\s+de)\s+(.+?)(?=\s+(?:hoje|amanh[ãa]|depois\s+de\s+amanh[ãa]|segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo)(?:\s|[.!?]|$)|[.!?](?:\s|$)|$)/i.exec(message);
+  const title = cleanTitle(typed?.[1] ?? implicit?.[1] ?? '');
   return title || null;
+}
+
+function extractTaskTime(message: string): string | null {
+  const source = normalized(message);
+  const match = /\b(?:as|a)\s+([01]?\d|2[0-3])(?::([0-5]\d))?\s*h?\b/.exec(source)
+    ?? /\b([01]?\d|2[0-3]):([0-5]\d)\b/.exec(source);
+  if (!match) return null;
+  return `${String(Number(match[1])).padStart(2, '0')}:${match[2] ?? '00'}`;
 }
 
 function extractGoalTitle(message: string): string | null {
@@ -95,18 +104,43 @@ function extractScore(message: string, labels: string[]): number | null {
 function recoverTask(input: RecoveryInput): AuraCommandResponse | null {
   const title = extractTaskTitle(input.message);
   if (!title) return null;
+  const startTime = extractTaskTime(input.message);
   return {
-    assistantMessage: 'Entendi. Vou colocar a tarefa no Planner e escolher o melhor horário livre para o seu dia.',
+    assistantMessage: startTime
+      ? 'Entendi. Vou colocar a tarefa no Planner no horário que você informou.'
+      : 'Entendi. Vou colocar a tarefa no Planner e escolher o melhor horário livre para o seu dia.',
     intent: 'planner_task',
     action: 'create_task',
     payload: {
       title,
       date: relativeDate(input.message, input.localDate),
-      autoScheduleRequested: true,
+      ...(startTime ? { startTime } : {}),
+      autoScheduleRequested: !startTime,
     },
     needsConfirmation: false,
     needsClarification: false,
     clarifyingQuestion: null,
+  };
+}
+
+function appendReadyCheckin(
+  response: AuraCommandResponse,
+  input: RecoveryInput,
+  allowed: Set<string>,
+): AuraCommandResponse {
+  if (!allowed.has('record_checkin') || response.action === 'record_checkin'
+    || response.actions?.some((action) => action.action === 'record_checkin')) return response;
+  const checkin = recoverCheckin(input);
+  if (!checkin || checkin.action !== 'record_checkin') return response;
+  return {
+    ...response,
+    assistantMessage: response.action === 'create_task'
+      ? 'Entendi como você está agora. Vou registrar o check-in e colocar a tarefa no Planner.'
+      : response.assistantMessage,
+    actions: [
+      ...(response.actions ?? []),
+      { action: checkin.action, payload: checkin.payload },
+    ],
   };
 }
 
@@ -210,6 +244,7 @@ export function recoverAuraCommandResponse(input: RecoveryInput): AuraCommandRes
   const typedTaskCommand = input.captureJudgment.captureAs === 'task'
     && allowed.has('create_task')
     && isExplicitTypedTaskCommand(input.message);
+  const taskAuthorized = input.captureJudgment.captureAs === 'task' && allowed.has('create_task');
   if (
     MUTATING_ACTIONS.has(input.response.action)
     && allowed.has(input.response.action)
@@ -222,11 +257,15 @@ export function recoverAuraCommandResponse(input: RecoveryInput): AuraCommandRes
       && typedTaskCommand
       && !hasExplicitTaskTime(input.message)
     ) {
-      return recoverTask(input) ?? input.response;
+      return appendReadyCheckin(recoverTask(input) ?? input.response, input, allowed);
     }
-    return input.response;
+    return appendReadyCheckin(input.response, input, allowed);
   }
   const checkinAuthorized = input.captureJudgment.captureAs === 'checkin' && allowed.has('record_checkin');
+  if (taskAuthorized) {
+    const recoveredTask = recoverTask(input);
+    if (recoveredTask) return appendReadyCheckin(recoveredTask, input, allowed);
+  }
   if (input.captureJudgment.explicitness !== 'explicit' && !typedTaskCommand && !checkinAuthorized) return input.response;
 
   if (allowed.has('create_goal')) return recoverGoal(input) ?? input.response;

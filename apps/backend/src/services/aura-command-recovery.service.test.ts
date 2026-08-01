@@ -83,6 +83,44 @@ function run() {
   assert.equal(taskWithInventedTime.payload.startTime, undefined);
   assert.equal(taskWithInventedTime.payload.category, undefined);
 
+  const implicitTimedTaskAfterConversation = recoverAuraCommandResponse({
+    response: {
+      ...baseResponse,
+      intent: 'conversation',
+      action: 'respond',
+      assistantMessage: 'Quer que eu só repita esse horário para você?',
+    },
+    message: 'Estou cansada e preciso comprar ração amanhã às 10h.',
+    localDate: '2026-07-31',
+    captureJudgment: {
+      captureAs: 'task',
+      captureMode: 'propose',
+      explicitness: 'implicit',
+      allowedMutationActions: ['create_task', 'create_checklist', 'record_checkin'],
+    },
+  });
+  assert.equal(implicitTimedTaskAfterConversation.action, 'create_task');
+  assert.equal(implicitTimedTaskAfterConversation.payload.title, 'comprar ração');
+  assert.equal(implicitTimedTaskAfterConversation.payload.date, '2026-08-01');
+  assert.equal(implicitTimedTaskAfterConversation.payload.startTime, '10:00');
+  assert.equal(implicitTimedTaskAfterConversation.payload.autoScheduleRequested, false);
+
+  const implicitTaskWithCompleteState = recoverAuraCommandResponse({
+    response: { ...baseResponse, intent: 'conversation', action: 'respond' },
+    message: 'Estou chateada e cansada e preciso comprar ração amanhã às 10h.',
+    localDate: '2026-07-31',
+    captureJudgment: {
+      captureAs: 'task',
+      captureMode: 'propose',
+      explicitness: 'implicit',
+      allowedMutationActions: ['create_task', 'create_checklist', 'record_checkin'],
+    },
+  });
+  assert.equal(implicitTaskWithCompleteState.action, 'create_task');
+  assert.equal(implicitTaskWithCompleteState.actions?.[0]?.action, 'record_checkin');
+  assert.equal(implicitTaskWithCompleteState.actions?.[0]?.payload.moodScore, 3);
+  assert.equal(implicitTaskWithCompleteState.actions?.[0]?.payload.energyScore, 3);
+
   const goal = recoverAuraCommandResponse({
     response: { ...baseResponse, intent: 'conversation', action: 'respond' },
     message: 'Quero como meta [TESTE DE PUBLICAÇÃO] organizar meu portfólio profissional. Divida em pequenas ações e adicione à minha página de metas.',

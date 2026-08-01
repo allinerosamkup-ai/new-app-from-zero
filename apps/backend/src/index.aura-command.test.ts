@@ -11,6 +11,7 @@ async function run() {
   const createdSessions: any[] = [];
   const savedMessages: any[] = [];
   const updatedBlocks: any[] = [];
+  const createdBlocks: any[] = [];
   const commandMessages: any[] = [];
   const commandPlans: any[] = [];
   const commandOperations: any[] = [];
@@ -336,6 +337,11 @@ async function run() {
         updatedBlocks.push({ where, data });
         return { id: where.id, ...data };
       },
+      create: async ({ data }: any) => {
+        const block = { id: `task-${createdBlocks.length + 2}`, ...data };
+        createdBlocks.push(block);
+        return block;
+      },
       delete: async () => ({}),
     },
     journalSession: {
@@ -534,6 +540,68 @@ async function run() {
     assert.equal(savedCheckins.length, 1);
     assert.equal(savedCheckins[0].moodScore, 3);
     assert.equal(savedCheckins[0].energyScore, 3);
+
+    const combinedCommandResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7c21',
+        message: 'Estou chateada e cansada e preciso comprar ração amanhã às 10h.',
+        localDate: '2026-04-07',
+        mode: 'executor',
+        history: [
+          { role: 'user', content: 'Só estou desabafando. Não crie nada.' },
+          { role: 'assistant', content: 'Tudo bem, vou apenas te ouvir.' },
+        ],
+      }),
+    });
+    const combinedCommandBody = await readResponseText(combinedCommandResponse);
+    const combinedCompletedFrame = combinedCommandBody
+      .split('\n')
+      .find((line) => line.startsWith('data: ') && line.includes('"plan"'));
+    assert.equal(combinedCommandResponse.status, 200);
+    assert.ok(combinedCompletedFrame);
+    const combinedCompleted = JSON.parse(combinedCompletedFrame.slice(6));
+    assert.equal(combinedCompleted.response.action, 'create_task');
+    assert.equal(combinedCompleted.response.actions[0].action, 'record_checkin');
+    assert.deepEqual(combinedCompleted.plan.operations.map((operation: any) => operation.type), [
+      'create_planner_task',
+      'record_checkin',
+    ]);
+    assert.equal(combinedCompleted.execution.status, 'applied');
+    assert.equal(createdBlocks.length, 1);
+    assert.equal(createdBlocks[0].title, 'comprar ração');
+    assert.equal(createdBlocks[0].startAt.toISOString(), '2026-04-08T10:00:00.000Z');
+    assert.equal(savedCheckins.length, 2);
+
+    const energyAndTaskResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        sessionId: '7a0f7c1e-1f25-4d9a-8b9a-b3d2df6a7c22',
+        message: 'Estou cansada e preciso comprar ração amanhã às 10h.',
+        localDate: '2026-04-07',
+        mode: 'executor',
+        history: [
+          { role: 'user', content: 'Só estou desabafando. Não crie nada.' },
+          { role: 'assistant', content: 'Tudo bem, vou apenas te ouvir.' },
+        ],
+      }),
+    });
+    const energyAndTaskBody = await readResponseText(energyAndTaskResponse);
+    const energyAndTaskFrame = energyAndTaskBody
+      .split('\n')
+      .find((line) => line.startsWith('data: ') && line.includes('"plan"'));
+    assert.equal(energyAndTaskResponse.status, 200);
+    assert.ok(energyAndTaskFrame);
+    const energyAndTaskCompleted = JSON.parse(energyAndTaskFrame.slice(6));
+    assert.equal(energyAndTaskCompleted.response.action, 'create_task');
+    assert.deepEqual(energyAndTaskCompleted.plan.operations.map((operation: any) => operation.type), [
+      'create_planner_task',
+    ]);
+    assert.equal(energyAndTaskCompleted.execution.status, 'applied');
+    assert.equal(createdBlocks.length, 2);
+    assert.equal(savedCheckins.length, 2, 'energia isolada não deve inventar humor para completar check-in');
 
     const longCommandResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
       method: 'POST',
