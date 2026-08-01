@@ -649,6 +649,12 @@ const NoteSection = React.memo(function NoteSection({
   const [isRecording, setIsRecording] = useState(false);
   const { showError } = useToast();
 
+  useEffect(() => {
+    return () => {
+      stopActiveRecognition(recognitionRef);
+    };
+  }, []);
+
   async function letAuraOrganize() {
     setAiLoading("content");
     try {
