@@ -46,11 +46,11 @@ export function ActivationChecklist({ activation }: Props) {
             style={{
               minHeight: 92,
               borderRadius: 16,
-              border: `1.5px solid ${done ? "rgba(80,112,91,.26)" : current ? "rgba(244,190,168,.42)" : "var(--warm-border)"}`,
+              border: `1.5px solid ${done ? "rgba(80,112,91,.26)" : current ? "rgba(191,220,203,.42)" : "var(--warm-border)"}`,
               background: done
                 ? "rgba(191,220,203,.14)"
                 : current
-                  ? "rgba(244,190,168,.12)"
+                  ? "rgba(191,220,203,.12)"
                   : "rgba(255,255,255,.72)",
               padding: "10px 8px",
               display: "flex",

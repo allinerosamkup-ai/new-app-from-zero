@@ -43,14 +43,14 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
         marginTop: 10,
         padding: 13,
         borderRadius: 16,
-        background: isCrisis ? "rgba(138,70,58,.10)" : "rgba(161,125,108,.08)",
-        border: isCrisis ? "1.5px solid rgba(138,70,58,.34)" : "1px solid rgba(161,125,108,.24)",
+        background: isCrisis ? "rgba(63,110,86,.10)" : "rgba(111,148,128,.08)",
+        border: isCrisis ? "1.5px solid rgba(63,110,86,.34)" : "1px solid rgba(111,148,128,.24)",
       }}
     >
-      <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: isCrisis ? "#8A463A" : "#8A5D4B" }}>
+      <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: isCrisis ? "#3F6E56" : "#4B7A62" }}>
         {isCrisis ? t("safety.crisisProtocol") : t("safety.safetyLayer")}
       </p>
-      <p style={{ margin: "0 0 9px", fontSize: 13, lineHeight: 1.55, color: "#5E4036", fontWeight: 750 }}>
+      <p style={{ margin: "0 0 9px", fontSize: 13, lineHeight: 1.55, color: "#36584A", fontWeight: 750 }}>
         {isCrisis
           ? t("safety.crisisBody")
           : t("safety.humanBody")}
@@ -59,7 +59,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
       {riskSafety.signals.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
           {riskSafety.signals.slice(0, 3).map((signal) => (
-            <span key={signal} style={{ fontSize: 10.5, fontWeight: 750, color: "#6F4D40", borderRadius: 999, padding: "4px 8px", background: "rgba(255,255,255,.58)", border: "1px solid rgba(111,77,64,.14)" }}>
+            <span key={signal} style={{ fontSize: 10.5, fontWeight: 750, color: "#3E6B54", borderRadius: 999, padding: "4px 8px", background: "rgba(255,255,255,.58)", border: "1px solid rgba(74,107,91,.14)" }}>
               {signal}
             </span>
           ))}
@@ -70,14 +70,14 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
         <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
           {supportResources.map((resource) => (
             <div key={resource.label} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 9px", borderRadius: 10, background: "rgba(255,255,255,.62)" }}>
-              <strong style={{ fontSize: 12, color: "#50362F" }}>{resource.label}</strong>
-              <span style={{ fontSize: 11, color: "#70564E", textAlign: "right" }}>{resource.detail}</span>
+              <strong style={{ fontSize: 12, color: "#2E4B3E" }}>{resource.label}</strong>
+              <span style={{ fontSize: 11, color: "#4A6B5B", textAlign: "right" }}>{resource.detail}</span>
             </div>
           ))}
         </div>
       )}
 
-      <p style={{ margin: "0 0 10px", fontSize: 11.5, lineHeight: 1.55, color: "#6F4D40" }}>
+      <p style={{ margin: "0 0 10px", fontSize: 11.5, lineHeight: 1.55, color: "#3E6B54" }}>
         {t("safety.emergency")}
       </p>
 

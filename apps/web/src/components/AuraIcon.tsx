@@ -5,6 +5,10 @@ import React from "react";
  * < 18px → versão micro: 3 círculos compactos (legível em botões pequenos).
  * ≥ 18px → versão completa: 4 círculos pastel + centro champagne.
  * variant="hybrid" → círculos + anéis de ripple (mesma DNA do logo de fundo, mas interativo).
+ *
+ * NÃO REPINTAR. Estas cores são a marca e ficaram de fora da virada da
+ * identidade para verde de propósito — a logo mantém a paleta original mesmo
+ * com o resto do app em verde. Varreduras de cor devem pular este arquivo.
  */
 export function AuraIcon({
   size = 16,

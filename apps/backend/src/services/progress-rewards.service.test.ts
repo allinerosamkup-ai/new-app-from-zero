@@ -4,6 +4,7 @@ import {
   XP_BY_KIND,
   buildCelebration,
   buildCompletionReward,
+  computeGoalCounters,
   computeProgress,
   computeStreak,
   levelFromXp,
@@ -175,6 +176,74 @@ const day = (n: number) => `2026-07-${String(n).padStart(2, '0')}`;
   for (const texto of textos) {
     assert.doesNotMatch(texto, /faltou|faltam|ainda|ontem|ao menos|pelo menos|finalmente|at[ée] que enfim|demorou/i, texto);
   }
+}
+
+// ── Objetivos: recompensa por micro-ação e por objetivo fechado ──────────────
+{
+  const acao = buildCompletionReward({ title: 'Separar os papéis', kind: 'goal_action_done', today: day(22) });
+  assert.equal(acao.xpEarned, 12, 'micro-ação de objetivo tem que valer mais que hábito (8)');
+  assert.equal(acao.intensity, 'small');
+
+  // Objetivo inteiro é o evento mais raro do app: sempre grande, mesmo sem
+  // subir de nível e sem marco de sequência.
+  const objetivo = buildCompletionReward({ title: 'Organizar o quarto', kind: 'goal_completed', today: day(22) });
+  assert.equal(objetivo.xpEarned, 60);
+  assert.equal(objetivo.intensity, 'big', 'objetivo fechado não pode chegar com o mesmo peso de uma tarefa');
+  assert.equal(objetivo.animation, 'confetti');
+  assert.notEqual(objetivo.headline, acao.headline, 'objetivo fechado precisa de frase própria');
+
+  // A regra da casa vale aqui também: nada de cobrança nem comparação.
+  for (const title of ['Organizar o quarto', 'Terminar o curso', 'Vender as camas']) {
+    const reward = buildCompletionReward({ title, kind: 'goal_completed', today: day(22) });
+    assert.doesNotMatch(
+      `${reward.headline} ${reward.detail ?? ''}`,
+      /faltou|faltam|ainda|ontem|ao menos|pelo menos|finalmente|at[ée] que enfim|demorou/i,
+    );
+  }
+}
+
+// ── Contadores ───────────────────────────────────────────────────────────────
+{
+  const goalEvents = [
+    { date: day(20), kind: 'goal_action_done' as const },
+    { date: day(21), kind: 'goal_action_done' as const },
+    { date: day(22), kind: 'goal_action_done' as const },
+    { date: day(22), kind: 'goal_completed' as const },
+  ];
+
+  const counters = computeGoalCounters({ goalEvents, today: day(22) });
+  assert.equal(counters.actionsCompleted, 3);
+  assert.equal(counters.goalsCompleted, 1);
+  assert.equal(counters.actionStreak.current, 3, 'três dias seguidos com ação');
+
+  // Piso: os eventos só passaram a existir agora. Quem já tinha 30 ações
+  // concluídas antes não pode ver zero — seria o oposto do efeito desejado.
+  const comPiso = computeGoalCounters({
+    goalEvents,
+    today: day(22),
+    floor: { actionsCompleted: 30, goalsCompleted: 4 },
+  });
+  assert.equal(comPiso.actionsCompleted, 30, 'piso histórico foi ignorado');
+  assert.equal(comPiso.goalsCompleted, 4);
+
+  // O piso é piso, não teto: quando os eventos passam do histórico, eles mandam.
+  const eventosMaiores = Array.from({ length: 40 }, () => ({ date: day(22), kind: 'goal_action_done' as const }));
+  assert.equal(
+    computeGoalCounters({ goalEvents: eventosMaiores, today: day(22), floor: { actionsCompleted: 30 } }).actionsCompleted,
+    40,
+  );
+
+  // Fase protegida não quebra a sequência de ações, igual ao resto do app.
+  const comBuraco = [
+    { date: day(20), kind: 'goal_action_done' as const },
+    { date: day(22), kind: 'goal_action_done' as const },
+  ];
+  const atravessou = computeGoalCounters({
+    goalEvents: comBuraco,
+    today: day(22),
+    phaseByDate: { [day(21)]: 'Recolhimento' },
+  });
+  assert.equal(atravessou.actionStreak.current, 2, 'Recolhimento tem que atravessar, não quebrar');
 }
 
 console.log('progress-rewards.service tests passed');

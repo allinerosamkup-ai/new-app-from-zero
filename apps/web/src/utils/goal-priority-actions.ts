@@ -118,6 +118,45 @@ export function buildGoalPriorityActions(
   return typeof options.limit === "number" ? actions.slice(0, options.limit) : actions;
 }
 
+/**
+ * Escolhe o objetivo que ocupa o card grande da Home e devolve o resto para a
+ * lista compacta.
+ *
+ * "Mais ativo" = o mais perto de fechar. Isso resolve de graça a troca de foco:
+ * quando o objetivo em destaque conclui, ele sai do filtro de elegíveis e o
+ * seguinte assume sozinho. Nada de estado persistido dizendo "qual é o foco" —
+ * a lista é reidratada a cada conclusão e a escolha se refaz.
+ */
+export function selectFocusGoal(
+  goals: GoalPrioritySource[],
+  options: { pausedIds?: Array<string | number> } = {},
+): { focus: GoalCardModel | null; others: GoalCardModel[] } {
+  const paused = new Set((options.pausedIds ?? []).map(String));
+
+  const models = goals.map(buildGoalCardModel);
+  const eligible = models.filter((model) => (
+    !paused.has(String(model.id))
+    // Concluído não pode ocupar o card: não sobrou ação para fazer ali.
+    && !model.completed
+    // Sem ação pendente o card grande não teria botão — vai para a lista.
+    && model.nextAction !== null
+  ));
+
+  const focus = eligible.length === 0 ? null : [...eligible].sort((left, right) => {
+    const leftPct = left.totalActions === 0 ? 0 : left.completedActions / left.totalActions;
+    const rightPct = right.totalActions === 0 ? 0 : right.completedActions / right.totalActions;
+    if (rightPct !== leftPct) return rightPct - leftPct;
+    // Empate: quem já andou mais em número absoluto. Depois, ordem de criação,
+    // que é como o backend já devolve — desempate estável, sem sorteio.
+    return right.completedActions - left.completedActions;
+  })[0];
+
+  return {
+    focus: focus ?? null,
+    others: models.filter((model) => model.id !== focus?.id),
+  };
+}
+
 export function buildGoalCardModel(goal: GoalPrioritySource): GoalCardModel {
   const subtasks = orderedSubtasks(goal.subtasks);
   const completedActions = subtasks.filter((subtask) => subtask.done).length;
@@ -143,7 +182,7 @@ export function buildGoalCardModel(goal: GoalPrioritySource): GoalCardModel {
   };
 }
 
-function orderedSubtasks<T extends { id: string | number; order?: number }>(subtasks: T[] | undefined): T[] {
+export function orderedSubtasks<T extends { id: string | number; order?: number }>(subtasks: T[] | undefined): T[] {
   return [...(subtasks ?? [])]
     .map((subtask, index) => ({ subtask, index }))
     .sort((left, right) => (left.subtask.order ?? left.index) - (right.subtask.order ?? right.index) || left.index - right.index)

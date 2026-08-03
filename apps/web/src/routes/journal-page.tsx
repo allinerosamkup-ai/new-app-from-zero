@@ -6,6 +6,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { useToast } from "../components/Toast";
+import { FEATURES } from "../config/features";
+import { CommandPlanCard } from "../components/aura/CommandPlanCard";
+import { shouldRenderCommandPlan } from "../features/aura/command-checkin-receipt";
+import type { AuraCommandPlan } from "../features/aura/command-types";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useAuraStore } from "../features/aura/store";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
@@ -147,7 +151,7 @@ function formatSessionDate(localDate: string, startedAt: string, locale: string)
 export function JournalPage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
-  const { state } = useAuraStore();
+  const { state, refreshData } = useAuraStore();
   const { showError, showSuccess } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -160,6 +164,51 @@ export function JournalPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [input, setInput] = useState(initialDraft);
   const [isTyping, setIsTyping] = useState(false);
+  // Proposta vinda do diário: check-in e/ou meta montados a partir do que foi
+  // contado. Fica esperando confirmação — o diário nunca aplica sozinho.
+  const [commandPlan, setCommandPlan] = useState<AuraCommandPlan | null>(null);
+  const [applyingPlan, setApplyingPlan] = useState(false);
+
+  function updatePlanOperation(
+    operationId: string,
+    patch: { selected?: boolean; payload?: Record<string, unknown> },
+  ) {
+    setCommandPlan((current) => current ? {
+      ...current,
+      operations: current.operations.map((operation) => (
+        operation.id === operationId ? { ...operation, ...patch } : operation
+      )),
+    } : current);
+  }
+
+  async function applyJournalPlan() {
+    if (!commandPlan || applyingPlan) return;
+    const selected = commandPlan.operations.filter((operation) => operation.selected);
+    if (selected.length === 0) return;
+
+    setApplyingPlan(true);
+    try {
+      await api.patch(`/aura/command/plans/${commandPlan.id}`, {
+        operations: commandPlan.operations.map((operation) => ({
+          id: operation.id,
+          selected: operation.selected,
+          payload: operation.payload,
+        })),
+      });
+      const applied = await api.post(`/aura/command/plans/${commandPlan.id}/apply`, {
+        operationIds: selected.map((operation) => operation.id),
+        // Chave estável por plano: reenviar não duplica check-in nem meta.
+        idempotencyKey: `journal:${commandPlan.id}`,
+      }) as { plan?: AuraCommandPlan };
+      setCommandPlan(applied.plan ?? null);
+      await refreshData();
+      showSuccess(l("Registrado.", "Saved."));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l("Não consegui registrar agora.", "Could not save right now."));
+    } finally {
+      setApplyingPlan(false);
+    }
+  }
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [lastRiskSafety, setLastRiskSafety] = useState<RiskSafety | null>(null);
   const [sessions, setSessions] = useState<JournalSessionCard[]>([]);
@@ -379,6 +428,12 @@ export function JournalPage() {
                 next[next.length - 1] = data.message;
                 return next;
               });
+            }
+
+            // O diário propõe check-in e meta a partir do que foi contado.
+            // Chega como plano para revisar — nunca aplicado sozinho.
+            if (data.plan) {
+              setCommandPlan(data.plan as AuraCommandPlan);
             }
 
             if (data.riskSafety) {
@@ -616,7 +671,7 @@ export function JournalPage() {
           </button>
         </div>
 
-        <div style={{ background: "rgba(255, 251, 246, .9)", borderRadius: 14, border: "1px solid rgba(197,165,147,.24)", padding: "12px 13px" }}>
+        <div style={{ background: "rgba(255, 251, 246, .9)", borderRadius: 14, border: "1px solid rgba(155,191,168,.24)", padding: "12px 13px" }}>
           <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "var(--text-3)" }}>
             {l("Resumo do dia", "Day summary")}
           </p>
@@ -647,7 +702,7 @@ export function JournalPage() {
               const added = addedToPlanner.has(key);
               const fakeTask: SuggestedTask = { title: item.replace(/^(Hoje|Amanhã|[^:]+):\s*/, ""), category: "rotina" };
               return (
-                <div key={item} style={{ borderRadius: 12, border: "1px solid rgba(197,165,147,.24)", background: "#fff", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div key={item} style={{ borderRadius: 12, border: "1px solid rgba(155,191,168,.24)", background: "#fff", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                   <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>{item}</p>
                   <button
                     onClick={() => !added && handleAddClick(key, fakeTask)}
@@ -655,7 +710,7 @@ export function JournalPage() {
                     style={{
                       alignSelf: "flex-start", border: "none", borderRadius: 8, cursor: added ? "default" : "pointer",
                       padding: "5px 12px", fontSize: 11, fontWeight: 700,
-                      background: added ? "rgba(150,199,179,.18)" : "rgba(244,168,150,.15)",
+                      background: added ? "rgba(150,199,179,.18)" : "rgba(143,192,164,.15)",
                       color: added ? "var(--accent-sage)" : "var(--accent-peach)",
                       transition: "all 200ms",
                     }}
@@ -701,7 +756,7 @@ export function JournalPage() {
                         padding: "5px 12px", fontSize: 11, fontWeight: 700,
                         background: added ? "rgba(150,199,179,.18)" : "var(--accent-peach)",
                         color: added ? "var(--accent-sage)" : "#fff",
-                        boxShadow: added ? "none" : "0 2px 8px rgba(244,168,150,.35)",
+                        boxShadow: added ? "none" : "0 2px 8px rgba(143,192,164,.35)",
                         transition: "all 200ms",
                       }}
                     >
@@ -731,13 +786,13 @@ export function JournalPage() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 0)}
-                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "1.5px solid var(--accent-peach)", background: "rgba(244,168,150,.1)", color: "var(--accent-peach)", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "1.5px solid var(--accent-peach)", background: "rgba(143,192,164,.1)", color: "var(--accent-peach)", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
                 >
                   {t("common.today")}
                 </button>
                 <button
                   onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 1)}
-                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13, boxShadow: "0 4px 14px rgba(244,168,150,.4)" }}
+                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13, boxShadow: "0 4px 14px rgba(143,192,164,.4)" }}
                 >
                   {t("common.tomorrow")}
                 </button>
@@ -827,7 +882,7 @@ export function JournalPage() {
               style={{
                 background: "rgba(255,255,255,.9)",
                 borderRadius: "22px",
-                border: "1.5px solid rgba(197,165,147,.28)",
+                border: "1.5px solid rgba(155,191,168,.28)",
                 padding: "16px 18px",
                 boxShadow: "0 8px 24px rgba(31,42,54,0.04)",
                 display: "flex",
@@ -848,7 +903,7 @@ export function JournalPage() {
                     style={{
                       padding: "6px 10px",
                       borderRadius: 999,
-                      background: "rgba(243,176,140,.14)",
+                      background: "rgba(169,210,187,.14)",
                       color: "var(--text-1)",
                       fontSize: 11,
                       fontWeight: 700,
@@ -929,7 +984,7 @@ export function JournalPage() {
                             padding: "5px 11px",
                             borderRadius: 999,
                             border: `1.5px solid ${filterEmotion === em ? "var(--accent-peach)" : "var(--warm-border)"}`,
-                            background: filterEmotion === em ? "rgba(215,137,127,0.12)" : "#fff",
+                            background: filterEmotion === em ? "rgba(134,183,154,0.12)" : "#fff",
                             color: filterEmotion === em ? "var(--accent-peach)" : "var(--text-3)",
                             fontSize: 11,
                             fontWeight: 700,
@@ -1028,7 +1083,7 @@ export function JournalPage() {
                         style={{
                           padding: "6px 10px",
                           borderRadius: 999,
-                          background: isActive ? "rgba(150,199,179,.16)" : "rgba(243,176,140,.14)",
+                          background: isActive ? "rgba(150,199,179,.16)" : "rgba(169,210,187,.14)",
                           color: "var(--text-1)",
                           fontSize: 10.5,
                           fontWeight: 700,
@@ -1052,7 +1107,7 @@ export function JournalPage() {
                                 style={{
                                   padding: "6px 10px",
                                   borderRadius: 999,
-                                  background: "rgba(243,176,140,.12)",
+                                  background: "rgba(169,210,187,.12)",
                                   color: "var(--text-1)",
                                   fontSize: 11,
                                   fontWeight: 700,
@@ -1181,14 +1236,14 @@ export function JournalPage() {
                 style={{
                   alignSelf: "flex-end",
                   maxWidth: "88%",
-                  background: "linear-gradient(135deg, var(--accent-peach-a3), rgba(244,190,168,.18))",
-                  border: "1px solid rgba(244,190,168,.34)",
+                  background: "linear-gradient(135deg, var(--accent-peach-a3), rgba(191,220,203,.18))",
+                  border: "1px solid rgba(191,220,203,.34)",
                   color: "var(--text-1)",
                   borderRadius: "20px 20px 4px 20px",
                   padding: "14px 16px",
                   fontSize: "14px",
                   lineHeight: "1.55",
-                  boxShadow: "0 10px 20px rgba(244,190,168,.10)",
+                  boxShadow: "0 10px 20px rgba(191,220,203,.10)",
                 }}
               >
                 {message.content}
@@ -1213,10 +1268,22 @@ export function JournalPage() {
             </div>
           )}
 
+          {/* Proposta de check-in e/ou meta a partir do que foi contado.
+              Aparece depois da resposta, com confirmação — o diário é lugar de
+              desabafo, e gravar sem pedir transformaria isso em formulário. */}
+          {shouldRenderCommandPlan(commandPlan) && commandPlan && (
+            <CommandPlanCard
+              plan={commandPlan}
+              applying={applyingPlan}
+              onChange={updatePlanOperation}
+              onApply={applyJournalPlan}
+            />
+          )}
+
           <SafetyProtocolCard
             riskSafety={lastRiskSafety}
             surface="journal"
-            onAdaptDay={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
+            onAdaptDay={() => navigate(FEATURES.planner ? "/planner" : "/home", { state: { openAgendaAdaptation: true } })}
           />
 
           <div ref={chatEndRef} />

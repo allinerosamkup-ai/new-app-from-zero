@@ -48,7 +48,7 @@ type Props = {
 const ACTION_ICON_COLOR: Record<PlannerAIAdjustItem["action"], string> = {
   MOVE_TOMORROW: "var(--accent-sky, #6398A9)",
   DOWNGRADE_INTENSITY: "var(--accent-sage-ink, #50705B)",
-  CANCEL: "var(--accent-peach, #D7897F)",
+  CANCEL: "var(--accent-peach, #86B79A)",
   KEEP: "var(--text-3)",
 };
 
@@ -155,7 +155,7 @@ export function PlannerAISuggestionSheet(props: Props) {
             ? t("plannerAi.pending", { count: totalPending })
             : t("plannerAi.confirm")
       }
-      icon={<Sparkles size={18} color="var(--accent-peach, #D7897F)" />}
+      icon={<Sparkles size={18} color="var(--accent-peach, #86B79A)" />}
     >
       {loading && (
         <p style={{ textAlign: "center", padding: 24, color: "var(--text-3)", fontSize: 13 }}>
@@ -168,9 +168,9 @@ export function PlannerAISuggestionSheet(props: Props) {
           style={{
             display: "flex",
             gap: 8,
-            background: "rgba(215,137,127,.08)",
-            border: "1.5px solid rgba(215,137,127,.45)",
-            color: "var(--accent-peach-ink, #A8584A)",
+            background: "rgba(134,183,154,.08)",
+            border: "1.5px solid rgba(134,183,154,.45)",
+            color: "var(--accent-peach-ink, #42775C)",
             borderRadius: 12,
             padding: 12,
             margin: "8px 0 16px",
@@ -265,9 +265,9 @@ export function PlannerAISuggestionSheet(props: Props) {
                       gap: 8,
                       padding: 12,
                       borderRadius: 12,
-                      border: "1.5px solid var(--accent-peach-a3, rgba(215,137,127,.25))",
-                      borderLeft: "4px solid var(--accent-peach, #D7897F)",
-                      background: isResolved ? "rgba(215,137,127,.04)" : "rgba(255,253,249,.97)",
+                      border: "1.5px solid var(--accent-peach-a3, rgba(134,183,154,.25))",
+                      borderLeft: "4px solid var(--accent-peach, #86B79A)",
+                      background: isResolved ? "rgba(134,183,154,.04)" : "rgba(255,253,249,.97)",
                       opacity: isResolved ? 0.55 : 1,
                       marginBottom: 8,
                     }}

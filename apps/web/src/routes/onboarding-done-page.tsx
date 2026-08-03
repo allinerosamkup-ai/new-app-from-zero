@@ -163,8 +163,8 @@ export function OnboardingDonePage() {
           <p style={{
             width: "100%",
             color: "var(--accent-peach-ink)",
-            background: "rgba(215,137,127,.1)",
-            border: "1px solid rgba(215,137,127,.22)",
+            background: "rgba(134,183,154,.1)",
+            border: "1px solid rgba(134,183,154,.22)",
             borderRadius: 14,
             padding: "10px 12px",
             fontSize: 12,

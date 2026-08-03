@@ -153,12 +153,12 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
                   gap: 14,
                   padding: 14,
                   borderRadius: 18,
-                  background: isCurrent ? "rgba(244,190,168,.14)" : "var(--warm-surface)",
+                  background: isCurrent ? "rgba(191,220,203,.14)" : "var(--warm-surface)",
                   border: isCurrent
-                    ? "1.5px solid rgba(244,190,168,.46)"
+                    ? "1.5px solid rgba(191,220,203,.46)"
                     : "1px solid var(--warm-border)",
                   boxShadow: isCurrent
-                    ? "0 10px 24px rgba(244,190,168,.13)"
+                    ? "0 10px 24px rgba(191,220,203,.13)"
                     : "var(--shadow-3d)",
                   transition: "all 200ms ease",
                 }}
@@ -207,7 +207,7 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
                           letterSpacing: "0.12em",
                           textTransform: "uppercase",
                           color: "var(--accent-peach-ink)",
-                          background: "rgba(244,190,168,.18)",
+                          background: "rgba(191,220,203,.18)",
                           padding: "3px 8px",
                           borderRadius: 999,
                           fontFamily: "var(--font-sans, sans-serif)",

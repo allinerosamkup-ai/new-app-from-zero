@@ -102,7 +102,7 @@ export default function BillingPage() {
         ) : (
           <div style={{
             padding: "18px 20px", borderRadius: 20,
-            border: isActive ? "1.5px solid rgba(150,199,179,0.35)" : "1.5px solid rgba(215,137,127,0.2)",
+            border: isActive ? "1.5px solid rgba(150,199,179,0.35)" : "1.5px solid rgba(134,183,154,0.2)",
             background: isActive ? "rgba(150,199,179,0.07)" : "rgba(255,255,255,.85)",
           }}>
             <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: isActive ? "var(--accent-sage)" : "var(--text-3)" }}>
@@ -120,13 +120,13 @@ export default function BillingPage() {
         )}
 
         {!isActive && (
-          <div style={{ padding: "20px", borderRadius: 20, border: "1.5px solid rgba(215,137,127,0.28)", background: "rgba(255,253,249,.97)" }}>
+          <div style={{ padding: "20px", borderRadius: 20, border: "1.5px solid rgba(134,183,154,0.28)", background: "rgba(255,253,249,.97)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
               <Sparkles size={16} color="var(--accent-peach)" />
               <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "var(--text-1)" }}>Airia Pro</p>
             </div>
 
-            <div style={{ display: "flex", background: "rgba(215,137,127,0.08)", borderRadius: 14, padding: 4, marginBottom: 18, gap: 4 }}>
+            <div style={{ display: "flex", background: "rgba(134,183,154,0.08)", borderRadius: 14, padding: 4, marginBottom: 18, gap: 4 }}>
               {(["monthly", "annual"] as BillingPlan[]).map((p) => {
                 const active = selectedPlan === p;
                 return (
@@ -211,7 +211,7 @@ export default function BillingPage() {
                 cursor: checkoutLoading ? "default" : "pointer",
                 opacity: checkoutLoading ? 0.7 : 1,
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                boxShadow: "0 8px 24px rgba(215,137,127,0.28)",
+                boxShadow: "0 8px 24px rgba(134,183,154,0.28)",
                 fontFamily: "'Plus Jakarta Sans', sans-serif",
               }}
             >
@@ -238,7 +238,7 @@ export default function BillingPage() {
             style={{
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
               width: "100%", minHeight: 48, borderRadius: 999,
-              border: "1.5px solid rgba(215,137,127,0.22)",
+              border: "1.5px solid rgba(134,183,154,0.22)",
               background: "rgba(255,255,255,.85)", color: "var(--text-1)",
               fontSize: 13, fontWeight: 700,
               cursor: portalLoading ? "default" : "pointer",

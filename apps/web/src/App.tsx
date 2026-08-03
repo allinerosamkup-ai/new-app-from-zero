@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { InstallPWA } from "./components/InstallPWA";
 import { trackInstallConversionOnce, trackMetaPixelPageView } from "./lib/meta-pixel";
+import { FEATURES, FEATURE_FALLBACK_ROUTE } from "./config/features";
 
 const loadAuraLayout = () => import("./routes/aura-layout");
 const loadLoginPage = () => import("./routes/login-page");
@@ -84,14 +85,14 @@ const CapturesPage = lazy(() => loadCapturesPage().then((module) => ({ default: 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
   "/splash": [loadLoginPage],
-  "/login": [loadAuraLayout, loadHomePage, loadCheckinPage, loadPlannerPage],
+  "/login": [loadAuraLayout, loadHomePage, loadCheckinPage, loadGoalsPage],
   "/forgot-password": [loadResetPasswordPage, loadLoginPage],
-  "/home": [loadCheckinPage, loadPlannerPage, loadJournalPage],
+  // A home agora leva para Objetivos, não para o Planner.
+  "/home": [loadCheckinPage, loadGoalsPage, loadJournalPage],
   "/checkin": [loadCheckinResultPage, loadHomePage],
-  "/checkin-result": [loadHomePage, loadPlannerPage, loadJournalPage],
-  "/planner": [loadHomePage, loadJournalPage, loadGoalsPage],
-  "/journal": [loadHomePage, loadPlannerPage, loadAuraChatPage],
-  "/goals": [loadPlannerPage, loadHomePage],
+  "/checkin-result": [loadHomePage, loadGoalsPage, loadJournalPage],
+  "/journal": [loadHomePage, loadGoalsPage, loadAuraChatPage],
+  "/goals": [loadHomePage, loadCheckinPage],
   "/insights": [loadHomePage, loadDailySummaryPage],
 };
 
@@ -138,7 +139,7 @@ function DevLayout() {
         {DEV_SCREENS.map(s => (
           <button key={s.path} onClick={() => navigate(`/dev/${s.path}`)}
             style={{ padding: "3px 10px", borderRadius: "6px", border: "none", cursor: "pointer", fontSize: "11px", fontWeight: 600,
-              background: current === s.path ? "#C5A593" : "#333", color: current === s.path ? "#fff" : "#aaa" }}>
+              background: current === s.path ? "#9BBFA8" : "#333", color: current === s.path ? "#fff" : "#aaa" }}>
             {s.label}
           </button>
         ))}
@@ -251,7 +252,9 @@ export default function App() {
         <Route path="/run" element={<RunPage />} />
         <Route path="/editorial-showcase" element={<EditorialShowcase />} />
         <Route path="/auth-v2" element={<AuthV2Page />} />
-        <Route path="/auth/callback" element={<Navigate to={`/planner${location.search}`} replace />} />
+        {/* Pós-login cai na Home, não no Planner. Incondicional: mesmo se o
+            Planner voltar, o destino de quem acabou de entrar é a Home. */}
+        <Route path="/auth/callback" element={<Navigate to={`/home${location.search}`} replace />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/billing" element={<BillingPage />} />
@@ -280,12 +283,15 @@ export default function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/goals" element={<GoalsPage />} />
-          <Route path="/habits" element={<HabitsPage />} />
+          {/* Desligadas no produto, mas ainda registradas: notificação push já
+              entregue no celular de alguém e link salvo apontam para cá, e cair
+              em 404 é pior que cair na Home. */}
+          <Route path="/habits" element={FEATURES.habits ? <HabitsPage /> : <Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/profile" element={<Navigate to="/insights" replace />} />
           <Route path="/preferences" element={<PreferencesPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
-          <Route path="/planner" element={<PlannerPage />} />
+          <Route path="/planner" element={FEATURES.planner ? <PlannerPage /> : <Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/pomodoro" element={<PomodoroPage />} />
           <Route path="/daily-summary" element={<DailySummaryPage />} />

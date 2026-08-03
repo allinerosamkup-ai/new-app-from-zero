@@ -156,7 +156,7 @@ export function DailySummaryPage() {
                   style={{
                     borderRadius: 14,
                     background: "rgba(255,253,249,.9)",
-                    border: "1.5px solid rgba(197,165,147,.18)",
+                    border: "1.5px solid rgba(155,191,168,.18)",
                     padding: "12px 10px",
                     textAlign: "center",
                   }}
@@ -213,7 +213,7 @@ export function DailySummaryPage() {
                       style={{
                         width: "100%",
                         textAlign: "left",
-                        border: "1.5px solid rgba(197,165,147,.18)",
+                        border: "1.5px solid rgba(155,191,168,.18)",
                         background: "rgba(255,251,246,.72)",
                         borderRadius: 12,
                         padding: "10px 12px",
@@ -269,7 +269,7 @@ export function DailySummaryPage() {
                 borderRadius: 999,
                 background: "rgba(255,253,249,.82)",
                 border: "1px solid rgba(255,255,255,.68)",
-                boxShadow: "0 2px 6px rgba(197,165,147,.06)",
+                boxShadow: "0 2px 6px rgba(155,191,168,.06)",
                 fontSize: 11.5,
                 fontWeight: 700,
                 color: "var(--text-1)",
@@ -298,7 +298,7 @@ export function DailySummaryPage() {
                 textTransform: "uppercase",
                 padding: "4px 10px",
                 borderRadius: 999,
-                background: "rgba(197,165,147,.08)",
+                background: "rgba(155,191,168,.08)",
                 color: "var(--text-2)",
                 letterSpacing: "0.06em",
               }}
@@ -314,7 +314,7 @@ export function DailySummaryPage() {
             width: "100%",
             padding: "15px 16px",
             background:
-              "linear-gradient(135deg, rgba(197,165,147,.06), rgba(180,185,169,.04))",
+              "linear-gradient(135deg, rgba(155,191,168,.06), rgba(180,185,169,.04))",
             borderLeft: "3px solid var(--accent-peach)",
             borderRadius: 13,
           }}
@@ -347,7 +347,7 @@ export function DailySummaryPage() {
         {phase === "loading" && (
           <div style={{
             width: "100%", padding: "14px 16px", borderRadius: 12, textAlign: "center",
-            background: "rgba(255,253,249,.9)", border: "1.5px solid rgba(197,165,147,.2)",
+            background: "rgba(255,253,249,.9)", border: "1.5px solid rgba(155,191,168,.2)",
           }}>
             <p style={{ fontSize: 13, color: "var(--text-2)", fontStyle: "italic", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
               <AuraIcon size={14} className="animate-pulse" /> {l("Lendo a sessão e montando tarefas...", "Reading the session and building tasks...")}
@@ -358,7 +358,7 @@ export function DailySummaryPage() {
         {(phase === "preview" || phase === "done") && (
           <div style={{
             width: "100%", background: "rgba(255,253,249,.95)", borderRadius: 13,
-            border: "1.5px solid rgba(197,165,147,.25)", overflow: "hidden",
+            border: "1.5px solid rgba(155,191,168,.25)", overflow: "hidden",
           }}>
             <div style={{ padding: "12px 14px 10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>

@@ -59,7 +59,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
         zIndex: 420,
         borderRadius: 22,
         background: "rgba(255,255,255,.97)",
-        border: "1px solid rgba(244,190,168,.26)",
+        border: "1px solid rgba(191,220,203,.26)",
         boxShadow: "0 22px 44px rgba(17,24,39,.16)",
         padding: 14,
         backdropFilter: "blur(16px)",

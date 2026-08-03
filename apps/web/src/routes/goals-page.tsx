@@ -1,3 +1,4 @@
+import { FEATURES } from "../config/features";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -96,7 +97,7 @@ export function GoalRecoveryNotice({
       style={{
         marginBottom: 14,
         padding: '13px 14px',
-        border: '1px solid rgba(215,137,127,.35)',
+        border: '1px solid rgba(134,183,154,.35)',
         borderRadius: 16,
         background: 'rgba(255,255,255,.9)',
       }}
@@ -237,7 +238,7 @@ function CreationSheet({
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
-        background: "rgba(26,22,20,.30)",
+        background: "rgba(20,27,23,.30)",
         backdropFilter: "blur(4px)",
       }}
       onClick={onClose}
@@ -250,11 +251,11 @@ function CreationSheet({
           borderRadius: "32px 32px 0 0",
           background: "var(--warm-bg)",
           padding: "18px 18px calc(24px + env(safe-area-inset-bottom))",
-          boxShadow: "0 -18px 50px rgba(34,28,25,.16)",
+          boxShadow: "0 -18px 50px rgba(26,34,29,.16)",
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div style={{ width: 42, height: 4, borderRadius: 99, background: "rgba(26,22,20,.14)", margin: "0 auto 18px" }} />
+        <div style={{ width: 42, height: 4, borderRadius: 99, background: "rgba(20,27,23,.14)", margin: "0 auto 18px" }} />
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 18 }}>
           <div style={{ flex: 1 }}>
             <p style={{ margin: "0 0 4px", color: "var(--lagune)", fontSize: 11, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase" }}>
@@ -334,7 +335,7 @@ function CreationSheet({
             minHeight: 52,
             border: 0,
             borderRadius: 14,
-            background: ready ? "var(--nectarine)" : "rgba(26,22,20,.10)",
+            background: ready ? "var(--nectarine)" : "rgba(20,27,23,.10)",
             color: ready ? "#fff" : "var(--text-3)",
             fontSize: 14,
             fontWeight: 850,
@@ -382,7 +383,7 @@ function TaskPlacementSheet({
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
-        background: "rgba(26,22,20,.30)",
+        background: "rgba(20,27,23,.30)",
         backdropFilter: "blur(4px)",
       }}
       onClick={onClose}
@@ -393,11 +394,11 @@ function TaskPlacementSheet({
           borderRadius: "32px 32px 0 0",
           background: "var(--warm-bg)",
           padding: "18px 18px calc(24px + env(safe-area-inset-bottom))",
-          boxShadow: "0 -18px 50px rgba(34,28,25,.16)",
+          boxShadow: "0 -18px 50px rgba(26,34,29,.16)",
         }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div style={{ width: 42, height: 4, borderRadius: 99, background: "rgba(26,22,20,.14)", margin: "0 auto 18px" }} />
+        <div style={{ width: 42, height: 4, borderRadius: 99, background: "rgba(20,27,23,.14)", margin: "0 auto 18px" }} />
         <p style={{ margin: "0 0 5px", color: "var(--lagune)", fontSize: 11, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase" }}>
           {l("Próxima ação", "Next action")}
         </p>
@@ -723,7 +724,7 @@ function GoalCard({
                       style={{
                         minHeight: 43,
                         borderRadius: 12,
-                        border: "1px solid rgba(215,137,127,.30)",
+                        border: "1px solid rgba(134,183,154,.30)",
                         background: "#fff",
                         color: "var(--text-1)",
                         padding: "9px 11px",
@@ -1093,12 +1094,19 @@ export function GoalsPage() {
         setCompletingActionId(actionId);
         try {
           const outcome = await toggleSubGoal(goal.id, actionId);
-          if (outcome?.objectiveCompletedNow) {
-            setReward({
-              headline: l("Objetivo concluído", "Goal completed"),
-              detail: l("Você percorreu todas as ações previstas.", "You completed every planned action."),
-              animation: "confetti",
-              intensity: "big",
+          // Agora CADA micro-ação paga, não só o objetivo inteiro. O texto vem
+          // do backend para ser igual em toda superfície; o fallback existe só
+          // para o caso de uma resposta antiga sem `reward`.
+          if (outcome?.completedNow) {
+            setReward(outcome.reward ?? {
+              headline: outcome.objectiveCompletedNow
+                ? l("Objetivo concluído", "Goal completed")
+                : l("Feito.", "Done."),
+              detail: outcome.objectiveCompletedNow
+                ? l("Você percorreu todas as ações previstas.", "You completed every planned action.")
+                : null,
+              animation: outcome.objectiveCompletedNow ? "confetti" : "spark",
+              intensity: outcome.objectiveCompletedNow ? "big" : "small",
             });
           }
         } catch (error) {
@@ -1155,7 +1163,7 @@ export function GoalsPage() {
                 fontSize: 12,
                 fontWeight: 850,
                 cursor: "pointer",
-                boxShadow: "0 8px 20px rgba(215,137,127,.22)",
+                boxShadow: "0 8px 20px rgba(134,183,154,.22)",
               }}
             >
               <Plus size={17} />
@@ -1245,7 +1253,7 @@ export function GoalsPage() {
           </section>
         )}
 
-        {activeGoals.length > 0 && (
+        {FEATURES.planner && activeGoals.length > 0 && (
           <button onClick={() => navigate("/planner")} style={{ ...quietButtonStyle, width: "100%", marginTop: 18, border: 0, background: "transparent", color: "var(--lagune)" }}>
             {l("Ver as ações que já estão no meu dia", "See actions already in my day")} <ArrowRight size={15} />
           </button>

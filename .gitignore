@@ -11,6 +11,11 @@ artifacts/.env*
 # Build
 dist/
 build/
+# Service worker de desenvolvimento — regenerado a cada `vite dev`
+dev-dist/
+
+# Anexos temporários de sessões de agente
+.codex-remote-attachments/
 
 # Expo
 .expo/

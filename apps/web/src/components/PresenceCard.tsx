@@ -63,7 +63,7 @@ export function PresenceCard({ checkinHistory }: PresenceCardProps) {
         </div>
         <div style={{
           width: 44, height: 44, borderRadius: "50%",
-          background: "rgba(215,137,127,0.1)",
+          background: "rgba(134,183,154,0.1)",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 22,
         }}>
@@ -84,7 +84,7 @@ export function PresenceCard({ checkinHistory }: PresenceCardProps) {
                 background: present
                   ? "var(--accent-peach)"
                   : isPast
-                    ? "rgba(215,137,127,0.08)"
+                    ? "rgba(134,183,154,0.08)"
                     : "transparent",
                 border: isToday && !present
                   ? "1.5px dashed var(--accent-peach)"

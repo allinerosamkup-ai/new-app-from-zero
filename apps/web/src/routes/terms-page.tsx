@@ -3,15 +3,15 @@ import { ArrowLeft, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 const BRAND = {
-  nectarine: "#F4A896",
-  nectarineLight: "#FDE8E3",
+  nectarine: "#8FC0A4",
+  nectarineLight: "#E4F0E9",
   menthe: "#B8D9C8",
   lagune: "#8FB8C4",
-  pecheSoft: "#FEF3E0",
+  pecheSoft: "#EAF4EE",
   lavender: "#D4C4E0",
-  rosa: "#F0C4D4",
-  textWarm: "#6B5B57",
-  textSoft: "#8B7B77",
+  rosa: "#C4E0D2",
+  textWarm: "#4A5A50",
+  textSoft: "#77877E",
   bgLight: "#FDF9F5",
   bgDark: "#141211",
 } as const;
@@ -58,7 +58,7 @@ export function TermsPage() {
             padding: "8px 12px", 
             borderRadius: 999, 
             background: BRAND.pecheSoft,
-            color: "#B86D4C",
+            color: "#4F8A6B",
             fontSize: 11,
             fontWeight: 800,
             letterSpacing: ".1em",

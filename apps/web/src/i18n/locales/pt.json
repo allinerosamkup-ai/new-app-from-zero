@@ -51,8 +51,6 @@
     "creating": "Criando conta...",
     "createContinue": "Criar conta e continuar",
     "afterLogin": "Depois do login, seguimos direto para seu dia.",
-    "or": "OU",
-    "google": "Entrar com Google",
     "almostThere": "Quase lá!",
     "confirmEmail": "Enviamos um link de confirmação para <1>{{email}}</1>. Verifique sua caixa de entrada e o spam para ativar sua conta.",
     "goToLogin": "Entendi, ir para o login",
@@ -64,8 +62,7 @@
       "generic": "Erro ao autenticar",
       "credentials": "Email ou senha incorretos.",
       "registered": "Email já cadastrado. Tente entrar.",
-      "shortPassword": "Senha muito curta — mínimo 6 caracteres.",
-      "google": "Erro ao entrar com Google"
+      "shortPassword": "Senha muito curta — mínimo 6 caracteres."
     },
     "recovery": {
       "forgotTitle": "Esqueceu a senha?",
@@ -253,7 +250,7 @@
     "anotherSuggestion": "Gerar outra sugestão",
     "emotions": {
       "radiant": "Radiante",
-      "calm": "Calma",
+      "calm": "Tranquila",
       "happy": "Feliz",
       "anxious": "Ansiosa",
       "tired": "Cansada",
@@ -264,6 +261,20 @@
       "sensitive": "Sensível",
       "exhausted": "Exausta",
       "agitated": "Agitada"
+    },
+    "emotionsMale": {
+      "radiant": "Radiante",
+      "calm": "Tranquilo",
+      "happy": "Feliz",
+      "anxious": "Ansioso",
+      "tired": "Cansado",
+      "focused": "Focado",
+      "sad": "Triste",
+      "angry": "Irritado",
+      "stressed": "Estressado",
+      "sensitive": "Sensível",
+      "exhausted": "Exausto",
+      "agitated": "Agitado"
     },
     "factors": {
       "slept_well": "Dormi bem (7h+)",
@@ -642,20 +653,6 @@
     "initialNextAction": "Essa ação veio da sua meta. Posso te explicar o que ela quer dizer e te dar ideias simples para começar.",
     "initialPlanner": "Essa tarefa já veio com contexto. Posso te explicar o que ela significa e como fazer de um jeito simples.",
     "initialContext": "O contexto já está aqui. Qual parte você quer destravar primeiro?",
-    "suggestions": {
-      "organizeDay": "Organizar meu dia",
-      "createChecklist": "Criar checklist",
-      "transformGoal": "Transformar em meta",
-      "reflective": "Abrir conversa reflexiva",
-      "patterns": "Ler últimos dias",
-      "falling": "Estou caindo"
-    },
-    "quickPrompts": {
-      "organizeDay": "Organize meu dia de acordo com minha energia atual e com o que já existe no planner.",
-      "transformGoal": "Transforme minha meta ativa mais importante em próximos passos possíveis para esta semana.",
-      "patterns": "O que meus últimos dias mostram sobre humor, energia, sono e execução?",
-      "falling": "Estou caindo, com baixa energia e risco de travar. O que eu faço agora sem me violentar?"
-    },
     "errors": {
       "start": "Não foi possível iniciar a Airia agora.",
       "execute": "Não foi possível executar o pedido.",

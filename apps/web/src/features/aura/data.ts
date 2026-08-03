@@ -107,6 +107,7 @@ export const initialAuraState: AuraState = {
   lastProfileUpdate: null,
   proactiveNudge: null,
   checkinHistory: [],
+  biologicalSex: null,
   habits: [],
   onboardingDone: false,
   accountCreatedAt: null,

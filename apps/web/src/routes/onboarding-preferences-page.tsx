@@ -80,7 +80,7 @@ export function OnboardingPreferencesPage() {
           {Array.from({ length: TOTAL }, (_, i) => (
             <div key={i} style={{
               flex: 1, height: 4, borderRadius: 999,
-              background: i < STEP ? "var(--accent-peach)" : "rgba(215,137,127,.2)",
+              background: i < STEP ? "var(--accent-peach)" : "rgba(134,183,154,.2)",
             }} />
           ))}
         </div>
@@ -117,7 +117,7 @@ export function OnboardingPreferencesPage() {
                   opacity: disabled ? 0.45 : 1,
                   transition: "all 150ms", textAlign: "left",
                   backdropFilter: "blur(16px)",
-                  boxShadow: "0 10px 24px rgba(243,176,140,.08)",
+                  boxShadow: "0 10px 24px rgba(169,210,187,.08)",
                 }}
               >
                 <span style={{ fontSize: 24, flexShrink: 0 }}>{c.emoji}</span>
@@ -215,11 +215,11 @@ export function OnboardingPreferencesPage() {
           disabled={selected.size === 0}
           style={{
             width: "100%", height: 46,
-            background: selected.size > 0 ? "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)" : "rgba(215,137,127,.3)",
+            background: selected.size > 0 ? "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)" : "rgba(134,183,154,.3)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
             cursor: selected.size === 0 ? "not-allowed" : "pointer",
-            boxShadow: selected.size > 0 ? "0 12px 24px rgba(243,176,140,.24)" : "none",
+            boxShadow: selected.size > 0 ? "0 12px 24px rgba(169,210,187,.24)" : "none",
             marginBottom: 10, transition: "all 200ms",
           }}
         >

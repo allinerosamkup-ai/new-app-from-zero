@@ -205,7 +205,7 @@ function DesktopInstallSheet({ onClose }: { onClose: () => void }) {
   const l = useLocalizedCopy();
   return (
     <SheetWrapper onClose={onClose} title={l("Instalar no computador", "Install on computer")}>
-      <p style={{ margin: 0, fontSize: 14, color: "#4A3B37", lineHeight: 1.5 }}>
+      <p style={{ margin: 0, fontSize: 14, color: "#37453D", lineHeight: 1.5 }}>
         {l("No Chrome ou Edge, procure o ícone de instalação", "In Chrome or Edge, look for the install icon")} <strong>⊕</strong> {l("no canto direito da barra de endereço e clique em", "on the right side of the address bar and click")} <strong>{l('"Instalar"', '"Install"')}</strong>.
       </p>
       <p style={{ margin: "12px 0 0", fontSize: 12, color: "#7C6D68" }}>
@@ -239,7 +239,7 @@ function SheetWrapper({
             style={{ width: 36, height: 36, borderRadius: 8 }}
           />
           <div>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#4A3B37" }}>{title}</p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#37453D" }}>{title}</p>
             <p style={{ margin: 0, fontSize: 12, color: "#7C6D68" }}>{l("Adicionar à tela inicial", "Add to Home Screen")}</p>
           </div>
         </div>
@@ -259,7 +259,7 @@ const bannerStyle: CSSProperties = {
   background: "rgba(255, 255, 255, 0.96)",
   backdropFilter: "blur(24px)",
   WebkitBackdropFilter: "blur(24px)",
-  border: "1px solid rgba(180, 130, 110, 0.18)",
+  border: "1px solid rgba(150, 170, 155, 0.18)",
   borderRadius: 14,
   padding: "10px 12px",
   boxShadow: "0 10px 32px rgba(0, 0, 0, 0.10)",
@@ -273,7 +273,7 @@ const bannerStyle: CSSProperties = {
 const titleStyle: CSSProperties = {
   fontSize: 13,
   fontWeight: 700,
-  color: "#4A3B37",
+  color: "#37453D",
   lineHeight: 1.2,
   whiteSpace: "nowrap",
   overflow: "hidden",
@@ -291,7 +291,7 @@ const subtitleStyle: CSSProperties = {
 };
 
 const installButtonStyle: CSSProperties = {
-  background: "#F4A896",
+  background: "#8FC0A4",
   color: "#fff",
   border: "none",
   borderRadius: 8,
@@ -301,13 +301,13 @@ const installButtonStyle: CSSProperties = {
   cursor: "pointer",
   whiteSpace: "nowrap",
   flexShrink: 0,
-  boxShadow: "0 6px 14px rgba(244, 168, 150, 0.35)",
+  boxShadow: "0 6px 14px rgba(143,192,164, 0.35)",
 };
 
 const dismissButtonStyle: CSSProperties = {
   background: "transparent",
   border: "none",
-  color: "#B8A8A4",
+  color: "#A8B8AE",
   cursor: "pointer",
   padding: 4,
   fontSize: 14,
@@ -367,7 +367,7 @@ const stepItemStyle: CSSProperties = {
   alignItems: "flex-start",
   gap: 10,
   fontSize: 14,
-  color: "#4A3B37",
+  color: "#37453D",
   lineHeight: 1.5,
 };
 
@@ -375,8 +375,8 @@ const stepNumStyle: CSSProperties = {
   minWidth: 22,
   height: 22,
   borderRadius: "50%",
-  background: "#F4A896",
-  color: "#5C3526",
+  background: "#8FC0A4",
+  color: "#274A38",
   fontSize: 12,
   fontWeight: 800,
   display: "flex",

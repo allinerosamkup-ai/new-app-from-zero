@@ -4,7 +4,7 @@ import React from "react";
 export type CyclePhase = "menstrual" | "folicular" | "ovulatoria" | "lutea";
 
 const PHASE_CONFIG: Record<CyclePhase, { emoji: string; label: string; color: string; bg: string; border: string }> = {
-  menstrual:  { emoji: "🌙", label: "Menstrual",  color: "#A8544A", bg: "rgba(215,137,127,.13)", border: "rgba(215,137,127,.3)" },
+  menstrual:  { emoji: "🌙", label: "Menstrual",  color: "#42775C", bg: "rgba(134,183,154,.13)", border: "rgba(134,183,154,.3)" },
   folicular:  { emoji: "🌱", label: "Folicular",  color: "#3A7A66", bg: "rgba(150,199,179,.13)", border: "rgba(150,199,179,.35)" },
   ovulatoria: { emoji: "🚀", label: "Ovulatória", color: "#4F7D8E", bg: "rgba(99,152,169,.13)",  border: "rgba(99,152,169,.3)"  },
   lutea:      { emoji: "🌊", label: "Lútea",      color: "#705A8A", bg: "rgba(160,120,180,.13)", border: "rgba(160,120,180,.3)" },

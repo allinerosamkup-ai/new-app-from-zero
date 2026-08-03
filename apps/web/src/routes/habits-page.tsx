@@ -29,7 +29,7 @@ import { getLocalDateKey } from "../utils/day-context";
 import { useLocalizedCopy } from "../i18n";
 
 // ─── Confetti burst (CSS-only, no dependency) ────────────────────────────────
-const CONFETTI_COLORS = ["#D7897F","#96C7B3","#6398A9","#B5A4C8","#F9C784","#fff"];
+const CONFETTI_COLORS = ["#86B79A","#96C7B3","#6398A9","#B5A4C8","#F9C784","#fff"];
 const CONFETTI_COUNT = 42;
 
 function ConfettiBurst({ active }: { active: boolean }) {
@@ -153,10 +153,10 @@ const ACHIEVEMENTS: AchievementDef[] = [
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   health:       { label: "Saúde",         color: "var(--accent-sage)",    bg: "rgba(150,199,179,0.14)" },
   productivity: { label: "Produtividade", color: "var(--accent-sky)",    bg: "rgba(99,152,169,0.14)"  },
-  mindfulness:  { label: "Mindfulness",   color: "var(--accent-peach)", bg: "rgba(215,137,127,0.14)" },
+  mindfulness:  { label: "Mindfulness",   color: "var(--accent-peach)", bg: "rgba(134,183,154,0.14)" },
   social:       { label: "Social",        color: "#B5A4C8",          bg: "rgba(181,164,200,0.14)" },
   learning:     { label: "Aprendizado",   color: "var(--accent-sky)",    bg: "rgba(99,152,169,0.14)"  },
-  leisure:      { label: "Lazer",         color: "var(--accent-peach)", bg: "rgba(215,137,127,0.14)" },
+  leisure:      { label: "Lazer",         color: "var(--accent-peach)", bg: "rgba(134,183,154,0.14)" },
   geral:        { label: "Geral",         color: "var(--text-3)",    bg: "rgba(150,150,150,0.10)" },
 };
 
@@ -192,9 +192,9 @@ function StreakDots({ streakCount, completedToday }: { streakCount: number; comp
               background: isFilled
                 ? "var(--accent-peach)"
                 : isToday
-                  ? "rgba(215,137,127,0.25)"
+                  ? "rgba(134,183,154,0.25)"
                   : "var(--warm-border)",
-              border: isToday ? "1.5px solid rgba(215,137,127,0.5)" : "none",
+              border: isToday ? "1.5px solid rgba(134,183,154,0.5)" : "none",
               transition: "all 0.2s ease",
             }}
           />
@@ -709,8 +709,8 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
               width: 30,
               height: 30,
               borderRadius: 8,
-              border: "1.5px solid rgba(215,137,127,0.25)",
-              background: "rgba(215,137,127,0.06)",
+              border: "1.5px solid rgba(134,183,154,0.25)",
+              background: "rgba(134,183,154,0.06)",
               color: archiving ? "var(--text-3)" : "var(--accent-peach)",
               cursor: archiving ? "default" : "pointer",
               display: "flex",
@@ -771,8 +771,8 @@ function AllHabitCard({ habit, dateKey, onArchive, onEdit }: { habit: Habit; dat
               width: "100%",
               padding: "9px 0",
               borderRadius: 10,
-              border: "1.5px solid rgba(215,137,127,0.25)",
-              background: "rgba(215,137,127,0.06)",
+              border: "1.5px solid rgba(134,183,154,0.25)",
+              background: "rgba(134,183,154,0.06)",
               color: archiving ? "var(--text-3)" : "var(--accent-peach)",
               fontSize: 12,
               fontWeight: 700,
@@ -813,8 +813,8 @@ function HabitCatalog({
         marginBottom: 22,
         padding: "18px 16px",
         borderRadius: 24,
-        border: "1.5px solid rgba(215,137,127,.18)",
-        background: "linear-gradient(145deg, rgba(255,255,255,.94), rgba(215,137,127,.07))",
+        border: "1.5px solid rgba(134,183,154,.18)",
+        background: "linear-gradient(145deg, rgba(255,255,255,.94), rgba(134,183,154,.07))",
         boxShadow: "0 12px 32px rgba(74,63,60,.06)",
       }}
     >
@@ -839,9 +839,9 @@ function HabitCatalog({
           style={{
             minHeight: 38,
             borderRadius: 999,
-            border: "1px solid rgba(215,137,127,.28)",
+            border: "1px solid rgba(134,183,154,.28)",
             background: "rgba(255,255,255,.9)",
-            color: "var(--nectarine-11, #8B4A43)",
+            color: "var(--nectarine-11, #44735B)",
             padding: "8px 12px",
             fontSize: 11,
             fontWeight: 900,
@@ -866,8 +866,8 @@ function HabitCatalog({
                 minHeight: 34,
                 borderRadius: 999,
                 border: active ? "1px solid var(--accent-peach)" : "1px solid var(--warm-border)",
-                background: active ? "rgba(215,137,127,.13)" : "rgba(255,255,255,.76)",
-                color: active ? "var(--nectarine-11, #8B4A43)" : "var(--text-2)",
+                background: active ? "rgba(134,183,154,.13)" : "rgba(255,255,255,.76)",
+                color: active ? "var(--nectarine-11, #44735B)" : "var(--text-2)",
                 padding: "7px 11px",
                 fontSize: 10.5,
                 fontWeight: 800,
@@ -1146,8 +1146,8 @@ export function HabitsPage() {
             style={{
               padding: "14px 16px",
               borderRadius: 16,
-              border: "1.5px solid rgba(215,137,127,0.2)",
-              background: "rgba(215,137,127,0.07)",
+              border: "1.5px solid rgba(134,183,154,0.2)",
+              background: "rgba(134,183,154,0.07)",
               display: "flex",
               alignItems: "center",
               gap: 12,
@@ -1440,8 +1440,8 @@ export function HabitsPage() {
               <div style={{
                 padding: "14px 16px",
                 borderRadius: 16,
-                background: "rgba(215,137,127,0.07)",
-                border: "1.5px solid rgba(215,137,127,0.18)",
+                background: "rgba(134,183,154,0.07)",
+                border: "1.5px solid rgba(134,183,154,0.18)",
                 marginBottom: 20,
                 display: "flex",
                 alignItems: "center",
@@ -1539,7 +1539,7 @@ export function HabitsPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 4px 20px rgba(215,137,127,0.45)",
+          boxShadow: "0 4px 20px rgba(134,183,154,0.45)",
           zIndex: 100,
           transition: "transform 0.15s ease",
         }}

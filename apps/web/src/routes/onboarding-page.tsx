@@ -62,7 +62,7 @@ export function OnboardingPage() {
             style={{
               height: 6,
               borderRadius: 999,
-              background: "rgba(243,176,140,.12)",
+              background: "rgba(169,210,187,.12)",
               overflow: "hidden",
               margin: "12px 0 4px",
             }}

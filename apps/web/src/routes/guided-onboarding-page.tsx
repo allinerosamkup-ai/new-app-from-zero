@@ -238,7 +238,7 @@ export function GuidedOnboardingPage() {
               style={{
                 height: '100%',
                 width: `${((stepIndex + 1) / STEPS.length) * 100}%`,
-                background: 'var(--accent-peach-strong, #E8A08F)',
+                background: 'var(--accent-peach-strong, #8FC0A4)',
                 borderRadius: 999,
                 transition: 'width 220ms ease',
               }}
@@ -453,7 +453,7 @@ function AvailabilityStep({
                 style={{
                   height: 44, borderRadius: 12, padding: 0,
                   border: selected ? 'none' : '1.5px solid var(--warm-border-2)',
-                  background: selected ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+                  background: selected ? 'var(--accent-peach-strong, #8FC0A4)' : 'transparent',
                   color: selected ? '#FFF' : 'var(--text-2)',
                   fontSize: 13, fontWeight: 800, cursor: 'pointer',
                 }}
@@ -590,7 +590,7 @@ function CommitmentStep({
                 style={{
                   height: 44, borderRadius: 12,
                   border: selected ? 'none' : '1.5px solid var(--warm-border-2)',
-                  background: selected ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+                  background: selected ? 'var(--accent-peach-strong, #8FC0A4)' : 'transparent',
                   color: selected ? '#FFF' : 'var(--text-2)',
                   fontSize: 13, fontWeight: 800, cursor: 'pointer', padding: 0,
                 }}
@@ -616,7 +616,7 @@ function CommitmentStep({
               style={{
                 flexShrink: 0, padding: '10px 14px', borderRadius: 12, minHeight: 42,
                 border: draftStart === hour ? 'none' : '1.5px solid var(--warm-border-2)',
-                background: draftStart === hour ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+                background: draftStart === hour ? 'var(--accent-peach-strong, #8FC0A4)' : 'transparent',
                 color: draftStart === hour ? '#FFF' : 'var(--text-2)',
                 fontSize: 13, fontWeight: 700, cursor: 'pointer',
               }}
@@ -677,8 +677,8 @@ function HabitStep({
               display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px',
               borderRadius: 16, width: '100%', textAlign: 'left', cursor: 'pointer',
               minHeight: 60,
-              border: selected ? '1.5px solid var(--accent-peach-strong, #E8A08F)' : '1.5px solid var(--warm-border-2)',
-              background: selected ? 'var(--accent-peach-a, rgba(244,190,168,.12))' : 'var(--surface-1, #FFF)',
+              border: selected ? '1.5px solid var(--accent-peach-strong, #8FC0A4)' : '1.5px solid var(--warm-border-2)',
+              background: selected ? 'var(--accent-peach-a, rgba(191,220,203,.12))' : 'var(--surface-1, #FFF)',
             }}
           >
             <span style={{ fontSize: 20, flexShrink: 0 }} aria-hidden>{template.emoji}</span>
@@ -695,7 +695,7 @@ function HabitStep({
               style={{
                 width: 20, height: 20, flexShrink: 0, borderRadius: '50%',
                 border: selected ? 'none' : '1.5px solid var(--warm-border-2)',
-                background: selected ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+                background: selected ? 'var(--accent-peach-strong, #8FC0A4)' : 'transparent',
                 color: '#FFF', fontSize: 12, fontWeight: 800,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}

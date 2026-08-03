@@ -8,7 +8,7 @@ import { buildHabitPayload, type HabitFormDraft, type HabitPayload, type HabitFr
 export type HabitModalPayload = HabitPayload;
 
 const HABIT_THEME_META: Record<HabitSuggestion["theme"], { label: string; accent: string; bg: string }> = {
-  starter: { label: "Cotidiano leve", accent: "var(--accent-peach)", bg: "rgba(244,190,168,.18)" },
+  starter: { label: "Cotidiano leve", accent: "var(--accent-peach)", bg: "rgba(191,220,203,.18)" },
   autocuidado: { label: "Autocuidado", accent: "var(--sweet-mint)", bg: "rgba(192,220,203,.22)" },
   casa: { label: "Casa em ordem", accent: "var(--horizon)", bg: "rgba(189,207,236,.22)" },
   social: { label: "Vínculos", accent: "var(--horizon)", bg: "rgba(218,206,235,.24)" },
@@ -205,62 +205,55 @@ export function HabitIdeasModal({
           </button>
         </div>
 
+        {/* Sem caixa em volta e sem gradiente: o campo de texto já é a
+            entrada. O emoji vira um alvo redondo ao lado, não um quadrado. */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "56px 1fr",
+            gridTemplateColumns: "40px 1fr",
             gap: 10,
-            padding: 14,
-            borderRadius: 22,
-            background: "linear-gradient(135deg, rgba(244,190,168,.16), rgba(229,219,247,.18))",
-            border: "1px solid rgba(17,24,39,.05)",
-            marginBottom: 14,
+            alignItems: "center",
+            marginBottom: 16,
           }}
         >
           <button
             type="button"
+            aria-label="Trocar ícone do hábito"
             onClick={() => {
               const currentIndex = EMOJI_OPTIONS.indexOf(draft.icon);
               updateDraft({ icon: EMOJI_OPTIONS[(currentIndex + 1) % EMOJI_OPTIONS.length] });
             }}
             style={{
-              width: 56,
-              height: 56,
-              borderRadius: 18,
-              border: "1px solid rgba(17,24,39,.06)",
-              background: "rgba(255,255,255,.88)",
-              fontSize: 28,
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              border: "1px solid rgba(17,24,39,.08)",
+              background: "rgba(255,255,255,.9)",
+              fontSize: 20,
+              lineHeight: 1,
               cursor: "pointer",
             }}
           >
             {draft.icon}
           </button>
-          <div>
-            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--text-3)" }}>
-              Entrada livre
-            </p>
-            <textarea
-              value={draft.title}
-              onChange={(event) => updateDraft({ title: event.target.value })}
-              placeholder="Ex: beber água, regar as plantas, 5 min de silêncio"
-              rows={2}
-              style={{
-                width: "100%",
-                minHeight: 58,
-                borderRadius: 14,
-                border: "1px solid rgba(17,24,39,.08)",
-                background: "rgba(255,255,255,.92)",
-                padding: "10px 14px",
-                fontSize: 14,
-                color: "var(--text-1)",
-                outline: "none",
-                boxSizing: "border-box",
-                resize: "none",
-                lineHeight: 1.35,
-                fontFamily: "inherit",
-              }}
-            />
-          </div>
+          <input
+            value={draft.title}
+            onChange={(event) => updateDraft({ title: event.target.value })}
+            placeholder="Ex: beber água, regar as plantas, 5 min de silêncio"
+            style={{
+              width: "100%",
+              height: 40,
+              borderRadius: 999,
+              border: "1px solid rgba(17,24,39,.08)",
+              background: "rgba(255,255,255,.92)",
+              padding: "0 16px",
+              fontSize: 14,
+              color: "var(--text-1)",
+              outline: "none",
+              boxSizing: "border-box",
+              fontFamily: "inherit",
+            }}
+          />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
@@ -275,10 +268,10 @@ export function HabitIdeasModal({
                   type="button"
                   onClick={() => setFrequency(frequency)}
                   style={{
-                    height: 38,
-                    borderRadius: 12,
+                    height: 34,
+                    borderRadius: 999,
                     border: `1px solid ${draft.frequency === frequency ? "var(--accent-peach)" : "rgba(17,24,39,.08)"}`,
-                    background: draft.frequency === frequency ? "rgba(244,190,168,.18)" : "rgba(255,255,255,.8)",
+                    background: draft.frequency === frequency ? "rgba(191,220,203,.18)" : "rgba(255,255,255,.8)",
                     color: draft.frequency === frequency ? "var(--accent-peach-ink)" : "var(--text-2)",
                     fontWeight: 800,
                     fontSize: 12,
@@ -303,8 +296,8 @@ export function HabitIdeasModal({
               onChange={(event) => updateDraft({ targetCount: Number(event.target.value) })}
               style={{
                 width: "100%",
-                height: 38,
-                borderRadius: 12,
+                height: 34,
+                borderRadius: 999,
                 border: "1px solid rgba(17,24,39,.08)",
                 background: "rgba(255,255,255,.88)",
                 padding: "0 12px",
@@ -332,7 +325,7 @@ export function HabitIdeasModal({
                     onClick={() => updateDraft({ targetDays: toggleArrayValue(draft.targetDays, day.value) })}
                     style={{
                       height: 34,
-                      borderRadius: 12,
+                      borderRadius: 999,
                       border: `1px solid ${selected ? "var(--accent-sage)" : "rgba(17,24,39,.08)"}`,
                       background: selected ? "rgba(192,220,203,.28)" : "rgba(255,255,255,.82)",
                       color: selected ? "var(--accent-sage-ink)" : "var(--text-2)",
@@ -356,7 +349,7 @@ export function HabitIdeasModal({
             <select
               value={draft.category}
               onChange={(event) => updateDraft({ category: event.target.value })}
-              style={{ width: "100%", height: 40, borderRadius: 12, border: "1px solid rgba(17,24,39,.08)", background: "rgba(255,255,255,.9)", padding: "0 10px", color: "var(--text-1)", fontWeight: 700 }}
+              style={{ width: "100%", height: 40, borderRadius: 999, border: "1px solid rgba(17,24,39,.08)", background: "rgba(255,255,255,.9)", padding: "0 10px", color: "var(--text-1)", fontWeight: 700 }}
             >
               {CATEGORY_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -370,7 +363,7 @@ export function HabitIdeasModal({
             <select
               value={draft.timeOfDay}
               onChange={(event) => updateDraft({ timeOfDay: event.target.value })}
-              style={{ width: "100%", height: 40, borderRadius: 12, border: "1px solid rgba(17,24,39,.08)", background: "rgba(255,255,255,.9)", padding: "0 10px", color: "var(--text-1)", fontWeight: 700 }}
+              style={{ width: "100%", height: 40, borderRadius: 999, border: "1px solid rgba(17,24,39,.08)", background: "rgba(255,255,255,.9)", padding: "0 10px", color: "var(--text-1)", fontWeight: 700 }}
             >
               {TIME_OF_DAY_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -418,13 +411,13 @@ export function HabitIdeasModal({
                 type="time"
                 value={draft.reminderTime}
                 onChange={(event) => updateDraft({ reminderTime: event.target.value })}
-                style={{ height: 40, borderRadius: 12, border: "1px solid rgba(150,199,179,.45)", background: "rgba(150,199,179,.08)", padding: "0 10px", color: "var(--text-1)", fontWeight: 800 }}
+                style={{ height: 40, borderRadius: 999, border: "1px solid rgba(150,199,179,.45)", background: "rgba(150,199,179,.08)", padding: "0 10px", color: "var(--text-1)", fontWeight: 800 }}
               />
               <select
                 value={draft.persistentReminderIntervalMinutes}
                 disabled={!draft.persistentReminderEnabled}
                 onChange={(event) => updateDraft({ persistentReminderIntervalMinutes: Number(event.target.value) })}
-                style={{ height: 40, borderRadius: 12, border: "1px solid rgba(17,24,39,.08)", background: draft.persistentReminderEnabled ? "rgba(255,255,255,.9)" : "rgba(17,24,39,.04)", padding: "0 10px", color: "var(--text-1)", fontWeight: 700 }}
+                style={{ height: 40, borderRadius: 999, border: "1px solid rgba(17,24,39,.08)", background: draft.persistentReminderEnabled ? "rgba(255,255,255,.9)" : "rgba(17,24,39,.04)", padding: "0 10px", color: "var(--text-1)", fontWeight: 700 }}
               >
                 <option value={30}>A cada 30 min</option>
                 <option value={60}>A cada 1 hora</option>
@@ -452,7 +445,7 @@ export function HabitIdeasModal({
           style={{
             width: "100%",
             minHeight: 76,
-            borderRadius: 14,
+            borderRadius: 999,
             border: "1px solid rgba(17,24,39,.08)",
             background: "rgba(255,255,255,.86)",
             padding: "10px 12px",
@@ -493,7 +486,11 @@ export function HabitIdeasModal({
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+              {/* Uma linha por ideia, empilhadas. O carrossel horizontal
+                  escondia metade das opções e obrigava a arrastar de lado; a
+                  frase "Toque para preencher o formulário" saiu porque
+                  repetia a mesma instrução em cada cartão. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {suggestions.map((suggestion) => {
                   const selected = selectedSuggestion === suggestion.title;
                   return (
@@ -502,30 +499,37 @@ export function HabitIdeasModal({
                       type="button"
                       onClick={() => applySuggestion(suggestion)}
                       style={{
-                        minWidth: 180,
-                        maxWidth: 180,
-                        padding: 14,
-                        borderRadius: 22,
-                        border: `1px solid ${selected ? `${meta.accent}55` : "rgba(17,24,39,.06)"}`,
-                        background: selected ? "rgba(255,255,255,.98)" : meta.bg,
-                        boxShadow: "0 10px 22px rgba(17,24,39,.06)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        minHeight: 42,
+                        padding: "0 14px",
+                        borderRadius: 999,
+                        border: `1px solid ${selected ? meta.accent : "rgba(17,24,39,.07)"}`,
+                        background: selected ? meta.bg : "rgba(255,255,255,.72)",
                         cursor: "pointer",
                         textAlign: "left",
-                        flexShrink: 0,
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 14 }}>
-                        <span style={{ fontSize: 24 }}>{suggestion.icon}</span>
-                        <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: meta.accent }}>
-                          {suggestion.durationMinutes > 0 ? `${suggestion.durationMinutes} min` : "flex"}
-                        </span>
-                      </div>
-                      <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.3 }}>
+                      <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{suggestion.icon}</span>
+                      <span
+                        style={{
+                          flex: 1,
+                          fontSize: 13,
+                          fontWeight: selected ? 800 : 600,
+                          color: "var(--text-1)",
+                          lineHeight: 1.3,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
                         {suggestion.title}
-                      </p>
-                      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.45, color: "var(--text-2)" }}>
-                        {selected ? "Ajuste os detalhes acima e salve." : "Toque para preencher o formulário."}
-                      </p>
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-3)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                        {suggestion.durationMinutes > 0 ? `${suggestion.durationMinutes} min` : "flex"}
+                      </span>
                     </button>
                   );
                 })}

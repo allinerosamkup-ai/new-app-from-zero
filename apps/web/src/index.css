@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --accent-peach: #F4BEA8;
+  --accent-peach: #BFDCCB;
   --accent-butter: #F7E7A6;
   --accent-sage:    #BFDCCB;
   --accent-sky:    #BEE6F3;
@@ -25,18 +25,18 @@
   --accent-green:  #BFDCCB;
   --accent-blue:   #BEE6F3;
   --accent-teal:   #BFDCCB;
-  --accent-orange: #F4BEA8;
+  --accent-orange: #BFDCCB;
   --accent-purple: #E5DBF7;
-  --accent-rose:   #F5C9C1;
+  --accent-rose:   #CFE4D7;
 
   --cat-trabalho: #BEE6F3;
   --cat-saude:    #BFDCCB;
   --cat-lazer:    #F7E7A6;
-  --cat-rotina:   #F4BEA8;
+  --cat-rotina:   #BFDCCB;
 
   --state-leve:     #BFDCCB;
   --state-moderado: #F7E7A6;
-  --state-sensivel: #F4BEA8;
+  --state-sensivel: #BFDCCB;
   --state-critico:  #F3A7A7;
 
   --radius-sm: 12px;
@@ -57,10 +57,10 @@
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* ── Accent peach ── */
-  --accent-9:        #F4BEA8;
-  --accent-10:       #E8A98F;
-  --accent-11:       #A86855;
-  --accent-surface:  rgba(244, 190, 168, .10);
+  --accent-9:        #BFDCCB;
+  --accent-10:       #8FC0A4;
+  --accent-11:       #4F7359;
+  --accent-surface:  rgba(191,220,203, .10);
 
   /* ── Bordas tonais ── */
   --border-subtle:      rgba(17, 24, 39, .06);

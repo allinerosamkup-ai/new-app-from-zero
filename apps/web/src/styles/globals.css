@@ -1,14 +1,16 @@
 :root {
   /* ──── Aura × Spring Meadow Core Palette ──── */
-  --herald-of-spring: #A36361;
+  --herald-of-spring: #5C8468;
   --olive:            #8B895B;
   --horizon:          #558E9B;
   --dusty-lavender:   #A386A9;
-  --terracotta:       #F3B08C;
+  --terracotta:       #A9D2BB;
   --spanish-green:    #84A48B;
   --neptune:          #7BB2BA;
-  --rose:             #E69B88;
-  --atomic-tangerine: #F3B08C; /* Official Primary */
+  --rose:             #8FC0A4;
+  /* Primário oficial. O nome é herdado; o valor é verde desde a virada da
+   * identidade visual. Trocar aqui muda o app inteiro — inclusive a splash. */
+  --atomic-tangerine: #A9D2BB;
   --sweet-mint:       #AECD88;
   --buttercup:        #E7C875;
   --wisteria-purple:  #C6B3CA;
@@ -17,15 +19,15 @@
 
   /* ──── Legacy Remapping (Safety Net) ──── */
   --accent-peach:        var(--atomic-tangerine);
-  --accent-peach-soft:   rgba(247, 158, 112, 0.15);
-  --rose-soft:        #F9D0CD;
+  --accent-peach-soft:   rgba(169, 210, 187, 0.20);
+  --rose-soft:        #CFE4D7;
   --sage-soft:        #DCE9DF;
   --lavender-soft:    #E7DEF6;
   --cream-strong:     #FFF5EA;
 
   /* ──── Functional Tokens ──── */
   --primary:          var(--atomic-tangerine);
-  --primary-hover:    #E39A73;
+  --primary-hover:    #8FC0A4;
   --text-1:           #1F2A36; /* Deep Navy ONLY for text */
   --text-2:           #4A5568;
   --text-3:           #8B96A5;
@@ -176,8 +178,8 @@ button {
   width: 14px;
   height: 14px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #e8a39a, #C5A593);
-  box-shadow: 0 0 0 6px rgba(215, 137, 127, 0.12);
+  background: linear-gradient(180deg, #8FC0A4, #9BBFA8);
+  box-shadow: 0 0 0 6px rgba(134,183,154, 0.12);
 }
 
 .aura-nav {
@@ -214,7 +216,7 @@ button {
 .aura-sidebar-card p {
   margin: 0;
   line-height: 1.5;
-  color: #5c4a44;
+  color: #44544A;
 }
 
 .aura-content {
@@ -272,7 +274,7 @@ button {
 .aura-preference span,
 .aura-goal span,
 .aura-step span {
-  color: #5c4a44;
+  color: #44544A;
   line-height: 1.5;
 }
 
@@ -360,10 +362,10 @@ button {
 }
 
 .aura-button--primary {
-  background: rgba(243, 176, 140, 0.62);
+  background: rgba(169,210,187, 0.62);
   border-color: rgba(255,255,255,.76);
   color: white;
-  box-shadow: 0 12px 28px rgba(243,176,140,.18), 0 1px 0 rgba(255,255,255,.24) inset;
+  box-shadow: 0 12px 28px rgba(169,210,187,.18), 0 1px 0 rgba(255,255,255,.24) inset;
 }
 
 .aura-button--secondary {
@@ -380,7 +382,7 @@ button {
 
 .aura-button--ghost {
   background: rgba(255,255,255,.34);
-  border-color: rgba(243,176,140,.18);
+  border-color: rgba(169,210,187,.18);
   color: var(--muted);
   box-shadow: none;
 }
@@ -472,7 +474,7 @@ button {
 
 .aura-progress__bar {
   height: 100%;
-  background: linear-gradient(90deg, #e8a39a, #C5A593);
+  background: linear-gradient(90deg, #8FC0A4, #9BBFA8);
   border-radius: inherit;
 }
 

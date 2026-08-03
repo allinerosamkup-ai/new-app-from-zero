@@ -126,12 +126,6 @@ type AuraRouteState = {
   autoSend?: boolean;
 };
 
-const QUICK_ACTIONS: Array<{ labelKey: string; promptKey: string }> = [
-  { labelKey: "aura.suggestions.organizeDay", promptKey: "aura.quickPrompts.organizeDay" },
-  { labelKey: "aura.suggestions.transformGoal", promptKey: "aura.quickPrompts.transformGoal" },
-  { labelKey: "aura.suggestions.patterns", promptKey: "aura.quickPrompts.patterns" },
-  { labelKey: "aura.suggestions.falling", promptKey: "aura.quickPrompts.falling" },
-];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -942,24 +936,9 @@ export function AuraChatPage() {
         </div>
       </div>
 
-      <div style={{ padding: "10px 16px", display: "flex", gap: 6, overflowX: "auto" }}>
-        {QUICK_ACTIONS.map((action) => (
-          <AuraButtonV2
-            key={action.labelKey}
-            onClick={() => send(t(action.promptKey))}
-            disabled={isTyping || !sessionId}
-            variant="glass"
-            size="sm"
-            style={{
-              flexShrink: 0,
-              whiteSpace: "nowrap",
-              color: "var(--accent-peach-ink)",
-            }}
-          >
-            {t(action.labelKey)}
-          </AuraButtonV2>
-        ))}
-      </div>
+      {/* Sem chips de sugestão: a Airia é agente, não menu. A pessoa fala o que
+          precisa e ela identifica a intenção e executa. Oferecer quatro atalhos
+          prontos ensinava o contrário — que só aquilo ali era possível. */}
 
       <div style={{ flex: 1, overflowY: "auto", padding: "0 16px 8px" }}>
         {messages.map((message, index) => (
@@ -981,7 +960,7 @@ export function AuraChatPage() {
                   flexShrink: 0,
                   marginRight: 10,
                   marginTop: 12,
-                  boxShadow: "0 0 0 4px rgba(243,176,140,.14)",
+                  boxShadow: "0 0 0 4px rgba(169,210,187,.14)",
                 }}
               />
             )}
@@ -990,14 +969,14 @@ export function AuraChatPage() {
                 maxWidth: "min(92%, 440px)",
                 padding: "9px 13px",
                 borderRadius: message.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                background: message.role === "user" ? "rgba(243,176,140,.58)" : "rgba(255,255,255,.68)",
+                background: message.role === "user" ? "rgba(169,210,187,.58)" : "rgba(255,255,255,.68)",
                 color: message.role === "user" ? "#fff" : "var(--text-1)",
                 fontSize: 13.5,
                 lineHeight: 1.55,
                 boxShadow:
                   message.role === "user"
-                    ? "0 10px 24px rgba(243,176,140,.18)"
-                    : "0 10px 24px rgba(243,176,140,.08)",
+                    ? "0 10px 24px rgba(169,210,187,.18)"
+                    : "0 10px 24px rgba(169,210,187,.08)",
                 border: "1px solid rgba(255,255,255,.82)",
                 fontFamily: "'Plus Jakarta Sans', sans-serif",
                 backdropFilter: "blur(18px)",
@@ -1021,7 +1000,7 @@ export function AuraChatPage() {
                 flexShrink: 0,
                 marginRight: 10,
                 marginTop: 12,
-                boxShadow: "0 0 0 4px rgba(243,176,140,.14)",
+                boxShadow: "0 0 0 4px rgba(169,210,187,.14)",
               }}
             />
             <div
@@ -1033,7 +1012,7 @@ export function AuraChatPage() {
                 color: "var(--text-2)",
                 fontSize: 13.5,
                 lineHeight: 1.55,
-                boxShadow: "0 10px 24px rgba(243,176,140,.08)",
+                boxShadow: "0 10px 24px rgba(169,210,187,.08)",
                 border: "1px solid rgba(255,255,255,.82)",
                 fontFamily: "'Plus Jakarta Sans', sans-serif",
                 backdropFilter: "blur(18px)",
@@ -1053,7 +1032,7 @@ export function AuraChatPage() {
               border: "1px solid rgba(255,255,255,.84)",
               borderRadius: 18,
               padding: "12px 14px",
-              boxShadow: "0 12px 24px rgba(243,176,140,.08)",
+              boxShadow: "0 12px 24px rgba(169,210,187,.08)",
               backdropFilter: "blur(18px)",
             }}
           >
@@ -1150,7 +1129,7 @@ export function AuraChatPage() {
               border: "1px solid rgba(255,255,255,.84)",
               borderRadius: 18,
               padding: "12px 14px",
-              boxShadow: "0 12px 24px rgba(243,176,140,.08)",
+              boxShadow: "0 12px 24px rgba(169,210,187,.08)",
               backdropFilter: "blur(18px)",
             }}
           >
@@ -1249,7 +1228,7 @@ export function AuraChatPage() {
               border: "1px solid rgba(255,255,255,.84)",
               borderRadius: 18,
               padding: "12px 14px",
-              boxShadow: "0 12px 24px rgba(243,176,140,.08)",
+              boxShadow: "0 12px 24px rgba(169,210,187,.08)",
               backdropFilter: "blur(18px)",
             }}
           >
@@ -1342,7 +1321,7 @@ export function AuraChatPage() {
             borderRadius: 22,
             border: "1px solid rgba(255,255,255,.82)",
             padding: "6px 6px 6px 14px",
-            boxShadow: "0 12px 24px rgba(243,176,140,.08)",
+            boxShadow: "0 12px 24px rgba(169,210,187,.08)",
             backdropFilter: "blur(18px)",
           }}
         >

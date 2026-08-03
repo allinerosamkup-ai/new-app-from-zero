@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@app/database';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { recordInitialConsents } from '../services/consent.service';
 
 // Lazy singleton — criado na primeira requisição, quando dotenv já carregou os env vars
 let _client: SupabaseClient | null = null;
@@ -29,7 +30,12 @@ type AuthProfileUser = {
   user_metadata?: Record<string, unknown>;
 };
 
-export function createProfileBootstrapper(profileRepository: ProfileRepository) {
+export function createProfileBootstrapper(
+  profileRepository: ProfileRepository,
+  // Opcional para não quebrar chamadores existentes (inclusive o teste de
+  // bootstrap, que injeta só o repositório de perfil).
+  recordConsents?: (userId: string) => Promise<void>,
+) {
   const ensured = new Map<string, Promise<void>>();
 
   return (user: AuthProfileUser): Promise<void> => {
@@ -45,7 +51,17 @@ export function createProfileBootstrapper(profileRepository: ProfileRepository) 
       where: { id: user.id },
       update: {},
       create: { id: user.id, fullName },
-    }).then(() => undefined).catch((error) => {
+    }).then(async () => {
+      // Consentimento é gravado depois do perfil existir (a FK exige isso) e
+      // nunca pode derrubar a autenticação: sem o catch, uma falha ao registrar
+      // consentimento tiraria a pessoa do app inteiro.
+      if (recordConsents) {
+        await recordConsents(user.id).catch((error) => {
+          console.error('[auth/consent-bootstrap] Error:', error);
+        });
+      }
+      return undefined;
+    }).catch((error) => {
       ensured.delete(user.id);
       throw error;
     });
@@ -60,7 +76,13 @@ let _bootstrapProfile: ReturnType<typeof createProfileBootstrapper> | null = nul
 
 function getProfileBootstrapper() {
   if (!_profilePrisma) _profilePrisma = new PrismaClient();
-  if (!_bootstrapProfile) _bootstrapProfile = createProfileBootstrapper(_profilePrisma.profile);
+  if (!_bootstrapProfile) {
+    const prisma = _profilePrisma;
+    _bootstrapProfile = createProfileBootstrapper(
+      prisma.profile,
+      (userId) => recordInitialConsents(prisma.consent, userId, new Date()),
+    );
+  }
   return _bootstrapProfile;
 }
 

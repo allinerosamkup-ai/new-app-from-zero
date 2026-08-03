@@ -1125,7 +1125,7 @@ export function InsightsPage() {
               {positive.length > 0 && (
                 <>
                   <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-sage)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 10px" }}>
-                    ✨ Associações em registros de humor mais alto
+                    {l("✨ Associações em registros de humor mais alto", "✨ Associations in higher-mood entries")}
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: negative.length > 0 ? 16 : 0 }}>
                     {positive.map(item => {
@@ -1144,7 +1144,10 @@ export function InsightsPage() {
                             <div style={{ width: `${Math.min(100, (item.delta / 10) * 100 * 3)}%`, height: "100%", borderRadius: 999, background: "var(--accent-sage)", transition: "width .5s ease" }} />
                           </div>
                           <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
-                            Com: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10 · {item.sampleCount} dias ({item.confidence === "high" ? "boa base" : "base inicial"}). Associação não prova causa.
+                            {l(
+                              `Com: ${item.avgWith.toFixed(1)}/10 · sem: ${item.avgWithout.toFixed(1)}/10 · ${item.sampleCount} dias (${item.confidence === "high" ? "boa base" : "base inicial"}). Associação não prova causa.`,
+                              `With: ${item.avgWith.toFixed(1)}/10 · without: ${item.avgWithout.toFixed(1)}/10 · ${item.sampleCount} days (${item.confidence === "high" ? "solid base" : "early base"}). Association does not prove causation.`,
+                            )}
                           </p>
                         </div>
                       );
@@ -1156,7 +1159,7 @@ export function InsightsPage() {
               {negative.length > 0 && (
                 <>
                   <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach)", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 10px" }}>
-                    😔 Associações em registros de humor mais baixo
+                    {l("😔 Associações em registros de humor mais baixo", "😔 Associations in lower-mood entries")}
                   </p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {negative.map(item => {
@@ -1175,7 +1178,10 @@ export function InsightsPage() {
                             <div style={{ width: `${Math.min(100, (Math.abs(item.delta) / 10) * 100 * 3)}%`, height: "100%", borderRadius: 999, background: "var(--accent-peach)", transition: "width .5s ease" }} />
                           </div>
                           <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0", fontStyle: "italic" }}>
-                            Com: {item.avgWith.toFixed(1)}/10 · sem: {item.avgWithout.toFixed(1)}/10 · {item.sampleCount} dias ({item.confidence === "high" ? "boa base" : "base inicial"}). Associação não prova causa.
+                            {l(
+                              `Com: ${item.avgWith.toFixed(1)}/10 · sem: ${item.avgWithout.toFixed(1)}/10 · ${item.sampleCount} dias (${item.confidence === "high" ? "boa base" : "base inicial"}). Associação não prova causa.`,
+                              `With: ${item.avgWith.toFixed(1)}/10 · without: ${item.avgWithout.toFixed(1)}/10 · ${item.sampleCount} days (${item.confidence === "high" ? "solid base" : "early base"}). Association does not prove causation.`,
+                            )}
                           </p>
                         </div>
                       );
@@ -1445,8 +1451,8 @@ export function InsightsPage() {
                     return (
                       <span key={flag} style={{
                         fontSize: 10, padding: "3px 8px", borderRadius: 999,
-                        background: "rgba(215,137,127,.12)", color: "var(--accent-peach)",
-                        border: "1px solid rgba(215,137,127,.25)", fontWeight: 600,
+                        background: "rgba(134,183,154,.12)", color: "var(--accent-peach)",
+                        border: "1px solid rgba(134,183,154,.25)", fontWeight: 600,
                       }}>
                         ⚠ {FLAG_LABELS[flag] ?? flag}
                       </span>
@@ -1560,7 +1566,7 @@ export function InsightsPage() {
               {bestHabit && bestHabit.bestStreak > 0 && (
                 <div style={{
                   padding: "8px 10px", borderRadius: 10,
-                  background: "rgba(215,137,127,0.08)", border: "1px solid rgba(215,137,127,0.20)",
+                  background: "rgba(134,183,154,0.08)", border: "1px solid rgba(134,183,154,0.20)",
                   display: "flex", alignItems: "center", gap: 10, marginBottom: 0,
                 }}>
                   <span style={{ fontSize: 18 }}>🏆</span>
@@ -1689,8 +1695,8 @@ export function InsightsPage() {
         {insightTab === "agora" && insightPhase === "done" && weeklyQuestion && (
           <div style={{
             borderRadius: 18,
-            background: "linear-gradient(135deg, rgba(215,137,127,0.10) 0%, rgba(150,199,179,0.08) 100%)",
-            border: "1.5px solid rgba(215,137,127,0.20)",
+            background: "linear-gradient(135deg, rgba(134,183,154,0.10) 0%, rgba(150,199,179,0.08) 100%)",
+            border: "1.5px solid rgba(134,183,154,0.20)",
             padding: "18px 20px",
             marginBottom: "calc(var(--a))",
           }}>
@@ -1737,7 +1743,7 @@ export function InsightsPage() {
                 </div>
               )}
               {moodDayHighlights.worstDay && (
-                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(215,137,127,0.08)", border: "1px solid rgba(215,137,127,0.25)", textAlign: "center" }}>
+                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(134,183,154,0.08)", border: "1px solid rgba(134,183,154,0.25)", textAlign: "center" }}>
                   <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-peach)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>{t("insights.difficultDay")}</p>
                   <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-peach)", margin: "0 0 1px" }}>{moodDayHighlights.worstDay.day}</p>
                   <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{l("humor", "mood")} {moodDayHighlights.worstDay.mood.toFixed(1)}/10</p>
@@ -1794,7 +1800,10 @@ export function InsightsPage() {
             {t("insights.reportTitle")}
           </p>
           <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.45, margin: "0 0 12px" }}>
-            Base: {reportEvidence.observedDays} dias com registro na janela de {reportEvidence.windowDays}; {reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}. Leituras mostram associações, não causas nem diagnósticos.
+            {l(
+              `Base: ${reportEvidence.observedDays} dias com registro na janela de ${reportEvidence.windowDays}; ${reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}. Leituras mostram associações, não causas nem diagnósticos.`,
+              `Base: ${reportEvidence.observedDays} days logged in a ${reportEvidence.windowDays}-day window; ${reportEvidence.confidence === "high" ? "solid base" : reportEvidence.confidence === "medium" ? "early base" : "insufficient data"}. Readings show associations, not causes or diagnoses.`,
+            )}
           </p>
 
           {monthlyReportPhase === 'idle' && (

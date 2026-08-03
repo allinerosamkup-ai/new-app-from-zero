@@ -78,7 +78,7 @@ export function ReferralCard({ userId, invitedCount = 0 }: ReferralCardProps) {
       <div style={{
         display: "flex",
         alignItems: "center",
-        background: "rgba(215,137,127,0.07)",
+        background: "rgba(134,183,154,0.07)",
         borderRadius: 12,
         padding: "10px 12px",
         gap: 8,

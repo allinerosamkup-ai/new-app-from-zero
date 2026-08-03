@@ -15,6 +15,31 @@ export const PRIOR_DIAGNOSIS_VALUES = [
 export const PriorDiagnosisSchema = z.enum(PRIOR_DIAGNOSIS_VALUES);
 export type PriorDiagnosis = z.infer<typeof PriorDiagnosisSchema>;
 
+/**
+ * Sexo autorrelatado. Existe por um motivo único: decidir se o rastreamento de
+ * ciclo menstrual aparece. Nenhum outro comportamento do produto ramifica aqui.
+ */
+export const BIOLOGICAL_SEX_VALUES = [
+  'female',
+  'male',
+] as const;
+
+export const BiologicalSexSchema = z.enum(BIOLOGICAL_SEX_VALUES);
+export type BiologicalSex = z.infer<typeof BiologicalSexSchema>;
+
+/**
+ * Único ponto de decisão do gate menstrual — front e back leem daqui para não
+ * divergirem.
+ *
+ * `null` = ainda não perguntado. Nesse caso o bloco continua visível, porque
+ * esconder um campo que a pessoa já usava por causa de uma pergunta que ela
+ * nunca viu seria perder dado sem aviso. Quem responde decide de verdade.
+ */
+export function tracksMenstrualCycle(sex: BiologicalSex | null | undefined): boolean {
+  if (sex === null || sex === undefined) return true;
+  return sex === 'female';
+}
+
 export const OnboardingProcessSchema = z.object({
   fullName: z.string().trim().min(1).max(80),
   age: z.number().int().min(13).max(120).nullable(),
@@ -30,6 +55,7 @@ export const OnboardingProcessSchema = z.object({
   cycleLength: z.number().int().min(21).max(40).nullable().optional(),
   lutealLength: z.number().int().min(9).max(17).nullable().optional(),
   priorDiagnoses: z.array(PriorDiagnosisSchema).max(5).default([]).optional(),
+  biologicalSex: BiologicalSexSchema.nullable().optional(),
   medicationCurrentlyUsing: z.boolean().nullable().optional(),
   medicationNotes: z.string().trim().max(500).nullable().optional(),
 });

@@ -143,7 +143,7 @@ export function PomodoroPage() {
               cx="110"
               cy="110"
               r={RADIUS}
-              stroke="rgba(197,165,147,.12)"
+              stroke="rgba(155,191,168,.12)"
               strokeWidth="9"
               fill="none"
             />
@@ -159,7 +159,7 @@ export function PomodoroPage() {
               strokeDasharray={CIRCUMFERENCE}
               strokeDashoffset={dashOffset}
               transform="rotate(-90 110 110)"
-              style={{ filter: "drop-shadow(0 0 6px rgba(197,165,147,.4))", transition: "stroke-dashoffset 0.8s ease" }}
+              style={{ filter: "drop-shadow(0 0 6px rgba(155,191,168,.4))", transition: "stroke-dashoffset 0.8s ease" }}
             />
           </svg>
 
@@ -268,7 +268,7 @@ export function PomodoroPage() {
                   borderRadius: "50%",
                   background: i < cycles
                     ? "var(--accent-peach)"
-                    : "rgba(197,165,147,.15)",
+                    : "rgba(155,191,168,.15)",
                   display: "inline-block",
                   flexShrink: 0,
                 }}

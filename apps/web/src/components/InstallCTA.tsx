@@ -134,7 +134,7 @@ function IosInstallSheet({ inSafari, onClose }: { inSafari: boolean; onClose: ()
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <img src="/icons/icon-192.png" alt="Airia" style={{ width: 36, height: 36, borderRadius: 8 }} />
           <div>
-            <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#4A3B37" }}>{l("Instalar Airia", "Install Airia")}</p>
+            <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#37453D" }}>{l("Instalar Airia", "Install Airia")}</p>
             <p style={{ margin: 0, fontSize: 12, color: "#7C6D68" }}>{l("Adicionar à tela inicial", "Add to Home Screen")}</p>
           </div>
         </div>
@@ -159,7 +159,7 @@ function IosInstallSheet({ inSafari, onClose }: { inSafari: boolean; onClose: ()
           </ol>
         ) : (
           <div style={{ padding: "12px 0 4px" }}>
-            <p style={{ margin: 0, fontSize: 14, color: "#4A3B37", lineHeight: 1.5 }}>
+            <p style={{ margin: 0, fontSize: 14, color: "#37453D", lineHeight: 1.5 }}>
               {l("Para instalar no iPhone, abra este link no", "To install on iPhone, open this link in")} <strong>Safari</strong>.
             </p>
             <p style={{ margin: "8px 0 0", fontSize: 12, color: "#7C6D68" }}>
@@ -215,7 +215,7 @@ const stepItemStyle: CSSProperties = {
   alignItems: "flex-start",
   gap: 10,
   fontSize: 14,
-  color: "#4A3B37",
+  color: "#37453D",
   lineHeight: 1.5,
 };
 
@@ -223,8 +223,8 @@ const stepNumStyle: CSSProperties = {
   minWidth: 22,
   height: 22,
   borderRadius: "50%",
-  background: "#F4A896",
-  color: "#5C3526",
+  background: "#8FC0A4",
+  color: "#274A38",
   fontSize: 12,
   fontWeight: 800,
   display: "flex",
@@ -304,7 +304,7 @@ function InstallCard({
 }
 
 const cardStyle: CSSProperties = {
-  border: "1px solid rgba(184,109,76,.16)",
+  border: "1px solid rgba(79,138,107,.16)",
   borderRadius: 8,
   padding: 13,
   display: "flex",
@@ -312,7 +312,7 @@ const cardStyle: CSSProperties = {
   gap: 9,
   minHeight: 0,
   boxShadow: "0 14px 32px rgba(107,91,87,.07)",
-  background: "linear-gradient(180deg, rgba(255,255,255,.92), rgba(244,168,150,.18))",
+  background: "linear-gradient(180deg, rgba(255,255,255,.92), rgba(143,192,164,.18))",
 };
 
 const eyebrowStyle: CSSProperties = {
@@ -321,7 +321,7 @@ const eyebrowStyle: CSSProperties = {
   fontWeight: 900,
   letterSpacing: ".16em",
   textTransform: "uppercase",
-  color: "#A45D3D",
+  color: "#47795E",
 };
 
 const titleStyle: CSSProperties = {
@@ -329,7 +329,7 @@ const titleStyle: CSSProperties = {
   fontSize: 15,
   lineHeight: 1.18,
   fontWeight: 800,
-  color: "#4A3B37",
+  color: "#37453D",
 };
 
 const descriptionStyle: CSSProperties = {
@@ -351,9 +351,9 @@ const buttonStyle: CSSProperties = {
   gap: 8,
   width: "100%",
   justifyContent: "center",
-  background: "#F4A896",
-  color: "#5C3526",
-  boxShadow: "0 18px 28px rgba(244,168,150,.22)",
+  background: "#8FC0A4",
+  color: "#274A38",
+  boxShadow: "0 18px 28px rgba(143,192,164,.22)",
 };
 
 const secondaryButtonStyle: CSSProperties = {
@@ -368,7 +368,7 @@ const secondaryButtonStyle: CSSProperties = {
 };
 
 const compactCardStyle: CSSProperties = {
-  border: "1px solid rgba(184,109,76,.12)",
+  border: "1px solid rgba(79,138,107,.12)",
   borderRadius: 999,
   padding: "8px 8px 8px 14px",
   display: "flex",
@@ -387,13 +387,13 @@ const compactEyebrowStyle: CSSProperties = {
   fontWeight: 900,
   letterSpacing: ".14em",
   textTransform: "uppercase",
-  color: "#A45D3D",
+  color: "#47795E",
 };
 
 const compactTitleStyle: CSSProperties = {
   fontSize: 12,
   lineHeight: 1.1,
-  color: "#5C4A45",
+  color: "#44544A",
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -410,9 +410,9 @@ const compactButtonStyle: CSSProperties = {
   alignItems: "center",
   gap: 6,
   justifyContent: "center",
-  background: "#F4A896",
-  color: "#5C3526",
-  boxShadow: "0 12px 22px rgba(244,168,150,.18)",
+  background: "#8FC0A4",
+  color: "#274A38",
+  boxShadow: "0 12px 22px rgba(143,192,164,.18)",
 };
 
 const compactSecondaryButtonStyle: CSSProperties = {

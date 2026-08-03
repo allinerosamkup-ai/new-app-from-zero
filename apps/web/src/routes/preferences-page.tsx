@@ -289,7 +289,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
                 <button
                   onClick={handleDisconnect}
                   style={{
-                    background: "none", border: "1px solid rgba(197,165,147,.3)", borderRadius: 8,
+                    background: "none", border: "1px solid rgba(155,191,168,.3)", borderRadius: 8,
                     padding: "6px 14px", fontSize: 11, fontWeight: 600, color: "var(--accent-peach)", cursor: "pointer",
                   }}
                 >
@@ -820,10 +820,10 @@ export function PreferencesPage() {
                     padding: "7px 10px",
                     borderRadius: 12,
                     border: isActive
-                      ? "1.5px solid rgba(215,137,127,0.55)"
-                      : "1px solid rgba(74,59,55,0.1)",
-                    background: isActive ? "rgba(215,137,127,0.10)" : "#FFFFFF",
-                    color: isActive ? "#A8544A" : "var(--text-2)",
+                      ? "1.5px solid rgba(134,183,154,0.55)"
+                      : "1px solid rgba(55,69,61,0.1)",
+                    background: isActive ? "rgba(134,183,154,0.10)" : "#FFFFFF",
+                    color: isActive ? "#42775C" : "var(--text-2)",
                     fontSize: 12,
                     fontWeight: 800,
                     cursor: "pointer",
@@ -903,7 +903,7 @@ export function PreferencesPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 color: "var(--accent-peach)",
-                background: "rgba(215,137,127,.10)",
+                background: "rgba(134,183,154,.10)",
                 transform: aboutAppOpen ? "rotate(90deg)" : "rotate(0deg)",
                 transition: "transform .18s ease",
                 flexShrink: 0,
@@ -926,7 +926,7 @@ export function PreferencesPage() {
                       padding: "10px 11px",
                       borderRadius: 14,
                       background: "rgba(255,255,255,.72)",
-                      border: "1px solid rgba(74,59,55,.08)",
+                      border: "1px solid rgba(55,69,61,.08)",
                     }}
                   >
                     <span style={{ fontSize: 16, width: 22, flexShrink: 0 }}>{icon}</span>
@@ -947,9 +947,9 @@ export function PreferencesPage() {
                 style={{
                   marginTop: 12,
                   width: "100%",
-                  border: "1.5px solid rgba(215,137,127,0.35)",
-                  background: "rgba(215,137,127,0.10)",
-                  color: "#A8544A",
+                  border: "1.5px solid rgba(134,183,154,0.35)",
+                  background: "rgba(134,183,154,0.10)",
+                  color: "#42775C",
                   fontSize: 12,
                   fontWeight: 800,
                   letterSpacing: "0.04em",
@@ -1128,7 +1128,7 @@ export function PreferencesPage() {
           </div>
           <div className="config-row">
             <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(244,168,150,.14)" }}>
+              <div className="icon-bg" style={{ background: "rgba(143,192,164,.14)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2v20" /><path d="M5 9c4 0 7-3 7-7 0 4 3 7 7 7" /><path d="M5 15c4 0 7 3 7 7 0-4 3-7 7-7" />
                 </svg>
@@ -1231,8 +1231,8 @@ export function PreferencesPage() {
                     }}
                     aria-pressed={active}
                     style={{
-                      border: active ? "1.5px solid rgba(215,137,127,.55)" : "1px solid var(--warm-border)",
-                      background: active ? "rgba(244,190,168,.16)" : "rgba(255,255,255,.58)",
+                      border: active ? "1.5px solid rgba(134,183,154,.55)" : "1px solid var(--warm-border)",
+                      background: active ? "rgba(191,220,203,.16)" : "rgba(255,255,255,.58)",
                       color: active ? "var(--accent-peach-ink)" : "var(--text-3)",
                       borderRadius: 999,
                       padding: "7px 10px",
@@ -1290,8 +1290,8 @@ export function PreferencesPage() {
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") navigate("/billing"); }}
           >
             <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(215,137,127,.12)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach, #D7897F)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <div className="icon-bg" style={{ background: "rgba(134,183,154,.12)" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach, #86B79A)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4-6.3-4.6L5.7 21.4 8 14 2 9.4h7.6z" />
                 </svg>
               </div>
@@ -1364,7 +1364,7 @@ export function PreferencesPage() {
             }}
           >
             <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(215,137,127,.12)" }}>
+              <div className="icon-bg" style={{ background: "rgba(134,183,154,.12)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v6h6" />
                 </svg>
@@ -1394,7 +1394,7 @@ export function PreferencesPage() {
             }}
           >
             <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(197,165,147,.1)" }}>
+              <div className="icon-bg" style={{ background: "rgba(155,191,168,.1)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
                 </svg>

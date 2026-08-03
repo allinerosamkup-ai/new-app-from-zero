@@ -12,6 +12,33 @@ export const PRIOR_DIAGNOSIS_OPTIONS = [
 
 export type PriorDiagnosis = (typeof PRIOR_DIAGNOSIS_OPTIONS)[number]["value"];
 
+/**
+ * Binário de propósito. Este campo não descreve identidade — ele liga ou
+ * desliga o rastreamento de ciclo menstrual, que é uma função biológica com
+ * efeito medido sobre humor e energia. Uma terceira opção não teria como
+ * responder a pergunta que o app precisa fazer.
+ */
+export const BIOLOGICAL_SEX_OPTIONS = [
+  { value: "female", label: "Feminino" },
+  { value: "male", label: "Masculino" },
+] as const;
+
+export type BiologicalSex = (typeof BIOLOGICAL_SEX_OPTIONS)[number]["value"];
+
+/**
+ * Espelho de `tracksMenstrualCycle` em
+ * `apps/backend/src/contracts/onboarding.contract.ts`. Se um lado mudar, o
+ * outro tem que mudar junto — `onboarding-gate.test.ts` trava os dois.
+ *
+ * `null` = ainda não perguntado: mantém o bloco visível, porque esconder um
+ * campo que a pessoa já preenchia por causa de uma pergunta que ela nunca viu
+ * seria sumir com dado sem avisar.
+ */
+export function tracksMenstrualCycle(sex: BiologicalSex | null | undefined): boolean {
+  if (sex === null || sex === undefined) return true;
+  return sex === "female";
+}
+
 export type OnboardingDraft = {
   fullName: string;
   age: string;
@@ -33,6 +60,7 @@ export type OnboardingDraft = {
   primaryGoal: string;
   supportGoals: string[];
   priorDiagnoses: PriorDiagnosis[];
+  biologicalSex: BiologicalSex | null;
   medicationCurrentlyUsing: boolean | null;
 };
 
@@ -51,6 +79,7 @@ export type OnboardingProcessPayload = {
   cycleLength: number | null;
   lutealLength: number | null;
   priorDiagnoses: PriorDiagnosis[];
+  biologicalSex: BiologicalSex | null;
   medicationCurrentlyUsing: boolean | null;
 };
 
@@ -114,6 +143,7 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     primaryGoal: "",
     supportGoals: [],
     priorDiagnoses: [],
+    biologicalSex: null,
     medicationCurrentlyUsing: null,
   };
 }
@@ -173,10 +203,14 @@ export function buildOnboardingProcessPayload(draft: OnboardingDraft): Onboardin
     supportGoals: supportGoals.length
       ? supportGoals
       : ["Entender meus ciclos", "Organizar a rotina por energia", "Criar check-ins consistentes"],
-    cycleStart: clean(draft.cycleStart) || null,
-    cycleLength: Number.isFinite(draft.cycleLength) ? draft.cycleLength : null,
-    lutealLength: Number.isFinite(draft.lutealLength) ? draft.lutealLength : null,
+    // Quem não rastreia ciclo não manda dado de ciclo — inclusive o default de
+    // 28/14 que o draft carrega desde o início. Sem isso o backend gravaria um
+    // ciclo inventado para alguém que nunca viu a pergunta.
+    cycleStart: tracksMenstrualCycle(draft.biologicalSex) ? (clean(draft.cycleStart) || null) : null,
+    cycleLength: tracksMenstrualCycle(draft.biologicalSex) && Number.isFinite(draft.cycleLength) ? draft.cycleLength : null,
+    lutealLength: tracksMenstrualCycle(draft.biologicalSex) && Number.isFinite(draft.lutealLength) ? draft.lutealLength : null,
     priorDiagnoses: Array.isArray(draft.priorDiagnoses) ? draft.priorDiagnoses : [],
+    biologicalSex: draft.biologicalSex ?? null,
     medicationCurrentlyUsing: typeof draft.medicationCurrentlyUsing === "boolean" ? draft.medicationCurrentlyUsing : null,
   };
 }

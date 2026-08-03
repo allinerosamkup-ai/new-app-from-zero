@@ -1,4 +1,4 @@
-import type { OnboardingDraft } from "./onboarding";
+import type { BiologicalSex, OnboardingDraft } from "./onboarding";
 
 export type MoodOption =
   | "equilibrada"
@@ -149,6 +149,8 @@ export type AuraState = {
   cycleStart?: string;
   cycleLength?: number;
   lutealLength?: number;
+  /** Autorrelato do onboarding. null = ainda não perguntado. */
+  biologicalSex: BiologicalSex | null;
   habits: Habit[];
   onboardingDone: boolean;
   accountCreatedAt?: string | null;

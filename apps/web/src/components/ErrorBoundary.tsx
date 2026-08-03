@@ -35,7 +35,7 @@ function DefaultErrorFallback({ error }: { error: Error | null }) {
         </p>
         <button
           className="btn-aura"
-          style={{ background: "var(--bg-dark, #C5A593)", color: "#fff", border: "none", width: "100%", height: 52, borderRadius: "6.5px", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
+          style={{ background: "var(--bg-dark, #9BBFA8)", color: "#fff", border: "none", width: "100%", height: 52, borderRadius: "6.5px", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
           onClick={() => window.location.reload()}
         >
           {t("common.reload")}

@@ -49,7 +49,93 @@ export type WarningFlag =
   | "rapid_drop"            // Queda de >1.5 pts em 48h — alerta de episódio
   | "sustained_elevated"    // 5+ dias acima de 4.2 — alerta hipomaníaco
   | "sleep_impact_high"     // Correlação sono-humor > 0.6
-  | "low_checkin_frequency"; // Menos de 4 checkins nos últimos 7 dias
+  | "low_checkin_frequency" // Menos de 4 checkins nos últimos 7 dias
+  | "mixed_features"        // Humor baixo e energia alta ao mesmo tempo
+  | "reduced_sleep_need";   // Pouco sono sem queda — marcador de elevação
+
+/**
+ * Estabilidade diz que a pessoa está dentro do próprio padrão. Não diz se esse
+ * padrão é bom. Quem está deprimido há meses também fica "estável": baixa
+ * variação, sem tendência, colado no próprio baseline. Por isso a valência é
+ * medida no nível ABSOLUTO do composto, não no desvio do baseline pessoal —
+ * senão depressão sustentada é lida como equilíbrio.
+ */
+export type StabilityValence = "positive" | "neutral" | "negative";
+
+export type StableReading = {
+  isStable: boolean;
+  valence: StabilityValence;
+  label: string;
+  description: string;
+  /** Dias consecutivos dentro da faixa estável, contados de trás para frente. */
+  sustainedDays: number;
+};
+
+// Limiares no composto 0-10 (humor*0.6 + energia*0.4).
+const STABLE_POSITIVE_MIN = 6.2;
+const STABLE_NEGATIVE_MAX = 4.6;
+
+/**
+ * Traços mistos: quanto a energia precisa superar o humor, no mesmo dia, para
+ * a divergência deixar de ser ruído e virar sinal. 3 pontos numa escala de 10
+ * é folgado o bastante para não disparar com oscilação normal.
+ */
+const MIXED_DIVERGENCE_MIN = 3;
+/** A divergência só conta como mista se o humor estiver de fato baixo. */
+const MIXED_MOOD_MAX = 4;
+/** Abaixo disso o sono é curto o suficiente para ser sinal, não variação. */
+const SHORT_SLEEP_HOURS_MAX = 6;
+
+function buildStableReading(
+  phase: MoodPhase,
+  currentComposite: number,
+  daysInPhase: number,
+): StableReading {
+  const isStable = phase === "stable";
+  const valence: StabilityValence = currentComposite >= STABLE_POSITIVE_MIN
+    ? "positive"
+    : currentComposite <= STABLE_NEGATIVE_MAX
+      ? "negative"
+      : "neutral";
+
+  if (!isStable) {
+    return {
+      isStable: false,
+      valence,
+      label: "",
+      description: "",
+      sustainedDays: 0,
+    };
+  }
+
+  if (valence === "positive") {
+    return {
+      isStable: true,
+      valence,
+      label: "Estável positivo",
+      description: "Constante e num nível bom. É o cenário para avançar em coisas que exigem continuidade.",
+      sustainedDays: daysInPhase,
+    };
+  }
+
+  if (valence === "negative") {
+    return {
+      isStable: true,
+      valence,
+      label: "Estável negativo",
+      description: "Constante, mas num nível baixo. Pouca oscilação aqui não é equilíbrio — é um platô baixo que se sustenta.",
+      sustainedDays: daysInPhase,
+    };
+  }
+
+  return {
+    isStable: true,
+    valence,
+    label: "Estável",
+    description: "Dentro do seu padrão pessoal, num nível intermediário.",
+    sustainedDays: daysInPhase,
+  };
+}
 
 export type PersonalTrendProfile = {
   baselineMood: number;
@@ -91,6 +177,8 @@ export type MoodCycleReport = {
   energyForecast: EnergyForecast;
   energyForecastLabel: string;
   warningFlags: WarningFlag[];
+  /** Valência da estabilidade: platô bom, intermediário ou baixo. */
+  stableReading: StableReading;
   cycleEstimate: {
     hasEnoughData: boolean;
     estimatedLengthDays: number | null;
@@ -462,8 +550,13 @@ export function aggregateCheckinsByDay(history: CheckinEntry[]): CheckinEntry[] 
         recordedAt: latest?.recordedAt,
         checkinSlot: latest?.checkinSlot,
         sono: averageDefined(ordered.map((entry) => entry.sono)),
+        // Horas de sono estavam sendo descartadas aqui: o check-in coletava e a
+        // agregação perdia, então nada a jusante conseguia usá-las. É o dado que
+        // separa necessidade de sono reduzida (marcador de elevação) de privação.
+        sleepHours: averageDefined(ordered.map((entry) => entry.sleepHours)),
         fisico: averageDefined(ordered.map((entry) => entry.fisico)),
         social: averageDefined(ordered.map((entry) => entry.social)),
+        irritabilidade: averageDefined(ordered.map((entry) => entry.irritabilidade)),
         cyclePhase: latest?.cyclePhase,
         cycleDay: latest?.cycleDay,
         isFlowing: latest?.isFlowing,
@@ -621,6 +714,7 @@ export function computeMoodCycle(
       energyForecast: cfg.energyForecast,
       energyForecastLabel: ENERGY_LABELS[cfg.energyForecast],
       warningFlags: [],
+      stableReading: { isStable: false, valence: "neutral", label: "", description: "", sustainedDays: 0 },
       cycleEstimate: { hasEnoughData: false, estimatedLengthDays: null, currentDayInCycle: null },
       personalTrend: emptyTrend,
       baselineMood: 0,
@@ -753,15 +847,58 @@ export function computeMoodCycle(
   // sustained_low: só dispara se o humor ainda está baixo AGORA.
   // Se a tendência é positiva ou a fase é de recuperação, não alarmar por dias antigos.
   const isTrendingUpNow = trend7d > 0.4;
-  const isInPositivePhase = phase === "recovering" || phase === "stable" || phase === "flowing" || phase === "elevated";
+  // "stable" só protege do alerta quando o platô não é baixo. Quem está
+  // deprimido há semanas fica estável no próprio baseline rebaixado: sem esta
+  // checagem de nível absoluto, o alerta era engolido justamente no caso que
+  // mais precisa dele.
+  const isStableAtLowLevel = phase === "stable" && currentComposite <= STABLE_NEGATIVE_MAX;
+  const isInPositivePhase = !isStableAtLowLevel && (
+    phase === "recovering" || phase === "stable" || phase === "flowing" || phase === "elevated"
+  );
   if (!isTrendingUpNow && !isInPositivePhase) {
     if (criticalDays >= 3) warningFlags.push("sustained_low");
     if (lowDays >= 5 && criticalDays < 3) warningFlags.push("sustained_low");
   }
 
+  // lowDays/criticalDays medem desvio do baseline PESSOAL. Quem está deprimido
+  // há meses tem o baseline já rebaixado: os dias ruins deixam de "desviar" e
+  // os dois contadores zeram justamente no quadro mais grave. Este segundo
+  // critério olha o nível ABSOLUTO — platô longo em faixa baixa acende o alerta
+  // mesmo sem nenhum desvio, que é como depressão sustentada de fato se parece.
+  const absoluteLowDays = composite14.filter((value) => value <= STABLE_NEGATIVE_MAX).length;
+  if (!isTrendingUpNow && absoluteLowDays >= 7 && !warningFlags.includes("sustained_low")) {
+    warningFlags.push("sustained_low");
+  }
+
   // bipolar_ii / cyclothymia: lower sustained_elevated threshold (3 days vs 5)
   const sustainedElevatedThreshold = hasBipolarII ? 3 : 5;
   if (highDays >= sustainedElevatedThreshold) warningFlags.push("sustained_elevated");
+
+  // ── Traços mistos ───────────────────────────────────────
+  // Estado misto é definido por simultaneidade: elementos de polos opostos no
+  // MESMO dia — humor deprimido junto com energia e agitação altas. É o que o
+  // separa de ciclagem rápida, onde os polos se alternam.
+  //
+  // O composto (humor*0.6 + energia*0.4) DESTRÓI esse sinal: humor 2 com
+  // energia 8 vira 4.4 e passa por dia intermediário. Como o app registra os
+  // dois separadamente, a divergência está disponível de graça — só não estava
+  // sendo olhada.
+  const mixedDays = last14.filter(
+    (entry) => entry.energia - entry.humor >= MIXED_DIVERGENCE_MIN && entry.humor <= MIXED_MOOD_MAX,
+  ).length;
+  if (mixedDays >= 3) warningFlags.push("mixed_features");
+
+  // ── Necessidade de sono reduzida ────────────────────────
+  // O marcador de hipomania incipiente não é dormir pouco — é dormir pouco E
+  // ESTAR BEM. Dormir pouco com humor baixo é privação e já conta como fator
+  // negativo em outro lugar; aqui só interessa o caso em que a pessoa corta
+  // sono e mesmo assim fica acima do próprio baseline.
+  const shortSleepElevatedDays = last7.filter((entry) => (
+    typeof entry.sleepHours === "number"
+    && entry.sleepHours <= SHORT_SLEEP_HOURS_MAX
+    && weightedComposite(entry.humor, entry.energia) >= baselineComposite + 0.6
+  )).length;
+  if (shortSleepElevatedDays >= 2) warningFlags.push("reduced_sleep_need");
 
   // Queda rápida: últimos 2 dias vs 2 dias anteriores
   // Só dispara se a queda é recente E o humor não está subindo agora
@@ -834,8 +971,13 @@ export function computeMoodCycle(
     }
   }
 
+  const stableReading = buildStableReading(phase, currentComposite, daysInPhase);
+
   const aiContext = [
     `Padrão pessoal: ${cfg.label} (${phase}) — ${daysInPhase} dia(s) nesta faixa.`,
+    stableReading.isStable
+      ? `Valência da estabilidade: ${stableReading.label} (${stableReading.valence}) — ${stableReading.description}`
+      : "",
     `Baseline pessoal: humor ${baselineMood.toFixed(1)}/10 | energia ${baselineEnergy.toFixed(1)}/10 | combinado ${baselineComposite.toFixed(1)}/10.`,
     `Leitura atual: humor ${currentMoodEwma.toFixed(1)}/10 | energia ${currentEnergyEwma.toFixed(1)}/10 | combinado ${currentComposite.toFixed(1)}/10.`,
     `Desvio do baseline: Δhumor ${baselineDeltaMood > 0 ? "+" : ""}${baselineDeltaMood.toFixed(2)} | Δenergia ${baselineDeltaEnergy > 0 ? "+" : ""}${baselineDeltaEnergy.toFixed(2)} | Δcombinado ${baselineDeltaComposite > 0 ? "+" : ""}${baselineDeltaComposite.toFixed(2)}.`,
@@ -843,6 +985,17 @@ export function computeMoodCycle(
     `Estabilidade: ${stabilityScore}/100 | Volatilidade: ${volatility14d.toFixed(2)} | faixa pessoal: ${trendProfile.trendBandLabel}.`,
     avgSleep7d ? `Sono médio: ${avgSleep7d.toFixed(1)}/10.` : "",
     warningFlags.length > 0 ? `Alertas: ${warningFlags.join(", ")}.` : "",
+    // Traduz as flags clínicas em conduta, porque o nome da flag sozinho não
+    // diz à IA o que fazer com ela. Base em docs/product/base-clinica-padroes-e-acoes.md
+    warningFlags.includes("mixed_features")
+      ? "Traços mistos (humor baixo com energia alta no mesmo dia): não proponha nada que exija decisão rápida nem que possa aumentar irritação. Ação de baixa exigência e sem consequência irreversível."
+      : "",
+    warningFlags.includes("reduced_sleep_need")
+      ? "Necessidade de sono reduzida (dormiu pouco e seguiu acima do baseline): marcador de elevação. Conduta é desacelerar — adie compromisso novo e meta ambiciosa, não some carga."
+      : "",
+    warningFlags.includes("sustained_elevated")
+      ? "Elevação sustentada: propor meta grande agora é contraproducente. Priorize proteger sono e conter impulso."
+      : "",
     `Previsão de energia hoje: ${ENERGY_LABELS[energyForecast]}.`,
     menstrualModulator.detected ? `Modulador menstrual: ${menstrualModulator.contextNote}` : "",
   ].filter(Boolean).join(" ");
@@ -863,6 +1016,7 @@ export function computeMoodCycle(
     energyForecast,
     energyForecastLabel: ENERGY_LABELS[energyForecast],
     warningFlags,
+    stableReading,
     cycleEstimate: {
       hasEnoughData,
       estimatedLengthDays,

@@ -8,7 +8,7 @@ import { cn } from "../../utils/class-names";
 export type CardAccent = "neutral" | "peach" | "sage" | "sky" | "lilac";
 
 const ACCENT_STYLE: Record<Exclude<CardAccent, "neutral">, { border: string; background: string }> = {
-  peach: { border: "1.5px solid rgba(215,137,127,0.35)", background: "rgba(215,137,127,0.08)" },
+  peach: { border: "1.5px solid rgba(134,183,154,0.35)", background: "rgba(134,183,154,0.08)" },
   sage: { border: "1.5px solid rgba(150,199,179,0.5)", background: "rgba(150,199,179,0.10)" },
   sky: { border: "1.5px solid rgba(99,152,169,0.4)", background: "rgba(99,152,169,0.08)" },
   lilac: { border: "1.5px solid rgba(181,164,200,0.4)", background: "rgba(181,164,200,0.10)" },

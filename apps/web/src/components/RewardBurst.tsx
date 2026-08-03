@@ -59,6 +59,12 @@ export function RewardBurst({ reward, onDone }: { reward: Reward | null; onDone?
         <strong>{reward.headline}</strong>
         {reward.detail ? <em>{reward.detail}</em> : null}
       </span>
+      {/* O XP já vinha do backend desde sempre e nunca era mostrado — a pessoa
+          ganhava pontos sem ver que ganhou. Só número e sigla, sem palavra
+          traduzível, então não muda entre idiomas. */}
+      {typeof reward.xpEarned === "number" && reward.xpEarned > 0 && (
+        <span className="reward-burst__xp">+{reward.xpEarned} XP</span>
+      )}
       {big && (
         <span className="reward-burst__sparks" aria-hidden="true">
           {Array.from({ length: 6 }).map((_, index) => (
@@ -79,8 +85,8 @@ export function RewardBurst({ reward, onDone }: { reward: Reward | null; onDone?
           padding: 10px 16px;
           border-radius: 999px;
           background: rgba(255, 255, 255, 0.94);
-          border: 1px solid rgba(243, 176, 140, 0.36);
-          box-shadow: 0 14px 34px rgba(243, 176, 140, 0.22);
+          border: 1px solid rgba(169,210,187, 0.36);
+          box-shadow: 0 14px 34px rgba(169,210,187, 0.22);
           backdrop-filter: blur(18px);
           pointer-events: none;
           animation: rewardIn 260ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -88,6 +94,18 @@ export function RewardBurst({ reward, onDone }: { reward: Reward | null; onDone?
         .reward-burst__icon { font-size: 20px; }
         .reward-burst--big .reward-burst__icon { font-size: 26px; animation: rewardPop 620ms ease-out; }
         .reward-burst__text { display: flex; flex-direction: column; line-height: 1.25; }
+        .reward-burst__xp {
+          flex-shrink: 0;
+          padding: 3px 9px;
+          border-radius: 999px;
+          background: var(--accent-primary-a3, rgba(191,220,203,.16));
+          color: var(--accent-primary-ink, #4F7359);
+          font-size: 11px;
+          font-weight: 800;
+          font-variant-numeric: tabular-nums;
+          white-space: nowrap;
+        }
+        .reward-burst--big .reward-burst__xp { font-size: 13px; padding: 4px 11px; }
         .reward-burst__text strong {
           font-size: 14px; font-weight: 800; color: var(--text-1, #2b2320);
           font-family: 'Plus Jakarta Sans', sans-serif;
@@ -100,7 +118,7 @@ export function RewardBurst({ reward, onDone }: { reward: Reward | null; onDone?
         .reward-burst__sparks i {
           position: absolute; left: 50%; top: 50%;
           width: 6px; height: 6px; border-radius: 50%;
-          background: rgba(243, 176, 140, 0.9);
+          background: rgba(169,210,187, 0.9);
           animation: rewardSpark 900ms ease-out forwards;
           animation-delay: calc(var(--i) * 40ms);
           transform: rotate(calc(var(--i) * 60deg)) translateY(0);

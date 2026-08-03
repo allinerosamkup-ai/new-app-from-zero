@@ -23,13 +23,13 @@ const C = {
   ink: "#2B2622",
   ink2: "#6B6258",
   ink3: "#9A9085",
-  peach: "#D7897F",
+  peach: "#86B79A",
   peachInk: "#B5685E",
   sage: "#96C7B3",
   sky: "#6398A9",
   lilac: "#B5A4C8",
-  border: "rgba(43,38,34,.10)",
-  softPeach: "rgba(215,137,127,.10)",
+  border: "rgba(34,42,37,.10)",
+  softPeach: "rgba(134,183,154,.10)",
   softSage: "rgba(150,199,179,.12)",
 };
 
@@ -99,7 +99,7 @@ function BuyButton({ children, big }: { children: React.ReactNode; big?: boolean
         minHeight: big ? 60 : 52, padding: big ? "0 28px" : "0 22px",
         borderRadius: 999, background: C.peach, color: "#fff",
         fontSize: big ? 17 : 15, fontWeight: 800, letterSpacing: ".01em",
-        boxShadow: "0 10px 26px rgba(215,137,127,.40)",
+        boxShadow: "0 10px 26px rgba(134,183,154,.40)",
         transition: "transform .15s",
       }}
       onMouseDown={(e) => (e.currentTarget.style.transform = "scale(.98)")}
@@ -160,7 +160,7 @@ export default function LivroPage() {
           alt={`Capa do e-book ${BOOK_NAME} — Autoconhecimento para mentes intensas, que desejam se conectar, por Alinê Roza`}
           style={{
             width: 210, height: "auto", margin: "0 auto 28px", display: "block",
-            borderRadius: 14, boxShadow: "0 24px 50px rgba(43,38,34,.22)",
+            borderRadius: 14, boxShadow: "0 24px 50px rgba(34,42,37,.22)",
           }}
         />
 
@@ -225,7 +225,7 @@ export default function LivroPage() {
 
       {/* BÔNUS — O APP */}
       <Section style={{ padding: "40px 22px" }}>
-        <div style={{ borderRadius: 22, border: `1.5px solid ${C.peach}44`, background: C.card, padding: 24, boxShadow: "0 14px 30px rgba(43,38,34,.06)" }}>
+        <div style={{ borderRadius: 22, border: `1.5px solid ${C.peach}44`, background: C.card, padding: 24, boxShadow: "0 14px 30px rgba(34,42,37,.06)" }}>
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: C.peachInk }}>{l("Incluso · sem custo extra", "Included · no extra cost")}</span>
           <h2 style={{ fontSize: 21, fontWeight: 800, margin: "10px 0 12px", lineHeight: 1.3 }}>
             {l("A Airia: o app que continua o livro todo dia", "Airia: the app that continues the book every day")}
@@ -325,7 +325,7 @@ export default function LivroPage() {
           <a
             href={CHECKOUT_URL}
             onClick={goToCheckout}
-            style={{ flexShrink: 0, textDecoration: "none", background: C.peach, color: "#fff", fontWeight: 800, fontSize: 14, padding: "12px 22px", borderRadius: 999, boxShadow: "0 6px 16px rgba(215,137,127,.4)" }}
+            style={{ flexShrink: 0, textDecoration: "none", background: C.peach, color: "#fff", fontWeight: 800, fontSize: 14, padding: "12px 22px", borderRadius: 999, boxShadow: "0 6px 16px rgba(134,183,154,.4)" }}
           >
             {l("Quero agora", "Get it now")}
           </a>

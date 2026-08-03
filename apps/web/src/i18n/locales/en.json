@@ -51,8 +51,6 @@
     "creating": "Creating account...",
     "createContinue": "Create account and continue",
     "afterLogin": "After signing in, we'll go straight to your day.",
-    "or": "OR",
-    "google": "Continue with Google",
     "almostThere": "Almost there!",
     "confirmEmail": "We sent a confirmation link to <1>{{email}}</1>. Check your inbox and spam folder to activate your account.",
     "goToLogin": "Got it, go to sign in",
@@ -64,8 +62,7 @@
       "generic": "Authentication error",
       "credentials": "Incorrect email or password.",
       "registered": "Email already registered. Try signing in.",
-      "shortPassword": "Password is too short — at least 6 characters.",
-      "google": "Error signing in with Google"
+      "shortPassword": "Password is too short — at least 6 characters."
     },
     "recovery": {
       "forgotTitle": "Forgot your password?",
@@ -252,6 +249,20 @@
     "notePlaceholder": "A thought, a situation... it goes straight to your journal.",
     "anotherSuggestion": "Generate another suggestion",
     "emotions": {
+      "radiant": "Radiant",
+      "calm": "Calm",
+      "happy": "Happy",
+      "anxious": "Anxious",
+      "tired": "Tired",
+      "focused": "Focused",
+      "sad": "Sad",
+      "angry": "Irritated",
+      "stressed": "Stressed",
+      "sensitive": "Sensitive",
+      "exhausted": "Exhausted",
+      "agitated": "Agitated"
+    },
+    "emotionsMale": {
       "radiant": "Radiant",
       "calm": "Calm",
       "happy": "Happy",
@@ -642,20 +653,6 @@
     "initialNextAction": "This action came from your goal. I can explain what it means and give you simple ideas to start.",
     "initialPlanner": "This task already has context. I can explain what it means and how to do it simply.",
     "initialContext": "The context is here. Which part should we unlock first?",
-    "suggestions": {
-      "organizeDay": "Organize my day",
-      "createChecklist": "Create checklist",
-      "transformGoal": "Turn into a goal",
-      "reflective": "Open reflective conversation",
-      "patterns": "Read recent days",
-      "falling": "I'm slipping"
-    },
-    "quickPrompts": {
-      "organizeDay": "Organize my day around my current energy and what is already in my planner.",
-      "transformGoal": "Turn my most important active goal into realistic next steps for this week.",
-      "patterns": "What do my recent days show about mood, energy, sleep, and follow-through?",
-      "falling": "I'm slipping, with low energy and a risk of freezing. What can I do now without pushing myself too hard?"
-    },
     "errors": {
       "start": "Airia couldn't start right now.",
       "execute": "The request couldn't be completed.",

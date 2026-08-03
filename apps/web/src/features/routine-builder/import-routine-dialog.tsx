@@ -370,7 +370,7 @@ export function ImportRoutineDialog({
               flex: 1.4,
               border: 0,
               borderRadius: 999,
-              background: "var(--accent-peach, #d7897f)",
+              background: "var(--accent-peach, #86B79A)",
               color: "#fff",
               fontWeight: 900,
               cursor: busy ? "wait" : "pointer",

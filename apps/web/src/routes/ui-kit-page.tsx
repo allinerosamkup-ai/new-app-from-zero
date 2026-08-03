@@ -12,7 +12,7 @@ export function UIKitPage() {
         </h2>
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {/* Earthy Clay Gradient */}
-          <AuraButtonV2 className="ui-btn-gradient" style={{ '--gradient-1': '#C5A593', '--gradient-2': '#A17D6C' } as React.CSSProperties}>
+          <AuraButtonV2 className="ui-btn-gradient" style={{ '--gradient-1': '#9BBFA8', '--gradient-2': '#6F9480' } as React.CSSProperties}>
             <span>Iniciar Sessão</span>
           </AuraButtonV2>
           

@@ -7,8 +7,12 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { navigateClientsToRelease } from './features/pwa/release-update';
+import { FEATURES, FEATURE_FALLBACK_ROUTE } from './config/features';
 
 declare const self: ServiceWorkerGlobalScope;
+
+/** Para onde o clique na notificação leva. Segue a chave do produto. */
+const NOTIFICATION_TARGET = FEATURES.planner ? '/planner' : FEATURE_FALLBACK_ROUTE;
 
 const appRelease = import.meta.env.VITE_APP_RELEASE?.trim() ?? '';
 
@@ -99,10 +103,11 @@ self.addEventListener('notificationclick', (event) => {
           // Envia para todos os clientes abertos
           clients.forEach((c: any) => c.postMessage(message));
 
-          // Navega para o planner para dar feedback visual
-          const target = clients.find((c: any) => c.url.includes('/planner') || c.focused);
+          // Navega para dar feedback visual. Com o Planner desligado o destino
+          // é a Home — notificação não pode abrir tela que saiu do produto.
+          const target = clients.find((c: any) => c.url.includes(NOTIFICATION_TARGET) || c.focused);
           if (target) return target.focus();
-          return (self.clients as any).openWindow('/planner');
+          return (self.clients as any).openWindow(NOTIFICATION_TARGET);
         }),
     );
     return;

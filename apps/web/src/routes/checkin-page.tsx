@@ -5,6 +5,7 @@ import { Check, ChevronLeft, Loader, Mic, MicOff } from "lucide-react";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useAuraStore } from "../features/aura/store";
+import { tracksMenstrualCycle } from "../features/aura/onboarding";
 import type { MoodOption } from "../features/aura/types";
 import {
   createTranscriptResultHandler,
@@ -131,22 +132,102 @@ function ChoiceButton({ active, onClick, children, ariaLabel }: {
   );
 }
 
-function ScorePicker({ label, value, onChange }: {
+/**
+ * Escala arrastável. Substitui a grade de 10 botões: um alvo de toque contínuo
+ * é mais rápido no celular e ocupa uma linha em vez de duas.
+ *
+ * O campo é opcional, então `null` precisa continuar sendo um estado visível e
+ * alcançável — o polegar parte do meio em cinza e só vira resposta depois que a
+ * pessoa encosta. "Limpar" devolve ao não respondido.
+ */
+function ScoreSlider({ label, value, onChange, min = 1, max = 10, suffix = "", emptyHint }: {
   label: string;
   value: number | null;
   onChange: (value: number | null) => void;
+  min?: number;
+  max?: number;
+  suffix?: string;
+  emptyHint: string;
 }) {
+  const l = useLocalizedCopy();
+  const answered = value !== null;
+  const sliderValue = answered ? value : Math.round((min + max) / 2);
+  const inputId = `score-slider-${label.replace(/\s+/g, "-").toLowerCase()}`;
+
   return (
-    <fieldset style={{ margin: "0 0 16px", padding: 0, border: 0 }}>
-      <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800, color: "var(--text-2)" }}>{label}</legend>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 7 }}>
-        {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
-          <ChoiceButton key={score} active={value === score} onClick={() => onChange(value === score ? null : score)}>
-            {score}
-          </ChoiceButton>
-        ))}
+    <div style={{ margin: "0 0 16px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, margin: "0 0 6px" }}>
+        <label htmlFor={inputId} style={{ fontSize: 12, fontWeight: 800, color: "var(--text-2)" }}>{label}</label>
+        <span
+          aria-hidden="true"
+          style={{
+            fontSize: answered ? 18 : 13,
+            fontWeight: 800,
+            color: answered ? "var(--accent-peach-ink)" : "var(--text-3)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {answered ? `${value}${suffix}` : emptyHint}
+        </span>
       </div>
-    </fieldset>
+      <input
+        id={inputId}
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={sliderValue}
+        aria-valuetext={answered ? `${value}${suffix}` : emptyHint}
+        onChange={(event) => onChange(Number(event.target.value))}
+        style={{
+          width: "100%",
+          height: 34,
+          margin: 0,
+          cursor: "pointer",
+          accentColor: answered ? "var(--accent-peach-strong)" : "var(--warm-border-2)",
+          background: "transparent",
+          opacity: answered ? 1 : 0.55,
+          // Sem isso o Android não repassa o arrasto horizontal para o input,
+          // porque o container do check-in já captura o gesto de scroll.
+          touchAction: "none",
+        }}
+      />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: -2 }}>
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontVariantNumeric: "tabular-nums" }}>{min}{suffix}</span>
+        {answered && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            style={{
+              border: 0,
+              background: "transparent",
+              padding: "2px 6px",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "var(--text-3)",
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            {l("Limpar", "Clear")}
+          </button>
+        )}
+        <span style={{ fontSize: 10, color: "var(--text-3)", fontVariantNumeric: "tabular-nums" }}>{max}{suffix}</span>
+      </div>
+      <span
+        aria-live="polite"
+        style={{
+          position: "absolute",
+          width: 1,
+          height: 1,
+          overflow: "hidden",
+          clip: "rect(0 0 0 0)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {answered ? `${label}: ${value}${suffix}` : ""}
+      </span>
+    </div>
   );
 }
 
@@ -176,7 +257,14 @@ export function CheckinPage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
   const navigate = useNavigate();
-  const { setMood, addCheckin } = useAuraStore();
+  const { state, setMood, addCheckin } = useAuraStore();
+  const showMenstrualBlock = tracksMenstrualCycle(state.biologicalSex);
+  // Português flexiona adjetivo por gênero: "cansada" e "cansado" são a mesma
+  // emoção. O app já sabe a resposta do onboarding, então escreve a palavra
+  // certa em vez de recorrer a "cansado(a)".
+  const emotionLabelNamespace = state.biologicalSex === "male"
+    ? "checkin.emotionsMale"
+    : "checkin.emotions";
   const dayContext = getClientDayContext(new Date(), resolveIntlLocale(i18n.language));
 
   const [humor, setHumor] = useState<number | null>(null);
@@ -378,15 +466,15 @@ export function CheckinPage() {
             {EMOTIONS.map((emotion) => (
               <ChoiceButton key={emotion.id} active={emotions.includes(emotion.id)} onClick={() => setEmotions((current) => toggleEmotionSelection(current, emotion.id))}>
                 <span style={{ display: "block", fontSize: 22 }}>{emotion.emoji}</span>
-                <span style={{ display: "block", fontSize: 10 }}>{t(`checkin.emotions.${emotion.id}`)}</span>
+                <span style={{ display: "block", fontSize: 10 }}>{t(`${emotionLabelNamespace}.${emotion.id}`)}</span>
               </ChoiceButton>
             ))}
           </div>
         </Section>
 
         <Section section="mood-energy" title={l("Humor e energia", "Mood and energy")} subtitle={l("Escolha como estão agora. Nenhum valor é presumido.", "Choose how they are now. No value is assumed.")}>
-          <ScorePicker label={l("Humor", "Mood")} value={humor} onChange={setHumor} />
-          <ScorePicker label={l("Energia", "Energy")} value={energia} onChange={setEnergia} />
+          <ScoreSlider label={l("Humor", "Mood")} value={humor} onChange={setHumor} emptyHint={l("arraste", "drag")} />
+          <ScoreSlider label={l("Energia", "Energy")} value={energia} onChange={setEnergia} emptyHint={l("arraste", "drag")} />
         </Section>
 
         <Section section="influences" title={l("Fatores de influência", "Influencing factors")} subtitle={l("Marque o que realmente contribuiu para este estado.", "Select what actually contributed to this state.")}>
@@ -421,17 +509,13 @@ export function CheckinPage() {
         <Section section="optional-context" title={l("Detalhes do contexto", "Context details")} subtitle={l("Opcionais, mas importantes para correlações mais precisas.", "Optional, but important for more precise correlations.")}>
           <div style={{ display: "grid", gap: 18 }}>
             <div>
-              <ScorePicker label={l("Qualidade do sono", "Sleep quality")} value={sono} onChange={setSono} />
-              <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800, color: "var(--text-2)" }}>{l("Horas de sono", "Sleep hours")}</p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 7 }}>
-                {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((hours) => (
-                  <ChoiceButton key={hours} active={sleepHours === hours} onClick={() => setSleepHours(sleepHours === hours ? null : hours)}>{hours}h</ChoiceButton>
-                ))}
-              </div>
+              <ScoreSlider label={l("Qualidade do sono", "Sleep quality")} value={sono} onChange={setSono} emptyHint={l("arraste", "drag")} />
+              <ScoreSlider label={l("Horas de sono", "Sleep hours")} value={sleepHours} onChange={setSleepHours} min={3} max={12} suffix="h" emptyHint={l("arraste", "drag")} />
             </div>
-            <ScorePicker label={l("Estado físico", "Physical state")} value={fisico} onChange={setFisico} />
-            <ScorePicker label={l("Carga social", "Social load")} value={social} onChange={setSocial} />
+            <ScoreSlider label={l("Estado físico", "Physical state")} value={fisico} onChange={setFisico} emptyHint={l("arraste", "drag")} />
+            <ScoreSlider label={l("Carga social", "Social load")} value={social} onChange={setSocial} emptyHint={l("arraste", "drag")} />
 
+            {showMenstrualBlock && (
             <div>
               <BooleanChoice value={isFlowing} onChange={(value) => {
                 setIsFlowing(value);
@@ -470,11 +554,12 @@ export function CheckinPage() {
                 </div>
               )}
             </div>
+            )}
 
             <div>
               <BooleanChoice value={medicationTakenToday} onChange={setMedicationTakenToday} legend={l("Tomou a medicação hoje?", "Did you take medication today?")} group="medication-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
             </div>
-            <ScorePicker label={l("Foco", "Focus")} value={focusScore} onChange={setFocusScore} />
+            <ScoreSlider label={l("Foco", "Focus")} value={focusScore} onChange={setFocusScore} emptyHint={l("arraste", "drag")} />
             <div>
               <BooleanChoice value={hyperfocusOccurred} onChange={setHyperfocusOccurred} legend={l("Teve hiperfoco?", "Did hyperfocus occur?")} group="hyperfocus-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
             </div>

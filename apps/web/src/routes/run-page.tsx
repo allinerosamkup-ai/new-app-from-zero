@@ -210,16 +210,16 @@ export function RunPage() {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-label={l("Progresso da rotina", "Routine progress")}
-          style={{ height: 6, borderRadius: 999, background: "rgba(243,176,140,.16)", overflow: "hidden" }}
+          style={{ height: 6, borderRadius: 999, background: "rgba(169,210,187,.16)", overflow: "hidden" }}
         >
-          <div style={{ width: `${progressPercent}%`, height: "100%", background: "var(--accent-peach, #F3B08C)", transition: "width 320ms ease" }} />
+          <div style={{ width: `${progressPercent}%`, height: "100%", background: "var(--accent-peach, #A9D2BB)", transition: "width 320ms ease" }} />
         </div>
         <p style={{ margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)" }}>
           {l(`Passo ${run.index + 1} de ${run.steps.length}`, `Step ${run.index + 1} of ${run.steps.length}`)}
         </p>
 
         {/* O passo atual ocupa a tela. É a única coisa que precisa existir agora. */}
-        <div style={{ background: "rgba(255,255,255,.72)", border: "1px solid rgba(255,255,255,.86)", borderRadius: 22, padding: "22px 20px", boxShadow: "0 14px 30px rgba(243,176,140,.08)" }}>
+        <div style={{ background: "rgba(255,255,255,.72)", border: "1px solid rgba(255,255,255,.86)", borderRadius: 22, padding: "22px 20px", boxShadow: "0 14px 30px rgba(169,210,187,.08)" }}>
           <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 800, lineHeight: 1.2, color: "var(--text-1)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             {step?.title}
           </h1>

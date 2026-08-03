@@ -28,8 +28,8 @@ const CARD_BASE: CSSProperties = {
 };
 
 const CARD_SELECTED: CSSProperties = {
-  borderColor: 'var(--accent-peach-strong, #E8A08F)',
-  background: 'var(--accent-peach-a, rgba(244,190,168,.12))',
+  borderColor: 'var(--accent-peach-strong, #8FC0A4)',
+  background: 'var(--accent-peach-a, rgba(191,220,203,.12))',
   color: 'var(--accent-peach-ink)',
 };
 
@@ -60,7 +60,7 @@ export function ChoiceCard({
           flexShrink: 0,
           borderRadius: '50%',
           border: selected ? 'none' : '1.5px solid var(--warm-border-2)',
-          background: selected ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+          background: selected ? 'var(--accent-peach-strong, #8FC0A4)' : 'transparent',
           color: '#FFF',
           fontSize: 12,
           display: 'flex',
@@ -160,7 +160,7 @@ export function ScalePicker({
               height: 38,
               borderRadius: 10,
               border: value === step ? 'none' : '1.5px solid var(--warm-border-2)',
-              background: value >= step ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+              background: value >= step ? 'var(--accent-peach-strong, #8FC0A4)' : 'transparent',
               opacity: value >= step ? (value === step ? 1 : 0.45) : 1,
               color: value >= step ? '#FFF' : 'var(--text-3)',
               fontSize: 12,
@@ -206,7 +206,7 @@ export function PillGroup({
               borderRadius: 999,
               minHeight: 40,
               border: selected ? 'none' : '1.5px solid var(--warm-border-2)',
-              background: selected ? 'var(--accent-peach-strong, #E8A08F)' : 'transparent',
+              background: selected ? 'var(--accent-peach-strong, #8FC0A4)' : 'transparent',
               color: selected ? '#FFF' : 'var(--text-2)',
               fontSize: 13,
               fontWeight: 700,

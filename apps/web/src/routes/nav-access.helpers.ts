@@ -2,10 +2,15 @@
 // Semana 1 mostra só o essencial (Hoje, Airia, Diário); Planner e Padrões
 // entram conforme a pessoa registra check-ins. Usuária estabelecida vê tudo.
 
-export type NavKey = "home" | "planner" | "aura" | "insights" | "journal";
+// "planner" continua na união e nas regras mesmo estando desligado no produto:
+// a ocultação acontece na camada de cima (config/features.ts), então religar é
+// uma linha e não mexe aqui.
+export type NavKey = "home" | "goals" | "planner" | "aura" | "insights" | "journal";
 
-const ALWAYS_UNLOCKED: readonly NavKey[] = ["home", "aura", "journal"];
-const ALL_NAV: readonly NavKey[] = ["home", "planner", "aura", "insights", "journal"];
+// Objetivos sempre liberado: é o núcleo do app agora, não faz sentido esperar
+// check-in para a pessoa poder criar uma meta.
+const ALWAYS_UNLOCKED: readonly NavKey[] = ["home", "goals", "aura", "journal"];
+const ALL_NAV: readonly NavKey[] = ["home", "goals", "planner", "aura", "insights", "journal"];
 
 // Planner precisa de pelo menos 1 check-in pra calibrar; Padrões (Insights) só
 // fazem sentido com base mínima — alinhado ao corte do engine (3 check-ins).

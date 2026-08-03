@@ -30,16 +30,29 @@ type ScreenshotCard = {
   imageTransform?: string;
 };
 
-const BRAND = {
+/**
+ * Cores da marca. Separadas de BRAND porque a logo NÃO acompanhou a virada da
+ * identidade para verde — ela mantém a paleta original de propósito.
+ * Não repintar: varreduras de cor devem pular este bloco.
+ */
+const LOGO = {
   nectarine: "#F4A896",
   nectarineLight: "#FDE8E3",
   menthe: "#B8D9C8",
   lagune: "#8FB8C4",
-  pecheSoft: "#FEF3E0",
-  lavender: "#D4C4E0",
   rosa: "#F0C4D4",
-  textWarm: "#6B5B57",
-  textSoft: "#8B7B77",
+} as const;
+
+const BRAND = {
+  nectarine: "#8FC0A4",
+  nectarineLight: "#E4F0E9",
+  menthe: "#B8D9C8",
+  lagune: "#8FB8C4",
+  pecheSoft: "#EAF4EE",
+  lavender: "#D4C4E0",
+  rosa: "#C4E0D2",
+  textWarm: "#4A5A50",
+  textSoft: "#77877E",
   bgLight: "#FDF9F5",
   bgDark: "#141211",
 } as const;
@@ -60,7 +73,7 @@ const audienceCards: InfoCard[] = [
   {
     title: "Bio-previsibilidade para ajustar o dia antes do atrito",
     description:
-      "Quando o app percebe que sua energia está mudando, o planner, os alertas e as sugestões mudam junto. Não é cobrança de rotina: é leitura de ritmo para escolher melhor o próximo movimento.",
+      "Quando o app percebe que sua energia está mudando, os alertas e o tamanho do que ele sugere mudam junto. Não é cobrança de rotina: é leitura de ritmo para escolher melhor o próximo movimento.",
   },
   {
     title: "Histórico organizado para conversar melhor sobre você",
@@ -99,21 +112,21 @@ const features: FeatureCard[] = [
   },
   {
     icon: CalendarRange,
-    title: "Planner que respeita energia real",
+    title: "Objetivos que viram a próxima ação",
     description:
-      "Agenda, hábitos, ações e metas aparecem calibrados pela sua fase atual, sem transformar tudo em evento com horário.",
+      "Você diz onde quer chegar e a Airia quebra em passos pequenos, na ordem. A tela mostra só o próximo — e cada um concluído tem recompensa.",
   },
   {
     icon: BrainCircuit,
     title: "Airia com memória de padrões",
     description:
-      "A IA usa diário, check-ins, planner, metas e sugestões recentes para reconhecer repetição, custo oculto e decisão pendente.",
+      "A IA usa diário, check-ins, objetivos e sugestões recentes para reconhecer repetição, custo oculto e decisão pendente.",
   },
   {
     icon: HeartHandshake,
-    title: "Diário que conversa e vira plano",
+    title: "Diário que vira check-in e objetivo",
     description:
-      "O diário não só acolhe: ele ajuda a testar ideias, validar sugestões e transformar o que fez sentido em ações para o planner.",
+      "Conte como foi o dia do seu jeito. A Airia lê o estado e propõe registrar, percebe uma intenção e propõe montar como objetivo — sempre perguntando antes.",
   },
   {
     icon: ClipboardList,
@@ -135,11 +148,6 @@ const screenshots: ScreenshotCard[] = [
     src: "/screenshots/checkin-page.png",
   },
   {
-    title: "Planner com agenda adaptativa",
-    description: "Blocos, prioridades e replanejamento com mais respeito ao estado real do dia.",
-    src: "/screenshots/planner-page.png",
-  },
-  {
     title: "Insights e padrões",
     description: "Visualizações para perceber fases, quedas, estabilidade e sinais recorrentes.",
     src: "/screenshots/insights-page.png",
@@ -155,7 +163,7 @@ const testimonials = [
   {
     name: "Mariana G.",
     role: "Designer (TDAH)",
-    content: "A Airia é o primeiro app que não me faz sentir culpado por mudar o plano quando minha energia cai. O planner adaptativo é o que eu sempre precisei.",
+    content: "A Airia é o primeiro app que não me faz sentir culpado por mudar o plano quando minha energia cai. Ele quebra o objetivo em passos do tamanho do meu dia.",
   },
   {
     name: "Ricardo S.",
@@ -193,7 +201,7 @@ const heroHighlights = [
 const audienceCardsEn: InfoCard[] = [
   { title: "Airia connects how you feel with what was already happening", description: "For people who notice too late that they are dropping, accelerating, or exhausted. Airia reads mood, energy, sleep, agenda, journal, and history to build a personal baseline and a more faithful reading of the moment." },
   { title: "A space where facts, stories, and decisions stay separate", description: "Instead of generic phrases, Airia helps you understand what happened, which interpretation took over, and which concrete decision is being avoided, protected, or postponed." },
-  { title: "Biological predictability to adjust the day before friction", description: "When the app notices your energy changing, the planner, alerts, and suggestions change with it. It reads your rhythm so you can choose the next move more intelligently." },
+  { title: "Biological predictability to adjust the day before friction", description: "When the app notices your energy changing, the alerts and the size of what it suggests change with it. It reads your rhythm so you can choose the next move more intelligently." },
   { title: "Organized history for better conversations about you", description: "Vague sensations become records of cycles, stability, drops, early signals, decisions, and recurring patterns. You can bring useful context to therapy or medical care instead of relying on scattered memory." },
 ];
 
@@ -205,22 +213,21 @@ const flowStepsEn: StepCard[] = [
 
 const featuresEn: Array<Omit<FeatureCard, "icon">> = [
   { title: "Mood and energy across eight phases", description: "See whether you are in high flight, flow, stability, slowdown, retreat, pause, resumption, or turbulence." },
-  { title: "A planner that respects real energy", description: "Agenda items, habits, actions, and goals are calibrated to your current phase without turning everything into a timed event." },
-  { title: "Airia with pattern memory", description: "AI uses your journal, check-ins, planner, goals, and recent suggestions to recognize repetition, hidden cost, and pending decisions." },
-  { title: "A journal that talks and becomes a plan", description: "The journal does more than welcome you: it helps test ideas, validate suggestions, and turn what makes sense into planner actions." },
+  { title: "Goals that become the next action", description: "You say where you want to get to and Airia breaks it into small steps, in order. The screen shows only the next one — and every step completed earns a reward." },
+  { title: "Airia with pattern memory", description: "AI uses your journal, check-ins, goals, and recent suggestions to recognize repetition, hidden cost, and pending decisions." },
+  { title: "A journal that becomes a check-in and a goal", description: "Tell it how the day went in your own words. Airia reads your state and offers to log it, spots an intention and offers to build it into a goal — always asking first." },
   { title: "History that shows your phases over time", description: "Weekly and monthly charts and forecasts show mood and energy together, with personal baselines and alerts grounded in your own usage." },
 ];
 
 const screenshotsEn: Array<Omit<ScreenshotCard, "src" | "imageTransform">> = [
   { title: "Home with a reading of your day", description: "Open to your current state, weekly signals, and a quick reading of what needs care now." },
   { title: "A fast, tactile check-in", description: "A simple flow for recording mood and energy without unnecessary friction." },
-  { title: "Planner with an adaptive agenda", description: "Blocks, priorities, and replanning that respect the day's real state." },
   { title: "Insights and patterns", description: "Visualizations for noticing phases, drops, stability, and recurring signals." },
   { title: "Airia: patterns, decisions, and phases", description: "A conversation that reads context, recognizes patterns, and turns emotional clarity into practical action." },
 ];
 
 const testimonialsEn = [
-  { role: "Designer (ADHD)", content: "Airia is the first app that does not make me feel guilty for changing the plan when my energy drops. The adaptive planner is what I always needed." },
+  { role: "Designer (ADHD)", content: "Airia is the first app that does not make me feel guilty for changing the plan when my energy drops. It breaks the goal into steps the size of my day." },
   { role: "Entrepreneur", content: "Noticing the exhaustion signal three days early changed everything. Fewer blackouts and more clarity about my limits." },
   { role: "Writer", content: "It is not another generic tracker; it is a conversation that makes sense. The AI understands my patterns and helps me choose the next step." },
 ];
@@ -273,11 +280,11 @@ function AiriaConstellationLogo({
         </g>
       ) : null}
 
-      <circle cx="90" cy="80" r="42" fill={BRAND.nectarine} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
-      <circle cx="130" cy="85" r="32" fill={BRAND.menthe} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
-      <circle cx="75" cy="115" r="28" fill={BRAND.lagune} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
-      <circle cx="125" cy="120" r="30" fill={BRAND.rosa} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
-      <circle cx="100" cy="100" r="16" fill={BRAND.nectarineLight} fillOpacity="0.98" stroke="white" strokeWidth="2" />
+      <circle cx="90" cy="80" r="42" fill={LOGO.nectarine} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
+      <circle cx="130" cy="85" r="32" fill={LOGO.menthe} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
+      <circle cx="75" cy="115" r="28" fill={LOGO.lagune} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
+      <circle cx="125" cy="120" r="30" fill={LOGO.rosa} fillOpacity="0.88" stroke="white" strokeWidth="1.5" />
+      <circle cx="100" cy="100" r="16" fill={LOGO.nectarineLight} fillOpacity="0.98" stroke="white" strokeWidth="2" />
 
       {[
         [90, 80],
@@ -309,7 +316,7 @@ function AiriaWordmark({
           lineHeight: 1,
           letterSpacing: "0.18em",
           textTransform: "lowercase",
-          color: "#B28A7F",
+          color: "#7FA890",
           marginBottom: compact ? 6 : 10,
         }}
       >
@@ -496,7 +503,7 @@ export function SplashPage() {
         position: "relative",
         overflowX: "hidden",
         background:
-          "radial-gradient(circle at top left, rgba(244,168,150,.22), transparent 28%), radial-gradient(circle at 82% 18%, rgba(184,217,200,.24), transparent 24%), radial-gradient(circle at 16% 82%, rgba(212,196,224,.18), transparent 24%), linear-gradient(180deg, #FDF9F5 0%, #FFFDFC 100%)",
+          "radial-gradient(circle at top left, rgba(143,192,164,.22), transparent 28%), radial-gradient(circle at 82% 18%, rgba(184,217,200,.24), transparent 24%), radial-gradient(circle at 16% 82%, rgba(212,196,224,.18), transparent 24%), linear-gradient(180deg, #FDF9F5 0%, #FFFDFC 100%)",
       }}
     >
       <div
@@ -565,7 +572,7 @@ export function SplashPage() {
                 boxShadow: "0 14px 28px rgba(17,24,39,.06)",
               }}
             >
-              <Sparkles size={14} color="#B86D4C" />
+              <Sparkles size={14} color="#4F8A6B" />
               {l("BIO-SINCRONIA · NEURODIVERGENTES · IA QUE ACOLHE", "BIO-SYNCHRONY · NEURODIVERGENCE · SUPPORTIVE AI")}
             </div>
 
@@ -593,7 +600,7 @@ export function SplashPage() {
                     color: BRAND.textSoft,
                   }}
                 >
-                  {l("O tracker de humor e planner adaptativo que entende seu ritmo e prevê quedas de energia antes que você possa desabar.", "The mood tracker and adaptive planner that understands your rhythm and anticipates energy drops before you crash.")}
+                  {l("O tracker de humor que entende seu ritmo, prevê quedas de energia e transforma cada objetivo na próxima ação possível.", "The mood tracker that understands your rhythm, anticipates energy drops, and turns each goal into the next possible action.")}
                 </p>
                 <p
                   style={{
@@ -615,13 +622,13 @@ export function SplashPage() {
                 style={{
                   border: "none",
                   background: BRAND.nectarine,
-                  color: "#6A3C28",
+                  color: "#2C5340",
                   borderRadius: 22,
                   padding: "20px 40px",
                   fontSize: 18,
                   fontWeight: 800,
                   cursor: "pointer",
-                  boxShadow: "0 24px 48px rgba(243,176,140,.32)",
+                  boxShadow: "0 24px 48px rgba(169,210,187,.32)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -752,7 +759,7 @@ export function SplashPage() {
                         Preview
                       </p>
                       <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: BRAND.textWarm }}>
-                        {l("Agenda, check-ins e padrões no mesmo lugar", "Agenda, check-ins, and patterns in one place")}
+                        {l("Check-in, objetivos e padrões no mesmo lugar", "Check-in, goals, and patterns in one place")}
                       </p>
                     </div>
                   </div>
@@ -761,8 +768,8 @@ export function SplashPage() {
                   style={{
                     padding: "8px 10px",
                     borderRadius: 999,
-                    background: "rgba(244,168,150,.16)",
-                    color: "#A45D3D",
+                    background: "rgba(143,192,164,.16)",
+                    color: "#47795E",
                     fontSize: 11,
                     fontWeight: 800,
                   }}
@@ -826,14 +833,14 @@ export function SplashPage() {
                     width: 30,
                     height: 30,
                     borderRadius: 10,
-                    background: "rgba(244,168,150,.22)",
+                    background: "rgba(143,192,164,.22)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
-                  <Waves size={14} color="#B86D4C" />
+                  <Waves size={14} color="#4F8A6B" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <span style={{ fontSize: 10, fontWeight: 800, color: "var(--text-3)", letterSpacing: ".08em", textTransform: "uppercase" }}>
@@ -873,7 +880,7 @@ export function SplashPage() {
                   <Sparkles size={16} color="#5A7A64" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>{l("Planner adaptativo", "Adaptive planner")}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-3)" }}>{l("Objetivos em passos", "Goals in steps")}</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>{l("Menos atrito, mais clareza", "Less friction, more clarity")}</span>
                 </div>
               </div>
@@ -914,13 +921,13 @@ export function SplashPage() {
                     width: 44,
                     height: 44,
                     borderRadius: 18,
-                    background: "linear-gradient(135deg, rgba(244,168,150,.22) 0%, rgba(212,196,224,.22) 100%)",
+                    background: "linear-gradient(135deg, rgba(143,192,164,.22) 0%, rgba(212,196,224,.22) 100%)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Sparkles size={18} color="#B86D4C" />
+                  <Sparkles size={18} color="#4F8A6B" />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <h3 style={{ margin: 0, fontSize: 22, lineHeight: 1.12, color: BRAND.textWarm }}>{card.title}</h3>
@@ -958,7 +965,7 @@ export function SplashPage() {
               >
                 <div style={{ display: "flex", gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Sparkles key={s} size={14} color="#F4A896" />
+                    <Sparkles key={s} size={14} color="#8FC0A4" />
                   ))}
                 </div>
                 <p style={{ margin: 0, fontSize: 16, fontStyle: "italic", lineHeight: 1.6, color: BRAND.textWarm }}>
@@ -998,7 +1005,7 @@ export function SplashPage() {
             {l("Diferenciais", "What makes Airia different")}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {[l("Tracker genérico", "Generic tracker"), l("Agenda rígida", "Rigid agenda"), l("Métricas vazias", "Empty metrics")].map((label) => (
+            {[l("Tracker genérico", "Generic tracker"), l("Meta parada na lista", "Goals stuck on a list"), l("Métricas vazias", "Empty metrics")].map((label) => (
               <div
                 key={label}
                 style={{
@@ -1009,7 +1016,7 @@ export function SplashPage() {
                   borderRadius: 999,
                   background: "rgba(239,68,68,.06)",
                   border: "1px solid rgba(239,68,68,.12)",
-                  color: "#A05050",
+                  color: "#46785C",
                   fontSize: 13,
                   fontWeight: 600,
                   textDecoration: "line-through",
@@ -1074,8 +1081,8 @@ export function SplashPage() {
                     width: "fit-content",
                     padding: "8px 12px",
                     borderRadius: 999,
-                    background: "rgba(244,168,150,.16)",
-                    color: "#9D5C3E",
+                    background: "rgba(143,192,164,.16)",
+                    color: "#43765C",
                     fontSize: 11,
                     fontWeight: 800,
                     letterSpacing: ".12em",
@@ -1125,7 +1132,7 @@ export function SplashPage() {
                     width: 46,
                     height: 46,
                     borderRadius: 18,
-                    background: "linear-gradient(135deg, rgba(244,168,150,.18), rgba(184,217,200,.18))",
+                    background: "linear-gradient(135deg, rgba(143,192,164,.18), rgba(184,217,200,.18))",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1198,7 +1205,7 @@ export function SplashPage() {
             padding: "36px clamp(22px, 5vw, 44px)",
             borderRadius: 34,
             background:
-              "linear-gradient(135deg, rgba(255,255,255,.9) 0%, rgba(254,243,224,.98) 52%, rgba(240,196,212,.44) 100%)",
+              "linear-gradient(135deg, rgba(255,255,255,.9) 0%, rgba(234,244,238,.98) 52%, rgba(196,224,210,.44) 100%)",
             border: "1px solid rgba(17,24,39,.06)",
             boxShadow: "0 24px 56px rgba(107,91,87,.08)",
             display: "grid",
@@ -1244,13 +1251,13 @@ export function SplashPage() {
               style={{
                 border: "none",
                 background: BRAND.nectarine,
-                color: "#6A3C28",
+                color: "#2C5340",
                 borderRadius: 22,
                 padding: "20px 40px",
                 fontSize: 18,
                 fontWeight: 800,
                 cursor: "pointer",
-                boxShadow: "0 22px 44px rgba(243,176,140,.28)",
+                boxShadow: "0 22px 44px rgba(169,210,187,.28)",
                 width: "100%",
                 maxWidth: 400,
               }}

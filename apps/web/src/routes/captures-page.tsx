@@ -73,7 +73,7 @@ export function CapturesPage() {
           </div>
         )}
         {captures.map((capture) => (
-          <article key={capture.id} style={{ background: "rgba(255,255,255,.76)", border: "1px solid rgba(255,255,255,.9)", borderRadius: 18, padding: 14, boxShadow: "0 12px 28px rgba(95,65,52,.06)" }}>
+          <article key={capture.id} style={{ background: "rgba(255,255,255,.76)", border: "1px solid rgba(255,255,255,.9)", borderRadius: 18, padding: 14, boxShadow: "0 12px 28px rgba(54,96,74,.06)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{ margin: "0 0 3px", color: "var(--text-3)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" }}>
@@ -87,7 +87,7 @@ export function CapturesPage() {
                 onClick={() => updateCapture(capture, { status: "archived" })}
                 style={{
                   flexShrink: 0,
-                  border: "1px solid rgba(197,165,147,.24)",
+                  border: "1px solid rgba(155,191,168,.24)",
                   background: "rgba(255,250,247,.86)",
                   color: "var(--accent-peach-ink)",
                   borderRadius: 10,

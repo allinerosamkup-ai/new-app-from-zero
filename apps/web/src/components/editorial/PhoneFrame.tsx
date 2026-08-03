@@ -11,7 +11,7 @@ export const PhoneFrame: React.FC<{ children: React.ReactNode, label?: string }>
           <div className="phone-status" style={{ height: '44px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 20px 6px', fontSize: '11px', fontWeight: 600, color: 'var(--text-2-v2)' }}>
             <span>9:41</span>
             <div className="status-icons" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-               <svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" strokeOpacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/></svg>
+               <svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#2B3630" strokeOpacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#2B3630"/></svg>
             </div>
           </div>
           <div className="screen-content" style={{ padding: '8px 16px 20px' }}>

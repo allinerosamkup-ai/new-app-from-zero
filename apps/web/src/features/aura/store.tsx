@@ -246,7 +246,20 @@ export type GoalActionCompletion = {
   nextAction: { id: string; title: string; order: number; plannerBlockId?: string | null } | null;
   completedNow: boolean;
   objectiveCompletedNow: boolean;
+  /** Vem do backend, para o texto ser o mesmo em toda superfície. Null quando
+   *  a ação já estava concluída e nada mudou agora. */
+  reward?: {
+    xpEarned: number;
+    headline: string;
+    detail: string | null;
+    animation: string;
+    intensity: string;
+  } | null;
 };
+
+/** Avisa quem mostra progresso que os números mudaram. Sem isso a faixa só
+ *  atualizaria no próximo carregamento da tela. */
+export const PROGRESS_UPDATED_EVENT = "airia:progress-updated";
 
 const AuraStoreContext = createContext<AuraStoreContextValue | null>(null);
 
@@ -383,6 +396,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           cycleStart: profile?.cycle_start ? profile.cycle_start.slice(0, 10) : current.cycleStart,
           cycleLength: profile?.cycle_length ?? current.cycleLength,
           lutealLength: profile?.luteal_length ?? current.lutealLength,
+          biologicalSex: ((preferences as any)?.biologicalSex ?? current.biologicalSex) as AuraState['biologicalSex'],
           onboardingDone: profile?.onboarding_done ?? current.onboardingDone,
           ...normalizeReminderPreferences(preferences, {
             morningCheckinTime: current.morningCheckinTime,
@@ -739,8 +753,16 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         await refreshData();
       },
       toggleSubGoal: async (goalId, subGoalId) => {
-        const result = await api.post(`/objectives/${goalId}/subgoals/${subGoalId}/complete`, {}) as GoalActionCompletion;
+        // localDate no fuso da pessoa: sem isso a sequência usaria a data do
+        // servidor e quem conclui às 22h no Brasil teria a ação contada amanhã.
+        const result = await api.post(
+          `/objectives/${goalId}/subgoals/${subGoalId}/complete`,
+          { localDate: getLocalDateKey() },
+        ) as GoalActionCompletion;
         await refreshData();
+        if (result?.completedNow) {
+          window.dispatchEvent(new CustomEvent(PROGRESS_UPDATED_EVENT));
+        }
         return result;
       },
       removeGoal: async (goalId) => {

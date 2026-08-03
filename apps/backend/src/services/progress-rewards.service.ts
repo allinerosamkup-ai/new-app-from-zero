@@ -16,14 +16,28 @@ export const PROTECTED_PHASES = ['Recolhimento', 'Pausa'] as const;
 
 export type ProgressEvent = {
   date: string;
-  kind: 'habit_done' | 'task_done' | 'routine_completed' | 'routine_partial' | 'checkin' | 'journal';
+  kind:
+    | 'habit_done'
+    | 'task_done'
+    | 'routine_completed'
+    | 'routine_partial'
+    | 'checkin'
+    | 'journal'
+    | 'goal_action_done'
+    | 'goal_completed';
 };
 
 export type PhaseByDate = Record<string, string | undefined>;
 
 export const XP_BY_KIND: Record<ProgressEvent['kind'], number> = {
+  // Fechar um objetivo inteiro é o maior evento do app: várias micro-ações em
+  // sequência, cada uma dependendo da anterior.
+  goal_completed: 60,
   // Atravessar uma rotina inteira é o movimento mais difícil, e paga mais.
   routine_completed: 25,
+  // Micro-ação de objetivo vale mais que hábito porque exige sequência: só a
+  // próxima da fila é clicável, então concluir significa ter chegado até ali.
+  goal_action_done: 12,
   // Começar e parar no meio também paga: começar é a parte cara.
   routine_partial: 10,
   habit_done: 8,
@@ -183,6 +197,17 @@ const REPORTED_HEADLINES = [
   'Marquei aqui.',
 ];
 
+/**
+ * Fechar um objetivo inteiro merece frase própria. Fala do que aconteceu, nunca
+ * do tempo que levou nem do que ficou pelo caminho.
+ */
+const GOAL_DONE_HEADLINES = [
+  'Objetivo fechado.',
+  'Você chegou.',
+  'Percorrido.',
+  'Do começo ao fim.',
+];
+
 /** Escolha estável: a mesma conclusão sempre mostra a mesma frase, mas itens
  *  diferentes mostram frases diferentes. Sem repetir a anterior por acaso. */
 function pick(pool: string[], seed: string): string {
@@ -201,7 +226,10 @@ function pick(pool: string[], seed: string): string {
  */
 export function buildCompletionReward(input: {
   title: string;
-  kind: Extract<ProgressEvent['kind'], 'habit_done' | 'task_done' | 'routine_completed'>;
+  kind: Extract<
+    ProgressEvent['kind'],
+    'habit_done' | 'task_done' | 'routine_completed' | 'goal_action_done' | 'goal_completed'
+  >;
   reported?: boolean;
   streak?: StreakState;
   leveledUp?: boolean;
@@ -212,14 +240,19 @@ export function buildCompletionReward(input: {
   const seed = `${input.title}:${input.today ?? ''}`;
   const xpEarned = XP_BY_KIND[input.kind] ?? XP_BY_KIND.task_done;
 
+  const goalCompleted = input.kind === 'goal_completed';
   const milestoneStreak = !!input.streak && input.streak.current > 0 && input.streak.current % 7 === 0;
-  const big = !!input.leveledUp || !!input.clearedTheDay || milestoneStreak;
+  // Objetivo concluído é sempre grande, independente de nível ou sequência: é o
+  // evento mais raro do app e não pode chegar com o mesmo peso de uma tarefa.
+  const big = goalCompleted || !!input.leveledUp || !!input.clearedTheDay || milestoneStreak;
 
-  const headline = input.reported
-    ? pick(REPORTED_HEADLINES, seed)
-    : input.clearedTheDay
-      ? 'Dia fechado.'
-      : pick(DONE_HEADLINES, seed);
+  const headline = goalCompleted
+    ? pick(GOAL_DONE_HEADLINES, seed)
+    : input.reported
+      ? pick(REPORTED_HEADLINES, seed)
+      : input.clearedTheDay
+        ? 'Dia fechado.'
+        : pick(DONE_HEADLINES, seed);
 
   const detail = input.leveledUp
     ? 'Subiu de nível.'
@@ -233,8 +266,53 @@ export function buildCompletionReward(input: {
     xpEarned,
     headline,
     detail,
-    animation: input.leveledUp ? 'confetti' : milestoneStreak ? 'streak' : input.clearedTheDay ? 'confetti' : input.reported ? 'pulse' : 'spark',
+    animation: goalCompleted || input.leveledUp
+      ? 'confetti'
+      : milestoneStreak ? 'streak' : input.clearedTheDay ? 'confetti' : input.reported ? 'pulse' : 'spark',
     intensity: big ? 'big' : 'small',
+  };
+}
+
+/**
+ * Os quatro contadores que a faixa de progresso mostra.
+ *
+ * `actionsCompleted` e `goalsCompleted` são totais acumulados — números que só
+ * sobem, nunca zeram. `actionStreak` reusa `computeStreak` e por isso herda de
+ * graça a regra de fase protegida: Recolhimento e Pausa não quebram sequência.
+ */
+export type GoalCounters = {
+  actionsCompleted: number;
+  goalsCompleted: number;
+  actionStreak: StreakState;
+};
+
+export function computeGoalCounters(input: {
+  /** Só eventos de objetivo — o resto do histórico não entra nestes contadores. */
+  goalEvents: ProgressEvent[];
+  today: string;
+  phaseByDate?: PhaseByDate;
+  /**
+   * Piso vindo do estado atual dos objetivos. Necessário porque os eventos só
+   * passaram a existir agora: sem ele, quem já concluiu dezenas de ações veria
+   * zero — o oposto do efeito que a contagem deveria ter.
+   */
+  floor?: { actionsCompleted?: number; goalsCompleted?: number };
+}): GoalCounters {
+  const actionEvents = input.goalEvents.filter((event) => event.kind === 'goal_action_done');
+  return {
+    actionsCompleted: Math.max(actionEvents.length, input.floor?.actionsCompleted ?? 0),
+    goalsCompleted: Math.max(
+      input.goalEvents.filter((event) => event.kind === 'goal_completed').length,
+      input.floor?.goalsCompleted ?? 0,
+    ),
+    // Sequência conta dias com ação de objetivo, não qualquer presença no app.
+    // Não é recuperável para quem já usava: subgoals não guardam data, então
+    // começa do zero — e isso é honesto, não um bug.
+    actionStreak: computeStreak({
+      events: actionEvents,
+      today: input.today,
+      phaseByDate: input.phaseByDate,
+    }),
   };
 }
 

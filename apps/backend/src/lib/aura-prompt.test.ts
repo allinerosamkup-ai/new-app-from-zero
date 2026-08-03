@@ -218,6 +218,98 @@ async function run() {
     currentMinute: 0,
   });
   assert.doesNotMatch(stablePhasePrompt, /BREVIDADE ADAPTATIVA/);
+
+  // A Airia executa; ela nao devolve a escolha do passo para a usuaria.
+  // Perguntar "qual a menor coisa que voce pode fazer hoje?" transfere para
+  // quem esta sem energia justamente o trabalho que a Airia deveria fazer.
+  // Estes assert.doesNotMatch existem para que a frase nunca volte ao prompt
+  // como exemplo a seguir, em nenhuma superficie.
+  const CHOICE_HANDBACK_PATTERNS = [
+    /menor coisa que (?:voce|você) pode fazer/i,
+    /UMA coisa min[ií]ma[^.]*qual seria/i,
+    /qual delas (?:voce|você) come[cç]a/i,
+    /por onde (?:voce|você) (?:quer|prefere) come[cç]ar/i,
+  ];
+
+  for (const domain of ['journal-live', 'checkin', 'home', 'aura-command', 'planning'] as const) {
+    const surfacePrompt = buildAuraSystemPrompt({
+      userName: 'Ana',
+      domain,
+      currentHour: 10,
+      currentMinute: 0,
+    });
+    for (const pattern of CHOICE_HANDBACK_PATTERNS) {
+      // Uma linha que FALA sobre a frase proibida — para bloqueá-la ou para
+      // distinguir dela — não está ensinando a frase. O que não pode é a frase
+      // aparecer como instrução ou exemplo a seguir.
+      const offending = surfacePrompt
+        .split('\n')
+        .filter((line) => pattern.test(line) && !/proibid/i.test(line));
+      assert.deepEqual(
+        offending,
+        [],
+        `dominio "${domain}" ensina a devolver a escolha da acao: ${offending.join(' | ')}`,
+      );
+    }
+  }
+
+  const journalExecutionPrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'journal-live',
+    currentHour: 10,
+    currentMinute: 0,
+  });
+  assert.match(journalExecutionPrompt, /PROIBIDO DEVOLVER A ESCOLHA DA ACAO/);
+  assert.match(journalExecutionPrompt, /ESCOLHA a menor acao e NOMEIE ela/);
+
+  // A politica de estado decide O QUE pode ser proposto, nao so o tom. Sem ela
+  // a Airia propoe meta grande em fase alta, que e o erro mais facil aqui.
+  for (const domain of ['checkin', 'journal-live', 'aura-command', 'home'] as const) {
+    const surfacePrompt = buildAuraSystemPrompt({
+      userName: 'Ana',
+      domain,
+      currentHour: 10,
+      currentMinute: 0,
+    });
+    assert.match(surfacePrompt, /ESCOLHA DA ACAO PELO ESTADO/, `dominio "${domain}" sem politica de estado`);
+    assert.match(surfacePrompt, /a conduta e CONTER, nao aproveitar o embalo/, `dominio "${domain}"`);
+    assert.match(surfacePrompt, /nunca sugira, altere ou comente medicacao/, `dominio "${domain}"`);
+  }
+
+  // Fechamento nao propoe acao nova, entao nao carrega a politica.
+  const finalizePrompt = buildAuraSystemPrompt({
+    userName: 'Ana',
+    domain: 'journal-finalize',
+    currentHour: 10,
+    currentMinute: 0,
+  });
+  assert.doesNotMatch(finalizePrompt, /ESCOLHA DA ACAO PELO ESTADO/);
+
+  // ── Sinais do diário ──────────────────────────────────────────────────────
+  // O diário é onde a pessoa conta como está sem preencher formulário. Estes
+  // dois sinais aproveitam isso; sem eles a Fase 6 não funciona.
+  assert.match(journalExecutionPrompt, /SINAL DE CHECK-IN/);
+  assert.match(journalExecutionPrompt, /journalSignals/);
+  assert.match(journalExecutionPrompt, /SINAL DE META/);
+  // Ordem por evitação vem da exposição graduada (base-clinica-padroes-e-acoes.md),
+  // não da ordem lógica da tarefa.
+  assert.match(journalExecutionPrompt, /MENOS evitado para o MAIS evitado/);
+
+  // Guardrail em tensão: pedir autorização para salvar uma meta JÁ formulada não
+  // é o mesmo que devolver a escolha do passo. Sem esta asserção fixando a
+  // distinção, alguém "conserta" o prompt depois e apaga a funcionalidade.
+  assert.match(journalExecutionPrompt, /PERMISSAO PARA A META/);
+  assert.match(journalExecutionPrompt, /ISTO NAO CONTRADIZ/);
+  assert.match(journalExecutionPrompt, /a Airia JA formulou a meta/);
+
+  // A proibição original continua de pé, lado a lado com a permissão.
+  assert.match(journalExecutionPrompt, /PROIBIDO DEVOLVER A ESCOLHA DA ACAO/);
+
+  // O sinal de check-in não pode virar anúncio: quem confirma é ela, no card.
+  assert.match(journalExecutionPrompt, /NAO anuncie no texto que registrou nada/);
+
+  // Fechamento não emite sinal nenhum — lá não se cria nada novo.
+  assert.doesNotMatch(finalizePrompt, /journalSignals/);
 }
 
 run()

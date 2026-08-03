@@ -84,7 +84,7 @@ const CATEGORY_OPTIONS = [
   { value: "trabalho" as const, label: "Trabalho", shortLabel: "TRABALHO", cor: "#4E7E93", bg: "rgba(176,200,218,.15)", textColor: "#4E7E93" },
   { value: "autocuidado" as const, label: "Autocuidado", shortLabel: "AUTOCUIDADO", cor: "#50705B", bg: "rgba(180,210,192,.15)", textColor: "#50705B" },
   { value: "social" as const, label: "Social", shortLabel: "SOCIAL", cor: "#74628B", bg: "rgba(229,219,247,.32)", textColor: "#74628B" },
-  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "#A86855", bg: "rgba(244,190,168,.28)", textColor: "#A86855" },
+  { value: "pessoal" as const, label: "Pessoal", shortLabel: "PESSOAL", cor: "#4F7359", bg: "rgba(191,220,203,.28)", textColor: "#4F7359" },
   { value: "casa" as const, label: "Casa", shortLabel: "CASA", cor: "#7C641A", bg: "rgba(247,231,166,.38)", textColor: "#7C641A" }
 ];
 
@@ -151,7 +151,7 @@ function TimelineProgressIndicator({ nowMinutes, slots }: { nowMinutes: number; 
          top: 0, 
          left: 0, 
          width: "100%",
-         background: "linear-gradient(to bottom, rgba(255,255,255,0.4) 0%, rgba(253,232,227,0.45) 15%, rgba(244,168,150,0.45) 45%, rgba(240,196,212,0.45) 65%, rgba(143,184,196,0.45) 85%, rgba(107,91,87,0.4) 100%)", 
+         background: "linear-gradient(to bottom, rgba(255,255,255,0.4) 0%, rgba(253,232,227,0.45) 15%, rgba(143,192,164,0.45) 45%, rgba(196,224,210,0.45) 65%, rgba(143,184,196,0.45) 85%, rgba(107,91,87,0.4) 100%)", 
          backdropFilter: "blur(8px)",
          WebkitBackdropFilter: "blur(8px)",
          borderRight: "1px solid rgba(255,255,255,0.2)",
@@ -815,7 +815,7 @@ const NoteSection = React.memo(function NoteSection({
           }}
           style={{
             padding: "0 16px", borderRadius: "8px", border: "none",
-            background: "rgba(244,190,168,0.2)", color: "var(--accent-peach-ink)",
+            background: "rgba(191,220,203,0.2)", color: "var(--accent-peach-ink)",
             fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap"
           }}
         >
@@ -1048,7 +1048,7 @@ function PlannerSheetBody({
               style={{
                 background: "var(--accent-peach)", color: "#fff",
                 padding: "14px 28px", borderRadius: "18px", fontSize: "18px", fontWeight: 800,
-                boxShadow: "0 8px 24px rgba(244,168,150,0.3)",
+                boxShadow: "0 8px 24px rgba(143,192,164,0.3)",
                 display: "flex", alignItems: "center", gap: 8, border: "none", cursor: "pointer"
               }}
             >
@@ -1301,7 +1301,7 @@ function PlannerSheetBody({
           onClick={() => setShowAddAlert(!showAddAlert)}
           style={{
             width: "100%", padding: "12px", borderRadius: "14px", border: "1.5px dashed var(--accent-peach)",
-            background: "rgba(244,190,168,0.05)", color: "var(--accent-peach-ink)",
+            background: "rgba(191,220,203,0.05)", color: "var(--accent-peach-ink)",
             fontSize: "14px", fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8
           }}
         >
@@ -1626,7 +1626,7 @@ function WeeklyAgendaHeader({ todayAnchor, offsetDias, setOffsetDias }: { todayA
                 color: isSelected ? '#fff' : 'var(--text-1)',
                 cursor: 'pointer',
                 transition: "all 0.2s",
-                boxShadow: isSelected ? '0 8px 16px rgba(244,190,168,0.25)' : 'none'
+                boxShadow: isSelected ? '0 8px 16px rgba(191,220,203,0.25)' : 'none'
               }}
             >
               <span className="planner-day-label" style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: isSelected ? 'rgba(255,255,255,0.8)' : 'var(--text-3)', letterSpacing: "0.05em" }}>
@@ -1710,7 +1710,7 @@ function ViewTaskSheetContent({ task, viewSplitting, onSplit }: { task: PlannerT
         <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 10, background: cat.bg, color: cat.textColor, border: `1px solid ${cat.cor}22` }}>
           {cat.shortLabel || task.category}
         </span>
-        <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 10, background: "rgba(244,190,168,.1)", color: "var(--accent-peach-ink)", border: "1px solid rgba(244,190,168,.2)" }}>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 10, background: "rgba(191,220,203,.1)", color: "var(--accent-peach-ink)", border: "1px solid rgba(191,220,203,.2)" }}>
           {energyLabel}
         </span>
       </div>
@@ -1755,7 +1755,7 @@ function ViewTaskSheetContent({ task, viewSplitting, onSplit }: { task: PlannerT
           disabled={viewSplitting}
           style={{
             width: "100%", padding: "13px 0", borderRadius: 14,
-            border: "1.5px dashed rgba(244,190,168,.5)", background: "rgba(244,190,168,.06)",
+            border: "1.5px dashed rgba(191,220,203,.5)", background: "rgba(191,220,203,.06)",
             fontSize: 13, fontWeight: 600, color: "var(--accent-peach-ink)",
             cursor: viewSplitting ? "wait" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -1766,7 +1766,7 @@ function ViewTaskSheetContent({ task, viewSplitting, onSplit }: { task: PlannerT
       )}
 
       {task.aiReasoning && (
-        <div style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic", padding: "8px 12px", background: "rgba(244,190,168,.05)", borderRadius: 10, border: "1px solid rgba(244,190,168,.15)" }}>
+        <div style={{ fontSize: 11, color: "var(--text-3)", fontStyle: "italic", padding: "8px 12px", background: "rgba(191,220,203,.05)", borderRadius: 10, border: "1px solid rgba(191,220,203,.15)" }}>
           {task.aiReasoning}
         </div>
       )}
@@ -3183,9 +3183,9 @@ export function PlannerPage() {
       {isLowPhase && (
         <div style={{
           borderRadius: 22, padding: "16px 18px", marginBottom: 24,
-          background: "linear-gradient(135deg, rgba(254,243,224,0.9), rgba(240,196,212,0.2))",
-          border: "1px solid rgba(184,109,76,0.12)",
-          boxShadow: "0 10px 30px rgba(184,109,76,0.06)",
+          background: "linear-gradient(135deg, rgba(234,244,238,0.9), rgba(196,224,210,0.2))",
+          border: "1px solid rgba(79,138,107,0.12)",
+          boxShadow: "0 10px 30px rgba(79,138,107,0.06)",
           position: "relative"
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -3201,7 +3201,7 @@ export function PlannerPage() {
             <div style={{ flex: 1 }}>
               <p style={{
                 fontSize: 13, fontWeight: 800, margin: "0 0 2px",
-                color: "#4A3B37",
+                color: "#37453D",
                 letterSpacing: "-0.01em"
               }}>
                 {t("planner.protectionActive", { phase: cycleReport.phaseLabel })}
@@ -3241,14 +3241,14 @@ export function PlannerPage() {
           onClick={() => navigate("/goals")}
           style={{
             display: "flex", alignItems: "center", gap: 8,
-            background: "rgba(244, 168, 150, 0.12)", 
-            border: "1.5px solid rgba(244, 168, 150, 0.3)", 
+            background: "rgba(143,192,164, 0.12)", 
+            border: "1.5px solid rgba(143,192,164, 0.3)", 
             borderRadius: 99,
             cursor: "pointer",
             padding: "8px 16px",
             zIndex: 50,
             transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-            boxShadow: "0 4px 12px rgba(244, 168, 150, 0.1)"
+            boxShadow: "0 4px 12px rgba(143,192,164, 0.1)"
           }}
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -3270,9 +3270,9 @@ export function PlannerPage() {
             </p>
           </div>
           <span style={{
-            padding: "6px 14px", borderRadius: 99, background: "rgba(244,168,150,0.12)",
+            padding: "6px 14px", borderRadius: 99, background: "rgba(143,192,164,0.12)",
             color: "var(--accent-peach-ink)", fontSize: 11, fontWeight: 800, letterSpacing: "0.05em",
-            border: "1px solid rgba(244,168,150,0.2)"
+            border: "1px solid rgba(143,192,164,0.2)"
           }}>
             {plannerBadgeLabel}
           </span>
@@ -3354,9 +3354,9 @@ export function PlannerPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                border: "1.5px solid var(--accent-peach, #D7897F)",
-                background: "rgba(215,137,127,.08)",
-                color: "var(--accent-peach-ink, #A8584A)",
+                border: "1.5px solid var(--accent-peach, #86B79A)",
+                background: "rgba(134,183,154,.08)",
+                color: "var(--accent-peach-ink, #42775C)",
                 borderRadius: 999,
                 padding: "6px 14px",
                 fontSize: 12,
@@ -3695,9 +3695,9 @@ export function PlannerPage() {
               >
               <span className="timeline-time" style={{
                   position: "absolute", left: 10, width: 44, textAlign: "center",
-                  fontWeight: 800, fontSize: 11, color: "var(--planner-time-color, #4A3B37)", zIndex: 1
+                  fontWeight: 800, fontSize: 11, color: "var(--planner-time-color, #37453D)", zIndex: 1
                 }}>{slot.time}</span>
-                <div className="timeline-line" style={{ left: 62, width: 2, background: "var(--planner-timeline-line, rgba(184,109,76,0.08))" }} />
+                <div className="timeline-line" style={{ left: 62, width: 2, background: "var(--planner-timeline-line, rgba(79,138,107,0.08))" }} />
                 <SwipeableTaskCard
                    slot={slot}
                    categoryOption={categoryOption}
@@ -3724,9 +3724,9 @@ export function PlannerPage() {
             >
               <span className="timeline-time" style={{ 
                 position: "absolute", left: 10, width: 44, textAlign: "center",
-                fontWeight: 800, fontSize: 13, color: "var(--planner-time-color, #4A3B37)", zIndex: 1, opacity: slot.title ? 1 : 0.72
+                fontWeight: 800, fontSize: 13, color: "var(--planner-time-color, #37453D)", zIndex: 1, opacity: slot.title ? 1 : 0.72
               }}>{slot.time}</span>
-              <div className="timeline-line" style={{ left: 62, width: 2, background: "var(--planner-timeline-line, rgba(184,109,76,0.08))", opacity: slot.title ? 1 : 0.58 }} />
+              <div className="timeline-line" style={{ left: 62, width: 2, background: "var(--planner-timeline-line, rgba(79,138,107,0.08))", opacity: slot.title ? 1 : 0.58 }} />
               <button
                 type="button"
                 className="timeline-block-card interactive-card glass-card"
@@ -3736,8 +3736,8 @@ export function PlannerPage() {
                   padding: slot.title ? "18px 20px" : "12px 14px",
                   borderRadius: 24,
                   background: slot.title ? "rgba(255, 255, 255, 0.75)" : "transparent",
-                  border: slot.title ? "1.5px dashed rgba(244, 168, 150, 0.4)" : "1px dashed var(--planner-empty-slot-border, rgba(184, 109, 76, 0.1))",
-                  borderLeft: slot.title ? "5px solid rgba(244, 168, 150, 0.3)" : "none",
+                  border: slot.title ? "1.5px dashed rgba(143,192,164, 0.4)" : "1px dashed var(--planner-empty-slot-border, rgba(79,138,107, 0.1))",
+                  borderLeft: slot.title ? "5px solid rgba(143,192,164, 0.3)" : "none",
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'flex-start',
@@ -3756,7 +3756,7 @@ export function PlannerPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="planner-empty-plus" style={{ fontSize: 18, color: 'var(--planner-empty-plus, rgba(184,109,76,0.3))', paddingLeft: 8 }}>+</div>
+                  <div className="planner-empty-plus" style={{ fontSize: 18, color: 'var(--planner-empty-plus, rgba(79,138,107,0.3))', paddingLeft: 8 }}>+</div>
                 )}
               </button>
             </div>
@@ -3779,9 +3779,9 @@ export function PlannerPage() {
             height: 56,
             borderRadius: "50%",
             background: "#FFFFFF",
-            color: "#4A3B37",
-            border: "1.5px solid rgba(184,109,76,0.12)",
-            boxShadow: "0 12px 30px rgba(184,109,76,0.15)",
+            color: "#37453D",
+            border: "1.5px solid rgba(79,138,107,0.12)",
+            boxShadow: "0 12px 30px rgba(79,138,107,0.15)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
@@ -3790,7 +3790,7 @@ export function PlannerPage() {
             transition: "transform 150ms, box-shadow 150ms",
           }}
         >
-          <span style={{ fontSize: 24, color: "rgba(184,109,76,0.8)", fontWeight: 300 }}>+</span>
+          <span style={{ fontSize: 24, color: "rgba(79,138,107,0.8)", fontWeight: 300 }}>+</span>
         </button>
       )}
 
@@ -3823,7 +3823,7 @@ export function PlannerPage() {
                   style={{
                     width: "100%",
                     border: "1px solid var(--warm-border)",
-                    background: option.scope === "all" ? "rgba(244,168,150,.10)" : "rgba(253,250,247,.84)",
+                    background: option.scope === "all" ? "rgba(143,192,164,.10)" : "rgba(253,250,247,.84)",
                     borderRadius: 16,
                     padding: "12px 14px",
                     textAlign: "left",

@@ -12,8 +12,8 @@ const PhoneFrame: React.FC<{ children: React.ReactNode, label?: string }> = ({ c
           <div className="phone-status" style={{ height: '44px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 20px 6px', fontSize: '11px', fontWeight: 600, color: 'var(--text-2)' }}>
             <span>9:41</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><rect x="0" y="3" width="3" height="8" rx="1" fill="#3A2E2B" opacity=".35"/><rect x="4.5" y="2" width="3" height="9" rx="1" fill="#3A2E2B" opacity=".55"/><rect x="9" y="0" width="3" height="11" rx="1" fill="#3A2E2B" opacity=".75"/><rect x="13.5" y="0" width="2.5" height="11" rx="1" fill="#3A2E2B"/></svg>
-              <svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#3A2E2B" strokeOpacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#3A2E2B"/><path d="M23 3.5V7.5C23.8 7.2 24.5 6.4 24.5 5.5C24.5 4.6 23.8 3.8 23 3.5Z" fill="#3A2E2B" opacity=".4"/></svg>
+              <svg width="16" height="11" viewBox="0 0 16 11" fill="none"><rect x="0" y="3" width="3" height="8" rx="1" fill="#2B3630" opacity=".35"/><rect x="4.5" y="2" width="3" height="9" rx="1" fill="#2B3630" opacity=".55"/><rect x="9" y="0" width="3" height="11" rx="1" fill="#2B3630" opacity=".75"/><rect x="13.5" y="0" width="2.5" height="11" rx="1" fill="#2B3630"/></svg>
+              <svg width="25" height="11" viewBox="0 0 25 11" fill="none"><rect x="0.5" y="0.5" width="21" height="10" rx="3.5" stroke="#2B3630" strokeOpacity=".35"/><rect x="2" y="2" width="17" height="7" rx="2" fill="#2B3630"/><path d="M23 3.5V7.5C23.8 7.2 24.5 6.4 24.5 5.5C24.5 4.6 23.8 3.8 23 3.5Z" fill="#2B3630" opacity=".4"/></svg>
             </div>
           </div>
           <div style={{ padding: '8px 16px 20px' }}>
@@ -46,7 +46,7 @@ export const EditorialShowcase: React.FC = () => {
 
           {/* Status Card */}
           <div style={{ 
-            background: 'linear-gradient(135deg, var(--accent-peach-a3), rgba(197,165,147, .04))',
+            background: 'linear-gradient(135deg, var(--accent-peach-a3), rgba(155,191,168, .04))',
             border: '1px solid rgba(255,255,255,.7)',
             borderRadius: '19.5px',
             padding: '15.6px',
@@ -97,7 +97,7 @@ export const EditorialShowcase: React.FC = () => {
               <path d="M16 56 C50 56 60 30 80 34 C100 38 110 44 140 40 C170 36 190 26 220 30 C240 32 256 36 264 32" fill="none" stroke="var(--accent-sage)" strokeWidth="1.5" strokeDasharray="4,3" opacity=".6"/>
               <circle cx="264" cy="24" r="4" fill="var(--accent-peach)" stroke="white" strokeWidth="1.5"/>
               <circle cx="220" cy="20" r="3.5" fill="var(--accent-sage)" stroke="white" strokeWidth="1.5"/>
-              <circle cx="140" cy="32" r="3.5" fill="#C5A593" stroke="white" strokeWidth="1.5"/>
+              <circle cx="140" cy="32" r="3.5" fill="#9BBFA8" stroke="white" strokeWidth="1.5"/>
               <circle cx="80" cy="24" r="3.5" fill="var(--accent-sage)" stroke="white" strokeWidth="1.5"/>
               <text x="16" y="74" textAnchor="middle" fontSize="9" fill="var(--text-3)">Qui</text>
               <text x="56" y="74" textAnchor="middle" fontSize="9" fill="var(--text-3)">Sex</text>
@@ -159,7 +159,7 @@ export const EditorialShowcase: React.FC = () => {
             borderRadius: '19.5px',
             padding: '12px 14px',
             backdropFilter: 'blur(20px)',
-            boxShadow: '0 2px 8px rgba(197,165,147, .07)'
+            boxShadow: '0 2px 8px rgba(155,191,168, .07)'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '3px' }}>
               <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--text-3)' }}>14:00 — 15:00</span>

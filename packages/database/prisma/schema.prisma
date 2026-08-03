@@ -100,6 +100,10 @@ model OnboardingResponse {
   // Self-reported prior diagnoses (autorrelato, nao diagnostico clinico).
   // Valores aceitos: bipolar_ii, cyclothymia, adhd, cyclical_depression, prefer_not_to_say.
   priorDiagnoses           String[] @default([]) @map("prior_diagnoses")
+  // Autorrelato. Valores aceitos: female, male, other, prefer_not_to_say.
+  // Só existe para decidir se as perguntas de ciclo menstrual aparecem — nada
+  // mais no produto ramifica por este campo. null = ainda não perguntado.
+  biologicalSex            String?  @map("biological_sex")
   medicationCurrentlyUsing Boolean? @map("medication_currently_using")
   medicationNotes          String?  @map("medication_notes") @db.Text
   // Stripe billing

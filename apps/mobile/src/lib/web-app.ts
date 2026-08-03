@@ -30,7 +30,6 @@ export function buildInjectedSessionScript(session: Session | null) {
     (function () {
       try {
         window.__AIRIA_NATIVE_SHELL__ = true;
-        window.__AIRIA_NATIVE_GOOGLE_AUTH__ = true;
         document.documentElement.classList.add('airia-native-shell');
 
         var applyNativeShell = function () {

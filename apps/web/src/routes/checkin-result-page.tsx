@@ -38,7 +38,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     description: "Humor e energy em equilíbrio. Clareza mental acima da média.",
     tip: "Aproveite o pico para suas tarefas mais importantes antes das 14h.",
     chipLabel: "Focada",
-    bg: "linear-gradient(180deg, #F5E9E7 0%, #FAF2F0 50%, #FAF6F2 100%)",
+    bg: "linear-gradient(180deg, #E7F0EA 0%, #F0F7F3 50%, #FAF6F2 100%)",
     accent: "var(--accent-peach)",
   },
   equilibrada: {
@@ -56,7 +56,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     description: "Tensão elevada detectada. Preste atenção ao seu ritmo.",
     tip: "Faça pausas curtas e evite decisões importantes agora.",
     chipLabel: "Tensa",
-    bg: "linear-gradient(180deg, #F3E8E5 0%, #FAF0EE 50%, #FAF6F2 100%)",
+    bg: "linear-gradient(180deg, #E6F0EA 0%, #EEF6F1 50%, #FAF6F2 100%)",
     accent: "var(--accent-peach)",
   },
   cansada: {
@@ -74,7 +74,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     description: "Energia pede cuidado extra. Sensibilidade elevada hoje.",
     tip: "Priorize autocuidado e evite decisões importantes agora.",
     chipLabel: "Delicado",
-    bg: "linear-gradient(180deg, #F3E8E5 0%, #FAF0EE 50%, #FAF6F2 100%)",
+    bg: "linear-gradient(180deg, #E6F0EA 0%, #EEF6F1 50%, #FAF6F2 100%)",
     accent: "var(--accent-peach)",
   },
   sobrecarregada: {
@@ -83,7 +83,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     description: "Indicadores pedem descanso. Sobrecarga detectada.",
     tip: "Cancele o que puder e reserve espaço para recuperação.",
     chipLabel: "Intenso",
-    bg: "linear-gradient(180deg, #F0E4E2 0%, #F7EEEC 50%, #FAF6F2 100%)",
+    bg: "linear-gradient(180deg, #E4F0E9 0%, #EEF6F1 50%, #FAF6F2 100%)",
     accent: "var(--accent-peach)",
   },
 };
@@ -726,7 +726,7 @@ export function CheckinResultPage() {
         {/* Ícone checkmark — entra com peso (pequena vitória, design emocional P1) */}
         <div
           className="result-hero-icon animate-pop-in"
-          style={{ background: isMenuthe ? "rgba(180,185,169,.18)" : "rgba(197,165,147,.15)" }}
+          style={{ background: isMenuthe ? "rgba(180,185,169,.18)" : "rgba(155,191,168,.15)" }}
         >
           {v.emoji}
         </div>
@@ -810,7 +810,7 @@ export function CheckinResultPage() {
               padding: "16px 16px",
               borderRadius: 18,
               background: "rgba(255,255,255,0.55)",
-              border: "1px dashed rgba(74,59,55,0.18)",
+              border: "1px dashed rgba(55,69,61,0.18)",
               fontFamily: "var(--font-sans, sans-serif)",
             }}
           >
@@ -842,7 +842,7 @@ export function CheckinResultPage() {
             {checkinAI?.suggestedIntensity && !auraMsgLoading && (
               <span style={{
                 fontSize: 9, borderRadius: 999, padding: "2px 7px", fontWeight: 700,
-                background: checkinAI.suggestedIntensity === "P" ? "rgba(99,152,169,.15)" : checkinAI.suggestedIntensity === "M" ? "rgba(150,199,179,.15)" : "rgba(215,137,127,.15)",
+                background: checkinAI.suggestedIntensity === "P" ? "rgba(99,152,169,.15)" : checkinAI.suggestedIntensity === "M" ? "rgba(150,199,179,.15)" : "rgba(134,183,154,.15)",
                 color: checkinAI.suggestedIntensity === "P" ? "var(--accent-sky)" : checkinAI.suggestedIntensity === "M" ? "var(--accent-sage)" : "var(--accent-peach)",
               }}>
                 {checkinAI.suggestedIntensity === "P" ? l("Ritmo intenso", "Intense pace") : checkinAI.suggestedIntensity === "M" ? l("Ritmo médio", "Medium pace") : l("Ritmo leve", "Light pace")}
@@ -854,8 +854,8 @@ export function CheckinResultPage() {
                 borderRadius: 999,
                 padding: "2px 7px",
                 fontWeight: 800,
-                background: "rgba(161,125,108,.12)",
-                color: "#8A5D4B",
+                background: "rgba(111,148,128,.12)",
+                color: "#4B7A62",
               }}>
                 {t("checkin.result.safety", { status: t(checkinAI.riskSafety.route === "crisis_protocol" ? "checkin.result.crisis" : "checkin.result.attention") })}
               </span>
@@ -1029,7 +1029,7 @@ export function CheckinResultPage() {
         {(phase === "preview" || phase === "done") && (
           <div style={{
             background: "rgba(255,253,250,.95)", borderRadius: 14, padding: 16,
-            marginBottom: 10, border: `1.5px solid ${isMenuthe ? "rgba(180,185,169,.3)" : "rgba(197,165,147,.3)"}`,
+            marginBottom: 10, border: `1.5px solid ${isMenuthe ? "rgba(180,185,169,.3)" : "rgba(155,191,168,.3)"}`,
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>

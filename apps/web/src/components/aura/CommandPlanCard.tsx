@@ -68,9 +68,9 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
       style={{
         margin: "8px 0 12px 33px",
         borderRadius: 20,
-        border: "1px solid rgba(197,165,147,.25)",
+        border: "1px solid rgba(155,191,168,.25)",
         background: "rgba(255,255,255,.78)",
-        boxShadow: "0 16px 34px rgba(95,65,52,.08)",
+        boxShadow: "0 16px 34px rgba(54,96,74,.08)",
         padding: 14,
       }}
     >
@@ -91,7 +91,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
       </div>
 
       {plan.missingFields.length > 0 && (
-        <div role="alert" style={{ padding: "9px 10px", borderRadius: 12, background: "rgba(204,111,82,.09)", color: "var(--text-2)", fontSize: 12, marginBottom: 10 }}>
+        <div role="alert" style={{ padding: "9px 10px", borderRadius: 12, background: "rgba(79,138,107,.09)", color: "var(--text-2)", fontSize: 12, marginBottom: 10 }}>
           {t("aura.commandPlan.missing", "Ainda preciso confirmar")}: {plan.missingFields.join(", ")}
         </div>
       )}
@@ -105,7 +105,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
           const items = itemLabels(payload.subgoals ?? payload.items ?? payload.checklist);
           const destination = TYPE_DESTINATION[operation.type];
           return (
-            <article key={operation.id} style={{ borderRadius: 14, border: "1px solid rgba(197,165,147,.18)", padding: 10, background: "rgba(255,250,247,.66)" }}>
+            <article key={operation.id} style={{ borderRadius: 14, border: "1px solid rgba(155,191,168,.18)", padding: 10, background: "rgba(255,250,247,.66)" }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <input
                   aria-label={t("aura.commandPlan.select", "Selecionar ação")}
@@ -149,7 +149,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
                       value={String(payload[dateKey])}
                       disabled={operation.status === "applied" || applying}
                       onChange={(event) => updatePayload(operation, dateKey, event.target.value)}
-                      style={{ flex: 1, minWidth: 0, border: "1px solid rgba(197,165,147,.22)", borderRadius: 9, background: "#fff", padding: "7px 8px", color: "var(--text-1)", fontSize: 12 }}
+                      style={{ flex: 1, minWidth: 0, border: "1px solid rgba(155,191,168,.22)", borderRadius: 9, background: "#fff", padding: "7px 8px", color: "var(--text-1)", fontSize: 12 }}
                     />
                   )}
                   {timeKey && (
@@ -159,7 +159,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
                       value={String(payload[timeKey])}
                       disabled={operation.status === "applied" || applying}
                       onChange={(event) => updatePayload(operation, timeKey, event.target.value)}
-                      style={{ flex: 1, minWidth: 0, border: "1px solid rgba(197,165,147,.22)", borderRadius: 9, background: "#fff", padding: "7px 8px", color: "var(--text-1)", fontSize: 12 }}
+                      style={{ flex: 1, minWidth: 0, border: "1px solid rgba(155,191,168,.22)", borderRadius: 9, background: "#fff", padding: "7px 8px", color: "var(--text-1)", fontSize: 12 }}
                     />
                   )}
                 </div>
@@ -177,7 +177,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
                         value={typeof payload[key] === "number" ? String(payload[key]) : ""}
                         disabled={operation.status === "applied" || applying}
                         onChange={(event) => updatePayload(operation, key, event.target.value ? Number(event.target.value) : null)}
-                        style={{ display: "block", width: "100%", boxSizing: "border-box", border: "1px solid rgba(197,165,147,.22)", borderRadius: 9, background: "#fff", padding: "7px 8px", color: "var(--text-1)" }}
+                        style={{ display: "block", width: "100%", boxSizing: "border-box", border: "1px solid rgba(155,191,168,.22)", borderRadius: 9, background: "#fff", padding: "7px 8px", color: "var(--text-1)" }}
                       />
                     </label>
                   ))}
@@ -191,7 +191,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
               )}
 
               {operation.error?.message && (
-                <p role="alert" style={{ margin: "7px 0 0", color: "#a7432f", fontSize: 11 }}>{operation.error.message}</p>
+                <p role="alert" style={{ margin: "7px 0 0", color: "#3F6E56", fontSize: 11 }}>{operation.error.message}</p>
               )}
             </article>
           );

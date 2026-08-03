@@ -381,7 +381,7 @@ const CATEGORY_LABELS: Record<ContentCard["category"], string> = {
 const CATEGORY_COLORS: Record<ContentCard["category"], string> = {
   tdah: "var(--lagune, #6398A9)",
   bipolar: "var(--menthe, #96C7B3)",
-  ciclotimia: "var(--nectarine, #D7897F)",
+  ciclotimia: "var(--nectarine, #86B79A)",
   produtividade: "#9B8EBF",
 };
 
@@ -562,7 +562,7 @@ export function ConteudoPage() {
           display: "flex",
           alignItems: "center",
           gap: 12,
-          borderBottom: "1px solid var(--border-subtle, #E8E4DF)",
+          borderBottom: "1px solid var(--border-subtle, #E2E8E4)",
           background: "var(--warm-bg, #FAFAF7)",
           position: "sticky",
           top: 0,
@@ -584,7 +584,7 @@ export function ConteudoPage() {
           <ArrowLeft size={20} />
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <BookOpen size={18} style={{ color: "var(--nectarine, #D7897F)" }} />
+          <BookOpen size={18} style={{ color: "var(--nectarine, #86B79A)" }} />
           <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--text-primary, #1a1a1a)" }}>
             {l("Biblioteca", "Library")}
           </h1>
@@ -609,9 +609,9 @@ export function ConteudoPage() {
               padding: "6px 14px",
               borderRadius: 20,
               border: "1.5px solid",
-              borderColor: filter === cat ? CATEGORY_COLORS[cat as ContentCard["category"]] ?? "var(--nectarine, #D7897F)" : "var(--border-subtle, #E8E4DF)",
-              background: filter === cat ? (CATEGORY_COLORS[cat as ContentCard["category"]] ?? "var(--nectarine, #D7897F)") + "18" : "transparent",
-              color: filter === cat ? (CATEGORY_COLORS[cat as ContentCard["category"]] ?? "var(--nectarine, #D7897F)") : "var(--text-muted, #888)",
+              borderColor: filter === cat ? CATEGORY_COLORS[cat as ContentCard["category"]] ?? "var(--nectarine, #86B79A)" : "var(--border-subtle, #E2E8E4)",
+              background: filter === cat ? (CATEGORY_COLORS[cat as ContentCard["category"]] ?? "var(--nectarine, #86B79A)") + "18" : "transparent",
+              color: filter === cat ? (CATEGORY_COLORS[cat as ContentCard["category"]] ?? "var(--nectarine, #86B79A)") : "var(--text-muted, #888)",
               fontSize: 13,
               fontWeight: 600,
               cursor: "pointer",
@@ -639,7 +639,7 @@ export function ConteudoPage() {
             onClick={() => setSelectedCard(card)}
             style={{
               background: "#fff",
-              border: "1px solid var(--border-subtle, #E8E4DF)",
+              border: "1px solid var(--border-subtle, #E2E8E4)",
               borderRadius: 14,
               padding: "16px",
               cursor: "pointer",

@@ -436,7 +436,7 @@
     background-color: color-mix(in srgb, var(--aura-accents-primary) 72%, white);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 12px 28px rgba(243,176,140,.18), 0 1px 0 rgba(255,255,255,.22) inset;
+    box-shadow: 0 12px 28px rgba(169,210,187,.18), 0 1px 0 rgba(255,255,255,.22) inset;
   }
   .button-fill:hover:not(:disabled),
   .button-fill.active {

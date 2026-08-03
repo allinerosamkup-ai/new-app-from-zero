@@ -12,6 +12,7 @@ import { useHabitReminders } from "../hooks/useHabitReminders";
 import { getActivationState } from "../features/aura/activation";
 import { resolveActiveBanner } from "./aura-layout.helpers";
 import { resolveUnlockedNav, type NavKey } from "./nav-access.helpers";
+import { FEATURES } from "../config/features";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -24,8 +25,12 @@ type NavItem = {
   center?: boolean;
 };
 
-// Ordem por valor: Hoje · Planner · Airia (centro) · Padrões · Diário.
+// Ordem por valor: Hoje · Objetivos · Airia (centro) · Padrões · Diário.
 // Config saiu da barra e virou o gear no header da Home.
+//
+// Planner segue declarado aqui de propósito, mesmo desligado: a filtragem por
+// FEATURES acontece logo abaixo, então religar é uma linha em config/features.ts
+// e a barra volta a ter o item no lugar de sempre.
 const NAV_ITEMS: NavItem[] = [
   {
     key: "home",
@@ -36,6 +41,19 @@ const NAV_ITEMS: NavItem[] = [
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5Z" />
         <path d="M9 21V12h6v9" />
+      </svg>
+    ),
+  },
+  {
+    key: "goals",
+    side: "left",
+    labelKey: "nav.metas",
+    route: "/goals",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="5" />
+        <circle cx="12" cy="12" r="1.5" />
       </svg>
     ),
   },
@@ -91,19 +109,19 @@ const NAV_ITEMS: NavItem[] = [
 
 const SEVERITY_CONFIG = {
   info:     { color: "var(--accent-sage)",    bg: "rgba(150,199,179,.12)", border: "rgba(150,199,179,.3)", emoji: "✨" },
-  warning:  { color: "var(--accent-peach)", bg: "rgba(215,137,127,.10)", border: "rgba(215,137,127,.3)", emoji: "📉" },
-  critical: { color: "#A17D6C",          bg: "rgba(161,125,108,.10)", border: "rgba(161,125,108,.3)", emoji: "🌙" },
+  warning:  { color: "var(--accent-peach)", bg: "rgba(134,183,154,.10)", border: "rgba(134,183,154,.3)", emoji: "📉" },
+  critical: { color: "#6F9480",          bg: "rgba(111,148,128,.10)", border: "rgba(111,148,128,.3)", emoji: "🌙" },
 };
 
 const PHASE_ALERT_CONFIG: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
   elevated: { color: "var(--accent-sky)", bg: "rgba(176,180,196,.14)", border: "rgba(176,180,196,.34)", emoji: "🚀" },
   flowing: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "✨" },
   stable: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "💚" },
-  falling: { color: "var(--accent-peach)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "📉" },
-  low: { color: "var(--accent-peach-strong)", bg: "rgba(215,137,127,.14)", border: "rgba(215,137,127,.36)", emoji: "🌙" },
-  depleted: { color: "var(--accent-peach-ink)", bg: "rgba(161,125,108,.12)", border: "rgba(161,125,108,.34)", emoji: "😴" },
+  falling: { color: "var(--accent-peach)", bg: "rgba(134,183,154,.12)", border: "rgba(134,183,154,.34)", emoji: "📉" },
+  low: { color: "var(--accent-peach-strong)", bg: "rgba(134,183,154,.14)", border: "rgba(134,183,154,.36)", emoji: "🌙" },
+  depleted: { color: "var(--accent-peach-ink)", bg: "rgba(111,148,128,.12)", border: "rgba(111,148,128,.34)", emoji: "😴" },
   recovering: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "🌱" },
-  mixed: { color: "var(--accent-peach)", bg: "rgba(215,137,127,.12)", border: "rgba(215,137,127,.34)", emoji: "⚡" },
+  mixed: { color: "var(--accent-peach)", bg: "rgba(134,183,154,.12)", border: "rgba(134,183,154,.34)", emoji: "⚡" },
 };
 
 const ONBOARDING_PROMPT_WINDOW_DAYS = 7;
@@ -167,9 +185,14 @@ export function AuraLayout() {
     () => resolveUnlockedNav({ checkinCount: activation.checkinCount, isNewUser: activation.isNewUser }),
     [activation.checkinCount, activation.isNewUser],
   );
-  const leftNavItems = NAV_ITEMS.filter((item) => item.side === "left" && unlockedNav.has(item.key));
-  const rightNavItems = NAV_ITEMS.filter((item) => item.side === "right" && unlockedNav.has(item.key));
-  const centerNavItem = NAV_ITEMS.find((item) => item.center)!;
+  // Duas filtragens em série, com papéis diferentes: FEATURES decide o que
+  // existe no produto, unlockedNav decide o que a pessoa já destravou pelo uso.
+  const visibleNavItems = NAV_ITEMS.filter((item) => (
+    item.key === "planner" ? FEATURES.planner : true
+  ));
+  const leftNavItems = visibleNavItems.filter((item) => item.side === "left" && unlockedNav.has(item.key));
+  const rightNavItems = visibleNavItems.filter((item) => item.side === "right" && unlockedNav.has(item.key));
+  const centerNavItem = visibleNavItems.find((item) => item.center)!;
 
   function renderNavItem(item: NavItem) {
     const isActive = location.pathname === item.route;
@@ -269,7 +292,7 @@ export function AuraLayout() {
           marginLeft: "auto",
           marginRight: "auto",
           background: "rgba(255,255,255,.96)",
-          border: "1px solid rgba(215,137,127,.25)",
+          border: "1px solid rgba(134,183,154,.25)",
           borderRadius: 18,
           boxShadow: "0 18px 32px rgba(17,24,39,.10)",
           backdropFilter: "blur(16px)",

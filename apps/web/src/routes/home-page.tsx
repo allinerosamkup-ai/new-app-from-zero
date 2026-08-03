@@ -1,4 +1,6 @@
 // Home Page v4 — babá digital IA + mensagens personalizadas + agenda por blocos
+import { FEATURES } from "../config/features";
+import { GoalFocusCard } from "../components/GoalFocusCard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
@@ -9,7 +11,8 @@ import { supabase } from "../lib/supabase";
 import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { api, setAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
-import { parseAiSuggestion, tryParseAiSuggestion } from "../lib/ai";
+import { tryParseAiSuggestion } from "../lib/ai";
+import { AiriaLogoBg } from "../components/AuraIcon";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
@@ -29,24 +32,19 @@ import { computeMenstrualPhase } from "../utils/menstrual-phase";
 import { getClientDayContext, getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { buildGoalSuggestionRouteState } from "../utils/goal-suggestion-routing";
-import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
 import { dismissProactiveNudgeForToday } from "../utils/proactive-nudge-dismissal";
 import {
-  type AgendaBlock,
   type HomeAiMsg,
   buildHomeAgendaPreview,
   buildHomeAiRequestKey,
   buildQuarterHourRefreshBucket,
-  dedupeAgendaBlocks,
   deriveHomePrimaryAction,
-  extractAgendaRepeatContext,
   extractBlockedHomeAutonomyTitles,
   extractHomeRepeatContext,
   isHomeAutonomyTitleBlocked,
   readHomeAutonomyFeedback,
   rememberHomeAutonomyActionFeedback,
-  resolveHomeAgendaSuggestionDate,
 } from "./home-page.helpers";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
 import { 
@@ -60,7 +58,6 @@ import {
   ChevronRight,
   ClipboardCheck,
 } from "lucide-react";
-import { AuraIcon, AiriaLogoBg } from "../components/AuraIcon";
 import { ActivationChecklist } from "../components/activation/ActivationChecklist";
 import { FirstRunGuide } from "../components/activation/FirstRunGuide";
 import { getActivationState } from "../features/aura/activation";
@@ -198,15 +195,6 @@ function normalizeHomeAiMessage(payload: unknown): HomeAiMsg | null {
   };
 }
 
-const BLOCK_CONFIG: Record<string, { cor: string; bg: string; emoji: string | React.ReactNode; category: string }> = {
-  trabalho:     { cor: "var(--accent-sky)",    bg: "rgba(176,180,196,.10)",    emoji: "💼", category: "trabalho" },
-  autocuidado:  { cor: "var(--accent-sage)",   bg: "rgba(180,185,169,.10)",   emoji: "🌿", category: "autocuidado" },
-  casa:         { cor: "var(--accent-peach)", bg: "rgba(197,165,147,.10)",  emoji: "🏠", category: "rotina" },
-  social:       { cor: "var(--social-color)", bg: "rgba(217,206,197,.10)", emoji: "🤝", category: "social" },
-  descanso:     { cor: "var(--accent-sage)",   bg: "rgba(180,185,169,.08)",   emoji: "😴", category: "autocuidado" },
-  refeicao:     { cor: "var(--accent-peach)", bg: "rgba(197,165,147,.08)", emoji: "🍽️", category: "rotina" },
-  flexivel:     { cor: "var(--accent-sky)",   bg: "rgba(176,180,196,.08)",    emoji: <AuraIcon size={13} />, category: "pessoal" },
-};
 
 const IMPORTANT_ALERT_CONFIG: Record<ImportantAlert["tone"], { accent: string; bg: string; border: string; emoji: string }> = {
   info: {
@@ -233,53 +221,10 @@ function timeToMinutes(t: string) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
-function minutesToTime(m: number) {
-  const h = Math.floor(m / 60) % 24;
-  const min = m % 60;
-  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
-}
 
-function eventDateTimeToTime(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
 
-function mapExternalCalendarBusyWindows(events: unknown[]): Array<{ title: string; startTime: string; endTime: string; source: "gcal" }> {
-  return events
-    .filter((event): event is { summary?: unknown; start?: { dateTime?: unknown }; end?: { dateTime?: unknown } } => !!event && typeof event === "object")
-    .map((event) => {
-      const startTime = eventDateTimeToTime(event.start?.dateTime);
-      const endTime = eventDateTimeToTime(event.end?.dateTime);
-      if (!startTime || !endTime) return null;
-      return {
-        title: typeof event.summary === "string" ? event.summary : "Google Agenda",
-        startTime,
-        endTime,
-        source: "gcal" as const,
-      };
-    })
-    .filter((window): window is { title: string; startTime: string; endTime: string; source: "gcal" } => window !== null);
-}
 
-function agendaTaskKey(blockIndex: number, taskIndex: number) {
-  return `${blockIndex}:${taskIndex}`;
-}
 
-function buildAgendaSelection(blocks: AgendaBlock[]) {
-  const selected = new Set<string>();
-
-  blocks.forEach((block, blockIndex) => {
-    const isSkip = block.tipo === "descanso" || block.tipo === "refeicao";
-    if (isSkip) return;
-    block.tarefas_sugeridas.forEach((_, taskIndex) => {
-      selected.add(agendaTaskKey(blockIndex, taskIndex));
-    });
-  });
-
-  return selected;
-}
 
 function valueToChartY(value: number | undefined) {
   const numeric = Number(value);
@@ -438,7 +383,7 @@ function LiveClock() {
 export function HomePage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
-  const { state, addTask, addHabit, refreshData, toggleTask, removeTask, toggleHabit, toggleSubGoal, archiveHabit, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
+  const { state, addTask, addHabit, refreshData, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
@@ -474,13 +419,11 @@ export function HomePage() {
   const [addingActionTitle, setAddingActionTitle] = useState<string | null>(null);
   const [scheduleModalAction, setScheduleModalAction] = useState<HomeScheduleModalAction | null>(null);
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
-  const [doneTaskIds, setDoneTaskIds] = useState<Set<string | number>>(new Set());
   const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
   // Gráfico tátil (design emocional P3): dedo/cursor sobre o gráfico acende o ponto.
   const [chartFocusIdx, setChartFocusIdx] = useState<number | null>(null);
   useEffect(() => { setChartFocusIdx(null); }, [homeChartMode]);
   const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
-  const [expandedAgendaRows, setExpandedAgendaRows] = useState<Set<string>>(new Set());
 
   // Relógio e Contexto de Tempo (necessários para IDs e filtros)
   const [clockTime, setClockTime] = useState(() => new Date());
@@ -506,14 +449,6 @@ export function HomePage() {
     ],
   );
 
-  // Agenda por blocos
-  const [agendaPhase, setAgendaPhase] = useState<"idle" | "loading" | "preview" | "approved">("idle");
-  const [agendaBlocks, setAgendaBlocks] = useState<AgendaBlock[]>([]);
-  const [selectedAgendaTaskKeys, setSelectedAgendaTaskKeys] = useState<Set<string>>(new Set());
-  const [savedAgendaTaskKeys, setSavedAgendaTaskKeys] = useState<Set<string>>(new Set());
-  const [agendaSaving, setAgendaSaving] = useState(false);
-  const [goalActionTick, setGoalActionTick] = useState(0);
-  const agendaRequestCountRef = useRef(0);
 
   const rawMood = moodMap[state.mood] ?? moodMap.equilibrada;
   const moodLabelsEn: Record<string, string> = {
@@ -674,19 +609,6 @@ export function HomePage() {
     () => buildHomeAgendaPreview({ tasks: state.tasks || [], habits, referenceDate: clockTime }),
     [clockTime, habits, state.tasks],
   );
-  const homeGoalActions = useMemo(
-    () => buildGoalPriorityActions(state.goals || [], { limit: 3 }),
-    [state.goals, goalActionTick],
-  );
-  const isAgendaRowExpanded = (key: string) => expandedAgendaRows.has(key);
-  const toggleAgendaRowExpanded = (key: string) => {
-    setExpandedAgendaRows((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
 
   // ── Gráfico semanal — média diária dos últimos 7 dias ─────────────────────
   const weeklyCheckinData = useMemo<ChartPoint[]>(() => {
@@ -752,10 +674,12 @@ export function HomePage() {
       hasCheckinToday: todayCheckinData.length > 0,
       hasEveningCheckinToday,
       isReentry: isCheckinReentry,
-      nextTask: homeAgendaPreview.tasks[0]
+      // Chave aplicada aqui, no chamador: deriveHomePrimaryAction e pura e tem
+      // suite propria — contamina-la com estado de produto quebraria os testes.
+      nextTask: FEATURES.planner && homeAgendaPreview.tasks[0]
         ? { title: homeAgendaPreview.tasks[0].title, time: homeAgendaPreview.tasks[0].time }
         : null,
-      dueHabit: homeAgendaPreview.habit
+      dueHabit: FEATURES.habits && homeAgendaPreview.habit
         ? { title: homeAgendaPreview.habit.title, icon: homeAgendaPreview.habit.icon }
         : null,
     }),
@@ -1057,143 +981,7 @@ export function HomePage() {
   const totalTasks = state.tasks.length;
   const doneTasks = state.tasks.filter(t => t.done).length;
   const pendingTasks = state.tasks.filter(t => !t.done).length;
-  async function fetchAgenda() {
-    setAgendaPhase("loading");
-    try {
-        agendaRequestCountRef.current += 1;
-        const previousAgendaContext = extractAgendaRepeatContext(agendaBlocks);
-        const previousHomeContext = extractHomeRepeatContext(homeAiMsg);
-        const targetAgendaDate = resolveHomeAgendaSuggestionDate(dayContext.localDate, dayContext.hour);
-        const gcalRes = await api.get(`/gcal/events?date=${targetAgendaDate}`).catch(() => null);
-        const externalBusyWindows = gcalRes?.connected && Array.isArray(gcalRes.events)
-          ? mapExternalCalendarBusyWindows(gcalRes.events)
-          : [];
-        const res = await api.post("/ai/suggest", {
-          type: "agenda-blocks",
-          context: {
-            mood: state.mood,
-            moodLabel: mood.label,
-            energia: state.energia,
-            history: (state.checkinHistory || []).slice(0, 3),
-            moodCycleContext: moodCycleContextForAi,
-            goals: goalTitles,
-            pendingTaskTitles,
-            hour: dayContext.hour,
-            partOfDay: dayContext.partOfDay,
-            weekday: dayContext.weekday,
-            localDate: dayContext.localDate,
-            targetAgendaDate,
-            externalBusyWindows,
-            previousAgendaLabels: previousAgendaContext.previousLabels,
-            previousAgendaTasks: previousAgendaContext.previousTasks,
-            previousAutocuidado: previousHomeContext.previousAutocuidado,
-            requestVariant: agendaRequestCountRef.current,
-          },
-        });
-      const parsed = parseAiSuggestion<AgendaBlock[]>(res.suggestion);
-      const normalizedBlocks = dedupeAgendaBlocks(Array.isArray(parsed) ? parsed : [])
-        .filter((block) => {
-          const targetDate = block.local_date || targetAgendaDate;
-          if (targetDate !== dayContext.localDate) return true;
-          return timeToMinutes(block.horario_inicio) >= (dayContext.hour * 60 + clockTime.getMinutes());
-        })
-        .sort((a, b) => a.horario_inicio.localeCompare(b.horario_inicio));
-      setAgendaBlocks(normalizedBlocks);
-      setSelectedAgendaTaskKeys(buildAgendaSelection(normalizedBlocks));
-      setSavedAgendaTaskKeys(new Set());
-      setAgendaPhase("preview");
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel montar a agenda com IA.");
-      setAgendaPhase("idle");
-    }
-  }
 
-  async function approveAgenda() {
-    if (agendaSaving) return;
-    const SKIP_TYPES = new Set(["descanso", "refeicao"]);
-    const today = getLocalDateKey();
-    const batches = new Map<string, Array<{ title: string; startTime: string; endTime: string; category: string; intensity: "L" | "M" | "P"; isAiSuggested: boolean; aiReasoning: string }>>();
-    const savedKeys = new Set<string>();
-    const seenTitles = new Set<string>();
-
-    agendaBlocks.forEach((block, blockIndex) => {
-      if (SKIP_TYPES.has(block.tipo)) return;
-      const cfg = BLOCK_CONFIG[block.tipo] ?? BLOCK_CONFIG.flexivel;
-      const targetDate = block.local_date || today;
-      const startMin = timeToMinutes(block.horario_inicio);
-      const endMin = timeToMinutes(block.horario_fim);
-      const tasks = block.tarefas_sugeridas.filter((_, taskIndex) => selectedAgendaTaskKeys.has(agendaTaskKey(blockIndex, taskIndex)));
-      if (tasks.length === 0) return;
-      const totalDuration = Math.max(endMin - startMin, tasks.length * 20);
-      const duration = Math.max(15, Math.floor(totalDuration / tasks.length));
-      tasks.forEach((title, i) => {
-        const trimmedTitle = title.trim();
-        const normalizedTitle = `${targetDate}:${trimmedTitle.toLowerCase()}`;
-        if (!trimmedTitle || seenTitles.has(normalizedTitle)) return;
-        seenTitles.add(normalizedTitle);
-        const taskIndex = block.tarefas_sugeridas.findIndex((task) => task === title);
-        if (taskIndex >= 0) {
-          savedKeys.add(agendaTaskKey(blockIndex, taskIndex));
-        }
-        const itemStart = startMin + i * duration;
-        const dateBlocks = batches.get(targetDate) ?? [];
-        dateBlocks.push({
-          title: trimmedTitle,
-          startTime: minutesToTime(itemStart),
-          endTime: minutesToTime(itemStart + duration),
-          category: cfg.category,
-          intensity: block.intensity ?? "M",
-          isAiSuggested: true,
-          aiReasoning: block.razao_ia,
-        });
-        batches.set(targetDate, dateBlocks);
-      });
-    });
-
-    const totalToCreate = Array.from(batches.values()).reduce((total, blocks) => total + blocks.length, 0);
-
-    if (totalToCreate === 0) {
-      showError("Selecione pelo menos uma sugestao para entrar no planner.");
-      return;
-    }
-
-    setAgendaSaving(true);
-    try {
-      for (const [date, blocks] of batches) {
-        await api.post("/timeline", {
-          date,
-          forceSave: false,
-          blocks,
-        });
-      }
-      await refreshData();
-      setSavedAgendaTaskKeys(savedKeys);
-      setAgendaPhase("approved");
-      // feedback visual pela transição de fase (agendaPhase → "approved")
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "";
-      if (/conflito|conflitos|horário|horario/i.test(message)) {
-        showError("Esse horario ficou ocupado. Vou refazer a sugestao.");
-        setAgendaPhase("idle");
-        setAgendaBlocks([]);
-        setSelectedAgendaTaskKeys(new Set());
-        setSavedAgendaTaskKeys(new Set());
-      } else {
-        showError(message || "Nao foi possivel enviar a agenda ao planner.");
-      }
-    } finally {
-      setAgendaSaving(false);
-    }
-  }
-  function toggleAgendaTaskSelection(blockIndex: number, taskIndex: number) {
-    const key = agendaTaskKey(blockIndex, taskIndex);
-    setSelectedAgendaTaskKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   async function handleHabitSave(payload: HabitModalPayload) {
     try {
@@ -1205,58 +993,10 @@ export function HomePage() {
     }
   }
 
-  async function handleHomeTaskDone(task: (typeof homeAgendaPreview.tasks)[number]) {
-    // Feedback visual imediato (otimista)
-    setDoneTaskIds(prev => new Set([...prev, task.id]));
-    recordHomeAutonomyFeedback(task.title, "done");
-    try {
-      await toggleTask(task.id);
-    } catch (error) {
-      setDoneTaskIds(prev => { const s = new Set(prev); s.delete(task.id); return s; });
-      showError(error instanceof Error ? error.message : "Nao foi possivel concluir o compromisso.");
-    }
-  }
 
-  async function handleHomeTaskDelete(task: (typeof homeAgendaPreview.tasks)[number]) {
-    recordHomeAutonomyFeedback(task.title, "deleted");
-    try {
-      await removeTask(task.id);
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel excluir o compromisso.");
-    }
-  }
 
-  async function handleHomeHabitDone(habit: NonNullable<typeof homeAgendaPreview.habit>) {
-    recordHomeAutonomyFeedback(habit.title, "done");
-    try {
-      await toggleHabit(habit.id);
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel atualizar o habito.");
-    }
-  }
 
-  async function handleHomeHabitDelete(habit: NonNullable<typeof homeAgendaPreview.habit>) {
-    recordHomeAutonomyFeedback(habit.title, "deleted");
-    try {
-      await archiveHabit(habit.id);
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel excluir o habito.");
-    }
-  }
 
-  async function handleHomeGoalActionDone(action: (typeof homeGoalActions)[number]) {
-    recordHomeAutonomyFeedback(action.text, "done");
-    try {
-      if (action.source === "goal" && action.goalId != null && action.subId != null) {
-        await toggleSubGoal(action.goalId, action.subId);
-      } else if (action.source === "capture" && action.gtdId) {
-        markStoredGtdActionDone(action.gtdId);
-        setGoalActionTick((value) => value + 1);
-      }
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel concluir a acao.");
-    }
-  }
 
   function openHomeScheduleModal(action: { title: string; category: string }) {
     const slot = findSmartPlannerSlot(state.tasks || [], new Date());
@@ -1306,11 +1046,6 @@ export function HomePage() {
     }
   }
 
-  const selectedAgendaCount = selectedAgendaTaskKeys.size;
-  const selectableAgendaCount = agendaBlocks.reduce((total, block) => {
-    if (block.tipo === "descanso" || block.tipo === "refeicao") return total;
-    return total + block.tarefas_sugeridas.length;
-  }, 0);
   const importantAlerts = useMemo(() => {
     const alerts: ImportantAlert[] = [];
     const nowMinutes = clockTime.getHours() * 60 + clockTime.getMinutes();
@@ -1419,13 +1154,15 @@ export function HomePage() {
           <span className="shortcut-label">{t("nav.journal")}</span>
           <span className="shortcut-sub">{t("home.talkToAi")}</span>
         </button>
-        <button className="shortcut-card" onClick={() => navigate("/planner")}>
-          <div className="icon-badge shortcut-icon shortcut-icon-planner">
-            <LayoutDashboard size={18} color="var(--horizon)" />
-          </div>
-          <span className="shortcut-label">Planner</span>
-          <span className="shortcut-sub">{t("home.organize")}</span>
-        </button>
+        {FEATURES.planner && (
+          <button className="shortcut-card" onClick={() => navigate("/planner")}>
+            <div className="icon-badge shortcut-icon shortcut-icon-planner">
+              <LayoutDashboard size={18} color="var(--horizon)" />
+            </div>
+            <span className="shortcut-label">Planner</span>
+            <span className="shortcut-sub">{t("home.organize")}</span>
+          </button>
+        )}
         <button className="shortcut-card" onClick={() => navigate("/daily-summary")}>
           <div className="icon-badge" style={{ background: "rgba(197,165,147,.16)" }}>
             <ClipboardCheck size={18} color="var(--accent-peach)" />
@@ -1454,13 +1191,15 @@ export function HomePage() {
           <span className="shortcut-label">Pomodoro</span>
           <span className="shortcut-sub">{t("home.focus")}</span>
         </button>
-        <button className="shortcut-card" onClick={() => navigate("/habits")}>
-          <div className="icon-badge" style={{ background: "rgba(150,199,179,.18)" }}>
-            <Sparkles size={18} color="var(--accent-sage)" />
-          </div>
-          <span className="shortcut-label">{t("home.habits")}</span>
-          <span className="shortcut-sub">{t("home.rituals")}</span>
-        </button>
+        {FEATURES.habits && (
+          <button className="shortcut-card" onClick={() => navigate("/habits")}>
+            <div className="icon-badge" style={{ background: "rgba(150,199,179,.18)" }}>
+              <Sparkles size={18} color="var(--accent-sage)" />
+            </div>
+            <span className="shortcut-label">{t("home.habits")}</span>
+            <span className="shortcut-sub">{t("home.rituals")}</span>
+          </button>
+        )}
       </div>
     </>
   );
@@ -2429,591 +2168,11 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* ── Agenda por Blocos ── */}
-        <div style={{ marginBottom: "calc(var(--a) * 1.2)" }}>
-          {/* Header */}
-          <div className="home-section-row">
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
-                <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-              </svg>
-              <span className="section-title" style={{ fontSize: "14px" }}>{t("home.agendaTitle")}</span>
-            </div>
-            {agendaPhase === "approved" && (
-              <span style={{ fontSize: "11px", color: "var(--accent-sage)", fontWeight: 600 }}>✓ No Planner</span>
-            )}
-            {agendaPhase === "preview" && (
-              <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 600 }}>
-                {selectedAgendaCount} selecionada{selectedAgendaCount !== 1 ? "s" : ""}
-              </span>
-            )}
-            {agendaPhase === "idle" && (
-              <AuraButtonV2 variant="primary" size="sm" onClick={fetchAgenda} useAuraIcon>
-                {t("home.agendaWithAi")}
-              </AuraButtonV2>
-            )}
-          </div>
-
-          {agendaPhase === "idle" && (
-            <div className="home-agenda-card" style={{
-              background: "rgba(255,253,249,.97)",
-              borderRadius: 14,
-              border: "1.5px solid var(--warm-border)",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}>
-              {homeAgendaPreview.tasks.length === 0 && !homeAgendaPreview.habit && homeGoalActions.length === 0 ? (
-                <div style={{ padding: "14px 13px" }}>
-                  {activationState.checkinCount === 0 ? (
-                    <>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
-                        {t("home.blankDay")}
-                      </p>
-                      <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
-                        {t("home.blankCheckin")}
-                      </p>
-                      <button
-                        onClick={() => navigate("/checkin")}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 7,
-                          padding: "8px 14px",
-                          background: "var(--accent-sage, #96c7b3)",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 20,
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          letterSpacing: 0.1,
-                        }}
-                      >
-                        <span style={{ fontSize: 16 }}>🌿</span>
-                        Fazer check-in
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: "0 0 4px" }}>
-                        {t("home.blankDay")}
-                      </p>
-                      <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, margin: "0 0 12px" }}>
-                        {t("home.blankAi")}
-                      </p>
-                      <button
-                        onClick={() => navigate("/routine-builder", {
-                          state: {
-                            focus: l("Montar um dia possível a partir do que é real agora", "Build a workable day from what is real now"),
-                          }
-                        })}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 7,
-                          padding: "8px 14px",
-                          background: "var(--accent-salmon, #f4a896)",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 20,
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          letterSpacing: 0.1,
-                        }}
-                      >
-                        <span style={{ fontSize: 16 }}>✦</span>
-                        {l("Montar minha rotina", "Build my routine")}
-                      </button>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {homeAgendaPreview.tasks.map((task, index) => {
-                    const isTaskDone = doneTaskIds.has(task.id);
-                    const rowKey = `task:${task.id}`;
-                    const isExpanded = isAgendaRowExpanded(rowKey);
-                    return (
-                    <div
-                      key={task.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate("/planner", { state: { openTaskId: task.id } })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigate("/planner", { state: { openTaskId: task.id } });
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        gap: 10,
-                        padding: "10px 13px",
-                        border: "none",
-                        borderBottom: index < homeAgendaPreview.tasks.length - 1 || homeAgendaPreview.habit ? "1px solid var(--warm-border)" : "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        opacity: isTaskDone ? 0.6 : 1,
-                        transition: "opacity 0.2s",
-                        order: timeToMinutes(task.time),
-                      }}
-                    >
-                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>{task.time}</p>
-                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>{t("common.today").toLocaleLowerCase(i18n.language)}</p>
-                      </div>
-                      <div style={{ width: 3, borderRadius: 999, background: isTaskDone ? "var(--accent-sage)" : "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28, transition: "background 0.2s" }} />
-                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: isTaskDone ? "var(--text-3)" : "var(--text-1)",
-                            margin: 0,
-                            textDecoration: isTaskDone ? "line-through" : "none",
-                            transition: "all 0.2s",
-                            whiteSpace: isExpanded ? "normal" : "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}>
-                            {task.title}
-                          </p>
-                          {isExpanded && (
-                            <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                              {isTaskDone ? l("Concluído", "Completed") : (task.category ? l(`Compromisso/tarefa · ${task.category}`, `Commitment/task · ${task.category}`) : l("Compromisso/tarefa", "Commitment/task"))}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleAgendaRowExpanded(rowKey);
-                          }}
-                          title={isExpanded ? l("Recolher", "Collapse") : l("Expandir", "Expand")}
-                          aria-label={isExpanded ? l("Recolher compromisso", "Collapse commitment") : l("Expandir compromisso", "Expand commitment")}
-                          style={{
-                            width: 20, height: 20, borderRadius: "50%",
-                            border: "1.5px solid rgba(244,168,150,.45)",
-                            background: "rgba(244,168,150,.12)",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                            color: "var(--accent-peach)",
-                          }}
-                        >
-                          <ChevronRight size={12} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
-                        </button>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (!isTaskDone) void handleHomeTaskDone(task);
-                          }}
-                          title={isTaskDone ? l("Concluído", "Completed") : l("Marcar como feito", "Mark as done")}
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-sage)",
-                            background: isTaskDone ? "var(--accent-sage)" : "transparent",
-                            cursor: isTaskDone ? "default" : "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                            transition: "background 0.2s",
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke={isTaskDone ? "white" : "var(--accent-sage)"} strokeWidth="2.5" strokeLinecap="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </button>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleHomeTaskDelete(task);
-                          }}
-                                      title={t("home.deleteTitle")}
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-peach)",
-                            background: "transparent",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  );})}
-                  {homeAgendaPreview.habit && (() => {
-                    const rowKey = `habit:${homeAgendaPreview.habit.id}`;
-                    const isExpanded = isAgendaRowExpanded(rowKey);
-                    return (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate("/habits")}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigate("/habits");
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        gap: 10,
-                        padding: "10px 13px",
-                        border: "none",
-                        background: "rgba(180,185,169,.08)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        order: timeToMinutes(homeAgendaPreview.habit.reminderTime ?? "23:59"),
-                      }}
-                    >
-                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-sage)", margin: 0 }}>
-                          {homeAgendaPreview.habit.reminderTime ?? "--:--"}
-                        </p>
-                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>{t("home.habit")}</p>
-                      </div>
-                      <div style={{ width: 3, borderRadius: 999, background: "var(--accent-sage)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "var(--text-1)",
-                            margin: 0,
-                            whiteSpace: isExpanded ? "normal" : "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}>
-                            {homeAgendaPreview.habit.icon ? `${homeAgendaPreview.habit.icon} ` : ""}{homeAgendaPreview.habit.title}
-                          </p>
-                          {isExpanded && (
-                            <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                              {t("home.pendingRitual")}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleAgendaRowExpanded(rowKey);
-                          }}
-                          title={isExpanded ? l("Recolher", "Collapse") : l("Expandir", "Expand")}
-                          aria-label={isExpanded ? l("Recolher hábito", "Collapse habit") : l("Expandir hábito", "Expand habit")}
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1px solid var(--warm-border-2)",
-                            background: "rgba(255,255,255,.62)",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                            color: "var(--text-3)",
-                          }}
-                        >
-                          <ChevronRight size={11} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
-                        </button>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleHomeHabitDone(homeAgendaPreview.habit!);
-                          }}
-                          title="Marcar como feito"
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-sage)",
-                            background: "transparent",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </button>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleHomeHabitDelete(homeAgendaPreview.habit!);
-                          }}
-                                            title={t("home.deleteTitle")}
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-peach)",
-                            background: "transparent",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="2" strokeLinecap="round">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    );
-                  })()}
-                  {homeGoalActions.map((action, index) => {
-                    const rowKey = `action:${action.id}`;
-                    const isExpanded = isAgendaRowExpanded(rowKey);
-                    return (
-                    <div
-                      key={action.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate("/goals", action.source === "goal" ? { state: { openGoalId: action.goalId, openSubtaskId: action.subId } } : { state: { activeTab: "acoes" } })}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigate("/goals", action.source === "goal" ? { state: { openGoalId: action.goalId, openSubtaskId: action.subId } } : { state: { activeTab: "acoes" } });
-                        }
-                      }}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        gap: 10,
-                        padding: "10px 13px",
-                        border: "none",
-                        borderTop: index === 0 ? "1px solid var(--warm-border)" : "none",
-                        borderBottom: index < homeGoalActions.length - 1 ? "1px solid var(--warm-border)" : "none",
-                        background: "rgba(244,168,150,.06)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        order: 2000 + index,
-                      }}
-                    >
-                      <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                                          <p style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-peach)", margin: 0 }}>{t("home.action")}</p>
-                        <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>meta</p>
-                      </div>
-                      <div style={{ width: 3, borderRadius: 999, background: "var(--accent-peach)", flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: "var(--text-1)",
-                            margin: 0,
-                            whiteSpace: isExpanded ? "normal" : "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                          }}>
-                            {action.text}
-                          </p>
-                          {isExpanded && (
-                            <p style={{ fontSize: 10, color: "var(--text-3)", margin: "2px 0 0" }}>
-                              {action.source === "goal" && action.goalTitle ? l(`Próxima ação · ${action.goalTitle}`, `Next action · ${action.goalTitle}`) : l("Próxima ação capturada", "Captured next action")}
-                            </p>
-                          )}
-                        </div>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleAgendaRowExpanded(rowKey);
-                          }}
-                          title={isExpanded ? l("Recolher", "Collapse") : l("Expandir", "Expand")}
-                          aria-label={isExpanded ? l("Recolher ação", "Collapse action") : l("Expandir ação", "Expand action")}
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1px solid var(--warm-border-2)",
-                            background: "rgba(255,255,255,.62)",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                            color: "var(--text-3)",
-                          }}
-                        >
-                          <ChevronRight size={11} style={{ transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 160ms ease" }} />
-                        </button>
-                        <button
-                          className="home-touch-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleHomeGoalActionDone(action);
-                          }}
-                                              title={t("home.markActionDone")}
-                          style={{
-                            width: 18, height: 18, borderRadius: "50%",
-                            border: "1.5px solid var(--accent-sage)",
-                            background: "transparent",
-                            cursor: "pointer",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="2.5" strokeLinecap="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    );
-                  })}
-                </>
-              )}
-            </div>
-          )}
-
-          {agendaPhase === "loading" && (
-            <div style={{
-              background: "rgba(255,253,249,.9)", borderRadius: 12, padding: "16px",
-              textAlign: "center", border: "1.5px solid var(--warm-border)",
-            }}>
-              <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
-              <p style={{ fontSize: 12, color: "var(--text-2)", fontStyle: "italic" }}>
-                {t("home.analyzingBlocks")}
-              </p>
-            </div>
-          )}
-
-          {(agendaPhase === "preview" || agendaPhase === "approved") && agendaBlocks.length > 0 && (
-            <div className="home-agenda-card" style={{
-              background: "rgba(255,253,249,.97)", borderRadius: 14,
-              border: "1.5px solid var(--warm-border)", overflow: "hidden",
-            }}>
-              {agendaBlocks.map((block, idx) => {
-                const cfg = BLOCK_CONFIG[block.tipo] ?? BLOCK_CONFIG.flexivel;
-                const isSkip = block.tipo === "descanso" || block.tipo === "refeicao";
-                const savedCount = block.tarefas_sugeridas.filter((_, taskIndex) => savedAgendaTaskKeys.has(agendaTaskKey(idx, taskIndex))).length;
-                return (
-                  <div key={idx} style={{
-                    display: "flex", gap: 10, padding: "10px 13px",
-                    borderBottom: idx < agendaBlocks.length - 1 ? "1px solid var(--warm-border)" : "none",
-                    opacity: isSkip ? 0.55 : 1,
-                  }}>
-                    {/* Time column */}
-                    <div style={{ flexShrink: 0, textAlign: "right", minWidth: 38 }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, color: cfg.cor, margin: 0 }}>{block.horario_inicio}</p>
-                      <p style={{ fontSize: 9, color: "var(--text-3)", margin: "1px 0 0" }}>{block.horario_fim}</p>
-                    </div>
-                    {/* Color bar */}
-                    <div style={{ width: 3, borderRadius: 999, background: cfg.cor, flexShrink: 0, alignSelf: "stretch", minHeight: 28 }} />
-                    {/* Content */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
-                        <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
-                        <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>{block.label}</p>
-                        {savedCount > 0 && !isSkip && (
-                          <span style={{ fontSize: 9, fontWeight: 700, color: cfg.cor, background: cfg.bg, padding: "2px 6px", borderRadius: 999, border: `1px solid ${cfg.cor}40` }}>✓ {savedCount} salva{savedCount > 1 ? "s" : ""}</span>
-                        )}
-                      </div>
-                      {block.tarefas_sugeridas.length > 0 && !isSkip && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 5 }}>
-                          {block.tarefas_sugeridas.map((t, ti) => (
-                            <button
-                              key={ti}
-                              type="button"
-                              onClick={() => agendaPhase === "preview" && toggleAgendaTaskSelection(idx, ti)}
-                              style={{
-                                width: "100%",
-                                fontSize: 11,
-                                color: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor : "var(--text-2)",
-                                background: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? `${cfg.cor}18` : cfg.bg,
-                                border: `1px solid ${selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor + "70" : cfg.cor + "30"}`,
-                                borderRadius: 9,
-                                padding: "6px 8px",
-                                cursor: agendaPhase === "preview" ? "pointer" : "default",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: 4,
-                                textAlign: "left",
-                                opacity: agendaPhase === "approved" && !savedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? 0.45 : 1,
-                              }}
-                            >
-                              {agendaPhase === "preview" && (
-                                <span style={{
-                                  width: 16,
-                                  height: 16,
-                                  borderRadius: 5,
-                                  border: `1.5px solid ${cfg.cor}`,
-                                  background: selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? cfg.cor : "transparent",
-                                  color: "#fff",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  flexShrink: 0,
-                                  fontSize: 10,
-                                  fontWeight: 900,
-                                }}>
-                                  {selectedAgendaTaskKeys.has(agendaTaskKey(idx, ti)) ? "✓" : ""}
-                                </span>
-                              )}
-                              <span style={{ flex: 1 }}>{t}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      <p style={{ fontSize: 10, color: "var(--text-3)", fontStyle: "italic", margin: 0 }}>
-                        {block.razao_ia}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Approve button */}
-              {agendaPhase === "preview" && (
-                <div style={{ padding: "10px 13px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ flex: "1 1 100%" }}
-                    onClick={() => {
-                      if (selectedAgendaCount >= selectableAgendaCount) {
-                        setSelectedAgendaTaskKeys(new Set());
-                      } else {
-                        setSelectedAgendaTaskKeys(buildAgendaSelection(agendaBlocks));
-                      }
-                    }}
-                    disabled={agendaSaving || selectableAgendaCount === 0}
-                  >
-                    {selectedAgendaCount >= selectableAgendaCount ? l("Limpar seleção", "Clear selection") : l("Marcar todas", "Select all")}
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ flex: 1 }}
-                    onClick={() => { setAgendaPhase("idle"); setAgendaBlocks([]); setSelectedAgendaTaskKeys(new Set()); setSavedAgendaTaskKeys(new Set()); }}
-                  >{t("common.cancel")}</button>
-                  <button
-                    className="btn btn-ghost"
-                    style={{ flex: 1 }}
-                    onClick={fetchAgenda}
-                    disabled={agendaSaving}
-                  >Refazer</button>
-                  <AuraButtonV2 variant="primary" size="sm" style={{ flex: 2 }} onClick={approveAgenda} disabled={selectedAgendaCount === 0 || agendaSaving}>
-                    {agendaSaving ? "Enviando..." : `Adicionar ${selectedAgendaCount > 0 ? selectedAgendaCount : ""} ao Planner`}
-                  </AuraButtonV2>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        {/* ── Objetivo em foco + demais objetivos ──
+            Substituiu a agenda por blocos (585 linhas de Planner). A pergunta
+            que a Home responde deixou de ser "o que tenho hoje" e passou a ser
+            "o que eu faço agora". ── */}
+        <GoalFocusCard />
 
         {/* ── Presença sem cobrança ── */}
         {(state.checkinHistory || []).length > 0 && (

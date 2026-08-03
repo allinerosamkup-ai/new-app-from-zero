@@ -40,7 +40,7 @@ export function PremiumGate({ children, feature, blurBehind = false }: PremiumGa
           justifyContent: "center",
           padding: "24px 20px",
           borderRadius: 20,
-          border: "1.5px solid rgba(215,137,127,0.3)",
+          border: "1.5px solid rgba(134,183,154,0.3)",
           background: "rgba(255,253,249,.96)",
           textAlign: "center",
         }}
@@ -51,7 +51,7 @@ export function PremiumGate({ children, feature, blurBehind = false }: PremiumGa
               width: 44,
               height: 44,
               borderRadius: "50%",
-              background: "rgba(215,137,127,0.12)",
+              background: "rgba(134,183,154,0.12)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

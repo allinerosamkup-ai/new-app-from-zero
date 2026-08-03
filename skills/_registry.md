@@ -13,3 +13,7 @@ Este registro lista skills locais do projeto Airia. Skills devem morar em `skill
 - `airia-notification-hygiene`: alertas futuros, ancorados e deduplicados.
 - `airia-mood-reporting`: padroes e relatorios longitudinais seguros e baseados em dados.
 
+## Infraestrutura
+
+- `notebooklm-bridge`: ponte Claude Code <-> NotebookLM via MCP para leitura pesada, pesquisa ancorada e memoria entre sessoes. Setup em `docs/notebooklm-mcp-setup.md`.
+

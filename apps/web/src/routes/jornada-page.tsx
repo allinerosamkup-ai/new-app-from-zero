@@ -162,7 +162,7 @@ export default function JornadaPage() {
                     <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--text-2)", fontStyle: "italic" }}>
                       “{step.reflexao}”
                     </p>
-                    <div style={{ padding: "12px 14px", borderRadius: 14, background: "rgba(215,137,127,0.06)", border: "1px solid rgba(215,137,127,0.18)" }}>
+                    <div style={{ padding: "12px 14px", borderRadius: 14, background: "rgba(134,183,154,0.06)", border: "1px solid rgba(134,183,154,0.18)" }}>
                       <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
                         {isLowPhase ? l("Hoje, só isto", "Just this today") : l("Seu passo de hoje", "Your step today")}
                       </p>

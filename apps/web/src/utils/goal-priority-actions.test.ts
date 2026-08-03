@@ -3,6 +3,7 @@ import {
   buildGoalCardModel,
   buildGoalTaskSchedule,
   parsePausedGoalIds,
+  selectFocusGoal,
   togglePausedGoalId,
 } from "./goal-priority-actions";
 
@@ -106,5 +107,55 @@ describe("goal experience helpers", () => {
       date: "2026-07-27",
       time: "09:00",
     });
+  });
+});
+
+describe("selectFocusGoal", () => {
+  const goal = (id: string, done: number, total: number, completedPct?: number) => ({
+    id,
+    title: `Objetivo ${id}`,
+    completedPct: completedPct ?? Math.round((done / Math.max(total, 1)) * 100),
+    subtasks: Array.from({ length: total }, (_, index) => ({
+      id: `${id}-${index}`,
+      title: `Ação ${index}`,
+      done: index < done,
+      order: index,
+    })),
+  });
+
+  it("põe em foco o objetivo mais perto de fechar", () => {
+    const { focus, others } = selectFocusGoal([goal("a", 1, 4), goal("b", 3, 4), goal("c", 0, 4)]);
+
+    expect(focus?.id).toBe("b");
+    // Todos os demais continuam na lista, inclusive os menos avançados.
+    expect(others.map((model) => model.id).sort()).toEqual(["a", "c"]);
+  });
+
+  it("ignora pausados, concluídos e quem não tem ação pendente", () => {
+    const pausado = goal("pausado", 3, 4);
+    const concluido = goal("concluido", 4, 4, 100);
+    const semAcao = { id: "vazio", title: "Sem ações", completedPct: 0, subtasks: [] };
+    const elegivel = goal("ok", 1, 4);
+
+    const { focus } = selectFocusGoal([pausado, concluido, semAcao, elegivel], { pausedIds: ["pausado"] });
+
+    expect(focus?.id).toBe("ok");
+  });
+
+  it("devolve foco nulo quando não há objetivo elegível", () => {
+    const { focus, others } = selectFocusGoal([goal("feito", 4, 4, 100)]);
+
+    expect(focus).toBeNull();
+    // O concluído não some da tela — ele sai do card grande, não da lista.
+    expect(others).toHaveLength(1);
+  });
+
+  it("passa o foco adiante quando o objetivo em destaque conclui", () => {
+    const antes = selectFocusGoal([goal("a", 3, 4), goal("b", 1, 4)]);
+    expect(antes.focus?.id).toBe("a");
+
+    // Mesma lista, com "a" agora fechado — o seguinte assume sem estado salvo.
+    const depois = selectFocusGoal([goal("a", 4, 4, 100), goal("b", 1, 4)]);
+    expect(depois.focus?.id).toBe("b");
   });
 });

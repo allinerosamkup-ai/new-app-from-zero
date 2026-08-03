@@ -47,7 +47,7 @@ export function OnboardingSleepPage() {
           {Array.from({ length: TOTAL }, (_, i) => (
             <div key={i} style={{
               flex: 1, height: 4, borderRadius: 999,
-              background: i < STEP ? "var(--accent-peach)" : "rgba(215,137,127,.2)",
+              background: i < STEP ? "var(--accent-peach)" : "rgba(134,183,154,.2)",
             }} />
           ))}
         </div>
@@ -107,7 +107,7 @@ export function OnboardingSleepPage() {
                   transition: "all 150ms",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
                   backdropFilter: "blur(16px)",
-                  boxShadow: "0 10px 24px rgba(243,176,140,.08)",
+                  boxShadow: "0 10px 24px rgba(169,210,187,.08)",
                 }}
               >
                 <span style={{ fontSize: 24 }}>{c.emoji}</span>
@@ -131,7 +131,7 @@ export function OnboardingSleepPage() {
                 border: "1.5px solid var(--warm-border-2)", padding: "0 12px",
                 fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, color: "var(--text-1)",
                 background: "rgba(255,255,255,.72)", outline: "none", boxSizing: "border-box",
-                backdropFilter: "blur(16px)", boxShadow: "0 10px 24px rgba(243,176,140,.08)",
+                backdropFilter: "blur(16px)", boxShadow: "0 10px 24px rgba(169,210,187,.08)",
               }}
             />
           </div>
@@ -143,7 +143,7 @@ export function OnboardingSleepPage() {
                 border: "1.5px solid var(--warm-border-2)", padding: "0 12px",
                 fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 15, color: "var(--text-1)",
                 background: "rgba(255,255,255,.72)", outline: "none", boxSizing: "border-box",
-                backdropFilter: "blur(16px)", boxShadow: "0 10px 24px rgba(243,176,140,.08)",
+                backdropFilter: "blur(16px)", boxShadow: "0 10px 24px rgba(169,210,187,.08)",
               }}
             />
           </div>
@@ -157,7 +157,7 @@ export function OnboardingSleepPage() {
             background: "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", boxShadow: "0 12px 24px rgba(243,176,140,.24)", marginBottom: 10,
+            cursor: "pointer", boxShadow: "0 12px 24px rgba(169,210,187,.24)", marginBottom: 10,
           }}
         >
           {t("common.continue")} →

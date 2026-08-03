@@ -58,6 +58,9 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'aiInitialSuggestions',
       'aiProfilePayload',
       'priorDiagnoses',
+      // Autorrelato da própria pessoa, no mesmo nível de priorDiagnoses: ela
+      // respondeu, então tem direito de ver no export dela.
+      'biologicalSex',
       'medicationCurrentlyUsing',
       'medicationNotes',
       // Stripe billing: the user's own subscription metadata. No payment
@@ -538,6 +541,10 @@ export const PRIVACY_EXPORT_EXCLUDED_MODELS = new Set<string>([
   'AiBackgroundJob',
   // Habit completions are exported via Habit.include.completions, not standalone
   'HabitCompletion',
+  // Lease/retry bookkeeping for the objective action recovery job. Holds no
+  // content the user wrote — only lock tokens, attempt counters and the last
+  // internal error. The objective itself is exported via Objective.
+  'ObjectiveActionRecoveryClaim',
 ]);
 
 export function classifyField(model: string, field: string): AllowlistMode | 'unknown' {

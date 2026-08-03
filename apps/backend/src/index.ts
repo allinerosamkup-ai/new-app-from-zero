@@ -28,7 +28,14 @@ import { LearningContextService } from './services/learning-context.service';
 import { HabitCreateSchema, HabitPatchSchema } from './contracts/habit.contract';
 import { JournalExternalMessageSchema, JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { EventLogCreateSchema } from './contracts/event-log.contract';
-import { OnboardingProcessSchema } from './contracts/onboarding.contract';
+import { OnboardingProcessSchema, tracksMenstrualCycle, type BiologicalSex } from './contracts/onboarding.contract';
+import {
+  CONSENT_TYPES,
+  CURRENT_CONSENT_VERSION,
+  revokeConsent,
+  summarizeConsents,
+} from './services/consent.service';
+import { extractJournalSignals, stripJournalSignals } from './services/journal-signals.service';
 import {
   DEFAULT_EVENING_REVIEW_TIME,
   DEFAULT_MORNING_CHECKIN_TIME,
@@ -50,7 +57,7 @@ import { AgendaPatternRecognitionService } from './services/agenda-pattern-recog
 import { ContextGroundingService } from './services/context-grounding.service';
 import { ReasoningContextService } from './services/reasoning-context.service';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './services/airia-operational-reasoning.service';
-import { buildCompletionReward, computeProgress, streakMessage, type ProgressEvent } from './services/progress-rewards.service';
+import { buildCompletionReward, computeGoalCounters, computeProgress, streakMessage, type ProgressEvent } from './services/progress-rewards.service';
 import { TaskDecompositionService } from './services/task-decomposition.service';
 import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-interpreter.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
@@ -2430,6 +2437,7 @@ export function createApp(dependencies: AppDependencies = {}) {
               input: data,
             },
             priorDiagnoses: data.priorDiagnoses ?? [],
+            biologicalSex: data.biologicalSex ?? null,
             medicationCurrentlyUsing: data.medicationCurrentlyUsing ?? null,
             medicationNotes: data.medicationNotes ?? null,
           },
@@ -2453,6 +2461,7 @@ export function createApp(dependencies: AppDependencies = {}) {
               input: data,
             },
             priorDiagnoses: data.priorDiagnoses ?? [],
+            biologicalSex: data.biologicalSex ?? null,
             medicationCurrentlyUsing: data.medicationCurrentlyUsing ?? null,
             medicationNotes: data.medicationNotes ?? null,
           },
@@ -3119,13 +3128,23 @@ export function createApp(dependencies: AppDependencies = {}) {
         },
       });
 
+      // O bloco de sinais é conversa entre o modelo e o app. Ele é lido aqui e
+      // some do texto: mostrar JSON no diário seria vazar mecânica na cara de
+      // quem está desabafando. O front repinta a mensagem com este conteúdo
+      // limpo quando recebe `assistant.completed`.
+      const journalSignals = extractJournalSignals(assistantContent);
+      const visibleContent = stripJournalSignals(assistantContent);
+      // localDate é opcional no schema do diário; para o check-in ele não pode
+      // faltar, então cai na data do servidor como último recurso.
+      const signalLocalDate = data.localDate ?? new Date().toISOString().slice(0, 10);
+
       const assistantOrderIndex = userOrderIndex + 1;
       const assistantMessage = await prisma.journalMessage.create({
         data: {
           sessionId: data.sessionId,
           userId: data.userId,
           role: 'assistant',
-          content: assistantContent,
+          content: visibleContent,
           orderIndex: assistantOrderIndex,
         },
       });
@@ -3140,6 +3159,107 @@ export function createApp(dependencies: AppDependencies = {}) {
         },
         riskSafety: journalRiskSafety,
       });
+
+      // ── Proposta de check-in e de meta ────────────────────────────────────
+      // Tudo daqui para baixo é opcional: falhar não pode cortar o diário, que
+      // já entregou a resposta. Daí o try/catch mudo.
+      try {
+        const proposals: Array<{ action: string; payload: Record<string, unknown> }> = [];
+
+        if (journalSignals.checkin) {
+          const draft = CheckinUnderstandingService.understand({
+            message: data.message,
+            localDate: signalLocalDate,
+            source: 'aura_text',
+            sourceMessageId: persistedUserMessage.id,
+            idempotencyKey: `journal:${data.sessionId}:${persistedUserMessage.id}`,
+            candidate: journalSignals.checkin as Record<string, unknown>,
+          });
+          // Só `ready` vira proposta: o serviço valida o sinal contra léxico e
+          // recusa quando a pessoa disse que só estava desabafando.
+          if (draft.status === 'ready') {
+            proposals.push({
+              action: 'record_checkin',
+              payload: {
+                localDate: draft.localDate,
+                moodScore: draft.mood.value,
+                energyScore: draft.energy.value,
+                emotions: draft.emotions,
+                factors: draft.factors,
+                source: draft.source,
+                sourceMessageId: draft.sourceMessageId,
+                idempotencyKey: draft.idempotencyKey,
+                rawText: draft.rawText,
+                needsConfirmation: true,
+                signalMetadata: { surface: 'journal' },
+              },
+            });
+          }
+        }
+
+        if (journalSignals.goal) {
+          proposals.push({
+            action: 'create_goal',
+            payload: {
+              title: journalSignals.goal.title,
+              subgoals: journalSignals.goal.subgoals,
+              // Obrigatório: sem anular, o construtor agenda por padrão um bloco
+              // de 25 min no Planner — que está desligado e ninguém veria.
+              firstAction: null,
+              needsConfirmation: true,
+            },
+          });
+        }
+
+        if (proposals.length > 0) {
+          // Reaproveita a sessão de comando ativa em vez de criar coluna nova em
+          // JournalSession — o que exigiria migração, entrada na allowlist de
+          // privacidade e edição do deploy, tudo para guardar um ponteiro.
+          const session = await prisma.auraCommandSession.findFirst({
+            where: { userId: data.userId, status: 'active' },
+            orderBy: { createdAt: 'desc' },
+          }) ?? await AuraCommandPersistenceService.createSession({
+            prisma,
+            userId: data.userId,
+            locale: typeof (req.body as any)?.locale === 'string' ? (req.body as any).locale : 'pt-BR',
+            timezone: typeof (req.body as any)?.timezone === 'string' ? (req.body as any).timezone : 'America/Sao_Paulo',
+          });
+          const operations = [];
+          for (const proposal of proposals) {
+            const plan = AuraCommandPlanBuilderService.build({
+              sessionId: session.id,
+              sourceMessageId: persistedUserMessage.id,
+              localDate: signalLocalDate,
+              currentTime: new Date().toTimeString().slice(0, 5),
+              // Nenhuma das duas propostas do diário agenda bloco: check-in não
+              // ocupa horário e a meta vai com firstAction nulo. Por isso
+              // calendário e janelas ocupadas ficam vazios.
+              defaultCalendarId: '',
+              busyWindows: [],
+              response: { action: proposal.action, payload: proposal.payload } as never,
+            });
+            operations.push(...plan.operations);
+          }
+
+          if (operations.length > 0) {
+            const plan = {
+              id: randomUUID(),
+              sessionId: session.id,
+              sourceMessageId: persistedUserMessage.id,
+              operations,
+              // Diário é superfície confessional: NUNCA aplica sozinho. Quem
+              // confirma é ela, no card.
+              executionPolicy: 'review_required' as const,
+              missingFields: [],
+              createdAt: new Date().toISOString(),
+            };
+            await AuraCommandPersistenceService.persistPlan({ prisma, userId: data.userId, plan: plan as never });
+            writeSseEvent(res, 'plan.proposed', { plan });
+          }
+        }
+      } catch (signalError) {
+        console.warn('[journal/signals] proposta não gerada:', signalError);
+      }
 
       // Fix #4 — Extração assíncrona do Knowledge Graph. Roda DEPOIS da resposta
       // ir pra usuária (não bloqueia UX). Falha silenciosa.
@@ -3855,7 +3975,9 @@ export function createApp(dependencies: AppDependencies = {}) {
       const since = new Date(`${localDate}T00:00:00.000Z`);
       since.setUTCDate(since.getUTCDate() - 120);
 
-      const [completions, doneBlocks, checkins, journalSessions] = await Promise.all([
+      const GOAL_EVENT_NAMES = ['objective_action_completed', 'objective_completed'];
+
+      const [completions, doneBlocks, checkins, journalSessions, goalEventRows, objectives] = await Promise.all([
         prisma.habitCompletion.findMany({
           where: { date: { gte: since }, habit: { userId } },
           select: { date: true },
@@ -3871,6 +3993,17 @@ export function createApp(dependencies: AppDependencies = {}) {
         prisma.journalSession.findMany({
           where: { userId, status: 'completed', finalizedAt: { not: null } },
           select: { finalizedAt: true },
+        }).catch(() => []),
+        prisma.eventLog.findMany({
+          where: { userId, eventName: { in: GOAL_EVENT_NAMES }, createdAt: { gte: since } },
+          select: { eventName: true, createdAt: true },
+        }).catch(() => []),
+        // Piso dos contadores: os eventos só passaram a ser gravados agora, então
+        // sem ler o estado atual dos objetivos quem já concluiu dezenas de ações
+        // veria zero. Lê só o que precisa para contar.
+        prisma.objective.findMany({
+          where: { userId, archived: false },
+          select: { progress: true, subgoals: true },
         }).catch(() => []),
       ]);
 
@@ -3895,8 +4028,28 @@ export function createApp(dependencies: AppDependencies = {}) {
         if (day && checkin.stateLabel) phaseByDate[day] = checkin.stateLabel;
       }
 
-      const progress = computeProgress({ events, today: localDate, phaseByDate });
-      return res.json({ ...progress, streakMessage: streakMessage(progress.streak) });
+      const goalEvents: ProgressEvent[] = (goalEventRows as Array<{ eventName: string; createdAt: Date }>)
+        .map((row) => ({
+          date: dayOf(row.createdAt)!,
+          kind: (row.eventName === 'objective_completed' ? 'goal_completed' : 'goal_action_done') as ProgressEvent['kind'],
+        }))
+        .filter((event) => Boolean(event.date));
+
+      const objectiveRows = objectives as Array<{ progress: number; subgoals: unknown }>;
+      const floor = {
+        actionsCompleted: objectiveRows.reduce((total, objective) => (
+          total + (Array.isArray(objective.subgoals)
+            ? (objective.subgoals as Array<{ done?: boolean }>).filter((s) => s?.done).length
+            : 0)
+        ), 0),
+        goalsCompleted: objectiveRows.filter((objective) => objective.progress >= 100).length,
+      };
+
+      // Eventos de objetivo entram no XP junto com o resto: fechar micro-ação
+      // vale progresso como qualquer outra conclusão do app.
+      const progress = computeProgress({ events: [...events, ...goalEvents], today: localDate, phaseByDate });
+      const counters = computeGoalCounters({ goalEvents, today: localDate, phaseByDate, floor });
+      return res.json({ ...progress, streakMessage: streakMessage(progress.streak), counters });
     } catch (error) {
       console.error('[progress] Error:', error);
       return res.status(500).json({ error: 'Failed to compute progress' });
@@ -4226,10 +4379,18 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.get('/api/preferences', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     try {
-      const [prefs, profile] = await Promise.all([
+      const [prefs, profile, onboarding] = await Promise.all([
         prisma.userPreference.findUnique({ where: { userId } }),
         prisma.profile.findUnique({ where: { id: userId }, select: { fullName: true } }),
+        // O gate do bloco menstrual vive aqui porque /api/preferences já é
+        // buscado por toda superfície que precisa dele. Um endpoint novo só
+        // para um campo somaria uma requisição em cada tela.
+        prisma.onboardingResponse.findUnique({
+          where: { userId },
+          select: { biologicalSex: true },
+        }).catch(() => null),
       ]);
+      const biologicalSex = (onboarding?.biologicalSex as BiologicalSex | null | undefined) ?? null;
       return res.json({
         ...(prefs ?? defaultUserPreferences),
         morningCheckinTime: prefs?.morningCheckinTime ?? DEFAULT_MORNING_CHECKIN_TIME,
@@ -4238,6 +4399,8 @@ export function createApp(dependencies: AppDependencies = {}) {
           prefs?.notificationPreferences ?? defaultUserPreferences.notificationPreferences,
         ),
         fullName: profile?.fullName ?? null,
+        biologicalSex,
+        tracksMenstrualCycle: tracksMenstrualCycle(biologicalSex),
       });
     } catch (error: any) {
       console.error('[preferences/get] Error:', error);
@@ -4335,6 +4498,51 @@ export function createApp(dependencies: AppDependencies = {}) {
     } catch (error: any) {
       console.error('[privacy/deletion-status] Error:', error);
       return res.status(500).json({ error: 'Failed to read deletion status' });
+    }
+  });
+
+  /**
+   * GET /api/privacy/consents
+   * Histórico de consentimento da usuária (LGPD Art. 9: direito a saber o que
+   * consentiu, quando e em qual versão do documento).
+   */
+  app.get('/api/privacy/consents', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const records = await prisma.consent.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+      });
+      return res.json({
+        currentVersion: CURRENT_CONSENT_VERSION,
+        consents: summarizeConsents(records),
+      });
+    } catch (error: any) {
+      console.error('[privacy/consents] Error:', error);
+      return res.status(500).json({ error: 'Failed to read consents' });
+    }
+  });
+
+  /**
+   * POST /api/privacy/consents/revoke
+   * Revogação de consentimento (LGPD Art. 8 §5). Marca a revogação e preserva
+   * o histórico — apagar destruiria a prova de que houve consentimento antes.
+   * Revogar não apaga dados: para isso existe /api/privacy/delete-request.
+   */
+  app.post('/api/privacy/consents/revoke', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { consentType } = z
+        .object({ consentType: z.enum(CONSENT_TYPES) })
+        .parse(req.body);
+      const revoked = await revokeConsent(prisma.consent, userId, consentType, new Date());
+      return res.json({ consentType, revoked });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[privacy/consents/revoke] Error:', error);
+      return res.status(500).json({ error: 'Failed to revoke consent' });
     }
   });
 
@@ -4511,14 +4719,55 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   app.post('/api/objectives/:id/subgoals/:subgoalId/complete', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
     try {
+      // localDate vem do cliente porque a sequência é contada no fuso da
+      // usuária. Sem isso, quem conclui às 22h no Brasil teria a ação contada
+      // no dia seguinte, e a sequência quebraria sozinha.
+      const { localDate } = z
+        .object({ localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })
+        .parse(req.body ?? {});
+      const completionDate = localDate ?? new Date().toISOString().slice(0, 10);
+
       const result = await objectiveProgressionService.completeActiveAction({
-        userId: (req as AuthRequest).userId,
+        userId,
         objectiveId: req.params.id,
         subgoalId: req.params.subgoalId,
       });
-      return res.status(200).json(result);
+
+      if (!result.completedNow) {
+        return res.status(200).json({ ...result, reward: null });
+      }
+
+      const completedAction = Array.isArray(result.subgoals)
+        ? (result.subgoals as Array<{ id?: string; title?: string }>).find((s) => s?.id === req.params.subgoalId)
+        : undefined;
+      const actionTitle = completedAction?.title ?? 'ação';
+
+      // Telemetria de gamificação nunca pode derrubar a conclusão: o trabalho
+      // da usuária já foi salvo pela transação acima. Daí o catch silencioso.
+      const eventsToLog = [
+        { eventName: 'objective_action_completed', properties: { objectiveId: req.params.id, subgoalId: req.params.subgoalId, title: actionTitle, localDate: completionDate } },
+        ...(result.objectiveCompletedNow
+          ? [{ eventName: 'objective_completed', properties: { objectiveId: req.params.id, localDate: completionDate } }]
+          : []),
+      ];
+      await Promise.all(eventsToLog.map((event) => (
+        prisma.eventLog.create({ data: { userId, eventName: event.eventName, properties: event.properties } })
+          .catch((error: unknown) => { console.error('[objectives/complete-subgoal] event log failed:', error); })
+      )));
+
+      const reward = buildCompletionReward({
+        title: actionTitle,
+        kind: result.objectiveCompletedNow ? 'goal_completed' : 'goal_action_done',
+        today: completionDate,
+      });
+
+      return res.status(200).json({ ...result, reward });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
       if (error instanceof ObjectiveProgressionError) {
         return res.status(error.code === 'objective_not_found' ? 404 : 409).json({ error: error.code });
       }

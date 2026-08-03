@@ -51,7 +51,7 @@ export function OnboardingEnergyPage() {
           {Array.from({ length: TOTAL }, (_, i) => (
             <div key={i} style={{
               flex: 1, height: 4, borderRadius: 999,
-              background: i < STEP ? "var(--accent-peach)" : i === STEP - 1 ? "var(--accent-peach)" : "rgba(215,137,127,.2)",
+              background: i < STEP ? "var(--accent-peach)" : i === STEP - 1 ? "var(--accent-peach)" : "rgba(134,183,154,.2)",
               transition: "background .3s",
             }} />
           ))}
@@ -151,7 +151,7 @@ export function OnboardingEnergyPage() {
             background: "linear-gradient(135deg, var(--accent-peach) 0%, var(--accent-peach-strong) 100%)",
             color: "#fff", border: "none", borderRadius: 16,
             fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700,
-            cursor: "pointer", boxShadow: "0 12px 24px rgba(243,176,140,.24)",
+            cursor: "pointer", boxShadow: "0 12px 24px rgba(169,210,187,.24)",
             marginBottom: 10,
           }}
         >
