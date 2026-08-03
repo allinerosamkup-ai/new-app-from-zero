@@ -50,3 +50,4 @@ export function normalizeObjectiveSubgoals(subgoals: unknown): ObjectiveSubgoal[
 
 export const ObjectiveSubgoalsSchema = z.array(ObjectiveSubgoalInputSchema)
   .transform((subgoals) => normalizeObjectiveSubgoals(subgoals));
+
