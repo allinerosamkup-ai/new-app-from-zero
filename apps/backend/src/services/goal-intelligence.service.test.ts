@@ -183,6 +183,28 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.equal(result.steps.length, 2);
   });
 
+  it('entrega os passos quando o revisor reprova mas a guarda aprovou', async () => {
+    // Regressão de produção: o revisor é adversarial por instrução e, com
+    // modelo pequeno, reprovava sistematicamente uma decomposição correta. O
+    // pipeline caía na pergunta com o caminho pronto na mão.
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: SALA },
+      clientReturning(
+        {
+          steps: [
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' },
+            { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
+          ],
+        },
+        { approved: false, failures: ['poderia ser mais específico'], missingInfo: null },
+      ),
+    );
+
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.steps.length, 2);
+    assert.equal(result.question, null);
+  });
+
   it('só pergunta depois que a decomposição falhou nas duas tentativas', async () => {
     // Regressão de produção: enquanto passos e pergunta dividiam o mesmo
     // contrato, o modelo escolhia perguntar mesmo com contexto suficiente. A

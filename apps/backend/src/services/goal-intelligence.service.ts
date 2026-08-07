@@ -480,9 +480,12 @@ Avalie CADA passo contra todos estes critérios:
 6. Existe uma ação anterior mais lógica que ficou de fora?
 7. Contradiz alguma informação disponível?
 
-Reprove se QUALQUER passo falhar. Na dúvida, reprove.
-Se o motivo da reprovação for falta de informação, escreva em "missingInfo" a
-ÚNICA pergunta curta que destravaria uma boa recomendação.
+Reprove só com MOTIVO CONCRETO, nomeando o passo e o que exatamente nele não se
+sustenta. "Poderia ser mais específico" e "falta contexto" NÃO são motivos:
+generalidade honesta é o comportamento correto quando o dado é escasso.
+Na dúvida, aprove — inventar fato já foi barrado antes de chegar aqui.
+Se o motivo real for falta de informação, escreva em "missingInfo" a ÚNICA
+pergunta curta que destravaria uma boa recomendação.
 
 JSON APENAS:
 {"approved":true|false,"failures":["passo 2 inventa ..."],"missingInfo":null}`;
@@ -595,6 +598,9 @@ export class GoalIntelligenceService {
       let lastRejections: Array<{ title: string; reason: string }> = [];
       let lastResultDefinition: string | null = null;
       let lastAssumptions: string[] = [];
+      // Passos que sobreviveram à guarda determinística, mesmo que o revisor
+      // tenha implicado. Só existem se de fato havia caminho.
+      let survivedGuard: GoalStep[] = [];
 
       // Duas tentativas: a segunda recebe o motivo exato da reprovação. Mais que
       // isso vira loop caro sem ganho — se falhou duas vezes com o motivo na
@@ -632,6 +638,7 @@ export class GoalIntelligenceService {
         }
 
         const steps = screened.kept.slice(0, MAX_STEPS);
+        survivedGuard = steps;
         const verdict = await this.validate({
           goalTitle: input.goalTitle,
           contextText: buildContextText(input),
@@ -653,6 +660,34 @@ export class GoalIntelligenceService {
 
 
         feedback = verdict.failures.join('\n') || 'reprovado pelo revisor sem motivo declarado';
+      }
+
+      /**
+       * Revisor reprovou duas vezes, mas a guarda aprovou passos.
+       *
+       * Entrega os passos. O revisor é instruído a ser adversarial, e com modelo
+       * pequeno isso vira reprovação sistemática — em produção ele derrubou uma
+       * decomposição correta ("retirar o que não pertence", "organizar os
+       * elementos principais", "limpeza básica", "conferir se está utilizável")
+       * duas vezes seguidas, e o pipeline caía na pergunta.
+       *
+       * A rede de segurança dura contra o erro que importa — invenção de objeto,
+       * defeito ou circunstância — é a guarda determinística, e ela já rodou.
+       * Pergunta é para quando NÃO HÁ caminho, não para quando um revisor
+       * implicou com o caminho que existe.
+       */
+      if (survivedGuard.length > 0) {
+        console.info(
+          `[goal-intelligence] revisor reprovou 2x; entregando ${survivedGuard.length} passo(s) aprovado(s) pela guarda`,
+        );
+        return {
+          mode: 'actions',
+          resultDefinition: lastResultDefinition,
+          assumptions: lastAssumptions,
+          steps: survivedGuard,
+          question: null,
+          rejectedSteps: lastRejections,
+        };
       }
 
       // Nenhuma das duas tentativas produziu passo utilizável. Agora sim — e só
