@@ -47,10 +47,9 @@ import {
   readHomeAutonomyFeedback,
   rememberHomeAutonomyActionFeedback,
 } from "./home-page.helpers";
-import { findSmartPlannerSlot } from "./planner-page.helpers";
-import { 
+import { saveNextAction } from "../utils/save-next-action";
+import {
   MessageSquareText,
-  LayoutDashboard,
   Activity,
   Target,
   Timer,
@@ -58,13 +57,11 @@ import {
   Sparkles,
   ChevronRight,
 } from "lucide-react";
-import { ActivationChecklist } from "../components/activation/ActivationChecklist";
 import { FirstRunGuide } from "../components/activation/FirstRunGuide";
 import { getActivationState } from "../features/aura/activation";
 import { isHabitDueOnDate } from "../features/aura/habit-helpers";
 import { NotificationPromptBanner } from "../components/NotificationPromptBanner";
 import { PresenceCard } from "../components/PresenceCard";
-import { GoalNudgeCard } from "../components/GoalNudgeCard";
 // import { ReferralCard } from "../components/ReferralCard"; // reserved for referral section
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -84,14 +81,6 @@ type ImportantAlert = {
   tone: "info" | "warning" | "critical";
   actionLabel?: string;
   actionPath?: string;
-};
-
-type HomeScheduleModalAction = {
-  title: string;
-  category: string;
-  date: string;
-  time: string;
-  isNextDay: boolean;
 };
 
 type ChartPoint = {
@@ -217,11 +206,6 @@ const IMPORTANT_ALERT_CONFIG: Record<ImportantAlert["tone"], { accent: string; b
   },
 };
 
-function timeToMinutes(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
 
 
 
@@ -330,7 +314,7 @@ const moodMap: Record<string, { emoji: string; label: string; description: strin
     emoji: "😴",
     label: "Dia Cansativo",
     description: "Energia baixa hoje. Respeite seu ritmo.",
-    tip: "Se possível, inclua 20 min de descanso no seu planner hoje.",
+    tip: "Se possível, reserve 20 min de descanso antes da próxima ação.",
     chipLabel: "Cansada",
   },
   sensivel: {
@@ -383,7 +367,7 @@ function LiveClock() {
 export function HomePage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
-  const { state, addTask, addHabit, refreshData, setPendingFollowUp, setProactiveNudge, hydrated } = useAuraStore();
+  const { state, addHabit, refreshData, setProactiveNudge, hydrated } = useAuraStore();
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
@@ -417,7 +401,6 @@ export function HomePage() {
   const { showError, showSuccess } = useToast();
   const [addedActionTitles, setAddedActionTitles] = useState<Set<string>>(new Set());
   const [addingActionTitle, setAddingActionTitle] = useState<string | null>(null);
-  const [scheduleModalAction, setScheduleModalAction] = useState<HomeScheduleModalAction | null>(null);
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
   const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
   // Gráfico tátil (design emocional P3): dedo/cursor sobre o gráfico acende o ponto.
@@ -676,9 +659,9 @@ export function HomePage() {
       isReentry: isCheckinReentry,
       // Chave aplicada aqui, no chamador: deriveHomePrimaryAction e pura e tem
       // suite propria — contamina-la com estado de produto quebraria os testes.
-      nextTask: FEATURES.planner && homeAgendaPreview.tasks[0]
-        ? { title: homeAgendaPreview.tasks[0].title, time: homeAgendaPreview.tasks[0].time }
-        : null,
+      // Sem Planner não existe "próximo bloco com horário": a Home só conhece
+      // objetivo em foco e próximas ações, e nenhum dos dois tem relógio.
+      nextTask: null,
       dueHabit: FEATURES.habits && homeAgendaPreview.habit
         ? { title: homeAgendaPreview.habit.title, icon: homeAgendaPreview.habit.icon }
         : null,
@@ -808,7 +791,7 @@ export function HomePage() {
     [homeAutonomyBlockedTitles],
   );
   const recordHomeAutonomyFeedback = useCallback(
-    (title: string, status: "done" | "dismissed" | "deleted" | "scheduled") => {
+    (title: string, status: "done" | "dismissed" | "deleted" | "scheduled" | "accepted") => {
       rememberHomeAutonomyActionFeedback(title, status);
       void api.post("/ai/action-feedback", {
         title,
@@ -998,49 +981,35 @@ export function HomePage() {
 
 
 
-  function openHomeScheduleModal(action: { title: string; category: string }) {
-    const slot = findSmartPlannerSlot(state.tasks || [], new Date());
+  /**
+   * Aceitar uma sugestão da Home = registrar nas Próximas ações.
+   *
+   * Antes isso abria um modal de data e hora e virava bloco no Planner. Sem
+   * Planner, marcar horário para quem está sem combustível só cria um prazo a
+   * mais para estourar: a ação entra sem relógio e fica até ser concluída.
+   */
+  async function acceptHomeAction(action: { title: string; category: string }) {
+    if (addingActionTitle) return;
     const title = polishHomeActionTitle(action.title);
-    setScheduleModalAction({
-      title,
-      category: action.category,
-      date: slot.date,
-      time: slot.time,
-      isNextDay: slot.isNextDay,
-    });
-  }
-
-  async function confirmHomeScheduleModal() {
-    if (!scheduleModalAction || addingActionTitle) return;
-    setAddingActionTitle(scheduleModalAction.title);
+    setAddingActionTitle(title);
     try {
-      const saved = await addTask(scheduleModalAction.title, scheduleModalAction.time, scheduleModalAction.category, {
-        forceSave: true,
-        date: scheduleModalAction.date,
+      const result = await saveNextAction({
+        text: title,
+        razao: "Sugestão aceita na Home.",
+        source: "home-autonomy",
       });
-      if (!saved) throw new Error("A sugestao nao entrou no planner.");
-      trackEvent("tasks_added_to_planner", {
+      setAddedActionTitles((prev) => new Set([...prev, action.title, title]));
+      recordHomeAutonomyFeedback(action.title, "accepted");
+      trackEvent("home_action_to_next_actions", {
         source: "home",
-        item_count: 1,
-        next_day: scheduleModalAction.isNextDay,
+        created: result.created,
+        matched_by: result.matchedBy ?? "none",
       });
-      setAddedActionTitles((prev) => new Set([...prev, scheduleModalAction.title]));
-      recordHomeAutonomyFeedback(scheduleModalAction.title, "scheduled");
-      if (scheduleModalAction.isNextDay) {
-        showSuccess(`Agendado para amanhã às ${scheduleModalAction.time}`);
-      }
-      const scheduledFor = new Date(`${scheduleModalAction.date}T${scheduleModalAction.time}:00`).toISOString();
-      setPendingFollowUp({
-        suggestionTitle: scheduleModalAction.title,
-        suggestionCategory: scheduleModalAction.category,
-        scheduledFor,
-        response: null,
-        followUpMessage: null,
-        source: "autonomous",
-      });
-      setScheduleModalAction(null);
+      showSuccess(result.created
+        ? l("Entrou nas suas próximas ações.", "Added to your next actions.")
+        : l("Isso já estava nas suas próximas ações.", "That was already in your next actions."));
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao no planner.");
+      showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao.");
     } finally {
       setAddingActionTitle(null);
     }
@@ -1048,30 +1017,9 @@ export function HomePage() {
 
   const importantAlerts = useMemo(() => {
     const alerts: ImportantAlert[] = [];
-    const nowMinutes = clockTime.getHours() * 60 + clockTime.getMinutes();
-    const overdueTasks = state.tasks.filter((task) => !task.done && timeToMinutes(task.time) + 45 < nowMinutes);
     const stagnantGoals = state.goals.filter((goal) => goal.completedPct === 0 && goal.subtasks.length > 0);
     const insightText = `${state.autonomousInsight?.pattern ?? ""} ${state.autonomousInsight?.insight ?? ""}`.toLowerCase();
     const hasCompulsionSignal = /(compuls|impuls|compra|comprando|gasto|excesso)/i.test(insightText);
-
-    if (overdueTasks.length > 0) {
-      const firstTask = overdueTasks[0];
-      alerts.push({
-        key: "overdue-tasks",
-        title: overdueTasks.length === 1 ? "Um compromisso ficou para trás" : `${overdueTasks.length} compromissos ficaram para trás`,
-        description:
-          overdueTasks.length === 1
-            ? `"${firstTask.title}" já passou do horário e ainda está pendente.`
-            : `Existem ${overdueTasks.length} itens do planner fora do horário hoje. Vale reorganizar antes que virem peso acumulado.`,
-        evidence:
-          overdueTasks.length === 1
-            ? `Base: "${firstTask.title}" estava marcado para ${firstTask.time} e ainda não foi concluído.`
-            : `Base: ${overdueTasks.length} itens com horário vencido e status pendente no Planner de hoje.`,
-        tone: overdueTasks.length >= 3 ? "critical" : "warning",
-        actionLabel: "Montar meu dia",
-        actionPath: "/planner",
-      });
-    }
 
     if (stagnantGoals.length > 0) {
       alerts.push({
@@ -1154,17 +1102,6 @@ export function HomePage() {
           <span className="shortcut-label">{t("nav.journal")}</span>
           <span className="shortcut-sub">{t("home.talkToAi")}</span>
         </button>
-        {FEATURES.planner && (
-          <button className="shortcut-card" onClick={() => navigate("/planner")}>
-            <div className="icon-badge shortcut-icon shortcut-icon-planner">
-              <LayoutDashboard size={18} color="var(--horizon)" />
-            </div>
-            <span className="shortcut-label">Planner</span>
-            <span className="shortcut-sub">{t("home.organize")}</span>
-          </button>
-        )}
-        {/* "Fechar o dia" saiu do acesso rápido: a tela depende do Planner para
-            ter o que revisar, e sem ele o fluxo perdeu função. */}
         <button className="shortcut-card" onClick={() => navigate("/insights")}>
           <div className="icon-badge shortcut-icon shortcut-icon-insights">
             <Activity size={18} color="var(--atomic-tangerine)" />
@@ -1202,81 +1139,6 @@ export function HomePage() {
   return (
     <>
     <FirstRunGuide activation={activationState} userId={pushUserId} />
-    {scheduleModalAction && (
-      <div style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 900,
-        background: "rgba(17,24,39,.24)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 18,
-        backdropFilter: "blur(6px)",
-      }}>
-        <div style={{
-          width: "min(100%, 360px)",
-          borderRadius: 22,
-          background: "rgba(255,253,249,.98)",
-          border: "1px solid var(--warm-border)",
-          boxShadow: "0 24px 60px rgba(17,24,39,.18)",
-          padding: 16,
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
-            <div>
-              <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)" }}>
-                {t("home.scheduleSuggestion")}
-              </p>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.35 }}>
-                {t("home.markFor", { when: scheduleModalAction.date === dayContext.localDate ? t("common.today").toLocaleLowerCase(i18n.language) : t("home.thisDate"), time: scheduleModalAction.time })}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setScheduleModalAction(null)}
-              style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
-              aria-label={t("home.closeModal")}
-            >
-              ×
-            </button>
-          </div>
-          <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
-            {scheduleModalAction.title}
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 112px", gap: 8, marginBottom: 14 }}>
-            <input
-              type="date"
-              value={scheduleModalAction.date}
-              onChange={(event) => setScheduleModalAction((current) => current ? { ...current, date: event.target.value, isNextDay: event.target.value !== dayContext.localDate } : current)}
-              style={{ height: 40, borderRadius: 12, padding: "0 10px", fontSize: 12, fontWeight: 700 }}
-            />
-            <input
-              type="time"
-              value={scheduleModalAction.time}
-              onChange={(event) => setScheduleModalAction((current) => current ? { ...current, time: event.target.value } : current)}
-              style={{ height: 40, borderRadius: 12, padding: "0 10px", fontSize: 12, fontWeight: 700 }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => setScheduleModalAction(null)}
-              style={{ flex: 1, height: 40, borderRadius: 12, border: "1px solid var(--warm-border-2)", background: "transparent", color: "var(--text-2)", fontSize: 12, fontWeight: 800, cursor: "pointer" }}
-            >
-              {t("common.no")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void confirmHomeScheduleModal()}
-              disabled={addingActionTitle === scheduleModalAction.title}
-              style={{ flex: 1, height: 40, borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontSize: 12, fontWeight: 900, cursor: addingActionTitle === scheduleModalAction.title ? "default" : "pointer", opacity: addingActionTitle === scheduleModalAction.title ? 0.7 : 1 }}
-            >
-              {addingActionTitle === scheduleModalAction.title ? t("home.saving") : t("common.yes")}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
     <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative", WebkitOverflowScrolling: "touch" }}>
       {/* Watermark híbrida — logo da Airia quase transparente */}
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", pointerEvents: "none", zIndex: 0 }}>
@@ -1555,37 +1417,6 @@ export function HomePage() {
           </Card>
         )}
 
-        {showActivationHome && (
-          <div
-            className="aura-card"
-            style={{
-              marginBottom: "calc(var(--a) * 1.1)",
-              padding: 16,
-              borderRadius: 22,
-              border: "1.5px solid rgba(244,190,168,.28)",
-              background: "rgba(255,253,249,.94)",
-            }}
-          >
-            <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach-ink)" }}>
-              Comece por aqui
-            </p>
-            <h2 style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.25 }}>
-              {activationState.nextAction.title}
-            </h2>
-            <p style={{ margin: "0 0 13px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
-              {activationState.nextAction.description}
-            </p>
-            <ActivationChecklist activation={activationState} />
-            <AuraButtonV2
-              variant="primary"
-              size="md"
-              onClick={() => navigate(activationState.nextAction.route)}
-              style={{ width: "100%", minHeight: 44, marginTop: 12 }}
-            >
-              {activationState.nextAction.label}
-            </AuraButtonV2>
-          </div>
-        )}
 
         {/* ── Ver meu dia — detalhes colapsados (today view) ── */}
         <button
@@ -2163,24 +1994,18 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* ── Objetivo em foco + demais objetivos ──
-            Substituiu a agenda por blocos (585 linhas de Planner). A pergunta
-            que a Home responde deixou de ser "o que tenho hoje" e passou a ser
-            "o que eu faço agora". ── */}
-        <NextActionsCard />
+        {/* ── Objetivo em foco → Próximas ações ──
+            A ordem é a hierarquia: primeiro o objetivo prioritário com a UMA
+            ação que importa agora, depois as demais possibilidades. Inverter
+            isso devolve a lista antes da direção, que é exatamente o que trava
+            quem já está sem combustível para escolher. ── */}
         <GoalFocusCard />
+        <NextActionsCard />
 
         {/* ── Presença sem cobrança ── */}
         {(state.checkinHistory || []).length > 0 && (
           <PresenceCard checkinHistory={state.checkinHistory || []} />
         )}
-
-        {/* ── Sugestão por meta quando agenda vazia ── */}
-        <GoalNudgeCard
-          goals={state.goals || []}
-          tasks={state.tasks || []}
-          onAddTask={(title) => addTask(title, "09:00", "geral")}
-        />
 
         {quickAccessSection}
 
@@ -2290,10 +2115,10 @@ export function HomePage() {
                   <AuraButtonV2
                     variant="primary"
                     size="md"
-                    onClick={() => openHomeScheduleModal(primaryAction)}
+                    onClick={() => void acceptHomeAction(primaryAction)}
                     style={{ width: "100%", minHeight: 44, marginTop: 12 }}
                   >
-                    Transformar em bloco no Planner
+                    {l("Colocar nas minhas próximas ações", "Add to my next actions")}
                   </AuraButtonV2>
                 ) : (
                   <AuraButtonV2
@@ -2358,11 +2183,11 @@ export function HomePage() {
                                 className="home-touch-button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  if (!isAdding) openHomeScheduleModal(action);
+                                  if (!isAdding) void acceptHomeAction(action);
                                 }}
                                 disabled={isAdding}
-              aria-label={t("home.addToPlanner")}
-              title={t("home.addToPlanner")}
+              aria-label={t("home.addToNextActions")}
+              title={t("home.addToNextActions")}
                               >
                                 {isAdding ? "..." : "+"}
                               </button>

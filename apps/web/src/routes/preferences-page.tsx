@@ -207,7 +207,7 @@ function GCalSettingsSection({ onStatusChange }: { onStatusChange: (msg: string 
           ) : (
             <>
               <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".06em" }}>
-                {t("config.gcal.plannerSync")}
+                {t("config.gcal.agendaSync")}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {calendars.map(cal => (
@@ -1109,23 +1109,6 @@ export function PreferencesPage() {
               </div>
             </div>
           )}
-          <div className="config-row">
-            <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(150,199,179,.12)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
-                </svg>
-              </div>
-              <div>
-                <p className="config-row-text">{t("config.plannerNotifications")}</p>
-                <p className="config-row-sub">{t("config.plannerNotificationsDescription")}</p>
-              </div>
-            </div>
-            <Toggle
-              on={notificationPrefs.planner}
-              onToggle={() => handleNotificationPatch({ planner: !notificationPrefs.planner })}
-            />
-          </div>
           <div className="config-row">
             <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(143,192,164,.14)" }}>

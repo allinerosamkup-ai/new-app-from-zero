@@ -182,8 +182,8 @@ export function RunPage() {
               ? l("Um passo feito. Começar é a parte cara.", "One step done. Starting is the expensive part.")
               : l(`${completed} passos atravessados.`, `${completed} steps done.`)}
           </p>
-          <AuraButtonV2 onClick={() => navigate("/planner")} style={{ marginTop: 8 }}>
-            {l("Voltar ao Planner", "Back to Planner")}
+          <AuraButtonV2 onClick={() => navigate("/home")} style={{ marginTop: 8 }}>
+            {l("Voltar para o início", "Back to home")}
           </AuraButtonV2>
         </div>
         <RewardBurst reward={reward} onDone={() => setReward(null)} />

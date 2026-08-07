@@ -3,9 +3,9 @@ import request from 'supertest';
 
 import { createApp } from '../index';
 import {
-  buildGoalSubtasksPrompt,
   ObjectiveActionRecoveryService,
 } from './objective-action-recovery.service';
+import { buildGoalDecompositionPrompt } from './goal-intelligence.service';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -117,13 +117,13 @@ function createRepository(initial: ObjectiveFixture[]) {
 
 async function run() {
   assert.match(
-    buildGoalSubtasksPrompt({ goalTitle: 'Publicar o portfólio', existingSubtasks: [] }),
-    /Meta: "Publicar o portfólio"/,
-    'a recuperação deve reutilizar o contrato de prompt goal-subtasks',
+    buildGoalDecompositionPrompt({ goalTitle: 'Publicar o portfólio' }),
+    /OBJETIVO: "Publicar o portfólio"/,
+    'a recuperação usa o mesmo contrato de interpretação do fluxo normal',
   );
   assert.match(
-    buildGoalSubtasksPrompt({ goalTitle: 'Publish the portfolio', existingSubtasks: [], locale: 'en-US' }),
-    /Respond in English/,
+    buildGoalDecompositionPrompt({ goalTitle: 'Publish the portfolio', locale: 'en-US' }),
+    /Answer in English/,
     'o locale recebido do app deve orientar o idioma da geração',
   );
 

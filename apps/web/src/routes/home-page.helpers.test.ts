@@ -389,7 +389,7 @@ describe("home primary action", () => {
       nextTask: { title: "Revisar proposta", time: "15:00" },
     });
     assert.equal(action?.kind, "next-block");
-    assert.equal(action?.route, "/planner");
+    assert.equal(action?.route, "/home");
     assert.ok(action?.title.includes("Revisar proposta"));
   });
 

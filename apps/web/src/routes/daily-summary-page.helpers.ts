@@ -60,7 +60,7 @@ function buildTaskAdjustment(task: Task, lowEnergy: boolean): DailyCloseAdjustme
       ? "Levar para amanha com escopo menor: reduzir carga antes de tentar executar."
       : "Levar para amanha como primeiro bloco realista, sem abrir outra frente antes.",
     source: "task",
-    path: "/planner",
+    path: "/home",
   };
 }
 
@@ -128,7 +128,7 @@ export function buildDailyCloseSummary(input: DailyCloseInput): DailyCloseSummar
   const evidence = [
     checkins.length > 0 ? formatCount(checkins.length, "check-in", "check-ins") : null,
     latestCheckin ? `ultimo estado: humor ${latestCheckin.humor}/10 e energia ${latestCheckin.energia}/10` : null,
-    pendingTasks > 0 ? `${formatCount(pendingTasks, "pendencia", "pendencias")} no Planner` : null,
+    pendingTasks > 0 ? `${formatCount(pendingTasks, "pendencia", "pendencias")} em aberto` : null,
     completedTasks > 0 ? `${formatCount(completedTasks, "tarefa concluida", "tarefas concluidas")}` : null,
     pendingHabits > 0 ? `${formatCount(pendingHabits, "habito devido", "habitos devidos")}` : null,
     activeGoals > 0 ? `${formatCount(activeGoals, "meta ativa", "metas ativas")}` : null,
@@ -158,8 +158,8 @@ export function buildDailyCloseSummary(input: DailyCloseInput): DailyCloseSummar
     },
     tomorrowAdjustments: adjustments,
     primaryAction: {
-      label: adjustments.length > 0 ? "Abrir Planner de amanha" : "Revisar Planner",
-      path: "/planner",
+      label: adjustments.length > 0 ? "Ver minhas proximas acoes" : "Voltar para o inicio",
+      path: "/home",
     },
   };
 }

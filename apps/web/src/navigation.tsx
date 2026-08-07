@@ -6,7 +6,6 @@ export type Screen =
   | 'home'
   | 'checkin'
   | 'checkinResult'
-  | 'planner'
   | 'journal'
   | 'insights'
   | 'config'
@@ -40,7 +39,6 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
     setScreen(s);
     setParams(p || {});
     if (s === 'home') setActiveTab('home');
-    if (s === 'planner') setActiveTab('planner');
     if (s === 'journal') setActiveTab('journal');
     if (s === 'insights') setActiveTab('insights');
     if (s === 'config') setActiveTab('config');

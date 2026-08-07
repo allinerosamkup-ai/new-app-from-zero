@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
+import { saveNextAction } from "../utils/save-next-action";
 import { useToast } from "../components/Toast";
 import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
@@ -154,7 +155,7 @@ const dateInputStyle = {
 export function InsightsPage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
-  const { state, addTask, refreshData } = useAuraStore();
+  const { state, refreshData } = useAuraStore();
 
   // Refresh on mount and on page focus (catches returning from check-in)
   useEffect(() => {
@@ -441,10 +442,18 @@ export function InsightsPage() {
       showError(insightDecision?.reason ?? "Ainda falta base para transformar isso em tarefa.");
       return;
     }
-    addTask(aiInsight.actionTitle, "09:00", aiInsight.category, { forceSave: true })
-      .then(() => {
+    // Sem hora: o insight vira ação sem data nas Próximas ações, que é onde a
+    // pessoa realmente vai reencontrar isso.
+    saveNextAction({
+      text: aiInsight.actionTitle,
+      razao: "Ação confirmada a partir de um padrão dos Insights.",
+      source: "insights",
+    })
+      .then((result) => {
         setTaskAdded(true);
-        showSuccess("Acao adicionada ao planner.");
+        showSuccess(result.created
+          ? "Entrou nas suas proximas acoes."
+          : "Isso ja estava nas suas proximas acoes.");
       })
       .catch((error) => {
         showError(error instanceof Error ? error.message : "Nao foi possivel salvar a acao.");
@@ -1695,7 +1704,7 @@ export function InsightsPage() {
                   onClick={applyAction}
                   disabled={taskAdded || !insightDecision?.canSaveToPlanner}
                 >
-                  {taskAdded ? l("✓ Salvo", "✓ Saved") : insightDecision?.canSaveToPlanner ? l("Confirmar no Planner", "Confirm in Planner") : l("Aguardar base", "Wait for more data")}
+                  {taskAdded ? l("✓ Salvo", "✓ Saved") : insightDecision?.canSaveToPlanner ? l("Colocar nas próximas ações", "Add to next actions") : l("Aguardar base", "Wait for more data")}
                 </button>
               </div>
             </div>

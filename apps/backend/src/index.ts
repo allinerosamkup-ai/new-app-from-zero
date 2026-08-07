@@ -115,11 +115,14 @@ import {
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
 import { normalizeObjectiveSubgoals, ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
 import {
-  buildGoalSubtasksPrompt,
   ObjectiveActionRecoveryService,
   type GoalSubtasksSuggestionGenerator,
   type GoalSubtasksSuggestionRequest,
 } from './services/objective-action-recovery.service';
+import {
+  GoalIntelligenceService,
+  type GoalIntelligenceInput,
+} from './services/goal-intelligence.service';
 import { ObjectiveProgressionError, ObjectiveProgressionService } from './services/objective-progression.service';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
@@ -1929,34 +1932,103 @@ function getRagIntent(type: string, context: any): string {
   }
 }
 
+function stringList(value: unknown, limit = 12): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+/**
+ * Cruzamento de dados antes de qualquer recomendação.
+ *
+ * A regra do produto é explícita: check-in atual + histórico + objetivos +
+ * estado dos objetivos + ações anteriores + diário + padrões → LLM. Sem isso a
+ * IA só tem o título do objetivo, e título sozinho é o que produz recomendação
+ * inventada.
+ *
+ * A separação importante aqui é entre FATO e PADRÃO. `userStatements` são falas
+ * da pessoa e podem sustentar um passo. `patternContext` (RAG/memória) explica
+ * comportamento e nunca vira fato novo — por isso vai num campo separado, com
+ * essa instrução no prompt.
+ */
+export function buildGoalIntelligenceInput(input: {
+  type: string;
+  context: any;
+  userName?: string;
+  ragContext?: string;
+}): GoalIntelligenceInput {
+  const context = input.context ?? {};
+  const grounding = context.grounding ?? {};
+
+  const goalTitle = String(
+    context.goalTitle
+    ?? context.focusGoalTitle
+    ?? stringList(context.goals, 1)[0]
+    ?? stringList(grounding.activeGoals, 1)[0]
+    ?? '',
+  ).trim();
+
+  // Só fala da pessoa. Nota de check-in, diário e o que ela pediu à Airia.
+  const userStatements = [
+    typeof context.note === 'string' ? context.note : '',
+    typeof context.checkinNote === 'string' ? context.checkinNote : '',
+    typeof context.nota === 'string' ? context.nota : '',
+    typeof context.journalExcerpt === 'string' ? context.journalExcerpt : '',
+    typeof context.message === 'string' ? context.message : '',
+    ...stringList(context.userStatements, 6),
+  ].map((line) => line.trim()).filter(Boolean).slice(0, 8);
+
+  return {
+    goalTitle,
+    existingActions: [
+      ...stringList(context.existingSubtasks),
+      ...stringList(context.pendingActions),
+    ],
+    completedActions: [
+      ...stringList(context.completedSubgoalTitles),
+      ...stringList(context.completedTaskTitles),
+      ...stringList(grounding.completedActions),
+    ],
+    userName: input.userName,
+    locale: typeof context.locale === 'string' ? context.locale : 'pt-BR',
+    userStatements,
+    moodLabel: typeof context.moodLabel === 'string' ? context.moodLabel : null,
+    energyScore: typeof context.energia === 'number'
+      ? context.energia
+      : typeof context.energyScore === 'number' ? context.energyScore : null,
+    phase: typeof context.phaseLabel === 'string' ? context.phaseLabel : null,
+    capacity: context.capacity === 'quick' || context.capacity === 'moderate' || context.capacity === 'heavy'
+      ? context.capacity
+      : null,
+    operationalProfile: (context.operationalProfile ?? null) as GoalIntelligenceInput['operationalProfile'],
+    patternContext: [input.ragContext, context.moodCycleContext]
+      .filter((part) => typeof part === 'string' && part.trim())
+      .join('\n')
+      .slice(0, 1200) || null,
+  };
+}
+
+/**
+ * Recuperação de objetivo sem ações.
+ *
+ * Passa pelo mesmo cérebro do fluxo normal: se a interpretação não se sustentar,
+ * o objetivo continua sem ações e o serviço tenta de novo depois. Encher com
+ * lista genérica seria pior — a pessoa abriria o objetivo e veria passos que não
+ * têm nada a ver com a situação dela.
+ */
 async function generateGoalSubtasksForRecovery(
   request: GoalSubtasksSuggestionRequest,
-  options?: { signal?: AbortSignal },
+  _options?: { signal?: AbortSignal },
 ): Promise<unknown> {
-  const OpenAI = (await import('openai')).default;
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const generationConfig = resolveSuggestGenerationConfig(request.type, false);
-  const completion = await openai.chat.completions.create(
-    {
-      model: getOpenAiModel(),
-      messages: [
-        {
-          role: 'system' as const,
-          content: buildAuraSystemPrompt({ domain: 'goal-execution' }),
-        },
-        {
-          role: 'user' as const,
-          content: buildGoalSubtasksPrompt(request.context),
-        },
-      ],
-      max_completion_tokens: getOpenAiMaxCompletionTokens(generationConfig.maxTokens),
-      ...openAiTemperature(getOpenAiModel(), generationConfig.temperature),
-      response_format: { type: 'json_object' as const },
-    },
-    { signal: options?.signal },
-  );
-  const rawSuggestion = completion.choices[0]?.message?.content?.trim() ?? '';
-  return normalizeAiSuggestion(request.type, rawSuggestion);
+  const decomposition = await GoalIntelligenceService.decompose({
+    goalTitle: request.context.goalTitle,
+    existingActions: request.context.existingSubtasks,
+    locale: request.context.locale,
+  });
+  return { items: decomposition.steps.map((step) => step.title) };
 }
 
 export function createApp(dependencies: AppDependencies = {}) {
@@ -5513,6 +5585,41 @@ export function createApp(dependencies: AppDependencies = {}) {
         suggestCognitive ? AiriaCognitiveInterpreterService.formatForPrompt(suggestCognitive) : '',
       ].join('\n\n');
 
+      /**
+       * Objetivo e próxima ação saem do fluxo de prompt único.
+       *
+       * As outras superfícies fazem uma chamada e devolvem o texto. Estas duas
+       * precisam de geração + guarda determinística + validação adversarial,
+       * porque é aqui que a IA inventava obstáculo ("pegue um rolo de fita
+       * crepe") a partir de um objetivo que ninguém detalhou. Uma chamada só
+       * não tem como se auto-reprovar.
+       */
+      if (type === 'goal-subtasks' || type === 'checkin-next-step') {
+        const decomposition = await GoalIntelligenceService.decompose(
+          buildGoalIntelligenceInput({ type, context, userName, ragContext }),
+        );
+
+        const items = decomposition.steps.map((step) => step.title);
+        const suggestion = {
+          mode: decomposition.mode,
+          items,
+          question: decomposition.question,
+          resultDefinition: decomposition.resultDefinition,
+          assumptions: decomposition.assumptions,
+        };
+
+        if (items.length > 0) {
+          SuggestionMemoryService.append(prisma, userId, type, items).catch(() => {});
+        }
+        if ((decomposition.rejectedSteps ?? []).length > 0) {
+          console.info(
+            `[ai/suggest] type=${type} descartou ${decomposition.rejectedSteps!.length} passo(s) sem lastro:`,
+            decomposition.rejectedSteps!.map((item) => `${item.title} — ${item.reason}`).join(' | '),
+          );
+        }
+        return res.json({ suggestion });
+      }
+
       let prompt = '';
       if (type === 'task-notes') {
         prompt = `Você é uma assistente pessoal carinhosa e organizada. Escreva observações práticas e motivadoras (2-3 frases) para a tarefa "${context.title}" (categoria: ${context.category}). Tom acolhedor, como uma amiga organizada ajudando. Responda diretamente.`;
@@ -5685,15 +5792,6 @@ EXEMPLOS DE FORMATO BOM:
 - "Enviar em 5 min uma mensagem objetiva pedindo ajuste de prazo"
 
 Retorne SOMENTE um array JSON: [{"title":"tarefa concreta","category":"trabalho|saude|rotina|social","time":"HH:MM"}]. Sem explicação.`;
-      } else if (type === 'goal-subtasks') {
-        prompt = buildGoalSubtasksPrompt({
-          goalTitle: String(context.goalTitle ?? ''),
-          existingSubtasks: Array.isArray(context.existingSubtasks)
-            ? context.existingSubtasks.filter((item: unknown): item is string => typeof item === 'string')
-            : [],
-          userName,
-          locale: typeof context.locale === 'string' ? context.locale : 'pt-BR',
-        });
       } else if (type === 'weekly-insight') {
         prompt = `${userName} precisa de uma leitura semanal realmente útil, como uma assistente pessoal autônoma que acompanha o ciclo ao longo do tempo.
 

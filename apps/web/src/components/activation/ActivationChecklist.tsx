@@ -1,4 +1,4 @@
-import { CalendarCheck, CheckCircle2, Circle, MessageSquareText, SmilePlus } from "lucide-react";
+import { CheckCircle2, Circle, MessageSquareText, SmilePlus, Target } from "lucide-react";
 
 import type { ActivationState } from "../../features/aura/activation";
 
@@ -10,10 +10,10 @@ const STEPS = [
     icon: SmilePlus,
   },
   {
-    id: "planner",
-    title: "Planner",
-    description: "Monte um dia possivel.",
-    icon: CalendarCheck,
+    id: "goal",
+    title: "Objetivo",
+    description: "Escolha o que quer destravar.",
+    icon: Target,
   },
   {
     id: "journal",
@@ -30,7 +30,7 @@ type Props = {
 export function ActivationChecklist({ activation }: Props) {
   const doneByStep = {
     checkin: activation.hasCheckin,
-    planner: activation.hasPlannerItem,
+    goal: activation.hasGoal,
     journal: activation.hasJournalEntry,
   };
 

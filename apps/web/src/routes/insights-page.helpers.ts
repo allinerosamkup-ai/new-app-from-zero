@@ -48,6 +48,6 @@ export function buildInsightActionDecision(input: InsightActionDecisionInput): I
     evidence: input.source === "weekly_endpoint"
       ? `Base: ${checkins} check-ins no período e recomendação semanal.`
       : `Base: ${checkins} check-ins no período e leitura local de fase.`,
-    reason: hasMinimumEvidence ? null : "Precisa de pelo menos 3 check-ins para virar ação no Planner.",
+    reason: hasMinimumEvidence ? null : "Precisa de pelo menos 3 check-ins para virar uma próxima ação.",
   };
 }

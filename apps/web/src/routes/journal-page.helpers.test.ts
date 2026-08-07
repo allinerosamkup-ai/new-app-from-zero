@@ -40,7 +40,7 @@ describe("journal page helpers", () => {
     });
 
     assert.equal(prompt.label, "Revisar o dia");
-    assert.equal(prompt.description, "Use o resumo, 2 tarefas e 1 compromisso para ajustar o Planner.");
+    assert.equal(prompt.description, "Use o resumo, 2 tarefas e 1 compromisso para escolher a proxima acao.");
   });
 
   it("does not imply planner work when the journal has no extracted action", () => {

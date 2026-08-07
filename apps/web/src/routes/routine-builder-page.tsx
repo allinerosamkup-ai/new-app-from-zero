@@ -267,8 +267,8 @@ export function RoutineBuilderPage() {
     <main className="routine-builder-page">
       <div className="routine-builder-shell">
         <header className="routine-builder-header">
-          <button type="button" className="routine-builder-header__back" onClick={() => navigate('/planner')}>
-            <ArrowLeft size={18} /> {t('routineBuilder.backPlanner')}
+          <button type="button" className="routine-builder-header__back" onClick={() => navigate('/home')}>
+            <ArrowLeft size={18} /> {t('routineBuilder.backHome')}
           </button>
           {step !== 'source' && (
             <>
@@ -483,8 +483,8 @@ export function RoutineBuilderPage() {
                 <button className="routine-secondary" type="button" onClick={() => restart()}>
                   <RotateCcw size={16} /> {t('routineBuilder.newRoutine')}
                 </button>
-                <button className="routine-primary" type="button" onClick={() => navigate('/planner')}>
-                  {t('routineBuilder.openPlanner')}
+                <button className="routine-primary" type="button" onClick={() => navigate('/home')}>
+                  {t('routineBuilder.openHome')}
                 </button>
               </div>
             </div>

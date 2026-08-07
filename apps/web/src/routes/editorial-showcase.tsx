@@ -133,7 +133,7 @@ export const EditorialShowcase: React.FC = () => {
               <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(176,180,196,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-1)' }}>Planner</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-1)' }}>Objetivos</span>
               <span style={{ fontSize: '9.5px', color: 'var(--text-3)' }}>Organizar dia</span>
             </div>
             <div className="shortcut-card">

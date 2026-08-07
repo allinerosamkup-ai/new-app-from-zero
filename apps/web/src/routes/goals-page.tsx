@@ -40,6 +40,8 @@ type GoalLike = {
   id: string | number;
   title: string;
   completedPct: number;
+  /** Texto livre do objetivo. É onde fica o que a pessoa já respondeu sobre ele. */
+  progress?: string;
   subtasks: Array<{ id: string | number; title: string; done: boolean; order?: number; plannerBlockId?: string | null }>;
 };
 
@@ -614,7 +616,7 @@ function GoalCard({
                 ) : linkedPlannerBlockId ? (
                   <p style={{ margin: "11px 0 0", color: "var(--lagune)", fontSize: 11, fontWeight: 750 }}>
                     <CalendarPlus size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-                    {l("Esta ação já está no seu Planner.", "This action is already in your Planner.")}
+                    {l("Esta ação já está agendada.", "This action is already scheduled.")}
                   </p>
                 ) : (
                   <button
@@ -852,14 +854,38 @@ function GoalCard({
   );
 }
 
+/**
+ * Contrato de `/api/ai/suggest` para objetivos.
+ *
+ * `items` continua igual para compatibilidade, mas agora a resposta pode vir
+ * com `question` e sem nenhum item — quando a Airia não tem informação para uma
+ * boa recomendação, perguntar É a recomendação.
+ */
+function parseGoalSuggestion(raw: unknown): { items: string[]; question: string | null; resultDefinition: string | null } {
+  const parsed = parseAiSuggestion<{ items?: unknown; question?: unknown; resultDefinition?: unknown } | string[]>(raw);
+  const rawItems = Array.isArray(parsed) ? parsed : parsed?.items;
+  const items = Array.isArray(rawItems)
+    ? rawItems.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+  const question = !Array.isArray(parsed) && typeof parsed?.question === "string" && parsed.question.trim()
+    ? parsed.question.trim()
+    : null;
+  const resultDefinition = !Array.isArray(parsed) && typeof parsed?.resultDefinition === "string" && parsed.resultDefinition.trim()
+    ? parsed.resultDefinition.trim()
+    : null;
+  return { items, question, resultDefinition };
+}
+
 export function GoalsPage() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
   const location = useLocation();
   const {
     state,
+    addGoal,
     addGoalWithSubGoals,
     addSubGoals,
+    refreshData,
     linkGoalActionToPlannerBlock,
     toggleSubGoal,
     removeGoal,
@@ -882,6 +908,8 @@ export function GoalsPage() {
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoveringGoals, setRecoveringGoals] = useState(false);
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
+  const [pendingQuestion, setPendingQuestion] = useState<{ goalId?: string | number; goalTitle: string; question: string } | null>(null);
+  const [questionAnswer, setQuestionAnswer] = useState("");
   const [pausedIds, setPausedIds] = useState<string[]>(() => {
     try {
       return parsePausedGoalIds(localStorage.getItem(PAUSED_GOALS_KEY));
@@ -965,24 +993,46 @@ export function GoalsPage() {
     return () => window.clearTimeout(timer);
   }, [focusedGoalId]);
 
-  async function createGoal(result: string) {
+  /**
+   * Cria o objetivo interpretando o que ele significa.
+   *
+   * A Airia pode responder com uma PERGUNTA em vez de um caminho — é o caso de
+   * objetivo amplo demais ("organizar minhas finanças" pode ser dívida, gasto
+   * mensal ou controle). Nesse caso o objetivo é criado do mesmo jeito, sem
+   * ações, e a pergunta aparece na tela. Bloquear a criação até a pessoa
+   * responder seria transferir para ela o custo de um problema que é nosso.
+   */
+  async function createGoal(result: string, clarifications: string[] = []) {
     setCreating(true);
     try {
       const response = await api.post("/ai/suggest", {
         type: "goal-subtasks",
-        context: { goalTitle: result, existingSubtasks: [] },
+        context: {
+          goalTitle: result,
+          existingSubtasks: [],
+          userStatements: clarifications,
+        },
       }) as { suggestion?: unknown };
-      const parsed = parseAiSuggestion<{ items?: string[] } | string[]>(response.suggestion);
-      const actions = (Array.isArray(parsed) ? parsed : parsed?.items ?? [])
-        .map((item) => String(item).trim())
+      const suggestion = parseGoalSuggestion(response.suggestion);
+      const actions = suggestion.items
         .filter((item, index, all) => item.length >= 3 && all.indexOf(item) === index)
         .slice(0, 5);
-      if (actions.length < 2) {
-        throw new Error(l("A Airia não conseguiu montar um caminho executável agora.", "Airia could not assemble an executable path right now."));
+
+      if (actions.length >= 2) {
+        await addGoalWithSubGoals(result, actions);
+        setCreationOpen(false);
+        showSuccess(l("Objetivo criado com o primeiro movimento em foco.", "Goal created with the first move in focus."));
+        return;
       }
-      await addGoalWithSubGoals(result, actions);
-      setCreationOpen(false);
-      showSuccess(l("Objetivo criado com o primeiro movimento em foco.", "Goal created with the first move in focus."));
+
+      if (suggestion.question) {
+        await addGoal(result);
+        setCreationOpen(false);
+        setPendingQuestion({ goalTitle: result, question: suggestion.question });
+        return;
+      }
+
+      throw new Error(l("A Airia não conseguiu montar um caminho executável agora.", "Airia could not assemble an executable path right now."));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível criar o objetivo.", "Could not create the goal."));
     } finally {
@@ -990,32 +1040,70 @@ export function GoalsPage() {
     }
   }
 
-  async function requestSuggestion(goal: GoalLike) {
+  async function requestSuggestion(goal: GoalLike, clarifications: string[] = []) {
     setLoadingSuggestion(goal.id);
     try {
       const response = await api.post("/ai/suggest", {
         type: "goal-subtasks",
         context: {
           goalTitle: goal.title,
-          existingSubtasks: goal.subtasks.map((subtask) => subtask.title),
+          existingSubtasks: goal.subtasks.filter((subtask) => !subtask.done).map((subtask) => subtask.title),
+          completedSubgoalTitles: goal.subtasks.filter((subtask) => subtask.done).map((subtask) => subtask.title),
+          // A descrição guarda o que a pessoa já respondeu sobre este objetivo.
+          userStatements: [
+            goal.progress && goal.progress !== "Em andamento" ? goal.progress : "",
+            ...clarifications,
+          ].filter(Boolean),
         },
       }) as { suggestion?: unknown };
-      const parsed = parseAiSuggestion<{ items?: string[] } | string[]>(response.suggestion);
-      const items = (Array.isArray(parsed) ? parsed : parsed?.items ?? [])
-        .map((item) => String(item).trim())
-        .filter(Boolean)
-        .slice(0, 3);
+      const suggestion = parseGoalSuggestion(response.suggestion);
+      const items = suggestion.items.slice(0, 3);
 
-      if (items.length === 0) {
-        showError(l("A Airia não encontrou uma opção concreta. Defina o primeiro passo com suas palavras.", "Airia did not find a concrete option. Define the first step in your own words."));
+      if (items.length > 0) {
+        setSuggestionDrafts((current) => ({ ...current, [String(goal.id)]: items }));
         return;
       }
-      setSuggestionDrafts((current) => ({ ...current, [String(goal.id)]: items }));
+
+      // Sem caminho confiável, a melhor próxima ação da Airia é a pergunta.
+      if (suggestion.question) {
+        setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: suggestion.question });
+        return;
+      }
+
+      showError(l("A Airia não encontrou uma opção concreta. Defina o primeiro passo com suas palavras.", "Airia did not find a concrete option. Define the first step in your own words."));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível gerar opções agora.", "Could not generate options right now."));
     } finally {
       setLoadingSuggestion(null);
     }
+  }
+
+  /**
+   * Resposta da pessoa vira contexto permanente do objetivo.
+   *
+   * Guardar na descrição é o que impede a mesma pergunta de voltar amanhã: o
+   * campo já viaja em toda leitura do objetivo e alimenta a próxima geração.
+   */
+  async function answerPendingQuestion() {
+    const answer = questionAnswer.trim();
+    if (!pendingQuestion || !answer) return;
+    setQuestionAnswer("");
+    const target = pendingQuestion;
+    setPendingQuestion(null);
+
+    const goalId = target.goalId
+      ?? (state.goals || []).find((goal) => goal.title === target.goalTitle)?.id;
+    if (goalId === undefined) return;
+
+    try {
+      await api.patch(`/objectives/${goalId}`, { description: answer });
+      await refreshData();
+    } catch {
+      // Não gravou: a resposta ainda vale para esta geração.
+    }
+
+    const goal = (state.goals || []).find((item) => item.id === goalId);
+    if (goal) await requestSuggestion(goal, [answer]);
   }
 
   async function addAction(goalId: string | number, title: string) {
@@ -1261,6 +1349,73 @@ export function GoalsPage() {
       </div>
 
       <CreationSheet open={creationOpen} saving={creating} onClose={() => !creating && setCreationOpen(false)} onCreate={createGoal} />
+
+      {/* Pergunta em vez de tarefa inventada.
+          Quando a Airia não tem base para uma boa próxima ação, ela pergunta —
+          uma pergunta, curta e decisiva, não uma bateria. A resposta vira
+          contexto permanente do objetivo. */}
+      {pendingQuestion && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed", inset: 0, zIndex: 1200, display: "flex",
+            alignItems: "flex-end", justifyContent: "center", padding: 16,
+            background: "rgba(17,24,39,.32)", backdropFilter: "blur(6px)",
+          }}
+        >
+          <div style={{
+            width: "min(100%, 440px)", borderRadius: 22, padding: 18,
+            background: "rgba(255,253,249,.98)", border: "1px solid var(--warm-border)",
+            boxShadow: "0 24px 60px rgba(17,24,39,.18)",
+          }}>
+            <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine-11)" }}>
+              {l("Para eu te ajudar direito", "So I can actually help")}
+            </p>
+            <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.4 }}>
+              {pendingQuestion.question}
+            </p>
+            <p style={{ margin: "0 0 12px", fontSize: 11, color: "var(--text-3)" }}>
+              {l("Objetivo", "Goal")}: {pendingQuestion.goalTitle}
+            </p>
+            <textarea
+              value={questionAnswer}
+              onChange={(event) => setQuestionAnswer(event.target.value)}
+              rows={3}
+              maxLength={500}
+              autoFocus
+              placeholder={l("Responda com suas palavras", "Answer in your own words")}
+              style={{
+                width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12,
+                border: "1.5px solid var(--warm-border-2)", resize: "vertical", fontSize: 13,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                onClick={() => { setPendingQuestion(null); setQuestionAnswer(""); }}
+                style={{ ...quietButtonStyle, flex: 1, justifyContent: "center" }}
+              >
+                {l("Agora não", "Not now")}
+              </button>
+              <button
+                type="button"
+                onClick={() => { void answerPendingQuestion(); }}
+                disabled={!questionAnswer.trim()}
+                style={{
+                  flex: 2, minHeight: 44, borderRadius: 999, border: 0,
+                  background: "var(--accent-primary-strong, #8FC0A4)", color: "#2C5340",
+                  fontSize: 14, fontWeight: 800,
+                  cursor: questionAnswer.trim() ? "pointer" : "default",
+                  opacity: questionAnswer.trim() ? 1 : 0.6,
+                }}
+              >
+                {l("Responder", "Answer")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <TaskPlacementSheet draft={taskDraft} saving={scheduling} onClose={() => !scheduling && setTaskDraft(null)} onChoose={placeAction} />
       <RewardBurst reward={reward} onDone={() => setReward(null)} />
     </div>

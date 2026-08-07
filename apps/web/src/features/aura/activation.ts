@@ -2,7 +2,7 @@ import type { AuraState } from "./types";
 import { getLocalDateKey } from "../../utils/day-context";
 
 export type ActivationLevel = "empty" | "started" | "calibrating" | "active";
-export type ActivationActionId = "checkin" | "planner" | "journal" | "explore";
+export type ActivationActionId = "checkin" | "goal" | "journal" | "explore";
 
 export type ActivationAction = {
   id: ActivationActionId;
@@ -15,11 +15,11 @@ export type ActivationAction = {
 export type ActivationState = {
   isNewUser: boolean;
   hasCheckin: boolean;
-  hasPlannerItem: boolean;
+  hasGoal: boolean;
   hasJournalEntry: boolean;
   activationLevel: ActivationLevel;
   checkinCount: number;
-  plannerItemCount: number;
+  goalCount: number;
   journalEntryCount: number;
   completedSteps: number;
   nextAction: ActivationAction;
@@ -41,12 +41,12 @@ export const ACTIVATION_ACTIONS: Record<ActivationActionId, ActivationAction> = 
     description: "A Airia precisa saber como estao seu humor e energia hoje para orientar o resto.",
     route: "/checkin",
   },
-  planner: {
-    id: "planner",
-    label: "Montar meu dia",
-    title: "Ajuste seu dia",
-    description: "Depois do check-in, transforme o estado de hoje em uma agenda possivel.",
-    route: "/planner",
+  goal: {
+    id: "goal",
+    label: "Definir meu objetivo",
+    title: "Escolha o que quer destravar",
+    description: "Um objetivo aqui vira uma sequencia de passos, e o app mostra so o proximo.",
+    route: "/goals",
   },
   journal: {
     id: "journal",
@@ -76,16 +76,16 @@ export function getActivationState(state: AuraState, options: ActivationOptions 
   const todayKey = getLocalDateKey(now);
   const checkinCount = state.checkinHistory?.length ?? 0;
   const todayCheckinCount = (state.checkinHistory ?? []).filter((entry) => entry.date === todayKey).length;
-  const plannerItemCount = (state.tasks?.length ?? 0) + (state.goals?.length ?? 0) + (state.habits?.length ?? 0);
+  const goalCount = state.goals?.length ?? 0;
   const journalEntryCount = Math.max(
     options.journalEntryCount ?? 0,
     options.hasLocalJournalEntry || state.journal?.trim() ? 1 : 0,
   );
 
   const hasCheckin = todayCheckinCount > 0;
-  const hasPlannerItem = plannerItemCount > 0;
+  const hasGoal = goalCount > 0;
   const hasJournalEntry = journalEntryCount > 0;
-  const completedSteps = [hasCheckin, hasPlannerItem, hasJournalEntry].filter(Boolean).length;
+  const completedSteps = [hasCheckin, hasGoal, hasJournalEntry].filter(Boolean).length;
 
   const activationLevel: ActivationLevel =
     completedSteps === 0 ? "empty" :
@@ -101,8 +101,8 @@ export function getActivationState(state: AuraState, options: ActivationOptions 
 
   const nextAction = !hasCheckin
     ? ACTIVATION_ACTIONS.checkin
-    : !hasPlannerItem
-      ? ACTIVATION_ACTIONS.planner
+    : !hasGoal
+      ? ACTIVATION_ACTIONS.goal
       : !hasJournalEntry
         ? ACTIVATION_ACTIONS.journal
         : ACTIVATION_ACTIONS.explore;
@@ -110,11 +110,11 @@ export function getActivationState(state: AuraState, options: ActivationOptions 
   return {
     isNewUser,
     hasCheckin,
-    hasPlannerItem,
+    hasGoal,
     hasJournalEntry,
     activationLevel,
     checkinCount,
-    plannerItemCount,
+    goalCount,
     journalEntryCount,
     completedSteps,
     nextAction,

@@ -13,8 +13,8 @@ type Props = {
 };
 
 const TYPE_DESTINATION: Partial<Record<AuraCommandOperation["type"], string>> = {
-  create_planner_task: "/planner",
-  create_calendar_event: "/planner",
+  create_planner_task: "/home",
+  create_calendar_event: "/home",
   create_goal: "/goals",
   create_habit: "/habits",
   create_capture: "/captures",
@@ -35,7 +35,7 @@ function itemLabels(value: unknown): string[] {
 
 function operationTitle(operation: AuraCommandOperation, t: TFunction) {
   const titles: Record<AuraCommandOperation["type"], string> = {
-    create_planner_task: t("aura.commandPlan.task", "Tarefa no Planner"),
+    create_planner_task: t("aura.commandPlan.task", "Nova tarefa"),
     create_calendar_event: t("aura.commandPlan.appointment", "Compromisso no Google Agenda"),
     create_goal: t("aura.commandPlan.goal", "Meta e pequenas ações"),
     create_habit: t("aura.commandPlan.habit", "Hábito"),

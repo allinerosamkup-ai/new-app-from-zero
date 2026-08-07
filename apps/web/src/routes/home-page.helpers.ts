@@ -34,7 +34,7 @@ export type HomeCareGroundingInput = {
   hasMoodCycle: boolean;
 };
 
-export type HomeAutonomyFeedbackStatus = "done" | "dismissed" | "deleted" | "scheduled";
+export type HomeAutonomyFeedbackStatus = "done" | "dismissed" | "deleted" | "scheduled" | "accepted";
 
 export type HomeAutonomyFeedbackItem = {
   key: string;
@@ -189,7 +189,7 @@ function buildFallbackCareActions(input: HomeCareGroundingInput): string[] {
     return [
       `🎯 Faça um avanço mínimo em "${input.goalTitles[0]}" hoje.`,
       "🧩 Escolha uma subtarefa que caiba em 20 minutos.",
-      "📌 Transforme o próximo passo da meta em bloco no Planner.",
+      "📌 Registre o próximo passo da meta nas suas próximas ações.",
     ];
   }
 
@@ -538,8 +538,8 @@ export function deriveHomePrimaryAction(input: {
       kind: "next-block",
       emoji: "📅",
       title: `Próximo: ${input.nextTask.title}`,
-      subtitle: `às ${input.nextTask.time} — toca pra abrir no Planner.`,
-      route: "/planner",
+      subtitle: `às ${input.nextTask.time} — toca pra ver os detalhes.`,
+      route: "/home",
     };
   }
 

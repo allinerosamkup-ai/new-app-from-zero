@@ -8,7 +8,7 @@ import {
 } from "./insights-page.helpers.ts";
 
 describe("insights page helpers", () => {
-  it("blocks planner actions when insight evidence is too thin", () => {
+  it("blocks next actions when insight evidence is too thin", () => {
     const decision = buildInsightActionDecision({
       checkins: 2,
       action: "Reduzir a carga de hoje",
@@ -18,7 +18,7 @@ describe("insights page helpers", () => {
     });
 
     assert.equal(decision.canSaveToPlanner, false);
-    assert.equal(decision.reason, "Precisa de pelo menos 3 check-ins para virar ação no Planner.");
+    assert.equal(decision.reason, "Precisa de pelo menos 3 check-ins para virar uma próxima ação.");
   });
 
   it("allows planner actions when the insight has enough check-ins", () => {

@@ -53,7 +53,7 @@ export const moodContent: Record<
       "Este é um dia para tarefas leves e para recarregar sua energia com gentileza.",
     tips: [
       "Mova as tarefas pesadas para amanhã.",
-      "Inclua 20 min de descanso no planner hoje.",
+      "Reserve 20 min de descanso antes da próxima ação.",
     ],
     tone: "tone-rest",
   },

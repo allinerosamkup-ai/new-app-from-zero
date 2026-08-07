@@ -6,7 +6,7 @@ import { useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { computeMoodCycle, type MoodPhase } from "../utils/mood-cycle-engine";
 
-type JornadaFeature = "journal" | "habits" | "checkin" | "insights" | "planner";
+type JornadaFeature = "journal" | "habits" | "checkin" | "insights" | "goals";
 
 type JornadaStep = {
   n: number;
@@ -30,7 +30,7 @@ const FEATURE_ROUTE: Record<JornadaFeature, string> = {
   habits: "/habits",
   checkin: "/checkin",
   insights: "/insights",
-  planner: "/planner",
+  goals: "/goals",
 };
 
 const FEATURE_LABEL: Record<JornadaFeature, string> = {
@@ -38,7 +38,7 @@ const FEATURE_LABEL: Record<JornadaFeature, string> = {
   habits: "Ir para hábitos",
   checkin: "Fazer check-in",
   insights: "Ver meus padrões",
-  planner: "Abrir o planner",
+  goals: "Abrir meus objetivos",
 };
 
 const LOW_PHASES = new Set<MoodPhase>(["low", "depleted"]);

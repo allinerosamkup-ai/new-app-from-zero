@@ -6,7 +6,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { useToast } from "../components/Toast";
-import { FEATURES } from "../config/features";
 import { CommandPlanCard } from "../components/aura/CommandPlanCard";
 import { shouldRenderCommandPlan } from "../features/aura/command-checkin-receipt";
 import type { AuraCommandPlan } from "../features/aura/command-types";
@@ -15,7 +14,7 @@ import { useAuraStore } from "../features/aura/store";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { supabase } from "../lib/supabase";
-import { buildJournalClosePrompt, buildJournalPlannerSlot } from "./journal-page.helpers";
+import { buildJournalClosePrompt } from "./journal-page.helpers";
 import { isSpeechRecognitionSupported, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
 import {
   createTranscriptResultHandler,
@@ -225,7 +224,6 @@ export function JournalPage() {
   const [finalizationResult, setFinalizationResult] = useState<JournalFinalizationResult | null>(null);
   const [addingToPlanner, setAddingToPlanner] = useState<string | null>(null);
   const [addedToPlanner, setAddedToPlanner] = useState<Set<string>>(new Set());
-  const [dayChoice, setDayChoice] = useState<{ key: string; task: SuggestedTask; isCommitment?: boolean; text?: string } | null>(null);
   const [liveReplyPending, setLiveReplyPending] = useState(false);
   const liveReplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -578,48 +576,34 @@ export function JournalPage() {
     return () => clearTimeout(midnightTimer);
   }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function addTaskToPlanner(key: string, task: SuggestedTask, dayOffset: number) {
+  /**
+   * Sugestão do diário entra nas Próximas ações, sem hora.
+   *
+   * Antes virava bloco no Planner, e por isso precisava de um diálogo
+   * "hoje ou amanhã?" — decisão de agenda para quem acabou de escrever sobre um
+   * dia difícil. A régua mudou: o que importa é concluir, não caber no relógio.
+   */
+  async function addSuggestionToNextActions(key: string, task: SuggestedTask) {
     setAddingToPlanner(key);
     try {
-      const slot = buildJournalPlannerSlot({ time: task.time, dayOffset });
-
-      await api.post("/timeline", {
-        date: slot.date,
-        forceSave: true,
-        blocks: [{
-          title: task.title,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          category: task.category === "saude" ? "autocuidado" : task.category,
-          intensity: "M",
-          status: "planned",
-          isAiSuggested: true,
-          aiReasoning: "Sugerido a partir do diário.",
-        }],
-      });
-
-      setAddedToPlanner(prev => new Set([...prev, key]));
-      trackEvent("tasks_added_to_planner", {
+      const result = await saveNextAction({
+        text: task.title,
+        razao: "Sugerido a partir do diário.",
         source: "journal",
-        day_offset: dayOffset,
       });
-      showSuccess(dayOffset === 0 ? "Adicionado à agenda de hoje!" : "Adicionado à agenda de amanhã!");
+
+      setAddedToPlanner((prev) => new Set([...prev, key]));
+      trackEvent("journal_suggestion_to_next_actions", {
+        source: "journal",
+        created: result.created,
+      });
+      showSuccess(result.created
+        ? l("Entrou nas suas próximas ações.", "Added to your next actions.")
+        : l("Isso já estava nas suas próximas ações.", "That was already in your next actions."));
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Não foi possível adicionar ao planner.");
+      showError(error instanceof Error ? error.message : "Não foi possível salvar a ação.");
     } finally {
       setAddingToPlanner(null);
-      setDayChoice(null);
-    }
-  }
-
-  function handleAddClick(key: string, task: SuggestedTask) {
-    const nowHour = new Date().getHours();
-    const taskHour = task.time ? Number(task.time.split(":")[0]) : nowHour + 1;
-    // Ask today or tomorrow when: after 20h, task time >= 20h, or task time has already passed
-    if (nowHour >= 20 || taskHour >= 20 || taskHour <= nowHour) {
-      setDayChoice({ key, task });
-    } else {
-      void addTaskToPlanner(key, task, 0);
     }
   }
 
@@ -711,7 +695,7 @@ export function JournalPage() {
                 <div key={item} style={{ borderRadius: 12, border: "1px solid rgba(155,191,168,.24)", background: "#fff", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                   <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>{item}</p>
                   <button
-                    onClick={() => !added && handleAddClick(key, fakeTask)}
+                    onClick={() => { if (!added) void addSuggestionToNextActions(key, fakeTask); }}
                     disabled={added || addingToPlanner === key}
                     style={{
                       alignSelf: "flex-start", border: "none", borderRadius: 8, cursor: added ? "default" : "pointer",
@@ -721,7 +705,7 @@ export function JournalPage() {
                       transition: "all 200ms",
                     }}
                   >
-                    {added ? "✓ Adicionado" : addingToPlanner === key ? "Adicionando..." : "+ Planner"}
+                    {added ? l("✓ Adicionado", "✓ Added") : addingToPlanner === key ? l("Adicionando...", "Adding...") : l("+ Próximas ações", "+ Next actions")}
                   </button>
                 </div>
               );
@@ -755,7 +739,7 @@ export function JournalPage() {
                       </span>
                     ) : null}
                     <button
-                      onClick={() => !added && handleAddClick(key, task)}
+                      onClick={() => { if (!added) void addSuggestionToNextActions(key, task); }}
                       disabled={added || addingToPlanner === key}
                       style={{
                         marginLeft: "auto", border: "none", borderRadius: 8, cursor: added ? "default" : "pointer",
@@ -766,7 +750,7 @@ export function JournalPage() {
                         transition: "all 200ms",
                       }}
                     >
-                      {added ? "✓ Na agenda" : addingToPlanner === key ? "..." : "+ Planner"}
+                      {added ? l("✓ Adicionado", "✓ Added") : addingToPlanner === key ? "..." : l("+ Próximas ações", "+ Next actions")}
                     </button>
                   </div>
                 </div>
@@ -775,40 +759,6 @@ export function JournalPage() {
           )}
         </div>
 
-        {/* Hoje ou Amanhã? dialog */}
-        {dayChoice && (
-          <div style={{
-            position: "fixed", inset: 0, background: "rgba(17,24,39,.5)", zIndex: 1300,
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-          }}>
-            <div style={{
-              background: "#fff", borderRadius: 20, padding: 20, maxWidth: 320, width: "100%",
-              boxShadow: "0 24px 64px rgba(17,24,39,.2)",
-            }}>
-              <p style={{ fontWeight: 800, fontSize: 15, margin: "0 0 6px", color: "var(--text-1)" }}>{t("journal.whenAdd")}</p>
-              <p style={{ fontSize: 13, color: "var(--text-2)", margin: "0 0 16px", lineHeight: 1.5 }}>
-                "{dayChoice.task.title}"
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 0)}
-                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "1.5px solid var(--accent-peach)", background: "rgba(143,192,164,.1)", color: "var(--accent-peach)", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
-                >
-                  {t("common.today")}
-                </button>
-                <button
-                  onClick={() => void addTaskToPlanner(dayChoice.key, dayChoice.task, 1)}
-                  style={{ flex: 1, padding: "10px", borderRadius: 12, border: "none", background: "var(--accent-peach)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 13, boxShadow: "0 4px 14px rgba(143,192,164,.4)" }}
-                >
-                  {t("common.tomorrow")}
-                </button>
-              </div>
-              <button onClick={() => setDayChoice(null)} style={{ width: "100%", marginTop: 10, background: "none", border: "none", color: "var(--text-3)", fontSize: 12, cursor: "pointer", padding: 6 }}>
-                {t("common.cancel")}
-              </button>
-            </div>
-          </div>
-        )}
 
 
         <div style={{ borderRadius: 14, background: "rgba(176,180,196,.10)", border: "1px solid rgba(176,180,196,.26)", padding: "11px 12px" }}>
@@ -1289,7 +1239,7 @@ export function JournalPage() {
           <SafetyProtocolCard
             riskSafety={lastRiskSafety}
             surface="journal"
-            onAdaptDay={() => navigate(FEATURES.planner ? "/planner" : "/home", { state: { openAgendaAdaptation: true } })}
+            
           />
 
           <div ref={chatEndRef} />

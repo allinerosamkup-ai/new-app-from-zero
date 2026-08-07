@@ -250,6 +250,7 @@ function BooleanChoice({ value, onChange, yes, no, legend, group }: {
   );
 }
 
+type CheckinCapacity = "quick" | "moderate" | "heavy";
 type FlowIntensity = "leve" | "moderado" | "intenso";
 type DayType = "up" | "down" | "mixed" | "stable";
 
@@ -266,6 +267,7 @@ export function CheckinPage() {
     ? "checkin.emotionsMale"
     : "checkin.emotions";
   const dayContext = getClientDayContext(new Date(), resolveIntlLocale(i18n.language));
+  const activeGoals = (state.goals || []).filter((goal) => goal.completedPct < 100);
 
   const [humor, setHumor] = useState<number | null>(null);
   const [energia, setEnergia] = useState<number | null>(null);
@@ -285,6 +287,8 @@ export function CheckinPage() {
   const [hyperfocusOccurred, setHyperfocusOccurred] = useState<boolean | null>(null);
   const [dayType, setDayType] = useState<DayType | null>(null);
   const [mixedEpisodeNote, setMixedEpisodeNote] = useState("");
+  const [capacity, setCapacity] = useState<CheckinCapacity | null>(null);
+  const [priorityGoalId, setPriorityGoalId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -428,8 +432,25 @@ export function CheckinPage() {
             emotions_count: emotions.length,
             has_voice_context: Boolean(voiceTranscript.trim()),
             has_optional_context: [sono, sleepHours, fisico, social, isFlowing, medicationTakenToday, focusScore, hyperfocusOccurred, dayType].some((value) => value !== null),
+            has_capacity: capacity !== null,
+            has_priority_goal: Boolean(priorityGoalId),
           });
-          navigate("/checkin-result", { state: checkinAI });
+          /**
+           * Capacidade e prioridade viajam pela navegação, não pelo banco.
+           *
+           * São sinais do momento — o que cabe HOJE e o que pesa HOJE — e o que
+           * eles precisam alimentar é a próxima ação que a tela seguinte vai
+           * montar. Persistir isso exigiria migração de schema para um dado que
+           * não tem uso histórico; leitura de padrão continua vindo de humor,
+           * energia e fatores, que já são gravados.
+           */
+          navigate("/checkin-result", {
+            state: {
+              ...checkinAI,
+              capacity,
+              priorityGoalId,
+            },
+          });
         },
       });
     } catch (error) {
@@ -476,6 +497,61 @@ export function CheckinPage() {
           <ScoreSlider label={l("Humor", "Mood")} value={humor} onChange={setHumor} emptyHint={l("arraste", "drag")} />
           <ScoreSlider label={l("Energia", "Energy")} value={energia} onChange={setEnergia} emptyHint={l("arraste", "drag")} />
         </Section>
+
+        {/* ── Perguntas condicionais ──
+            O check-in não vira formulário maior para todo mundo: estas duas só
+            aparecem quando têm função. Capacidade só faz sentido depois que
+            humor e energia existem — antes disso não há o que calibrar. E a
+            pergunta de prioridade só aparece se houver mais de um objetivo
+            ativo; com um só, perguntar qual priorizar é fazer a pessoa
+            responder algo que o app já sabe. ── */}
+        {humor !== null && energia !== null && (
+          <Section
+            section="capacity"
+            title={l("O que cabe hoje", "What fits today")}
+            subtitle={l("Isso define o tamanho do que a Airia vai sugerir.", "This sets the size of what Airia will suggest.")}
+          >
+            <fieldset data-choice-group="capacity" style={{ margin: 0, padding: 0, border: 0 }}>
+              <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800 }}>
+                {l("Hoje você lida melhor com algo:", "Today you can better handle something:")}
+              </legend>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
+                {(["quick", "moderate", "heavy"] as CheckinCapacity[]).map((option) => (
+                  <ChoiceButton
+                    key={option}
+                    active={capacity === option}
+                    onClick={() => setCapacity(capacity === option ? null : option)}
+                  >
+                    {{
+                      quick: l("Rápido", "Quick"),
+                      moderate: l("Moderado", "Moderate"),
+                      heavy: l("Mais trabalhoso", "Heavier"),
+                    }[option]}
+                  </ChoiceButton>
+                ))}
+              </div>
+            </fieldset>
+
+            {activeGoals.length > 1 && (
+              <fieldset data-choice-group="priority-goal" style={{ margin: "16px 0 0", padding: 0, border: 0 }}>
+                <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800 }}>
+                  {l("O que mais precisa da sua atenção hoje?", "What needs your attention most today?")}
+                </legend>
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {activeGoals.slice(0, 4).map((goal) => (
+                    <ChoiceButton
+                      key={String(goal.id)}
+                      active={priorityGoalId === String(goal.id)}
+                      onClick={() => setPriorityGoalId(priorityGoalId === String(goal.id) ? null : String(goal.id))}
+                    >
+                      {goal.title}
+                    </ChoiceButton>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+          </Section>
+        )}
 
         <Section section="influences" title={l("Fatores de influência", "Influencing factors")} subtitle={l("Marque o que realmente contribuiu para este estado.", "Select what actually contributed to this state.")}>
           {(["positive", "negative"] as const).map((category) => (

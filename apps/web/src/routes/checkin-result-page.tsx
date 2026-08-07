@@ -7,7 +7,6 @@ import { computeMoodCycle, getPhaseColor } from '../utils/mood-cycle-engine';
 import { PhaseLegendSheet } from '../components/PhaseLegendSheet';
 import { useTranslation } from 'react-i18next';
 import { api } from "../lib/api";
-import { tryParseAiSuggestion } from "../lib/ai";
 import { trackEvent } from "../lib/track";
 import { successHaptic } from "../utils/haptics";
 import { useToast } from "../components/Toast";
@@ -17,7 +16,7 @@ import { resolveMoodFromCheckin } from "../features/aura/checkin-mood";
 import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
-import { findSmartPlannerSlot } from "./planner-page.helpers";
+import { buildCheckinReading } from "./checkin-reading.helpers";
 import { saveNextAction } from "../utils/save-next-action";
 import { RefreshCcw, X } from "lucide-react";
 import "../styles/aura.css";
@@ -64,7 +63,7 @@ const variants: Record<MoodOption, ResultVariant> = {
     emoji: "😴",
     label: "Dia Cansativo",
     description: "Energia baixa hoje. Respeite seu ritmo.",
-    tip: "Se possível, inclua 20 min de descanso no seu planner hoje.",
+    tip: "Se possível, reserve 20 min de descanso antes da próxima ação.",
     chipLabel: "Cansada",
     bg: "linear-gradient(180deg, #E6F2EC 0%, #EDF6F2 50%, #FAF6F2 100%)",
     accent: "var(--accent-sage)",
@@ -93,12 +92,21 @@ const VARIANT_EN: Record<MoodOption, Pick<ResultVariant, "label" | "description"
   focada: { label: "Radiant Energy", description: "Mood and energy are balanced. Mental clarity is above average.", tip: "Use this peak for your most important tasks before 2 PM.", chipLabel: "Focused" },
   equilibrada: { label: "Balanced", description: "A calm, steady rhythm. A good base for today's tasks.", tip: "Start with lighter tasks and gradually build momentum.", chipLabel: "Balanced" },
   tensa: { label: "Tense Day", description: "Elevated tension detected. Pay attention to your pace.", tip: "Take short breaks and avoid important decisions right now.", chipLabel: "Tense" },
-  cansada: { label: "Tiring Day", description: "Low energy today. Respect your pace.", tip: "If possible, add 20 minutes of rest to your planner today.", chipLabel: "Tired" },
+  cansada: { label: "Tiring Day", description: "Low energy today. Respect your pace.", tip: "If possible, set aside 20 minutes of rest before your next action.", chipLabel: "Tired" },
   sensivel: { label: "Sensitive Day", description: "Your energy needs extra care. Sensitivity is higher today.", tip: "Prioritize self-care and avoid important decisions right now.", chipLabel: "Delicate" },
   sobrecarregada: { label: "Difficult Day", description: "Your signals call for rest. Overload detected.", tip: "Cancel what you can and leave room for recovery.", chipLabel: "Intense" },
 };
 
 type AuraMsg = { message: string; suggestionEmoji: string; suggestion: string };
+
+/** Contrato de /api/ai/suggest para `checkin-next-step`. */
+type CheckinNextStepSuggestion = {
+  mode?: "actions" | "question";
+  items?: string[];
+  question?: string | null;
+  resultDefinition?: string | null;
+  assumptions?: string[];
+};
 
 type StoredGtdInboxItem = {
   id: string;
@@ -112,69 +120,16 @@ type StoredGtdInboxItem = {
   createdAt: string;
   source: string;
 };
-type AiTask = { title: string; category: string; time: string; date?: string; isNextDay?: boolean; discarded: boolean };
-type AiPhase = "idle" | "loading" | "preview" | "done";
-
-const CAT_COLOR: Record<string, string> = {
-  trabalho: "var(--accent-sky)",
-  saude: "var(--accent-sage)",
-  autocuidado: "var(--accent-sage)",
-  rotina: "var(--accent-peach)",
-  social: "var(--social-color)",
-};
-
-function parseTimeToMinutes(time: string): number | null {
-  if (!/^\d{2}:\d{2}$/.test(time)) return null;
-  const [hours, minutes] = time.split(":").map(Number);
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-  return hours * 60 + minutes;
-}
-
-function addMinutes(time: string, minutesToAdd: number): string {
-  const total = (parseTimeToMinutes(time) ?? 0) + minutesToAdd;
-  const normalized = ((total % 1440) + 1440) % 1440;
-  const hours = String(Math.floor(normalized / 60)).padStart(2, "0");
-  const minutes = String(normalized % 60).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-function resolveSuggestedTaskTime(
-  rawTime: unknown,
-  existingTasks: Array<{ time: string; endTime?: string | null }>,
-  referenceDate = new Date(),
-): string {
-  const fallback = findSmartPlannerSlot(existingTasks, referenceDate).time;
-  if (typeof rawTime !== "string") return fallback;
-
-  const trimmed = rawTime.trim();
-  const minutes = parseTimeToMinutes(trimmed);
-  if (minutes === null) return fallback;
-
-  const currentMinutes = referenceDate.getHours() * 60 + referenceDate.getMinutes();
-  const dayEndMinutes = 18 * 60;
-
-  if (minutes <= currentMinutes || minutes < 6 * 60 || minutes > dayEndMinutes) {
-    return fallback;
-  }
-
-  return trimmed;
-}
-
-function resolveSuggestedTaskSchedule(
-  rawTime: unknown,
-  existingTasks: Array<{ time: string; endTime?: string | null }>,
-  referenceDate = new Date(),
-): { time: string; date?: string; isNextDay?: boolean } {
-  const fallback = findSmartPlannerSlot(existingTasks, referenceDate);
-  const resolvedTime = resolveSuggestedTaskTime(rawTime, existingTasks, referenceDate);
-
-  if (resolvedTime === fallback.time) {
-    return fallback;
-  }
-
-  return { time: resolvedTime, date: undefined, isNextDay: false };
-}
+/**
+ * Sugestão pós-check-in.
+ *
+ * Sem horário e sem categoria de agenda de propósito: a pergunta que a tela
+ * responde é "o que faz sentido agora", não "às quantas horas". Marcar hora
+ * para quem acabou de dizer que está sem energia é criar mais um prazo para
+ * estourar.
+ */
+type NextStep = { title: string; discarded: boolean };
+type AiPhase = "idle" | "loading" | "preview" | "done" | "question";
 
 function normalizeTextKey(value: unknown): string {
   return typeof value === "string"
@@ -253,6 +208,10 @@ export function CheckinResultPage() {
     analysis?: string | null;
     recommendations?: string[];
     suggestedIntensity?: string | null;
+    /** O que cabe hoje, respondido no check-in. Define o tamanho do passo. */
+    capacity?: "quick" | "moderate" | "heavy" | null;
+    /** Objetivo que a pessoa apontou como prioridade de hoje. */
+    priorityGoalId?: string | null;
     riskSafety?: {
       riskLevel?: RiskSafety["riskLevel"];
       signals?: string[];
@@ -301,10 +260,6 @@ export function CheckinResultPage() {
   const goalTitles = useMemo(
     () => (state.goals || []).filter(g => g.completedPct < 100).map(g => g.title),
     [state.goals]
-  );
-  const pendingTaskTitles = useMemo(
-    () => (state.tasks || []).filter((task) => !task.done).slice(0, 8).map((task) => task.title),
-    [state.tasks],
   );
   const completedTaskTitles = useMemo(
     () => (state.tasks || []).filter((task) => task.done).map((task) => task.title).filter(Boolean),
@@ -405,49 +360,46 @@ export function CheckinResultPage() {
     }
   }, []);
 
+  /**
+   * Objetivo em foco desta tela.
+   *
+   * Diferente do card da Home, aqui um objetivo SEM nenhuma ação também pode
+   * ganhar o foco — é justamente o caso em que a devolutiva certa é a pergunta
+   * "o que falta para você considerar isso pronto?". Excluir o objetivo vazio
+   * esconderia a única conversa que destrava ele.
+   */
+  const focusGoal = useMemo(() => {
+    const active = (state.goals || []).filter((goal) => goal.completedPct < 100);
+    // A escolha da pessoa no check-in ganha de qualquer heurística nossa.
+    const chosen = checkinAI?.priorityGoalId
+      ? active.find((goal) => String(goal.id) === String(checkinAI.priorityGoalId))
+      : undefined;
+    return chosen ?? active.find((goal) => goal.subtasks.some((sub) => !sub.done)) ?? active[0] ?? null;
+  }, [checkinAI?.priorityGoalId, state.goals]);
+
+  const reading = useMemo(() => buildCheckinReading({
+    todayEnergy: latestCheckin?.energia ?? null,
+    todayMood: latestCheckin?.humor ?? null,
+    previousEnergies: (state.checkinHistory || []).slice(1, 15).map((entry) => entry.energia),
+    goals: (state.goals || [])
+      .filter((goal) => goal.completedPct < 100)
+      .map((goal) => ({
+        title: goal.title,
+        totalActions: goal.subtasks.length,
+        completedActions: goal.subtasks.filter((sub) => sub.done).length,
+        lastCompletedActionTitle: [...goal.subtasks].reverse().find((sub) => sub.done)?.title ?? null,
+        daysSinceLastCompletion: goal.subtasks.some((sub) => sub.done) ? 1 : null,
+      })),
+  }), [latestCheckin, state.checkinHistory, state.goals]);
+
   const [phase, setPhase] = useState<AiPhase>("idle");
-  const [tasks, setTasks] = useState<AiTask[]>([]);
-  const [regenIdx, setRegenIdx] = useState<number | null>(null);
-  const [savingTasks, setSavingTasks] = useState(false);
+  const [steps, setSteps] = useState<NextStep[]>([]);
+  const [savingSteps, setSavingSteps] = useState(false);
   const [syncingContext, setSyncingContext] = useState(true);
-
-  // Recalibração de agenda ("life happens")
-  const [recalibrateLoading, setRecalibrateLoading] = useState(false);
-  const [recalibrateResult, setRecalibrateResult] = useState<string | null>(null);
-
-  const recalibrateSignal: "day_hard" | "day_great" | null = (() => {
-    if (resultMood === "focada") return "day_great";
-    if (resultMood === "sobrecarregada" || resultMood === "cansada" || resultMood === "sensivel") return "day_hard";
-    return null;
-  })();
-
-  async function handleRecalibrateDay() {
-    if (!recalibrateSignal || recalibrateLoading) return;
-    setRecalibrateLoading(true);
-    setRecalibrateResult(null);
-    try {
-      const res = await api.post("/agenda/recalibrate", {
-        signal: recalibrateSignal,
-        date: dayContext.localDate,
-        context: {
-          moodCycleContext: cycleReport.aiContext,
-          localDate: dayContext.localDate,
-        },
-      }) as any;
-      const kept = (res?.decisions ?? []).filter((d: any) => d.type === "keep").length;
-      const paused = (res?.decisions ?? []).filter((d: any) => d.type === "pause" || d.type === "move").length;
-      if (recalibrateSignal === "day_great") {
-        setRecalibrateResult(`Energia alta — ${kept} compromisso${kept !== 1 ? "s" : ""} mantido${kept !== 1 ? "s" : ""}, foco no que já existe na lista.`);
-      } else {
-        setRecalibrateResult(`Dia difícil — ${paused} bloco${paused !== 1 ? "s" : ""} pausado${paused !== 1 ? "s" : ""}. Só o essencial ficou.`);
-      }
-      trackEvent("agenda_recalibrated", { signal: recalibrateSignal, mood: resultMood });
-    } catch {
-      showError(t("checkin.result.recalibrateError"));
-    } finally {
-      setRecalibrateLoading(false);
-    }
-  }
+  // Quando falta informação, a melhor próxima ação da Airia é uma pergunta.
+  const [clarification, setClarification] = useState<string | null>(null);
+  const [clarificationAnswer, setClarificationAnswer] = useState("");
+  const [resultDefinition, setResultDefinition] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -466,71 +418,86 @@ export function CheckinResultPage() {
     if (!hydrated || syncingContext) return;
     if (autoTasksRan.current || auraMsgLoading || phase !== "idle") return;
     autoTasksRan.current = true;
-    void fetchDayTasks();
+    void fetchNextStep();
   }, [auraMsgLoading, phase, hydrated, syncingContext]);
 
-  function normalizeTaskSuggestions(payload: unknown): AiTask[] {
-    if (!Array.isArray(payload)) return [];
-    const seen = new Set<string>();
-    const normalized: AiTask[] = [];
-    const virtualTasks: Array<{ time: string; endTime?: string | null }> = (state.tasks || []).map((task) => ({ time: task.time, endTime: task.endTime }));
-    const now = new Date();
-    for (const raw of payload) {
-      if (!raw || typeof raw !== "object") continue;
-      const item = raw as { title?: unknown; category?: unknown; time?: unknown };
-      const title = typeof item.title === "string" ? item.title.trim() : "";
-      if (!title) continue;
-      const key = title.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (isGenericCheckinSuggestion(title, blockedTaskTitles)) continue;
-      if (blockedTaskTitles.some((blockedTitle) => isSimilarText(title, blockedTitle))) continue;
-      const category = typeof item.category === "string" ? item.category.trim().toLowerCase() : "rotina";
-      const schedule = resolveSuggestedTaskSchedule(item.time, virtualTasks, now);
-      normalized.push({ title, category, time: schedule.time, date: schedule.date, isNextDay: schedule.isNextDay, discarded: false });
-      virtualTasks.push({ time: schedule.time, endTime: addMinutes(schedule.time, 30) });
-      if (normalized.length >= 3) break;
-    }
-    return normalized;
-  }
-
-  async function fetchDayTasks() {
+  /**
+   * Próximo passo depois do check-in.
+   *
+   * O que mudou: antes esta tela pedia "3 tarefas para hoje" com horário, e a
+   * resposta vinha do mesmo gerador que produzia sugestão genérica quando não
+   * tinha âncora. Agora ela pede uma coisa só — a próxima ação coerente com o
+   * objetivo em foco — cruzando check-in de hoje, histórico, objetivos, estado
+   * dos objetivos, ações já feitas e diário.
+   *
+   * E aceita como resposta legítima uma PERGUNTA. Quando a Airia não tem
+   * informação suficiente, perguntar "o que falta para você considerar isso
+   * pronto?" é melhor recomendação do que inventar uma tarefa para preencher o
+   * card.
+   */
+  async function fetchNextStep(extraStatements: string[] = []) {
     setPhase("loading");
     try {
       const res = await api.post("/ai/suggest", {
-        type: "day-tasks",
+        type: "checkin-next-step",
         context: {
-          mood: resultMood,
+          goalTitle: focusGoal?.title ?? "",
+          existingSubtasks: focusGoal?.subtasks.filter((sub) => !sub.done).map((sub) => sub.title) ?? [],
+          completedSubgoalTitles,
+          completedTaskTitles,
+          goals: goalTitles,
+          userStatements: [
+            todayNote,
+            focusGoal?.progress && focusGoal.progress !== "Em andamento" ? focusGoal.progress : "",
+            state.journal,
+            ...extraStatements,
+          ].filter(Boolean),
           moodLabel: v.label,
+          capacity: checkinAI?.capacity ?? null,
+          energia: latestCheckin?.energia ?? null,
+          phaseLabel: cycleReport.phaseLabel,
           moodCycleContext: cycleReport.aiContext,
           checkinHistory: recentHistory,
-          goals: goalTitles,
-          pendingTasks: pendingTaskTitles,
-          nota: state.journal,
-          hour: dayContext.hour,
-          minute: dayContext.minute,
-          partOfDay: dayContext.partOfDay,
-          weekday: dayContext.weekday,
-          localDate: dayContext.localDate,
           factors: todayFactors,
           emotions: todayEmotions,
-          avoidTaskTitles: blockedTaskTitles,
-          completedTaskTitles,
-          completedHabitTitles,
-          completedGoalTitles,
-          completedSubgoalTitles,
+          localDate: dayContext.localDate,
+          locale: resolveIntlLocale(i18n.language),
         },
-      });
-      const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
-      const normalized = normalizeTaskSuggestions(parsed);
-      if (normalized.length === 0) {
-        throw new Error("A IA não retornou tarefas válidas agora.");
+      }) as { suggestion?: CheckinNextStepSuggestion };
+
+      const suggestion = res.suggestion ?? null;
+      setResultDefinition(suggestion?.resultDefinition?.trim() || null);
+
+      const items = (suggestion?.items ?? [])
+        .map((item) => String(item).trim())
+        .filter(Boolean)
+        .filter((item) => !isGenericCheckinSuggestion(item, blockedTaskTitles))
+        .filter((item) => !blockedTaskTitles.some((blocked) => isSimilarText(item, blocked)))
+        .slice(0, 3);
+
+      if (items.length > 0) {
+        setSteps(items.map((title) => ({ title, discarded: false })));
+        setClarification(null);
+        localStorage.setItem("aura_last_day_tasks", items.join("|"));
+        setPhase("preview");
+        return;
       }
-      setTasks(normalized);
-      localStorage.setItem("aura_last_day_tasks", normalized.map((task) => task.title).join("|"));
-      setPhase("preview");
+
+      const question = suggestion?.question?.trim();
+      if (question) {
+        setSteps([]);
+        setClarification(question);
+        setPhase("question");
+        trackEvent("checkin_next_step_asked", { has_focus_goal: Boolean(focusGoal) });
+        return;
+      }
+
+      // Nem ação nem pergunta. A tela diz isso em voz alta em vez de fingir.
+      setSteps([]);
+      setClarification(null);
+      setPhase("idle");
     } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel gerar ajustes para o dia.");
+      showError(error instanceof Error ? error.message : "Nao foi possivel ler seu contexto agora.");
       setPhase("idle");
     }
   }
@@ -540,53 +507,35 @@ export function CheckinResultPage() {
       has_router_state: Boolean(checkinAI),
       has_analysis: Boolean(checkinAI?.analysis),
     });
-    void fetchDayTasks();
+    void fetchNextStep();
   }
 
-  async function regenTask(idx: number) {
-    setRegenIdx(idx);
-    try {
-      const res = await api.post("/ai/suggest", {
-        type: "day-tasks",
-        context: {
-          mood: resultMood,
-          moodLabel: v.label,
-          moodCycleContext: cycleReport.aiContext,
-          checkinHistory: recentHistory,
-          goals: goalTitles,
-          pendingTasks: pendingTaskTitles,
-          nota: state.journal,
-          hour: dayContext.hour,
-          minute: dayContext.minute,
-          partOfDay: dayContext.partOfDay,
-          weekday: dayContext.weekday,
-          localDate: dayContext.localDate,
-          factors: todayFactors,
-          emotions: todayEmotions,
-          avoidTaskTitles: blockedTaskTitles,
-          completedTaskTitles,
-          completedHabitTitles,
-          completedGoalTitles,
-          completedSubgoalTitles,
-        },
-      });
-      const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
-      const normalized = normalizeTaskSuggestions(parsed);
-      if (normalized[0]) {
-        setTasks((prev) =>
-          prev.map((t, i) => (i === idx ? normalized[0] : t))
-        );
+  /**
+   * A resposta da pessoa vira contexto permanente do objetivo.
+   *
+   * Sem isso a mesma pergunta voltaria amanhã: a informação teria servido para
+   * uma geração e evaporado. Ela vai para a descrição do objetivo, que é o campo
+   * que já carrega "onde isso está" na Home.
+   */
+  async function submitClarification() {
+    const answer = clarificationAnswer.trim();
+    if (!answer) return;
+    setClarificationAnswer("");
+    if (focusGoal) {
+      try {
+        await api.patch(`/objectives/${focusGoal.id}`, { description: answer });
+        await refreshData();
+      } catch {
+        // Não conseguiu gravar: a resposta ainda serve para esta geração.
       }
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel regenerar a sugestao.");
-    } finally {
-      setRegenIdx(null);
     }
+    trackEvent("checkin_next_step_answered", { has_focus_goal: Boolean(focusGoal) });
+    await fetchNextStep([answer]);
   }
 
   function toggleDiscard(idx: number) {
-    setTasks((prev) =>
-      prev.map((t, i) => (i === idx ? { ...t, discarded: !t.discarded } : t))
+    setSteps((prev) =>
+      prev.map((step, i) => (i === idx ? { ...step, discarded: !step.discarded } : step))
     );
   }
 
@@ -599,26 +548,26 @@ export function CheckinResultPage() {
    * ser feita — e o dedupe impede que a mesma coisa seja registrada de novo.
    */
   async function confirmTasks() {
-    const accepted = tasks.filter((t) => !t.discarded);
-    if (accepted.length === 0 || savingTasks) return;
+    const accepted = steps.filter((step) => !step.discarded);
+    if (accepted.length === 0 || savingSteps) return;
 
-    setSavingTasks(true);
+    setSavingSteps(true);
     let savedCount = 0;
     let duplicateCount = 0;
 
     // Em série, não em paralelo: cada verificação precisa enxergar o que a
     // anterior gravou, senão duas sugestões parecidas do mesmo lote entram
     // juntas — a duplicata que o dedupe existe para impedir.
-    for (const task of accepted) {
+    for (const step of accepted) {
       const result = await saveNextAction({
-        text: task.title,
+        text: step.title,
         razao: 'Sugestão aceita no resultado do check-in.',
         source: 'checkin-result',
       });
       if (result.created) savedCount += 1; else duplicateCount += 1;
     }
 
-    setSavingTasks(false);
+    setSavingSteps(false);
     setPhase('done');
 
     trackEvent('checkin_suggestions_to_next_actions', {
@@ -643,17 +592,9 @@ export function CheckinResultPage() {
     }
   }
 
-  const acceptedCount = tasks.filter((t) => !t.discarded).length;
+  const acceptedCount = steps.filter((step) => !step.discarded).length;
   const isMenuthe = v.accent === "var(--accent-sage)";
-  const hasAgendaAnchor = pendingTaskTitles.length > 0;
-  const hasSoftAnchor = goalTitles.length > 0 || (state.habits || []).some((habit) => !(habit.completions || []).some((completion) => normalizeDateKey(completion.date) === dayContext.localDate));
-  const adaptivePlannerLabel = hasAgendaAnchor
-    ? "Ver ajustes sugeridos"
-    : hasSoftAnchor
-      ? "Montar um bloco possível"
-      : "Abrir Planner";
-
-  async function finalizeAndGo(path: "/planner" | "/home" | "/journal", navState?: Record<string, unknown>) {
+  async function finalizeAndGo(path: "/home" | "/journal" | "/goals", navState?: Record<string, unknown>) {
     try {
       await refreshData();
     } catch {
@@ -885,10 +826,12 @@ export function CheckinResultPage() {
                   ))}
                 </div>
               )}
+              {/* Sem `onAdaptDay`: o destino era o Planner, que não existe mais.
+                  Botão que leva a lugar nenhum em card de segurança é pior que
+                  botão ausente. */}
               <SafetyProtocolCard
                 riskSafety={checkinAI.riskSafety as RiskSafety | undefined}
                 surface="checkin_result"
-                onAdaptDay={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
               />
             </>
           ) : auraMsg ? (
@@ -924,66 +867,53 @@ export function CheckinResultPage() {
         </div>
 
 
-        <div
-          style={{
-            background: "rgba(255,253,250,.92)",
-            borderRadius: 14,
-            border: `1.5px solid ${v.accent}28`,
-            padding: 14,
-            marginBottom: 12,
-          }}
-        >
-          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>
-            Agenda adaptativa
-          </p>
-          <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-2)", lineHeight: 1.55 }}>
-            A Airia pode usar esse check-in, a hora atual e seus blocos do dia para sugerir o que mover, reduzir, pausar ou encaixar.
-          </p>
-          <AuraButtonV2
-            className="btn btn-ghost btn-full"
-            onClick={() => { void finalizeAndGo("/planner", { openAgendaAdaptation: true }); }}
+        {/* ── Leitura do dia ──
+            A devolutiva que mostra que o app entendeu. Cada frase daqui nasce
+            de um número ou registro real; sem evidência, nada aparece. ── */}
+        {reading && (
+          <div
+            style={{
+              background: "rgba(255,253,250,.92)",
+              borderRadius: 14,
+              border: `1.5px solid ${v.accent}28`,
+              padding: 14,
+              marginBottom: 12,
+            }}
           >
-            {adaptivePlannerLabel}
-          </AuraButtonV2>
+            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>
+              {l("O que eu li aqui", "What I read here")}
+            </p>
+            <p style={{ margin: 0, fontSize: 13.5, color: "var(--text-1)", lineHeight: 1.55, fontWeight: 600 }}>
+              {reading.text}
+            </p>
+            <p style={{ margin: "6px 0 0", fontSize: 10.5, color: "var(--text-3)", lineHeight: 1.45 }}>
+              {l("Base", "Based on")}: {reading.evidence}
+            </p>
+          </div>
+        )}
 
-          {recalibrateSignal && !recalibrateResult && (
-            <AuraButtonV2
-              className="btn btn-ghost btn-full"
-              style={{ marginTop: 8 }}
-              onClick={handleRecalibrateDay}
-              disabled={recalibrateLoading}
-            >
-              {recalibrateLoading
-                ? l("Reajustando...", "Readjusting...")
-                : recalibrateSignal === "day_great"
-                  ? l("Aproveitar a energia de hoje", "Use today's energy")
-                  : l("Reajustar minha agenda a esse ritmo", "Readjust my agenda to this pace")}
-            </AuraButtonV2>
-          )}
-
-          {recalibrateResult && (
-            <div style={{
-              marginTop: 10, padding: "10px 12px", borderRadius: 10,
-              background: isMenuthe ? "rgba(180,185,169,.10)" : "var(--accent-peach-a3)",
-              border: `1px solid ${v.accent}30`,
-            }}>
-              <p style={{ margin: 0, fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
-                ✓ {recalibrateResult}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* ─── BLOCO IA ─── */}
+        {/* PROXIMO PASSO */}
         {phase === "idle" && !syncingContext && (
-          <AuraButtonV2
-            useAuraIcon
-            className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
-            onClick={handleAdjustDayClick}
-            style={{ marginBottom: 10 }}
-          >
-            Ajustar meu dia
-          </AuraButtonV2>
+          <>
+            <AuraButtonV2
+              useAuraIcon
+              className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
+              onClick={handleAdjustDayClick}
+              style={{ marginBottom: 10 }}
+            >
+              {l("Ver meu próximo passo", "Show my next step")}
+            </AuraButtonV2>
+            {/* Sem informação suficiente a tela DIZ isso. Preencher o card com
+                qualquer coisa é o comportamento que estamos removendo. */}
+            {steps.length === 0 && !clarification && (
+              <p style={{ fontSize: 12, color: "var(--text-3)", lineHeight: 1.5, marginBottom: 12, textAlign: "center" }}>
+                {l(
+                  "Ainda não tenho contexto suficiente para uma boa próxima ação. Conte no diário o que está pegando e eu volto com algo real.",
+                  "I still do not have enough context for a good next action. Tell me in the journal what is in the way and I will come back with something real.",
+                )}
+              </p>
+            )}
+          </>
         )}
 
         {syncingContext && (
@@ -993,7 +923,7 @@ export function CheckinResultPage() {
           }}>
             <div className="aura-inline-spinner" style={{ margin: "0 auto 10px" }} />
             <p style={{ fontSize: 12, color: "var(--text-2)", fontStyle: "italic" }}>
-              Sincronizando metas e compromissos atuais...
+              {l("Cruzando seus objetivos com o que você registrou...", "Crossing your goals with what you recorded...")}
             </p>
           </div>
         )}
@@ -1010,18 +940,66 @@ export function CheckinResultPage() {
           </div>
         )}
 
+        {/* Falta de informação vira PERGUNTA, não tarefa inventada. */}
+        {phase === "question" && clarification && (
+          <div style={{
+            background: "rgba(255,253,250,.95)", borderRadius: 14, padding: 16,
+            marginBottom: 10, border: `1.5px solid ${v.accent}40`,
+          }}>
+            <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>
+              {l("Para eu te ajudar direito", "So I can actually help")}
+            </p>
+            <p style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "var(--text-1)", lineHeight: 1.45 }}>
+              {clarification}
+            </p>
+            {focusGoal && (
+              <p style={{ margin: "-6px 0 12px", fontSize: 11, color: "var(--text-3)" }}>
+                {l("Objetivo", "Goal")}: {focusGoal.title}
+              </p>
+            )}
+            <textarea
+              value={clarificationAnswer}
+              onChange={(event) => setClarificationAnswer(event.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder={l("Responda com suas palavras", "Answer in your own words")}
+              style={{
+                width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12,
+                border: "1.5px solid var(--warm-border-2)", resize: "vertical", fontSize: 13,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <AuraButtonV2
+                className="btn btn-ghost"
+                style={{ flex: 1 }}
+                onClick={() => { setClarification(null); setPhase("idle"); }}
+              >
+                {l("Agora não", "Not now")}
+              </AuraButtonV2>
+              <AuraButtonV2
+                className={`btn ${isMenuthe ? "btn-sage" : "btn-primary"}`}
+                style={{ flex: 2 }}
+                onClick={() => { void submitClarification(); }}
+                disabled={!clarificationAnswer.trim()}
+              >
+                {l("Responder", "Answer")}
+              </AuraButtonV2>
+            </div>
+          </div>
+        )}
+
         {(phase === "preview" || phase === "done") && (
           <div style={{
             background: "rgba(255,253,250,.95)", borderRadius: 14, padding: 16,
             marginBottom: 10, border: `1.5px solid ${isMenuthe ? "rgba(180,185,169,.3)" : "rgba(155,191,168,.3)"}`,
           }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>
-                {l("Próximas ações", "Next actions")}
+                {l("Próximo passo", "Next step")}
               </p>
               {phase === "preview" && (
                 <p style={{ fontSize: 11, color: "var(--text-3)" }}>
-                  {acceptedCount}/{tasks.length} selecionadas
+                  {acceptedCount}/{steps.length} {l("selecionadas", "selected")}
                 </p>
               )}
               {phase === "done" && (
@@ -1029,80 +1007,64 @@ export function CheckinResultPage() {
               )}
             </div>
 
+            {/* O que a Airia entendeu por "concluído". Deixa a interpretação
+                visível para poder ser corrigida em vez de silenciosa. */}
+            {resultDefinition && (
+              <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "var(--text-3)", lineHeight: 1.45 }}>
+                {l("Concluir isso significa", "Finishing this means")}: {resultDefinition}
+              </p>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: phase === "preview" ? 14 : 0 }}>
-              {tasks.map((task, idx) => {
-                const cor = CAT_COLOR[task.category] ?? "var(--accent-peach)";
-                return (
-                  <div key={idx} className="result-task-card" style={{
-                    padding: "10px 12px", borderRadius: 10,
-                    background: task.discarded ? "rgba(0,0,0,.04)" : "var(--warm-bg)",
-                    border: `1.5px solid ${task.discarded ? "var(--warm-border)" : cor + "40"}`,
-                    opacity: task.discarded ? 0.5 : 1,
-                    transition: "all 150ms",
-                  }}>
-                    {/* dot cor */}
-                    <span className="result-task-dot" style={{ background: cor }} />
+              {steps.map((step, idx) => (
+                <div key={idx} className="result-task-card" style={{
+                  padding: "10px 12px", borderRadius: 10,
+                  background: step.discarded ? "rgba(0,0,0,.04)" : "var(--warm-bg)",
+                  border: `1.5px solid ${step.discarded ? "var(--warm-border)" : v.accent + "40"}`,
+                  opacity: step.discarded ? 0.5 : 1,
+                  transition: "all 150ms",
+                }}>
+                  <span className="result-task-dot" style={{ background: v.accent }} />
 
-                    {/* info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        fontSize: 13, fontWeight: 600, color: "var(--text-1)",
-                        textDecoration: task.discarded ? "line-through" : "none",
-                        wordBreak: "break-word",
-                      }}>
-                        {task.title}
-                      </p>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      fontSize: 13, fontWeight: 600, color: "var(--text-1)",
+                      textDecoration: step.discarded ? "line-through" : "none",
+                      wordBreak: "break-word",
+                    }}>
+                      {step.title}
+                    </p>
+                    {focusGoal && (
                       <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
-                        {task.isNextDay ? `amanhã ${task.time}` : task.time} · {task.category}
+                        {focusGoal.title}
                       </p>
-                    </div>
-
-                    {/* ações */}
-                    {phase === "preview" && (
-                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                        {/* regenerar */}
-                        <button
-                          type="button"
-                          onClick={() => regenTask(idx)}
-                          disabled={regenIdx === idx}
-                title={t("checkin.anotherSuggestion")}
-                          style={{
-                            width: 32, height: 32, borderRadius: 10, border: "1.5px solid var(--warm-border-2)",
-                            background: "transparent", cursor: "pointer", display: "flex",
-                            alignItems: "center", justifyContent: "center",
-                            opacity: regenIdx === idx ? 0.4 : 1,
-                          }}
-                        >
-                          {regenIdx === idx ? (
-                            <RefreshCcw size={14} className="animate-spin" />
-                          ) : (
-                            <RefreshCcw size={14} color="var(--text-3)" />
-                          )}
-                        </button>
-                        {/* aceitar / descartar */}
-                        <button
-                          type="button"
-                          onClick={() => toggleDiscard(idx)}
-                          title={task.discarded ? "Incluir" : "Descartar"}
-                          style={{
-                            width: 32, height: 32, borderRadius: 10,
-                            border: `1.5px solid ${task.discarded ? "var(--accent-sage)" : "var(--accent-peach)40"}`,
-                            background: task.discarded ? "var(--accent-sage)10" : "var(--accent-peach)08",
-                            cursor: "pointer", display: "flex", alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          {task.discarded ? (
-                            <RefreshCcw size={14} color="var(--accent-sage)" />
-                          ) : (
-                            <X size={14} color="var(--accent-peach)" />
-                          )}
-                        </button>
-                      </div>
                     )}
                   </div>
-                );
-              })}
+
+                  {phase === "preview" && (
+                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => toggleDiscard(idx)}
+                        title={step.discarded ? l("Incluir", "Include") : l("Descartar", "Discard")}
+                        style={{
+                          width: 32, height: 32, borderRadius: 10,
+                          border: `1.5px solid ${step.discarded ? "var(--accent-sage)" : "var(--accent-peach)40"}`,
+                          background: step.discarded ? "var(--accent-sage)10" : "var(--accent-peach)08",
+                          cursor: "pointer", display: "flex", alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {step.discarded ? (
+                          <RefreshCcw size={14} color="var(--accent-sage)" />
+                        ) : (
+                          <X size={14} color="var(--accent-peach)" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             {phase === "preview" && (
@@ -1118,11 +1080,11 @@ export function CheckinResultPage() {
                   className={`btn ${isMenuthe ? "btn-sage" : "btn-primary"}`}
                   style={{ flex: 2 }}
                   onClick={() => { void confirmTasks(); }}
-                  disabled={acceptedCount === 0 || savingTasks}
+                  disabled={acceptedCount === 0 || savingSteps}
                 >
-                  {savingTasks
-                    ? "Salvando..."
-                    : `Adicionar ${acceptedCount > 0 ? `${acceptedCount} tarefa${acceptedCount > 1 ? "s" : ""}` : ""} ao Planner`}
+                  {savingSteps
+                    ? l("Salvando...", "Saving...")
+                    : l("Colocar nas minhas próximas ações", "Add to my next actions")}
                 </AuraButtonV2>
               </div>
             )}

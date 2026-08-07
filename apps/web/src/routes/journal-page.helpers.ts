@@ -64,6 +64,6 @@ export function buildJournalClosePrompt(input: {
 
   return {
     label: "Revisar o dia",
-    description: `Use o resumo, ${taskText} e ${commitmentText} para ajustar o Planner.`,
+    description: `Use o resumo, ${taskText} e ${commitmentText} para escolher a proxima acao.`,
   };
 }

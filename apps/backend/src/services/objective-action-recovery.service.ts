@@ -83,41 +83,6 @@ const DEFAULT_LEASE_MS = 120_000;
 const DEFAULT_GENERATION_TIMEOUT_MS = 90_000;
 const LEASE_FENCE_MARGIN_MS = 1;
 
-export function buildGoalSubtasksPrompt(input: {
-  goalTitle: string;
-  existingSubtasks: string[];
-  userName?: string;
-  locale?: string;
-}): string {
-  const existing = input.existingSubtasks.length > 0
-    ? `\nSubtarefas já existentes: ${input.existingSubtasks.join(', ')}`
-    : '';
-
-  const languageInstruction = input.locale?.toLowerCase().startsWith('en')
-    ? 'Respond in English while preserving the same JSON contract.'
-    : 'Responda em português do Brasil preservando o mesmo contrato JSON.';
-
-  return `${input.userName ?? 'A pessoa'} pode estar com energia baixa ou oscilante. Gere micro-passos sem carga cognitiva e sem abstrações.
-${languageInstruction}
-
-Meta: "${input.goalTitle}"${existing}
-
-Gere 4-5 MICRO-AÇÕES físicas e hiper-específicas. Regras OBRIGATÓRIAS:
-- Cada ação é executável em 2-10 minutos
-- Comece com VERBO físico: Abrir, Separar, Mandar, Verificar, Ligar, Escrever, Pegar, Colocar, Escolher
-- NUNCA use: "planejar", "organizar", "pesquisar sobre", "considerar", "preparar-se para", "pensar"
-- Nomeie objetos reais, apps e locais específicos quando possível
-- Cada ação = mínima unidade de esforço, zero carga cognitiva
-
-Exemplos para "ir à praia": ["Abrir o calendário e marcar um dia nos próximos 7 dias", "Verificar a previsão do tempo no celular para esse dia", "Separar o biquíni/sunga e o protetor solar agora", "Mandar mensagem para alguém: 'Vamos à praia [dia]?'", "Abrir Google Maps e ver quanto tempo leva para chegar"]
-
-- As ações não podem se repetir de forma disfarçada.
-- A primeira ação deve ser a mais fácil de começar em menos de 2 minutos.
-- Se já houver subtarefas parecidas, evite duplicar.
-
-JSON APENAS: {"items":["micro-ação 1","micro-ação 2","micro-ação 3","micro-ação 4"]}`;
-}
-
 function suggestionItems(value: unknown): string[] {
   const payload = value && typeof value === 'object' && 'suggestion' in value
     ? (value as { suggestion?: unknown }).suggestion

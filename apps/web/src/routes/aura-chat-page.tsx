@@ -177,7 +177,7 @@ function buildInitialAssistantMessage(initialPrompt: string, contextLabel: strin
     return i18n.t("aura.initialNextAction", "Essa ação veio da sua meta. Posso te explicar o que ela quer dizer e te dar ideias simples para começar.");
   }
 
-  if (label.includes("planner") || label.includes("agenda") || label.includes("tarefa")) {
+  if (label.includes("agenda") || label.includes("tarefa")) {
     return i18n.t("aura.initialPlanner", "Essa tarefa já veio com contexto. Posso te explicar o que ela significa e como fazer de um jeito simples.");
   }
 
@@ -374,8 +374,8 @@ export function AuraChatPage() {
           eyebrow: t("aura.plannerUpdated"),
           title: t("aura.oneTaskCreated"),
           items: blocks.map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
-          ctaLabel: t("aura.viewPlanner"),
-          ctaPath: "/planner",
+          ctaLabel: t("aura.viewHome"),
+          ctaPath: "/home",
           undo: {
             label: l("Desfazer", "Undo"),
             run: async () => {
@@ -453,8 +453,8 @@ export function AuraChatPage() {
           eyebrow: l("ADIADO", "POSTPONED"),
           title: typeof response.payload.title === "string" ? response.payload.title : l("Movido", "Moved"),
           items: targetDate ? [targetDate] : [],
-          ctaLabel: t("aura.viewPlanner"),
-          ctaPath: "/planner",
+          ctaLabel: t("aura.viewHome"),
+          ctaPath: "/home",
         });
         return null;
       }
@@ -471,8 +471,8 @@ export function AuraChatPage() {
             ? l(`${applied.length} ${applied.length === 1 ? "mudança" : "mudanças"} no seu dia`, `${applied.length} change(s) to your day`)
             : l("Seu dia já estava do tamanho certo", "Your day was already the right size"),
           items: applied.slice(0, 4).map((change) => change.title ?? "").filter(Boolean),
-          ctaLabel: t("aura.viewPlanner"),
-          ctaPath: "/planner",
+          ctaLabel: t("aura.viewHome"),
+          ctaPath: "/home",
         });
         return null;
       }
@@ -480,7 +480,7 @@ export function AuraChatPage() {
       if (response.action === "open_screen") {
         const screen = typeof response.payload.screen === "string" ? response.payload.screen : "";
         const routes: Record<string, string> = {
-          home: "/home", planner: "/planner", habits: "/habits", goals: "/goals",
+          home: "/home", goals: "/goals",
           insights: "/insights", journal: "/journal", checkin: "/checkin",
         };
         if (routes[screen]) navigate(routes[screen]);
@@ -561,8 +561,8 @@ export function AuraChatPage() {
           eyebrow: t("aura.registered"),
           title: firstReward?.headline ?? t("aura.itemsDone", { count: matched.length + created.length }),
           items: confirmationLines.slice(0, 4),
-          ctaLabel: t("aura.viewPlanner"),
-          ctaPath: "/planner",
+          ctaLabel: t("aura.viewHome"),
+          ctaPath: "/home",
           reward: firstReward,
         });
 
@@ -822,8 +822,8 @@ export function AuraChatPage() {
         items: pendingTaskConfirmation.blocks
           .slice(0, 6)
           .map((block) => formatTimelineBlock(block, resolveIntlLocale(i18n.language))),
-        ctaLabel: t("aura.openPlanner"),
-        ctaPath: "/planner",
+        ctaLabel: t("aura.viewHome"),
+        ctaPath: "/home",
       });
       setMessages((prev) => [
         ...prev,
@@ -1120,7 +1120,7 @@ export function AuraChatPage() {
         )}
 
         {/* Rotina montada na conversa: cada item é aceito ou descartado aqui, e o
-            que entra vai direto para o Planner. */}
+            que entra vai direto para as próximas ações. */}
         {routineProposal && (
           <div
             style={{
@@ -1137,7 +1137,7 @@ export function AuraChatPage() {
               {l("ROTINA MONTADA", "ROUTINE BUILT")}
             </p>
             <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--text-2)" }}>
-              {l("Aceite o que servir. O que você aceitar já entra no Planner.", "Accept what fits. Whatever you accept goes straight to the Planner.")}
+              {l("Aceite o que servir. O que você aceitar entra nas suas próximas ações.", "Accept what fits. Whatever you accept goes to your next actions.")}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
@@ -1152,7 +1152,7 @@ export function AuraChatPage() {
                     </span>
                     {accepted ? (
                       <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent-sage, var(--text-3))" }}>
-                        {l("no Planner", "in Planner")}
+                        {l("nas próximas ações", "in next actions")}
                       </span>
                     ) : (
                       <>
@@ -1297,7 +1297,7 @@ export function AuraChatPage() {
           <SafetyProtocolCard
             riskSafety={lastRiskSafety}
             surface="aura_chat"
-            onAdaptDay={() => navigate("/planner", { state: { openAgendaAdaptation: true } })}
+            
           />
         </div>
 

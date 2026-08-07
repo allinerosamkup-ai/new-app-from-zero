@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getActivationState } from "./activation";
+import { ACTIVATION_ACTIONS, getActivationState } from "./activation";
 import { initialAuraState } from "./data";
 import type { AuraState } from "./types";
 
@@ -11,8 +11,18 @@ function makeState(overrides: Partial<AuraState> = {}): AuraState {
   };
 }
 
+function makeGoal() {
+  return {
+    id: "g1",
+    title: "Deixar a sala pronta para uso",
+    category: "casa",
+    completedPct: 0,
+    subtasks: [],
+  } as unknown as AuraState["goals"][number];
+}
+
 describe("activation state", () => {
-  it("returns empty without check-ins, planner items or journal entries", () => {
+  it("returns empty without check-ins, goals or journal entries", () => {
     const activation = getActivationState(makeState(), { now: new Date("2026-05-06T12:00:00") });
 
     expect(activation.activationLevel).toBe("empty");
@@ -22,36 +32,44 @@ describe("activation state", () => {
 
   it("recommends check-in when no check-in exists", () => {
     const activation = getActivationState(makeState({
-      tasks: [{ id: "t1", title: "Responder Ana", time: "10:00", done: false }],
+      goals: [makeGoal()],
     }));
 
-    expect(activation.hasPlannerItem).toBe(true);
+    expect(activation.hasGoal).toBe(true);
     expect(activation.nextAction.route).toBe("/checkin");
   });
 
-  it("recommends planner after the first check-in when agenda is empty", () => {
+  it("recommends a goal after the first check-in when there is none", () => {
     const activation = getActivationState(makeState({
       checkinHistory: [{ date: "2026-05-06", humor: 6, energia: 5, emotion: "ok" }],
     }), { now: new Date("2026-05-06T12:00:00") });
 
     expect(activation.activationLevel).toBe("started");
-    expect(activation.nextAction.id).toBe("planner");
+    expect(activation.nextAction.id).toBe("goal");
+    expect(activation.nextAction.route).toBe("/goals");
   });
 
-  it("recommends journal when check-in and planner already exist", () => {
+  it("recommends journal when check-in and goal already exist", () => {
     const activation = getActivationState(makeState({
       checkinHistory: [{ date: "2026-05-06", humor: 6, energia: 5, emotion: "ok" }],
-      tasks: [{ id: "t1", title: "Montar roteiro", time: "15:00", done: false }],
+      goals: [makeGoal()],
     }), { now: new Date("2026-05-06T12:00:00") });
 
     expect(activation.activationLevel).toBe("calibrating");
     expect(activation.nextAction.id).toBe("journal");
   });
 
+  it("never routes the first-run path to a removed feature", () => {
+    const routes = Object.values(ACTIVATION_ACTIONS).map((action) => action.route);
+
+    expect(routes).not.toContain("/planner");
+    expect(routes).not.toContain("/habits");
+  });
+
   it("does not mark check-in as done when today's check-in is missing", () => {
     const activation = getActivationState(makeState({
       checkinHistory: [{ date: "2026-05-05", humor: 6, energia: 5, emotion: "ok" }],
-      tasks: [{ id: "t1", title: "Montar roteiro", time: "15:00", done: false }],
+      goals: [makeGoal()],
     }), { now: new Date("2026-05-06T12:00:00") });
 
     expect(activation.hasCheckin).toBe(false);
@@ -67,7 +85,7 @@ describe("activation state", () => {
         { date: "2026-05-05", humor: 7, energia: 6, emotion: "bem" },
         { date: "2026-05-06", humor: 5, energia: 5, emotion: "neutra" },
       ],
-      tasks: [{ id: "t1", title: "Revisar agenda", time: "11:00", done: false }],
+      goals: [makeGoal()],
     }), {
       now: new Date("2026-05-06T12:00:00"),
       journalEntryCount: 1,

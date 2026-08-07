@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
+import { saveNextAction } from "../utils/save-next-action";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { useToast } from "../components/Toast";
@@ -23,7 +24,7 @@ const CAT_COLOR: Record<string, string> = {
 export function DailySummaryPage() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
-  const { state, addTask } = useAuraStore();
+  const { state } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
   const [phase, setPhase] = useState<"idle" | "loading" | "preview" | "done">("idle");
@@ -53,13 +54,18 @@ export function DailySummaryPage() {
   }
 
   function confirmTasks() {
+    // Sem hora: o fechamento do dia devolve ação, não bloco de agenda.
     Promise.all(
-      tasks.filter((t) => !t.discarded).map((task) => addTask(task.title, task.time, task.category, { forceSave: true }))
+      tasks.filter((t) => !t.discarded).map((task) => saveNextAction({
+        text: task.title,
+        razao: "Aceita no fechamento do dia.",
+        source: "daily-summary",
+      }))
     )
       .then(() => {
         setSaved(true);
         setPhase("done");
-        showSuccess("Tarefas adicionadas ao planner.");
+        showSuccess("Adicionado as suas proximas acoes.");
       })
       .catch((error) => {
         showError(error instanceof Error ? error.message : "Nao foi possivel salvar as tarefas.");
@@ -240,11 +246,11 @@ export function DailySummaryPage() {
             }}
           >
             <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--text-2)" }}>
-              {l("Sem check-in, planner, hábito, meta ou diário, a Airia não tem base confiável para fechar o dia.", "Without a check-in, planner, habit, goal, or journal entry, Airia has no reliable basis for closing the day.")}
+              {l("Sem check-in, objetivo ou diário, a Airia não tem base confiável para fechar o dia.", "Without a check-in, goal, or journal entry, Airia has no reliable basis for closing the day.")}
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
               <AuraButtonV2 variant="primary" size="sm" onClick={() => navigate("/checkin")}>Check-in</AuraButtonV2>
-              <AuraButtonV2 variant="outline" size="sm" onClick={() => navigate("/planner")}>Planner</AuraButtonV2>
+              <AuraButtonV2 variant="outline" size="sm" onClick={() => navigate("/goals")}>{l("Objetivos", "Goals")}</AuraButtonV2>
             </div>
           </div>
         )}
@@ -366,7 +372,7 @@ export function DailySummaryPage() {
                   <AuraIcon size={10} /> {l("TAREFAS DO DIÁRIO", "JOURNAL TASKS")}
                 </p>
                 {phase === "done" && (
-                  <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 700 }}>✓ Salvo no Planner</span>
+                  <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 700 }}>✓ {l("Nas próximas ações", "In your next actions")}</span>
                 )}
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -423,7 +429,7 @@ export function DailySummaryPage() {
                   onClick={confirmTasks}
                   disabled={acceptedCount === 0}
                 >
-                  Adicionar ao Planner
+                  {l("Colocar nas próximas ações", "Add to next actions")}
                 </AuraButtonV2>
               </div>
             )}
@@ -435,7 +441,7 @@ export function DailySummaryPage() {
           <AuraButtonV2
             variant="ghost"
             size="md"
-            onClick={() => navigate("/planner")}
+            onClick={() => navigate(closeSummary.primaryAction.path)}
           >
             {closeSummary.primaryAction.label}
           </AuraButtonV2>
