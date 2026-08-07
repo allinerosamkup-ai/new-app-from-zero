@@ -4353,10 +4353,15 @@ export function createApp(dependencies: AppDependencies = {}) {
           const { default: OpenAI } = await import('openai');
           const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
           for (const b of newBlocksWithoutNote) {
+            // Modelo e temperatura vêm dos helpers, nunca fixos aqui: um
+            // `model` hardcoded ignora o OPENAI_MODEL e cria uma ponta que
+            // diverge do resto do app. E `temperature: 0.7` cru dava 400 em
+            // qualquer modelo gpt-5/o-series, que só aceitam o default.
+            const microStepModel = getOpenAiModel();
             const completion = await openai.chat.completions.create({
-              model: 'gpt-4o-mini',
-              max_tokens: 60,
-              temperature: 0.7,
+              model: microStepModel,
+              max_completion_tokens: getOpenAiMaxCompletionTokens(60),
+              ...openAiTemperature(microStepModel, 0.7),
               messages: [
                 {
                   role: 'system',

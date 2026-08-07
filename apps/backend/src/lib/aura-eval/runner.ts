@@ -14,7 +14,7 @@ import dotenv from 'dotenv';
 import { OpenAI } from 'openai';
 
 import { buildAuraSystemPrompt } from '../aura-prompt';
-import { getOpenAiModel } from '../openai-config';
+import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../openai-config';
 import { AURA_EVAL_CASES, type AuraEvalCase } from './cases';
 import { evaluateResponse, type EvalFailure } from './matchers';
 
@@ -44,12 +44,14 @@ async function runOne(client: OpenAI, model: string, evalCase: AuraEvalCase): Pr
 
   const startedAt = Date.now();
   const completion = await client.chat.completions.create({
+    // Sem helper, `temperature: 0` + `max_tokens` davam 400 em gpt-5/o-series e
+    // a eval inteira reprovava por erro de request, não por qualidade.
     model,
     messages,
-    temperature: 0,
+    ...openAiTemperature(model, 0),
     seed: 42,
-    max_tokens: MAX_TOKENS,
-  });
+    max_completion_tokens: getOpenAiMaxCompletionTokens(MAX_TOKENS),
+  } as any);
   const response = completion.choices[0]?.message?.content ?? '';
   const failures = evaluateResponse(response, evalCase.expects);
 

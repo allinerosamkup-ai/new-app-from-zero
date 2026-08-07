@@ -91,16 +91,42 @@ async function run() {
     assert.ok(sentCount <= 40, `enviou ${sentCount} candidatos; o teto é 40`);
   }
 
-  // ── Determinismo: temperatura zero e resposta em JSON ──
+  // ── Determinismo: temperatura pelo helper e resposta em JSON ──
+  //
+  // Modelo que aceita temperatura recebe 0, porque dedupe não pode variar entre
+  // chamadas iguais. Modelo gpt-5/o-series NÃO aceita e o campo tem que sair da
+  // requisição: mandar 0 ali dá 400, e como a falha é engolida (o item é criado
+  // do mesmo jeito), o dedupe morre calado e a pessoa vê ação repetida.
   {
-    let args: any = null;
-    await findEquivalentActionWithLlm({
-      candidate: 'Nova',
-      existing: EXISTING,
-      openaiFactory: fakeClient('{"duplicateOf":null}', (a) => { args = a; }),
-    });
-    assert.equal(args.temperature, 0, 'dedupe não pode variar entre chamadas iguais');
-    assert.equal(args.response_format.type, 'json_object');
+    const originalModel = process.env.OPENAI_MODEL;
+    try {
+      process.env.OPENAI_MODEL = 'gpt-4.1-mini';
+      let args: any = null;
+      await findEquivalentActionWithLlm({
+        candidate: 'Nova',
+        existing: EXISTING,
+        openaiFactory: fakeClient('{"duplicateOf":null}', (a) => { args = a; }),
+      });
+      assert.equal(args.temperature, 0, 'dedupe não pode variar entre chamadas iguais');
+      assert.equal(args.response_format.type, 'json_object');
+
+      process.env.OPENAI_MODEL = 'gpt-5.4-mini';
+      let reasoningArgs: any = null;
+      await findEquivalentActionWithLlm({
+        candidate: 'Nova',
+        existing: EXISTING,
+        openaiFactory: fakeClient('{"duplicateOf":null}', (a) => { reasoningArgs = a; }),
+      });
+      assert.equal(
+        'temperature' in reasoningArgs,
+        false,
+        'modelo de raciocínio recusa temperatura custom; o campo tem que ser omitido',
+      );
+      assert.equal(reasoningArgs.response_format.type, 'json_object');
+    } finally {
+      if (originalModel === undefined) delete process.env.OPENAI_MODEL;
+      else process.env.OPENAI_MODEL = originalModel;
+    }
   }
 }
 

@@ -18,7 +18,7 @@
  * criada: perder uma ação da pessoa é pior que ter duas parecidas na lista.
  */
 
-import { getOpenAiModel } from '../lib/openai-config';
+import { getOpenAiModel, openAiTemperature } from '../lib/openai-config';
 
 export type EquivalenceCandidate = { id: string; text: string };
 
@@ -58,9 +58,13 @@ export async function findEquivalentActionWithLlm(input: {
 
     const list = existing.map((item, index) => `${index + 1}. [${item.id}] ${item.text}`).join('\n');
 
+    // Temperatura pelo helper: `temperature: 0` cru dava 400 em gpt-5/o-series,
+    // e como a falha aqui é engolida (o item é criado do mesmo jeito), o dedupe
+    // semântico morria calado — duas ações iguais na lista sem nenhum erro.
+    const equivalenceModel = getOpenAiModel();
     const response = await client.chat.completions.create({
-      model: getOpenAiModel(),
-      temperature: 0,
+      model: equivalenceModel,
+      ...openAiTemperature(equivalenceModel, 0),
       response_format: { type: 'json_object' },
       messages: [
         {
