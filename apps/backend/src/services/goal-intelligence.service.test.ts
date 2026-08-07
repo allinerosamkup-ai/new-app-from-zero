@@ -68,6 +68,15 @@ describe('isCausallyLinked', () => {
   it('aceita ação que fala do objeto do objetivo', () => {
     assert.equal(isCausallyLinked(step('Deixar a sala utilizável para trabalhar'), SALA, SALA), true);
   });
+
+  it('aceita a mesma palavra flexionada — "pronta" no objetivo, "pronto" no passo', () => {
+    // Regressão de produção: este passo correto foi descartado porque a
+    // comparação era exata e português flexiona.
+    assert.equal(
+      isCausallyLinked(step('Fazer uma checagem final do ambiente para confirmar que já está pronto para uso.'), SALA, SALA),
+      true,
+    );
+  });
 });
 
 describe('GoalIntelligenceService.screenSteps', () => {

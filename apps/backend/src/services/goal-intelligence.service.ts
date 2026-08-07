@@ -265,6 +265,19 @@ export function detectUnsupportedSpecificity(
 }
 
 /**
+ * Raiz aproximada da palavra.
+ *
+ * Português flexiona demais para comparação exata funcionar: o objetivo diz
+ * "sala pronta" e o passo diz "pronto para uso" — mesma palavra, match zero.
+ * Isso descartou um passo correto em produção. Prefixo de 4 caracteres resolve
+ * a flexão de gênero, número e boa parte da conjugação sem precisar de um
+ * stemmer de verdade, que seria peso desproporcional para o que a regra faz.
+ */
+function stem(token: string): string {
+  return token.slice(0, 4);
+}
+
+/**
  * O passo tem relação causal com o objetivo, ou é uma tarefa avulsa?
  *
  * Não basta ser pequeno: microação sem ligação com o resultado é ruído do mesmo
@@ -272,13 +285,13 @@ export function detectUnsupportedSpecificity(
  * a pessoa contou — nenhuma das duas, o passo não pertence a este objetivo.
  */
 export function isCausallyLinked(step: GoalStep, goalTitle: string, contextText: string): boolean {
-  const anchorTokens = new Set(
-    [...tokens(goalTitle), ...tokens(contextText)].filter((token) => (
-      token.length >= 4 && !STRUCTURAL_WORDS.has(token)
-    )),
+  const anchors = new Set(
+    [...tokens(goalTitle), ...tokens(contextText)]
+      .filter((token) => token.length >= 3 && !STRUCTURAL_WORDS.has(token))
+      .map(stem),
   );
-  if (anchorTokens.size === 0) return true;
-  return tokens(step.title).some((token) => anchorTokens.has(token));
+  if (anchors.size === 0) return true;
+  return tokens(step.title).some((token) => token.length >= 3 && anchors.has(stem(token)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
