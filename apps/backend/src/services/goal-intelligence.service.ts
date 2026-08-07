@@ -135,6 +135,10 @@ const StepsPayloadSchema = z.object({
     basedOn: z.enum(['stated', 'inferred']).catch('inferred').optional().default('inferred'),
     rationale: clipped(240).optional().default(''),
   })).optional().default([]),
+});
+
+/** Contrato da chamada dedicada de pergunta. */
+const QuestionPayloadSchema = z.object({
   question: clipped(320).nullable().optional().default(null),
 });
 
@@ -378,32 +382,70 @@ MARCAÇÃO OBRIGATÓRIA:
 - "basedOn": "inferred" → o passo vem de conhecimento geral sobre esse tipo de
   objetivo. Permitido, desde que não invente objeto, defeito nem circunstância.
 
-QUANDO PERGUNTAR EM VEZ DE AGIR:
-Só quando o objetivo tem uma BIFURCAÇÃO REAL que muda todo o caminho
-("organizar minhas finanças" pode ser dívida, gasto mensal ou controle). Aí sim:
-UMA pergunta curta e decisiva, "steps" vazio, "question" preenchida.
-
-QUANDO É PROIBIDO PERGUNTAR:
+PERGUNTAR NÃO É UMA OPÇÃO NESTA RESPOSTA:
 ${said.length > 0
-  ? `Ela JÁ CONTOU o que falta (veja o bloco acima). Perguntar de novo é o pior
-comportamento possível — é devolver para ela o esforço que ela já fez. Com a
-fala dela na mão, "question" DEVE ser null e você DEVE entregar os passos.`
-  : `Não pergunte nada que dê para inferir com segurança a partir do próprio
-objetivo. "Está sujo?", "tem coisa fora do lugar?", "o que impede o uso?" são
-perguntas que o caminho resolve sozinho — retirar o que não pertence, organizar,
-limpar e conferir cobre qualquer uma dessas respostas. Pergunte só se, sem a
-resposta, você escolheria um caminho COMPLETAMENTE diferente.`}
+  ? `Ela JÁ CONTOU o que falta (veja o bloco acima). Devolver pergunta aqui é o
+pior comportamento possível — é jogar de volta para ela o esforço que ela já
+fez. Use a fala dela e entregue os passos.`
+  : `Não peça esclarecimento. "Está sujo?", "o que tem na sala?", "o que impede o
+uso?" são perguntas que o próprio caminho resolve — retirar o que não pertence,
+organizar, deixar utilizável e conferir cobre qualquer resposta possível. Se
+faltar detalhe, você AINDA ASSIM entrega os passos, no nível de generalidade que
+o dado permite, e declara o que supôs em "assumptions".`}
 
 FORMATO:
 - ${MIN_STEPS} a ${MAX_STEPS} passos, ordenados, cada um um movimento real e observável.
 - Nenhum passo pode ser o objetivo reescrito com menos palavras.
 - Não repita nem disfarce ação que já existe ou já foi concluída.
 - "resultDefinition" diz, em uma frase, o que significa concluir isso.
-- "assumptions" lista o que você supôs sem ter dado. Seja honesto: o que estiver
-  aqui pode virar pergunta depois.
+- "assumptions" lista o que você supôs sem ter dado. Seja honesto.
 
 JSON APENAS:
-{"resultDefinition":"...","assumptions":["..."],"steps":[{"title":"...","basedOn":"stated|inferred","rationale":"..."}],"question":null}`;
+{"resultDefinition":"...","assumptions":["..."],"steps":[{"title":"...","basedOn":"stated|inferred","rationale":"..."}]}`;
+}
+
+/**
+ * A pergunta tem prompt próprio, e é chamada só depois que a decomposição
+ * falhou.
+ *
+ * Motivo: enquanto os dois cabiam no mesmo contrato, o modelo escolhia perguntar
+ * — inclusive quando a pessoa já tinha escrito o que falta. Não adiantou proibir
+ * no texto nem insistir com uma segunda tentativa; em produção os três cenários
+ * de teste voltaram com pergunta. Dar a opção É o que produz a escolha.
+ *
+ * Com responsabilidade única em cada chamada, o gerador não tem como se esquivar
+ * para a pergunta, e o formulador de pergunta não tem como devolver tarefa.
+ */
+export function buildClarifyingQuestionPrompt(input: GoalIntelligenceInput): string {
+  const english = (input.locale ?? 'pt-BR').toLowerCase().startsWith('en');
+  const said = (input.userStatements ?? []).filter(Boolean);
+  const language = english
+    ? 'Answer in English, same JSON contract.'
+    : 'Responda em português do Brasil, mesmo contrato JSON.';
+  const saidBlock = said.length > 0
+    ? `O QUE ELA JÁ DISSE:\n${said.map((line) => `- "${line}"`).join('\n')}`
+    : 'Ela não disse mais nada além do título.';
+
+  return `Não foi possível montar um caminho confiável para o objetivo abaixo.
+${language}
+
+OBJETIVO: "${input.goalTitle}"
+${saidBlock}
+
+Escreva UMA pergunta curta que resolva a bifurcação — a informação que, sem ela,
+faria você escolher um caminho completamente diferente.
+
+REGRAS:
+- Uma pergunta só. Não faça bateria de perguntas.
+- Não pergunte o que ela já respondeu acima.
+- Não peça detalhe que não muda o caminho.
+- Linguagem direta, como quem quer ajudar, não como formulário.
+
+Exemplo bom para "organizar minhas finanças":
+"Hoje o principal problema é dívida, gasto mensal ou falta de controle do dinheiro?"
+
+JSON APENAS:
+{"question":"..."}`;
 }
 
 export function buildActionValidationPrompt(input: {
@@ -551,8 +593,8 @@ export class GoalIntelligenceService {
     try {
       let feedback = '';
       let lastRejections: Array<{ title: string; reason: string }> = [];
-      // Guardada, não devolvida na hora: pergunta é último recurso.
-      let heldQuestion: { question: string; resultDefinition: string | null; assumptions: string[] } | null = null;
+      let lastResultDefinition: string | null = null;
+      let lastAssumptions: string[] = [];
 
       // Duas tentativas: a segunda recebe o motivo exato da reprovação. Mais que
       // isso vira loop caro sem ganho — se falhou duas vezes com o motivo na
@@ -560,7 +602,7 @@ export class GoalIntelligenceService {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const prompt = attempt === 0
           ? buildGoalDecompositionPrompt(input)
-          : `${buildGoalDecompositionPrompt(input)}\n\nA TENTATIVA ANTERIOR FOI REPROVADA:\n${feedback}\nCorrija exatamente isso. Se não der para corrigir sem inventar, devolva "question".`;
+          : `${buildGoalDecompositionPrompt(input)}\n\nA TENTATIVA ANTERIOR FOI REPROVADA:\n${feedback}\nCorrija exatamente isso, sem inventar objeto, defeito nem circunstância.`;
 
         const raw = await completeJson(chat, GENERATOR_SYSTEM, prompt, 900);
         const parsed = StepsPayloadSchema.safeParse(raw);
@@ -576,41 +618,14 @@ export class GoalIntelligenceService {
         }
 
         const payload = parsed.data;
-        const question = payload.question?.trim() || null;
         const assumptions = payload.assumptions.filter(Boolean).slice(0, 4);
+        lastResultDefinition = payload.resultDefinition || lastResultDefinition;
+        lastAssumptions = assumptions.length > 0 ? assumptions : lastAssumptions;
 
         const screened = this.screenSteps(payload.steps, input);
         lastRejections = screened.rejected;
 
         if (screened.kept.length === 0) {
-          if (question) {
-            /**
-             * Pergunta na primeira tentativa não é aceita de cara.
-             *
-             * O modelo tem viés forte para perguntar: em produção, com a pessoa
-             * tendo escrito "só falta organizar os móveis e colocar minhas
-             * coisas de trabalho", ele ainda devolveu "quais itens exatamente?".
-             * Isso é devolver para ela o esforço que ela já fez.
-             *
-             * Então a pergunta fica guardada e o serviço insiste uma vez,
-             * dizendo que perguntar não é opção. Só se a segunda tentativa
-             * também não produzir passo é que a pergunta vira a resposta — que é
-             * o comportamento certo quando de fato falta informação.
-             */
-            if (attempt === 0) {
-              heldQuestion = { question, resultDefinition: payload.resultDefinition || null, assumptions };
-              feedback = `você devolveu uma pergunta ("${question}") em vez de passos. PERGUNTAR NÃO É OPÇÃO AGORA: use conhecimento geral sobre esse tipo de objetivo e entregue de ${MIN_STEPS} a ${MAX_STEPS} passos, sem inventar objeto, defeito ou circunstância. Deixe "question" null.`;
-              continue;
-            }
-            return {
-              mode: 'question',
-              resultDefinition: payload.resultDefinition || heldQuestion?.resultDefinition || null,
-              assumptions: assumptions.length > 0 ? assumptions : (heldQuestion?.assumptions ?? []),
-              steps: [],
-              question,
-              rejectedSteps: screened.rejected,
-            };
-          }
           feedback = screened.rejected.map((item) => `- "${item.title}": ${item.reason}`).join('\n')
             || 'nenhum passo utilizável';
           continue;
@@ -636,37 +651,49 @@ export class GoalIntelligenceService {
           };
         }
 
-        if (verdict.missingInfo && attempt === 1) {
-          return {
-            mode: 'question',
-            resultDefinition: payload.resultDefinition || null,
-            assumptions,
-            steps: [],
-            question: verdict.missingInfo,
-            rejectedSteps: screened.rejected,
-          };
-        }
 
         feedback = verdict.failures.join('\n') || 'reprovado pelo revisor sem motivo declarado';
       }
 
-      // Nenhuma das duas tentativas produziu passo. Se a primeira ao menos
-      // trouxe uma pergunta, ela vale mais que devolver nada.
-      if (heldQuestion) {
-        return {
-          mode: 'question',
-          resultDefinition: heldQuestion.resultDefinition,
-          assumptions: heldQuestion.assumptions,
-          steps: [],
-          question: heldQuestion.question,
-          rejectedSteps: lastRejections,
-        };
-      }
-
-      return { ...empty, rejectedSteps: lastRejections };
+      // Nenhuma das duas tentativas produziu passo utilizável. Agora sim — e só
+      // agora — a pergunta é a melhor próxima ação, e vai numa chamada dedicada.
+      const question = await this.askClarifyingQuestion(input, chat);
+      return {
+        mode: 'question',
+        resultDefinition: lastResultDefinition,
+        assumptions: lastAssumptions,
+        steps: [],
+        question,
+        rejectedSteps: lastRejections,
+      };
     } catch (error) {
       console.warn('[goal-intelligence] falhou, seguindo sem sugerir:', error);
       return empty;
+    }
+  }
+
+  /**
+   * A pergunta que destrava, quando não houve caminho.
+   *
+   * Chamada dedicada de propósito: enquanto passos e pergunta dividiam o mesmo
+   * contrato, o modelo escolhia perguntar mesmo com contexto suficiente.
+   */
+  static async askClarifyingQuestion(
+    input: GoalIntelligenceInput,
+    client?: ChatClient,
+  ): Promise<string | null> {
+    if (!client && !process.env.OPENAI_API_KEY) return null;
+    try {
+      const raw = await completeJson(
+        client ?? getOpenAI(),
+        'Você formula UMA pergunta curta que destrava um objetivo. Responde só JSON.',
+        buildClarifyingQuestionPrompt(input),
+        200,
+      );
+      const parsed = QuestionPayloadSchema.safeParse(raw);
+      return parsed.success ? (parsed.data.question?.trim() || null) : null;
+    } catch {
+      return null;
     }
   }
 

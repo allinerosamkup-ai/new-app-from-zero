@@ -128,21 +128,21 @@ describe('buildGoalDecompositionPrompt', () => {
     assert.match(prompt, /Falta organizar os móveis/);
   });
 
-  it('proíbe perguntar de novo quando a pessoa já respondeu', () => {
+  it('não oferece a pergunta como saída no contrato de decomposição', () => {
+    const prompt = buildGoalDecompositionPrompt({ goalTitle: SALA });
+
+    assert.match(prompt, /PERGUNTAR NÃO É UMA OPÇÃO/);
+    // O JSON de saída não tem campo de pergunta: sem a opção, não há escolha.
+    assert.doesNotMatch(prompt, /"question"\s*:/);
+  });
+
+  it('lembra que ela já contou, quando contou', () => {
     const prompt = buildGoalDecompositionPrompt({
       goalTitle: SALA,
       userStatements: ['Só falta organizar os móveis e colocar minhas coisas de trabalho'],
     });
 
     assert.match(prompt, /JÁ CONTOU/);
-    assert.match(prompt, /"question" DEVE ser null/);
-  });
-
-  it('sem fala dela, ainda barra pergunta que o próprio caminho resolve', () => {
-    const prompt = buildGoalDecompositionPrompt({ goalTitle: SALA });
-
-    assert.match(prompt, /PROIBIDO PERGUNTAR/);
-    assert.doesNotMatch(prompt, /JÁ CONTOU/);
   });
 });
 
@@ -183,56 +183,50 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.equal(result.steps.length, 2);
   });
 
-  it('insiste antes de aceitar pergunta: passos na 2a tentativa ganham da pergunta da 1a', async () => {
-    // Regressão de produção: o modelo tem viés forte para perguntar. Mesmo com
-    // a pessoa tendo escrito o que falta, ele devolvia "quais itens exatamente?"
-    // — devolver para ela o esforço que ela já fez.
-    const result = await GoalIntelligenceService.decompose(
-      {
-        goalTitle: SALA,
-        userStatements: ['Só falta organizar os móveis e colocar minhas coisas de trabalho'],
-      },
-      clientReturning(
-        { steps: [], question: 'Quais itens de trabalho exatamente?' },
-        {
-          steps: [
-            { title: 'Coloque os móveis no lugar onde eles vão ficar', basedOn: 'stated' },
-            { title: 'Traga suas coisas de trabalho para a sala', basedOn: 'stated' },
-          ],
-        },
-        { approved: true, failures: [], missingInfo: null },
-      ),
-    );
-
-    assert.equal(result.mode, 'actions');
-    assert.equal(result.steps.length, 2);
-    assert.equal(result.question, null);
-  });
-
-  it('devolve a pergunta quando a insistência também não produz passo', async () => {
-    const result = await GoalIntelligenceService.decompose(
-      { goalTitle: 'Organizar minhas finanças' },
-      clientReturning({ steps: [], question: 'Hoje o problema é dívida, gasto mensal ou falta de controle?' }),
-    );
-
-    assert.equal(result.mode, 'question');
-    assert.match(result.question ?? '', /dívida/);
-  });
-
-  it('vira pergunta quando o gerador só produz invenção', async () => {
+  it('só pergunta depois que a decomposição falhou nas duas tentativas', async () => {
+    // Regressão de produção: enquanto passos e pergunta dividiam o mesmo
+    // contrato, o modelo escolhia perguntar mesmo com contexto suficiente. A
+    // pergunta agora é uma chamada separada, que só acontece no fim.
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: SALA },
-      clientReturning({
-        resultDefinition: '',
-        assumptions: [],
-        steps: [{ title: 'Pegue fita crepe e prenda o rodapé', basedOn: 'inferred' }],
-        question: 'O que ainda falta para você considerar essa sala pronta?',
-      }),
+      clientReturning(
+        { steps: [{ title: 'Pegue fita crepe e prenda o rodapé', basedOn: 'inferred' }] },
+        { steps: [{ title: 'Compre uma caixa organizadora', basedOn: 'inferred' }] },
+        { question: 'O que ainda falta para você considerar essa sala pronta?' },
+      ),
     );
 
     assert.equal(result.mode, 'question');
     assert.equal(result.steps.length, 0);
     assert.match(result.question ?? '', /o que ainda falta/i);
+  });
+
+  it('não gasta a chamada de pergunta quando os passos se sustentam', async () => {
+    let calls = 0;
+    const client = {
+      chat: {
+        completions: {
+          create: async () => {
+            calls += 1;
+            const payload = calls === 1
+              ? {
+                steps: [
+                  { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' },
+                  { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
+                ],
+              }
+              : { approved: true, failures: [], missingInfo: null };
+            return { choices: [{ message: { content: JSON.stringify(payload) } }] };
+          },
+        },
+      },
+    } as any;
+
+    const result = await GoalIntelligenceService.decompose({ goalTitle: SALA }, client);
+
+    assert.equal(result.mode, 'actions');
+    // Geração + validação. Nenhuma terceira chamada para formular pergunta.
+    assert.equal(calls, 2);
   });
 
   it('não derruba a resposta por causa de rationale ou assumption longos', async () => {
