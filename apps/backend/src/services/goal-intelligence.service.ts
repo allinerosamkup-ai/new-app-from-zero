@@ -186,8 +186,20 @@ const STRUCTURAL_WORDS = new Set([
   'the', 'and', 'of', 'to', 'for', 'with', 'a', 'an', 'in', 'on', 'at',
 ]);
 
-/** Verbos que exigem que o objeto EXISTA no mundo da pessoa. */
-const ACQUISITION_VERBS = /\b(pegue|pegar|peg[ao]|compre|comprar|use|usar|utilize|utilizar|aplique|aplicar|instale|instalar|conserte|consertar|conserta|fixe|fixar|cole|colar|pinte|pintar|take|grab|buy|use|apply|install|fix|glue|paint)\b/;
+/**
+ * Verbos que exigem que o objeto EXISTA no mundo da pessoa.
+ *
+ * Só posse e manipulação física. "usar" saiu depois de reprovar em produção o
+ * passo "conferir se o que foi registrado está coerente e completo o suficiente
+ * para usar" — o "para usar" no fim da frase não pede objeto nenhum, é
+ * finalidade. Verbo polissêmico numa regra de posse só gera falso positivo, e
+ * falso positivo aqui custa caro: descarta passo bom e empurra a tela para
+ * "sem informação suficiente".
+ *
+ * O caso da fita crepe segue coberto: "pegue" abre a frase, e "fita"/"crepe"
+ * ainda estão na lista de artefatos.
+ */
+const ACQUISITION_VERBS = /\b(pegue|pegar|peg[ao]|compre|comprar|aplique|aplicar|instale|instalar|conserte|consertar|conserta|fixe|fixar|cole|colar|pinte|pintar|take|grab|buy|apply|install|glue|paint)\b/;
 
 /**
  * Objetos que a IA adora inventar quando não tem dado. Não é lista exaustiva —
@@ -262,36 +274,6 @@ export function detectUnsupportedSpecificity(
   }
 
   return { ok: true };
-}
-
-/**
- * Raiz aproximada da palavra.
- *
- * Português flexiona demais para comparação exata funcionar: o objetivo diz
- * "sala pronta" e o passo diz "pronto para uso" — mesma palavra, match zero.
- * Isso descartou um passo correto em produção. Prefixo de 4 caracteres resolve
- * a flexão de gênero, número e boa parte da conjugação sem precisar de um
- * stemmer de verdade, que seria peso desproporcional para o que a regra faz.
- */
-function stem(token: string): string {
-  return token.slice(0, 4);
-}
-
-/**
- * O passo tem relação causal com o objetivo, ou é uma tarefa avulsa?
- *
- * Não basta ser pequeno: microação sem ligação com o resultado é ruído do mesmo
- * jeito. Aqui a régua é sobreposição de vocabulário com o objetivo ou com o que
- * a pessoa contou — nenhuma das duas, o passo não pertence a este objetivo.
- */
-export function isCausallyLinked(step: GoalStep, goalTitle: string, contextText: string): boolean {
-  const anchors = new Set(
-    [...tokens(goalTitle), ...tokens(contextText)]
-      .filter((token) => token.length >= 3 && !STRUCTURAL_WORDS.has(token))
-      .map(stem),
-  );
-  if (anchors.size === 0) return true;
-  return tokens(step.title).some((token) => token.length >= 3 && anchors.has(stem(token)));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -397,10 +379,20 @@ MARCAÇÃO OBRIGATÓRIA:
   objetivo. Permitido, desde que não invente objeto, defeito nem circunstância.
 
 QUANDO PERGUNTAR EM VEZ DE AGIR:
-Se o objetivo for amplo demais para escolher um caminho com segurança
-("organizar minhas finanças" pode ser dívida, gasto mensal ou controle), devolva
-UMA pergunta curta e decisiva que resolva a bifurcação — não uma bateria de
-perguntas. Nesse caso "steps" vem vazio e "question" vem preenchida.
+Só quando o objetivo tem uma BIFURCAÇÃO REAL que muda todo o caminho
+("organizar minhas finanças" pode ser dívida, gasto mensal ou controle). Aí sim:
+UMA pergunta curta e decisiva, "steps" vazio, "question" preenchida.
+
+QUANDO É PROIBIDO PERGUNTAR:
+${said.length > 0
+  ? `Ela JÁ CONTOU o que falta (veja o bloco acima). Perguntar de novo é o pior
+comportamento possível — é devolver para ela o esforço que ela já fez. Com a
+fala dela na mão, "question" DEVE ser null e você DEVE entregar os passos.`
+  : `Não pergunte nada que dê para inferir com segurança a partir do próprio
+objetivo. "Está sujo?", "tem coisa fora do lugar?", "o que impede o uso?" são
+perguntas que o caminho resolve sozinho — retirar o que não pertence, organizar,
+limpar e conferir cobre qualquer uma dessas respostas. Pergunte só se, sem a
+resposta, você escolheria um caminho COMPLETAMENTE diferente.`}
 
 FORMATO:
 - ${MIN_STEPS} a ${MAX_STEPS} passos, ordenados, cada um um movimento real e observável.
@@ -491,8 +483,19 @@ export class GoalIntelligenceService {
   }
 
   /**
-   * Filtro determinístico. Roda antes de gastar uma segunda chamada e é o que
-   * garante o comportamento mesmo quando o validador está indisponível.
+   * Filtro determinístico contra INVENÇÃO — e só contra isso.
+   *
+   * Pertinência ao objetivo saiu daqui. A versão anterior media sobreposição de
+   * palavras entre passo e objetivo, e em produção descartou "listar as
+   * categorias que você quer controlar" para o objetivo "organizar minhas
+   * finanças": ligação óbvia para qualquer humano, zero palavras em comum. Com
+   * objetivo curto e passo em vocabulário de domínio a heurística erra sempre
+   * para o mesmo lado — rejeita o que é bom e empurra a tela para "sem
+   * informação suficiente".
+   *
+   * Julgar pertinência é trabalho do validador, que lê significado. Aqui fica o
+   * que uma regra léxica realmente sabe fazer: apontar objeto, cor ou medida que
+   * não existe em lugar nenhum do que a pessoa informou.
    */
   static screenSteps(steps: GoalStep[], input: GoalIntelligenceInput): {
     kept: GoalStep[];
@@ -511,10 +514,6 @@ export class GoalIntelligenceService {
       const specificity = detectUnsupportedSpecificity(step, contextText);
       if (!specificity.ok) {
         rejected.push({ title: step.title, reason: specificity.reason });
-        continue;
-      }
-      if (!isCausallyLinked(step, input.goalTitle, contextText)) {
-        rejected.push({ title: step.title, reason: 'não tem ligação com o objetivo nem com o que foi informado' });
         continue;
       }
       kept.push(step);

@@ -6,7 +6,6 @@ import {
   buildGoalDecompositionPrompt,
   detectUnsupportedSpecificity,
   GoalIntelligenceService,
-  isCausallyLinked,
   type GoalStep,
 } from './goal-intelligence.service';
 
@@ -60,26 +59,24 @@ describe('detectUnsupportedSpecificity', () => {
   });
 });
 
-describe('isCausallyLinked', () => {
-  it('rejeita ação sem relação com o objetivo', () => {
-    assert.equal(isCausallyLinked(step('Responder os emails do trabalho'), SALA, SALA), false);
-  });
-
-  it('aceita ação que fala do objeto do objetivo', () => {
-    assert.equal(isCausallyLinked(step('Deixar a sala utilizável para trabalhar'), SALA, SALA), true);
-  });
-
-  it('aceita a mesma palavra flexionada — "pronta" no objetivo, "pronto" no passo', () => {
-    // Regressão de produção: este passo correto foi descartado porque a
-    // comparação era exata e português flexiona.
-    assert.equal(
-      isCausallyLinked(step('Fazer uma checagem final do ambiente para confirmar que já está pronto para uso.'), SALA, SALA),
-      true,
-    );
-  });
-});
-
 describe('GoalIntelligenceService.screenSteps', () => {
+  it('não reprova passo por vocabulário diferente do objetivo', () => {
+    // Regressão de produção: "listar as categorias que você quer controlar" foi
+    // descartado para "organizar minhas finanças" por não repetir palavra do
+    // título. Pertinência é julgamento de significado, e isso é do validador.
+    const result = GoalIntelligenceService.screenSteps(
+      [
+        step('Listar as categorias que você quer controlar'),
+        step('Registrar os lançamentos mais recentes'),
+        step('Conferir se está completo o suficiente para usar'),
+      ],
+      { goalTitle: 'Organizar minhas finanças' },
+    );
+
+    assert.equal(result.kept.length, 3);
+    assert.equal(result.rejected.length, 0);
+  });
+
   it('mantém o que se sustenta e descarta o que foi inventado', () => {
     const result = GoalIntelligenceService.screenSteps(
       [
@@ -129,6 +126,23 @@ describe('buildGoalDecompositionPrompt', () => {
 
     assert.match(prompt, /única fonte de fato/);
     assert.match(prompt, /Falta organizar os móveis/);
+  });
+
+  it('proíbe perguntar de novo quando a pessoa já respondeu', () => {
+    const prompt = buildGoalDecompositionPrompt({
+      goalTitle: SALA,
+      userStatements: ['Só falta organizar os móveis e colocar minhas coisas de trabalho'],
+    });
+
+    assert.match(prompt, /JÁ CONTOU/);
+    assert.match(prompt, /"question" DEVE ser null/);
+  });
+
+  it('sem fala dela, ainda barra pergunta que o próprio caminho resolve', () => {
+    const prompt = buildGoalDecompositionPrompt({ goalTitle: SALA });
+
+    assert.match(prompt, /PROIBIDO PERGUNTAR/);
+    assert.doesNotMatch(prompt, /JÁ CONTOU/);
   });
 });
 
