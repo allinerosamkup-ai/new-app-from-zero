@@ -65,41 +65,86 @@ function getLocaleContext() {
 // Evita disparar vários refresh/signOut concorrentes num storm de 401 (ex.: Promise.all).
 let _recoveringSession = false;
 
+/**
+ * Renova a sessão e diz se a requisição pode ser refeita.
+ *
+ * Devolve `true` quando o refresh deu certo — aí a chamada original vale a pena
+ * de novo. `false` quando a sessão morreu de vez (já deslogou e redirecionou).
+ */
+async function recoverSession(): Promise<boolean> {
+  if (_recoveringSession) {
+    // Outro 401 já está renovando. Espera a poeira baixar e tenta de novo: sem
+    // isso, num storm de 401 (Promise.all) só a primeira chamada se recupera.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    return !_recoveringSession;
+  }
+
+  _recoveringSession = true;
+  let sessionDead = false;
+  try {
+    // refreshSession() pode pendurar (token malformado / rede ruim). Nunca deixar a
+    // recuperação travar: corre contra um timeout que, se vencer, trata como sessão morta.
+    const timeout = new Promise<{ data: { session: null }; error: Error }>((resolve) =>
+      setTimeout(() => resolve({ data: { session: null }, error: new Error('refresh timeout') }), 8000),
+    );
+    const { data, error } = await Promise.race([supabase.auth.refreshSession(), timeout]);
+    sessionDead = Boolean(error) || !data?.session;
+  } catch {
+    sessionDead = true;
+  } finally {
+    _recoveringSession = false;
+  }
+
+  if (sessionDead) {
+    // Sessão realmente morta: limpa e manda pro login. Redirect duro (não só signOut)
+    // porque com a sessão já inválida no servidor o evento SIGNED_OUT pode não disparar,
+    // deixando o app "logado-zumbi". O reload ainda zera o estado em memória.
+    await supabase.auth.signOut().catch(() => {});
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+      window.location.assign('/login');
+    }
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Faz a requisição e, num 401 recuperável, refaz UMA vez com o token novo.
+ *
+ * Por que existe: o access token do Supabase dura ~1h. Antes, a resposta 401
+ * disparava o refresh mas a chamada original rejeitava mesmo assim — o app
+ * ficava com sessão boa e a tela com erro. No onboarding guiado, que busca o
+ * catálogo uma vez no mount, isso virava "Não consegui carregar as opções" numa
+ * sessão perfeitamente válida, e só saía dali clicando em "Tentar de novo".
+ *
+ * Uma tentativa só: se o 401 persiste com token novo, o problema não é o token.
+ */
+async function requestWithAuth(
+  build: (headers: Record<string, string>) => Promise<Response> | Response,
+  // `any` de propósito: mantém o contrato que `handleResponse` já tinha
+  // (response.json()), senão toda chamada do app precisaria de cast novo.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  const response = await build(await getAuthHeaders());
+  if (response.status !== 401) return handleResponse(response);
+
+  const recovered = await recoverSession();
+  if (!recovered) {
+    throw new Error('Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
+  }
+
+  // Token novo em mãos: refaz a chamada que falhou.
+  return handleResponse(await build(await getAuthHeaders()));
+}
+
 async function handleResponse(response: Response) {
   if (response.ok) return response.status === 204 ? null : response.json();
 
   if (response.status === 401) {
-    // 401 pode ser token de acesso expirado (transitório, recuperável via refresh) OU
-    // sessão realmente morta (refresh token expirado/revogado). Antes não fazíamos nada
-    // pra evitar kick-out agressivo, mas isso deixava o app "logado-zumbi": UI logada de
-    // cache + 401 em loop, sem nunca voltar pro login. Então: tenta renovar; se o refresh
-    // falhar de verdade, desloga limpo (aura-layout redireciona pro /login no SIGNED_OUT).
-    if (!_recoveringSession) {
-      _recoveringSession = true;
-      let sessionDead = false;
-      try {
-        // refreshSession() pode pendurar (token malformado / rede ruim). Nunca deixar a
-        // recuperação travar: corre contra um timeout que, se vencer, trata como sessão morta.
-        const timeout = new Promise<{ data: { session: null }; error: Error }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null }, error: new Error('refresh timeout') }), 8000),
-        );
-        const { data, error } = await Promise.race([supabase.auth.refreshSession(), timeout]);
-        sessionDead = Boolean(error) || !data?.session;
-      } catch {
-        sessionDead = true;
-      } finally {
-        _recoveringSession = false;
-      }
-      if (sessionDead) {
-        // Sessão realmente morta: limpa e manda pro login. Redirect duro (não só signOut)
-        // porque com a sessão já inválida no servidor o evento SIGNED_OUT pode não disparar,
-        // deixando o app "logado-zumbi". O reload ainda zera o estado em memória.
-        await supabase.auth.signOut().catch(() => {});
-        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-          window.location.assign('/login');
-        }
-      }
-    }
+    // Chegou aqui já tendo passado por requestWithAuth: o token foi renovado e
+    // a chamada refeita, e ainda assim voltou 401. Não é mais problema de token.
+    await recoverSession();
     throw new Error('Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
   }
 
@@ -133,71 +178,61 @@ function uploadContentType(file: File): string {
 
 export const api = {
   async get(endpoint: string) {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}${endpoint}`, { headers });
-    return handleResponse(response);
+    return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, { headers }));
   },
 
   async post(endpoint: string, body: unknown) {
-    const headers = await getAuthHeaders();
     // Injeta horário do cliente em qualquer POST com body objeto.
     // Backend usa pra calibrar sugestões; rotas que não precisam ignoram silenciosamente.
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
       ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
       : body;
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(enrichedBody),
-    });
-    return handleResponse(response);
+    }));
   },
 
   async patch(endpoint: string, body: unknown) {
-    const headers = await getAuthHeaders();
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
       ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
       : body;
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify(enrichedBody),
-    });
-    return handleResponse(response);
+    }));
   },
 
   async put(endpoint: string, body: unknown) {
-    const headers = await getAuthHeaders();
     const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
       ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
       : body;
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, {
       method: 'PUT',
       headers,
       body: JSON.stringify(enrichedBody),
-    });
-    return handleResponse(response);
+    }));
   },
 
   async delete(endpoint: string) {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}${endpoint}`, {
+    return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, {
       method: 'DELETE',
       headers,
-    });
-    return handleResponse(response);
+    }));
   },
 
   async upload(endpoint: string, file: File) {
-    const headers = await getAuthHeaders();
-    delete headers['Content-Type'];
-    headers['Content-Type'] = uploadContentType(file);
-    headers['X-File-Name'] = encodeURIComponent(file.name);
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      method: 'POST',
-      headers,
-      body: file,
+    return requestWithAuth((headers) => {
+      delete headers['Content-Type'];
+      headers['Content-Type'] = uploadContentType(file);
+      headers['X-File-Name'] = encodeURIComponent(file.name);
+      return fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: file,
+      });
     });
-    return handleResponse(response);
   },
 };
