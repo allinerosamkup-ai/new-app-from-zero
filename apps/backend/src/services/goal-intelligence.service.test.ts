@@ -176,6 +176,51 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.match(result.question ?? '', /o que ainda falta/i);
   });
 
+  it('não derruba a resposta por causa de rationale ou assumption longos', async () => {
+    // Regressão de produção: o modelo devolveu uma decomposição correta com
+    // rationale de ~170 chars e o schema reprovou o payload inteiro, virando
+    // "sem informação suficiente" na tela com a informação toda disponível.
+    const longo = 'x'.repeat(400);
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: SALA },
+      clientReturning(
+        {
+          resultDefinition: longo,
+          assumptions: [longo, longo],
+          steps: [
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', rationale: longo },
+            { title: 'Organize os elementos principais da sala', basedOn: 'inferred', rationale: longo },
+          ],
+          question: null,
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.steps.length, 2);
+    assert.ok(result.resultDefinition!.length <= 240);
+    assert.ok(result.assumptions.every((item) => item.length <= 240));
+  });
+
+  it('aceita basedOn desconhecido tratando como inferido', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: SALA },
+      clientReturning(
+        {
+          steps: [
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'chute' },
+            { title: 'Organize os elementos principais da sala' },
+          ],
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+
+    assert.equal(result.mode, 'actions');
+    assert.ok(result.steps.every((step) => step.basedOn === 'inferred'));
+  });
+
   it('não devolve nada sem chave e sem cliente — não inventa lista genérica', async () => {
     const previous = process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;

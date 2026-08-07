@@ -113,21 +113,35 @@ export type GoalDecomposition = {
   rejectedSteps?: Array<{ title: string; reason: string }>;
 };
 
+/**
+ * Texto que corta em vez de reprovar.
+ *
+ * Isto já quebrou em produção: o modelo devolveu uma decomposição impecável com
+ * `rationale` de 170 caracteres contra um teto de 160, e o `safeParse` derrubou
+ * o payload INTEIRO. Duas tentativas depois a tela mostrava "sem informação
+ * suficiente" — mentira, a informação estava lá.
+ *
+ * A regra que ficou: limite em campo acessório é formatação, não validação.
+ * Passa a régua no texto e segue. Só o que muda a decisão — existir um passo,
+ * existir uma pergunta — pode reprovar a resposta.
+ */
+const clipped = (max: number) => z.string().transform((value) => value.trim().slice(0, max));
+
 const StepsPayloadSchema = z.object({
-  resultDefinition: z.string().trim().max(240).optional().default(''),
-  assumptions: z.array(z.string().trim().min(1).max(160)).max(4).optional().default([]),
+  resultDefinition: clipped(240).optional().default(''),
+  assumptions: z.array(clipped(240)).optional().default([]),
   steps: z.array(z.object({
-    title: z.string().trim().min(1).max(120),
-    basedOn: z.enum(['stated', 'inferred']).optional().default('inferred'),
-    rationale: z.string().trim().max(160).optional().default(''),
+    title: clipped(160),
+    basedOn: z.enum(['stated', 'inferred']).catch('inferred').optional().default('inferred'),
+    rationale: clipped(240).optional().default(''),
   })).optional().default([]),
-  question: z.string().trim().max(240).nullable().optional().default(null),
+  question: clipped(320).nullable().optional().default(null),
 });
 
 const ValidationPayloadSchema = z.object({
   approved: z.boolean(),
-  failures: z.array(z.string().trim().min(1).max(200)).max(8).optional().default([]),
-  missingInfo: z.string().trim().max(240).nullable().optional().default(null),
+  failures: z.array(clipped(320)).optional().default([]),
+  missingInfo: clipped(320).nullable().optional().default(null),
 });
 
 const MIN_STEPS = 2;
@@ -537,12 +551,19 @@ export class GoalIntelligenceService {
         const raw = await completeJson(chat, GENERATOR_SYSTEM, prompt, 900);
         const parsed = StepsPayloadSchema.safeParse(raw);
         if (!parsed.success) {
+          // Loga o motivo: parse silencioso já escondeu uma geração perfeita
+          // atrás de "sem informação suficiente" em produção uma vez.
+          console.warn(
+            '[goal-intelligence] payload fora do contrato:',
+            parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(' | '),
+          );
           feedback = 'resposta fora do contrato JSON';
           continue;
         }
 
         const payload = parsed.data;
         const question = payload.question?.trim() || null;
+        const assumptions = payload.assumptions.filter(Boolean).slice(0, 4);
 
         const screened = this.screenSteps(payload.steps, input);
         lastRejections = screened.rejected;
@@ -552,7 +573,7 @@ export class GoalIntelligenceService {
             return {
               mode: 'question',
               resultDefinition: payload.resultDefinition || null,
-              assumptions: payload.assumptions,
+              assumptions,
               steps: [],
               question,
               rejectedSteps: screened.rejected,
@@ -576,7 +597,7 @@ export class GoalIntelligenceService {
           return {
             mode: 'actions',
             resultDefinition: payload.resultDefinition || null,
-            assumptions: payload.assumptions,
+            assumptions,
             steps,
             question: null,
             rejectedSteps: screened.rejected,
@@ -587,7 +608,7 @@ export class GoalIntelligenceService {
           return {
             mode: 'question',
             resultDefinition: payload.resultDefinition || null,
-            assumptions: payload.assumptions,
+            assumptions,
             steps: [],
             question: verdict.missingInfo,
             rejectedSteps: screened.rejected,
