@@ -36,6 +36,7 @@ import {
   summarizeConsents,
 } from './services/consent.service';
 import { extractJournalSignals, stripJournalSignals } from './services/journal-signals.service';
+import { findEquivalentActionWithLlm } from './services/action-equivalence.service';
 import {
   DEFAULT_EVENING_REVIEW_TIME,
   DEFAULT_MORNING_CHECKIN_TIME,
@@ -4502,6 +4503,39 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * POST /api/actions/check-equivalent
+   * Diz se uma ação nova já existe na lista, por significado.
+   *
+   * O cliente roda o filtro lexical antes e só chega aqui quando nada casou —
+   * então esta chamada é o caso difícil: sinônimo real, que sobreposição de
+   * palavras não pega ("comprar pão" x "passar na padaria").
+   */
+  app.post('/api/actions/check-equivalent', async (req: Request, res: Response) => {
+    try {
+      const data = z.object({
+        candidate: z.string().trim().min(1).max(300),
+        existing: z.array(z.object({
+          id: z.string().trim().min(1).max(120),
+          text: z.string().trim().min(1).max(300),
+        })).max(60).default([]),
+      }).parse(req.body ?? {});
+
+      const result = await findEquivalentActionWithLlm({
+        candidate: data.candidate,
+        existing: data.existing,
+      });
+      return res.json(result);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[actions/check-equivalent] Error:', error);
+      // Falhar aqui não pode impedir a pessoa de registrar a ação dela.
+      return res.json({ duplicateOf: null, reason: null, degraded: true });
+    }
+  });
+
+  /**
    * GET /api/privacy/consents
    * Histórico de consentimento da usuária (LGPD Art. 9: direito a saber o que
    * consentiu, quando e em qual versão do documento).
@@ -6152,25 +6186,68 @@ REGRAS:
 
 JSON APENAS: {"message":"..."}`;
       } else if (type === 'monthly-report') {
-        const period = context.period ?? '30d';
-        const periodLabel = period === '7d' ? 'últimos 7 dias' : period === '30d' ? 'últimos 30 dias' : 'últimos 90 dias';
-        prompt = `Você é a Airia, assistente de bem-estar de ${userName}. Gere um relatório pessoal de saúde mental dos ${periodLabel}.
+        // Relatório de período. O que estava errado antes: o payload mandava a
+        // FASE DE HOJE e o contexto "leitura atual", então o texto falava do dia
+        // e só citava o período de passagem. Aqui nada de hoje entra — só
+        // agregados da janela, e o prompt proíbe explicitamente esse desvio.
+        const p = (context.periodData ?? {}) as Record<string, any>;
+        const range = (p.range ?? {}) as Record<string, any>;
+        const num = (value: unknown, suffix = '') => (
+          value === null || value === undefined ? '—' : `${value}${suffix}`
+        );
+        const half = (h: any, name: string) => (
+          h ? `${name}: humor ${num(h.avgMood)}/10, energia ${num(h.avgEnergy)}/10 (${num(h.observed)} dias com registro)` : `${name}: sem dados`
+        );
 
-DADOS DO PERÍODO:
-- Check-ins registrados: ${context.totalCheckins ?? '—'}
-- Humor médio: ${context.avgHumor ?? '—'}/10
-- Energia média: ${context.avgEnergy ?? '—'}/10
-- Fase atual: ${context.phaseLabel ?? context.phase ?? '—'}
-- Score de estabilidade: ${context.stabilityScore ?? '—'}/100
-- Alertas: ${(context.warningFlags as string[] | undefined)?.join(', ') || 'nenhum'}
-- Contexto do ciclo: ${context.moodCycleContext ?? ''}
+        const samplingWarning = p.sampling === 'low'
+          ? 'AMOSTRAGEM BAIXA: menos de 30% dos dias têm registro. Diga isso na primeira seção e trate toda leitura como indício, nunca como conclusão firme. Não invente padrão que os dados não sustentam.'
+          : p.sampling === 'medium'
+            ? 'AMOSTRAGEM PARCIAL: entre 30% e 60% dos dias têm registro. Aponte a limitação uma vez e siga.'
+            : 'AMOSTRAGEM BOA: mais de 60% dos dias têm registro.';
 
-INSTRUÇÕES:
-- Tom: acolhedor, honesto, como uma amiga que acompanha de verdade.
-- Máximo 4 parágrafos curtos.
-- Estrutura: 1) O que o período mostrou, 2) Padrões ou tendências, 3) Uma conquista ou ponto de atenção, 4) Uma sugestão concreta para o próximo período.
-- Sem jargões clínicos. Sem excesso de emojis (max 3 no total).
-- Responda em português, direto ao ponto.`;
+        prompt = `Você é a Airia, acompanhando ${userName}. Escreva o relatório do período ${range.label ?? ''} (${range.start ?? '—'} a ${range.end ?? '—'}).
+
+DADOS AGREGADOS DO PERÍODO — é a sua única base:
+- Janela: ${num(p.windowDays)} dias | com registro: ${num(p.observedDays)} | sem registro: ${num(p.missingDays)} | cobertura ${num(p.coverage)}
+- Humor médio do período: ${num(p.avgMood)}/10 | Energia média: ${num(p.avgEnergy)}/10
+- Variabilidade no período: ${num(p.volatility)}
+- ${half(p.firstHalf, 'Primeira metade')}
+- ${half(p.secondHalf, 'Segunda metade')}
+- Diferença entre metades: humor ${num(p.moodDelta)} | energia ${num(p.energyDelta)}
+- Melhor dia: ${p.bestDay ? `${p.bestDay.date} (humor ${p.bestDay.mood}, energia ${p.bestDay.energy})` : '—'}
+- Pior dia: ${p.worstDay ? `${p.worstDay.date} (humor ${p.worstDay.mood}, energia ${p.worstDay.energy})` : '—'}
+- Dias com humor baixo e energia alta ao mesmo tempo: ${num(p.divergentDays)}
+- Maior sequência sem registro: ${num(p.longestGapDays)} dias
+- Média de humor por dia da semana: ${JSON.stringify(p.weekdayAverages ?? [])}
+- Fatores associados a humor no período: ${JSON.stringify(p.topFactors ?? [])}
+
+${samplingWarning}
+
+REGRA QUE MANDA EM TUDO:
+Este relatório analisa O PERÍODO INTEIRO. É PROIBIDO transformá-lo em leitura do dia atual — para isso existem o check-in e o resumo do dia. Só cite um dia específico quando ele for extremo do período ou parte de um padrão que você está demonstrando, e mesmo assim em uma frase.
+
+ESTRUTURA (use estes títulos, pule seção sem dado em vez de inventar):
+1. Resumo do período
+2. Quantidade e consistência dos registros
+3. Principais padrões identificados
+4. Aspectos positivos
+5. Aspectos negativos ou pontos de atenção
+6. Oscilações de humor e energia
+7. Comportamentos e hábitos recorrentes
+8. Relação entre ações, contexto e resultados
+9. Gatilhos ou fatores associados
+10. Evoluções e regressões
+11. Comparação entre o início e o final do período
+12. Conclusões principais
+13. Próximas ações recomendadas
+
+COMO ESCREVER:
+- Documento para consultar, guardar e levar a uma conversa profissional. Pode ser longo.
+- Cada afirmação apoiada num número dos dados acima. Sem número, não afirme.
+- Associação não é causa: escreva "aparece junto de", não "causou".
+- Linguagem acessível, sem jargão clínico. Nunca nomeie transtorno nem sugira diagnóstico.
+- As próximas ações recomendadas saem do que os dados mostram, sem data e sem horário.
+- Português, markdown com os títulos numerados acima.`;
       } else if (type === 'habit-recommendation') {
         const hour = new Date().getHours();
         const timeOfDay = hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';

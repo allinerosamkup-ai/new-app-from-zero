@@ -18,6 +18,7 @@ import { AuraIcon } from "../components/AuraIcon";
 import { getClientDayContext } from "../utils/day-context";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { findSmartPlannerSlot } from "./planner-page.helpers";
+import { saveNextAction } from "../utils/save-next-action";
 import { RefreshCcw, X } from "lucide-react";
 import "../styles/aura.css";
 
@@ -259,7 +260,9 @@ export function CheckinResultPage() {
       message?: string;
     };
   } | null) ?? null;
-  const { state, addTask, prepareJournalFromMood, refreshData, hydrated } = useAuraStore();
+  // addTask saiu: as sugestões do check-in não viram mais bloco com horário no
+  // Planner, e sim ação sem data nas Próximas ações.
+  const { state, prepareJournalFromMood, refreshData, hydrated } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
   // Check-in salvo = pequena vitória: confirmação tátil única na chegada.
@@ -587,75 +590,56 @@ export function CheckinResultPage() {
     );
   }
 
+  /**
+   * Manda as sugestões aceitas para as Próximas ações, sem data.
+   *
+   * Antes elas viravam blocos no Planner, com horário calculado e transbordo
+   * para o dia seguinte quando hoje estava cheio. A régua mudou: o que importa
+   * é concluir, não caber na agenda. Aqui a ação entra no Inbox e fica lá até
+   * ser feita — e o dedupe impede que a mesma coisa seja registrada de novo.
+   */
   async function confirmTasks() {
     const accepted = tasks.filter((t) => !t.discarded);
     if (accepted.length === 0 || savingTasks) return;
 
     setSavingTasks(true);
     let savedCount = 0;
-    let nextDayCount = 0;
-    let lastError: unknown = null;
+    let duplicateCount = 0;
 
-    // Snapshot das tarefas atuais para calcular slots sem conflito entre si
-    let currentTasks = [...(state.tasks || [])];
-
+    // Em série, não em paralelo: cada verificação precisa enxergar o que a
+    // anterior gravou, senão duas sugestões parecidas do mesmo lote entram
+    // juntas — a duplicata que o dedupe existe para impedir.
     for (const task of accepted) {
-      try {
-        const now = new Date();
-        const taskTimeMins = task.time ? (parseInt(task.time.split(":")[0]) * 60 + parseInt(task.time.split(":")[1])) : -1;
-        const nowMins = now.getHours() * 60 + now.getMinutes();
-
-        // Usa o horário sugerido pela IA se for futuro; caso contrário, acha slot livre
-        const useAiTime = taskTimeMins > nowMins;
-        const slot = task.isNextDay
-          ? { time: task.time, date: task.date, isNextDay: true }
-          : useAiTime
-          ? { time: task.time, date: task.date, isNextDay: false }
-          : findSmartPlannerSlot(currentTasks, now);
-
-        const saved = await addTask(task.title, slot.time, task.category, {
-          forceSave: true,
-          ...(slot.date ? { date: slot.date } : {}),
-        });
-
-        if (saved) {
-          savedCount += 1;
-          if (slot.isNextDay) nextDayCount += 1;
-          // Adicionar ao snapshot local para evitar conflito com a próxima tarefa
-          currentTasks = [...currentTasks, saved as any];
-        } else {
-          lastError = new Error("A tarefa nao foi aceita pelo planner.");
-        }
-      } catch (error) {
-        lastError = error;
-      }
+      const result = await saveNextAction({
+        text: task.title,
+        razao: 'Sugestão aceita no resultado do check-in.',
+        source: 'checkin-result',
+      });
+      if (result.created) savedCount += 1; else duplicateCount += 1;
     }
 
     setSavingTasks(false);
+    setPhase('done');
+
+    trackEvent('checkin_suggestions_to_next_actions', {
+      source: 'checkin_result',
+      accepted_count: accepted.length,
+      saved_count: savedCount,
+      duplicate_count: duplicateCount,
+    });
 
     if (savedCount > 0) {
-      setPhase("done");
-      trackEvent("tasks_added_to_planner", {
-        source: "checkin_result",
-        accepted_count: accepted.length,
-        saved_count: savedCount,
-        next_day_count: nextDayCount,
-      });
-      const baseMsg = savedCount === accepted.length
-        ? "Sugestoes adicionadas ao planner."
-        : `${savedCount} sugest${savedCount > 1 ? "oes foram" : "ao foi"} adicionada${savedCount > 1 ? "s" : ""} ao planner.`;
-      const nextDayMsg = nextDayCount > 0
-        ? ` (${nextDayCount} para amanhã — hoje já está cheio)`
-        : "";
-      showSuccess(baseMsg + nextDayMsg);
-    }
-
-    if (savedCount < accepted.length) {
-      showError(
-        lastError instanceof Error
-          ? lastError.message
-          : "Algumas sugestoes nao puderam ser salvas no planner.",
-      );
+      showSuccess(l(
+        savedCount === 1
+          ? "Uma ação entrou nas suas próximas ações."
+          : `${savedCount} ações entraram nas suas próximas ações.`,
+        savedCount === 1
+          ? "One action was added to your next actions."
+          : `${savedCount} actions were added to your next actions.`,
+      ));
+    } else if (duplicateCount > 0) {
+      // Nada foi criado porque tudo já existia. Dizer 'salvo' seria mentira.
+      showSuccess(l('Isso já estava nas suas próximas ações.', 'That was already in your next actions.'));
     }
   }
 
@@ -1033,7 +1017,7 @@ export function CheckinResultPage() {
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: v.accent }}>
-                Tarefas sugeridas
+                {l("Próximas ações", "Next actions")}
               </p>
               {phase === "preview" && (
                 <p style={{ fontSize: 11, color: "var(--text-3)" }}>
@@ -1041,7 +1025,7 @@ export function CheckinResultPage() {
                 </p>
               )}
               {phase === "done" && (
-                <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 700 }}>✓ Salvo no Planner</span>
+                <span style={{ fontSize: 11, color: "var(--accent-sage)", fontWeight: 700 }}>✓ {l("Nas próximas ações", "In your next actions")}</span>
               )}
             </div>
 
@@ -1133,7 +1117,7 @@ export function CheckinResultPage() {
                 <AuraButtonV2
                   className={`btn ${isMenuthe ? "btn-sage" : "btn-primary"}`}
                   style={{ flex: 2 }}
-                  onClick={confirmTasks}
+                  onClick={() => { void confirmTasks(); }}
                   disabled={acceptedCount === 0 || savingTasks}
                 >
                   {savingTasks
@@ -1176,19 +1160,15 @@ export function CheckinResultPage() {
 
         {/* Botões de navegação */}
         <div className="result-nav-stack" style={{ marginTop: phase === "idle" ? 0 : 4 }}>
-          {phase !== "idle" && (
-            <AuraButtonV2
-              className="btn btn-ghost btn-full"
-              onClick={() => { void finalizeAndGo("/planner"); }}
-            >
-              Ver meu Planner
-            </AuraButtonV2>
-          )}
+          {/* O release do dia leva para as Próximas ações, que ficam na Home —
+              não mais para o Planner. */}
           <AuraButtonV2
             className={`btn btn-full ${isMenuthe ? "btn-sage" : "btn-primary"}`}
             onClick={() => { void finalizeAndGo("/home"); }}
           >
-            Ir para o inicio
+            {phase === "done"
+              ? l("Ver minhas próximas ações", "See my next actions")
+              : l("Ir para o início", "Go to home")}
           </AuraButtonV2>
         </div>
 

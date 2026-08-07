@@ -10,6 +10,7 @@ import { trackEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
 import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
+import { buildPeriodReportData, resolvePeriodRange, type PeriodPreset } from "../utils/period-report";
 import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { BarChart3, ClipboardCheck } from "lucide-react";
 import {
@@ -139,6 +140,17 @@ function MoodLineChart({ data }: { data: Array<{ date: string; humor: number; en
   );
 }
 
+const dateInputStyle = {
+  marginLeft: 6,
+  minHeight: 34,
+  padding: "0 10px",
+  borderRadius: 999,
+  border: "1.5px solid var(--warm-border-2)",
+  background: "rgba(255,255,255,.72)",
+  fontSize: 12,
+  color: "var(--text-1)",
+} as const;
+
 export function InsightsPage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
@@ -160,7 +172,10 @@ export function InsightsPage() {
   const [weeklyQuestion, setWeeklyQuestion] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
+  const [period, setPeriod] = useState<PeriodPreset>('7d');
+  // Intervalo personalizado: só é usado quando period === 'custom'.
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [insightTab, setInsightTab] = useState<'agora' | 'padroes'>('agora');
   const [monthlyReport, setMonthlyReport] = useState<string | null>(null);
   const [monthlyReportPhase, setMonthlyReportPhase] = useState<'idle' | 'loading' | 'done'>('idle');
@@ -170,13 +185,27 @@ export function InsightsPage() {
   const allHistory = state.checkinHistory || [];
   const habits = state.habits || [];
   const journalSessions = state.journal?.trim() ? 1 : 0;
-  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : 90;
-  const history = useMemo(() => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - periodDays);
-    const cutoffIso = getLocalDateKey(cutoff);
-    return allHistory.filter(h => h.date >= cutoffIso);
-  }, [allHistory, periodDays]);
+  const periodRange = useMemo(
+    () => resolvePeriodRange(period, { customStart, customEnd }),
+    [period, customStart, customEnd],
+  );
+  const periodDays = useMemo(() => (
+    Math.round(
+      (new Date(`${periodRange.end}T12:00:00.000Z`).getTime()
+        - new Date(`${periodRange.start}T12:00:00.000Z`).getTime()) / 86_400_000,
+    ) + 1
+  ), [periodRange]);
+  // Filtra pelos dois extremos do intervalo, não só pelo início: com período
+  // personalizado a data final pode ser no passado, e um corte só por início
+  // deixaria entrar tudo que veio depois.
+  const history = useMemo(
+    () => allHistory.filter((h) => h.date >= periodRange.start && h.date <= periodRange.end),
+    [allHistory, periodRange],
+  );
+  const periodData = useMemo(
+    () => buildPeriodReportData(allHistory, periodRange),
+    [allHistory, periodRange],
+  );
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
   const reportEvidence = useMemo(() => buildMoodReportEvidence(history, periodDays), [history, periodDays]);
@@ -446,20 +475,14 @@ export function InsightsPage() {
   async function fetchMonthlyReport() {
     setMonthlyReportPhase('loading');
     try {
-      const avgHumor7d = history.length > 0 ? (history.reduce((s, h) => s + h.humor, 0) / history.length).toFixed(1) : '—';
-      const avgEnergy7d = history.length > 0 ? (history.reduce((s, h) => s + h.energia, 0) / history.length).toFixed(1) : '—';
       const res = await api.post('/ai/suggest', {
         type: 'monthly-report',
         context: {
           period,
-          totalCheckins: history.length,
-          avgHumor: avgHumor7d,
-          avgEnergy: avgEnergy7d,
-          phase: cycleReport.phase,
-          phaseLabel: currentPhaseLabel,
-          stabilityScore: cycleReport.stabilityScore,
-          warningFlags: cycleReport.warningFlags,
-          moodCycleContext: cycleReport.aiContext,
+          // Agregados da janela inteira. A fase de hoje e o contexto "leitura
+          // atual" saíram de propósito: eram eles que puxavam o relatório para
+          // o dia atual e faziam o período virar nota de rodapé.
+          periodData,
           evidence: {
             windowDays: reportEvidence.windowDays,
             observedDays: reportEvidence.observedDays,
@@ -501,8 +524,12 @@ export function InsightsPage() {
           </p>
           {/* Seletor de período + Export */}
           <div style={{ display: "flex", gap: "6px", marginTop: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            {(['7d', '30d', '90d'] as const).map(p => {
-              const label = p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : '90 dias';
+            {(['7d', '30d', '90d', '180d', 'custom'] as const).map(p => {
+              const label = p === '7d' ? l('Semana', 'Week')
+                : p === '30d' ? l('Mês', 'Month')
+                  : p === '90d' ? l('90 dias', '90 days')
+                    : p === '180d' ? l('Semestre', 'Semester')
+                      : l('Escolher', 'Custom');
               const active = period === p;
               return (
                 <button
@@ -522,6 +549,7 @@ export function InsightsPage() {
             })}
             <button
               onClick={exportCSV}
+              data-export-csv
               style={{
                 marginLeft: "auto", padding: "5px 12px", borderRadius: "999px", fontSize: "11px",
                 fontWeight: 700, fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: "pointer",
@@ -546,6 +574,36 @@ export function InsightsPage() {
               {t("insights.closeDay")}
             </button>
           </div>
+
+          {/* Intervalo personalizado: só aparece quando escolhido, para não
+              ocupar espaço em quem usa os presets. */}
+          {period === "custom" && (
+            <div style={{ display: "flex", gap: 8, marginTop: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <label style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700 }}>
+                {l("De", "From")}
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(event) => setCustomStart(event.target.value)}
+                  style={dateInputStyle}
+                />
+              </label>
+              <label style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700 }}>
+                {l("até", "to")}
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(event) => setCustomEnd(event.target.value)}
+                  style={dateInputStyle}
+                />
+              </label>
+              <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+                {periodData.windowDays} {l("dias", "days")} · {periodData.observedDays} {l("com registro", "with entries")}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Abas: Agora / Padrões ── */}

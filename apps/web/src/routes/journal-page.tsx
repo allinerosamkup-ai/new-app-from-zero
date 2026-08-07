@@ -24,7 +24,7 @@ import {
   TranscriptSession,
 } from "../features/voice/transcript-session";
 import "../styles/aura.css";
-import { appendStoredGtdAction } from "../utils/goal-priority-actions";
+import { saveNextAction } from "../utils/save-next-action";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { MessageSquareText } from "lucide-react";
 
@@ -370,13 +370,19 @@ export function JournalPage() {
 
     try {
       if (explicitAction) {
-        appendStoredGtdAction({
+        const saved = await saveNextAction({
           text: explicitAction,
-          titulo: explicitAction,
           razao: "Pedido explícito feito dentro do diário.",
           source: "journal",
         });
-        showSuccess(t("journal.savedActions"));
+        // Se já existia equivalente, dizer que salvou seria mentira: a pessoa
+        // procuraria um item novo que não foi criado.
+        showSuccess(saved.created
+          ? t("journal.savedActions")
+          : l(
+            `Isso já está nas suas próximas ações: "${saved.item.titulo || saved.item.text}".`,
+            `That is already in your next actions: "${saved.item.titulo || saved.item.text}".`,
+          ));
       }
 
       const { data: { session: authSession } } = await supabase.auth.getSession();

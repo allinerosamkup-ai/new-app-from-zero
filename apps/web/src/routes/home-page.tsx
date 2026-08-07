@@ -1,6 +1,7 @@
 // Home Page v4 — babá digital IA + mensagens personalizadas + agenda por blocos
 import { FEATURES } from "../config/features";
 import { GoalFocusCard } from "../components/GoalFocusCard";
+import { NextActionsCard } from "../components/NextActionsCard";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
@@ -56,7 +57,6 @@ import {
   TrendingUp,
   Sparkles,
   ChevronRight,
-  ClipboardCheck,
 } from "lucide-react";
 import { ActivationChecklist } from "../components/activation/ActivationChecklist";
 import { FirstRunGuide } from "../components/activation/FirstRunGuide";
@@ -1163,13 +1163,8 @@ export function HomePage() {
             <span className="shortcut-sub">{t("home.organize")}</span>
           </button>
         )}
-        <button className="shortcut-card" onClick={() => navigate("/daily-summary")}>
-          <div className="icon-badge" style={{ background: "rgba(197,165,147,.16)" }}>
-            <ClipboardCheck size={18} color="var(--accent-peach)" />
-          </div>
-          <span className="shortcut-label">{t("home.closeDay")}</span>
-                    <span className="shortcut-sub">{t("home.tomorrow")}</span>
-        </button>
+        {/* "Fechar o dia" saiu do acesso rápido: a tela depende do Planner para
+            ter o que revisar, e sem ele o fluxo perdeu função. */}
         <button className="shortcut-card" onClick={() => navigate("/insights")}>
           <div className="icon-badge shortcut-icon shortcut-icon-insights">
             <Activity size={18} color="var(--atomic-tangerine)" />
@@ -2172,6 +2167,7 @@ export function HomePage() {
             Substituiu a agenda por blocos (585 linhas de Planner). A pergunta
             que a Home responde deixou de ser "o que tenho hoje" e passou a ser
             "o que eu faço agora". ── */}
+        <NextActionsCard />
         <GoalFocusCard />
 
         {/* ── Presença sem cobrança ── */}

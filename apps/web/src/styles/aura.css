@@ -75,6 +75,45 @@
   --accent-peach-a3:      var(--accent-primary-a3);
   --accent-peach-a5:      var(--accent-primary-a5);
 
+  /* --nectarine* era referenciado por 16 lugares (Objetivos, Hábitos, Conteúdo)
+   * mas nunca foi definido. `var()` que não resolve invalida a declaração: em
+   * `color`, o valor vira herdado — e o texto do botão sumia no fundo claro.
+   * Era isso o "botão sem título". Apelidos apontando para o acento real. */
+  --nectarine:      var(--accent-primary-ink);
+  --nectarine-11:   var(--accent-primary-ink);
+  --nectarine-a3:   var(--accent-primary-a3);
+  --nectarine-a5:   var(--accent-primary-a5);
+
+  /* ──── Tokens referenciados pelo código e que nunca existiram ────
+   * Mesmo problema do --nectarine: o código pedia, o CSS não entregava, e a
+   * declaração inteira era descartada. Definir aqui é mais seguro que caçar
+   * cada uso, e mantém tudo apontando para a paleta real.
+   *
+   * Ficam de fora de propósito os que são injetados por style inline em tempo
+   * de execução (--i, --bar-h, --bar-opacity, --stat-accent, --ai-cor):
+   * defini-los aqui sobrescreveria o valor dinâmico. */
+  --menthe:            var(--accent-sage);
+  --lagune:            var(--accent-sky-ink);
+  --earth-11:          var(--text-2);
+  --accent-peach-a:    var(--accent-primary-a3);
+  --accent-sage-a3:    rgba(191,220,203,.16);
+  --accent-warm-coral: var(--accent-primary-strong);
+
+  --font-sans:  'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, serif;
+
+  --surface-0:  var(--warm-bg);
+  --surface-1:  var(--warm-surface);
+  --bg-1:       var(--warm-bg);
+  --bg-2:       var(--warm-surface);
+  --card-bg:    rgba(255,255,255,.86);
+  --warm-bg-v2: var(--warm-bg);
+  --text-2-v2:  var(--text-2);
+
+  --control-height: 46px;
+  --shadow:         var(--shadow-3d);
+  --shadow-primary: 0 12px 28px rgba(169,210,187,.22);
+
   /* ──── Sage Accent (verde — Humor/Saúde/Autocuidado) ──── */
   --accent-sage:        #BFDCCB;
   --accent-sage-ink:     #50705B;

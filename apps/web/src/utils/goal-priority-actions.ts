@@ -1,3 +1,5 @@
+import { dedupeActions, findEquivalentAction } from "./action-similarity";
+
 export type GoalPriorityAction = {
   id: string;
   text: string;
@@ -58,13 +60,27 @@ export function markStoredGtdActionDone(itemId: string) {
   localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
 }
 
+/**
+ * Grava uma ação no Inbox, ou devolve a equivalente que já estava lá.
+ *
+ * `created: false` significa que nada foi escrito — a chamadora deve dizer à
+ * pessoa que aquilo já existe, em vez de fingir que registrou. Sugerir de novo
+ * o que já está na lista é como o app perde confiança rápido.
+ */
 export function appendStoredGtdAction(input: {
   text: string;
   titulo?: string;
   razao?: string;
   source?: string;
-}): StoredGtdAction {
+}): StoredGtdAction & { created: boolean } {
   const title = (input.titulo || input.text).trim();
+
+  // Só compara com o que ainda está valendo: item concluído ou arquivado não
+  // deve impedir a pessoa de registrar a mesma coisa outra vez.
+  const active = readStoredGtdActions().filter((item) => !item.done && !item.archived);
+  const existing = findEquivalentAction(title, active, (item) => item.titulo || item.text);
+  if (existing) return { ...existing, created: false };
+
   const item: StoredGtdAction = {
     id: `gtd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     text: title,
@@ -80,7 +96,7 @@ export function appendStoredGtdAction(input: {
   const updated = [item, ...readStoredGtdActions()];
   localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
   window.dispatchEvent(new CustomEvent("gtd-inbox-updated", { detail: item }));
-  return item;
+  return { ...item, created: true };
 }
 
 export function buildGoalPriorityActions(
@@ -114,8 +130,31 @@ export function buildGoalPriorityActions(
       gtdId: item.id,
     }));
 
-  const actions = [...goalActions, ...captureActions];
+  // Metas primeiro, e o dedupe preserva o primeiro de cada grupo: se a mesma
+  // ação existe como passo de meta e como item solto do Inbox, quem fica é a
+  // versão ligada à meta, que tem contexto e move progresso.
+  const actions = dedupeActions([...goalActions, ...captureActions], (action) => action.text);
   return typeof options.limit === "number" ? actions.slice(0, options.limit) : actions;
+}
+
+/** Quantas ações a caixa da Home mostra. Cinco cabe na tela sem virar lista. */
+export const NEXT_ACTIONS_LIMIT = 5;
+
+/**
+ * As próximas ações da pessoa, sem data nenhuma.
+ *
+ * A regra é conclusão, não prazo: a ação fica disponível até ser concluída, e a
+ * ordem é metas antes de itens soltos, porque passo de meta move progresso e
+ * item do Inbox só sai da lista.
+ */
+export function buildNextActions(
+  goals: GoalPrioritySource[],
+  options: { gtdItems?: StoredGtdAction[]; limit?: number } = {},
+): GoalPriorityAction[] {
+  return buildGoalPriorityActions(goals, {
+    gtdItems: options.gtdItems,
+    limit: options.limit ?? NEXT_ACTIONS_LIMIT,
+  });
 }
 
 /**
