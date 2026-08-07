@@ -551,6 +551,8 @@ export class GoalIntelligenceService {
     try {
       let feedback = '';
       let lastRejections: Array<{ title: string; reason: string }> = [];
+      // Guardada, não devolvida na hora: pergunta é último recurso.
+      let heldQuestion: { question: string; resultDefinition: string | null; assumptions: string[] } | null = null;
 
       // Duas tentativas: a segunda recebe o motivo exato da reprovação. Mais que
       // isso vira loop caro sem ganho — se falhou duas vezes com o motivo na
@@ -582,10 +584,28 @@ export class GoalIntelligenceService {
 
         if (screened.kept.length === 0) {
           if (question) {
+            /**
+             * Pergunta na primeira tentativa não é aceita de cara.
+             *
+             * O modelo tem viés forte para perguntar: em produção, com a pessoa
+             * tendo escrito "só falta organizar os móveis e colocar minhas
+             * coisas de trabalho", ele ainda devolveu "quais itens exatamente?".
+             * Isso é devolver para ela o esforço que ela já fez.
+             *
+             * Então a pergunta fica guardada e o serviço insiste uma vez,
+             * dizendo que perguntar não é opção. Só se a segunda tentativa
+             * também não produzir passo é que a pergunta vira a resposta — que é
+             * o comportamento certo quando de fato falta informação.
+             */
+            if (attempt === 0) {
+              heldQuestion = { question, resultDefinition: payload.resultDefinition || null, assumptions };
+              feedback = `você devolveu uma pergunta ("${question}") em vez de passos. PERGUNTAR NÃO É OPÇÃO AGORA: use conhecimento geral sobre esse tipo de objetivo e entregue de ${MIN_STEPS} a ${MAX_STEPS} passos, sem inventar objeto, defeito ou circunstância. Deixe "question" null.`;
+              continue;
+            }
             return {
               mode: 'question',
-              resultDefinition: payload.resultDefinition || null,
-              assumptions,
+              resultDefinition: payload.resultDefinition || heldQuestion?.resultDefinition || null,
+              assumptions: assumptions.length > 0 ? assumptions : (heldQuestion?.assumptions ?? []),
               steps: [],
               question,
               rejectedSteps: screened.rejected,
@@ -628,6 +648,19 @@ export class GoalIntelligenceService {
         }
 
         feedback = verdict.failures.join('\n') || 'reprovado pelo revisor sem motivo declarado';
+      }
+
+      // Nenhuma das duas tentativas produziu passo. Se a primeira ao menos
+      // trouxe uma pergunta, ela vale mais que devolver nada.
+      if (heldQuestion) {
+        return {
+          mode: 'question',
+          resultDefinition: heldQuestion.resultDefinition,
+          assumptions: heldQuestion.assumptions,
+          steps: [],
+          question: heldQuestion.question,
+          rejectedSteps: lastRejections,
+        };
       }
 
       return { ...empty, rejectedSteps: lastRejections };

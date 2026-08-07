@@ -183,6 +183,42 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.equal(result.steps.length, 2);
   });
 
+  it('insiste antes de aceitar pergunta: passos na 2a tentativa ganham da pergunta da 1a', async () => {
+    // Regressão de produção: o modelo tem viés forte para perguntar. Mesmo com
+    // a pessoa tendo escrito o que falta, ele devolvia "quais itens exatamente?"
+    // — devolver para ela o esforço que ela já fez.
+    const result = await GoalIntelligenceService.decompose(
+      {
+        goalTitle: SALA,
+        userStatements: ['Só falta organizar os móveis e colocar minhas coisas de trabalho'],
+      },
+      clientReturning(
+        { steps: [], question: 'Quais itens de trabalho exatamente?' },
+        {
+          steps: [
+            { title: 'Coloque os móveis no lugar onde eles vão ficar', basedOn: 'stated' },
+            { title: 'Traga suas coisas de trabalho para a sala', basedOn: 'stated' },
+          ],
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.steps.length, 2);
+    assert.equal(result.question, null);
+  });
+
+  it('devolve a pergunta quando a insistência também não produz passo', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: 'Organizar minhas finanças' },
+      clientReturning({ steps: [], question: 'Hoje o problema é dívida, gasto mensal ou falta de controle?' }),
+    );
+
+    assert.equal(result.mode, 'question');
+    assert.match(result.question ?? '', /dívida/);
+  });
+
   it('vira pergunta quando o gerador só produz invenção', async () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: SALA },
