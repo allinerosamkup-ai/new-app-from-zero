@@ -3,11 +3,18 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_OPENAI_MAX_COMPLETION_TOKENS,
   DEFAULT_OPENAI_MODEL,
+  isJudgingCapableModel,
   getOpenAiMaxCompletionTokens,
   getOpenAiModel,
 } from './openai-config';
 
 async function run() {
+  // Regressão: com um "nano" no padrão, a camada de validação aprovava 1 de 5
+  // decomposições corretas e a Airia caía em "sem informação suficiente".
+  assert.equal(isJudgingCapableModel(DEFAULT_OPENAI_MODEL), true);
+  assert.equal(isJudgingCapableModel('gpt-5.4-nano'), false);
+  assert.equal(isJudgingCapableModel('gpt-5-nano'), false);
+
   const originalModel = process.env.OPENAI_MODEL;
   const originalMaxTokens = process.env.OPENAI_MAX_COMPLETION_TOKENS;
 

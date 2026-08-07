@@ -459,33 +459,45 @@ export function buildActionValidationPrompt(input: {
     ? 'Answer in English, same JSON contract.'
     : 'Responda em português do Brasil, mesmo contrato JSON.';
 
-  return `Você é o revisor. Sua função NÃO é ser gentil com a resposta anterior — é reprovar o que não se sustenta.
+  return `Você revisa uma decomposição de objetivo. Procure UM tipo de erro: fato inventado.
 ${language}
 
 OBJETIVO: "${input.goalTitle}"
 LEITURA DO RESULTADO: ${input.resultDefinition || '(não declarada)'}
-INFORMAÇÃO REAL DISPONÍVEL (tudo que a pessoa informou):
+INFORMAÇÃO QUE A PESSOA FORNECEU:
 ${input.contextText || '(apenas o título do objetivo)'}
 
 PASSOS PROPOSTOS:
-${input.steps.map((step, index) => `${index + 1}. [${step.basedOn}] ${step.title}`).join('\n')}
+${input.steps.map((step, index) => `${index + 1}. ${step.title}`).join('\n')}
 
-Avalie CADA passo contra todos estes critérios:
-1. Está diretamente ligado ao objetivo?
-2. Usa informação que a pessoa realmente forneceu, ou inventa contexto?
-3. Aproxima concretamente do resultado desejado?
-4. É executável no estado atual dela?
-5. É específico SEM ser arbitrariamente específico (objeto, cor, medida ou
-   defeito que ninguém mencionou reprova)?
-6. Existe uma ação anterior mais lógica que ficou de fora?
-7. Contradiz alguma informação disponível?
+A DISTINÇÃO QUE VOCÊ PRECISA FAZER — é o erro mais comum nesta revisão:
 
-Reprove só com MOTIVO CONCRETO, nomeando o passo e o que exatamente nele não se
-sustenta. "Poderia ser mais específico" e "falta contexto" NÃO são motivos:
-generalidade honesta é o comportamento correto quando o dado é escasso.
-Na dúvida, aprove — inventar fato já foi barrado antes de chegar aqui.
-Se o motivo real for falta de informação, escreva em "missingInfo" a ÚNICA
-pergunta curta que destravaria uma boa recomendação.
+INFERÊNCIA LEGÍTIMA (aprove): usar conhecimento geral sobre o que esse tipo de
+objetivo significa. "Deixar a sala pronta para uso" implica, para qualquer
+pessoa, retirar o que não pertence, organizar, deixar utilizável e conferir.
+Isso NÃO é inventar — é saber o que a palavra significa. Um passo assim vale
+para qualquer sala, e é exatamente por isso que ele é seguro.
+
+INVENÇÃO DE FATO (reprove): afirmar como existente algo específico que ninguém
+mencionou — um objeto ("um rolo de fita crepe", "a caixa azul"), um defeito
+("a área solta do rodapé", "a lâmpada queimada"), uma medida ("40 litros"), uma
+circunstância. O passo só funciona se aquele fato existir, e ninguém disse que
+existe.
+
+TESTE RÁPIDO: o passo funcionaria em QUALQUER situação coberta por esse
+objetivo? Então é inferência — aprove. Ele depende de um detalhe que só existe
+se alguém tiver dito? Então é invenção — reprove.
+
+NÃO SÃO MOTIVOS DE REPROVAÇÃO:
+- "pressupõe que existam itens/elementos a organizar" — isso é o objetivo.
+- "pressupõe um uso pretendido" — está no título, não precisa ser detalhado.
+- "poderia ser mais específico", "falta contexto", "é genérico demais".
+Generalidade honesta quando o dado é escasso é o comportamento CORRETO.
+
+Reprove com motivo concreto, nomeando o passo e o fato inventado. Na dúvida,
+aprove: esta camada existe para barrar ficção, não para exigir perfeição.
+Se faltar informação que mudaria TODO o caminho, escreva em "missingInfo" a
+única pergunta curta que destravaria isso.
 
 JSON APENAS:
 {"approved":true|false,"failures":["passo 2 inventa ..."],"missingInfo":null}`;
