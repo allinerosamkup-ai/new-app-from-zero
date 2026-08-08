@@ -176,5 +176,20 @@ bloco `LOGO` em `routes/splash-page.tsx` mantêm as cores originais (salmão, ro
 menta, azul) de propósito. Varredura de cor deve pular esses dois trechos.
 
 ### Antes de usar um token novo
-Rode a checagem de tokens indefinidos. Um `var()` que não resolve não gera erro
-de build nem de tipo — só some da tela, e você descobre pelo relato de quem usa.
+`src/styles/css-tokens.test.ts` é a checagem, e roda no `npm test`. Um `var()`
+que não resolve não gera erro de build nem de tipo — só some da tela, e você
+descobre pelo relato de quem usa.
+
+Ela varre **só o CSS que alguém importa**: `styles/main.css` e `index.css` são
+folhas órfãs, e alarme sobre arquivo morto é o que faz uma checagem ser ignorada.
+Token definido inline (`style={{ "--i": 2 }}`) conta como declarado.
+
+Na primeira execução achou três fantasmas em código vivo, todos da mesma família
+dos 27 anteriores: `--accent-butter` na faixa do `.btn-info-row` (só existia no
+`index.css` órfão; o amarelo real é `--buttercup`), `--text-secondary` num botão
+de Preferências (é `--text-2`) e `--bg-base` no `PhoneFrame` (é `--warm-bg`).
+
+**Código novo usa os tokens canônicos `--accent-primary*`, não os apelidos
+`--accent-peach*`.** Os apelidos existem para não quebrar o que já estava
+escrito; nascer apoiado neles é dívida de graça. O teste também trava se algum
+apelido voltar a receber valor literal — é assim que o rosa reentraria.

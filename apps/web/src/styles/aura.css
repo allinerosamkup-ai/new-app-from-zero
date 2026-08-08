@@ -1115,7 +1115,9 @@ body {
 }
 .btn-info-row.accent-sage::after  { background: var(--accent-sage); }
 .btn-info-row.accent-sky::after  { background: var(--accent-sky); }
-.btn-info-row.accent-butter::after   { background: var(--accent-butter); }
+/* --accent-butter só existia no index.css, que ninguém importa: a faixa saía
+   sem cor nenhuma. O amarelo real do tema é --buttercup. */
+.btn-info-row.accent-butter::after   { background: var(--buttercup); }
 .btn-info-row:hover { transform: translateY(-1px); box-shadow: var(--shadow-3d-hover), var(--shadow-inset-soft); }
 .btn-info-row:active { transform: translateY(0); box-shadow: var(--shadow-3d-active); }
 .btn-info-row .info-num {

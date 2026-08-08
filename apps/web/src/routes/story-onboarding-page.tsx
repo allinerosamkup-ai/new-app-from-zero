@@ -467,7 +467,7 @@ export default function StoryOnboardingPage() {
                     animationDelay: `${180 + i * 420}ms`,
                     fontWeight: 650,
                     color: "var(--text-1)",
-                    borderLeft: "2px solid var(--accent-peach, #BFDCCB)",
+                    borderLeft: "2px solid var(--accent-primary, #BFDCCB)",
                     paddingLeft: 12,
                   }}
                 >

@@ -10,7 +10,7 @@ export function PhoneFrame({ children }: { children: React.ReactNode }) {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[28px] bg-black rounded-b-2xl z-50" />
 
         <div className="w-full h-full rounded-[36px] overflow-hidden relative"
-          style={{ background: 'var(--bg-base)' }}>
+          style={{ background: 'var(--warm-bg)' }}>
           <div className="h-[44px] flex items-end justify-center px-6 pb-1 z-40 relative"
             style={{ background: 'inherit' }}>
             <div className="flex items-center justify-between w-full text-[11px] font-semibold text-[#1f1b16]">

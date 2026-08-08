@@ -524,7 +524,7 @@ function PrivacyDeleteSection({ onStatusChange }: { onStatusChange: (msg: string
           style={{
             fontSize: 11,
             fontWeight: 700,
-            color: "var(--text-secondary)",
+            color: "var(--text-2)",
             background: "transparent",
             border: "none",
             padding: "6px 10px",

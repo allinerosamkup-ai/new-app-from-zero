@@ -35,7 +35,7 @@
 
 .story-progress-fill {
   height: 100%;
-  background: var(--accent-peach, #BFDCCB);
+  background: var(--accent-primary, #BFDCCB);
   border-radius: 0 999px 999px 0;
   transition: width 520ms cubic-bezier(.16, 1, .3, 1);
 }
@@ -59,7 +59,7 @@
   font-weight: 900;
   letter-spacing: .14em;
   text-transform: uppercase;
-  color: var(--accent-peach-ink, #4F7359);
+  color: var(--accent-primary-ink, #4F7359);
 }
 
 .story-title {
@@ -127,12 +127,12 @@
   transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
   font-family: inherit;
 }
-.story-choice:hover { border-color: var(--accent-peach, #BFDCCB); }
+.story-choice:hover { border-color: var(--accent-primary, #BFDCCB); }
 .story-choice:active { transform: scale(.985); }
 .story-choice[aria-pressed="true"] {
-  border-color: var(--accent-peach, #BFDCCB);
-  background: var(--accent-peach-a3, #EDF6F0);
-  color: var(--accent-peach-ink, #4F7359);
+  border-color: var(--accent-primary, #BFDCCB);
+  background: var(--accent-primary-a3, rgba(191,220,203,.16));
+  color: var(--accent-primary-ink, #4F7359);
 }
 .story-choice .hint {
   font-size: 11.5px;
@@ -140,13 +140,13 @@
   color: var(--text-3);
   line-height: 1.35;
 }
-.story-choice[aria-pressed="true"] .hint { color: var(--accent-peach-ink, #4F7359); opacity: .8; }
+.story-choice[aria-pressed="true"] .hint { color: var(--accent-primary-ink, #4F7359); opacity: .8; }
 
 .story-choice:focus-visible,
 .story-cta:focus-visible,
 .story-skip:focus-visible,
 .story-input:focus-visible {
-  outline: 2px solid var(--accent-peach-ink, #4F7359);
+  outline: 2px solid var(--accent-primary-ink, #4F7359);
   outline-offset: 2px;
 }
 
@@ -180,9 +180,11 @@
   min-height: 52px;
   border-radius: 999px;
   border: 0;
-  background: var(--accent-peach, #BFDCCB);
+  background: var(--accent-primary, #BFDCCB);
   /* Verde-escuro, não branco: o acento do app é claro (#BFDCCB) e texto branco
-     em cima dele fica em 1.7:1, ilegível. É o mesmo par que o GoalFocusCard usa. */
+     em cima dele fica em 1.7:1, ilegível. É o mesmo par que o GoalFocusCard usa.
+     Tokens canônicos (--accent-primary*), não os apelidos --accent-peach*: código
+     novo não deve nascer apoiado em alias de compatibilidade. */
   color: #2C5340;
   font-size: 15px;
   font-weight: 800;
@@ -207,8 +209,8 @@
 /* ── A conta: o número entra com peso ── */
 .story-reckon {
   border-radius: 18px;
-  background: var(--accent-peach-a3, #EDF6F0);
-  border: 1.5px solid var(--accent-peach, #BFDCCB);
+  background: var(--accent-primary-a3, rgba(191,220,203,.16));
+  border: 1.5px solid var(--accent-primary, #BFDCCB);
   padding: 18px;
   display: flex;
   flex-direction: column;
@@ -219,7 +221,7 @@
   font-size: 16px;
   font-weight: 750;
   line-height: 1.45;
-  color: var(--accent-peach-ink, #4F7359);
+  color: var(--accent-primary-ink, #4F7359);
 }
 .story-evidence {
   margin: 0;
@@ -257,8 +259,8 @@
   transition: background 260ms ease, border-color 260ms ease;
 }
 .story-work-item.done .story-work-dot {
-  background: var(--accent-sage, #BFDCCB);
-  border-color: var(--accent-sage, #BFDCCB);
+  background: var(--accent-primary, #BFDCCB);
+  border-color: var(--accent-primary, #BFDCCB);
 }
 
 /* ── Conclusão: um pulso, uma vez ── */
@@ -268,7 +270,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: var(--accent-sage, #BFDCCB);
+  background: var(--accent-primary, #BFDCCB);
   color: #2C5340;
   font-size: 32px;
   margin: 0 auto;

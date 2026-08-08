@@ -96,6 +96,29 @@ packages/
 objetivos, padrões e diário**. Planner e Hábitos estão desligados, com o código
 inteiro preservado e as rotas redirecionando para a home. Religar é uma linha.
 
+## Onboarding — história em três atos (`/comecar`)
+`story-onboarding-page.tsx` implementa introdução, clímax e conclusão num fluxo
+só, onde cada pergunta prepara a interpretação seguinte. **Entrada por toque:**
+22 telas e apenas dois campos de texto, e o do objetivo tem atalhos — dá para
+atravessar sem teclado.
+
+- A conta e o espelho (`features/story-onboarding/reading.ts`) são
+  **determinísticos**: nascem das respostas dela, sem modelo. É onde um número
+  errado destruiria a confiança do fluxo, e onde o modelo não acrescenta nada.
+  Os testes varrem toda saída contra vocabulário clínico e linguagem de culpa.
+- O clímax é real: chama `GoalIntelligenceService`, inclusive a pergunta em vez
+  de ação quando o objetivo é amplo demais.
+- O perfil operacional sai daqui e é injetado **no servidor** em toda geração
+  (`OperationalProfileService`, em `aiProfilePayload`, sem migração).
+- Animação tem função — linha a linha dá tempo de ler, barra acompanha gravação
+  real, selo pulsa uma vez. Nada em loop, tudo atrás de `prefers-reduced-motion`.
+- A tela de gravação tem prazo por etapa e escape de 12s: prender alguém na
+  última tela do onboarding é o pior desfecho possível.
+
+Pendente de decisão: hoje `/comecar` existe em paralelo e não substituiu nada.
+Virar porta de entrada depende de definir se roda **antes do cadastro** — sem
+sessão não há onde gravar.
+
 ## Atualizações Recentes
 - **2026-08-03:** Correções de aparência e de relatório. **27 tokens CSS que o código pedia e o CSS nunca definiu** — `var()` que não resolve invalida a declaração, e era isso que fazia botão da página de Objetivos parecer sem título e o "Criar objetivo" parecer desaparecido. Caixa de **Próximas ações** na Home substituiu "Tarefas sugeridas": até 5 itens, sem data, regra é conclusão e não prazo. Dedupe em duas camadas — lexical instantâneo, LLM no caso difícil. Relatório de período passou a analisar a janela inteira, com seletor de 5 períodos e estrutura de 13 seções.
 - **2026-08-02:** Reestruturação para o núcleo. Chave de funcionalidade desligou Planner e Hábitos sem apagar nada. Home virou "o que eu faço agora": objetivo em foco com a próxima ação concluível ali. Gamificação de objetivos — 12 XP por micro-ação, 60 por objetivo, com 4 contadores em `EventLog` (zero migração). Diário passou a propor check-in e meta, sempre com confirmação. Login com Google removido. **LGPD:** a tabela `Consent` existia e era exportada mas nunca era escrita — o app não conseguia provar consentimento; agora grava com versão e data, mais endpoints de consulta e revogação.
