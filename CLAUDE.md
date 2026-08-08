@@ -81,13 +81,25 @@ packages/
   - rotina largada no meio também paga, porque começar é a parte cara;
   - celebração fala do que aconteceu e nunca do que faltou.
 
-## Status do Design System — Aura Editorial Clean
+## Status do Design System — Aura Editorial Clean (identidade verde)
 - Fundo base: branco/off-white, com uso de cor apenas como acento.
 - Visual dominante: cards claros, sombras suaves, bordas discretas, layout respirado.
-- Acentos ativos: salmão rosado pastel, verde sálvia claro, azul suave, lilás leve, pêssego aberto.
+- **Acento primário é verde claro.** `--accent-primary` `#BFDCCB`, forte `#8FC0A4`, para texto `#4F7359`. O rosa-salmão saiu do app: a leitura era "muito feminino" para um produto de público amplo.
+- Apelidos `--accent-peach*`, `--nectarine*`, `--menthe` e `--lagune` continuam existindo por compatibilidade e apontam para o verde. **Não reintroduza rosa neles.**
+- **A logo é exceção e mantém a paleta original** (salmão, rosa, menta, azul) — em `components/AuraIcon.tsx` e no bloco `LOGO` de `splash-page.tsx`. Varredura de cor pula esses dois.
+- Ficam de fora da virada, de propósito: vermelho de erro de validação, cores de marca do Google no login, amarelos de aviso e marrons quase pretos de texto.
+- Valores concretos e a lição sobre token fantasma: `apps/web/CLAUDE.md`.
 - Evitar qualquer retorno para o visual antigo de massa cromática, headers pesados ou mockups legados.
 
+## Escopo do produto — reduzido ao núcleo
+`apps/web/src/config/features.ts` decide o que existe. Hoje o app é **check-in,
+objetivos, padrões e diário**. Planner e Hábitos estão desligados, com o código
+inteiro preservado e as rotas redirecionando para a home. Religar é uma linha.
+
 ## Atualizações Recentes
+- **2026-08-03:** Correções de aparência e de relatório. **27 tokens CSS que o código pedia e o CSS nunca definiu** — `var()` que não resolve invalida a declaração, e era isso que fazia botão da página de Objetivos parecer sem título e o "Criar objetivo" parecer desaparecido. Caixa de **Próximas ações** na Home substituiu "Tarefas sugeridas": até 5 itens, sem data, regra é conclusão e não prazo. Dedupe em duas camadas — lexical instantâneo, LLM no caso difícil. Relatório de período passou a analisar a janela inteira, com seletor de 5 períodos e estrutura de 13 seções.
+- **2026-08-02:** Reestruturação para o núcleo. Chave de funcionalidade desligou Planner e Hábitos sem apagar nada. Home virou "o que eu faço agora": objetivo em foco com a próxima ação concluível ali. Gamificação de objetivos — 12 XP por micro-ação, 60 por objetivo, com 4 contadores em `EventLog` (zero migração). Diário passou a propor check-in e meta, sempre com confirmação. Login com Google removido. **LGPD:** a tabela `Consent` existia e era exportada mas nunca era escrita — o app não conseguia provar consentimento; agora grava com versão e data, mais endpoints de consulta e revogação.
+- **2026-08-02:** Base clínica em `docs/product/base-clinica-padroes-e-acoes.md` (ASRS, MDQ, TCC para ciclotimia, NIMH Life Chart). Três falhas de detecção corrigidas no motor: traços mistos invisíveis porque o composto colapsava humor baixo com energia alta; sinal do sono invertido (dormir pouco **e estar bem** é marcador de elevação, não privação); e `sleepHours` sendo descartado na agregação diária. Estabilidade ganhou valência — platô baixo não é equilíbrio, e depressão sustentada deixou de ser lida como "Estável".
 - **2026-07-26:** Virada de captura: a Airia passou a montar tarefa, compromisso, hábito e meta a partir do contexto contado, com agendamento automático, decomposição automática de tarefa vaga, motor de execução passo a passo e progresso que incentiva sem cobrar.
 - **2026-05-10:** Guardrails reais de produto ampliados: bloqueio de copy de venda/demo no app, fluxo falso, alegação clínica perigosa, `setHours()` em serviços de agenda, contrato único de `riskSafety` e checklist de release integrado.
 - **2026-05-10:** Skill local `skills/airia-pr-review/SKILL.md` criada para tornar obrigatoria a revisao Airia baseada em evidencias antes de finalizar PRs/features/deploys.

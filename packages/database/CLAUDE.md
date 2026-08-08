@@ -18,6 +18,22 @@ Arquivo: `prisma/schema.prisma`
 | `TimelineBlock` | `timeline_blocks` | Blocos do planner diário |
 | `WeeklyInsight` | `weekly_insights` | Insights semanais gerados por IA |
 | `Objective` | `objectives` | Objetivos com sub-metas (subgoals em JSONB) |
+| `ObjectiveActionRecoveryClaim` | `objective_action_recovery_claims` | Lease/retry do job de recuperação de ações |
+| `EventLog` | `event_logs` | Eventos leves. Usado pela gamificação de objetivos |
+
+### Campos adicionados
+- `OnboardingResponse.biologicalSex` — autorrelato (`female` \| `male`, `NULL` = não perguntado). Existe por um motivo só: ligar ou desligar o rastreamento de ciclo menstrual. `NULL` mantém o bloco visível, para não sumir com campo de quem já usava por causa de pergunta que nunca viu.
+
+### Gamificação de objetivos usa EventLog, não tabela nova
+`subgoals` é JSONB sem data de conclusão, então não dá para derivar "quando". A
+solução foi `EventLog` (`objective_action_completed`, `objective_completed`), que
+já existe, já tem índice por `(userId, eventName)` e **já está inteiro na
+allowlist de privacidade**. Custo: zero migração, zero edição no `deploy.sh`.
+
+Os contadores têm **piso** derivado do estado atual dos objetivos — os eventos só
+passaram a existir agora, e sem piso quem já concluiu dezenas de ações veria zero.
+A sequência de dias não é recuperável (não há data) e começa do zero; isso é
+honesto, não bug.
 
 ## Regras de migração
 1. **Sempre** habilitar RLS na nova tabela: `ALTER TABLE x ENABLE ROW LEVEL SECURITY;`

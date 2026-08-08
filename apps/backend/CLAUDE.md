@@ -50,7 +50,53 @@ Wrapper HTTP/serviço do `AdaptiveAgendaEngine`. A versão atual não move taref
 Arquivo: `src/services/ai.service.ts`
 Gerencia a resposta em tempo real do diário usando Server-Sent Events (SSE). O `context` agora inclui `moodCycleContext`.
 
+## Serviços adicionados
+
+### `consent.service.ts` — prova de consentimento (LGPD Art. 8 §1)
+A tabela `Consent` existia no schema e era exportada em `/api/privacy/export`
+desde sempre, mas **nada nunca a escrevia** — chegava vazia em todo export, e o
+app não conseguia demonstrar que houve aceite.
+
+Grava no **primeiro acesso autenticado**, que é o momento honesto: a pessoa só
+chega ali depois de passar pela tela de cadastro, que exibe Termos e Política.
+Idempotente por `(userId, consentType, version)`, com `update: {}` — reexecutar
+não sobrescreve a data original, que é o dado com valor legal.
+
+Revogação (Art. 8 §5) **marca, não apaga**: apagar destruiria a prova de que
+houve consentimento no período anterior. Revogar não apaga dados — para isso
+continua existindo `/api/privacy/delete-request`.
+
+Gravar consentimento **nunca pode derrubar a autenticação**: falha ali só vira
+log, senão a pessoa perderia o app inteiro.
+
+### `journal-signals.service.ts` — o diário propõe
+O diário é onde a pessoa conta como está sem preencher formulário. O modelo emite
+um bloco `journalSignals` no fim da resposta e este serviço lê:
+- **check-in** — só com humor **e** energia. Metade do par vira registro torto e
+  contamina baseline, tendência e toda leitura de padrão.
+- **meta** — título mais 3 a 5 passos, ordenados do **menos** evitado para o mais
+  (exposição graduada).
+
+O bloco JSON **sai do texto visível** — mostrar mecânica na cara de quem está
+desabafando seria vazamento. E o diário **nunca aplica sozinho**: sempre
+`review_required`, porque é superfície confessional e gravar sem pedir
+transformaria desabafo em formulário.
+
+`create_goal` vai com `firstAction: null` de propósito — sem isso o construtor
+agenda um bloco de 25 min no Planner, que está desligado e ninguém veria.
+
+### `action-equivalence.service.ts` — dedupe por significado
+O cliente roda o filtro lexical antes e só chega aqui no caso difícil. Compara se
+**fazer uma cumpre a outra**. Instruído a responder "não é duplicata" na dúvida.
+
+Três proteções: temperatura via `openAiTemperature()` (mandar `0` cru dá 400 em
+gpt-5/o-series, e como a falha é engolida o dedupe morreria calado); id fora da
+lista enviada é descartado, senão alucinação apagaria em silêncio uma ação real;
+e qualquer falha permite criar.
+
 ## Endpoints Principais
+- `POST /api/actions/check-equivalent`: diz se uma ação nova já existe, por significado.
+- `GET /api/privacy/consents` · `POST /api/privacy/consents/revoke`: histórico e revogação de consentimento.
 - `POST /api/checkins`: Salva check-in e avalia estado via IA. Agora persiste campos de ciclo menstrual.
 - `POST /api/ai/suggest`: Endpoint genérico para sugestões IA (notas, checklist, tarefas do dia).
 - `GET /api/context/day?date=YYYY-MM-DD`: Retorna o `DailyContext` central do dia.
@@ -78,6 +124,36 @@ Regras do fluxo:
 - lista operacional estruturada com caixas, objetivos e recorrências abre o montador mesmo sem comando literal;
 - uma nova solicitação não pode ser substituída por sessão antiga salva no navegador;
 - prévia antiga é recomposta automaticamente quando sua versão difere do motor atual.
+
+## Prompt — o que mudou e não pode voltar
+
+`lib/aura-prompt.ts`. Estas quatro coisas têm teste que trava regressão:
+
+**A Airia não devolve a escolha da ação.** O prompt tinha, como *exemplo bom*,
+`"se você tivesse que fazer UMA coisa mínima com isso hoje, qual seria?"` — e
+exemplo pesa mais que regra. Agora é proibido explicitamente: ela **escolhe** a
+menor ação e **nomeia**. Pedir que a pessoa escolha é devolver o trabalho para
+quem está sem combustível.
+
+**Pedir permissão não é devolver a escolha.** "Posso colocar no seu plano?" depois
+de já ter formulado a meta é autorização para salvar, não transferência de
+decisão. O guardrail distingue os dois casos — sem essa asserção, alguém
+"conserta" e apaga a funcionalidade do diário.
+
+**`STATE_ACTION_POLICY`** entra em 7 domínios que propõem ação. O estado limita
+**o que pode ser proposto**, não só o tom. A regra que mais contraria o instinto:
+**em fase alta a conduta é conter, não aproveitar o embalo** — nada de meta
+ambiciosa, porque elevar quem já está elevado piora.
+
+**Limite clínico:** nunca nomear transtorno, nunca comentar medicação, nunca
+apresentar leitura de padrão como diagnóstico.
+
+## Relatório de período (`monthly-report`)
+
+Falava do dia atual porque era isso que recebia: `phaseLabel` e `moodCycleContext`
+("leitura atual", "previsão de energia hoje"). Agora recebe `periodData` — só
+agregados da janela — e o prompt tem as 13 seções mais proibição explícita de
+virar leitura do dia. Cobertura abaixo de 30% obriga a declarar amostragem baixa.
 
 ## Regras de Banco (Prisma)
 - Schema: `packages/database/prisma/schema.prisma`
