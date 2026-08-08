@@ -16,6 +16,7 @@ import {
   Play,
   Plus,
   Sparkles,
+  Star,
   Target,
   X,
 } from "lucide-react";
@@ -26,6 +27,8 @@ import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
+import { readPrimaryGoalId } from "../utils/goal-priority-actions";
+import { setPrimaryGoal } from "../features/aura/use-focus-goal";
 import {
   buildGoalCardModel,
   buildGoalTaskSchedule,
@@ -463,6 +466,8 @@ function GoalCard({
   onEditResult,
   onPause,
   onArchive,
+  isPrimary,
+  onMakePrimary,
 }: {
   goal: GoalLike;
   paused: boolean;
@@ -479,6 +484,8 @@ function GoalCard({
   onEditResult: (title: string) => Promise<void>;
   onPause: () => void;
   onArchive: () => Promise<void>;
+  isPrimary: boolean;
+  onMakePrimary: () => void;
 }) {
   const l = useLocalizedCopy();
   const model = buildGoalCardModel(goal);
@@ -803,9 +810,25 @@ function GoalCard({
               {showManagement ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
             {showManagement && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7, marginTop: 6 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7, marginTop: 6 }}>
                 <button onClick={() => setEditingResult(true)} style={{ ...quietButtonStyle, padding: "8px 6px" }}>
                   <Edit3 size={14} /> {l("Editar", "Edit")}
+                </button>
+                {/* Quem sabe o que é urgente é ela, não a porcentagem de
+                    conclusão. A heurística continua sendo o padrão; isto é a
+                    palavra final. */}
+                <button
+                  onClick={onMakePrimary}
+                  style={{
+                    ...quietButtonStyle,
+                    padding: "8px 6px",
+                    ...(isPrimary
+                      ? { borderColor: "var(--accent-primary-strong)", color: "var(--accent-primary-ink)" }
+                      : {}),
+                  }}
+                >
+                  <Star size={14} />
+                  {isPrimary ? l("É o principal", "Is primary") : l("Tornar principal", "Make primary")}
                 </button>
                 <button onClick={onPause} style={{ ...quietButtonStyle, padding: "8px 6px" }}>
                   {paused ? <Play size={14} /> : <Pause size={14} />}
@@ -910,6 +933,7 @@ export function GoalsPage() {
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
   const [pendingQuestion, setPendingQuestion] = useState<{ goalId?: string | number; goalTitle: string; question: string } | null>(null);
   const [questionAnswer, setQuestionAnswer] = useState("");
+  const [primaryGoalId, setPrimaryGoalId] = useState<string | null>(() => readPrimaryGoalId());
   const [pausedIds, setPausedIds] = useState<string[]>(() => {
     try {
       return parsePausedGoalIds(localStorage.getItem(PAUSED_GOALS_KEY));
@@ -1217,6 +1241,16 @@ export function GoalsPage() {
       }}
       onPause={() => togglePaused(goal.id)}
       onArchive={() => archiveGoal(goal)}
+      isPrimary={String(goal.id) === primaryGoalId}
+      onMakePrimary={() => {
+        // Tocar de novo no que já é principal devolve a escolha à heurística.
+        const next = String(goal.id) === primaryGoalId ? null : goal.id;
+        setPrimaryGoal(next);
+        setPrimaryGoalId(next === null ? null : String(next));
+        showSuccess(next === null
+          ? l("Voltei a escolher sozinha qual é o principal.", "I'll pick the primary one again.")
+          : l("Esse é o seu objetivo principal agora.", "That's your primary goal now."));
+      }}
     />
   );
 

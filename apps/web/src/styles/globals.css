@@ -497,7 +497,7 @@ button {
 .tone-alert {
   background-image: linear-gradient(
     180deg,
-    rgba(246, 216, 208, 0.55),
+    rgba(191, 220, 203, 0.55),
     rgba(255, 253, 249, 0.82)
   );
 }
@@ -622,7 +622,8 @@ html.airia-installed-shell .page-transition {
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .aura-breathe,
-  .animate-pop-in {
+  .animate-pop-in,
+  .page-transition {
     animation: none !important;
     transform: none !important;
   }

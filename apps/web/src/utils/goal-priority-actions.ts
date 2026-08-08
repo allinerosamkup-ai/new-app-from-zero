@@ -54,6 +54,17 @@ export function readStoredGtdActions(): StoredGtdAction[] {
   }
 }
 
+/** Corrige o texto de um item do Inbox, preservando o resto do registro. */
+export function renameStoredGtdAction(itemId: string, title: string) {
+  const clean = title.trim();
+  if (!clean) return;
+  const updated = readStoredGtdActions().map((item) => (
+    item.id === itemId ? { ...item, text: clean, titulo: clean } : item
+  ));
+  localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
+  window.dispatchEvent(new CustomEvent("gtd-inbox-updated", { detail: { id: itemId } }));
+}
+
 export function markStoredGtdActionDone(itemId: string) {
   const raw = readStoredGtdActions();
   const updated = raw.map((item) => item.id === itemId ? { ...item, done: true } : item);
@@ -101,12 +112,30 @@ export function appendStoredGtdAction(input: {
 
 export function buildGoalPriorityActions(
   goals: GoalPrioritySource[],
-  options: { gtdItems?: StoredGtdAction[]; limit?: number } = {},
+  options: {
+    gtdItems?: StoredGtdAction[];
+    limit?: number;
+    /**
+     * Objetivo que já está no card grande da Home.
+     *
+     * Desse, a lista pula a primeira pendente e mostra a SEGUINTE: a primeira
+     * está logo acima, no card, e repetir a mesma ação em dois lugares na mesma
+     * tela é ruído — quem lê fica sem saber se são duas coisas ou uma.
+     */
+    focusGoalId?: string | number | null;
+  } = {},
 ): GoalPriorityAction[] {
+  const focusId = options.focusGoalId === undefined || options.focusGoalId === null
+    ? null
+    : String(options.focusGoalId);
+
   const goalActions = goals
     .filter((goal) => (goal.completedPct ?? 0) < 100)
     .map((goal) => {
-      const nextSub = orderedSubtasks(goal.subtasks).find((subtask) => !subtask.done);
+      const pending = orderedSubtasks(goal.subtasks).filter((subtask) => !subtask.done);
+      // O objetivo em foco entra a partir da segunda: se só tem uma pendente,
+      // ela já está no card e o objetivo não contribui para a lista.
+      const nextSub = String(goal.id) === focusId ? pending[1] : pending[0];
       if (!nextSub) return null;
 
       return {
@@ -149,26 +178,56 @@ export const NEXT_ACTIONS_LIMIT = 5;
  */
 export function buildNextActions(
   goals: GoalPrioritySource[],
-  options: { gtdItems?: StoredGtdAction[]; limit?: number } = {},
+  options: { gtdItems?: StoredGtdAction[]; limit?: number; focusGoalId?: string | number | null } = {},
 ): GoalPriorityAction[] {
   return buildGoalPriorityActions(goals, {
     gtdItems: options.gtdItems,
     limit: options.limit ?? NEXT_ACTIONS_LIMIT,
+    focusGoalId: options.focusGoalId,
   });
+}
+
+/** Onde fica o objetivo que a pessoa marcou como principal. */
+export const PRIMARY_GOAL_KEY = "airia-primary-goal-v1";
+
+export function readPrimaryGoalId(): string | null {
+  try {
+    const raw = localStorage.getItem(PRIMARY_GOAL_KEY);
+    return raw && raw.trim() ? raw.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writePrimaryGoalId(goalId: string | number | null) {
+  try {
+    if (goalId === null) localStorage.removeItem(PRIMARY_GOAL_KEY);
+    else localStorage.setItem(PRIMARY_GOAL_KEY, String(goalId));
+  } catch {
+    /* modo privado: a escolha vale só para esta sessão */
+  }
 }
 
 /**
  * Escolhe o objetivo que ocupa o card grande da Home e devolve o resto para a
  * lista compacta.
  *
- * "Mais ativo" = o mais perto de fechar. Isso resolve de graça a troca de foco:
- * quando o objetivo em destaque conclui, ele sai do filtro de elegíveis e o
- * seguinte assume sozinho. Nada de estado persistido dizendo "qual é o foco" —
- * a lista é reidratada a cada conclusão e a escolha se refaz.
+ * A ordem é: o que ela marcou como principal, e só então a heurística.
+ *
+ * A heurística ("o mais perto de fechar") continua sendo o padrão porque
+ * funciona sem pedir nada e resolve de graça a troca de foco — quando o objetivo
+ * em destaque conclui, ele sai dos elegíveis e o seguinte assume sozinho. Mas
+ * quem sabe o que é urgente é ela, não a porcentagem, então a escolha manual
+ * passa na frente.
+ *
+ * `preferredId` só vale se o objetivo ainda for elegível: existir, não estar
+ * pausado, não estar concluído e ter ação pendente. Falhando qualquer uma
+ * dessas, cai na heurística — é o que impede a escolha de ontem de virar um card
+ * morto hoje.
  */
 export function selectFocusGoal(
   goals: GoalPrioritySource[],
-  options: { pausedIds?: Array<string | number> } = {},
+  options: { pausedIds?: Array<string | number>; preferredId?: string | number | null } = {},
 ): { focus: GoalCardModel | null; others: GoalCardModel[] } {
   const paused = new Set((options.pausedIds ?? []).map(String));
 
@@ -180,6 +239,14 @@ export function selectFocusGoal(
     // Sem ação pendente o card grande não teria botão — vai para a lista.
     && model.nextAction !== null
   ));
+
+  const preferred = options.preferredId === undefined || options.preferredId === null
+    ? null
+    : eligible.find((model) => String(model.id) === String(options.preferredId)) ?? null;
+
+  if (preferred) {
+    return { focus: preferred, others: models.filter((model) => model.id !== preferred.id) };
+  }
 
   const focus = eligible.length === 0 ? null : [...eligible].sort((left, right) => {
     const leftPct = left.totalActions === 0 ? 0 : left.completedActions / left.totalActions;

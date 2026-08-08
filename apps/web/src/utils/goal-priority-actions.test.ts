@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGoalCardModel,
   buildGoalTaskSchedule,
+  buildNextActions,
   parsePausedGoalIds,
   selectFocusGoal,
   togglePausedGoalId,
@@ -157,5 +158,80 @@ describe("selectFocusGoal", () => {
     // Mesma lista, com "a" agora fechado — o seguinte assume sem estado salvo.
     const depois = selectFocusGoal([goal("a", 4, 4, 100), goal("b", 1, 4)]);
     expect(depois.focus?.id).toBe("b");
+  });
+});
+
+describe("Próximas ações x objetivo em foco", () => {
+  const comAcoes = (id: string, titulos: string[]) => ({
+    id,
+    title: `Objetivo ${id}`,
+    completedPct: 0,
+    subtasks: titulos.map((title, index) => ({ id: `${id}-${index}`, title, done: false })),
+  });
+
+  it("não repete na lista a ação que já está no card de foco", () => {
+    const goals = [
+      comAcoes("foco", ["Separar as fotos", "Escrever a legenda"]),
+      comAcoes("outro", ["Ligar para o contador"]),
+    ];
+    const { focus } = selectFocusGoal(goals);
+    const acoes = buildNextActions(goals, { gtdItems: [], focusGoalId: focus?.id });
+
+    const textos = acoes.map((acao) => acao.text);
+    expect(focus?.nextAction?.title).toBe("Separar as fotos");
+    expect(textos).not.toContain("Separar as fotos");
+    expect(textos).toContain("Escrever a legenda");
+    expect(textos).toContain("Ligar para o contador");
+  });
+
+  it("objetivo em foco com uma ação só não entra na lista", () => {
+    const goals = [comAcoes("foco", ["Medir a parede"]), comAcoes("outro", ["Ligar para o contador"])];
+    const acoes = buildNextActions(goals, { gtdItems: [], focusGoalId: "foco" });
+
+    expect(acoes.map((acao) => acao.text)).toEqual(["Ligar para o contador"]);
+  });
+
+  it("sem foco definido, todos contribuem com a primeira — comportamento antigo", () => {
+    const goals = [comAcoes("a", ["Medir a parede", "Comprar a tinta"]), comAcoes("b", ["Ligar para o contador"])];
+    const acoes = buildNextActions(goals, { gtdItems: [] });
+
+    expect(acoes.map((acao) => acao.text)).toEqual(["Medir a parede", "Ligar para o contador"]);
+  });
+});
+
+describe("objetivo principal escolhido à mão", () => {
+  const goal = (id: string, feitas: number, total: number, pct = 0) => ({
+    id,
+    title: `Objetivo ${id}`,
+    completedPct: pct,
+    subtasks: Array.from({ length: total }, (_, index) => ({
+      id: `${id}-${index}`,
+      title: `Ação ${index}`,
+      done: index < feitas,
+    })),
+  });
+
+  it("a escolha dela ganha da heurística de quem está mais perto de fechar", () => {
+    const goals = [goal("quase", 3, 4), goal("escolhido", 0, 4)];
+
+    expect(selectFocusGoal(goals).focus?.id).toBe("quase");
+    expect(selectFocusGoal(goals, { preferredId: "escolhido" }).focus?.id).toBe("escolhido");
+  });
+
+  it("escolha inelegível cai na heurística em vez de deixar o card morto", () => {
+    const goals = [goal("concluido", 4, 4, 100), goal("ativo", 1, 4)];
+
+    // Concluído, pausado e inexistente: nenhum pode ocupar o card.
+    expect(selectFocusGoal(goals, { preferredId: "concluido" }).focus?.id).toBe("ativo");
+    expect(selectFocusGoal(goals, { preferredId: "ativo", pausedIds: ["ativo"] }).focus).toBeNull();
+    expect(selectFocusGoal(goals, { preferredId: "sumiu" }).focus?.id).toBe("ativo");
+  });
+
+  it("o escolhido sai da lista de outros, sem duplicar", () => {
+    const goals = [goal("a", 2, 4), goal("b", 0, 4)];
+    const { focus, others } = selectFocusGoal(goals, { preferredId: "b" });
+
+    expect(focus?.id).toBe("b");
+    expect(others.map((model) => model.id)).toEqual(["a"]);
   });
 });

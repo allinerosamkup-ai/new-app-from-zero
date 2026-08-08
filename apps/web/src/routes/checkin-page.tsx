@@ -17,6 +17,7 @@ import {
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
+import { tapHaptic } from "../utils/haptics";
 import { getClientDayContext } from "../utils/day-context";
 import { mergeVoiceFactors } from "./checkin-page.helpers";
 import {
@@ -115,7 +116,7 @@ function ChoiceButton({ active, onClick, children, ariaLabel }: {
       type="button"
       aria-label={ariaLabel}
       aria-pressed={active}
-      onClick={onClick}
+      onClick={() => { tapHaptic(); onClick(); }}
       style={{
         minHeight: 42,
         borderRadius: 12,

@@ -13,6 +13,7 @@ import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useAuraStore } from "../features/aura/store";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
+import { tapHaptic } from "../utils/haptics";
 import { supabase } from "../lib/supabase";
 import { buildJournalClosePrompt } from "./journal-page.helpers";
 import { isSpeechRecognitionSupported, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
@@ -214,6 +215,12 @@ export function JournalPage() {
   const [isSessionsLoading, setIsSessionsLoading] = useState(true);
   const [latestSummary, setLatestSummary] = useState<JournalSummary | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  /**
+   * Aba visível. Escrever hoje e reler o que passou são duas intenções
+   * diferentes, e empilhadas na mesma tela a segunda ficava soterrada abaixo da
+   * primeira — quem queria reler tinha que rolar por tudo.
+   */
+  const [journalTab, setJournalTab] = useState<"today" | "past">("today");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterEmotion, setFilterEmotion] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -805,6 +812,52 @@ export function JournalPage() {
           </div>
 
           <div
+            role="tablist"
+            aria-label={l("Seções do diário", "Journal sections")}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 4,
+              padding: 4,
+              borderRadius: 999,
+              background: "rgba(17,24,39,.04)",
+            }}
+          >
+            {([
+              { id: "today" as const, label: l("Hoje", "Today") },
+              { id: "past" as const, label: l("Anteriores", "Past entries") },
+            ]).map((tab) => {
+              const active = journalTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => { tapHaptic(); setJournalTab(tab.id); }}
+                  style={{
+                    minHeight: 38,
+                    borderRadius: 999,
+                    border: 0,
+                    cursor: "pointer",
+                    fontSize: 13,
+                    fontWeight: 800,
+                    fontFamily: "inherit",
+                    background: active ? "#fff" : "transparent",
+                    color: active ? "var(--text-1)" : "var(--text-3)",
+                    boxShadow: active ? "0 2px 8px rgba(31,42,54,.06)" : "none",
+                    transition: "background 160ms ease, color 160ms ease",
+                  }}
+                >
+                  {tab.label}
+                  {tab.id === "past" && sessions.length > 0 ? ` (${sessions.length})` : ""}
+                </button>
+              );
+            })}
+          </div>
+
+          {journalTab === "today" && (
+          <div
             style={{
               background: "#fff",
               borderRadius: "24px",
@@ -832,8 +885,9 @@ export function JournalPage() {
               {mainButtonLabel}
             </AuraButtonV2>
           </div>
+          )}
 
-          {latestSummary && (
+          {journalTab === "today" && latestSummary && (
             <div
               style={{
                 background: "rgba(255,255,255,.9)",
@@ -887,6 +941,7 @@ export function JournalPage() {
             </div>
           )}
 
+          {journalTab === "past" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <p style={{ fontSize: 12, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--text-3)", margin: 0 }}>
@@ -1110,6 +1165,7 @@ export function JournalPage() {
               })()
             )}
           </div>
+          )}
         </div>
         {finalizationModal}
       </div>

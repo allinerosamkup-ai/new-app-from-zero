@@ -4,6 +4,7 @@ import { Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuraStore } from "../features/aura/store";
+import { tapHaptic } from "../utils/haptics";
 import { supabase } from "../lib/supabase";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
@@ -201,7 +202,7 @@ export function AuraLayout() {
         key={item.route}
         type="button"
         className={`airia-nav-item flex flex-col items-center justify-center p-2 nav-item${isActive ? ' active' : ''}`}
-        onClick={() => navigate(item.route)}
+        onClick={() => { tapHaptic(); navigate(item.route); }}
       >
         <span className="mb-0.5">{item.icon}</span>
         <span className="text-[10px] font-bold tracking-normal">{t(item.labelKey)}</span>

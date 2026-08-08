@@ -991,7 +991,7 @@ body {
   border-color: rgba(191,220,203,.32);
 }
 .btn-secondary:hover:not(:disabled) { background: rgba(191,220,203,.18); border-color: rgba(191,220,203,.5); }
-.btn-secondary:active:not(:disabled) { background: rgba(224,195,181,.22); }
+.btn-secondary:active:not(:disabled) { background: rgba(191,220,203,.30); }
 
 /* Ghost — outline neutro pill */
 .btn-ghost {
@@ -1346,8 +1346,12 @@ body {
 /* ═══════════════════════════════════════════════════════════
    SCREEN: HOME
    ═══════════════════════════════════════════════════════════ */
+/* O gradiente tinha salmão (247,207,196) e lilás (229,219,247) cravados em
+   valor literal, e por isso passou inteiro pela virada verde: varredura de
+   token não enxerga cor escrita à mão. Agora é uma rampa do verde primário
+   para o azul de energia — os dois acentos que o app já usa. */
 .home-header {
-  background: linear-gradient(135deg, rgba(191,220,203,.42) 0%, rgba(247,207,196,.58) 58%, rgba(229,219,247,.38) 100%);
+  background: linear-gradient(135deg, rgba(191,220,203,.52) 0%, rgba(191,220,203,.30) 52%, rgba(190,230,243,.42) 100%);
   border-radius: 28px;
   padding: calc(var(--a) * 1.2) calc(var(--a) * 1.2) calc(var(--a) * 1.3);
   margin-bottom: calc(var(--a) * 1);
@@ -2142,7 +2146,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   border: 0.5px solid rgba(255,255,255,0.5);
   border-radius: 18px;
   text-align: center;
-  box-shadow: 0 6px 20px rgba(244,167,160,0.08);
+  box-shadow: 0 6px 20px rgba(143,192,164,0.10);
 }
 .harmony-overall-pct {
   font-size: 40px;
@@ -2792,12 +2796,22 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 
 
 /* ─── Page Transition ─────────────────────────────────────── */
+/*
+ * A animação estava declarada aqui desde sempre e nunca teve efeito: com
+ * `display: contents` o elemento não gera caixa, e sem caixa não há onde aplicar
+ * `opacity` nem `transform`. Trocando por um item flex que repassa o layout do
+ * `.app-viewport` (também flex-column), a caixa existe e a transição roda — sem
+ * mexer na rolagem das páginas nem na barra inferior.
+ */
 .page-transition {
-  animation: page-enter 0.22s ease-out both;
-  display: contents;
+  animation: page-enter 0.26s cubic-bezier(.16, 1, .3, 1) both;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 @keyframes page-enter {
-  from { opacity: 0; transform: translateY(7px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 

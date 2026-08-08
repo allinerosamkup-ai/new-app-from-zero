@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
-import { Check, ListChecks } from "lucide-react";
+import { Check, ListChecks, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useLocalizedCopy } from "../i18n";
 import { useAuraStore } from "../features/aura/store";
+import { useFocusGoal } from "../features/aura/use-focus-goal";
 import {
   buildNextActions,
   markStoredGtdActionDone,
   readStoredGtdActions,
+  renameStoredGtdAction,
   type GoalPriorityAction,
 } from "../utils/goal-priority-actions";
+import { tapHaptic } from "../utils/haptics";
 
 /**
  * Próximas ações — o que fazer agora, sem data nenhuma.
@@ -28,9 +31,14 @@ const INBOX_UPDATED_EVENT = "gtd-inbox-updated";
 export function NextActionsCard() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
-  const { state, toggleSubGoal } = useAuraStore();
+  const { state, toggleSubGoal, updateSubGoalTitle } = useAuraStore();
   const [inboxTick, setInboxTick] = useState(0);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  // Ação em edição e o texto sendo digitado. A ação nasce da leitura da IA e nem
+  // sempre sai com as palavras dela; sem poder corrigir, a saída seria apagar e
+  // recriar, perdendo ordem e vínculo com o objetivo.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
 
   // O Inbox vive no armazenamento local, fora do store. Sem ouvir o evento, um
   // item registrado pelo diário só apareceria no próximo carregamento da tela.
@@ -40,15 +48,38 @@ export function NextActionsCard() {
     return () => window.removeEventListener(INBOX_UPDATED_EVENT, bump);
   }, []);
 
+  // A primeira ação do objetivo principal já está no card acima. Passar o id do
+  // foco faz esta lista mostrar a SEGUINTE dele, em vez de repetir a mesma coisa
+  // duas vezes na mesma tela.
+  const { focus } = useFocusGoal(state.goals ?? []);
   const actions = buildNextActions(state.goals ?? [], {
     // inboxTick força a releitura; o valor em si não é usado.
     gtdItems: inboxTick >= 0 ? readStoredGtdActions() : undefined,
+    focusGoalId: focus?.id ?? null,
   });
 
   if (actions.length === 0) return null;
 
+  async function saveEdit(action: GoalPriorityAction) {
+    const clean = draft.trim();
+    setEditingId(null);
+    if (!clean || clean === action.text) return;
+
+    try {
+      if (action.source === "goal" && action.goalId !== undefined && action.subId !== undefined) {
+        await updateSubGoalTitle(action.goalId, action.subId, clean);
+      } else if (action.gtdId) {
+        renameStoredGtdAction(action.gtdId, clean);
+        setInboxTick((tick) => tick + 1);
+      }
+    } catch {
+      // Falhou ao gravar: o texto antigo continua na tela, que é a verdade.
+    }
+  }
+
   async function complete(action: GoalPriorityAction) {
     if (completingId) return;
+    tapHaptic();
     setCompletingId(action.id);
     try {
       if (action.source === "goal" && action.goalId !== undefined && action.subId !== undefined) {
@@ -125,15 +156,66 @@ export function NextActionsCard() {
             </button>
 
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-1)", lineHeight: 1.35 }}>
-                {action.text}
-              </span>
-              {action.goalTitle && (
+              {editingId === action.id ? (
+                <input
+                  autoFocus
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  onBlur={() => { void saveEdit(action); }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") { event.preventDefault(); void saveEdit(action); }
+                    if (event.key === "Escape") setEditingId(null);
+                  }}
+                  maxLength={140}
+                  aria-label={l("Editar a ação", "Edit the action")}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--text-1)",
+                    padding: "4px 8px",
+                    borderRadius: 9,
+                    border: "1.5px solid var(--accent-primary-strong, #8FC0A4)",
+                    background: "#fff",
+                    fontFamily: "inherit",
+                  }}
+                />
+              ) : (
+                <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-1)", lineHeight: 1.35 }}>
+                  {action.text}
+                </span>
+              )}
+              {action.goalTitle && editingId !== action.id && (
                 <span style={{ display: "block", fontSize: 10, color: "var(--text-3)", marginTop: 2 }}>
                   {action.goalTitle}
                 </span>
               )}
             </span>
+
+            {editingId !== action.id && (
+              <button
+                type="button"
+                aria-label={l(`Editar: ${action.text}`, `Edit: ${action.text}`)}
+                onClick={() => { tapHaptic(); setDraft(action.text); setEditingId(action.id); }}
+                style={{
+                  width: 30,
+                  height: 30,
+                  flexShrink: 0,
+                  borderRadius: 9,
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--text-3)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                }}
+              >
+                <Pencil size={13} aria-hidden="true" />
+              </button>
+            )}
           </div>
         ))}
       </div>

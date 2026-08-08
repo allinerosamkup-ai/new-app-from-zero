@@ -173,6 +173,8 @@ type AuraStoreContextValue = {
   addGoal: (title: string) => Promise<void>;
   addGoalWithSubGoals: (title: string, subgoals: string[]) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
+  /** Corrige o texto de uma ação sem mexer em progresso nem em ordem. */
+  updateSubGoalTitle: (goalId: string | number, subGoalId: string | number, title: string) => Promise<void>;
   linkGoalActionToPlannerBlock: (goalId: string | number, subGoalId: string | number, plannerBlockId: string | number) => Promise<void>;
   setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
   toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<GoalActionCompletion | null>;
@@ -721,6 +723,32 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const merged = [...existing, ...newSubs];
         const pct = merged.length > 0 ? Math.round(merged.filter(s => s.done).length / merged.length * 100) : 0;
         await api.patch(`/objectives/${goalId}`, { progress: pct, subgoals: merged });
+        await refreshData();
+      },
+      /**
+       * Renomeia uma ação.
+       *
+       * A ação nasce da leitura da IA e nem sempre sai com as palavras dela. Sem
+       * poder corrigir o texto, a alternativa é apagar e recriar — o que perde a
+       * ordem e o vínculo com o objetivo. Só o título muda aqui: `done`, `order`
+       * e o progresso ficam exatamente como estavam.
+       */
+      updateSubGoalTitle: async (goalId, subGoalId, title) => {
+        const clean = title.trim();
+        if (!clean) return;
+        const goal = state.goals.find((item) => item.id === goalId);
+        if (!goal) return;
+
+        const subgoals = goal.subtasks.map((subgoal, index) => ({
+          id: String(subgoal.id),
+          title: String(subgoal.id) === String(subGoalId) ? clean : subgoal.title,
+          done: subgoal.done,
+          order: subgoal.order ?? index,
+          plannerBlockId: subgoal.plannerBlockId ?? null,
+          aiGenerated: false,
+        }));
+
+        await api.patch(`/objectives/${goalId}`, { subgoals });
         await refreshData();
       },
       linkGoalActionToPlannerBlock: async (goalId, subGoalId, plannerBlockId) => {

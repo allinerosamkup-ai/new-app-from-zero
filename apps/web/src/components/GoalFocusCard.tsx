@@ -4,8 +4,9 @@ import { useNavigate } from "react-router-dom";
 
 import { useLocalizedCopy } from "../i18n";
 import { useAuraStore } from "../features/aura/store";
+import { tapHaptic } from "../utils/haptics";
 import { RewardBurst, type Reward } from "./RewardBurst";
-import { parsePausedGoalIds, selectFocusGoal } from "../utils/goal-priority-actions";
+import { useFocusGoal } from "../features/aura/use-focus-goal";
 
 /**
  * O objetivo em foco e os demais, no lugar onde antes ficava a agenda do dia.
@@ -18,16 +19,6 @@ import { parsePausedGoalIds, selectFocusGoal } from "../utils/goal-priority-acti
  * Nenhuma busca nova acontece aqui: os objetivos já vêm hidratados no store.
  */
 
-const PAUSED_GOALS_KEY = "airia-paused-goals-v1";
-
-function readPausedIds(): string[] {
-  try {
-    return parsePausedGoalIds(localStorage.getItem(PAUSED_GOALS_KEY));
-  } catch {
-    return [];
-  }
-}
-
 export function GoalFocusCard() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
@@ -35,7 +26,7 @@ export function GoalFocusCard() {
   const [completingId, setCompletingId] = useState<string | number | null>(null);
   const [reward, setReward] = useState<Reward | null>(null);
 
-  const { focus, others } = selectFocusGoal(state.goals ?? [], { pausedIds: readPausedIds() });
+  const { focus, others } = useFocusGoal(state.goals ?? []);
 
   // Sem objetivo nenhum a Home não mostra caixa vazia: mostra o convite para
   // criar o primeiro, com destino real (botão que não faz nada é reprovado
@@ -64,6 +55,7 @@ export function GoalFocusCard() {
   }
 
   async function completeFocusAction() {
+    tapHaptic();
     if (!focus?.nextAction || completingId !== null) return;
     setCompletingId(focus.nextAction.id);
     try {

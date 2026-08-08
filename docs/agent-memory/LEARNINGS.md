@@ -72,6 +72,24 @@ valor literal — é assim que o rosa reentraria.
 Exceção deliberada: a logo mantém a paleta original (`AuraIcon.tsx` e bloco
 `LOGO` de `splash-page.tsx`). Varredura de cor pula esses dois.
 
+### [FATO] Trocar token não alcança cor escrita à mão
+A virada verde trocou os tokens e **não tocou** em `rgba()` literal. O
+`.home-header` — o primeiro card da Home — continuou salmão por isso, e mais três
+lugares junto (`.tone-alert`, `.btn-secondary:active`, sombra do harmony).
+Nenhum teste podia ter pego: não havia token envolvido.
+
+Guarda hoje: caso "não há salmão nem rosa cravado" em `css-tokens.test.ts`. O
+recorte é estreito de propósito (claro + quente + azul perto do verde) para não
+alarmar sobre vermelho de erro, amarelo de aviso e marrom de texto, que ficam de
+fora da paleta por decisão.
+
+### [FATO] `display: contents` anula qualquer animação do elemento
+`.page-transition` declarava `animation: page-enter` **e** `display: contents`.
+Sem caixa gerada não há onde aplicar `opacity` nem `transform`: a transição
+existia no CSS e nunca rodou, em nenhuma tela, desde que foi escrita.
+Substituído por item flex (`flex: 1 1 auto; min-height: 0`) que repassa o layout
+do `.app-viewport`, também flex-column — a rolagem das páginas continua igual.
+
 ---
 
 ## IA

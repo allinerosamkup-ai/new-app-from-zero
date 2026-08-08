@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
-import { successHaptic } from "../utils/haptics";
+import { successHaptic, tapHaptic } from "../utils/haptics";
 import { useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import {
@@ -27,6 +27,7 @@ import {
   RESTORERS,
   STORY_STEPS,
 } from "../features/story-onboarding/steps";
+import { buildFirstCheckin } from "../features/story-onboarding/first-checkin";
 import "../features/story-onboarding/story.css";
 
 /**
@@ -52,6 +53,9 @@ const EMPTY: StoryAnswers = {
   listPreference: null,
 };
 
+/** Teto de objetivos. Ver o comentário em `goalTitles`. */
+const MAX_GOALS = 3;
+
 function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 }
@@ -63,16 +67,26 @@ export default function StoryOnboardingPage() {
 
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<StoryAnswers>(EMPTY);
-  const [goalTitle, setGoalTitle] = useState("");
+  /**
+   * Até três objetivos.
+   *
+   * O teto não é estético: cada objetivo custa duas chamadas de modelo
+   * (interpretação + validação) na tela mais crítica do funil. Três é o ponto em
+   * que ainda dá para gerar tudo em paralelo sem transformar a conclusão do
+   * onboarding em sala de espera.
+   */
+  const [goalTitles, setGoalTitles] = useState<string[]>([]);
+  const [freeGoal, setFreeGoal] = useState("");
   const [capacity, setCapacity] = useState<string | null>(null);
   const [commitment, setCommitment] = useState<string | null>(null);
 
   // Resultado real do motor de interpretação.
+  type GoalPlan = { title: string; steps: string[]; question: string | null; resultDefinition: string | null };
+  const [plans, setPlans] = useState<GoalPlan[]>([]);
   const [resultDefinition, setResultDefinition] = useState<string | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
   const [question, setQuestion] = useState<string | null>(null);
   const [thinking, setThinking] = useState(false);
-  const [failed, setFailed] = useState(false);
 
   const [workDone, setWorkDone] = useState(0);
   const startedRef = useRef(false);
@@ -88,7 +102,23 @@ export default function StoryOnboardingPage() {
 
   const reckoning = useMemo(() => buildReckoning(answers), [answers]);
   const mirror = useMemo(() => buildMirror(answers), [answers]);
-  const outlook = useMemo(() => buildOutlook(answers, goalTitle || null), [answers, goalTitle]);
+  const outlook = useMemo(() => buildOutlook(answers, goalTitles[0] ?? null), [answers, goalTitles]);
+
+  const toggleGoal = useCallback((titulo: string) => {
+    setGoalTitles((atuais) => {
+      if (atuais.includes(titulo)) return atuais.filter((item) => item !== titulo);
+      return atuais.length >= MAX_GOALS ? atuais : [...atuais, titulo];
+    });
+  }, []);
+
+  const addFreeGoal = useCallback(() => {
+    const limpo = freeGoal.trim();
+    if (limpo.length < 3) return;
+    setGoalTitles((atuais) => (
+      atuais.includes(limpo) || atuais.length >= MAX_GOALS ? atuais : [...atuais, limpo]
+    ));
+    setFreeGoal("");
+  }, [freeGoal]);
 
   const go = useCallback((delta: number) => {
     setIndex((current) => Math.min(STORY_STEPS.length - 1, Math.max(0, current + delta)));
@@ -99,33 +129,41 @@ export default function StoryOnboardingPage() {
    * a Airia devolver uma PERGUNTA em vez de passos, que é o comportamento certo
    * quando o objetivo é amplo demais.
    */
-  const interpretGoal = useCallback(async (title: string) => {
+  const interpretGoals = useCallback(async (titles: string[]) => {
     setThinking(true);
-    setFailed(false);
-    try {
-      const response = await api.post("/ai/suggest", {
-        type: "goal-subtasks",
-        context: {
-          goalTitle: title,
-          existingSubtasks: [],
-          capacity,
-          userStatements: [answers.feeling ? `Cheguei aqui ${answers.feeling.toLowerCase()}.` : ""].filter(Boolean),
-        },
-      }) as { suggestion?: { items?: string[]; question?: string | null; resultDefinition?: string | null } };
 
-      const suggestion = response.suggestion ?? {};
-      setResultDefinition(suggestion.resultDefinition?.trim() || null);
-      setSteps((suggestion.items ?? []).map((item) => String(item).trim()).filter(Boolean).slice(0, 5));
-      setQuestion(suggestion.question?.trim() || null);
-    } catch {
-      // Falha de rede não pode prender ninguém no onboarding: o fluxo segue e o
-      // objetivo é criado do mesmo jeito no fim.
-      setFailed(true);
-      setSteps([]);
-      setQuestion(null);
-    } finally {
-      setThinking(false);
-    }
+    const statements = [answers.feeling ? `Cheguei aqui ${answers.feeling.toLowerCase()}.` : ""].filter(Boolean);
+
+    // Em paralelo, não em série: três objetivos × (geração + validação) em fila
+    // colocariam ~20s na tela onde ela mais desiste.
+    const resultados = await Promise.all(titles.map(async (title) => {
+      try {
+        const response = await api.post("/ai/suggest", {
+          type: "goal-subtasks",
+          context: { goalTitle: title, existingSubtasks: [], capacity, userStatements: statements },
+        }) as { suggestion?: { items?: string[]; question?: string | null; resultDefinition?: string | null } };
+
+        const suggestion = response.suggestion ?? {};
+        return {
+          title,
+          steps: (suggestion.items ?? []).map((item) => String(item).trim()).filter(Boolean).slice(0, 5),
+          question: suggestion.question?.trim() || null,
+          resultDefinition: suggestion.resultDefinition?.trim() || null,
+        };
+      } catch {
+        // Falha de rede não pode prender ninguém aqui: o objetivo é criado do
+        // mesmo jeito no fim, e as ações podem ser montadas depois em Objetivos.
+        return { title, steps: [] as string[], question: null, resultDefinition: null };
+      }
+    }));
+
+    setPlans(resultados);
+    // O clímax mostra o primeiro; os demais aparecem prontos em Objetivos.
+    const principal = resultados[0];
+    setResultDefinition(principal?.resultDefinition ?? null);
+    setSteps(principal?.steps ?? []);
+    setQuestion(principal?.question ?? null);
+    setThinking(false);
   }, [answers.feeling, capacity]);
 
   /**
@@ -155,42 +193,46 @@ export default function StoryOnboardingPage() {
     } catch { /* perfil é personalização; sem ele o app funciona sem calibragem */ }
     marcar(1);
 
-    if (goalTitle.trim()) {
+    // Todos os objetivos escolhidos, cada um já com as ações interpretadas: ela
+    // sai do onboarding com Objetivos preenchido, não com uma tela vazia.
+    const paraCriar = goalTitles.length > 0
+      ? goalTitles.map((title) => plans.find((plan) => plan.title === title) ?? { title, steps: [], resultDefinition: null })
+      : [];
+
+    await Promise.all(paraCriar.map(async (plan, indice) => {
       try {
-        const subgoals = steps.map((title, order) => ({
-          id: `story-${Date.now()}-${order}`,
-          title,
-          done: false,
-          order,
-          aiGenerated: true,
-        }));
         await comPrazo(api.post("/objectives", {
-          title: goalTitle.trim(),
+          title: plan.title,
           category: "geral",
-          ...(resultDefinition ? { description: resultDefinition } : {}),
-          subgoals,
-        }));
+          ...(plan.resultDefinition ? { description: plan.resultDefinition } : {}),
+          subgoals: plan.steps.map((title, order) => ({
+            id: `story-${Date.now()}-${indice}-${order}`,
+            title,
+            done: false,
+            order,
+            aiGenerated: true,
+          })),
+        }), 10000);
       } catch { /* segue: o objetivo pode ser recriado na tela de Objetivos */ }
-    }
+    }));
     marcar(2);
 
+    // Check-in com o que ela respondeu, não com um número de enfeite. O humor
+    // fixo em 5 que ficava aqui era dado inventado entrando no motor de ciclo —
+    // exatamente o que o app promete não fazer.
     try {
-      await comPrazo(api.post("/checkins", {
-        humor: 5,
-        energia: capacity === "quick" ? 3 : capacity === "heavy" ? 8 : 5,
-        ...(answers.feeling ? { note: `Primeiro registro: ${answers.feeling.toLowerCase()}.` } : {}),
-      }));
+      await comPrazo(api.post("/checkins", buildFirstCheckin(answers, capacity)));
     } catch { /* check-in inicial é bônus de calibragem, não requisito */ }
     marcar(3);
 
     try { await comPrazo(refreshData(), 5000); } catch { /* a Home recarrega sozinha */ }
     marcar(4);
-  }, [answers, capacity, goalTitle, refreshData, resultDefinition, steps]);
+  }, [answers, capacity, goalTitles, plans, refreshData]);
 
   // Efeitos de passo: interpretar no 'understanding', gravar no 'building'.
   useEffect(() => {
-    if (step === "understanding" && goalTitle.trim() && steps.length === 0 && !question && !thinking && !failed) {
-      void interpretGoal(goalTitle.trim());
+    if (step === "understanding" && goalTitles.length > 0 && plans.length === 0 && !thinking) {
+      void interpretGoals(goalTitles);
     }
     if (step === "building") {
       void persist();
@@ -208,7 +250,7 @@ export default function StoryOnboardingPage() {
   async function finish() {
     trackEvent("story_onboarding_completed", {
       blockers_count: answers.blockers.length,
-      has_goal: Boolean(goalTitle.trim()),
+      goals_count: goalTitles.length,
       commitment: commitment ?? "none",
       steps_generated: steps.length,
       asked_question: Boolean(question),
@@ -226,7 +268,7 @@ export default function StoryOnboardingPage() {
       case "drains": return true;
       case "restorers": return true;
       case "preference": return answers.listPreference !== null;
-      case "goal": return goalTitle.trim().length >= 3;
+      case "goal": return goalTitles.length > 0;
       case "checkin": return capacity !== null;
       case "commitment": return commitment !== null;
       default: return true;
@@ -416,28 +458,87 @@ export default function StoryOnboardingPage() {
         {step === "goal" && (<>
           <p className="story-eyebrow">{l("Agora a parte que importa", "Now the part that matters")}</p>
           <h1 className="story-title">{l("O que você quer resolver?", "What do you want to sort out?")}</h1>
-          <p className="story-body">{l("Escolhe uma ou escreve do seu jeito.", "Pick one or write it your way.")}</p>
+          <p className="story-body">
+            {l(`Escolhe até ${MAX_GOALS} ou escreve do seu jeito.`, `Pick up to ${MAX_GOALS} or write your own.`)}
+          </p>
           <div className="story-choices">
-            {GOAL_SHORTCUTS.map((option) => (
+            {GOAL_SHORTCUTS.map((option) => {
+              const marcado = goalTitles.includes(option.id);
+              const noTeto = goalTitles.length >= MAX_GOALS && !marcado;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className="story-choice"
+                  aria-pressed={marcado}
+                  disabled={noTeto}
+                  style={noTeto ? { opacity: .45, cursor: "default" } : undefined}
+                  onClick={() => { tapHaptic(); toggleGoal(option.id); }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              className="story-input"
+              value={freeGoal}
+              onChange={(event) => setFreeGoal(event.target.value)}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addFreeGoal(); } }}
+              disabled={goalTitles.length >= MAX_GOALS}
+              placeholder={l("Ou escreve aqui, do jeito que vier", "Or write it here, however it comes out")}
+              maxLength={120}
+              aria-label={l("Seu objetivo", "Your goal")}
+            />
+            {freeGoal.trim().length >= 3 && goalTitles.length < MAX_GOALS && (
               <button
-                key={option.id}
                 type="button"
                 className="story-choice"
-                aria-pressed={goalTitle === option.id}
-                onClick={() => setGoalTitle(goalTitle === option.id ? "" : option.id)}
+                style={{ flexShrink: 0, minWidth: 92, alignItems: "center" }}
+                onClick={() => { tapHaptic(); addFreeGoal(); }}
               >
-                {option.label}
+                {l("Somar", "Add")}
               </button>
-            ))}
+            )}
           </div>
-          <input
-            className="story-input"
-            value={GOAL_SHORTCUTS.some((option) => option.id === goalTitle) ? "" : goalTitle}
-            onChange={(event) => setGoalTitle(event.target.value)}
-            placeholder={l("Ou escreve aqui, do jeito que vier", "Or write it here, however it comes out")}
-            maxLength={120}
-            aria-label={l("Seu objetivo", "Your goal")}
-          />
+
+          {/* Bloquear o toque sem dizer por quê parece bug. */}
+          {goalTitles.length >= MAX_GOALS && (
+            <p className="story-evidence">
+              {l(
+                `${MAX_GOALS} já é bastante para começar. Dá para somar mais depois, em Objetivos.`,
+                `${MAX_GOALS} is plenty to start. You can add more later, in Goals.`,
+              )}
+            </p>
+          )}
+
+          {goalTitles.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {goalTitles.map((titulo) => (
+                <button
+                  key={titulo}
+                  type="button"
+                  onClick={() => { tapHaptic(); toggleGoal(titulo); }}
+                  aria-label={l(`Tirar: ${titulo}`, `Remove: ${titulo}`)}
+                  style={{
+                    border: "1.5px solid var(--accent-primary, #BFDCCB)",
+                    background: "var(--accent-primary-a3, rgba(191,220,203,.16))",
+                    color: "var(--accent-primary-ink, #4F7359)",
+                    borderRadius: 999,
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {GOAL_SHORTCUTS.find((option) => option.id === titulo)?.label ?? titulo} ×
+                </button>
+              ))}
+            </div>
+          )}
         </>)}
 
         {step === "understanding" && (<>
@@ -449,7 +550,7 @@ export default function StoryOnboardingPage() {
             <p className="story-body">{l("Se eu entendi errado, dá pra ajustar depois — em Objetivos.", "If I got it wrong, you can adjust it later in Goals.")}</p>
           </>)}
           {!thinking && !resultDefinition && (<>
-            <h1 className="story-title">{l(`Anotado: ${goalTitle}`, `Noted: ${goalTitle}`)}</h1>
+            <h1 className="story-title">{l(`Anotado: ${goalTitles[0] ?? ""}`, `Noted: ${goalTitles[0] ?? ""}`)}</h1>
             <p className="story-body">{l("Vou montar o caminho a partir daqui.", "I will build the path from here.")}</p>
           </>)}
         </>)}
@@ -529,7 +630,9 @@ export default function StoryOnboardingPage() {
           <div className="story-work">
             {[
               l("Perfil de como você funciona", "Profile of how you work"),
-              l("Seu objetivo e os passos", "Your goal and its steps"),
+              goalTitles.length > 1
+                ? l(`Seus ${goalTitles.length} objetivos e os passos`, `Your ${goalTitles.length} goals and their steps`)
+                : l("Seu objetivo e os passos", "Your goal and its steps"),
               l("Primeiro registro do seu ritmo", "First record of your rhythm"),
               l("Tudo pronto", "All set"),
             ].map((rotulo, i) => (
@@ -580,6 +683,7 @@ export default function StoryOnboardingPage() {
           className="story-cta"
           disabled={!canAdvance || (step === "building" && workDone < 4)}
           onClick={() => {
+            tapHaptic();
             if (step === "commitment") { void finish(); return; }
             go(1);
           }}
@@ -592,7 +696,7 @@ export default function StoryOnboardingPage() {
         </button>
 
         {index > 0 && step !== "building" && (
-          <button type="button" className="story-skip" onClick={() => go(-1)}>
+          <button type="button" className="story-skip" onClick={() => { tapHaptic(); go(-1); }}>
             {l("Voltar", "Back")}
           </button>
         )}

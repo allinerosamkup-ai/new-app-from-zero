@@ -128,6 +128,41 @@ describe("tokens CSS", () => {
     }
   });
 
+  /**
+   * Cor de acento escrita à mão escapa de toda varredura de token.
+   *
+   * Foi assim que o `.home-header` ficou salmão depois da virada verde: o
+   * gradiente tinha `rgba(247,207,196,.58)` cravado, e trocar os tokens não
+   * tocou nele. Nenhum teste podia ter pego — não havia token envolvido.
+   *
+   * O alvo é estreito de propósito: salmão e rosa pastel, a família que saiu do
+   * app. Fica de fora, por decisão registrada no CLAUDE.md, tudo que não é
+   * acento — vermelho de erro (R baixo demais), amarelo de aviso (azul muito
+   * distante do verde), marrom de texto (claro demais para o corte) e as cores
+   * de marca do Google.
+   */
+  it("não há salmão nem rosa cravado no CSS carregado", () => {
+    const cravadas: string[] = [];
+
+    for (const arquivo of cssCarregado()) {
+      const relativo = path.relative(SRC, arquivo).replaceAll("\\", "/");
+      const conteudo = fs.readFileSync(arquivo, "utf8");
+
+      conteudo.split("\n").forEach((linha, indice) => {
+        for (const match of linha.matchAll(/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/g)) {
+          const [r, g, b] = [Number(match[1]), Number(match[2]), Number(match[3])];
+          // Claro e quente (salmão/rosa), com azul perto do verde — o que separa
+          // essa família do amarelo, onde o azul despenca.
+          if (r >= 200 && g >= 130 && r - g >= 25 && g - b <= 45) {
+            cravadas.push(`${relativo}:${indice + 1} — rgb(${r},${g},${b})`);
+          }
+        }
+      });
+    }
+
+    expect(cravadas).toEqual([]);
+  }, 20_000);
+
   it("os apelidos de compatibilidade continuam apontando para o verde, nunca para rosa", () => {
     const aura = fs.readFileSync(path.join(SRC, "styles/aura.css"), "utf8");
     // Os alias existem para não quebrar código antigo. Se algum voltar a receber
