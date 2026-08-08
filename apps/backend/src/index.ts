@@ -123,6 +123,7 @@ import {
   GoalIntelligenceService,
   type GoalIntelligenceInput,
 } from './services/goal-intelligence.service';
+import { OperationalProfileService } from './services/operational-profile.service';
 import { ObjectiveProgressionError, ObjectiveProgressionService } from './services/objective-progression.service';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
@@ -2463,6 +2464,35 @@ export function createApp(dependencies: AppDependencies = {}) {
   // Todas as rotas abaixo exigem autenticação Supabase
   app.use('/api', dependencies.authMiddleware ?? requireAuth);
   app.use('/api/routine-builder', createRoutineBuilderRouter({ service: routineBuilderService }));
+
+  /**
+   * POST /api/onboarding/operational-profile
+   *
+   * Grava COMO a pessoa funciona — tamanho de passo, quantas opções ela
+   * consegue processar, o que trava primeiro. Não é diagnóstico e não vira
+   * rótulo visível: só muda o formato do que a Airia devolve.
+   */
+  const OperationalProfileSchema = z.object({
+    blockers: z.array(z.string().trim().min(1)).max(8).optional().default([]),
+    openFronts: z.number().int().min(0).max(99).nullable().optional().default(null),
+    listPreference: z.enum(['one_at_a_time', 'whole_picture']).nullable().optional().default(null),
+    stepSize: z.enum(['small', 'medium', 'large']).nullable().optional().default(null),
+  });
+
+  app.post('/api/onboarding/operational-profile', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const answers = OperationalProfileSchema.parse(req.body);
+      const profile = await OperationalProfileService.save(prisma, userId, answers);
+      return res.json({ profile });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[onboarding/operational-profile] Error:', error);
+      return res.status(500).json({ error: 'Failed to save operational profile' });
+    }
+  });
 
   app.post('/api/onboarding/process', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
@@ -5600,9 +5630,14 @@ export function createApp(dependencies: AppDependencies = {}) {
        * não tem como se auto-reprovar.
        */
       if (type === 'goal-subtasks' || type === 'checkin-next-step') {
-        const decomposition = await GoalIntelligenceService.decompose(
-          buildGoalIntelligenceInput({ type, context, userName, ragContext }),
-        );
+        // O perfil vem do banco, não do corpo da requisição. Se dependesse da
+        // tela mandar, cada superfície nova nasceria sem personalização e o
+        // onboarding teria sido preenchido à toa.
+        const operationalProfile = await OperationalProfileService.get(prisma, userId);
+        const decomposition = await GoalIntelligenceService.decompose({
+          ...buildGoalIntelligenceInput({ type, context, userName, ragContext }),
+          operationalProfile,
+        });
 
         const items = decomposition.steps.map((step) => step.title);
         const suggestion = {

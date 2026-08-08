@@ -40,6 +40,7 @@ const loadConteudoPage = () => import("./routes/conteudo-page");
 const loadContextoPage = () => import("./routes/contexto-page");
 const loadRoutineBuilderPage = () => import("./routes/routine-builder-page");
 const loadGuidedOnboardingPage = () => import("./routes/guided-onboarding-page");
+const loadStoryOnboardingPage = () => import("./routes/story-onboarding-page");
 const loadRunPage = () => import("./routes/run-page");
 const loadCapturesPage = () => import("./routes/captures-page");
 
@@ -79,6 +80,7 @@ const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: 
 const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: module.ContextoPage })));
 const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
 const GuidedOnboardingPage = lazy(() => loadGuidedOnboardingPage().then((module) => ({ default: module.GuidedOnboardingPage })));
+const StoryOnboardingPage = lazy(() => loadStoryOnboardingPage().then((module) => ({ default: module.default })));
 const RunPage = lazy(() => loadRunPage().then((module) => ({ default: module.RunPage })));
 const CapturesPage = lazy(() => loadCapturesPage().then((module) => ({ default: module.CapturesPage })));
 
@@ -241,6 +243,10 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* Fluxo guiado: tela cheia, sem bottom nav — a barra de ação é da própria etapa. */}
+        {/* O onboarding-história: introdução, clímax e conclusão num fluxo só.
+            Fica fora do AuraLayout de propósito — tela cheia, sem barra
+            competindo com o conteúdo. */}
+        <Route path="/comecar" element={<StoryOnboardingPage />} />
         <Route path="/onboarding/guiado" element={<GuidedOnboardingPage />} />
         <Route path="/onboarding/energy" element={<OnboardingEnergyPage />} />
         <Route path="/onboarding/cycle" element={<OnboardingCyclePage />} />

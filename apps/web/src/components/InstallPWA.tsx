@@ -58,6 +58,10 @@ export function InstallPWA() {
     if (isStandalonePwa()) return;
     // Página de venda do livro: visitante frio veio comprar, não instalar — sem banner
     if (window.location.pathname.startsWith("/livro")) return;
+    // Onboarding: tela cheia, uma pergunta por vez. Um banner cobrindo o topo
+    // rouba a única coisa que deveria estar na tela e atrapalha justamente o
+    // fluxo que decide se a pessoa fica. O convite de instalar espera a Home.
+    if (window.location.pathname.startsWith("/comecar")) return;
 
     const isSplash = window.location.pathname === "/";
     // Na splash, ignora dismiss anterior (queremos máxima exposição na entrada)

@@ -1,0 +1,298 @@
+/**
+ * Movimento do onboarding-história.
+ *
+ * A animação aqui tem uma função e só uma: marcar que alguma coisa aconteceu.
+ * Linha que entra uma a uma dá tempo de ler; barra que enche mostra trabalho
+ * real acontecendo; o selo que pulsa uma vez marca a conclusão. Nada gira em
+ * loop e nada se move sem motivo — movimento ambiente, para quem tem TDAH,
+ * compete com o conteúdo em vez de acompanhá-lo.
+ *
+ * Tudo desliga em `prefers-reduced-motion`: o conteúdo aparece inteiro, no
+ * lugar certo, sem transição. É a mesma regra que o RewardBurst já segue.
+ */
+
+/*
+ * Altura real, não herdada: esta rota fica fora do AuraLayout, então não existe
+ * pai esticado para `height: 100%` medir. `dvh` acompanha a barra do navegador
+ * no celular, que é onde o fluxo vai ser usado.
+ */
+.story-shell {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--warm-bg);
+}
+
+@supports not (height: 100dvh) {
+  .story-shell { min-height: 100vh; }
+}
+
+.story-progress {
+  height: 3px;
+  background: rgba(17, 24, 39, .06);
+  flex-shrink: 0;
+}
+
+.story-progress-fill {
+  height: 100%;
+  background: var(--accent-peach, #BFDCCB);
+  border-radius: 0 999px 999px 0;
+  transition: width 520ms cubic-bezier(.16, 1, .3, 1);
+}
+
+.story-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  padding: 28px 20px 20px;
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.story-eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent-peach-ink, #4F7359);
+}
+
+.story-title {
+  margin: 0;
+  font-size: clamp(22px, 6vw, 29px);
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: -.015em;
+  color: var(--text-1);
+  text-wrap: balance;
+}
+
+.story-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+/* ── Entrada de cada tela ── */
+.story-enter > * {
+  animation: story-rise 460ms cubic-bezier(.16, 1, .3, 1) both;
+}
+.story-enter > *:nth-child(2) { animation-delay: 60ms; }
+.story-enter > *:nth-child(3) { animation-delay: 120ms; }
+.story-enter > *:nth-child(4) { animation-delay: 180ms; }
+.story-enter > *:nth-child(5) { animation-delay: 240ms; }
+
+@keyframes story-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Linhas do espelho e da conta: uma a uma, com tempo de leitura ── */
+.story-line {
+  animation: story-line-in 520ms cubic-bezier(.16, 1, .3, 1) both;
+}
+@keyframes story-line-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Escolhas ── */
+.story-choices {
+  display: grid;
+  gap: 8px;
+}
+.story-choices.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.story-choice {
+  min-height: 52px;
+  border-radius: 15px;
+  border: 1.5px solid var(--warm-border-2, rgba(17, 24, 39, .1));
+  background: rgba(255, 255, 255, .78);
+  color: var(--text-1);
+  padding: 11px 14px;
+  font-size: 14.5px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+  font-family: inherit;
+}
+.story-choice:hover { border-color: var(--accent-peach, #BFDCCB); }
+.story-choice:active { transform: scale(.985); }
+.story-choice[aria-pressed="true"] {
+  border-color: var(--accent-peach, #BFDCCB);
+  background: var(--accent-peach-a3, #EDF6F0);
+  color: var(--accent-peach-ink, #4F7359);
+}
+.story-choice .hint {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-3);
+  line-height: 1.35;
+}
+.story-choice[aria-pressed="true"] .hint { color: var(--accent-peach-ink, #4F7359); opacity: .8; }
+
+.story-choice:focus-visible,
+.story-cta:focus-visible,
+.story-skip:focus-visible,
+.story-input:focus-visible {
+  outline: 2px solid var(--accent-peach-ink, #4F7359);
+  outline-offset: 2px;
+}
+
+.story-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 52px;
+  border-radius: 15px;
+  border: 1.5px solid var(--warm-border-2, rgba(17, 24, 39, .1));
+  background: rgba(255, 255, 255, .9);
+  padding: 13px 15px;
+  font-size: 16px; /* 16px evita o zoom automático do iOS ao focar */
+  font-family: inherit;
+  color: var(--text-1);
+}
+
+/* ── Rodapé de ação ── */
+.story-foot {
+  padding: 12px 20px calc(20px + env(safe-area-inset-bottom));
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.story-cta {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--accent-peach, #BFDCCB);
+  /* Verde-escuro, não branco: o acento do app é claro (#BFDCCB) e texto branco
+     em cima dele fica em 1.7:1, ilegível. É o mesmo par que o GoalFocusCard usa. */
+  color: #2C5340;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.story-cta:active { transform: scale(.99); }
+.story-cta:disabled { opacity: .45; cursor: default; }
+
+.story-skip {
+  background: none;
+  border: 0;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px;
+  font-family: inherit;
+}
+
+/* ── A conta: o número entra com peso ── */
+.story-reckon {
+  border-radius: 18px;
+  background: var(--accent-peach-a3, #EDF6F0);
+  border: 1.5px solid var(--accent-peach, #BFDCCB);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.story-reckon-turn {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 1.45;
+  color: var(--accent-peach-ink, #4F7359);
+}
+.story-evidence {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+
+/* ── Trabalho real acontecendo ── */
+.story-work {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.story-work-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-3);
+  transition: color 260ms ease;
+}
+.story-work-item.done { color: var(--text-1); }
+.story-work-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--warm-border-2, rgba(17, 24, 39, .12));
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: #2C5340;
+  font-weight: 900;
+  transition: background 260ms ease, border-color 260ms ease;
+}
+.story-work-item.done .story-work-dot {
+  background: var(--accent-sage, #BFDCCB);
+  border-color: var(--accent-sage, #BFDCCB);
+}
+
+/* ── Conclusão: um pulso, uma vez ── */
+.story-seal {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent-sage, #BFDCCB);
+  color: #2C5340;
+  font-size: 32px;
+  margin: 0 auto;
+  animation: story-seal-pop 620ms cubic-bezier(.2, 1.5, .4, 1) both;
+}
+@keyframes story-seal-pop {
+  0% { opacity: 0; transform: scale(.5); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-enter > *,
+  .story-line,
+  .story-seal {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .story-progress-fill,
+  .story-choice,
+  .story-cta,
+  .story-work-item,
+  .story-work-dot {
+    transition: none !important;
+  }
+}
