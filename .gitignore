@@ -28,6 +28,10 @@ vite.config.previewbridge.js
 # Estado por sessão do verification-guard (.claude/hooks/verification-guard.mjs)
 .claude/.state/
 
+# Configuração local do Claude Code — guarda tokens em `env` e permissões
+# desta máquina. NUNCA versionar: já vazou EXPO_TOKEN e senha do Postgres uma vez.
+.claude/settings.local.json
+
 # Worktrees (isolated workspaces)
 .worktrees/
 worktrees/
