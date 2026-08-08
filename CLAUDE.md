@@ -119,7 +119,54 @@ Pendente de decisão: hoje `/comecar` existe em paralelo e não substituiu nada.
 Virar porta de entrada depende de definir se roda **antes do cadastro** — sem
 sessão não há onde gravar.
 
+## Como se conclui uma tarefa aqui (obrigatório)
+
+**Alterar arquivo não conclui tarefa.** O protocolo completo está em
+[`docs/CLAUDE_ITERATION_PROTOCOL.md`](docs/CLAUDE_ITERATION_PROTOCOL.md). O que
+vale sempre, sem precisar abrir o documento:
+
+- `IMPLEMENTATION IS NOT COMPLETION. VERIFICATION IS PART OF IMPLEMENTATION.`
+  Código escrito, componente criado, `tsc` passando, build verde e teste isolado
+  passando são **etapas intermediárias**, não conclusão.
+- Ciclo: `UNDERSTAND → DEFINE DONE → IMPLEMENT → RUN → VERIFY → DIAGNOSE → FIX →
+  RE-VERIFY → REGRESSION → DONE`. Falha de verificação **abre iteração**, não
+  encerra tarefa.
+- Critérios de aceite viram lista **antes** de implementar, não depois de ver o
+  que deu para construir.
+- `CODE CORRECTNESS IS NOT PRODUCT CORRECTNESS.` Mudança visível na tela se prova
+  no navegador. Saída de IA tecnicamente válida e semanticamente errada é `FAIL`.
+- Bug: `REPRODUZIR → CAUSA RAIZ → CORRIGIR → REPRODUZIR DE NOVO → REGRESSÃO`.
+  Sem correção por palpite, sem alterar cinco coisas para ver qual pega.
+- Mesma abordagem falhou 2 vezes → trocar de hipótese. 3 vezes → análise de causa
+  raiz (§11 do protocolo) antes de tentar de novo.
+- Impedimento externo real: declarar `BLOQUEADO` com evidência e a ação exata
+  para destravar. Nunca "concluído".
+- Nada de placeholder silencioso, botão sem fluxo real, integração mockada
+  chamada de pronta, ou falha escondida no resumo final.
+
+O hook `.claude/hooks/verification-guard.mjs` reforça o mínimo disso de forma
+determinística: se houve alteração de código-fonte e nenhuma verificação rodou,
+ele bloqueia a parada uma vez. Ele não julga se a verificação foi suficiente —
+isso é o gate do protocolo.
+
+## Memória do projeto
+
+Conhecimento persistente vive em [`docs/agent-memory/`](docs/agent-memory/):
+`PROJECT_CONTEXT.md` (stack, comandos, portas, invariantes), `VERIFICATION.md`
+(como verificar aqui, custo real, falsos positivos conhecidos), `LEARNINGS.md`
+(fatos, decisões e abordagens que já falharam), `KNOWN_ISSUES.md` e
+`CURRENT_STATE.md` (tarefa em andamento e handoff).
+
+> **BEFORE REDISCOVERING, CHECK MEMORY. BEFORE FINISHING, UPDATE MEMORY.**
+
+Antes de trabalho relevante: ler só os arquivos do domínio da tarefa e validar
+contra o código. Depois: registrar o que evita retrabalho futuro, atualizar
+`CURRENT_STATE.md` se sobrou trabalho, e **corrigir memória que se revelou
+errada**. Memória é cache — em conflito, o código ganha. Tarefa trivial pode não
+gerar entrada nenhuma; não escreva por ritual.
+
 ## Atualizações Recentes
+- **2026-08-08:** Protocolo de iteração e conclusão (`docs/CLAUDE_ITERATION_PROTOCOL.md`) + memória operacional (`docs/agent-memory/`) + hook `verification-guard` que barra parada sem verificação. Achado no caminho: **8 arquivos de teste do backend nunca rodam** — o script `test` é lista manual e teste novo não entra sozinho.
 - **2026-08-03:** Correções de aparência e de relatório. **27 tokens CSS que o código pedia e o CSS nunca definiu** — `var()` que não resolve invalida a declaração, e era isso que fazia botão da página de Objetivos parecer sem título e o "Criar objetivo" parecer desaparecido. Caixa de **Próximas ações** na Home substituiu "Tarefas sugeridas": até 5 itens, sem data, regra é conclusão e não prazo. Dedupe em duas camadas — lexical instantâneo, LLM no caso difícil. Relatório de período passou a analisar a janela inteira, com seletor de 5 períodos e estrutura de 13 seções.
 - **2026-08-02:** Reestruturação para o núcleo. Chave de funcionalidade desligou Planner e Hábitos sem apagar nada. Home virou "o que eu faço agora": objetivo em foco com a próxima ação concluível ali. Gamificação de objetivos — 12 XP por micro-ação, 60 por objetivo, com 4 contadores em `EventLog` (zero migração). Diário passou a propor check-in e meta, sempre com confirmação. Login com Google removido. **LGPD:** a tabela `Consent` existia e era exportada mas nunca era escrita — o app não conseguia provar consentimento; agora grava com versão e data, mais endpoints de consulta e revogação.
 - **2026-08-02:** Base clínica em `docs/product/base-clinica-padroes-e-acoes.md` (ASRS, MDQ, TCC para ciclotimia, NIMH Life Chart). Três falhas de detecção corrigidas no motor: traços mistos invisíveis porque o composto colapsava humor baixo com energia alta; sinal do sono invertido (dormir pouco **e estar bem** é marcador de elevação, não privação); e `sleepHours` sendo descartado na agregação diária. Estabilidade ganhou valência — platô baixo não é equilíbrio, e depressão sustentada deixou de ser lida como "Estável".
@@ -139,8 +186,10 @@ sessão não há onde gravar.
 ## Como rodar
 ```bash
 # Backend (porta 3001)
-cd apps/backend && npm run dev
+npm run dev -w apps/backend
 
-# Frontend (porta 5173)
-cd apps/web && npm run dev
+# Frontend (porta 5051)
+npm run dev -w apps/web
 ```
+Dentro do Claude Code, prefira `preview_start` com os nomes de `.claude/launch.json`
+(`backend`, `web`, `mobile`, `prisma-studio`) em vez de subir servidor pelo shell.

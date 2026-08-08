@@ -25,6 +25,9 @@ vite.config.previewbridge.js
 # D.U.M.M.Y. OS memory
 .dummy/
 
+# Estado por sessão do verification-guard (.claude/hooks/verification-guard.mjs)
+.claude/.state/
+
 # Worktrees (isolated workspaces)
 .worktrees/
 worktrees/

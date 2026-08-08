@@ -1,9 +1,34 @@
 {
   "permissions": {
     "allow": [
-      "Bash(EXPO_TOKEN=\"3Ssr-a_fx0OUfQwxdBeZ0cqkHnWsYL5GoqCdpkWn\" npx eas-cli@latest build:view 707d3115-9202-4edd-b172-45deec27e94e --json)",
-      "Bash(EXPO_TOKEN=\"3Ssr-a_fx0OUfQwxdBeZ0cqkHnWsYL5GoqCdpkWn\" npx eas-cli@latest build:view 707d3115-9202-4edd-b172-45deec27e94e)",
-      "Bash(grep -oE \"https?://[^\\\\\"'\\\\\\\\\\)\\\\\\\\s]*\\\\\\\\.apk|airia\\\\\\\\.pro/airia\\\\\\\\.apk|/airia\\\\\\\\.apk\")"
+      "Bash(grep -oE \"https?://[^\\\\\"'\\\\\\\\\\)\\\\\\\\s]*\\\\\\\\.apk|airia\\\\\\\\.pro/airia\\\\\\\\.apk|/airia\\\\\\\\.apk\")",
+      "Bash(npx eas-cli:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|mcp__playwright__.*|mcp__Claude_Browser__.*|mcp__previewbridge__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/verification-guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/verification-guard.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
