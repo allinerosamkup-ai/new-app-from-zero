@@ -51,11 +51,15 @@ function arquivosTs(dir: string, encontrados: string[] = []): string[] {
 // — no contêiner de produção isso dava 5, número que descreve a CPU e não o
 // banco. Atrás do pooler do Supabase (pgbouncer, porta 6543) a conexão do app é
 // barata e o app se limitava sozinho.
+//
+// O valor é medido, não chutado: `max_connections` do banco é 60, com 35 em uso.
+// Teto de 15 deixa mais de 25 livres com o pool saturado. Se este número subir
+// sem alguém medir de novo, é palpite entrando no lugar de evidência.
 {
   const resolvida = resolveDatabaseUrl('postgresql://u:p@host:6543/db?pgbouncer=true');
   assert.ok(resolvida);
   const url = new URL(resolvida);
-  assert.equal(url.searchParams.get('connection_limit'), '20');
+  assert.equal(url.searchParams.get('connection_limit'), '15');
   assert.equal(url.searchParams.get('pgbouncer'), 'true', 'os parâmetros existentes precisam sobreviver');
 }
 

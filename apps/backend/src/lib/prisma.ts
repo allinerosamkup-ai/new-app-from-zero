@@ -24,16 +24,24 @@ import { PrismaClient } from '@app/database';
  * limitar sozinho, e um único `Promise.all` de cinco consultas — como o do
  * check-in — já consumia o pool inteiro.
  *
- * E o total **cai**: nove pools de 5 podiam abrir 45 conexões; um pool de 20
- * abre no máximo 20. Cada rota ganha quatro vezes mais folga enquanto o
- * processo pressiona menos o banco do que antes.
+ * E o total **cai**: nove pools de 5 podiam abrir 45 conexões; um pool de 15
+ * abre no máximo 15. Cada rota ganha três vezes mais folga enquanto o processo
+ * pressiona bem menos o banco do que antes.
+ *
+ * ## De onde vem o 15
+ *
+ * Medido no banco de produção, não escolhido no olho: `max_connections` é 60 e
+ * havia 35 conexões em uso, sendo 17 do app. Com teto de 15 sobram mais de 25
+ * livres mesmo com o pool saturado — margem para migration, Prisma Studio e um
+ * segundo contêiner durante o deploy. O antigo 45 teórico não cabia nesses 60.
  *
  * O limite fica explícito na URL, e não no ambiente, porque o valor precisa do
  * raciocínio acima do lado. Uma URL que já traga `connection_limit` é
- * respeitada: quem configurou o ambiente sabe mais do que este arquivo.
+ * respeitada: é por ali que se sobe o teto se o plano do Supabase crescer, sem
+ * tocar em código.
  */
 
-const DEFAULT_CONNECTION_LIMIT = 20;
+const DEFAULT_CONNECTION_LIMIT = 15;
 
 export function resolveDatabaseUrl(
   rawUrl: string | undefined,
