@@ -241,6 +241,22 @@ confirma o valor exibido no `pointerup`/`keyup` enquanto o campo estiver vazio.
 > Repetir só com informação nova, código alterado, ambiente diferente ou
 > hipótese diferente.
 
+### [TENTATIVA FRACASSADA] Redirecionar `www` para o host sem `www`
+Durou duas horas em 2026-08-09 e quebrou o app em produção. **O PWA está
+instalado em `www.airia.pro`**, e redirecionamento de host atinge todas as
+rotas, inclusive `/api/`: `POST /api/checkins` virou 301 (POST redirecionado não
+é reenviado como POST) e os GET voltaram 401 (o `Authorization` é descartado no
+salto entre origens). Sintoma para quem usa: app abre sem histórico e check-in
+não salva. Pior, `localStorage` é por origem — sessão e cache do PWA vivem em
+www e não acompanhariam a mudança.
+A consolidação de busca é feita por `rel=canonical`, que aponta para
+`https://airia.pro/` nas duas versões e é sinal legítimo sem redirecionar.
+Se um dia unificar de verdade: excluir `/api/`, avisar quem tem o PWA instalado
+que precisará entrar de novo, e só então ligar.
+**Lição transversal:** validação de deploy que confere só a home não vê API
+quebrada. A checagem que eu tinha escrito exigia o 301 — ela teria aprovado
+exatamente esta quebra.
+
 ### [TENTATIVA FRACASSADA] Documentar valor de token de design em `CLAUDE.md`
 Resultado: documentação e CSS divergiram, nasceram tokens fantasmas, dois bugs
 visuais em produção. Substituído por: fonte única em `aura.css` + teste
