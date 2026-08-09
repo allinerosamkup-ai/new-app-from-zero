@@ -192,6 +192,27 @@ engolia a exceção num `catch` mudo: **a proposta de check-in do diário nunca
 funcionou**, e a de meta morria junto por vir depois no mesmo laço. Hoje o
 esquema aceita `surface` e `dayPlan`.
 
+### [FATO] O app não estava no Google, e a causa era a rota raiz
+`/` fazia `Navigate` para `/splash`. O Googlebot executa JS, via o
+redirecionamento, e o Search Console classificava a home como "Página com
+redirecionamento" — nunca indexada, zero cliques de busca. Hoje `/` renderiza a
+splash e `/splash` manda para a raiz.
+Segundo problema no mesmo diagnóstico: `www.airia.pro` e `airia.pro` serviam o
+site com 200, e o Google elegeu o **www** como canônico — host que nem estava na
+propriedade cadastrada. O nginx devolve 301 de www para o host sem www, e o
+deploy valida esse 301.
+**Propriedade no Search Console:** `https://airia.pro/` (prefixo de URL), na
+conta allinerosamkup@gmail.com. Não existe propriedade de domínio.
+
+### [FATO] Deploy verde não significa build completa
+`Dockerfile.web` chamava `node ./node_modules/vite/bin/vite.js build`, então
+tudo que o script `build` faz além do Vite era pulado — `index.en.html` saiu
+verde no build local e simplesmente não existia na imagem, com `?lang=en` em
+404 na produção, e o deploy passou inteiro. Hoje o Dockerfile usa `npm run
+build` e o deploy valida `/?lang=en`, `/robots.txt`, `/sitemap.xml` e o 301 do
+www. O `build` invoca o Vite pelo caminho do node porque no Alpine o atalho em
+`.bin` chega sem permissão de execução.
+
 ### [FATO] `input[type=range]` não dispara evento ao tocar onde o polegar já está
 Campo opcional começa com o polegar no meio da escala, então o valor do meio —
 6 numa escala de 1 a 10 — era o único impossível de responder com um toque: a
