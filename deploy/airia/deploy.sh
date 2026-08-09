@@ -173,6 +173,16 @@ done
 
 # 200 não basta: o SPA devolve index.html para quase tudo. A página em inglês
 # tem que estar realmente em inglês.
+# O www precisa redirecionar, e não servir uma segunda cópia do site: dois hosts
+# respondendo 200 dividem o sinal de busca, e foi assim que o Google escolheu o
+# www como canônico — host fora da propriedade cadastrada no Search Console.
+WWW_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 'https://www.airia.pro/' 2>/dev/null)" || WWW_CODE="000"
+if [ "$WWW_CODE" != "301" ]; then
+  echo "FALHA: https://www.airia.pro/ retornou HTTP ${WWW_CODE}; esperado 301 para o host sem www"
+  exit 1
+fi
+echo "www: HTTP 301 para o host canônico"
+
 PUBLIC_EN="$(curl -fsS --max-time 10 'https://airia.pro/?lang=en')"
 case "$PUBLIC_EN" in
   *'<html lang="en-US"'*) echo "/?lang=en: head em inglês confirmado" ;;
