@@ -173,15 +173,16 @@ done
 
 # 200 não basta: o SPA devolve index.html para quase tudo. A página em inglês
 # tem que estar realmente em inglês.
-# O www precisa redirecionar, e não servir uma segunda cópia do site: dois hosts
-# respondendo 200 dividem o sinal de busca, e foi assim que o Google escolheu o
-# www como canônico — host fora da propriedade cadastrada no Search Console.
-WWW_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 'https://www.airia.pro/' 2>/dev/null)" || WWW_CODE="000"
-if [ "$WWW_CODE" != "301" ]; then
-  echo "FALHA: https://www.airia.pro/ retornou HTTP ${WWW_CODE}; esperado 301 para o host sem www"
+# O www precisa continuar SERVINDO o app, não redirecionando: o PWA está
+# instalado nesse host. Um 301 aqui quebra a API (POST vira 301, `Authorization`
+# some entre origens) e deixa a sessão presa na origem antiga. A consolidação de
+# busca é feita por `rel=canonical`, não por redirecionamento.
+WWW_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 'https://www.airia.pro/api/health' 2>/dev/null)" || WWW_CODE="000"
+if [ "$WWW_CODE" != "200" ]; then
+  echo "FALHA: https://www.airia.pro/api/health retornou HTTP ${WWW_CODE}; o PWA instalado nesse host depende dele"
   exit 1
 fi
-echo "www: HTTP 301 para o host canônico"
+echo "www: API respondendo 200 (PWA instalado nesse host preservado)"
 
 PUBLIC_EN="$(curl -fsS --max-time 10 'https://airia.pro/?lang=en')"
 case "$PUBLIC_EN" in
