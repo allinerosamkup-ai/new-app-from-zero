@@ -17,7 +17,9 @@
  * arquitetura, não ajuste de tag.
  */
 
-export const SITE_ORIGIN = "https://airia.pro";
+import content from "./seo-content.json";
+
+export const SITE_ORIGIN = content.origin;
 
 export type SeoLanguage = "pt" | "en";
 
@@ -36,57 +38,37 @@ export type SeoMetadata = {
   keywords: string;
 };
 
-/**
- * O caminho público que o buscador indexa.
- *
- * `/` redireciona para `/splash`, e as duas URLs devolveriam a mesma página —
- * o caso clássico de conteúdo duplicado. A canônica é a raiz, que é o que as
- * pessoas escrevem e compartilham.
- */
-const CANONICAL_PATH = "/";
-
-const CONTENT: Record<SeoLanguage, Pick<SeoMetadata, "title" | "description" | "keywords">> = {
-  pt: {
-    // O título carrega o termo que a pessoa digita ("app de humor") antes do
-    // nome da marca, que ninguém procura ainda.
-    title: "Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia",
-    description:
-      "Acompanhe humor e energia, entenda seu padrão de dias bons e ruins e receba a próxima ação possível — do tamanho do que cabe hoje. Feito para TDAH, ciclotimia e bipolaridade tipo II. Grátis no beta.",
-    keywords:
-      "app de humor, diário de humor, rastreador de humor, energia, TDAH, ciclotimia, bipolaridade tipo 2, saúde mental, autoconhecimento, produtividade neurodivergente",
-  },
-  en: {
-    title: "Airia — Mood and energy tracker for ADHD, bipolar and cyclothymia",
-    description:
-      "Track mood and energy, understand your pattern of good and hard days, and get the next possible action — sized to what fits today. Built for ADHD, cyclothymia and bipolar II. Free during beta.",
-    keywords:
-      "mood tracker, mood journal, energy tracker, ADHD, cyclothymia, bipolar 2, mental health, self-awareness, neurodivergent productivity",
-  },
-};
-
-const HTML_LANG: Record<SeoLanguage, string> = { pt: "pt-BR", en: "en-US" };
-const OG_LOCALE: Record<SeoLanguage, string> = { pt: "pt_BR", en: "en_US" };
+// A canônica é a raiz, e não `/splash`: as duas servem a mesma página, e sem
+// canônica declarada elas disputam entre si na indexação. A raiz é o que as
+// pessoas escrevem e compartilham.
+//
+// O texto vive em `seo-content.json`, e não aqui, porque o gerador do HTML
+// estático em inglês (`scripts/build-seo-html.mjs`) lê o mesmo arquivo. Se cada
+// lado tivesse a própria cópia, a página servida ao WhatsApp divergiria da que
+// o app aplica em tempo de execução — e ninguém perceberia.
+const CONTENT = content.languages;
 
 /** Normaliza qualquer coisa que o i18n devolva (`pt-BR`, `en-GB`) para o par suportado. */
 export function toSeoLanguage(language: string | null | undefined): SeoLanguage {
   return (language ?? "").toLowerCase().startsWith("en") ? "en" : "pt";
 }
 
+// O português é a versão sem parâmetro porque é o público principal hoje; o
+// inglês ganha `?lang=en`, que o detector de idioma lê antes de tudo.
 function urlFor(language: SeoLanguage): string {
-  // O português é a versão sem parâmetro porque é o público principal hoje; o
-  // inglês ganha `?lang=en`, que o detector de idioma lê antes de tudo.
-  return language === "pt"
-    ? `${SITE_ORIGIN}${CANONICAL_PATH}`
-    : `${SITE_ORIGIN}${CANONICAL_PATH}?lang=en`;
+  return CONTENT[language].url;
 }
 
 export function buildSeoMetadata(language: string | null | undefined): SeoMetadata {
   const lang = toSeoLanguage(language);
   const other: SeoLanguage = lang === "pt" ? "en" : "pt";
+  const entry = CONTENT[lang];
 
   return {
-    ...CONTENT[lang],
-    htmlLang: HTML_LANG[lang],
+    title: entry.title,
+    description: entry.description,
+    keywords: entry.keywords,
+    htmlLang: entry.htmlLang,
     canonical: urlFor(lang),
     alternates: [
       { hreflang: "pt-BR", href: urlFor("pt") },
@@ -95,9 +77,9 @@ export function buildSeoMetadata(language: string | null | undefined): SeoMetada
       // bate com nenhum idioma listado.
       { hreflang: "x-default", href: urlFor("pt") },
     ],
-    ogLocale: OG_LOCALE[lang],
-    ogAlternateLocale: OG_LOCALE[other],
-    ogImage: `${SITE_ORIGIN}/screenshots/home-page.png`,
+    ogLocale: entry.ogLocale,
+    ogAlternateLocale: CONTENT[other].ogLocale,
+    ogImage: content.image,
   };
 }
 
@@ -125,7 +107,7 @@ export function buildStructuredData(language: string | null | undefined): string
     offers: {
       "@type": "Offer",
       price: "0",
-      priceCurrency: lang === "pt" ? "BRL" : "USD",
+      priceCurrency: CONTENT[lang].currency,
     },
     author: { "@type": "Organization", name: "Airia", url: SITE_ORIGIN },
   });

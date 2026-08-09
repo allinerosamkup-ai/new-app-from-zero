@@ -1,0 +1,29 @@
+{
+  "_comment": "Fonte única do texto de busca. Lida pelo app (src/lib/seo.ts) e pelo gerador de HTML estático (scripts/build-seo-html.mjs). JSON de propósito: os dois lados leem sem compilar nada, então a versão em inglês servida ao WhatsApp não pode divergir da que o app aplica em tempo de execução.",
+  "origin": "https://airia.pro",
+  "image": "https://airia.pro/screenshots/home-page.png",
+  "languages": {
+    "pt": {
+      "htmlLang": "pt-BR",
+      "ogLocale": "pt_BR",
+      "currency": "BRL",
+      "url": "https://airia.pro/",
+      "title": "Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia",
+      "description": "Acompanhe humor e energia, entenda seu padrão de dias bons e ruins e receba a próxima ação possível — do tamanho do que cabe hoje. Feito para TDAH, ciclotimia e bipolaridade tipo II. Grátis no beta.",
+      "shortDescription": "Acompanhe humor e energia, entenda seu padrão de dias bons e ruins e receba a próxima ação possível — do tamanho do que cabe hoje. Grátis no beta.",
+      "keywords": "app de humor, diário de humor, rastreador de humor, energia, TDAH, ciclotimia, bipolaridade tipo 2, saúde mental, autoconhecimento, produtividade neurodivergente",
+      "imageAlt": "Tela inicial da Airia mostrando a fase do ciclo de humor e a próxima ação"
+    },
+    "en": {
+      "htmlLang": "en-US",
+      "ogLocale": "en_US",
+      "currency": "USD",
+      "url": "https://airia.pro/?lang=en",
+      "title": "Airia — Mood and energy tracker for ADHD, bipolar and cyclothymia",
+      "description": "Track mood and energy, understand your pattern of good and hard days, and get the next possible action — sized to what fits today. Built for ADHD, cyclothymia and bipolar II. Free during beta.",
+      "shortDescription": "Track mood and energy, understand your pattern of good and hard days, and get the next possible action — sized to what fits today. Free during beta.",
+      "keywords": "mood tracker, mood journal, energy tracker, ADHD, cyclothymia, bipolar 2, mental health, self-awareness, neurodivergent productivity",
+      "imageAlt": "Airia home screen showing the current mood cycle phase and the next action"
+    }
+  }
+}
