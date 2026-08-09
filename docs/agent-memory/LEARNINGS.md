@@ -192,6 +192,19 @@ engolia a exceção num `catch` mudo: **a proposta de check-in do diário nunca
 funcionou**, e a de meta morria junto por vir depois no mesmo laço. Hoje o
 esquema aceita `surface` e `dayPlan`.
 
+### [FATO] Um pool de conexões por processo, e o dono é `lib/prisma.ts`
+`P2024` em produção não era banco cheio: existiam **nove** `new PrismaClient()`
+(index, middleware de auth e sete serviços), cada um com pool próprio. O pool de
+uma rota estourava enquanto os outros oito seguravam conexões paradas.
+O limite de 5 vinha do Prisma derivando `núcleos × 2 + 1` — o contêiner enxerga
+2 CPUs. Número que descreve a CPU, não o banco, ainda mais com `DATABASE_URL`
+no pooler do Supabase (porta 6543, `pgbouncer=true`).
+Hoje: cliente único com `connection_limit=15` explícito na URL, medido contra
+`max_connections=60`. Efeito real após o deploy: conexões do app caíram de 17
+para 3 e o total no banco de 35 para 17.
+`lib/prisma.test.ts` varre o código e falha se alguém instanciar de novo fora
+desse arquivo.
+
 ### [FATO] O app não estava no Google, e a causa era a rota raiz
 `/` fazia `Navigate` para `/splash`. O Googlebot executa JS, via o
 redirecionamento, e o Search Console classificava a home como "Página com
