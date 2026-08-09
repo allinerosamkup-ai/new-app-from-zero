@@ -338,5 +338,51 @@ function run() {
   assert.equal(opened.executionPolicy, 'auto_apply');
 }
 
+/**
+ * A proposta de check-in que o diário monta precisa passar pelo construtor.
+ *
+ * Ela nunca passou. O diário sempre mandou `signalMetadata: { surface: 'journal' }`
+ * e nunca mandou `assistantMessage`; os dois faziam o `parse` lançar dentro do
+ * `catch` mudo do endpoint de streaming, então a proposta de check-in — e a de
+ * meta, que vinha depois no mesmo laço — desapareciam sem log de erro e sem
+ * nada na tela. Este teste é o que impede a regressão, porque o caminho real
+ * engole a exceção por desenho.
+ */
+function journalProposalBuilds() {
+  const plan = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Registro do que você contou, se quiser confirmar.',
+      action: 'record_checkin',
+      payload: {
+        localDate: '2026-08-08',
+        moodScore: 4,
+        energyScore: 6,
+        emotions: [],
+        factors: [],
+        source: 'aura_text',
+        sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+        idempotencyKey: 'journal:session:message',
+        rawText: 'hoje foi pesado',
+        needsConfirmation: true,
+        signalMetadata: { surface: 'journal' },
+      },
+    } as never,
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-08-08',
+    currentTime: '09:00',
+    defaultCalendarId: '',
+    busyWindows: [],
+    idFactory,
+  });
+
+  assert.equal(plan.operations[0]?.type, 'record_checkin');
+  assert.deepEqual((plan.operations[0] as any).payload.signalMetadata, { surface: 'journal' });
+  // A política de execução não é decidida aqui: o endpoint do diário fixa
+  // `review_required` ao montar o plano final, porque superfície confessional
+  // nunca aplica sozinha. O construtor só precisa entregar a operação.
+}
+
 run();
+journalProposalBuilds();
 console.log('aura-command-plan-builder.service tests passed');

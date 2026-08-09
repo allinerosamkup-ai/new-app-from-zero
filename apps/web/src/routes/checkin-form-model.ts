@@ -31,8 +31,12 @@ export type ContextualCheckinDraft = {
   noFactorIdentified: boolean;
   sono?: number;
   sleepHours?: number;
+  clareza?: number;
+  irritabilidade?: number;
   fisico?: number;
   social?: number;
+  capacity?: "quick" | "moderate" | "heavy";
+  priorityGoalId?: string;
   isFlowing?: boolean;
   flowDay?: number;
   flowIntensity?: "leve" | "moderado" | "intenso";
@@ -44,6 +48,44 @@ export type ContextualCheckinDraft = {
   dayType?: "up" | "down" | "mixed" | "stable";
   note?: string;
 };
+
+/**
+ * O fundo da tela responde enquanto ela responde.
+ *
+ * O check-in tem 36 fatores, 12 emoções e nove escalas, e hoje tudo tem o mesmo
+ * peso cinza — é isso que faz a tela parecer formulário e não conversa. Apps que
+ * sustentam o hábito diário devolvem algo imediato a cada toque; aqui o retorno
+ * é o ambiente mudando com humor e energia, sem custar um toque a mais.
+ *
+ * Duas regras de identidade limitam o resultado, e por isso ele é função pura
+ * com teste: o acento é **verde** (rosa saiu do app por leitura "muito
+ * feminino") e humor baixo **não** vira cor de alarme. Estado difícil recebe um
+ * azul-esverdeado frio e calmo — a tela acolhe, não diagnostica.
+ */
+export function checkinAmbience(humor: number | null, energia: number | null): string {
+  const white = "#FFFFFF";
+  if (humor === null && energia === null) return white;
+
+  const mood = (humor ?? energia ?? 5) / 10;
+  const energy = (energia ?? humor ?? 5) / 10;
+
+  // Humor baixo puxa para o azul sereno (--accent-sky), alto para o verde da
+  // identidade (--accent-primary). Nenhum dos extremos é quente.
+  const cool = { r: 190, g: 230, b: 243 };
+  const warm = { r: 191, g: 220, b: 203 };
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * mood);
+  const tint = { r: mix(cool.r, warm.r), g: mix(cool.g, warm.g), b: mix(cool.b, warm.b) };
+
+  // Energia move só a presença da cor. Teto baixo de propósito: o fundo comenta
+  // o estado, não compete com o conteúdo.
+  const alpha = (0.16 + energy * 0.26).toFixed(3);
+  const halo = (0.06 + energy * 0.12).toFixed(3);
+
+  return [
+    `radial-gradient(120% 62% at 50% 0%, rgba(${tint.r},${tint.g},${tint.b},${alpha}) 0%, rgba(${tint.r},${tint.g},${tint.b},${halo}) 45%, rgba(255,255,255,0) 78%)`,
+    white,
+  ].join(", ");
+}
 
 function compactStrings(values: string[] | undefined): string[] {
   return Array.from(new Set((values ?? []).map((value) => value.trim()).filter(Boolean)));
@@ -114,9 +156,30 @@ export async function finalizeContextualCheckin<T>({
 export function canSubmitContextualCheckin(
   input: Pick<ContextualCheckinDraft, "humor" | "energia" | "factors" | "noFactorIdentified">,
 ): boolean {
-  const hasScores = input.humor !== null && input.energia !== null;
-  const hasContextAnswer = compactStrings(input.factors).length > 0 || input.noFactorIdentified;
-  return hasScores && hasContextAnswer;
+  return missingCheckinAnswers(input).length === 0;
+}
+
+export type MissingCheckinAnswer = "humor" | "energia" | "fator";
+
+/**
+ * O que ainda falta para o check-in poder ser registrado.
+ *
+ * Existe porque um botão desabilitado sem explicação é indistinguível de um
+ * botão quebrado — e foi assim que um check-in inteiro se perdeu em produção:
+ * humor e energia não tinham sido capturados, o botão ficou morto, nada na tela
+ * disse o motivo, e a leitura de quem usa foi "fiz o check-in e não saiu o
+ * resultado". O log confirma: nenhum `POST /checkins` chegou ao servidor.
+ *
+ * A ordem segue a da tela, para o texto apontar de cima para baixo.
+ */
+export function missingCheckinAnswers(
+  input: Pick<ContextualCheckinDraft, "humor" | "energia" | "factors" | "noFactorIdentified">,
+): MissingCheckinAnswer[] {
+  const missing: MissingCheckinAnswer[] = [];
+  if (input.humor === null) missing.push("humor");
+  if (input.energia === null) missing.push("energia");
+  if (compactStrings(input.factors).length === 0 && !input.noFactorIdentified) missing.push("fator");
+  return missing;
 }
 
 export function buildContextualCheckinEntry(
@@ -138,8 +201,12 @@ export function buildContextualCheckinEntry(
     ...(factors.length > 0 ? { factors } : {}),
     ...(input.sono !== undefined ? { sono: input.sono } : {}),
     ...(input.sleepHours !== undefined ? { sleepHours: input.sleepHours } : {}),
+    ...(input.clareza !== undefined ? { clareza: input.clareza } : {}),
+    ...(input.irritabilidade !== undefined ? { irritabilidade: input.irritabilidade } : {}),
     ...(input.fisico !== undefined ? { fisico: input.fisico } : {}),
     ...(input.social !== undefined ? { social: input.social } : {}),
+    ...(input.capacity !== undefined ? { capacity: input.capacity } : {}),
+    ...(input.priorityGoalId !== undefined ? { priorityGoalId: input.priorityGoalId } : {}),
     ...(input.isFlowing !== undefined ? { isFlowing: input.isFlowing } : {}),
     ...(input.flowDay !== undefined ? { flowDay: input.flowDay } : {}),
     ...(input.flowIntensity !== undefined ? { flowIntensity: input.flowIntensity } : {}),

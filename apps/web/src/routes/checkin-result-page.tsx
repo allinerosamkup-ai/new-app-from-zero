@@ -14,6 +14,7 @@ import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyPr
 import type { MoodOption } from "../features/aura/types";
 import { resolveMoodFromCheckin } from "../features/aura/checkin-mood";
 import { AuraIcon } from "../components/AuraIcon";
+import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { getClientDayContext } from "../utils/day-context";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { buildCheckinReading } from "./checkin-reading.helpers";
@@ -108,18 +109,6 @@ type CheckinNextStepSuggestion = {
   assumptions?: string[];
 };
 
-type StoredGtdInboxItem = {
-  id: string;
-  text: string;
-  titulo: string;
-  tipo: "proxima_acao";
-  clarified: boolean;
-  done: boolean;
-  archived: boolean;
-  sentToGoal: boolean;
-  createdAt: string;
-  source: string;
-};
 /**
  * Sugestão pós-check-in.
  *
@@ -603,38 +592,22 @@ export function CheckinResultPage() {
     navigate(path, { replace: true, state: navState });
   }
 
-  function sendSuggestionToActions(text: string) {
+  /**
+   * Passa pelas duas camadas de dedupe, como todo o resto do app.
+   *
+   * Esta função escrevia direto em `gtd-inbox-v1` com comparação de texto
+   * exata, então "ligar pra médica" entrava ao lado de "ligar para a médica" e
+   * o evento `gtd-inbox-updated` nunca era disparado — a Home só via o item
+   * depois de recarregar. `saveNextAction` resolve os dois, e em qualquer falha
+   * ainda cria: perder o que ela mandou anotar é pior que ver item parecido.
+   */
+  async function sendSuggestionToActions(text: string) {
     const cleanText = text.trim();
     if (!cleanText) return;
 
     try {
-      const raw = JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
-      const list: StoredGtdInboxItem[] = Array.isArray(raw) ? raw : [];
-      const key = cleanText.toLowerCase().replace(/\s+/g, " ");
-      const alreadyExists = list.some((item) => {
-        const itemText = String(item.titulo || item.text || "").trim().toLowerCase().replace(/\s+/g, " ");
-        return itemText === key && !item.archived && !item.done;
-      });
-
-      if (!alreadyExists) {
-        const item: StoredGtdInboxItem = {
-          id: `checkin-${Date.now()}`,
-          text: cleanText,
-          titulo: cleanText,
-          tipo: "proxima_acao",
-          clarified: true,
-          done: false,
-          archived: false,
-          sentToGoal: false,
-          createdAt: new Date().toISOString(),
-          source: "checkin-result",
-        };
-        localStorage.setItem("gtd-inbox-v1", JSON.stringify([item, ...list]));
-        showSuccess(t("checkin.result.sentActions"));
-        return;
-      }
-
-      showSuccess(t("checkin.result.alreadyActions"));
+      const result = await saveNextAction({ text: cleanText, source: "checkin-result" });
+      showSuccess(result.created ? t("checkin.result.sentActions") : t("checkin.result.alreadyActions"));
     } catch {
       showError(t("checkin.result.sendActionsError"));
     }
@@ -648,12 +621,24 @@ export function CheckinResultPage() {
     <div className="result-shell" style={{ background: v.bg }}>
       <div className="screen-content result-screen">
 
-        {/* Ícone checkmark — entra com peso (pequena vitória, design emocional P1) */}
+        {/* A reação do mascote ao check-in, e o lugar dela é aqui.
+            A tela do formulário nunca mostra reação: ela só navega para cá
+            depois que o registro voltou confirmado do servidor, então o mascote
+            jamais comemora algo que ainda pode falhar. Fica no herói, que
+            aparece sempre — dentro do bloco de fase ele sumiria justamente para
+            quem ainda não tem histórico, ou seja, para quem está registrando
+            pela primeira vez. */}
         <div
           className="result-hero-icon animate-pop-in"
-          style={{ background: isMenuthe ? "rgba(180,185,169,.18)" : "rgba(155,191,168,.15)" }}
+          style={{
+            background: isMenuthe ? "rgba(180,185,169,.18)" : "rgba(155,191,168,.15)",
+            // O círculo nasceu com 64px para caber um emoji. O mascote precisa
+            // de mais, senão o halo dele transborda a borda tingida.
+            width: 88,
+            height: 88,
+          }}
         >
-          {v.emoji}
+          <AiriaMascot phase={cycleReport.phase} motion="understand" size={80} decorative />
         </div>
 
         {/* Título */}
@@ -805,7 +790,7 @@ export function CheckinResultPage() {
                   {visibleCheckinRecommendations.map((rec, i) => (
                     <div
                       key={i}
-                      onClick={() => sendSuggestionToActions(rec)}
+                      onClick={() => { void sendSuggestionToActions(rec); }}
                       style={{
                         display: "flex",
                         alignItems: "flex-start",
@@ -840,7 +825,7 @@ export function CheckinResultPage() {
                 {auraMsg.message}
               </p>
               <div
-                onClick={() => sendSuggestionToActions(auraMsg.suggestion)}
+                onClick={() => { void sendSuggestionToActions(auraMsg.suggestion); }}
                 style={{
                   display: "flex",
                   alignItems: "center",

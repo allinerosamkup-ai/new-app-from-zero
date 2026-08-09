@@ -36,6 +36,24 @@ skills/       skills locais do projeto (ver skills/_registry.md)
 
 npm workspaces. Sempre use `-w apps/web` / `-w apps/backend` / `-w packages/database`.
 
+### Worktrees entram na revisão, sempre
+
+`.worktrees/` e `.claude/worktrees/` guardam trabalho real que **não está na
+master**. Buscar só em `apps/` e concluir "isso não existe" já custou uma
+reconstrução do zero: o mascote Airia Orbital estava pronto e com a arte
+aprovada em `.worktrees/airia-orbital-mascot`, e a varredura não olhou lá.
+
+Antes de afirmar que algo não existe ou de começar a construir:
+
+```bash
+git worktree list
+git log --oneline master..<branch-do-worktree>
+```
+
+Cuidado ao ler: várias branches parecem ter trabalho pendente e não têm — a
+mensagem do commit bate com algo que já chegou à master por outro caminho.
+`git diff --stat master...<branch>` é o que separa um caso do outro.
+
 ---
 
 ## Escopo ligado hoje

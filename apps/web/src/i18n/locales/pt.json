@@ -1331,5 +1331,18 @@
     "everyDay": "todo dia",
     "everyWeek": "toda semana",
     "minutes": "{{count}} min"
+  },
+  "mascot": {
+    "phase": {
+      "elevated": "Airia — fase Voo Alto",
+      "flowing": "Airia — fase Fluindo",
+      "stable": "Airia — fase Estável",
+      "falling": "Airia — fase Desacelerando",
+      "low": "Airia — fase Recolhimento",
+      "depleted": "Airia — fase Pausa",
+      "recovering": "Airia — fase Retomada",
+      "mixed": "Airia — fase Turbulência",
+      "insufficientData": "Airia — conhecendo seu ritmo"
+    }
   }
 }

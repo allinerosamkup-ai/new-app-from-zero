@@ -37,10 +37,16 @@ durável é `docs/agent-memory/`.
 
 ## Testes
 
-### [FATO] Teste novo do backend não roda até entrar na string do `npm test`
-`apps/backend/package.json` lista os arquivos um a um em
-`ts-node-transpile-only ... && ...`. Sem descoberta automática. Criar um teste,
-vê-lo passar local e commitar não coloca nada na CI. Ver `KNOWN_ISSUES.md`.
+### [FATO] O backend também descobre teste sozinho, desde 2026-08-08
+`npm test -w apps/backend` roda `node scripts/run-tests.mjs`, que varre
+`src/**/*.test.ts`. Antes era uma corrente de 76 comandos escritos à mão, e
+**17 suítes existiam sem nunca ter rodado** — entre elas as três do check-in.
+Todas passaram na primeira execução. O runner roda cada suíte em processo
+próprio (várias mexem em estado global de módulo) e vai até o fim em vez de
+parar na primeira falha.
+
+### [FATO] No web é a mesma coisa — Vitest descobre sozinho
+`apps/web/src/**/*.test.ts(x)` entra sem registro nenhum.
 
 ### [FATO] No web é o contrário — Vitest descobre sozinho
 `apps/web/src/**/*.test.ts(x)` entra sem registro nenhum.
@@ -89,6 +95,20 @@ Sem caixa gerada não há onde aplicar `opacity` nem `transform`: a transição
 existia no CSS e nunca rodou, em nenhuma tela, desde que foi escrita.
 Substituído por item flex (`flex: 1 1 auto; min-height: 0`) que repassa o layout
 do `.app-viewport`, também flex-column — a rolagem das páginas continua igual.
+
+### [FATO] `runtimeCaching` em `vite.config.ts` é config morta neste projeto
+A estratégia é `injectManifest`, então o service worker é `src/sw.ts` e **só o
+que está escrito lá roda**. As regras de cache de fonte no `vite.config.ts` nunca
+valeram nada. Regra nova de cache vai em `src/sw.ts`; o bloco antigo ficou com
+aviso em cima.
+
+### [DECISÃO] Assets do mascote não entram no precache
+`globPatterns` não lista `webp` de propósito: as 16 imagens somam ~420 KB e
+ninguém precisa das oito fases baixadas para ver a primeira tela. Uma rota
+`CacheFirst` em `src/sw.ts` (`airia-mascot-v1`) resolve o offline depois da
+primeira exibição. Os PNGs-mestres (1,4 MB cada, 11,4 MB no total) **não estão na
+master** — vivem na branch `codex/airia-orbital-mascot`, e
+`apps/web/scripts/build-mascot-assets.mjs` regenera os WebP a partir deles.
 
 ---
 
@@ -152,6 +172,32 @@ data, que é o dado com valor legal. Revogação **marca, não apaga**.
 Ver dois itens parecidos incomoda; perder o que a pessoa pediu para anotar é
 grave. Vale para as duas camadas (lexical e LLM). Gravação em lote é **em série**,
 para cada verificação enxergar o que a anterior gravou.
+
+### [FATO] Campo pode existir em três camadas e nunca ser perguntado
+`irritabilityScore` tinha coluna no Prisma, campo no contrato, leitor no motor
+(`aggregateCheckinsByDay`) e consumidor no backend (`risk-safety`, limiar ≥ 9), e
+a tela do check-in **nunca perguntou**. `clarityScore` idem, sem nem consumidor.
+No sentido inverso, `capacity` e `priorityGoalId` eram perguntados e viajavam só
+pelo `navigate(state)`, morrendo ao fechar a tela.
+**Regra que ficou:** para cada pergunta da tela, provar que o valor chega ao
+banco e que alguma análise consome — ou registrar por que existe sem consumidor.
+Build verde não prova nada disso; a prova está em
+`features/aura/checkin-submission.test.ts` (tela → payload) e
+`services/checkin-application.service.test.ts` (payload → persistência).
+
+### [FATO] `signalMetadata` é `.strict()` — chave nova exige mudar o contrato
+`contracts/checkin-draft.contract.ts`. Não é saco de JSON livre. O diário
+mandava `{ surface: 'journal' }`, o `parse` lançava, e o endpoint de streaming
+engolia a exceção num `catch` mudo: **a proposta de check-in do diário nunca
+funcionou**, e a de meta morria junto por vir depois no mesmo laço. Hoje o
+esquema aceita `surface` e `dayPlan`.
+
+### [FATO] `input[type=range]` não dispara evento ao tocar onde o polegar já está
+Campo opcional começa com o polegar no meio da escala, então o valor do meio —
+6 numa escala de 1 a 10 — era o único impossível de responder com um toque: a
+pessoa via o polegar no lugar certo e o app gravava `null`. O `ScoreSlider`
+confirma o valor exibido no `pointerup`/`keyup` enquanto o campo estiver vazio.
+`sliderRestingValue()` existe para o teste travar o número.
 
 ---
 

@@ -27,6 +27,25 @@ export const CheckinSignalSchema = CheckinSignalObservationSchema.extend({
   }
 });
 
+/**
+ * O que a pessoa respondeu sobre o dia e que não é um sinal de 1 a 10.
+ *
+ * Capacidade ("o que cabe hoje") e objetivo prioritário são perguntados no
+ * check-in e definem o tamanho e o alvo do que a Airia sugere. Eram jogados
+ * fora: viajavam só pelo estado de navegação até a tela de resultado e morriam
+ * ao fechar o app. Pergunta que não vira dado é esforço cobrado à toa de quem
+ * já está sem combustível.
+ *
+ * Entram aqui, na coluna Json que já existe, porque não têm forma de sinal
+ * observado — não têm escala, provenance nem confiança. Colocá-los como
+ * `CheckinSignalObservationSchema` seria forçar um formato que não descreve o
+ * dado; coluna nova seria migração para um par de campos por check-in.
+ */
+export const CheckinDayPlanSchema = z.object({
+  capacity: z.enum(['quick', 'moderate', 'heavy']).optional(),
+  priorityGoalId: z.string().trim().min(1).max(100).optional(),
+}).strict();
+
 export const CheckinSignalMetadataSchema = z.object({
   mood: CheckinSignalObservationSchema.optional(),
   energy: CheckinSignalObservationSchema.optional(),
@@ -35,6 +54,17 @@ export const CheckinSignalMetadataSchema = z.object({
   physical: CheckinSignalObservationSchema.optional(),
   social: CheckinSignalObservationSchema.optional(),
   sleepScore: CheckinSignalObservationSchema.optional(),
+  dayPlan: CheckinDayPlanSchema.optional(),
+  /**
+   * De qual tela saiu o registro. `source` não resolve: diário e chat da Aura
+   * são os dois `aura_text`.
+   *
+   * Faltava, e o custo foi alto. O diário já mandava `{ surface: 'journal' }`;
+   * como o objeto é `.strict()`, o construtor de plano lançava, o `catch` mudo
+   * do endpoint engolia, e a proposta de check-in do diário nunca chegou a
+   * existir — junto com a de meta, que vinha depois no mesmo laço.
+   */
+  surface: z.enum(['journal', 'aura', 'screen']).optional(),
 }).strict();
 
 export const CheckinSourceSchema = z.enum(['screen', 'aura_text', 'aura_voice', 'mobile']);
@@ -61,6 +91,7 @@ export const CheckinDraftSchema = z.object({
 });
 
 export type CheckinSignal = z.infer<typeof CheckinSignalSchema>;
+export type CheckinDayPlan = z.infer<typeof CheckinDayPlanSchema>;
 export type CheckinSignalMetadata = z.infer<typeof CheckinSignalMetadataSchema>;
 export type CheckinSource = z.infer<typeof CheckinSourceSchema>;
 export type CheckinDraft = z.infer<typeof CheckinDraftSchema>;

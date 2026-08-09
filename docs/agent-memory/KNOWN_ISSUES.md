@@ -8,46 +8,7 @@ confundir com isso.
 
 ---
 
-## 1. Oito arquivos de teste do backend nunca rodam
-
-### Sintoma
-Testes existem, passam quando executados à mão, e não protegem nada: a CI e o
-`npm run test -w apps/backend` não os alcançam.
-
-### Causa
-`apps/backend/package.json` → script `test` é uma lista manual de arquivos
-encadeada com `&&`. Não há descoberta automática. Quem criou os arquivos não os
-registrou.
-
-### Status
-**Aberto** — verificado em 2026-08-08. Órfãos:
-
-```
-src/contracts/checkin-draft.contract.test.ts
-src/contracts/event-log.contract.test.ts
-src/contracts/onboarding-ai.contract.test.ts
-src/index.event-log.test.ts
-src/services/checkin-application.service.test.ts
-src/services/checkin-understanding.service.test.ts
-src/services/objective-action-recovery.service.test.ts
-src/services/routine-guided-transform.service.test.ts
-```
-
-### Contorno
-Rodar à mão o que for relevante à tarefa:
-`npx ts-node-transpile-only apps/backend/src/<arquivo>.test.ts` (~2,5s cada).
-
-### Ao criar teste novo no backend
-Adicionar o arquivo à string do script `test` **na mesma alteração**. Caso
-contrário o teste nasce morto.
-
-### Não confundir com
-"Teste falhando" — eles não falham, eles não são chamados. Também não é
-configuração de test runner: não existe runner, é execução direta por arquivo.
-
----
-
-## 2. A suíte do backend imprime erro de runtime e ainda retorna exit 0
+## 1. A suíte do backend imprime erro de runtime e ainda retorna exit 0
 
 ### Sintoma
 `npm run test -w apps/backend` termina com `EXIT=0` depois de imprimir, entre
@@ -84,7 +45,7 @@ Falha de conexão real com o banco — os testes não tocam Postgres, usam stub.
 
 ---
 
-## 3. Credenciais reais versionadas em `.claude/settings.local.json`
+## 2. Credenciais reais versionadas em `.claude/settings.local.json`
 
 ### Sintoma
 O arquivo está rastreado pelo git (`git ls-files .claude`) e traz, dentro de

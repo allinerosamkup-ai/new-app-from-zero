@@ -21,6 +21,31 @@ export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 const STORAGE_KEY = "airia_lang";
 
+/**
+ * Limpa o idioma que o detector gravou sozinho em versões anteriores.
+ *
+ * Até 2026-08-09 o detector cacheava o que ele mesmo detectou, então quem já
+ * usou o app tem `airia_lang` preenchido sem nunca ter escolhido nada — e esse
+ * valor passaria a vencer o idioma do aparelho para sempre, que é justo o
+ * problema que estamos consertando.
+ *
+ * Os dois casos se distinguem pelo formato: `setLanguage()` só grava `pt` ou
+ * `en`; o detector gravava a etiqueta completa do navegador (`pt-BR`, `en-US`).
+ * Valor com região é cache antigo e pode sair.
+ */
+export function dropDetectorCache() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored && !(SUPPORTED_LANGUAGES as readonly string[]).includes(stored)) {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    /* modo privado, storage bloqueado: seguir sem cache é o comportamento certo */
+  }
+}
+
+dropDetectorCache();
+
 void i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -33,10 +58,26 @@ void i18n
     supportedLngs: SUPPORTED_LANGUAGES as unknown as string[],
     nonExplicitSupportedLngs: true, // pt-BR -> pt
     interpolation: { escapeValue: false }, // react já escapa
+    /**
+     * O idioma segue o aparelho, até a pessoa escolher outro.
+     *
+     * `caches: ["localStorage"]` gravava o idioma **detectado**, não o
+     * escolhido. Efeito: a primeira visita cravava `airia_lang` para sempre, e
+     * quem depois trocasse o idioma do celular ficava preso no antigo — o app
+     * respeitava uma preferência que ninguém expressou.
+     *
+     * Sem cache, `navigator` é relido a cada carregamento e o aparelho manda.
+     * Escolha explícita continua ganhando porque `setLanguage()` escreve na
+     * mesma chave à mão, e `localStorage` vem antes na ordem.
+     *
+     * `querystring` na frente existe para o `?lang=en` do `hreflang`: link de
+     * busca em inglês precisa abrir em inglês mesmo num aparelho em português.
+     */
     detection: {
-      order: ["localStorage", "navigator"],
+      order: ["querystring", "localStorage", "navigator"],
+      lookupQuerystring: "lang",
       lookupLocalStorage: STORAGE_KEY,
-      caches: ["localStorage"],
+      caches: [],
     },
     returnNull: false,
   });
@@ -65,9 +106,16 @@ export function selectLocalizedCopy(language: string, portuguese: string, englis
   return language.toLowerCase().startsWith("en") ? english : portuguese;
 }
 
-/** Reactive helper for long-form/editorial copy that would make locale catalogs unreadable. */
-export function useLocalizedCopy() {
-  const language = useSyncExternalStore(
+/**
+ * Idioma ativo, reagindo à troca.
+ *
+ * Deliberadamente **sem** `useTranslation`: aquele hook resolve a instância por
+ * contexto do React, e sem `I18nextProvider` em volta ele quebra — foi o que
+ * derrubou o teste da splash, que renderiza a página sem provedor nenhum. Aqui
+ * a assinatura é direta na instância, então funciona em qualquer render.
+ */
+export function useLanguage(): string {
+  return useSyncExternalStore(
     (notify) => {
       i18n.on("languageChanged", notify);
       return () => i18n.off("languageChanged", notify);
@@ -75,6 +123,11 @@ export function useLocalizedCopy() {
     () => i18n.language,
     () => i18n.language,
   );
+}
+
+/** Reactive helper for long-form/editorial copy that would make locale catalogs unreadable. */
+export function useLocalizedCopy() {
+  const language = useLanguage();
   return (portuguese: string, english: string) => selectLocalizedCopy(language, portuguese, english);
 }
 

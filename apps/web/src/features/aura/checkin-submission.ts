@@ -6,13 +6,27 @@ type Input = {
   entry: Omit<CheckinEntry, "date">;
 };
 
+/**
+ * O que a tela pergunta precisa chegar ao banco — sem exceção silenciosa.
+ *
+ * Clareza e irritabilidade tinham coluna, contrato e leitor (o motor consome
+ * `irritabilidade` na agregação diária) e nenhuma pergunta. Capacidade e
+ * objetivo prioritário tinham o inverso: pergunta na tela e nenhum destino,
+ * porque viajavam só pelo `navigate(state)`. As duas metades se resolvem aqui.
+ */
 export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input) {
   const note = entry.note?.trim() || undefined;
+  const dayPlan = {
+    ...(entry.capacity !== undefined ? { capacity: entry.capacity } : {}),
+    ...(entry.priorityGoalId !== undefined ? { priorityGoalId: entry.priorityGoalId } : {}),
+  };
   return {
     localDate,
     checkinSlot,
     moodScore: entry.humor,
     energyScore: entry.energia,
+    ...(entry.clareza !== undefined ? { clarityScore: entry.clareza } : {}),
+    ...(entry.irritabilidade !== undefined ? { irritabilityScore: entry.irritabilidade } : {}),
     ...(entry.fisico !== undefined ? { physicalScore: entry.fisico } : {}),
     ...(entry.social !== undefined ? { socialScore: entry.social } : {}),
     ...(entry.sono !== undefined ? { sleepScore: entry.sono } : {}),
@@ -22,6 +36,12 @@ export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input)
     signalMetadata: {
       mood: { provenance: "reported" as const, confidence: 1, evidence: ["screen:mood"] },
       energy: { provenance: "reported" as const, confidence: 1, evidence: ["screen:energy"] },
+      ...(entry.clareza !== undefined
+        ? { clarity: { provenance: "reported" as const, confidence: 1, evidence: ["screen:clarity"] } }
+        : {}),
+      ...(entry.irritabilidade !== undefined
+        ? { irritability: { provenance: "reported" as const, confidence: 1, evidence: ["screen:irritability"] } }
+        : {}),
       ...(entry.fisico !== undefined
         ? { physical: { provenance: "reported" as const, confidence: 1, evidence: ["screen:physical"] } }
         : {}),
@@ -31,6 +51,7 @@ export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input)
       ...(entry.sono !== undefined
         ? { sleepScore: { provenance: "reported" as const, confidence: 1, evidence: ["screen:sleep"] } }
         : {}),
+      ...(Object.keys(dayPlan).length > 0 ? { dayPlan } : {}),
     },
     ...(note ? { note } : {}),
     factors: entry.factors,

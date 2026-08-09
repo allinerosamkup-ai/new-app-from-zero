@@ -19,9 +19,14 @@
 
 `SEM TAREFA ATIVA`
 
-Último trabalho registrado: criação do protocolo de iteração e da memória
-operacional (`docs/CLAUDE_ITERATION_PROTOCOL.md` + `docs/agent-memory/`) em
-2026-08-08. Concluído — nada pendente.
+Último trabalho registrado (2026-08-08): inventário, mascote Airia Orbital e
+redesenho do check-in. Concluído e verificado — 93 suítes no backend, 357 testes
+no web, typecheck e build verdes, e cada campo do check-in rastreado até o
+payload no navegador.
+
+Sobrou uma decisão de produto, não de código: os PNGs-mestres do mascote (11,4 MB)
+ficaram fora da master, só na branch `codex/airia-orbital-mascot`. Se essa branch
+for apagada, a arte-fonte some e só restam os WebP de 320/640 px.
 
 ---
 

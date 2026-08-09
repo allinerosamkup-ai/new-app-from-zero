@@ -765,6 +765,19 @@ export function computeMoodCycle(
   const sleepValues = last7.map(e => e.sono).filter(s => s !== undefined) as number[];
   const avgSleep7d = sleepValues.length > 0 ? mean(sleepValues) : null;
 
+  /**
+   * Irritabilidade entra como carga do dia, nunca como marcador de fase.
+   *
+   * `docs/product/base-clinica-padroes-e-acoes.md` é explícito: irritabilidade
+   * é comum a desregulação do TDAH e a episódio bipolar, então não discrimina
+   * um do outro e não pode influenciar a detecção de fase. O que ela informa é
+   * conduta — com irritabilidade alta a Airia baixa a exigência do dia em vez
+   * de cobrar tarefa. Por isso vai só para o `aiContext`, depois da fase já
+   * calculada, e não para `weightedComposite` nem para `warningFlags`.
+   */
+  const irritabilityValues = last7.map(e => e.irritabilidade).filter(v => v !== undefined) as number[];
+  const avgIrritability7d = irritabilityValues.length > 0 ? mean(irritabilityValues) : null;
+
   // ── Detecção de fase ────────────────────────────────────
   let phase: MoodPhase = "stable";
   let previousPhase: MoodPhase | null = null;
@@ -984,6 +997,10 @@ export function computeMoodCycle(
     `Tendência: ${trend7d > 0.2 ? "subindo" : trend7d < -0.2 ? "caindo" : "estável"} (Δ${trend7d > 0 ? "+" : ""}${trend7d.toFixed(2)}).`,
     `Estabilidade: ${stabilityScore}/100 | Volatilidade: ${volatility14d.toFixed(2)} | faixa pessoal: ${trendProfile.trendBandLabel}.`,
     avgSleep7d ? `Sono médio: ${avgSleep7d.toFixed(1)}/10.` : "",
+    avgIrritability7d ? `Irritabilidade média: ${avgIrritability7d.toFixed(1)}/10.` : "",
+    avgIrritability7d && avgIrritability7d >= 7
+      ? "Irritabilidade alta: reduza a exigência operacional e o tom de cobrança. Não é hora de propor tarefa difícil nem decisão que gere atrito."
+      : "",
     warningFlags.length > 0 ? `Alertas: ${warningFlags.join(", ")}.` : "",
     // Traduz as flags clínicas em conduta, porque o nome da flag sozinho não
     // diz à IA o que fazer com ela. Base em docs/product/base-clinica-padroes-e-acoes.md

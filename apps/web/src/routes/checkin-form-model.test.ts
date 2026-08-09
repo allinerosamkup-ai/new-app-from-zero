@@ -170,3 +170,85 @@ describe("integrated contextual check-in model", () => {
     });
   });
 });
+
+/**
+ * O botão desabilitado precisa dizer o que falta.
+ *
+ * Em produção um check-in se perdeu exatamente aqui: humor e energia não tinham
+ * sido capturados, o botão ficou morto sem explicação, e a leitura de quem usa
+ * foi "fiz o check-in e não saiu o resultado". O log do servidor confirmou —
+ * nenhum `POST /checkins` em 30 horas, com 32 leituras de histórico no mesmo
+ * período.
+ */
+describe("o que falta para registrar", () => {
+  const cheio = { humor: 5, energia: 5, factors: ["work_pressure"], noFactorIdentified: false };
+
+  it("nada falta quando tudo foi respondido", () => {
+    expect(model.missingCheckinAnswers(cheio)).toEqual([]);
+    expect(model.canSubmitContextualCheckin(cheio)).toBe(true);
+  });
+
+  it("nomeia cada campo pendente, na ordem da tela", () => {
+    expect(model.missingCheckinAnswers({ ...cheio, humor: null })).toEqual(["humor"]);
+    expect(model.missingCheckinAnswers({ ...cheio, energia: null })).toEqual(["energia"]);
+    expect(model.missingCheckinAnswers({ ...cheio, factors: [] })).toEqual(["fator"]);
+    expect(model.missingCheckinAnswers({ humor: null, energia: null, factors: [], noFactorIdentified: false }))
+      .toEqual(["humor", "energia", "fator"]);
+  });
+
+  it("marcar que não identificou fator conta como resposta", () => {
+    expect(model.missingCheckinAnswers({ ...cheio, factors: [], noFactorIdentified: true })).toEqual([]);
+  });
+
+  it("a lista vazia e o botão liberado nunca discordam", () => {
+    for (const humor of [null, 5]) {
+      for (const energia of [null, 5]) {
+        for (const factors of [[], ["rest"]]) {
+          const input = { humor, energia, factors, noFactorIdentified: false };
+          expect(model.canSubmitContextualCheckin(input)).toBe(model.missingCheckinAnswers(input).length === 0);
+        }
+      }
+    }
+  });
+});
+
+describe("ambiente da tela de check-in", () => {
+  function canais(css: string): Array<[number, number, number]> {
+    return [...css.matchAll(/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/g)]
+      .map((m) => [Number(m[1]), Number(m[2]), Number(m[3])] as [number, number, number]);
+  }
+
+  it("sem resposta não pinta nada", () => {
+    expect(model.checkinAmbience(null, null)).toBe("#FFFFFF");
+  });
+
+  it("energia alta aparece mais que energia baixa", () => {
+    const alpha = (css: string) => Number(css.match(/,([\d.]+)\)\s*0%/)![1]);
+    expect(alpha(model.checkinAmbience(5, 9))).toBeGreaterThan(alpha(model.checkinAmbience(5, 1)));
+  });
+
+  /**
+   * A trava que importa: humor baixo não pode virar cor de alarme, e o rosa
+   * não volta por aqui. O corte é o mesmo de `styles/css-tokens.test.ts` —
+   * claro, quente e com azul perto do verde.
+   */
+  it("nenhuma combinação produz salmão, rosa ou vermelho", () => {
+    for (let humor = 1; humor <= 10; humor += 1) {
+      for (let energia = 1; energia <= 10; energia += 1) {
+        for (const [r, g, b] of canais(model.checkinAmbience(humor, energia))) {
+          const rosa = r >= 200 && g >= 130 && r - g >= 25 && g - b <= 45;
+          expect(rosa, `humor ${humor}/energia ${energia} gerou rgb(${r},${g},${b})`).toBe(false);
+          expect(r <= g + 10, `humor ${humor}/energia ${energia} ficou quente demais`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("humor alto puxa para o verde e humor baixo para o azul", () => {
+    const frio = canais(model.checkinAmbience(1, 5))[0];
+    const verde = canais(model.checkinAmbience(10, 5))[0];
+    // Azul mais alto no frio, verde relativamente mais forte no alto.
+    expect(frio[2]).toBeGreaterThan(verde[2]);
+    expect(verde[1] - verde[2]).toBeGreaterThan(frio[1] - frio[2]);
+  });
+});

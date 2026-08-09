@@ -11,6 +11,7 @@ import { saveNextAction } from "../utils/save-next-action";
 import { useToast } from "../components/Toast";
 import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
+import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { buildPeriodReportData, resolvePeriodRange, type PeriodPreset } from "../utils/period-report";
 import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { BarChart3, ClipboardCheck } from "lucide-react";
@@ -526,8 +527,16 @@ export function InsightsPage() {
 
         {/* ── Header ── */}
         <div className="aura-page-header insights-header">
-          <p className="aura-page-kicker">{t("insights.yourPatterns")}</p>
-          <h1 className="aura-page-title insights-title">{t("insights.title")}</h1>
+          {/* Padrões é a tela onde a Airia observa, não age — daí o movimento de
+              compreensão e o tamanho pequeno, ao lado do título em vez de acima
+              do conteúdo. */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+            <div>
+              <p className="aura-page-kicker">{t("insights.yourPatterns")}</p>
+              <h1 className="aura-page-title insights-title">{t("insights.title")}</h1>
+            </div>
+            <AiriaMascot phase={cycleReport.phase} motion="understand" size={64} decorative />
+          </div>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
             Como suas fases se distribuem ao longo do tempo.
           </p>

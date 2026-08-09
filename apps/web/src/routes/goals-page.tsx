@@ -23,12 +23,17 @@ import {
 
 import { useToast } from "../components/Toast";
 import { RewardBurst, type Reward } from "../components/RewardBurst";
+import { AiriaMascot } from "../components/airia/AiriaMascot";
+import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
 import { parseAiSuggestion } from "../lib/ai";
 import { readPrimaryGoalId } from "../utils/goal-priority-actions";
-import { setPrimaryGoal } from "../features/aura/use-focus-goal";
+// A chave de objetivos pausados vive num lugar só: a Home lê para escolher o
+// foco e esta tela escreve. Duas cópias da mesma string é como as duas telas
+// passam a discordar sobre o que está pausado.
+import { PAUSED_GOALS_KEY, setPrimaryGoal } from "../features/aura/use-focus-goal";
 import {
   buildGoalCardModel,
   buildGoalTaskSchedule,
@@ -67,7 +72,6 @@ type ScheduledAction = {
   time: string;
 };
 
-const PAUSED_GOALS_KEY = "airia-paused-goals-v1";
 const SCHEDULED_ACTIONS_KEY = "airia-goal-action-tasks-v1";
 
 export async function recoverGoalActionsOnce(
@@ -952,6 +956,11 @@ export function GoalsPage() {
   const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
   const goals = state.goals as unknown as GoalLike[];
 
+  // A fase vem do mesmo motor de sempre. O mascote não a calcula nem a infere:
+  // se cada tela adivinhasse por conta própria, o mascote diria uma coisa e a
+  // Home diria outra sobre o mesmo dia.
+  const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
+
   const activeGoals = useMemo(
     () => goals.filter((goal) => goal.completedPct < 100 && !pausedIds.includes(String(goal.id))),
     [goals, pausedIds],
@@ -1259,6 +1268,9 @@ export function GoalsPage() {
       <div className="screen-content" style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 118 }}>
         <header style={{ padding: "18px 2px 16px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+            {/* Aqui a Airia apoia o próximo movimento — órbita firme, discreta,
+                e fora do caminho do botão de criar objetivo. */}
+            <AiriaMascot phase={cycleReport.phase} motion="action" size={56} decorative />
             <div style={{ flex: 1 }}>
               <p style={{ margin: "0 0 5px", color: "var(--lagune)", fontSize: 11, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase" }}>
                 {l("Direção e movimento", "Direction and movement")}

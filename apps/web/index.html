@@ -3,8 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Airia — Ciclagem de Humor</title>
-    <meta name="description" content="Seu assistente pessoal de ciclagem de humor. Entenda seus padrões, preveja suas fases." />
+    <!-- Base estática em português: é o que crawler sem JS e prévia de link no
+         WhatsApp/Slack enxergam. A versão em inglês é aplicada em tempo de
+         execução por src/lib/seo.ts, que o Googlebot executa. -->
+    <title>Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia</title>
+    <meta name="description" content="Acompanhe humor e energia, entenda seu padrão de dias bons e ruins e receba a próxima ação possível — do tamanho do que cabe hoje. Feito para TDAH, ciclotimia e bipolaridade tipo II. Grátis no beta." />
+    <meta name="keywords" content="app de humor, diário de humor, rastreador de humor, energia, TDAH, ciclotimia, bipolaridade tipo 2, saúde mental, autoconhecimento, produtividade neurodivergente" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="author" content="Airia" />
+
+    <!-- Uma URL canônica por idioma. Sem isso, / e /splash servem a mesma
+         página e disputam entre si na indexação. -->
+    <link rel="canonical" href="https://airia.pro/" />
+    <link rel="alternate" hreflang="pt-BR" href="https://airia.pro/" />
+    <link rel="alternate" hreflang="en" href="https://airia.pro/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://airia.pro/" />
 
     <!-- PWA / Theme -->
     <meta name="theme-color" content="#FDF9F5" />
@@ -30,11 +43,42 @@
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 
-    <!-- Open Graph -->
-    <meta property="og:title" content="Airia — Ciclagem de Humor" />
-    <meta property="og:description" content="Entenda seus padrões de humor. Preveja suas fases. Viva com mais consciência." />
-    <meta property="og:image" content="/screenshots/home-page.png" />
+    <!-- Open Graph — imagem absoluta de propósito: caminho relativo não resolve
+         fora do site, e a prévia do link sai sem imagem justo onde ela importa. -->
+    <meta property="og:title" content="Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia" />
+    <meta property="og:description" content="Acompanhe humor e energia, entenda seu padrão de dias bons e ruins e receba a próxima ação possível — do tamanho do que cabe hoje. Grátis no beta." />
+    <meta property="og:image" content="https://airia.pro/screenshots/home-page.png" />
+    <meta property="og:image:alt" content="Tela inicial da Airia mostrando a fase do ciclo de humor e a próxima ação" />
+    <meta property="og:url" content="https://airia.pro/" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Airia" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:locale:alternate" content="en_US" />
+
+    <!-- Twitter/X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia" />
+    <meta name="twitter:description" content="Acompanhe humor e energia, entenda seu padrão de dias bons e ruins e receba a próxima ação possível — do tamanho do que cabe hoje." />
+    <meta name="twitter:image" content="https://airia.pro/screenshots/home-page.png" />
+
+    <!-- Dados estruturados. Sem aggregateRating: nota inventada é penalidade
+         manual garantida, e mentira para quem instala achando que houve
+         avaliação. src/lib/seo.ts substitui este bloco no idioma ativo. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Airia",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "url": "https://airia.pro/",
+        "description": "Acompanhe humor e energia, entenda seu padrão de dias bons e ruins e receba a próxima ação possível — do tamanho do que cabe hoje. Feito para TDAH, ciclotimia e bipolaridade tipo II.",
+        "inLanguage": "pt-BR",
+        "image": "https://airia.pro/screenshots/home-page.png",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
+        "author": { "@type": "Organization", "name": "Airia", "url": "https://airia.pro" }
+      }
+    </script>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

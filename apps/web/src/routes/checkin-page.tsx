@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronLeft, Loader, Mic, MicOff } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, Loader, Mic, MicOff } from "lucide-react";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useAuraStore } from "../features/aura/store";
@@ -17,12 +17,13 @@ import {
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
-import { tapHaptic } from "../utils/haptics";
+import { successHaptic, tapHaptic } from "../utils/haptics";
 import { getClientDayContext } from "../utils/day-context";
 import { mergeVoiceFactors } from "./checkin-page.helpers";
 import {
   buildContextualCheckinEntry,
-  canSubmitContextualCheckin,
+  checkinAmbience,
+  missingCheckinAnswers,
   finalizeContextualCheckin,
   parseVoiceCheckinResponse,
 } from "./checkin-form-model";
@@ -141,6 +142,18 @@ function ChoiceButton({ active, onClick, children, ariaLabel }: {
  * alcançável — o polegar parte do meio em cinza e só vira resposta depois que a
  * pessoa encosta. "Limpar" devolve ao não respondido.
  */
+/**
+ * Onde o polegar descansa enquanto o campo não foi respondido.
+ *
+ * É também o valor que um toque sozinho precisa conseguir confirmar: numa
+ * escala de 1 a 10 dá 6, e 6 era justamente o único valor inalcançável por
+ * toque, porque `onChange` de um `input[type=range]` só dispara quando o valor
+ * muda. Exportado para o teste travar isso.
+ */
+export function sliderRestingValue(min: number, max: number): number {
+  return Math.round((min + max) / 2);
+}
+
 function ScoreSlider({ label, value, onChange, min = 1, max = 10, suffix = "", emptyHint }: {
   label: string;
   value: number | null;
@@ -152,7 +165,7 @@ function ScoreSlider({ label, value, onChange, min = 1, max = 10, suffix = "", e
 }) {
   const l = useLocalizedCopy();
   const answered = value !== null;
-  const sliderValue = answered ? value : Math.round((min + max) / 2);
+  const sliderValue = answered ? value : sliderRestingValue(min, max);
   const inputId = `score-slider-${label.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
@@ -180,6 +193,19 @@ function ScoreSlider({ label, value, onChange, min = 1, max = 10, suffix = "", e
         value={sliderValue}
         aria-valuetext={answered ? `${value}${suffix}` : emptyHint}
         onChange={(event) => onChange(Number(event.target.value))}
+        /**
+         * Encostar já é responder.
+         *
+         * `onChange` só dispara quando o valor MUDA, e o polegar de um campo
+         * não respondido descansa no meio da escala. Resultado: o valor do meio
+         * — 6 numa escala de 1 a 10 — era o único impossível de escolher com um
+         * toque. A pessoa tocava exatamente ali, via o polegar no lugar certo,
+         * e o app gravava `null`. Aqui o toque e a tecla confirmam o valor
+         * exibido quando o campo ainda está vazio; com o campo já respondido,
+         * `onChange` continua sendo o único caminho.
+         */
+        onPointerUp={() => { if (!answered) onChange(sliderValue); }}
+        onKeyUp={() => { if (!answered) onChange(sliderValue); }}
         style={{
           width: "100%",
           height: 34,
@@ -277,6 +303,8 @@ export function CheckinPage() {
   const [noFactorIdentified, setNoFactorIdentified] = useState(false);
   const [sono, setSono] = useState<number | null>(null);
   const [sleepHours, setSleepHours] = useState<number | null>(null);
+  const [clareza, setClareza] = useState<number | null>(null);
+  const [irritabilidade, setIrritabilidade] = useState<number | null>(null);
   const [fisico, setFisico] = useState<number | null>(null);
   const [social, setSocial] = useState<number | null>(null);
   const [isFlowing, setIsFlowing] = useState<boolean | null>(null);
@@ -291,6 +319,7 @@ export function CheckinPage() {
   const [capacity, setCapacity] = useState<CheckinCapacity | null>(null);
   const [priorityGoalId, setPriorityGoalId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [contextOpen, setContextOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -360,7 +389,12 @@ export function CheckinPage() {
         const result = parseVoiceCheckinResponse(await api.post("/ai/voice-checkin", { transcript }));
         if (result.humor !== null) setHumor(result.humor);
         if (result.energia !== null) setEnergia(result.energia);
-        if (result.sleepHours !== null) setSleepHours(result.sleepHours);
+        // Horas de sono moram na seção recolhida. Preencher e deixar escondido
+        // faria a pessoa achar que a fala foi ignorada.
+        if (result.sleepHours !== null) {
+          setSleepHours(result.sleepHours);
+          setContextOpen(true);
+        }
         if (result.emotions?.length) setEmotions(result.emotions.slice(0, 3));
         if (result.factors?.length) {
           setFactors((current) => mergeVoiceFactors(current, result.factors));
@@ -381,7 +415,8 @@ export function CheckinPage() {
     setFactors((current) => current.includes(id) ? current.filter((factor) => factor !== id) : [...current, id]);
   }
 
-  const canSubmit = canSubmitContextualCheckin({ humor, energia, factors, noFactorIdentified });
+  const missing = missingCheckinAnswers({ humor, energia, factors, noFactorIdentified });
+  const canSubmit = missing.length === 0;
 
   async function handleSubmit() {
     if (!canSubmit || isSaving) return;
@@ -396,8 +431,12 @@ export function CheckinPage() {
         noFactorIdentified,
         ...(sono !== null ? { sono } : {}),
         ...(sleepHours !== null ? { sleepHours } : {}),
+        ...(clareza !== null ? { clareza } : {}),
+        ...(irritabilidade !== null ? { irritabilidade } : {}),
         ...(fisico !== null ? { fisico } : {}),
         ...(social !== null ? { social } : {}),
+        ...(capacity !== null ? { capacity } : {}),
+        ...(priorityGoalId !== null ? { priorityGoalId } : {}),
         ...(isFlowing !== null ? { isFlowing } : {}),
         ...(flowDay !== null ? { flowDay } : {}),
         ...(flowIntensity !== null ? { flowIntensity } : {}),
@@ -425,6 +464,9 @@ export function CheckinPage() {
       await finalizeContextualCheckin({
         persist: async () => outcome,
         onConfirmed: (checkinAI) => {
+          // Retorno tátil só aqui: o registro já voltou confirmado do servidor.
+          // Vibrar no toque do botão comemoraria algo que ainda pode falhar.
+          successHaptic();
           if (entry.emotion) setMood(EMOTION_TO_MOOD[entry.emotion] ?? "equilibrada");
           trackEvent("checkin_completed", {
             flow: "contextual",
@@ -432,18 +474,14 @@ export function CheckinPage() {
             explicit_no_factor: noFactorIdentified,
             emotions_count: emotions.length,
             has_voice_context: Boolean(voiceTranscript.trim()),
-            has_optional_context: [sono, sleepHours, fisico, social, isFlowing, medicationTakenToday, focusScore, hyperfocusOccurred, dayType].some((value) => value !== null),
+            has_optional_context: [sono, sleepHours, clareza, irritabilidade, fisico, social, isFlowing, medicationTakenToday, focusScore, hyperfocusOccurred, dayType].some((value) => value !== null),
             has_capacity: capacity !== null,
             has_priority_goal: Boolean(priorityGoalId),
           });
           /**
-           * Capacidade e prioridade viajam pela navegação, não pelo banco.
-           *
-           * São sinais do momento — o que cabe HOJE e o que pesa HOJE — e o que
-           * eles precisam alimentar é a próxima ação que a tela seguinte vai
-           * montar. Persistir isso exigiria migração de schema para um dado que
-           * não tem uso histórico; leitura de padrão continua vindo de humor,
-           * energia e fatores, que já são gravados.
+           * A navegação leva capacidade e prioridade para a tela seguinte montar
+           * a sugestão sem uma ida ao servidor. Isso é atalho de renderização —
+           * a gravação já aconteceu, dentro de `signalMetadata.dayPlan`.
            */
           navigate("/checkin-result", {
             state: {
@@ -466,7 +504,19 @@ export function CheckinPage() {
   }
 
   return (
-    <div data-testid="checkin-contextual-flow" style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", paddingBottom: 36 }}>
+    <div
+      data-testid="checkin-contextual-flow"
+      style={{
+        flex: 1,
+        overflowY: "auto",
+        // A tela responde enquanto ela responde: o fundo pega cor de humor e
+        // energia. Antes tudo era cinza igual, e é isso que faz um check-in de
+        // nove escalas parecer formulário.
+        background: checkinAmbience(humor, energia),
+        transition: "background 600ms ease",
+        paddingBottom: 36,
+      }}
+    >
       <div className="screen-content">
         <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0 22px" }}>
           <button type="button" aria-label={l("Voltar", "Back")} onClick={() => navigate(-1)} style={{ border: 0, background: "none", padding: 4, color: "var(--text-1)" }}>
@@ -583,12 +633,58 @@ export function CheckinPage() {
           )}
         </Section>
 
+        {/* ── Detalhes recolhidos ──
+            Esta seção é a maior da tela e é inteira opcional: onze campos que
+            ninguém precisa responder para registrar o dia. Aberta por padrão,
+            ela transformava o check-in num questionário longo e empurrava o
+            botão de registrar para fora da tela. Recolhida, o obrigatório cabe
+            de uma vez e quem quiser detalhar continua a um toque. ── */}
         <Section section="optional-context" title={l("Detalhes do contexto", "Context details")} subtitle={l("Opcionais, mas importantes para correlações mais precisas.", "Optional, but important for more precise correlations.")}>
-          <div style={{ display: "grid", gap: 18 }}>
+          <button
+            type="button"
+            aria-expanded={contextOpen}
+            aria-controls="checkin-context-details"
+            onClick={() => { tapHaptic(); setContextOpen((open) => !open); }}
+            style={{
+              width: "100%",
+              minHeight: 46,
+              marginBottom: contextOpen ? 16 : 0,
+              borderRadius: 12,
+              border: "1.5px solid var(--warm-border-2)",
+              background: "rgba(255,255,255,.78)",
+              color: "var(--text-2)",
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: "inherit",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0 14px",
+            }}
+          >
+            <span>
+              {contextOpen
+                ? l("Esconder detalhes", "Hide details")
+                : l("Detalhar sono, foco e mais", "Add sleep, focus and more")}
+            </span>
+            <ChevronDown
+              size={17}
+              aria-hidden="true"
+              style={{ transform: contextOpen ? "rotate(180deg)" : "none", transition: "transform 180ms ease" }}
+            />
+          </button>
+          <div id="checkin-context-details" hidden={!contextOpen} style={{ display: contextOpen ? "grid" : "none", gap: 18 }}>
             <div>
               <ScoreSlider label={l("Qualidade do sono", "Sleep quality")} value={sono} onChange={setSono} emptyHint={l("arraste", "drag")} />
               <ScoreSlider label={l("Horas de sono", "Sleep hours")} value={sleepHours} onChange={setSleepHours} min={3} max={12} suffix="h" emptyHint={l("arraste", "drag")} />
             </div>
+            {/* Clareza e irritabilidade tinham coluna no banco, campo no contrato
+                e nenhuma pergunta. A irritabilidade é a que pesa: o motor lê o
+                valor na agregação diária e a Airia usa nível alto para baixar a
+                exigência do dia — sem coleta, os dois liam null para sempre. */}
+            <ScoreSlider label={l("Clareza mental", "Mental clarity")} value={clareza} onChange={setClareza} emptyHint={l("arraste", "drag")} />
+            <ScoreSlider label={l("Irritabilidade", "Irritability")} value={irritabilidade} onChange={setIrritabilidade} emptyHint={l("arraste", "drag")} />
             <ScoreSlider label={l("Estado físico", "Physical state")} value={fisico} onChange={setFisico} emptyHint={l("arraste", "drag")} />
             <ScoreSlider label={l("Carga social", "Social load")} value={social} onChange={setSocial} emptyHint={l("arraste", "drag")} />
 
@@ -661,6 +757,31 @@ export function CheckinPage() {
         </Section>
 
         {submitError && <p role="alert" aria-live="assertive" style={{ color: "#A24B43", fontSize: 13, lineHeight: 1.5 }}>{submitError}</p>}
+
+        {/* ── Por que o botão não está liberado ──
+            Botão desabilitado e mudo é indistinguível de botão quebrado, e foi
+            assim que um check-in inteiro se perdeu: o registro não saiu, nada
+            explicou, e a leitura foi "fiz o check-in e não apareceu o
+            resultado". O log do servidor confirmou que nenhum envio chegou.
+            Agora a tela diz o que falta, com o nome exato do campo. ── */}
+        {!canSubmit && !isSaving && (
+          <p
+            aria-live="polite"
+            style={{ margin: "0 0 10px", fontSize: 13, lineHeight: 1.5, color: "var(--text-2)", textAlign: "center" }}
+          >
+            {l("Falta responder: ", "Still missing: ")}
+            <strong style={{ color: "var(--accent-primary-ink)" }}>
+              {missing
+                .map((field) => ({
+                  humor: l("humor", "mood"),
+                  energia: l("energia", "energy"),
+                  fator: l("um fator (ou marcar que não identificou)", "one factor (or mark that you found none)"),
+                }[field]))
+                .join(l(" · ", " · "))}
+            </strong>
+          </p>
+        )}
+
         <AuraButtonV2 variant="primary" onClick={handleSubmit} disabled={!canSubmit || isSaving} style={{ width: "100%", minHeight: 54, fontWeight: 800 }}>
           {isSaving ? l("Registrando...", "Saving...") : <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{l("Registrar", "Save")} <Check size={16} /></span>}
         </AuraButtonV2>

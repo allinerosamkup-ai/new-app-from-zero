@@ -6,6 +6,8 @@ import {
   precacheAndRoute,
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
+import { CacheFirst } from 'workbox-strategies';
+import { ExpirationPlugin } from 'workbox-expiration';
 import { navigateClientsToRelease } from './features/pwa/release-update';
 import { FEATURES, FEATURE_FALLBACK_ROUTE } from './config/features';
 
@@ -23,6 +25,23 @@ precacheAndRoute(self.__WB_MANIFEST);
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), {
   denylist: [/^\/api\//],
 }));
+
+/**
+ * Mascote: cache depois de exibido, nunca no precache.
+ *
+ * `globPatterns` não inclui `webp` de propósito — as 16 imagens somam ~420 KB e
+ * ninguém precisa das oito fases baixadas para ver a primeira tela. Aqui elas
+ * entram no cache na primeira exibição, o que resolve o offline sem cobrar nada
+ * na instalação. A imagem é decorativa: falhar offline antes do primeiro acesso
+ * não esconde informação, porque o nome da fase está sempre em texto.
+ */
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/mascot/phases/'),
+  new CacheFirst({
+    cacheName: 'airia-mascot-v1',
+    plugins: [new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 90 })],
+  }),
+);
 
 self.addEventListener('activate', (event) => {
   if (!appRelease) return;

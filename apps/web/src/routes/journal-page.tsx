@@ -7,6 +7,7 @@ import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { useToast } from "../components/Toast";
 import { CommandPlanCard } from "../components/aura/CommandPlanCard";
+import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { shouldRenderCommandPlan } from "../features/aura/command-checkin-receipt";
 import type { AuraCommandPlan } from "../features/aura/command-types";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
@@ -800,6 +801,11 @@ export function JournalPage() {
       <div style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)" }}>
         <div className="screen-content" style={{ padding: "20px 24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Diário é escuta: as pétalas se aproximam e o brilho central
+                pulsa, sem nada que puxe o toque. */}
+            <div>
+              <AiriaMascot phase={cycleReport.phase} motion="listen" size={84} decorative />
+            </div>
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--primary)", margin: 0 }}>
               {t("journal.aiJournal")}
             </p>
@@ -1197,6 +1203,10 @@ export function JournalPage() {
               <polyline points="12 19 5 12 12 5" />
             </svg>
           </AuraButtonV2>
+          {/* A escuta acontece aqui, na conversa aberta — não só na visão geral.
+              O diário abre direto neste modo quando há sessão em andamento, que
+              é a maior parte das vezes. */}
+          <AiriaMascot phase={cycleReport.phase} motion="listen" size={40} decorative />
           <div>
             <h2 style={{ fontFamily: "'Poppins'", fontSize: "16px", fontWeight: 800, color: "var(--text-1)", margin: 0 }}>
               {t("journal.aiJournal")}

@@ -3339,7 +3339,18 @@ export function createApp(dependencies: AppDependencies = {}) {
               // calendário e janelas ocupadas ficam vazios.
               defaultCalendarId: '',
               busyWindows: [],
-              response: { action: proposal.action, payload: proposal.payload } as never,
+              // O construtor exige `assistantMessage` — a frase do card de
+              // confirmação. No diário quem fala é a resposta que já foi para a
+              // tela, então o card recebe só o rótulo da proposta. Sem isso o
+              // `parse` lança, e como este bloco inteiro está dentro de um
+              // `catch` mudo, a proposta sumiria sem deixar rastro.
+              response: {
+                action: proposal.action,
+                payload: proposal.payload,
+                assistantMessage: proposal.action === 'record_checkin'
+                  ? 'Registro do que você contou, se quiser confirmar.'
+                  : 'Meta a partir do que você contou, se quiser confirmar.',
+              } as never,
             });
             operations.push(...plan.operations);
           }

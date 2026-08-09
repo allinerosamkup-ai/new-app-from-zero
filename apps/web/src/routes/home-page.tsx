@@ -14,6 +14,7 @@ import { api, setAdaptiveSnapshot } from "../lib/api";
 import { trackEvent } from "../lib/track";
 import { tryParseAiSuggestion } from "../lib/ai";
 import { AiriaLogoBg } from "../components/AuraIcon";
+import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
@@ -1221,22 +1222,27 @@ export function HomePage() {
           </div>
           {/* Hero de fase — o centro da today view. Respira no ritmo da fase:
               fases altas = respiração mais viva; fases baixas/turbulência =
-              respiração lenta (co-regulação, nunca excitação). */}
+              respiração lenta (co-regulação, nunca excitação).
+
+              O mascote ocupa o lugar do emoji dentro do círculo. Um emoji e uma
+              criatura desenhada seriam dois indicadores da mesma fase empilhados
+              — e o nome dela já vem escrito logo abaixo, por isso o mascote
+              entra como decoração para leitor de tela. */}
           <div style={{ textAlign: "center", marginTop: 18 }}>
             <div
               className="aura-breathe"
               style={{
-                width: 76, height: 76, borderRadius: "50%",
+                width: 104, height: 104, borderRadius: "50%",
                 background: "rgba(255,255,255,.80)",
                 border: `2px solid ${phaseColor}`,
                 display: "inline-flex", alignItems: "center", justifyContent: "center",
-                fontSize: 32, marginBottom: 12,
+                marginBottom: 12,
                 boxShadow: "0 10px 22px rgba(17,24,39,.05)",
                 ["--breathe-dur" as string]: BREATHE_DURATION[cycleReport.phase] ?? "4.4s",
                 ["--breathe-glow" as string]: `${phaseColor}38`,
               }}
             >
-              {cycleReport.phaseEmoji}
+              <AiriaMascot phase={cycleReport.phase} size={92} decorative />
             </div>
             <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.2 }}>
               {currentPhaseLabel}

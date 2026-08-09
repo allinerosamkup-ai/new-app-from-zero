@@ -1,0 +1,22 @@
+# Airia — airia.pro
+
+User-agent: *
+Allow: /
+
+# Telas internas exigem sessão: o crawler só recebe a casca do app, e página
+# vazia indexada gasta orçamento de rastreamento e piora o resultado da busca.
+Disallow: /home
+Disallow: /checkin
+Disallow: /checkin-result
+Disallow: /goals
+Disallow: /insights
+Disallow: /journal
+Disallow: /aura
+Disallow: /preferences
+Disallow: /run
+Disallow: /pomodoro
+Disallow: /auth
+Disallow: /comecar
+Disallow: /onboarding
+
+Sitemap: https://airia.pro/sitemap.xml

@@ -25,6 +25,14 @@ Barra inferior: **Hoje · Objetivos | Airia | Padrões · Diário**. Objetivos e
 no essencial destravado — esperar check-in para deixar criar meta não faz sentido
 quando metas são o núcleo.
 
+**Padrões também, desde 2026-08-09.** Ficava escondido até o 3º check-in e a
+ausência foi lida como bug ("você tirou o botão Padrões") — o que é a leitura
+certa, porque some sem aviso e some por defeito são a mesma coisa na tela. A
+página já tinha o estado vazio que faz esse trabalho direito, dizendo quantos
+check-ins faltam e o que aparece em 3, 7 e 30 dias; ele era inalcançável
+justamente para quem foi escrito. `nav-access.helpers.ts` só condiciona o
+Planner agora.
+
 ## Estrutura de Rotas (`src/routes/`)
 | Rota | Arquivo | Descrição |
 |------|---------|-----------|
@@ -56,6 +64,34 @@ A pergunta mudou: era "o que tenho hoje" e virou **"o que eu faço agora"**. As
   escolha a cada reidratação, **sem estado persistido de "qual é o foco"**.
 - Acesso rápido não tem mais o card "Fechar" — levava a uma tela que depende do
   Planner.
+
+## Idioma e SEO
+
+**O idioma segue o aparelho até a pessoa escolher outro.** `i18n/index.ts` lê
+nesta ordem: `?lang=` → escolha salva → `navigator`. O detector **não guarda** o
+que apenas detectou (`caches: []`) — antes guardava, e isso cravava o idioma da
+primeira visita para sempre: quem trocasse o idioma do celular depois ficava
+preso no antigo, com o app respeitando uma preferência que ninguém expressou.
+Só `setLanguage()`, em Preferências, escreve `airia_lang`. `dropDetectorCache()`
+limpa o cache antigo pelo formato — o detector gravava `pt-BR`, a escolha grava
+`pt`.
+
+**A splash é a única página pública, e é ela que carrega o SEO.** `lib/seo.ts`
+decide (função pura, testada) e aplica no `<head>`: título, descrição, canônica,
+`hreflang`, Open Graph, Twitter e JSON-LD, tudo trocando com o idioma. As telas
+internas não entram — sobrescrever o título delas com texto de marketing não
+ajuda ninguém, e elas estão bloqueadas no `robots.txt` porque exigem sessão.
+
+Cada idioma tem URL própria (`/` e `/?lang=en`); sem isso `hreflang` não
+significa nada. As declarações são recíprocas, senão o Google descarta.
+
+**Limite honesto:** isto roda no cliente. O Googlebot executa JS e enxerga;
+prévia de link no WhatsApp e no Slack **não executa**, então o compartilhamento
+sempre mostra o que está no `index.html` estático, que é português. Resolver de
+verdade exige render no servidor — decisão de arquitetura, não ajuste de tag.
+
+Nada de `aggregateRating` no JSON-LD: nota inventada é penalidade manual
+garantida, e mentira para quem instala achando que houve avaliação.
 
 ## Dedupe de ações — duas camadas, nesta ordem
 
@@ -106,6 +142,54 @@ O motor mede desvio do **baseline pessoal**, e isso criava pontos cegos. Base em
 3. **As horas de sono nunca chegavam ao motor.** `aggregateCheckinsByDay`
    descartava `sleepHours` e `irritabilidade` em silêncio: o check-in coletava e
    a agregação jogava fora.
+
+Sobre a irritabilidade, o buraco era maior e do outro lado: a agregação passou a
+carregar o valor, mas **a tela nunca perguntou**. Corrigido em 2026-08-08. Ela
+entra no `aiContext` como carga do dia — nunca em `weightedComposite` nem em
+`warningFlags`, porque `base-clinica-padroes-e-acoes.md` é explícito em dizer que
+irritabilidade **não discrimina** desregulação de TDAH de episódio bipolar. O que
+ela informa é conduta: acima de 7, baixar a exigência do dia.
+
+## O que se pergunta tem que virar dado
+
+Regra do check-in, e ela vale para qualquer campo novo: **toda pergunta da tela
+precisa chegar ao banco e ter algum consumidor** — ou ficar registrado por que
+existe sem um.
+
+O que quebrou essa regra, nas duas direções: `clarityScore` e `irritabilityScore`
+tinham coluna, contrato e (no caso da irritabilidade) leitor, e nenhuma pergunta;
+`capacity` e `priorityGoalId` tinham pergunta e nenhum destino, viajando só pelo
+`navigate(state)` e morrendo ao fechar a tela. Os dois últimos vivem hoje em
+`signalMetadata.dayPlan` — coluna `Json` que já existia, zero migração.
+
+Provas: `features/aura/checkin-submission.test.ts` cobre tela → payload, e
+`checkin-application.service.test.ts` no backend cobre payload → persistência.
+
+**`input[type=range]` não avisa quando o toque cai onde o polegar já está.**
+Campo opcional começa com o polegar no meio da escala, então 6 era o único valor
+de 1 a 10 impossível de responder com um toque: a pessoa via o polegar no lugar
+certo e o app gravava `null`. O `ScoreSlider` confirma o valor exibido no
+`pointerup`/`keyup` enquanto o campo estiver vazio.
+
+## Mascote Airia Orbital
+
+`components/airia/AiriaMascot.tsx`, presente em Home, Objetivos, Padrões, Diário,
+Aura e no resultado do check-in.
+
+- **Recebe a fase pronta e nunca infere humor.** A fase sai do `MoodCycleEngine`;
+  componente que adivinhasse estado local diria uma coisa enquanto a tela ao lado
+  diz outra. Sem dado suficiente, cai em Estável — ausência de leitura não vira
+  cara triste.
+- **No check-in ele só reage depois do registro confirmado**, e por isso mora na
+  tela de resultado, não no formulário. Fica no herói, que aparece sempre: dentro
+  do bloco de fase ele sumiria justo para quem registra pela primeira vez.
+- `decorative` some da leitura de tela quando o nome da fase já está escrito ao
+  lado, que é o caso em todas as superfícies hoje.
+- Assets: WebP de 320 e 640 px, ~420 KB no total, **fora do precache** (rota
+  `CacheFirst` em `src/sw.ts`). Os PNGs-mestres (11,4 MB) ficam na branch
+  `codex/airia-orbital-mascot`; `scripts/build-mascot-assets.mjs` regenera.
+- O mestre é RGB sem alfa, com fundo creme chapado. A máscara radial do script é
+  o que impede um quadrado creme no card branco.
 
 Estabilidade agora tem **valência**: `stableReading` distingue platô alto de
 platô baixo pelo nível **absoluto**, não pelo desvio. Quem está deprimido há meses

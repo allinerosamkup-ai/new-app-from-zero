@@ -157,6 +157,13 @@ export default defineConfig({
         // Impede que o SW sirva index.html (SPA fallback) para rotas /api/
         // Isso é CRÍTICO para o OAuth callback do Google Calendar funcionar
         navigateFallbackDenylist: [/^\/api\//],
+        /**
+         * ATENÇÃO: com `strategies: 'injectManifest'` (linha 74), este bloco é
+         * ignorado. O service worker é `src/sw.ts`, e só o que está escrito lá
+         * roda — estas regras de fonte nunca chegaram a valer. Ficam porque
+         * voltariam a valer se a estratégia mudasse para `generateSW`; regra
+         * nova de cache vai em `src/sw.ts`, não aqui.
+         */
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

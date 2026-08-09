@@ -98,6 +98,38 @@ async function run() {
     idempotencyKey: 'screen-2026-07-31-morning',
   }, { now: new Date('2026-07-31T09:00:00.000Z') });
   assert.deepEqual(evaluations, ['aura_text', 'aura_text', 'screen']);
+
+  /**
+   * O que a tela do check-in pergunta chega à camada de persistência.
+   *
+   * Clareza e irritabilidade tinham coluna aqui e nenhuma pergunta na tela;
+   * capacidade e objetivo prioritário tinham o inverso. Este bloco é o elo
+   * final da prova: com a tela perguntando, o valor precisa aparecer no que vai
+   * para o banco — não só ser aceito pelo contrato.
+   */
+  rows.length = 0;
+  await service.record({
+    ...base,
+    source: 'screen',
+    sourceMessageId: null,
+    idempotencyKey: 'screen-2026-07-31-evening',
+    clarityScore: 2,
+    irritabilityScore: 9,
+    physicalScore: 6,
+    socialScore: 4,
+    sleepScore: 3,
+    sleepHours: 5,
+    signalMetadata: {
+      mood: { provenance: 'reported', confidence: 1, evidence: ['screen:mood'] },
+      irritability: { provenance: 'reported', confidence: 1, evidence: ['screen:irritability'] },
+      dayPlan: { capacity: 'quick', priorityGoalId: 'goal-7' },
+    },
+  }, { now: new Date('2026-07-31T20:00:00.000Z') });
+
+  assert.equal(rows[0].clarityScore, 2);
+  assert.equal(rows[0].irritabilityScore, 9);
+  assert.equal(rows[0].sleepHours, 5);
+  assert.deepEqual(rows[0].signalMetadata.dayPlan, { capacity: 'quick', priorityGoalId: 'goal-7' });
 }
 
 void run().then(() => console.log('checkin-application.service tests passed'));

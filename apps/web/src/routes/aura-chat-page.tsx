@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { CommandPlanCard } from "../components/aura/CommandPlanCard";
+import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { useToast } from "../components/Toast";
 import { useAuraStore } from "../features/aura/store";
@@ -904,8 +905,13 @@ export function AuraChatPage() {
           backdropFilter: "blur(18px)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
-          <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          {/* Aqui o mascote é a presença da própria Airia na conversa, no lugar
+              de um avatar genérico. Fica no cabeçalho porque a lista de
+              mensagens rola: um mascote entre balões sairia da tela na primeira
+              resposta longa. */}
+          <AiriaMascot phase={cycleReport.phase} motion="listen" size={44} decorative />
+          <div style={{ flex: 1 }}>
             <p
               style={{
                 fontSize: 10,

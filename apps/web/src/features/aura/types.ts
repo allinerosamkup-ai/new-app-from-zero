@@ -62,6 +62,9 @@ export type CheckinEntry = {
   irritabilidade?: number;
   fisico?: number;
   social?: number;
+  /** O que cabe hoje e o que pesa hoje — vão para `signalMetadata.dayPlan`. */
+  capacity?: 'quick' | 'moderate' | 'heavy';
+  priorityGoalId?: string;
   cyclePhase?: string;
   cycleDay?: number;
   isFlowing?: boolean;

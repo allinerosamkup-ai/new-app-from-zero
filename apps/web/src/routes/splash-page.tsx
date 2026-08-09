@@ -1,7 +1,8 @@
 import { ArrowRight, BrainCircuit, CalendarRange, ClipboardList, HeartHandshake, ShieldCheck, Sparkles, Waves, type LucideIcon } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { useLocalizedCopy } from "../i18n";
+import { useLanguage, useLocalizedCopy } from "../i18n";
+import { applySeoMetadata } from "../lib/seo";
 
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -487,7 +488,21 @@ function ScreenshotPhone({ shot }: { shot: ScreenshotCard }) {
 
 export function SplashPage() {
   const l = useLocalizedCopy();
+  const language = useLanguage();
   const navigate = useNavigate();
+
+  /**
+   * Esta é a única página pública do app, então é ela que carrega o SEO.
+   *
+   * Roda de novo a cada troca de idioma porque título, descrição, canônica e
+   * `hreflang` mudam junto: a versão em inglês precisa se anunciar como inglesa
+   * quando alguém copia o link. Aplicar isso no app inteiro seria errado —
+   * as telas internas não são indexáveis e sobrescrever o título delas com
+   * texto de marketing não ajuda ninguém.
+   */
+  useEffect(() => {
+    applySeoMetadata(language);
+  }, [language]);
   const localizedAudienceCards = audienceCards.map((card, index) => ({ ...card, title: l(card.title, audienceCardsEn[index].title), description: l(card.description, audienceCardsEn[index].description) }));
   const localizedFlowSteps = flowSteps.map((step, index) => ({ ...step, title: l(step.title, flowStepsEn[index].title), description: l(step.description, flowStepsEn[index].description) }));
   const localizedFeatures = features.map((feature, index) => ({ ...feature, title: l(feature.title, featuresEn[index].title), description: l(feature.description, featuresEn[index].description) }));

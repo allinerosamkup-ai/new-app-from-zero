@@ -128,4 +128,50 @@ const validCheckin = {
   assert.equal(result.success, false);
 }
 
+// O que a tela pergunta sobre o dia e não tem escala: capacidade e objetivo
+// prioritário. `signalMetadata` é `.strict()`, então sem chave própria o payload
+// inteiro seria rejeitado — e o check-in falharia por causa de dois campos
+// opcionais.
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    signalMetadata: {
+      mood: { provenance: 'reported', confidence: 1, evidence: ['screen:mood'] },
+      dayPlan: { capacity: 'quick', priorityGoalId: 'goal-7' },
+    },
+  });
+
+  assert.equal(result.success, true, 'capacidade e objetivo prioritário precisam ter onde ser gravados');
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    signalMetadata: { dayPlan: { capacity: 'enorme' } },
+  });
+
+  assert.equal(result.success, false, 'capacidade fora das três opções da tela não entra');
+}
+
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    signalMetadata: { dayPlan: { capacity: 'quick' }, inventada: true },
+  });
+
+  assert.equal(result.success, false, 'signalMetadata continua fechado a chave desconhecida');
+}
+
+// O diário sempre mandou `surface`, o esquema nunca aceitou, e o construtor de
+// plano lançava dentro de um catch mudo — a proposta de check-in do diário e a
+// de meta logo atrás morriam em silêncio.
+{
+  const result = CheckinCreateSchema.safeParse({
+    ...validCheckin,
+    signalMetadata: { surface: 'journal' },
+  });
+
+  assert.equal(result.success, true, 'a superfície de origem precisa caber em signalMetadata');
+}
+
 console.log('checkin.contract tests passed');

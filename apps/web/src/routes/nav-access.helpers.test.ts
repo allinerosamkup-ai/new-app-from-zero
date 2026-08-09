@@ -8,19 +8,28 @@ describe("resolveUnlockedNav", () => {
     // Objetivos entra no essencial: é o núcleo do app, e esperar check-in para
     // deixar a pessoa criar uma meta não faz sentido.
     const unlocked = resolveUnlockedNav({ checkinCount: 0, isNewUser: true });
-    assert.deepEqual([...unlocked].sort(), ["aura", "goals", "home", "journal"]);
+    assert.deepEqual([...unlocked].sort(), ["aura", "goals", "home", "insights", "journal"]);
+  });
+
+  /**
+   * Padrões não some mais no começo.
+   *
+   * Escondê-lo até o 3º check-in tinha intenção defensável — leitura de padrão
+   * sem base é leitura falsa — e efeito ruim: uma aba do produto desaparecia
+   * sem nada explicando, o que é indistinguível de defeito para quem usa.
+   * `insights-page.tsx` já tem o estado vazio que faz esse trabalho direito,
+   * dizendo quantos check-ins faltam e o que aparece em 3, 7 e 30 dias.
+   */
+  it("mostra Padrões desde o primeiro dia, mesmo sem nenhum check-in", () => {
+    for (const checkinCount of [0, 1, 2, 3]) {
+      const unlocked = resolveUnlockedNav({ checkinCount, isNewUser: true });
+      assert.equal(unlocked.has("insights"), true, `insights sumiu com ${checkinCount} check-in(s)`);
+    }
   });
 
   it("unlocks the planner after the first check-in", () => {
-    const unlocked = resolveUnlockedNav({ checkinCount: 1, isNewUser: true });
-    assert.equal(unlocked.has("planner"), true);
-    assert.equal(unlocked.has("insights"), false);
-  });
-
-  it("unlocks patterns after three check-ins", () => {
-    const unlocked = resolveUnlockedNav({ checkinCount: 3, isNewUser: true });
-    assert.equal(unlocked.has("insights"), true);
-    assert.equal(unlocked.has("planner"), true);
+    assert.equal(resolveUnlockedNav({ checkinCount: 0, isNewUser: true }).has("planner"), false);
+    assert.equal(resolveUnlockedNav({ checkinCount: 1, isNewUser: true }).has("planner"), true);
   });
 
   it("shows everything for an established user regardless of count", () => {
