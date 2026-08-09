@@ -62,8 +62,26 @@ function getLocaleContext() {
   };
 }
 
-// Evita disparar vários refresh/signOut concorrentes num storm de 401 (ex.: Promise.all).
-let _recoveringSession = false;
+/**
+ * A renovação em curso, compartilhada por quem chegar durante ela.
+ *
+ * Antes isto era um booleano com espera fixa de 400 ms: quem chegasse no meio
+ * dormia 400 ms e devolvia `!_recoveringSession`. Como renovar sessão é uma ida
+ * à rede — normalmente mais que 400 ms —, os concorrentes acordavam cedo, viam
+ * a renovação ainda em curso e **desistiam**, devolvendo `false`, que o chamador
+ * lê como "sessão morta".
+ *
+ * O efeito em produção: o app abre disparando seis chamadas de uma vez
+ * (`refreshData`). Com o token vencido, as seis tomam 401, uma renova e as
+ * outras cinco desistem. Cada uma tem `.catch()` próprio, então o erro some e a
+ * tela abre **vazia, sem mensagem nenhuma** — como se a conta não tivesse
+ * histórico. O log confirmava: `GET /checkins?days=90` 401 vinte e duas vezes
+ * sem um único 200, enquanto chamadas isoladas depois disso passavam.
+ *
+ * Agora todo mundo espera a **mesma** promessa. Sem tempo arbitrário, e o
+ * resultado é o real, não um palpite sobre quanto a rede demora.
+ */
+let _refreshInFlight: Promise<boolean> | null = null;
 
 /**
  * Renova a sessão e diz se a requisição pode ser refeita.
@@ -71,15 +89,16 @@ let _recoveringSession = false;
  * Devolve `true` quando o refresh deu certo — aí a chamada original vale a pena
  * de novo. `false` quando a sessão morreu de vez (já deslogou e redirecionou).
  */
-async function recoverSession(): Promise<boolean> {
-  if (_recoveringSession) {
-    // Outro 401 já está renovando. Espera a poeira baixar e tenta de novo: sem
-    // isso, num storm de 401 (Promise.all) só a primeira chamada se recupera.
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    return !_recoveringSession;
+function recoverSession(): Promise<boolean> {
+  if (!_refreshInFlight) {
+    _refreshInFlight = doRecoverSession().finally(() => {
+      _refreshInFlight = null;
+    });
   }
+  return _refreshInFlight;
+}
 
-  _recoveringSession = true;
+async function doRecoverSession(): Promise<boolean> {
   let sessionDead = false;
   try {
     // refreshSession() pode pendurar (token malformado / rede ruim). Nunca deixar a
@@ -91,8 +110,6 @@ async function recoverSession(): Promise<boolean> {
     sessionDead = Boolean(error) || !data?.session;
   } catch {
     sessionDead = true;
-  } finally {
-    _recoveringSession = false;
   }
 
   if (sessionDead) {

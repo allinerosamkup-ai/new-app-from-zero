@@ -97,6 +97,49 @@ describe("api — recuperação de sessão", () => {
     expect(refreshSession).not.toHaveBeenCalled();
   });
 
+  /**
+   * A abertura do app dispara seis chamadas de uma vez (`refreshData`).
+   *
+   * Com o token vencido, as seis tomam 401 ao mesmo tempo. A versão anterior
+   * fazia quem chegasse durante a renovação dormir 400 ms fixos e devolver
+   * `!_recoveringSession` — como renovar sessão é ida à rede e costuma passar
+   * de 400 ms, os cinco concorrentes acordavam cedo e **desistiam**. Cada
+   * chamada do store tem `.catch()` próprio, então o erro sumia e o app abria
+   * vazio, como se a conta não tivesse histórico.
+   *
+   * O `refreshSession` aqui demora 800 ms de propósito: é o que separa esperar
+   * a promessa real de chutar um tempo.
+   */
+  it("storm de 401: todas as chamadas simultâneas se recuperam com um refresh só", async () => {
+    refreshSession.mockImplementation(
+      () => new Promise((resolve) => {
+        setTimeout(() => resolve({ data: { session: { access_token: "novo" } }, error: null }), 800);
+      }),
+    );
+
+    const fetchMock = vi.fn((_url: string, init?: { headers?: Record<string, string> }) => {
+      const autorizacao = init?.headers?.Authorization ?? "";
+      return Promise.resolve(
+        autorizacao.includes("novo")
+          ? jsonResponse(200, { ok: true })
+          : jsonResponse(401, { error: "expirado" }),
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    getSession.mockImplementation(() =>
+      Promise.resolve({ data: { session: { access_token: refreshSession.mock.results.length > 0 ? "novo" : "velho" } } }),
+    );
+
+    const { api } = await import("./api");
+    const rotas = ["/checkins?days=90", "/timeline/hoje", "/objectives", "/preferences", "/habits", "/progress"];
+    const resultados = await Promise.all(rotas.map((rota) => api.get(rota)));
+
+    for (const resultado of resultados) expect(resultado).toEqual({ ok: true });
+    // Uma renovação para as seis: o guard de concorrência existe para isso.
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
   it("erro que não é 401 continua subindo com a mensagem do backend", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(500, { error: "deu ruim no servidor" }));
     vi.stubGlobal("fetch", fetchMock);
