@@ -158,7 +158,11 @@ if [ "$CODE" != "200" ]; then
 fi
 
 echo "== Public routes =="
-for PUBLIC_PATH in /home /aura /sw.js; do
+# `/?lang=en`, robots e sitemap entram aqui porque o deploy anterior passou
+# inteiro com a página em inglês devolvendo 404: o Dockerfile chamava o binário
+# do Vite direto e pulava o gerador do HTML em inglês. Rota que o buscador e a
+# prévia de link consomem precisa ser verificada como qualquer outra.
+for PUBLIC_PATH in /home /aura /sw.js /robots.txt /sitemap.xml "/?lang=en"; do
   CODE="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "https://airia.pro${PUBLIC_PATH}" 2>/dev/null)" || CODE="000"
   if [ "$CODE" != "200" ]; then
     echo "FALHA: ${PUBLIC_PATH} retornou HTTP ${CODE}"
@@ -166,6 +170,17 @@ for PUBLIC_PATH in /home /aura /sw.js; do
   fi
   echo "${PUBLIC_PATH}: HTTP 200"
 done
+
+# 200 não basta: o SPA devolve index.html para quase tudo. A página em inglês
+# tem que estar realmente em inglês.
+PUBLIC_EN="$(curl -fsS --max-time 10 'https://airia.pro/?lang=en')"
+case "$PUBLIC_EN" in
+  *'<html lang="en-US"'*) echo "/?lang=en: head em inglês confirmado" ;;
+  *)
+    echo "FALHA: /?lang=en respondeu 200 mas sem o head em inglês"
+    exit 1
+    ;;
+esac
 
 PUBLIC_SW="$(curl -fsS --max-time 10 'https://airia.pro/sw.js')"
 case "$PUBLIC_SW" in

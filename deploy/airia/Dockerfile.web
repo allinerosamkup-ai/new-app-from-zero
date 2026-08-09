@@ -20,7 +20,13 @@ ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_APK_URL=$VITE_APK_URL
 ENV VITE_APP_RELEASE=$VITE_APP_RELEASE
 
-RUN cd apps/web && node ./node_modules/vite/bin/vite.js build
+# `npm run build`, não o binário do Vite direto.
+#
+# Chamar o Vite por caminho pulava tudo que o script `build` faz além dele — foi
+# assim que `index.en.html` saiu verde no build local e simplesmente não existiu
+# na imagem, deixando `?lang=en` em 404 na produção. O script é a fonte da
+# verdade do que compõe uma build publicável.
+RUN npm run build --workspace=@app/web
 
 FROM nginx:1.27-alpine
 
