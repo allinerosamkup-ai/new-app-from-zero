@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@app/database';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { prisma as sharedPrisma } from '../lib/prisma';
 import { recordInitialConsents } from '../services/consent.service';
 
 // Lazy singleton — criado na primeira requisição, quando dotenv já carregou os env vars
@@ -71,13 +71,14 @@ export function createProfileBootstrapper(
   };
 }
 
-let _profilePrisma: PrismaClient | null = null;
 let _bootstrapProfile: ReturnType<typeof createProfileBootstrapper> | null = null;
 
 function getProfileBootstrapper() {
-  if (!_profilePrisma) _profilePrisma = new PrismaClient();
   if (!_bootstrapProfile) {
-    const prisma = _profilePrisma;
+    // Usa o pool do processo. Um cliente próprio aqui era o pior dos nove: este
+    // caminho roda em **toda requisição autenticada**, então mantinha um pool
+    // inteiro ocupado em paralelo com o que servia as rotas.
+    const prisma = sharedPrisma;
     _bootstrapProfile = createProfileBootstrapper(
       prisma.profile,
       (userId) => recordInitialConsents(prisma.consent, userId, new Date()),

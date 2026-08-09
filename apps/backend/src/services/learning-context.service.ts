@@ -1,6 +1,5 @@
 import { PrismaClient } from '@app/database';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const WEEKDAY_LABEL: Record<number, string> = {
   1: 'segunda',

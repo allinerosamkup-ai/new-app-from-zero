@@ -7,8 +7,7 @@ import {
   KnowledgeGraphExtractionSchema,
   type KnowledgeGraphExtraction,
 } from '../contracts/knowledge-graph.contract';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Lazy OpenAI — mesmo padrão de aura-command.service.ts / airia-cognitive
 let _openai: OpenAI | null = null;

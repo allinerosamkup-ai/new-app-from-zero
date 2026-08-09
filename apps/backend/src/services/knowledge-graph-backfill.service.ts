@@ -3,8 +3,7 @@ import { PrismaClient } from '@app/database';
 import { KnowledgeGraphService } from './knowledge-graph.service';
 import { CanonicalMemoryService } from './canonical-memory.service';
 import { MemoryService } from './memory.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 type BackfillDependencies = {
   prisma?: any;

@@ -9,6 +9,7 @@ import { ContextGroundingService } from './context-grounding.service';
 import { ReasoningContextService } from './reasoning-context.service';
 import { AiriaOperationalReasoningService } from './airia-operational-reasoning.service';
 import { AiriaCognitiveInterpreterService } from './airia-cognitive-interpreter.service';
+import { prisma } from '../lib/prisma';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -20,8 +21,6 @@ function getOpenAI(): OpenAI {
 const openai = new Proxy({} as OpenAI, {
   get(_target, prop) { return (getOpenAI() as any)[prop]; },
 });
-
-const prisma = new PrismaClient();
 
 export const WeeklyInsightSchema = z.object({
   summary: z.object({

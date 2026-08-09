@@ -1,8 +1,7 @@
 import Stripe from 'stripe';
 import { PrismaClient } from '@app/database';
 import { sendSubscribeEvent } from './meta-capi.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2026-05-27.dahlia',

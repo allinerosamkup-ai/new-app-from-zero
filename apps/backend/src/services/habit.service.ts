@@ -1,7 +1,6 @@
 import { PrismaClient } from '@app/database';
 import { startOfDay, subDays, isSameDay } from 'date-fns';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 export function parseHabitReferenceDate(value: string | Date | undefined): Date {
   if (value instanceof Date) {

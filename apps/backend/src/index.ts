@@ -7,6 +7,7 @@ import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import cron from 'node-cron';
 import path from 'path';
 import { PrismaClient } from '@app/database';
+import { prisma as sharedPrisma } from './lib/prisma';
 import { requireAuth, AuthRequest } from './middleware/auth';
 import { AIService } from './services/ai.service';
 import { KnowledgeGraphService } from './services/knowledge-graph.service';
@@ -157,7 +158,9 @@ const expo = new Expo();
 const port = process.env.PORT || 3000;
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
 const defaultAllowed = ['localhost', '127.0.0.1', 'localhost:5051', 'localhost:5173', 'replit', 'replit.dev', 'replit.app', 'airia.pro'];
-const defaultPrisma = new PrismaClient();
+// O pool do processo vem de `lib/prisma`. Continua sendo `defaultPrisma` porque
+// os testes injetam um cliente próprio por `dependencies.prisma`.
+const defaultPrisma = sharedPrisma;
 const DEFAULT_TIMELINE_RECURRING = { enabled: false, frequency: 'daily', days: [], everyNDays: 1 };
 
 const MUTATING_AURA_ACTIONS = new Set<AuraCommandResponse['action']>([

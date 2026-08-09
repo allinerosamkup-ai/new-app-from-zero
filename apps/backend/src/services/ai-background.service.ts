@@ -1,8 +1,7 @@
 import { PrismaClient } from '@app/database';
 import { MemoryService } from './memory.service';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const INTERVALS = {
   '1h': 60 * 60 * 1000,
