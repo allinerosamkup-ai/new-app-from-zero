@@ -140,6 +140,60 @@ describe("api — recuperação de sessão", () => {
     expect(signOut).not.toHaveBeenCalled();
   });
 
+  /**
+   * O caso que deixou o app abrindo vazio em produção.
+   *
+   * `getSession()` devolvia `null` numa corrida de inicialização do SDK, e o
+   * cliente mandava a requisição **sem** `Authorization` — 401 garantido. O log
+   * provou qual dos dois 401 era pelo tamanho: 44 bytes é exatamente
+   * `{"error":"Token de autenticação ausente."}`; token recusado teria 40.
+   */
+  it("sem sessão em mãos, renova antes de mandar a requisição pelada", async () => {
+    let restaurada = false;
+    getSession.mockImplementation(() =>
+      Promise.resolve({ data: { session: restaurada ? { access_token: "tok" } : null } }),
+    );
+    refreshSession.mockImplementation(() => {
+      restaurada = true;
+      return Promise.resolve({ data: { session: { access_token: "tok" } }, error: null });
+    });
+
+    const fetchMock = vi.fn((_url: string, init?: { headers?: Record<string, string> }) =>
+      Promise.resolve(
+        init?.headers?.Authorization
+          ? jsonResponse(200, { ok: true })
+          : jsonResponse(401, { error: "Token de autenticação ausente." }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("localStorage", { ...localStorage, "sb-airia-auth-token": "{}" });
+
+    const { api } = await import("./api");
+    expect(await api.get("/checkins?days=90")).toEqual({ ok: true });
+
+    // Uma ida ao servidor só: a renovação acontece ANTES, não depois do 401.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1]?.headers?.Authorization).toBe("Bearer tok");
+  });
+
+  /**
+   * A splash é pública. Renovar sessão inexistente falha por natureza, e cair no
+   * ramo de "sessão morta" mandaria um visitante anônimo para /login.
+   */
+  it("visitante sem login nenhum não é mandado para o login", async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {}, removeItem: () => {} });
+
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(401, { error: "Token de autenticação ausente." }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { api } = await import("./api");
+    await expect(api.get("/qualquer")).rejects.toThrow(/Sessão expirada/);
+
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
   it("erro que não é 401 continua subindo com a mensagem do backend", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(500, { error: "deu ruim no servidor" }));
     vi.stubGlobal("fetch", fetchMock);

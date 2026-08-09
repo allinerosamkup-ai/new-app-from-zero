@@ -38,20 +38,43 @@ export function getAdaptiveSnapshot(): AdaptiveSnapshot {
   return _adaptiveSnapshot;
 }
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
+/**
+ * Cabeçalhos da requisição, com o token quando existe sessão.
+ *
+ * `insistir` faz a diferença entre "não tem sessão, tudo bem" e "deveria ter".
+ * Sem sessão em mãos, isto **renova antes de desistir** em vez de mandar a
+ * requisição pelada.
+ *
+ * Por que importa: mandar sem `Authorization` para rota autenticada é gastar
+ * uma ida ao servidor sabendo que vai voltar 401. Foi o que aconteceu em
+ * produção — o app abriu e disparou seis chamadas sem token. O log não deixa
+ * dúvida sobre qual dos dois 401 era: a resposta tinha 44 bytes, o tamanho
+ * exato de `{"error":"Token de autenticação ausente."}`. Token inválido teria
+ * 40. Ou seja, não era token recusado: era token que nunca foi.
+ *
+ * O efeito para quem usa é o pior possível: cada chamada do store tem `.catch()`
+ * próprio, então o erro some e o app abre como se a conta não tivesse nada.
+ */
+async function getAuthHeaders(insistir = false): Promise<Record<string, string>> {
   const language = getCurrentLanguage();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return {
+  const base = {
     'Content-Type': 'application/json',
     'Accept-Language': language,
     'Content-Language': language,
   };
-  return {
-    Authorization: `Bearer ${session.access_token}`,
-    'Content-Type': 'application/json',
-    'Accept-Language': language,
-    'Content-Language': language,
-  };
+
+  let { data: { session } } = await supabase.auth.getSession();
+
+  if (!session && insistir) {
+    // Pode ser corrida de inicialização: o SDK ainda está restaurando a sessão
+    // do armazenamento, ou renovando um token vencido. Espera a renovação real
+    // em vez de concluir que não há login.
+    const renovada = await recoverSession();
+    if (renovada) ({ data: { session } } = await supabase.auth.getSession());
+  }
+
+  if (!session) return base;
+  return { ...base, Authorization: `Bearer ${session.access_token}` };
 }
 
 function getLocaleContext() {
@@ -99,6 +122,21 @@ function recoverSession(): Promise<boolean> {
 }
 
 async function doRecoverSession(): Promise<boolean> {
+  /**
+   * Nunca deslogar quem nunca esteve logado.
+   *
+   * Sem esta porta, uma chamada anônima — a splash é pública — dispararia
+   * `refreshSession()`, que falha por não haver o que renovar, cairia no ramo de
+   * "sessão morta" e **mandaria o visitante para /login**. Ausência de login não
+   * é sessão expirada.
+   */
+  const { data: { session: existente } } = await supabase.auth.getSession();
+  if (!existente) {
+    const guardado = typeof window !== 'undefined'
+      && Object.keys(window.localStorage).some((chave) => chave.startsWith('sb-'));
+    if (!guardado) return false;
+  }
+
   let sessionDead = false;
   try {
     // refreshSession() pode pendurar (token malformado / rede ruim). Nunca deixar a
@@ -143,7 +181,9 @@ async function requestWithAuth(
   // (response.json()), senão toda chamada do app precisaria de cast novo.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
-  const response = await build(await getAuthHeaders());
+  // `insistir`: na primeira tentativa, sessão ausente é motivo para renovar,
+  // não para mandar a requisição sem token e colher um 401 previsível.
+  const response = await build(await getAuthHeaders(true));
   if (response.status !== 401) return handleResponse(response);
 
   const recovered = await recoverSession();
@@ -152,7 +192,7 @@ async function requestWithAuth(
   }
 
   // Token novo em mãos: refaz a chamada que falhou.
-  return handleResponse(await build(await getAuthHeaders()));
+  return handleResponse(await build(await getAuthHeaders(true)));
 }
 
 async function handleResponse(response: Response) {
