@@ -431,9 +431,27 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       await refreshData();
     };
     const unregisterOnlineSync = registerOfflineSync(submitQueuedCheckin);
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    /**
+     * Sessão que chega depois precisa disparar a carga dos dados.
+     *
+     * `refreshData` roda uma vez na montagem e desiste em silêncio quando não há
+     * sessão. Na abertura a frio do PWA o SDK ainda está restaurando a sessão do
+     * armazenamento, então essa primeira tentativa sai vazia — e nada refazia a
+     * busca depois. O app renderizava a casca de usuário logado **sem nenhum
+     * dado**, indefinidamente: 177 check-ins no banco e a tela dizendo que a
+     * conta não tem nada.
+     *
+     * `INITIAL_SESSION` é o evento que fechava o buraco: é ele que o SDK emite
+     * quando termina de restaurar do armazenamento, exatamente o momento em que
+     * a primeira tentativa já falhou. `refreshData` deduplica chamadas em voo,
+     * então quando a sessão vem a tempo isto não custa requisição extra.
+     */
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         void syncPendingCheckins(submitQueuedCheckin);
+      }
+      if (session && (event === "INITIAL_SESSION" || event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+        void refreshData();
       }
     });
     return () => {

@@ -162,6 +162,9 @@ export function AuraLayout() {
       if (session) refreshData();
     });
 
+    // Quem recarrega os dados quando a sessão chega depois é o próprio store
+    // (`features/aura/store.tsx`), que é o dono deles e está montado em todas as
+    // rotas. Aqui só interessa saber se há sessão.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         setHasSession(true);
