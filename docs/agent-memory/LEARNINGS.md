@@ -14,6 +14,20 @@ Formato: `### [TIPO] Título` + o que muda na prática.
 
 ## Ferramentas e ambiente
 
+### [DECISÃO] O protocolo de desenvolvimento tem uma fonte única e neutra
+`docs/DEVELOPMENT_ITERATION_PROTOCOL.md` é a fonte compartilhada por Codex/GPT,
+Claude Code e demais agentes. `AGENTS.md`, `CLAUDE.md` e o AGENTS global do
+Codex são adaptadores curtos; `docs/CLAUDE_ITERATION_PROTOCOL.md` existe apenas
+como ponte de compatibilidade. Não criar uma segunda versão do protocolo.
+
+### [FATO] `TaskCompleted` é um evento próprio e não aceita matcher
+No Claude Code atual, `Stop`, `SubagentStop` e `TaskCompleted` disparam sem
+matcher. `TaskCompleted` recebe `task_subject`/`task_description` e pode impedir
+uma subtarefa de ser marcada como concluída. O guard do projeto usa esse evento
+apenas para a barreira determinística "código alterado nesta sessão sem nenhuma
+verificação tentada"; suficiência do teste e qualidade do produto continuam no
+protocolo.
+
 ### [FATO] O dev server do web roda na 5051, não na 5173
 `apps/web/vite.config.ts`: `Number(process.env.PORT) || 5051`. Subir pelo
 `preview_start {name: "web"}`, que já usa a porta certa de `.claude/launch.json`.

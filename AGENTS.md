@@ -11,6 +11,14 @@ Alline é a pessoa das ideias. O agente técnico transforma ideias em produto, c
 - Preferir implementação pequena, testada e alinhada ao padrão existente.
 - Não criar arquivos soltos. Documentação vai em `docs/`, planos em `docs/plans/`, contratos em `docs/product/`, instruções globais neste arquivo ou em `CLAUDE.md`.
 
+## Protocolo compartilhado de desenvolvimento
+
+Antes de trabalho relevante, consultar [`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`](docs/DEVELOPMENT_ITERATION_PROTOCOL.md) e ler somente a memória relevante em `docs/agent-memory/`.
+
+Alterar arquivos não significa concluir. Toda tarefa deve passar por critérios de aceite, execução, verificação, diagnóstico, correção, reverificação e regressão proporcional ao risco. Antes de finalizar, registrar evidência real; se houver bloqueio, declarar `BLOQUEADO`, nunca `DONE`.
+
+Durante tarefas longas, atualizar `docs/agent-memory/CURRENT_STATE.md`. Registrar descobertas reutilizáveis em `LEARNINGS.md`, corrigir memória desatualizada e não repetir abordagens já reprovadas sem nova evidência.
+
 ## Regra Central de IA
 Contexto antigo explica padrão; contexto de hoje decide ação.
 

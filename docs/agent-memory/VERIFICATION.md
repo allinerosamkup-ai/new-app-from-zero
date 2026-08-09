@@ -3,9 +3,9 @@
 > Camada A. Comandos reais, custo real, e as verificações que **parecem** válidas
 > mas produzem falso positivo. Consulte antes de escolher como provar uma
 > mudança. O protocolo que diz *quando* usar cada uma é
-> `docs/CLAUDE_ITERATION_PROTOCOL.md`.
+> `docs/DEVELOPMENT_ITERATION_PROTOCOL.md`.
 
-Tempos medidos em máquina local Windows, **2026-08-08**.
+Tempos medidos em máquina local Windows, **2026-08-09**.
 
 ---
 
@@ -16,9 +16,9 @@ Tempos medidos em máquina local Windows, **2026-08-08**.
 | `npx ts-node-transpile-only apps/backend/src/<x>.test.ts` | **~2,5s** | um arquivo de teste backend |
 | `npx vitest run <arquivo> --root apps/web` | ~5s | um arquivo de teste web |
 | `npm run typecheck -w apps/web` | ~18s | tipos do frontend |
-| `npm run test -w apps/web` | ~29s | 45 arquivos, 316 testes |
+| `npm run test -w apps/web` | ~29s | suítes `apps/web/src/**/*.test.ts(x)` descobertas pelo Vitest |
 | `npm run build -w apps/backend` | ~30s | tipos do backend (é o `tsc`) |
-| `npm run test -w apps/backend` | **~1m28s** | 74 blocos de teste |
+| `npm run test -w apps/backend` | **~1m28s** | todas as suítes `src/**/*.test.ts`, descobertas pelo runner |
 | `npm run build -w apps/web` | ~1min | bundle de produção |
 | `npm run aura:eval -w apps/backend` | minutos + custo de API | qualidade semântica da Aura |
 | `npm run ai:smoke -w apps/backend` | minutos + custo de API | formato de saída em todas as superfícies |
@@ -28,28 +28,23 @@ fica para o fim.
 
 ---
 
-## Backend: a cadeia de testes é manual
+## Backend: o runner descobre as suítes
 
-`apps/backend/package.json` → script `test` é uma string gigante com
-`ts-node-transpile-only <arquivo> && ...`, arquivo por arquivo.
-
-**Um teste novo não roda até ser adicionado nessa string.** Não existe descoberta
-automática. Criar `foo.test.ts`, ver passar localmente e commitar significa
-exatamente nada para a CI.
-
-Hoje há **8 arquivos de teste órfãos** — ver `KNOWN_ISSUES.md`.
-
-Checagem rápida de órfãos:
+`apps/backend/package.json` → `test` chama
+`apps/backend/scripts/run-tests.mjs`. O runner descobre todos os arquivos
+`src/**/*.test.ts`, ordena a lista, executa cada suíte em processo próprio e
+continua até o fim para mostrar todas as falhas. Teste novo entra
+automaticamente; não existe mais lista manual para atualizar.
 
 ```bash
-cd apps/backend && node -e "
-const fs=require('fs');const s=Object.values(JSON.parse(fs.readFileSync('package.json','utf8')).scripts).join(' ');
-function w(d,a=[]){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=d+'/'+e.name;e.isDirectory()?w(p,a):/\.test\.tsx?$/.test(e.name)&&a.push(p)}return a}
-w('src').filter(f=>!s.includes(f.replace(/\.tsx?$/,''))).forEach(f=>console.log('ORFAO',f))"
+npm run test -w apps/backend
 ```
 
-**Web é o contrário:** Vitest descobre `apps/web/src/**/*.test.ts(x)` sozinho.
-Nada a registrar.
+O exit code continua sendo necessário, mas não suficiente: alguns testes de
+caminho de erro imprimem stack trace intencional ou revelam stubs incompletos.
+Leia o relatório final e o log entre as suítes.
+
+**Web:** Vitest também descobre `apps/web/src/**/*.test.ts(x)` sozinho.
 
 ---
 

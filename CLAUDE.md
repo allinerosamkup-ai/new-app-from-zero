@@ -122,7 +122,7 @@ sessão não há onde gravar.
 ## Como se conclui uma tarefa aqui (obrigatório)
 
 **Alterar arquivo não conclui tarefa.** O protocolo completo está em
-[`docs/CLAUDE_ITERATION_PROTOCOL.md`](docs/CLAUDE_ITERATION_PROTOCOL.md). O que
+[`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`](docs/DEVELOPMENT_ITERATION_PROTOCOL.md). O que
 vale sempre, sem precisar abrir o documento:
 
 - `IMPLEMENTATION IS NOT COMPLETION. VERIFICATION IS PART OF IMPLEMENTATION.`
@@ -145,9 +145,10 @@ vale sempre, sem precisar abrir o documento:
   chamada de pronta, ou falha escondida no resumo final.
 
 O hook `.claude/hooks/verification-guard.mjs` reforça o mínimo disso de forma
-determinística: se houve alteração de código-fonte e nenhuma verificação rodou,
-ele bloqueia a parada uma vez. Ele não julga se a verificação foi suficiente —
-isso é o gate do protocolo.
+determinística: se houve alteração de código-fonte e nenhuma verificação foi
+tentada, ele bloqueia `Stop`/`SubagentStop` e impede `TaskCompleted` de fechar a
+subtarefa. Ele não julga se a verificação foi suficiente — isso é o gate do
+protocolo — e falha verificada continua sendo `BLOQUEADO`, nunca `DONE`.
 
 ## Memória do projeto
 
@@ -169,7 +170,7 @@ gerar entrada nenhuma; não escreva por ritual.
 - **2026-08-09:** **O check-in estava perdendo registro em produção.** Humor e energia são obrigatórios, o polegar deles nasce no meio da escala, e tocar ali não disparava evento — o botão ficava desabilitado e mudo. O log confirmou: **zero `POST /checkins` em 30 horas**, com 32 leituras de histórico no mesmo período. Agora o toque confirma o valor e a tela diz o que falta. **O app também não estava no Google:** `/` redirecionava para `/splash` e o buscador classificava a home como "Página com redirecionamento"; além disso `www` e sem-`www` serviam 200 e o Google elegeu o `www`, host fora da propriedade cadastrada. Corrigidos os dois, mais sitemap enviado e indexação solicitada. Idioma passou a seguir o aparelho e a splash ganhou `<head>` próprio em inglês, servido pelo nginx para prévia de link.
 - **2026-08-08:** Auditoria de campo do check-in, mascote e inventário. **Toda pergunta da tela agora chega ao banco:** clareza e irritabilidade tinham coluna, contrato e leitor no motor e nenhuma pergunta; capacidade e objetivo prioritário tinham pergunta e nenhum destino. Achado no caminho: num `input[type=range]`, tocar onde o polegar já está não dispara evento — **6 era o único valor de 1 a 10 impossível de responder com um toque**, e o app gravava `null`. A proposta de check-in do diário **nunca funcionou**: `signalMetadata` é `.strict()`, o `parse` lançava e um `catch` mudo engolia, levando junto a proposta de meta. **Mascote Airia Orbital em produção** nas 6 superfícies, de 11,4 MB em PNG para 0,42 MB em WebP, fora do precache. Check-in ganhou fundo que responde a humor e energia, detalhes recolhidos e retorno tátil no registro confirmado.
 - **2026-08-08:** `npm test -w apps/backend` passou a descobrir os arquivos (`scripts/run-tests.mjs`). Eram **17 suítes órfãs**, não 8 — todas passaram na primeira execução.
-- **2026-08-08:** Protocolo de iteração e conclusão (`docs/CLAUDE_ITERATION_PROTOCOL.md`) + memória operacional (`docs/agent-memory/`) + hook `verification-guard` que barra parada sem verificação.
+- **2026-08-08:** Protocolo de iteração e conclusão (`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`) + memória operacional (`docs/agent-memory/`) + hook `verification-guard` que barra parada sem verificação.
 - **2026-08-03:** Correções de aparência e de relatório. **27 tokens CSS que o código pedia e o CSS nunca definiu** — `var()` que não resolve invalida a declaração, e era isso que fazia botão da página de Objetivos parecer sem título e o "Criar objetivo" parecer desaparecido. Caixa de **Próximas ações** na Home substituiu "Tarefas sugeridas": até 5 itens, sem data, regra é conclusão e não prazo. Dedupe em duas camadas — lexical instantâneo, LLM no caso difícil. Relatório de período passou a analisar a janela inteira, com seletor de 5 períodos e estrutura de 13 seções.
 - **2026-08-02:** Reestruturação para o núcleo. Chave de funcionalidade desligou Planner e Hábitos sem apagar nada. Home virou "o que eu faço agora": objetivo em foco com a próxima ação concluível ali. Gamificação de objetivos — 12 XP por micro-ação, 60 por objetivo, com 4 contadores em `EventLog` (zero migração). Diário passou a propor check-in e meta, sempre com confirmação. Login com Google removido. **LGPD:** a tabela `Consent` existia e era exportada mas nunca era escrita — o app não conseguia provar consentimento; agora grava com versão e data, mais endpoints de consulta e revogação.
 - **2026-08-02:** Base clínica em `docs/product/base-clinica-padroes-e-acoes.md` (ASRS, MDQ, TCC para ciclotimia, NIMH Life Chart). Três falhas de detecção corrigidas no motor: traços mistos invisíveis porque o composto colapsava humor baixo com energia alta; sinal do sono invertido (dormir pouco **e estar bem** é marcador de elevação, não privação); e `sleepHours` sendo descartado na agregação diária. Estabilidade ganhou valência — platô baixo não é equilíbrio, e depressão sustentada deixou de ser lida como "Estável".

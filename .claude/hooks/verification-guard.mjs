@@ -3,18 +3,19 @@
  * verification-guard — barreira determinística contra conclusão prematura.
  *
  * Problema que resolve: o agente altera arquivo de código-fonte e tenta encerrar
- * a sessão sem ter rodado nenhuma verificação. Ver docs/CLAUDE_ITERATION_PROTOCOL.md §21.
+ * a sessão sem ter rodado nenhuma verificação. Ver docs/DEVELOPMENT_ITERATION_PROTOCOL.md §21.
  *
  * Como funciona:
  *   PostToolUse (Edit/Write/...)  → registra arquivo de código alterado e "arma" o guard
  *   PostToolUse (Bash/PowerShell) → se o comando for de verificação, marca verificado
  *   PostToolUse (browser/preview) → marca verificado (inspeção de runtime/UI)
- *   Stop                          → se há código alterado e nada foi verificado, bloqueia UMA vez
+ *   Stop/SubagentStop             → se há código alterado e nada foi verificado, bloqueia UMA vez
+ *   TaskCompleted                 → impede fechar subtarefa com código alterado e nada verificado
  *
  * O que ele NÃO faz, de propósito:
- *   - não roda teste (seria lento e caro a cada parada);
+ *   - não executa testes (seria lento e caro a cada parada);
  *   - não julga se a verificação foi suficiente — isso é julgamento, fica no protocolo;
- *   - não bloqueia duas vezes pela mesma pendência, e respeita stop_hook_active;
+ *   - respeita stop_hook_active no Stop/SubagentStop;
  *   - não impede parada por bloqueio legítimo: qualquer verificação executada,
  *     mesmo falhando, libera a parada.
  *
@@ -140,6 +141,38 @@ function main() {
     return;
   }
 
+  if (event === 'TaskCompleted') {
+    const pendingTask = state.edits.length > 0 && !state.verified;
+    if (!pendingTask) return;
+
+    const subject = String(payload.task_subject || 'subtarefa sem título');
+    const description = String(payload.task_description || '').trim();
+    const taskLine = description
+      ? `\nTarefa: ${subject}\nEscopo: ${description}`
+      : `\nTarefa: ${subject}`;
+    const listed = state.edits.slice(0, MAX_LISTED);
+    const extra = state.edits.length - listed.length;
+    const fileList =
+      listed.map((f) => `  - ${f}`).join('\n') + (extra > 0 ? `\n  - ...e mais ${extra}` : '');
+    const reason = [
+      'TASK COMPLETION BLOQUEADA: alteração de código ainda não foi verificada.',
+      taskLine,
+      '',
+      `Foram alterados ${state.edits.length} arquivo(s) de código-fonte nesta sessão e nenhuma`,
+      'verificação foi tentada — nem teste, nem typecheck, nem build, nem navegador.',
+      '',
+      fileList,
+      '',
+      'Execute a verificação mais barata que prove o comportamento e tente concluir novamente.',
+      'Se houver bloqueio externo genuíno, execute a verificação relevante, registre a falha',
+      'como evidência e declare BLOQUEADO; não declare DONE.',
+      '',
+      'Consulte docs/agent-memory/VERIFICATION.md e docs/DEVELOPMENT_ITERATION_PROTOCOL.md.',
+    ].join('\n');
+    process.stdout.write(JSON.stringify({ decision: 'block', reason }));
+    return;
+  }
+
   if (event !== 'Stop' && event !== 'SubagentStop') return;
 
   // Proteção contra laço: se esta parada já é consequência de um bloqueio, libera.
@@ -157,7 +190,7 @@ function main() {
     listed.map((f) => `  - ${f}`).join('\n') + (extra > 0 ? `\n  - ...e mais ${extra}` : '');
 
   const reason = [
-    'ALTERAR ARQUIVO NÃO CONCLUI TAREFA (docs/CLAUDE_ITERATION_PROTOCOL.md).',
+    'ALTERAR ARQUIVO NÃO CONCLUI TAREFA (docs/DEVELOPMENT_ITERATION_PROTOCOL.md).',
     '',
     `Foram alterados ${state.edits.length} arquivo(s) de código-fonte nesta sessão e nenhuma`,
     'verificação foi executada — nem teste, nem typecheck, nem build, nem navegador.',

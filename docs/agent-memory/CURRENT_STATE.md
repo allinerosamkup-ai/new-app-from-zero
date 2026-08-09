@@ -19,7 +19,21 @@
 
 `SEM TAREFA ATIVA`
 
-Último trabalho registrado (2026-08-08): inventário, mascote Airia Orbital e
+Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
+memória e conclusão alinhado ao runner real do monorepo e aos eventos
+`Stop`/`SubagentStop`/`TaskCompleted` do Claude Code. O guard foi exercitado com
+payloads isolados: bloqueou edição sem verificação, bloqueou `TaskCompleted`,
+respeitou `stop_hook_active`, liberou após tentativa de verificação e falhou
+aberto com entrada inválida.
+
+Trabalho concluído (2026-08-09): neutralização do protocolo para Codex/GPT,
+Claude Code e demais agentes. A fonte canônica passou a ser
+`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`; `docs/CLAUDE_ITERATION_PROTOCOL.md`
+permanece apenas como ponte de compatibilidade. `AGENTS.md`, `CLAUDE.md` e o
+AGENTS global do Codex apontam para a mesma fonte; o hook Claude-only foi mantido.
+Referências, JSON, sintaxe do hook, diff e cenários isolados foram verificados.
+
+Trabalho anterior (2026-08-08): inventário, mascote Airia Orbital e
 redesenho do check-in. Concluído e verificado — 93 suítes no backend, 357 testes
 no web, typecheck e build verdes, e cada campo do check-in rastreado até o
 payload no navegador.

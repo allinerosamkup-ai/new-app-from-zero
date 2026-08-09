@@ -165,7 +165,7 @@ As 8 fases visíveis oficiais: `Voo Alto`, `Fluindo`, `Estável`, `Desacelerando
 | Desenho e plano de feature | `docs/plans/AAAA-MM-DD-nome.md` |
 | Contrato de produto / API | `docs/product/` |
 | Base clínica | `docs/product/base-clinica-padroes-e-acoes.md` |
-| Processo de verificação | `docs/CLAUDE_ITERATION_PROTOCOL.md` |
+| Processo de verificação | `docs/DEVELOPMENT_ITERATION_PROTOCOL.md` |
 | Memória operacional | `docs/agent-memory/` (este diretório) |
 | Skills do projeto | `skills/<nome>/SKILL.md` + `skills/_registry.md` |
 
