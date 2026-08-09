@@ -157,6 +157,30 @@ curl -sI https://airia.pro/home
 Regra de release (`AGENTS.md`): GitHub, VPS e produção no mesmo SHA, com
 healthcheck público 200 nos dois endpoints.
 
+## Verificação de Git e worktrees
+
+Antes de iniciar trabalho paralelo ou retomar uma tarefa:
+
+```bash
+git status --short --branch
+git worktree list --porcelain
+git branch --all --verbose --no-abbrev
+```
+
+Depois de uma troca de agente ou worktree, conferir `docs/agent-memory/WORKTREES.md`
+e `CURRENT_STATE.md`. Antes de fechar, executar:
+
+```bash
+git diff --check
+git status --short --branch
+git log -1 --oneline
+```
+
+Um `M`, `A` ou `??` restante precisa ser commitado, removido conscientemente ou
+explicado como bloqueio; o status não pode ser ignorado. `git worktree prune` só
+é permitido depois de confirmar que o diretório ausente não contém trabalho
+único e que nenhum branch/commit precisa ser preservado.
+
 ---
 
 ## Sequência padrão antes de fechar PR / deploy

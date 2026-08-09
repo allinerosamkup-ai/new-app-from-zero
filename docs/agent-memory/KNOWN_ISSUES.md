@@ -66,3 +66,35 @@ do git mesmo depois de removido do HEAD.
 ### Não confundir com
 Problema de configuração de permissão do Claude Code. As permissões funcionam; o
 problema é o conteúdo delas.
+
+---
+
+## 3. Worktrees existentes sem inventário completo de proprietário
+
+### Sintoma
+Há várias cópias e branches de trabalho no repositório, incluindo entradas em
+`.worktrees/`, `.claude/worktrees/` e `C:\Users\allin\.codex\worktrees`. Sem um
+inventário de dono e estado, um agente pode duplicar tarefa, ignorar commit de
+outra cópia ou deixar trabalho pronto sem integração.
+
+### Causa
+Worktrees foram criados por sessões e agentes diferentes sem um ciclo comum de
+registro, handoff, commit e remoção.
+
+### Status
+**Aberto.** A auditoria de 2026-08-09 encontrou 24 entradas em
+`git worktree list --porcelain`. Nenhuma foi removida automaticamente porque a
+propriedade e o valor de cada branch ainda precisam ser confirmados.
+
+### Contorno
+Consultar `docs/agent-memory/WORKTREES.md` e executar `git worktree list
+--porcelain` antes de criar outra cópia. Não usar `git worktree prune` como faxina
+cega.
+
+### Arquivos relacionados
+`docs/DEVELOPMENT_ITERATION_PROTOCOL.md` §22,
+`docs/agent-memory/WORKTREES.md`, `docs/agent-memory/CURRENT_STATE.md`.
+
+### Não confundir com
+Uma branch antiga que já foi integrada: confirme com `git log` e `git diff`, não
+apague apenas pela idade do nome.

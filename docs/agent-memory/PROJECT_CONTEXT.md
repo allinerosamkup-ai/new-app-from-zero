@@ -46,9 +46,14 @@ aprovada em `.worktrees/airia-orbital-mascot`, e a varredura não olhou lá.
 Antes de afirmar que algo não existe ou de começar a construir:
 
 ```bash
-git worktree list
+git worktree list --porcelain
+git status --short --branch
 git log --oneline master..<branch-do-worktree>
 ```
+
+O inventário operacional e os estados de cada cópia ficam em
+`docs/agent-memory/WORKTREES.md`. Não criar cópia nova para uma tarefa que já
+tem worktree ativo sem registrar o motivo e o handoff.
 
 Cuidado ao ler: várias branches parecem ter trabalho pendente e não têm — a
 mensagem do commit bate com algo que já chegou à master por outro caminho.

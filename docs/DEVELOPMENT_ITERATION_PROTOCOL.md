@@ -33,7 +33,8 @@ Não leia inteiro toda vez. O caminho normal é:
 2. Consultar §6 (matriz de verificação) para escolher **quais** verificações a
    tarefa exige.
 3. Copiar os comandos reais de §5.
-4. Passar pelo gate de §15 antes de responder `DONE`.
+4. Passar pelo gate de §15 e pelo ciclo Git/worktree de §22 antes de responder
+   `DONE`.
 
 Tarefa trivial (corrigir uma string, renomear variável interna) atravessa isso
 em trinta segundos. Tarefa de fluxo de usuário ou de IA não atravessa.
@@ -735,6 +736,10 @@ Antes de declarar `DONE`:
 [ ] Risco de regressão vizinha conferido
 [ ] Nenhum problema crítico conhecido restante
 [ ] Existe evidência para tudo acima
+[ ] `git status --short --branch` foi revisado
+[ ] Cada alteração que deve permanecer está em commit
+[ ] Nenhum arquivo novo ficou sem decisão (commit, remoção consciente ou bloqueio documentado)
+[ ] Worktree e branch têm handoff/encerramento definido
 ```
 
 Para tarefa que muda comportamento percebido pela usuária, some:
@@ -780,6 +785,7 @@ A arquitetura está em `docs/agent-memory/`:
 |---|---|---|
 | `PROJECT_CONTEXT.md` | A — permanente | stack, estrutura, comandos, ambiente, invariantes |
 | `VERIFICATION.md` | A — permanente | como verificar aqui, custo, falso positivo conhecido |
+| `WORKTREES.md` | A/B — operacional | inventário e ciclo de vida dos worktrees |
 | `LEARNINGS.md` | C — acumulativa | fatos, decisões e abordagens que já falharam |
 | `KNOWN_ISSUES.md` | C — acumulativa | problema conhecido ainda não corrigido |
 | `CURRENT_STATE.md` | B — volátil | tarefa em andamento e handoff |
@@ -951,6 +957,135 @@ O Claude Code pode recarregar alterações em `settings.json` pelo watcher depoi
 de um pequeno intervalo de estabilidade. Para garantir que o `CLAUDE.md`, a
 memória e o protocolo inteiro estejam no contexto, use uma sessão nova depois
 de alterar estas instruções ou hooks.
+
+---
+
+## 22. Disciplina de commit e governança de worktrees
+
+Commit e worktree são problemas diferentes e ambos precisam de um encerramento
+explícito. **Não deixar alteração sem destino é parte da conclusão da tarefa.**
+
+### 22.1 Regra de commit
+
+Antes de começar, inspecionar:
+
+```bash
+git status --short --branch
+git diff --stat
+git ls-files --others --exclude-standard
+```
+
+Identificar o que já estava alterado e não assumir autoria de mudanças de outro
+agente. Durante o trabalho, separar unidades coerentes e manter o escopo claro.
+
+Antes de declarar `DONE`, cada arquivo precisa estar em exatamente um destes
+estados:
+
+1. **Commitado:** a alteração faz parte do resultado e foi registrada em um
+   commit com mensagem compreensível.
+2. **Removido conscientemente:** era temporário, gerado ou não deve permanecer;
+   a remoção foi revisada e não apagou trabalho da usuária ou de outro agente.
+3. **Bloqueado e documentado:** não pode ser commitado por segredo, dependência
+   externa ou decisão pendente; o caminho, motivo, proprietário e próxima ação
+   estão em `CURRENT_STATE.md`. Isso é `BLOQUEADO`, nunca `DONE`.
+
+Não usar `git add .` ou `git commit -am` sem revisar o diff. Não fazer commit de
+segredos, artefatos de build, arquivos locais ou alterações de outra tarefa.
+Quando a alteração deve permanecer, o padrão é commitá-la antes de encerrar —
+inclusive um commit de handoff claramente marcado quando a tarefa estiver
+incompleta. Um agente novo deve conseguir distinguir o que é trabalho pronto,
+WIP, bloqueio e lixo sem depender do histórico da conversa.
+
+O encerramento obrigatório é:
+
+```bash
+git diff --check
+git status --short --branch
+git log -1 --oneline
+```
+
+Se ainda houver `M`, `A` ou `??`, explicar cada caminho no handoff. Não responder
+`DONE` deixando arquivos acumularem silenciosamente.
+
+### 22.2 Regra de worktree
+
+Um worktree é uma cópia de trabalho com estado próprio. Criar worktree não cria
+isolamento mágico de conhecimento: outro agente pode estar trabalhando no
+mesmo fluxo, em outra cópia, com commits que ainda não chegaram à `master`.
+
+Antes de criar, entrar ou escolher um worktree, executar:
+
+```bash
+git worktree list --porcelain
+git status --short --branch
+git branch --all --verbose --no-abbrev
+```
+
+Regras obrigatórias:
+
+- reutilizar um worktree ativo da mesma tarefa quando ele existir;
+- não criar uma segunda cópia para o mesmo objetivo sem registrar o motivo;
+- uma tarefa tem um branch proprietário e um worktree ativo por vez, salvo
+  paralelismo explicitamente registrado;
+- antes de editar, conferir commits e diferenças do worktree relevante:
+  `git log --oneline master..<branch>` e `git diff --stat master...<branch>`;
+- não concluir que uma funcionalidade não existe sem pesquisar todos os
+  worktrees registrados;
+- registrar criação, responsável, tarefa, branch, caminho, status e próxima ação
+  em [`docs/agent-memory/WORKTREES.md`](agent-memory/WORKTREES.md);
+- em qualquer handoff, atualizar também `CURRENT_STATE.md` com o caminho exato
+  do worktree e o branch que deve ser retomado;
+- não mover uma tarefa para outro worktree sem deixar o handoff no anterior e no
+  destino; o agente seguinte não pode depender do chat do agente anterior.
+
+### 22.3 Estados permitidos
+
+Todo worktree registrado deve estar em um destes estados:
+
+| Estado | Significado | Próxima ação obrigatória |
+|---|---|---|
+| `ACTIVE` | alguém está trabalhando | manter dono, objetivo e próximo passo atualizados |
+| `HANDOFF` | pausa intencional | commit/handoff e instrução de retomada |
+| `BLOCKED` | impedimento real | registrar evidência e ação para destravar |
+| `READY_TO_MERGE` | verificado e commitado | merge/push conforme escopo, depois limpar |
+| `CLOSED` | trabalho integrado ou abandonado conscientemente | remover o worktree e atualizar o registro |
+| `AUDIT_PENDING` | entrada legada sem proprietário confirmado | não reutilizar nem remover; auditar primeiro |
+
+`UNKNOWN`, `ORPHANED` ou worktree sem dono não são estados finais aceitáveis.
+`AUDIT_PENDING` existe apenas como quarentena temporária para entradas legadas:
+ao encontrar uma, parar de criar cópias e fazer o inventário antes de iniciar
+outra tarefa.
+
+### 22.4 Encerramento e limpeza
+
+Quando uma tarefa termina:
+
+1. commitá-la, ou declarar `BLOQUEADO` com handoff explícito;
+2. confirmar que não há mudança exclusiva daquele worktree perdida;
+3. se integrada ou abandonada conscientemente, remover o worktree;
+4. atualizar `WORKTREES.md` para `CLOSED` e registrar destino do branch;
+5. conferir novamente `git worktree list --porcelain`.
+
+Nunca remover worktree sujo sem revisar `git status` e `git diff`. Nunca usar
+`git worktree prune` como faxina cega: primeiro confirmar que o diretório está
+realmente ausente e que não há branch ou commit único a preservar. Worktree
+antigo não significa trabalho descartável.
+
+### 22.5 Proibição de acúmulo
+
+Não iniciar uma nova sessão ou subagente para a mesma tarefa enquanto houver
+worktree ativo sem handoff. Não deixar branch, worktree, arquivo não rastreado ou
+alteração local sem um dos destinos definidos acima. O objetivo é que, ao abrir
+o projeto amanhã, seja possível responder imediatamente:
+
+```text
+Qual tarefa existe?
+Qual agente/branch é dono?
+Onde está o worktree?
+O que já foi commitado?
+O que foi verificado?
+Qual é a próxima ação?
+```
 
 ---
 

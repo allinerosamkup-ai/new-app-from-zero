@@ -143,6 +143,11 @@ vale sempre, sem precisar abrir o documento:
   para destravar. Nunca "concluído".
 - Nada de placeholder silencioso, botão sem fluxo real, integração mockada
   chamada de pronta, ou falha escondida no resumo final.
+- Commit e worktree são controles separados: antes de criar uma cópia, consultar
+  `git worktree list --porcelain` e `docs/agent-memory/WORKTREES.md`; antes de
+  concluir, todo arquivo precisa estar commitado, removido conscientemente ou
+  documentado como `BLOQUEADO`. Nunca deixar worktree, branch ou arquivo sem
+  dono/handoff. Ver §22 do protocolo.
 
 O hook `.claude/hooks/verification-guard.mjs` reforça o mínimo disso de forma
 determinística: se houve alteração de código-fonte e nenhuma verificação foi
@@ -156,7 +161,8 @@ Conhecimento persistente vive em [`docs/agent-memory/`](docs/agent-memory/):
 `PROJECT_CONTEXT.md` (stack, comandos, portas, invariantes), `VERIFICATION.md`
 (como verificar aqui, custo real, falsos positivos conhecidos), `LEARNINGS.md`
 (fatos, decisões e abordagens que já falharam), `KNOWN_ISSUES.md` e
-`CURRENT_STATE.md` (tarefa em andamento e handoff).
+`CURRENT_STATE.md` (tarefa em andamento e handoff), `WORKTREES.md` (inventário e
+ciclo de vida das cópias de trabalho).
 
 > **BEFORE REDISCOVERING, CHECK MEMORY. BEFORE FINISHING, UPDATE MEMORY.**
 

@@ -20,6 +20,13 @@ Claude Code e demais agentes. `AGENTS.md`, `CLAUDE.md` e o AGENTS global do
 Codex são adaptadores curtos; `docs/CLAUDE_ITERATION_PROTOCOL.md` existe apenas
 como ponte de compatibilidade. Não criar uma segunda versão do protocolo.
 
+### [DECISÃO] Commit e worktree têm gates separados
+Alteração pronta precisa de commit ou de um bloqueio documentado; worktree
+precisa de dono, branch, estado e handoff. `git status --short --branch` e
+`git worktree list --porcelain` são verificações obrigatórias antes de começar e
+encerrar trabalho. Não criar cópia para a mesma tarefa sem motivo registrado e
+não deixar worktree/branch/arquivo sem destino.
+
 ### [FATO] `TaskCompleted` é um evento próprio e não aceita matcher
 No Claude Code atual, `Stop`, `SubagentStop` e `TaskCompleted` disparam sem
 matcher. `TaskCompleted` recebe `task_subject`/`task_description` e pode impedir

@@ -19,6 +19,14 @@ Alterar arquivos não significa concluir. Toda tarefa deve passar por critérios
 
 Durante tarefas longas, atualizar `docs/agent-memory/CURRENT_STATE.md`. Registrar descobertas reutilizáveis em `LEARNINGS.md`, corrigir memória desatualizada e não repetir abordagens já reprovadas sem nova evidência.
 
+Commit e worktree são gates separados. Antes de criar ou entrar em um worktree,
+consultar `git worktree list --porcelain` e `docs/agent-memory/WORKTREES.md`;
+reutilizar trabalho existente, registrar dono/branch/caminho e deixar handoff
+quando houver troca de agente. Antes de finalizar, toda alteração deve estar
+commitada, removida conscientemente ou documentada como `BLOQUEADO`; nenhum
+arquivo, branch ou worktree pode ficar sem destino. O ciclo completo está em
+§22 de `docs/DEVELOPMENT_ITERATION_PROTOCOL.md`.
+
 ## Regra Central de IA
 Contexto antigo explica padrão; contexto de hoje decide ação.
 
