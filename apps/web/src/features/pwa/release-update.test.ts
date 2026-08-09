@@ -120,7 +120,13 @@ describe("getReleaseNavigationUrl", () => {
     expect(deploySource).toContain("rollback_on_error()");
     expect(deploySource).toContain("trap rollback_on_error EXIT");
     expect(deploySource).toContain("DESTRUCTIVE_MIGRATION_PATTERN=");
-    expect(deploySource).toContain("for PUBLIC_PATH in /home /aura /sw.js; do");
+    // A lista de rotas validadas cresce; o que não pode cair é a cobertura.
+    // Casar a linha inteira travava a lista num tamanho fixo e quebrava a cada
+    // rota nova — e a rota nova é justamente o que precisa de validação.
+    for (const rota of ["/home", "/aura", "/sw.js", "/robots.txt", "/sitemap.xml", "/?lang=en"]) {
+      expect(deploySource, `${rota} precisa ser validada no deploy`).toContain(rota);
+    }
+    expect(deploySource).toContain("for PUBLIC_PATH in");
     expect(deploySource).toContain("PUBLIC_SW=");
     expect(nginxSource).toContain("location ^~ /assets/");
     expect(nginxSource).toContain("location = /manifest.webmanifest");

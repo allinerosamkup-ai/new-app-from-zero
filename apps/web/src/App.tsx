@@ -237,8 +237,17 @@ export default function App() {
       <div className="app-viewport">
       <div key={location.pathname} className="page-transition">
       <Routes>
-        <Route path="/" element={<Navigate to="/splash" replace />} />
-        <Route path="/splash" element={<SplashPage />} />
+        {/* A raiz RENDERIZA a splash; não redireciona para ela.
+            Era o contrário, e custava a indexação inteira: o Googlebot executa
+            JS, via `/` redirecionar para `/splash`, e o Search Console
+            classificava a home como "Página com redirecionamento" — nunca
+            indexada. Com a canônica apontando para `/`, o buscador tinha uma
+            URL canônica que se recusava a servir conteúdo.
+            `/splash` continua existindo e agora manda para a raiz, porque link
+            antigo não pode cair em 404 e duas URLs servindo a mesma página é
+            conteúdo duplicado. */}
+        <Route path="/" element={<SplashPage />} />
+        <Route path="/splash" element={<Navigate to="/" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
