@@ -26,6 +26,11 @@ ENV VITE_APP_RELEASE=$VITE_APP_RELEASE
 # assim que `index.en.html` saiu verde no build local e simplesmente não existiu
 # na imagem, deixando `?lang=en` em 404 na produção. O script é a fonte da
 # verdade do que compõe uma build publicável.
+#
+# O script invoca `node ./node_modules/vite/bin/vite.js` em vez de `vite`: aqui
+# o atalho em `.bin` chega sem permissão de execução (`sh: vite: Permission
+# denied`), e era essa a razão do comando antigo. O contorno continua, agora
+# dentro do script, onde vale para todo mundo.
 RUN npm run build --workspace=@app/web
 
 FROM nginx:1.27-alpine
