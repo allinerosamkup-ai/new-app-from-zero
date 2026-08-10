@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import content from "./seo-content.json";
 import { SITE_ORIGIN } from "./seo";
 
 /**
@@ -37,22 +38,40 @@ function canonicalOf(html: string): string | null {
   return match ? match[1] : null;
 }
 
-/** Cada página indexável e a URL que ela deve declarar como verdadeira. */
-const INDEXABLE_PAGES = [
+/** Páginas cuja canônica está escrita no arquivo, versionada. */
+const STATIC_PAGES = [
   { file: "index.html", canonical: `${SITE_ORIGIN}/` },
   { file: "public/privacy.html", canonical: `${SITE_ORIGIN}/privacy` },
   { file: "public/terms.html", canonical: `${SITE_ORIGIN}/terms` },
 ] as const;
 
+/**
+ * Páginas cuja canônica é gerada no build por `scripts/build-seo-html.mjs` a
+ * partir de `seo-content.json`. Não há arquivo para ler aqui — o que se
+ * verifica é a fonte que o gerador consome.
+ */
+const GENERATED_PAGES = Object.entries(content.pages).map(([name, page]) => ({
+  name,
+  path: page.path,
+  canonical: page.url,
+}));
+
 describe("canônica das páginas públicas", () => {
-  it.each(INDEXABLE_PAGES)("$file declara a própria URL como canônica", ({ file, canonical }) => {
+  it.each(STATIC_PAGES)("$file declara a própria URL como canônica", ({ file, canonical }) => {
     expect(canonicalOf(read(file))).toBe(canonical);
   });
 
+  it.each(GENERATED_PAGES)("$name tem URL própria, coerente com o caminho", ({ path: pagePath, canonical }) => {
+    expect(canonical).toBe(`${SITE_ORIGIN}${pagePath}`);
+  });
+
   it("nenhuma canônica aponta para o host com www", () => {
-    for (const { file } of INDEXABLE_PAGES) {
+    for (const { file } of STATIC_PAGES) {
       const declared = canonicalOf(read(file)) ?? "";
       expect(declared.includes("www."), `${file} canonicaliza para www`).toBe(false);
+    }
+    for (const { name, canonical } of GENERATED_PAGES) {
+      expect(canonical.includes("www."), `${name} canonicaliza para www`).toBe(false);
     }
   });
 
@@ -62,18 +81,37 @@ describe("canônica das páginas públicas", () => {
 
     expect(locations.length).toBeGreaterThan(0);
 
-    // `?lang=en` é a mesma raiz com outro `<head>`, gerada no build por
-    // `scripts/build-seo-html.mjs` a partir de `seo-content.json`. A canônica
-    // dela é coberta pelos testes de `buildSeoMetadata`.
-    const fromStaticFiles = locations.filter((loc) => !loc.includes("?"));
-    const declared = INDEXABLE_PAGES.map((page) => page.canonical);
+    // `?lang=en` é a mesma raiz com outro `<head>`, e a canônica dela é coberta
+    // pelos testes de `buildSeoMetadata`.
+    const semParametro = locations.filter((loc) => !loc.includes("?"));
+    const declaradas = [
+      ...STATIC_PAGES.map((page) => page.canonical),
+      ...GENERATED_PAGES.map((page) => page.canonical),
+    ];
 
-    for (const loc of fromStaticFiles) {
-      expect(declared, `${loc} está no sitemap e nenhuma página a declara`).toContain(loc);
+    for (const loc of semParametro) {
+      expect(declaradas, `${loc} está no sitemap e nenhuma página a declara`).toContain(loc);
     }
   });
 
   it("o sitemap não lista URL no host com www", () => {
     expect(read("public/sitemap.xml")).not.toContain("www.airia.pro");
+  });
+
+  /**
+   * O gerador do `<head>` do livro depende de encontrar estas tags no
+   * `index.html` para substituir. Se alguém remover uma delas da raiz, o build
+   * falha na hora — mas falha só no build, e este teste dá o aviso antes.
+   */
+  it("o index.html tem as tags que o gerador do livro substitui", () => {
+    const index = read("index.html");
+    for (const tag of [
+      '<meta property="og:image" content=',
+      '<meta property="og:image:alt" content=',
+      '<meta name="twitter:image" content=',
+      '<link rel="alternate" hreflang="x-default"',
+    ]) {
+      expect(index, `o gerador precisa de ${tag}`).toContain(tag);
+    }
   });
 });

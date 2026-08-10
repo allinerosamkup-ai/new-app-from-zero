@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { trackMetaPixelEvent } from "../lib/meta-pixel";
-import { useLocalizedCopy } from "../i18n";
+import { useLanguage, useLocalizedCopy } from "../i18n";
+import { applyStandalonePageSeo } from "../lib/seo";
 
 /**
  * Página de vendas do e-book "Antes de se Cobrar" — servida em airia.pro/livro.
@@ -120,6 +121,7 @@ function Section({ children, style }: { children: React.ReactNode; style?: React
 
 export default function LivroPage() {
   const l = useLocalizedCopy();
+  const language = useLanguage();
   const localizedChapters = CHAPTERS.map((chapter, index) => l(chapter, CHAPTERS_EN[index]));
   const localizedFaq = FAQ.map((item, index) => ({ q: l(item.q, FAQ_EN[index].q), a: l(item.a, FAQ_EN[index].a) }));
   const [showBar, setShowBar] = useState(false);
@@ -129,8 +131,16 @@ export default function LivroPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Título, descrição e **canônica própria**. O texto sai de `seo-content.json`,
+  // o mesmo arquivo que gera o `<head>` estático servido em `/livro` — duas
+  // cópias divergiriam na primeira troca de copy. Reaplica ao trocar de idioma,
+  // como a splash faz; a canônica é a mesma nos dois, porque aqui é uma URL só.
   useEffect(() => {
-    document.title = l("Antes de se Cobrar — e-book por R$9,90", "Before You Judge Yourself — ebook for R$9.90");
+    applyStandalonePageSeo("livro", language);
+  }, [language]);
+
+  // O pixel é uma vez por visita, e não a cada troca de idioma.
+  useEffect(() => {
     trackMetaPixelEvent("ViewContent", {
       content_name: BOOK_NAME,
       content_category: "ebook",

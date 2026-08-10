@@ -25,5 +25,37 @@
       "keywords": "mood tracker, mood journal, energy tracker, ADHD, cyclothymia, bipolar 2, mental health, self-awareness, neurodivergent productivity",
       "imageAlt": "Airia home screen showing the current mood cycle phase and the next action"
     }
+  },
+  "_pagesComment": "Páginas públicas que não são a raiz. Cada uma tem URL própria e head estático próprio, gerado por scripts/build-seo-html.mjs e servido pelo nginx. Ao contrário da raiz, aqui os dois idiomas dividem a MESMA URL — a página troca de idioma sozinha e não existe `?lang=` para ela — então não há hreflang a declarar, só uma canônica.",
+  "pages": {
+    "livro": {
+      "path": "/livro",
+      "url": "https://airia.pro/livro",
+      "image": "https://airia.pro/livro/capa-antes-de-se-cobrar.png",
+      "price": "9.90",
+      "author": "Alinê Roza",
+      "languages": {
+        "pt": {
+          "htmlLang": "pt-BR",
+          "ogLocale": "pt_BR",
+          "currency": "BRL",
+          "title": "Antes de se Cobrar — e-book de autoconhecimento por R$9,90",
+          "description": "Autoconhecimento prático para mentes intensas: 13 capítulos com exercícios de autoestima, limites, comunicação e vínculos — um passo por vez, sem culpa. E-book digital por R$9,90, com acesso imediato e garantia de 7 dias.",
+          "shortDescription": "13 capítulos de autoconhecimento para mentes intensas, com exercícios práticos e sem culpa. E-book digital por R$9,90, acesso imediato.",
+          "keywords": "autoconhecimento, e-book, autoestima, limites saudáveis, comunicação assertiva, relacionamentos, mentes intensas, sensibilidade",
+          "imageAlt": "Capa do e-book Antes de se Cobrar, de Alinê Roza"
+        },
+        "en": {
+          "htmlLang": "en-US",
+          "ogLocale": "en_US",
+          "currency": "BRL",
+          "title": "Before You Judge Yourself — self-knowledge ebook",
+          "description": "Practical self-knowledge for intense minds: 13 chapters of exercises on self-esteem, boundaries, communication and connection — one step at a time, without guilt. Digital ebook, immediate access and a 7-day guarantee.",
+          "shortDescription": "13 chapters of self-knowledge for intense minds, with practical exercises and no guilt. Digital ebook, immediate access.",
+          "keywords": "self-knowledge, ebook, self-esteem, healthy boundaries, assertive communication, relationships, intense minds, sensitivity",
+          "imageAlt": "Cover of the ebook Before You Judge Yourself, by Alinê Roza"
+        }
+      }
+    }
   }
 }

@@ -238,10 +238,18 @@ Search Console. As rotas do SPA nunca tiveram esse problema porque herdam a
 canônica do `index.html` estático.
 Trava: `apps/web/src/lib/public-pages-canonical.test.ts` (arquivo) + checagem de
 canônica nos dois hosts no `deploy.sh` (produção).
-**Efeito colateral conhecido:** todas as rotas do SPA herdam a canônica da raiz,
-então `/livro` — página de vendas com tráfego pago — se declara duplicata da
-home e não tem como ser indexada por si. Decisão de produto pendente, não bug de
-infraestrutura.
+**Corrigido junto:** todas as rotas do SPA herdam a canônica da raiz, então
+`/livro` — página de vendas com tráfego pago — se declarava duplicata da home e
+não tinha como ser indexada por si. Hoje ela tem `<head>` estático próprio
+(`dist/livro.html`, gerado por `build-seo-html.mjs`, servido pelo nginx em
+`location = /livro`), canônica própria, JSON-LD de `Book` e a capa no Open Graph
+no lugar do print da home. Os `hreflang` da raiz são removidos: eles afirmavam
+que as versões de `/livro` eram `/` e `/?lang=en`, o que é falso — a página é uma
+URL só que troca de idioma sozinha.
+**Por que não bastou injetar em JS:** canônica só no cliente deixa o HTML cru
+contradizendo o DOM renderizado, e é o caso em que o buscador costuma ficar com
+a versão errada. Fora que prévia de link não executa JS — o link do anúncio se
+apresentava como o app de humor.
 
 ### [FATO] Deploy verde não significa build completa
 `Dockerfile.web` chamava `node ./node_modules/vite/bin/vite.js build`, então

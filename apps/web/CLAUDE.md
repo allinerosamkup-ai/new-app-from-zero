@@ -76,14 +76,40 @@ Só `setLanguage()`, em Preferências, escreve `airia_lang`. `dropDetectorCache(
 limpa o cache antigo pelo formato — o detector gravava `pt-BR`, a escolha grava
 `pt`.
 
-**A splash é a única página pública, e é ela que carrega o SEO.** `lib/seo.ts`
-decide (função pura, testada) e aplica no `<head>`: título, descrição, canônica,
-`hreflang`, Open Graph, Twitter e JSON-LD, tudo trocando com o idioma. As telas
-internas não entram — sobrescrever o título delas com texto de marketing não
-ajuda ninguém, e elas estão bloqueadas no `robots.txt` porque exigem sessão.
+**São quatro páginas públicas, e cada uma precisa declarar a própria canônica.**
+A splash (`/`) e `/livro` carregam SEO por `lib/seo.ts` — função pura, testada,
+que decide, e escrita boba que aplica no `<head>`. `/privacy` e `/terms` são
+arquivos estáticos em `public/` e trazem a canônica escrita no próprio arquivo.
+As telas internas não entram — sobrescrever o título delas com texto de
+marketing não ajuda ninguém, e estão bloqueadas no `robots.txt` porque exigem
+sessão.
 
-Cada idioma tem URL própria (`/` e `/?lang=en`); sem isso `hreflang` não
+**Canônica não é opcional em nenhuma delas.** `airia.pro` e `www.airia.pro`
+servem o mesmo site com 200 de propósito (o PWA está instalado no `www`), então
+`rel=canonical` é o único sinal que diz qual URL é a verdadeira. `privacy.html` e
+`terms.html` ficaram sem nenhuma até 2026-08-10, sendo duas das URLs do sitemap:
+o Google podia eleger a versão `www`, host fora da propriedade do Search Console.
+Trava: `lib/public-pages-canonical.test.ts` + checagem nos dois hosts no
+`deploy.sh`.
+
+Cada idioma da raiz tem URL própria (`/` e `/?lang=en`); sem isso `hreflang` não
 significa nada. As declarações são recíprocas, senão o Google descarta.
+
+**`/livro` é o caso oposto: uma URL só para os dois idiomas.** A página troca de
+idioma sozinha e não tem `?lang=`, então não há `hreflang` a declarar — e o que
+ela herdava do `index.html` era afirmação falsa (dizia que suas versões eram a
+home e a `/?lang=en`). `applyStandalonePageSeo("livro", language)` remove esses
+`hreflang` e crava a canônica própria. Antes disso toda rota do SPA herdava a
+canônica da raiz, e `/livro` — destino de anúncio pago — se declarava duplicata
+da home, sem como ser indexada por si.
+
+**Página pública fora da raiz ganha `<head>` estático próprio.** Injetar canônica
+só em JavaScript deixaria o HTML cru contradizendo o DOM renderizado, que é o
+caso em que o buscador costuma ficar com a versão errada — e não resolveria
+prévia de link, que não executa JS. `scripts/build-seo-html.mjs` gera
+`dist/index.en.html` e `dist/livro.html` a partir de `seo-content.json`, e o
+nginx serve cada um na URL certa. Mesmos assets, mesmo bundle, só o `<head>`
+muda. O gerador aborta se um padrão parar de casar com o `index.html`.
 
 **Limite honesto:** isto roda no cliente. O Googlebot executa JS e enxerga;
 prévia de link no WhatsApp e no Slack **não executa**, então o compartilhamento
