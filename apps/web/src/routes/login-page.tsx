@@ -6,6 +6,7 @@ import { useAuraStore } from "../features/aura/store";
 import { supabase } from "../lib/supabase";
 import { trackRegistrationConversion } from "../lib/meta-pixel";
 import { trackEvent } from "../lib/track";
+import { capturePendingReferral, claimPendingReferral } from "../features/referrals/capture";
 import "../styles/aura.css";
 
 type Tab = "entrar" | "criar";
@@ -29,15 +30,24 @@ export function LoginPage() {
   const [showConfirmEmail, setShowConfirmEmail] = useState(false);
 
   useEffect(() => {
+    capturePendingReferral();
+  }, []);
+
+  useEffect(() => {
     let active = true;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (active && session) navigate("/home", { replace: true });
+      if (!active || !session) return;
+      void claimPendingReferral().finally(() => {
+        if (active) navigate("/home", { replace: true });
+      });
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active || !session || event === "SIGNED_OUT") return;
-      navigate("/home", { replace: true });
+      void claimPendingReferral().finally(() => {
+        if (active) navigate("/home", { replace: true });
+      });
     });
 
     return () => {
@@ -63,19 +73,22 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
     try {
+      let authenticated = false;
       if (tab === "entrar") {
-        const { error: err } = await supabase.auth.signInWithPassword({
+        const { data, error: err } = await supabase.auth.signInWithPassword({
           email: state.email,
           password,
         });
         if (err) throw err;
+        authenticated = Boolean(data.session);
       } else {
-        const { error: err } = await supabase.auth.signUp({
+        const { data, error: err } = await supabase.auth.signUp({
           email: state.email,
           password,
           options: { data: { full_name: state.name } },
         });
         if (err) throw err;
+        authenticated = Boolean(data.session);
       }
       if (rememberMe) {
         window.localStorage.setItem(REMEMBER_ME_KEY, "true");
@@ -87,9 +100,11 @@ export function LoginPage() {
       if (tab === "criar") {
         trackRegistrationConversion("email");
         trackEvent("user_signed_up", { method: "email" });
+        if (authenticated) await claimPendingReferral();
         setShowConfirmEmail(true);
         return;
       }
+      if (authenticated) await claimPendingReferral();
       navigate("/home");
     } catch (err: any) {
       const msg = err?.message || t("auth.errors.generic");

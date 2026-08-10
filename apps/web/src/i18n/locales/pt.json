@@ -1070,6 +1070,15 @@
       "Suporte prioritário"
     ]
   },
+  "partners": {
+    "title": "Programa para psicólogas",
+    "benefit": "CRP ativo dá acesso Pro sem custo e um link que oferece 14 dias Pro.",
+    "pending": "Cadastro em análise",
+    "verified": "Cadastro profissional verificado",
+    "rejected": "Cadastro não aprovado",
+    "reviewRequired": "Precisamos revisar seu cadastro",
+    "privacy": "A Airia não compartilha dados das pessoas indicadas com a profissional."
+  },
   "legal": {
     "backHome": "Voltar para o Início",
     "updated": "Última atualização: Abril de 2026.",

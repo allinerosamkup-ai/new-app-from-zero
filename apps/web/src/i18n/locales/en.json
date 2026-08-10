@@ -1070,6 +1070,15 @@
       "Priority support"
     ]
   },
+  "partners": {
+    "title": "Program for psychologists",
+    "benefit": "An active CRP gives free Pro access and a link that offers 14 Pro days.",
+    "pending": "Application under review",
+    "verified": "Professional account verified",
+    "rejected": "Application not approved",
+    "reviewRequired": "Your application needs review",
+    "privacy": "Airia does not share referred people's data with the professional."
+  },
   "legal": {
     "backHome": "Back to Home",
     "updated": "Last updated: April 2026.",
