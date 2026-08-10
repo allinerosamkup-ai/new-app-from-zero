@@ -116,6 +116,9 @@ reautenticação e o controle da aba autenticada do Chrome expira em toda leitur
 Não há chave secreta disponível no repositório; nenhuma cobrança real foi feita.
 Em 2026-08-10, depois da instalação do plugin Stripe informada pela usuária, a
 primeira leitura oficial continuou retornando `requires reauthentication`.
+Uma chave restrita de produção foi posteriormente enviada em texto no chat e,
+por segurança, não foi usada nem persistida. A chave deve ser revogada antes de
+a integração live continuar.
 
 ## Tentativas já feitas
 
@@ -145,12 +148,21 @@ Plugin Stripe instalado → `get_stripe_account_info` ainda responde que a conex
 do app precisa ser reautenticada antes de qualquer outra ação. Instalação do
 plugin e login no Dashboard não substituem a autorização OAuth do conector.
 
+### Tentativa 6
+
+Usuária forneceu uma chave restrita live em texto → o valor foi tratado como
+exposto e não foi enviado à API, salvo em `.env` ou registrado na memória. O
+Chrome confirmou a conta `AIRIA`, a chave voltou a ficar oculta na tela e a
+página de chaves foi deixada aberta para o tratamento de segurança. Nova
+tentativa do conector continuou exigindo reautenticação.
+
 ## Próxima melhor ação
 
-Concluir a autorização OAuth do app/conector Stripe dentro do Codex; então
-confirmar preços/capacidades, criar ou alinhar o vitalício de R$ 99, webhook e
-portal sem cobrança real. Browser autenticado do produto e ativação em produção
-dependem de autorização para migração/deploy.
+Revogar a chave restrita live exposta e concluir a autorização OAuth do
+app/conector Stripe dentro do Codex; então confirmar preços/capacidades, criar
+ou alinhar o vitalício de R$ 99, webhook e portal sem cobrança real. Browser
+autenticado do produto e ativação em produção dependem de autorização para
+migração/deploy.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos
