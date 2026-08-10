@@ -17,7 +17,62 @@
 
 ## Status
 
-`SEM TAREFA ATIVA`
+`IN PROGRESS — onboarding único, período Pro, parceiros CRP e Stripe`
+
+## Objetivo
+
+Consolidar o onboarding atual em `/comecar`, iniciar 7 dias Pro (14 por
+indicação verificada), criar cadastro de profissionais parceiras sem comissão e
+ativar cobrança Stripe confiável.
+
+## Definition of Done
+
+- [ ] Todos os acessos de onboarding usam o fluxo atual.
+- [ ] Conclusão marca `onboardingDone` e concede o período correto uma única vez.
+- [ ] Assinatura, período Pro e parceria são persistidos fora do payload de onboarding.
+- [ ] Checkout, webhook e portal estão cobertos por testes e estados reais.
+- [ ] CRP pendente/verificado e indicação possuem contratos persistentes.
+- [ ] Fluxo autenticado mobile, reload e regressões foram verificados.
+- [ ] Stripe live tem preço, webhook e portal coerentes; bloqueios da conta são explícitos.
+- [ ] Todas as mudanças estão commitadas e o worktree tem destino registrado.
+
+## Status
+
+IN PROGRESS — design aprovado e baseline verde; plano TDD em elaboração.
+
+## O que já foi feito
+
+- Protocolo, memória, worktrees e código atual inspecionados.
+- Causa da duplicidade localizada em rotas/atalhos antigos.
+- Estado live da Stripe consultado por API sem expor segredos.
+- Design aprovado registrado em `docs/plans/2026-08-10-onboarding-stripe-professional-partners-design.md`.
+- Worktree dedicado criado em `C:\Users\allin\Projetos\Apps\new-app-fron-zero\.worktrees\onboarding-stripe-partners`.
+
+## O que falta
+
+- [ ] Plano de implementação TDD.
+- [ ] Implementação vertical por contrato.
+- [ ] Configuração Stripe externa e validação real.
+- [ ] Revisão Airia, builds, browser e fechamento Git/worktree.
+
+## Verificações executadas
+
+- `npm run test -w apps/web -- src/features/aura/onboarding.test.ts src/features/routine-builder/import-routine-dialog.test.tsx` → PASS, 11 testes.
+- `npm run typecheck -w apps/web` → PASS.
+- `npm run build -w apps/backend` → PASS.
+
+## Descobertas importantes
+
+- `/comecar` não marca `profiles.onboarding_done`; o fluxo legado marca.
+- Configurações ainda navega para `/onboarding/guiado`.
+- Stripe live está com `charges_enabled=false`, capacidades pendentes, sem webhook e sem portal.
+- O preço anual configurado existe; o mensal configurado não corresponde ao preço mensal ativo.
+- O convite atual não tem backend nem atribuição.
+
+## Próxima melhor ação
+
+Escrever e commitar o plano de implementação; iniciar o primeiro teste vermelho
+para a rota canônica do onboarding.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos
