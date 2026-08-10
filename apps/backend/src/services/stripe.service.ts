@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import Stripe from 'stripe';
 import type { PrismaClient } from '@app/database';
 
@@ -139,10 +141,14 @@ export class StripeService {
     const customerId = await this.getOrCreateCustomer(userId, email);
     const metadata = { userId, plan: planInput };
     const mode = planInput === 'lifetime' ? 'payment' : 'subscription';
+    const integrationIdentifier = `airia_${[...randomBytes(8)]
+      .map((byte) => String.fromCharCode(97 + (byte % 26)))
+      .join('')}`;
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       client_reference_id: userId,
+      integration_identifier: integrationIdentifier,
       mode,
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${this.config.appUrl}/billing?session_id={CHECKOUT_SESSION_ID}`,
@@ -408,7 +414,7 @@ export function createStripeServiceFromEnv(prisma: PrismaClient): StripeService 
   const lifetimePriceId = process.env.STRIPE_PRICE_ID_LIFETIME;
   return new StripeService({
     prisma,
-    stripe: secretKey ? new Stripe(secretKey, { apiVersion: '2026-05-27.dahlia' }) : null,
+    stripe: secretKey ? new Stripe(secretKey, { apiVersion: '2026-07-29.dahlia' }) : null,
     config: {
       appUrl: process.env.APP_URL || 'https://airia.pro',
       webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,

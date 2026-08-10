@@ -133,6 +133,7 @@ async function run() {
   );
   for (const [index, call] of f.checkoutCalls.entries()) {
     assert.equal(call.payload.client_reference_id, 'user-1');
+    assert.match(call.payload.integration_identifier, /^airia_[a-z]{8}$/);
     assert.equal(call.payload.success_url, 'https://airia.pro/billing?session_id={CHECKOUT_SESSION_ID}');
     assert.equal(call.payload.metadata.userId, 'user-1');
     assert.equal(call.options.idempotencyKey, `airia:checkout:user-1:${call.payload.metadata.plan}:attempt-${index + 1}`);
