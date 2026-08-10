@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, CheckCircle2, ChevronLeft, ExternalLink, Sparkles } from "lucide-react";
 
@@ -38,7 +38,7 @@ export async function confirmCheckoutSession(
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      last = await get(`/api/billing/checkout-session/${encodeURIComponent(sessionId)}`);
+      last = await get(`/billing/checkout-session/${encodeURIComponent(sessionId)}`);
       if (last.confirmed) return last;
       lastError = null;
     } catch (error) {
@@ -84,6 +84,7 @@ export default function BillingPage() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [verification, setVerification] = useState<"idle" | "pending" | "confirmed" | "delayed" | "error">("idle");
+  const checkoutAttemptKey = useRef<string | null>(null);
 
   const sessionId = new URLSearchParams(window.location.search).get("session_id");
 
@@ -119,10 +120,12 @@ export default function BillingPage() {
     setCheckoutError(null);
     trackEvent("upgrade_clicked", { plan: selectedPlan });
     try {
+      checkoutAttemptKey.current ??= globalThis.crypto.randomUUID();
       const { data: { session } } = await supabase.auth.getSession();
-      const result = await api.post("/api/billing/checkout", {
+      const result = await api.post("/billing/checkout", {
         email: session?.user?.email,
         plan: selectedPlan,
+        attemptKey: checkoutAttemptKey.current,
       }) as { url: string };
       window.location.assign(result.url);
     } catch {
@@ -135,7 +138,7 @@ export default function BillingPage() {
   async function handlePortal() {
     setPortalLoading(true);
     try {
-      const result = await api.post("/api/billing/portal", {}) as { url: string };
+      const result = await api.post("/billing/portal", {}) as { url: string };
       window.location.assign(result.url);
     } finally {
       setPortalLoading(false);

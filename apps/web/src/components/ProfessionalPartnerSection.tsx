@@ -35,11 +35,11 @@ function statusCopy(status: ProfessionalPartner["verificationStatus"], l: Return
 export function ProfessionalPartnerSection({ load, apply }: Props) {
   const l = useLocalizedCopy();
   const loadPartner = useCallback(
-    () => load?.() ?? api.get("/api/professional-partners/me") as Promise<PartnerResponse>,
+    () => load?.() ?? api.get("/professional-partners/me") as Promise<PartnerResponse>,
     [load],
   );
   const applyPartner = apply ?? ((input: Application) => (
-    api.post("/api/professional-partners/apply", input) as Promise<PartnerResponse>
+    api.post("/professional-partners/apply", input) as Promise<PartnerResponse>
   ));
   const [partner, setPartner] = useState<ProfessionalPartner | null>(null);
   const [loading, setLoading] = useState(true);

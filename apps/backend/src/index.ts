@@ -7770,11 +7770,15 @@ JSON APENAS: {"profileSummary":"..."}`,
       const input = z.object({
         email: z.string().email().optional(),
         plan: z.enum(['monthly', 'annual', 'lifetime']),
+        attemptKey: z.string().trim().min(8).max(100).regex(/^[a-zA-Z0-9:._-]+$/).optional(),
       }).parse(req.body);
       const headerKey = req.headers['idempotency-key'];
-      const attemptKey = typeof headerKey === 'string' && headerKey.length <= 100
-        ? headerKey
-        : randomUUID();
+      const normalizedHeaderKey = typeof headerKey === 'string' ? headerKey.trim() : '';
+      const attemptKey = normalizedHeaderKey.length >= 8
+        && normalizedHeaderKey.length <= 100
+        && /^[a-zA-Z0-9:._-]+$/.test(normalizedHeaderKey)
+        ? normalizedHeaderKey
+        : input.attemptKey ?? randomUUID();
       const url = await stripeService.createCheckoutSession(
         userId,
         input.email,

@@ -55,7 +55,7 @@ export function useSubscription(): UseSubscriptionResult {
     setError(null);
     void (async () => {
       try {
-        const data = await api.get("/api/billing/status") as BillingAccessSummary;
+        const data = await api.get("/billing/status") as BillingAccessSummary;
         if (alive) setSummary({ ...data, offers: Array.isArray(data.offers) ? data.offers : [] });
       } catch {
         if (alive) {

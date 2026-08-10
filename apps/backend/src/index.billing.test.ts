@@ -74,6 +74,14 @@ async function run() {
     assert.deepEqual(checkoutCalls.map((call) => call.userId), [USER_ID, USER_ID, USER_ID]);
     assert.deepEqual(checkoutCalls.map((call) => call.plan), ['monthly', 'annual', 'lifetime']);
 
+    const bodyIdempotency = await fetch(`${baseUrl}/api/billing/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: 'annual', attemptKey: 'attempt-from-client' }),
+    });
+    assert.equal(bodyIdempotency.status, 200);
+    assert.equal(checkoutCalls.at(-1)?.attemptKey, 'attempt-from-client');
+
     const status = await (await fetch(`${baseUrl}/api/billing/status`)).json();
     assert.deepEqual(status, { ...summary, offers });
 

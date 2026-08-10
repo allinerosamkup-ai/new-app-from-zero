@@ -75,4 +75,10 @@ describe("useSubscription", () => {
     expect(host.firstElementChild?.getAttribute("data-error")).toBe("status_unavailable");
     await act(async () => root.unmount());
   });
+
+  it("uses an endpoint relative to the API base URL", async () => {
+    const { root } = await renderSummary(base);
+    expect(mocks.get).toHaveBeenCalledWith("/billing/status");
+    await act(async () => root.unmount());
+  });
 });

@@ -1,5 +1,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -62,7 +64,7 @@ describe("BillingPage", () => {
     let resolveVerification!: (value: any) => void;
     const verification = new Promise((resolve) => { resolveVerification = resolve; });
     mocks.get.mockImplementation((path: string) => (
-      path === "/api/billing/status" ? Promise.resolve(freeSummary) : verification
+      path === "/billing/status" ? Promise.resolve(freeSummary) : verification
     ));
     const host = document.createElement("div");
     const root = createRoot(host);
@@ -80,7 +82,19 @@ describe("BillingPage", () => {
     const get = vi.fn(async () => ({ confirmed: false, plan: "annual", status: "open" }));
     const result = await confirmCheckoutSession("cs_pending", { get, delay: async () => undefined, attempts: 3 });
     expect(get).toHaveBeenCalledTimes(3);
+    expect(get).toHaveBeenCalledWith("/billing/checkout-session/cs_pending");
     expect(result.confirmed).toBe(false);
+  });
+
+  it("does not duplicate the /api prefix already owned by the API client", () => {
+    for (const file of [
+      "src/hooks/useSubscription.ts",
+      "src/routes/billing-page.tsx",
+      "src/components/ProfessionalPartnerSection.tsx",
+    ]) {
+      const fileSource = readFileSync(resolve(process.cwd(), file), "utf8");
+      expect(fileSource, file).not.toMatch(/api\.(?:get|post|patch|put|delete)\(["']\/api\//);
+    }
   });
 
   it("shows retry and free continuation when billing status fails", async () => {
@@ -91,6 +105,26 @@ describe("BillingPage", () => {
     await act(async () => { await Promise.resolve(); });
     expect(host.textContent).toContain("Tentar novamente");
     expect(host.textContent).toContain("Continuar gratuitamente");
+    await act(async () => root.unmount());
+  });
+
+  it("reuses one checkout attempt key when a network retry is needed", async () => {
+    mocks.get.mockResolvedValue(freeSummary);
+    mocks.post.mockRejectedValue(new Error("offline"));
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    const checkout = [...host.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Escolher este plano"));
+    expect(checkout).toBeTruthy();
+    await act(async () => { checkout?.click(); });
+    await act(async () => { checkout?.click(); });
+    expect(mocks.post).toHaveBeenCalledTimes(2);
+    const firstAttempt = mocks.post.mock.calls[0][1]?.attemptKey;
+    const secondAttempt = mocks.post.mock.calls[1][1]?.attemptKey;
+    expect(firstAttempt).toMatch(/^[a-zA-Z0-9-]{8,100}$/);
+    expect(secondAttempt).toBe(firstAttempt);
     await act(async () => root.unmount());
   });
 });
