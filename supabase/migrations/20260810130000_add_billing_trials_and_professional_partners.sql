@@ -38,7 +38,7 @@ create table if not exists public.professional_partners (
   updated_at timestamptz not null default now(),
   constraint uq_professional_partners_crp unique (crp_region, crp_number),
   constraint professional_partners_verification_status_check
-    check (verification_status in ('pending', 'verified', 'rejected', 'suspended'))
+    check (verification_status in ('pending', 'verified', 'rejected', 'review_required', 'suspended'))
 );
 
 create table if not exists public.referral_attributions (
