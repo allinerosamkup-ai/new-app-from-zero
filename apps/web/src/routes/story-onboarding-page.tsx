@@ -56,6 +56,145 @@ const EMPTY: StoryAnswers = {
 /** Teto de objetivos. Ver o comentário em `goalTitles`. */
 const MAX_GOALS = 3;
 
+export type BillingAccessSummary = {
+  access: "pro" | "free";
+  source: "paid" | "professional" | "trial" | "free";
+  subscriptionStatus: string | null;
+  plan: "monthly" | "annual" | null;
+  periodEnd: string | null;
+  trialEndsAt: string | null;
+  daysRemaining: number;
+  checkoutAvailable: boolean;
+};
+
+function isBillingAccessSummary(value: unknown): value is BillingAccessSummary {
+  if (!value || typeof value !== "object") return false;
+  const summary = value as Record<string, unknown>;
+  return (summary.access === "pro" || summary.access === "free")
+    && ["paid", "professional", "trial", "free"].includes(String(summary.source))
+    && Number.isInteger(summary.daysRemaining)
+    && typeof summary.checkoutAvailable === "boolean";
+}
+
+export async function completeStoryOnboarding({
+  post = api.post,
+  track = trackEvent,
+}: {
+  post?: (endpoint: string, body: unknown) => Promise<unknown>;
+  track?: typeof trackEvent;
+} = {}): Promise<BillingAccessSummary> {
+  const response = await post("/onboarding/complete", {}) as {
+    saved?: unknown;
+    billing?: unknown;
+  };
+  if (response?.saved !== true || !isBillingAccessSummary(response.billing)) {
+    throw new Error("onboarding_completion_unconfirmed");
+  }
+
+  const billing = response.billing;
+  if (billing.source === "trial" && billing.daysRemaining > 0) {
+    track("pro_trial_started", {
+      days: billing.daysRemaining,
+      source: billing.source,
+      trialEndsAt: billing.trialEndsAt,
+    });
+  }
+  return billing;
+}
+
+export async function finalizeStoryOnboarding(input: {
+  persist: () => Promise<void>;
+  complete: () => Promise<BillingAccessSummary>;
+  refresh: () => Promise<unknown>;
+}): Promise<BillingAccessSummary> {
+  await input.persist();
+  try {
+    return await input.complete();
+  } finally {
+    await input.refresh().catch(() => undefined);
+  }
+}
+
+export function OnboardingCompletionOffer({
+  billing,
+  error,
+  retrying,
+  onRetry,
+  onEnter,
+  onPlans,
+}: {
+  billing: BillingAccessSummary | null;
+  error: string | null;
+  retrying: boolean;
+  onRetry: () => void;
+  onEnter: () => void;
+  onPlans: () => void;
+}) {
+  const l = useLocalizedCopy();
+  const trialConfirmed = billing?.source === "trial" && billing.daysRemaining > 0;
+  const professionalConfirmed = billing?.source === "professional";
+  const paidConfirmed = billing?.source === "paid";
+  const freeConfirmed = billing?.source === "free";
+
+  return (
+    <>
+      <div className="story-seal" aria-hidden="true">{billing ? "✓" : "·"}</div>
+      {trialConfirmed && (<>
+        <p className="story-eyebrow" style={{ textAlign: "center" }}>{l("Seu começo Pro", "Your Pro start")}</p>
+        <h1 className="story-title" style={{ textAlign: "center" }}>
+          {l(`${billing.daysRemaining} dias Pro, sem cartão.`, `${billing.daysRemaining} Pro days, no card required.`)}
+        </h1>
+        <p className="story-body" style={{ textAlign: "center" }}>
+          {l(
+            "Depois, você pode continuar gratuitamente ou escolher um plano. Nada do que registrou será perdido.",
+            "After that, you can keep using the free version or choose a plan. Nothing you recorded will be lost.",
+          )}
+        </p>
+      </>)}
+      {professionalConfirmed && (<>
+        <p className="story-eyebrow" style={{ textAlign: "center" }}>{l("Parceria profissional", "Professional partnership")}</p>
+        <h1 className="story-title" style={{ textAlign: "center" }}>{l("Seu acesso Pro profissional está liberado.", "Your professional Pro access is ready.")}</h1>
+      </>)}
+      {paidConfirmed && (
+        <h1 className="story-title" style={{ textAlign: "center" }}>{l("Seu acesso Pro está ativo.", "Your Pro access is active.")}</h1>
+      )}
+      {freeConfirmed && (<>
+        <h1 className="story-title" style={{ textAlign: "center" }}>{l("Seu caminho está atualizado.", "Your path is updated.")}</h1>
+        <p className="story-body" style={{ textAlign: "center" }}>
+          {l("Você pode continuar gratuitamente e escolher um plano quando fizer sentido.", "You can continue for free and choose a plan whenever it makes sense.")}
+        </p>
+      </>)}
+      {!billing && !error && (<>
+        <h1 className="story-title" style={{ textAlign: "center" }}>{l("Confirmando o seu acesso...", "Confirming your access...")}</h1>
+        <p className="story-body" style={{ textAlign: "center" }}>{l("Seu caminho já está salvo.", "Your path is already saved.")}</p>
+      </>)}
+      {error && (<>
+        <h1 className="story-title" style={{ textAlign: "center" }}>{l("Seu caminho está salvo.", "Your path is saved.")}</h1>
+        <p className="story-body" style={{ textAlign: "center" }}>
+          {l(
+            "Não consegui confirmar seu período Pro agora. Você pode tentar de novo ou entrar sem perder o que fez.",
+            "I could not confirm your Pro period right now. You can retry or enter without losing your work.",
+          )}
+        </p>
+      </>)}
+
+      <div className="story-offer-actions">
+        <button type="button" className="story-cta" onClick={onEnter}>
+          {l("Entrar na minha Airia", "Enter my Airia")}
+        </button>
+        <button type="button" className="story-plan-action" onClick={onPlans}>
+          {l("Ver planos", "View plans")}
+        </button>
+        {error && (
+          <button type="button" className="story-retry-action" disabled={retrying} onClick={onRetry}>
+            {retrying ? l("Tentando...", "Retrying...") : l("Tentar novamente", "Try again")}
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 }
@@ -89,7 +228,12 @@ export default function StoryOnboardingPage() {
   const [thinking, setThinking] = useState(false);
 
   const [workDone, setWorkDone] = useState(0);
+  const [buildingReady, setBuildingReady] = useState(false);
+  const [billing, setBilling] = useState<BillingAccessSummary | null>(null);
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completionLoading, setCompletionLoading] = useState(false);
   const startedRef = useRef(false);
+  const persistStartedRef = useRef(false);
 
   const step = STORY_STEPS[index];
   const progress = ((index + 1) / STORY_STEPS.length) * 100;
@@ -166,6 +310,22 @@ export default function StoryOnboardingPage() {
     setThinking(false);
   }, [answers.feeling, capacity]);
 
+  const requestCompletion = useCallback(async () => {
+    setCompletionLoading(true);
+    setCompletionError(null);
+    try {
+      const summary = await completeStoryOnboarding();
+      setBilling(summary);
+      return summary;
+    } catch (error) {
+      setBilling(null);
+      setCompletionError(error instanceof Error ? error.message : "completion_failed");
+      throw error;
+    } finally {
+      setCompletionLoading(false);
+    }
+  }, []);
+
   /**
    * Grava tudo de verdade. É o que a barra da tela "montando" está esperando.
    *
@@ -178,56 +338,70 @@ export default function StoryOnboardingPage() {
    */
   const persist = useCallback(async () => {
     setWorkDone(0);
+    setBuildingReady(false);
     const marcar = (n: number) => setWorkDone((current) => Math.max(current, n));
     const comPrazo = <T,>(promessa: Promise<T>, ms = 7000) => Promise.race([
       promessa,
       new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
     ]);
 
-    try {
-      await comPrazo(api.post("/onboarding/operational-profile", {
-        blockers: answers.blockers,
-        openFronts: answers.openFronts,
-        listPreference: answers.listPreference,
-      }));
-    } catch { /* perfil é personalização; sem ele o app funciona sem calibragem */ }
-    marcar(1);
-
-    // Todos os objetivos escolhidos, cada um já com as ações interpretadas: ela
-    // sai do onboarding com Objetivos preenchido, não com uma tela vazia.
-    const paraCriar = goalTitles.length > 0
-      ? goalTitles.map((title) => plans.find((plan) => plan.title === title) ?? { title, steps: [], resultDefinition: null })
-      : [];
-
-    await Promise.all(paraCriar.map(async (plan, indice) => {
+    const persistCore = async () => {
       try {
-        await comPrazo(api.post("/objectives", {
-          title: plan.title,
-          category: "geral",
-          ...(plan.resultDefinition ? { description: plan.resultDefinition } : {}),
-          subgoals: plan.steps.map((title, order) => ({
-            id: `story-${Date.now()}-${indice}-${order}`,
-            title,
-            done: false,
-            order,
-            aiGenerated: true,
-          })),
-        }), 10000);
-      } catch { /* segue: o objetivo pode ser recriado na tela de Objetivos */ }
-    }));
-    marcar(2);
+        await comPrazo(api.post("/onboarding/operational-profile", {
+          blockers: answers.blockers,
+          openFronts: answers.openFronts,
+          listPreference: answers.listPreference,
+        }));
+      } catch { /* perfil é personalização; sem ele o app funciona sem calibragem */ }
+      marcar(1);
 
-    // Check-in com o que ela respondeu, não com um número de enfeite. O humor
-    // fixo em 5 que ficava aqui era dado inventado entrando no motor de ciclo —
-    // exatamente o que o app promete não fazer.
+      // Todos os objetivos escolhidos, cada um já com as ações interpretadas: ela
+      // sai do onboarding com Objetivos preenchido, não com uma tela vazia.
+      const paraCriar = goalTitles.length > 0
+        ? goalTitles.map((title) => plans.find((plan) => plan.title === title) ?? { title, steps: [], resultDefinition: null })
+        : [];
+
+      await Promise.all(paraCriar.map(async (plan, indice) => {
+        try {
+          await comPrazo(api.post("/objectives", {
+            title: plan.title,
+            category: "geral",
+            ...(plan.resultDefinition ? { description: plan.resultDefinition } : {}),
+            subgoals: plan.steps.map((title, order) => ({
+              id: `story-${Date.now()}-${indice}-${order}`,
+              title,
+              done: false,
+              order,
+              aiGenerated: true,
+            })),
+          }), 10000);
+        } catch { /* segue: o objetivo pode ser recriado na tela de Objetivos */ }
+      }));
+      marcar(2);
+
+      // Check-in com o que ela respondeu, não com um número de enfeite. O humor
+      // fixo em 5 que ficava aqui era dado inventado entrando no motor de ciclo —
+      // exatamente o que o app promete não fazer.
+      try {
+        await comPrazo(api.post("/checkins", buildFirstCheckin(answers, capacity)));
+      } catch { /* check-in inicial é bônus de calibragem, não requisito */ }
+      marcar(3);
+    };
+
     try {
-      await comPrazo(api.post("/checkins", buildFirstCheckin(answers, capacity)));
-    } catch { /* check-in inicial é bônus de calibragem, não requisito */ }
-    marcar(3);
-
-    try { await comPrazo(refreshData(), 5000); } catch { /* a Home recarrega sozinha */ }
-    marcar(4);
-  }, [answers, capacity, goalTitles, plans, refreshData]);
+      await finalizeStoryOnboarding({
+        persist: persistCore,
+        complete: requestCompletion,
+        refresh: async () => { await comPrazo(refreshData(), 5000); },
+      });
+      marcar(4);
+    } catch {
+      // A oferta final mostra o erro real e permite tentar novamente sem perder
+      // perfil, objetivos ou check-in já gravados.
+    } finally {
+      setBuildingReady(true);
+    }
+  }, [answers, capacity, goalTitles, plans, refreshData, requestCompletion]);
 
   // Efeitos de passo: interpretar no 'understanding', gravar no 'building'.
   useEffect(() => {
@@ -235,14 +409,17 @@ export default function StoryOnboardingPage() {
       void interpretGoals(goalTitles);
     }
     if (step === "building") {
-      void persist();
+      if (!persistStartedRef.current) {
+        persistStartedRef.current = true;
+        void persist();
+      }
       // Rede de segurança independente do que a rede fizer: passados 12s, o
       // botão libera de qualquer jeito. Prender alguém na última tela do
       // onboarding é o pior desfecho possível deste fluxo.
-      const escape = window.setTimeout(() => setWorkDone(4), 12000);
+      const escape = window.setTimeout(() => setBuildingReady(true), 12000);
       return () => window.clearTimeout(escape);
     }
-    if (step === "done") {
+    if (step === "done" || step === "offer") {
       successHaptic();
     }
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -255,7 +432,16 @@ export default function StoryOnboardingPage() {
       steps_generated: steps.length,
       asked_question: Boolean(question),
     });
+    try { await refreshData(); } catch { /* a Home também recarrega ao montar */ }
     navigate("/home", { replace: true });
+  }
+
+  async function retryCompletion() {
+    try {
+      await requestCompletion();
+      setWorkDone(4);
+      await refreshData();
+    } catch { /* a mensagem de erro permanece no card */ }
   }
 
   const canAdvance = (() => {
@@ -675,22 +861,32 @@ export default function StoryOnboardingPage() {
             </p>
           )}
         </>)}
+
+        {step === "offer" && (
+          <OnboardingCompletionOffer
+            billing={billing}
+            error={completionError}
+            retrying={completionLoading}
+            onRetry={() => { void retryCompletion(); }}
+            onEnter={() => { void finish(); }}
+            onPlans={() => navigate("/billing")}
+          />
+        )}
       </div>
 
-      <div className="story-foot">
+      {step !== "offer" && <div className="story-foot">
         <button
           type="button"
           className="story-cta"
-          disabled={!canAdvance || (step === "building" && workDone < 4)}
+          disabled={!canAdvance || (step === "building" && !buildingReady)}
           onClick={() => {
             tapHaptic();
-            if (step === "commitment") { void finish(); return; }
             go(1);
           }}
         >
           {step === "welcome" ? l("Começar", "Start")
-            : step === "commitment" ? l("Ir para o meu dia", "Go to my day")
-            : step === "building" ? (workDone < 4 ? l("Montando...", "Building...") : l("Continuar", "Continue"))
+            : step === "commitment" ? l("Ver meu acesso", "See my access")
+            : step === "building" ? (!buildingReady ? l("Montando...", "Building...") : l("Continuar", "Continue"))
             : step === "reckoning" ? l("Faz sentido", "That tracks")
             : l("Continuar", "Continue")}
         </button>
@@ -700,7 +896,7 @@ export default function StoryOnboardingPage() {
             {l("Voltar", "Back")}
           </button>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

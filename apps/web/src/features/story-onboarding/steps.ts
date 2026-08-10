@@ -135,6 +135,7 @@ export const STORY_STEPS = [
   'building',
   'outlook',
   'commitment',
+  'offer',
 ] as const;
 
 export type StoryStepId = (typeof STORY_STEPS)[number];
@@ -143,4 +144,5 @@ export type StoryStepId = (typeof STORY_STEPS)[number];
 export const READ_ONLY_STEPS = new Set<StoryStepId>([
   'welcome', 'problem', 'solution', 'reckoning', 'bridge', 'mirror',
   'understanding', 'path', 'nextAction', 'done', 'building', 'outlook',
+  'offer',
 ]);

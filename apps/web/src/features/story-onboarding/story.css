@@ -217,6 +217,42 @@
   font-family: inherit;
 }
 
+.story-offer-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.story-plan-action,
+.story-retry-action {
+  width: 100%;
+  min-height: 46px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.story-plan-action {
+  border: 1.5px solid var(--accent-primary, #BFDCCB);
+  background: transparent;
+  color: var(--accent-primary-ink, #4F7359);
+}
+
+.story-retry-action {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+}
+
+.story-retry-action:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
 /* ── A conta: o número entra com peso ── */
 .story-reckon {
   border-radius: 18px;
