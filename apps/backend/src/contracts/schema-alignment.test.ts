@@ -54,6 +54,12 @@ const objectiveRecoveryMigration = fs.readFileSync(
   path.resolve(__dirname, '../../../../supabase/migrations/20260801163000_add_objective_action_recovery_claims.sql'),
   'utf8',
 );
+const billingPartnersMigrationPath = path.resolve(
+  __dirname,
+  '../../../../supabase/migrations/20260810130000_add_billing_trials_and_professional_partners.sql',
+);
+assert.ok(fs.existsSync(billingPartnersMigrationPath), 'billing and professional partners migration must exist');
+const billingPartnersMigration = fs.readFileSync(billingPartnersMigrationPath, 'utf8');
 const prismaSchema = fs.readFileSync(
   path.resolve(__dirname, '../../../../packages/database/prisma/schema.prisma'),
   'utf8',
@@ -176,5 +182,41 @@ assert.match(
   prismaSchema,
   /objective\s+Objective\s+@relation\(fields: \[userId, objectiveId\], references: \[userId, id\], onDelete: Cascade\)/,
 );
+
+for (const table of [
+  'billing_accounts',
+  'professional_partners',
+  'referral_attributions',
+  'stripe_webhook_events',
+]) {
+  assert.match(
+    billingPartnersMigration,
+    new RegExp(`create table if not exists public\\.${table}`, 'i'),
+    `${table} must be created by the billing migration`,
+  );
+}
+for (const column of [
+  'stripe_customer_id',
+  'stripe_subscription_id',
+  'referral_code',
+  'referred_user_id',
+  'stripe_event_id',
+]) {
+  assert.match(
+    billingPartnersMigration,
+    new RegExp(`unique[^;]*${column}|${column}[^;]*unique`, 'i'),
+    `${column} must be protected by a unique constraint or index`,
+  );
+}
+for (const table of ['billing_accounts', 'professional_partners', 'referral_attributions']) {
+  assert.match(billingPartnersMigration, new RegExp(`alter table public\\.${table} enable row level security`, 'i'));
+  assert.match(billingPartnersMigration, new RegExp(`create policy[^;]+${table}`, 'i'));
+}
+assert.match(billingPartnersMigration, /stripe_webhook_events enable row level security/i);
+assert.match(billingPartnersMigration, /revoke all on table public\.stripe_webhook_events from anon, authenticated/i);
+assert.match(prismaSchema, /model BillingAccount/);
+assert.match(prismaSchema, /model ProfessionalPartner/);
+assert.match(prismaSchema, /model ReferralAttribution/);
+assert.match(prismaSchema, /model StripeWebhookEvent/);
 
 console.log('schema alignment tests passed');

@@ -9,11 +9,13 @@ const canonicalName = '20260714200000_add_canonical_memory.sql';
 const checkinName = '20260731120000_unify_checkin_signals.sql';
 const authProfileName = '20260801002000_ensure_auth_profiles.sql';
 const objectiveRecoveryName = '20260801163000_add_objective_action_recovery_claims.sql';
+const billingPartnersName = '20260810130000_add_billing_trials_and_professional_partners.sql';
 const rlsIndex = migrations.indexOf(rlsName);
 const canonicalIndex = migrations.indexOf(canonicalName);
 const checkinIndex = migrations.indexOf(checkinName);
 const authProfileIndex = migrations.indexOf(authProfileName);
 const objectiveRecoveryIndex = migrations.indexOf(objectiveRecoveryName);
+const billingPartnersIndex = migrations.indexOf(billingPartnersName);
 
 assert.ok(rlsIndex >= 0 && canonicalIndex >= 0 && rlsIndex < canonicalIndex,
   'the legacy memory RLS migration runs before the canonical migration creates memory_embeddings');
@@ -23,6 +25,8 @@ assert.ok(authProfileIndex > checkinIndex,
   'the authenticated profile repair must run after the canonical check-in migration');
 assert.ok(objectiveRecoveryIndex > authProfileIndex,
   'objective recovery claims must run after profile repair');
+assert.ok(billingPartnersIndex > objectiveRecoveryIndex,
+  'billing and professional partner tables must run after the existing profile-owned schema');
 
 const legacyRls = fs.readFileSync(path.join(migrationsDir, rlsName), 'utf8');
 assert.match(legacyRls, /to_regclass\('public\.memory_embeddings'\) is not null/i,
@@ -33,6 +37,7 @@ assert.match(legacyRls, /execute\s+'create policy "memory_embeddings_manage_own"
 const checkinMigration = fs.readFileSync(path.join(migrationsDir, checkinName), 'utf8');
 const authProfileMigration = fs.readFileSync(path.join(migrationsDir, authProfileName), 'utf8');
 const objectiveRecoveryMigration = fs.readFileSync(path.join(migrationsDir, objectiveRecoveryName), 'utf8');
+const billingPartnersMigration = fs.readFileSync(path.join(migrationsDir, billingPartnersName), 'utf8');
 const deployScript = fs.readFileSync(
   path.resolve(__dirname, '../../../../deploy/airia/deploy.sh'),
   'utf8',
@@ -56,11 +61,13 @@ assert.match(authProfileMigration, /insert into public\.profiles[\s\S]*from auth
 const deployedCheckinIndex = deployScript.indexOf(checkinName);
 const deployedAuthProfileIndex = deployScript.indexOf(authProfileName);
 const deployedObjectiveRecoveryIndex = deployScript.indexOf(objectiveRecoveryName);
+const deployedBillingPartnersIndex = deployScript.indexOf(billingPartnersName);
 assert.ok(
   deployedCheckinIndex >= 0
     && deployedAuthProfileIndex > deployedCheckinIndex
-    && deployedObjectiveRecoveryIndex > deployedAuthProfileIndex,
-  'deploy must apply objective recovery claims after its database prerequisites',
+    && deployedObjectiveRecoveryIndex > deployedAuthProfileIndex
+    && deployedBillingPartnersIndex > deployedObjectiveRecoveryIndex,
+  'deploy must apply billing partners after its database prerequisites',
 );
 assert.match(objectiveRecoveryMigration, /create table if not exists public\.objective_action_recovery_claims/i);
 for (const column of [
@@ -95,5 +102,9 @@ assert.match(objectiveRecoveryMigration, /create index if not exists idx_objecti
 assert.match(objectiveRecoveryMigration, /alter table public\.objective_action_recovery_claims enable row level security/i);
 assert.match(objectiveRecoveryMigration, /revoke all on table public\.objective_action_recovery_claims from anon, authenticated/i);
 assert.match(objectiveRecoveryMigration, /grant select, insert, update, delete on table public\.objective_action_recovery_claims to service_role/i);
+assert.doesNotMatch(billingPartnersMigration, /drop table|truncate/i,
+  'billing migration must preserve existing user and subscription history');
+assert.match(billingPartnersMigration, /alter table public\.stripe_webhook_events enable row level security/i);
+assert.match(billingPartnersMigration, /revoke all on table public\.stripe_webhook_events from anon, authenticated/i);
 
 console.log('migration chain safety tests passed');

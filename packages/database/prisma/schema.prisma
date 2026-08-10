@@ -43,6 +43,9 @@ model Profile {
   auraCommandPlans AuraCommandPlan[]
   auraCommandOperations AuraCommandOperation[]
   captures Capture[]
+  billingAccount BillingAccount?
+  professionalPartner ProfessionalPartner?
+  referralAttribution ReferralAttribution? @relation("ReferredUser")
 
   @@map("profiles")
 }
@@ -118,6 +121,74 @@ model OnboardingResponse {
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("onboarding_responses")
+}
+
+model BillingAccount {
+  userId               String    @id @map("user_id") @db.Uuid
+  stripeCustomerId     String?   @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+  subscriptionStatus   String?   @map("subscription_status")
+  subscriptionPlan     String?   @map("subscription_plan")
+  priceId              String?   @map("price_id")
+  currentPeriodEnd     DateTime? @map("current_period_end") @db.Timestamptz(6)
+  cancelAtPeriodEnd    Boolean   @default(false) @map("cancel_at_period_end")
+  trialStartedAt       DateTime? @map("trial_started_at") @db.Timestamptz(6)
+  trialEndsAt          DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  trialSource          String?   @map("trial_source")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("billing_accounts")
+}
+
+model ProfessionalPartner {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique @map("user_id") @db.Uuid
+  professionalName   String    @map("professional_name")
+  crpRegion          String    @map("crp_region")
+  crpNumber          String    @map("crp_number")
+  verificationStatus String    @default("pending") @map("verification_status")
+  verificationNote   String?   @map("verification_note") @db.Text
+  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz(6)
+  lastVerifiedAt     DateTime? @map("last_verified_at") @db.Timestamptz(6)
+  referralCode       String    @unique @map("referral_code")
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user      Profile               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referrals ReferralAttribution[]
+
+  @@unique([crpRegion, crpNumber], name: "uq_professional_partners_crp", map: "uq_professional_partners_crp")
+  @@map("professional_partners")
+}
+
+model ReferralAttribution {
+  id                    String    @id @default(uuid()) @db.Uuid
+  referredUserId        String    @unique @map("referred_user_id") @db.Uuid
+  professionalPartnerId String    @map("professional_partner_id") @db.Uuid
+  referralCode          String    @map("referral_code")
+  benefitDays           Int       @default(14) @map("benefit_days")
+  claimedAt             DateTime  @default(now()) @map("claimed_at") @db.Timestamptz(6)
+  convertedAt           DateTime? @map("converted_at") @db.Timestamptz(6)
+
+  referredUser       Profile             @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  professionalPartner ProfessionalPartner @relation(fields: [professionalPartnerId], references: [id], onDelete: Restrict)
+
+  @@index([professionalPartnerId, claimedAt(sort: Desc)], name: "idx_referral_attributions_partner_claimed")
+  @@map("referral_attributions")
+}
+
+model StripeWebhookEvent {
+  stripeEventId String   @id @map("stripe_event_id")
+  eventType     String   @map("event_type")
+  livemode      Boolean
+  result        String?
+  processedAt   DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  @@map("stripe_webhook_events")
 }
 
 /// Memórias vetorizadas da Aura (RAG)

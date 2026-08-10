@@ -9,6 +9,7 @@ $PROJECT_DIR/supabase/migrations/20260731120000_unify_checkin_signals.sql
 $PROJECT_DIR/supabase/migrations/20260801002000_ensure_auth_profiles.sql
 $PROJECT_DIR/supabase/migrations/20260801163000_add_objective_action_recovery_claims.sql
 $PROJECT_DIR/supabase/migrations/20260801190000_add_onboarding_biological_sex.sql
+$PROJECT_DIR/supabase/migrations/20260810130000_add_billing_trials_and_professional_partners.sql
 "
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
