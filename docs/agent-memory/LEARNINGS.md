@@ -256,6 +256,23 @@ confirma o valor exibido no `pointerup`/`keyup` enquanto o campo estiver vazio.
 
 ---
 
+### [FATO] O cliente web `api` já inclui o prefixo `/api`
+`apps/web/src/lib/api.ts` monta cada chamada como `API_URL + endpoint`, e o
+`API_URL` padrão já termina em `/api`. Portanto componentes devem chamar
+`api.get('/billing/status')`, nunca `api.get('/api/billing/status')`; o segundo
+formato vira `/api/api/...` e só costuma passar em teste quando o método inteiro
+é mockado. `billing-page.test.tsx` agora varre as superfícies novas para impedir
+essa regressão.
+
+### [FATO] Login no Dashboard Stripe não reautentica o conector Stripe do Codex
+A sessão do navegador e o OAuth do conector são independentes. Em 2026-08-10,
+o Chrome mostrou a conta AIRIA autenticada enquanto as chamadas do conector
+continuaram retornando `oauth_token_invalid_grant`. Não tratar login no painel
+como recuperação da API; reautenticar o conector ou usar uma sessão de navegador
+controlável, sem copiar chave secreta para o chat.
+
+---
+
 ## Tentativas que já falharam
 
 > Antes de tentar uma correção para problema já investigado, leia esta seção.

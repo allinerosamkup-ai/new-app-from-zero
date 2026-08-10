@@ -17,7 +17,7 @@
 
 ## Status
 
-`IN PROGRESS — onboarding único, período Pro, parceiros CRP e Stripe`
+`BLOQUEADO — código verificado; configuração live do Stripe sem canal autenticado operável`
 
 ## Objetivo
 
@@ -27,25 +27,21 @@ ativar cobrança Stripe confiável.
 
 ## Definition of Done
 
-- [ ] Todos os acessos de onboarding usam o fluxo atual.
-- [ ] Conclusão marca `onboardingDone` e concede o período correto uma única vez.
-- [ ] Assinatura, período Pro e parceria são persistidos fora do payload de onboarding.
-- [ ] Checkout, webhook e portal estão cobertos por testes e estados reais.
-- [ ] CRP pendente/verificado e indicação possuem contratos persistentes.
+- [x] Todos os acessos de onboarding usam o fluxo atual.
+- [x] Conclusão marca `onboardingDone` e concede o período correto uma única vez.
+- [x] Assinatura, período Pro e parceria são persistidos fora do payload de onboarding.
+- [x] Checkout, webhook e portal estão cobertos por testes e estados reais.
+- [x] CRP pendente/verificado e indicação possuem contratos persistentes.
 - [ ] Fluxo autenticado mobile, reload e regressões foram verificados.
 - [ ] Stripe live tem preço, webhook e portal coerentes; bloqueios da conta são explícitos.
-- [ ] Todas as mudanças estão commitadas e o worktree tem destino registrado.
-
-## Status
-
-IN PROGRESS — primeiro lote TDD concluído (Tasks 1–3); integração visual,
-parceiros e Stripe ainda pendentes.
+- [x] Todas as mudanças locais estão commitadas e o worktree tem destino registrado.
 
 ## O que já foi feito
 
 - Protocolo, memória, worktrees e código atual inspecionados.
 - Causa da duplicidade localizada em rotas/atalhos antigos.
-- Estado live da Stripe consultado por API sem expor segredos.
+- Estado anterior da Stripe foi consultado por API sem expor segredos; a
+  conexão OAuth expirou antes da configuração externa.
 - Design aprovado registrado em `docs/plans/2026-08-10-onboarding-stripe-professional-partners-design.md`.
 - Plano TDD registrado em `docs/plans/2026-08-10-onboarding-stripe-professional-partners-implementation.md`.
 - Worktree dedicado criado em `C:\Users\allin\Projetos\Apps\new-app-fron-zero\.worktrees\onboarding-stripe-partners`.
@@ -53,21 +49,47 @@ parceiros e Stripe ainda pendentes.
 - Regra central de acesso criada: 7 dias padrão, 14 por indicação verificada, sem reinício no refazer.
 - Endpoint autenticado `POST /api/onboarding/complete` criado e idempotente.
 - Configurações agora reinicia o fluxo canônico em `/comecar`.
+- Todas as rotas legadas de onboarding redirecionam para `/comecar`.
+- Oferta final usa período Pro confirmado pelo servidor: 7 dias padrão ou 14
+  dias por indicação profissional verificada, sem reinício ao refazer.
+- Mensal R$ 29,90 e anual R$ 249 usam assinatura; vitalício R$ 99 usa pagamento
+  único e pode ser desligado sem revogar compras existentes.
+- Checkout, retorno confirmado no servidor, webhooks idempotentes, portal e
+  estados de cobrança foram implementados sem ativação por parâmetro de URL.
+- Cadastro CRP, verificação administrativa e indicação profissional foram
+  implementados sem lista de pacientes nem comissão.
+- Exportação/privacidade exclui payloads de webhook, IDs Stripe e notas
+  administrativas.
+- Revisão final encontrou e corrigiu duplicação de `/api` nas chamadas web de
+  cobrança e parceria; um teste de regressão agora bloqueia esse erro.
+- Tentativas de checkout agora reutilizam uma chave idempotente gerada no
+  cliente quando a rede falha.
 
 ## O que falta
 
 - [x] Plano de implementação TDD.
 - [x] Tasks 1–3: persistência, acesso/período e conclusão canônica.
 - [x] Tasks 4–5: rotas legadas e oferta final depois da conclusão real.
-- [ ] Tasks 6–13: parceiros, Stripe com três ofertas, paywalls e validação.
-- [ ] Configuração Stripe externa e validação real.
-- [ ] Revisão Airia, builds, browser e fechamento Git/worktree.
+- [x] Tasks 6–11: parceiros, Stripe no código, paywalls, privacidade e contratos.
+- [ ] Task 12: configuração Stripe externa e validação read-only.
+- [ ] Task 13: browser autenticado mobile e ativação em ambiente com a migração.
+- [x] Task 13 local: revisão Airia, reverificação integral e fechamento Git.
 
 ## Verificações executadas
 
 - `npm run test -w apps/web -- src/features/aura/onboarding.test.ts src/features/routine-builder/import-routine-dialog.test.tsx` → PASS, 11 testes.
 - `npm run typecheck -w apps/web` → PASS.
+- `npm run generate -w packages/database` → PASS.
+- `npm run build -w packages/database` → PASS.
 - `npm run build -w apps/backend` → PASS.
+- `npm run build -w apps/web` → PASS.
+- `npm run typecheck -w apps/web` → PASS.
+- `npm run test:auth -w apps/backend` → PASS.
+- `npm run test -w apps/backend` após a correção final → PASS, 102 suítes.
+- `npm run test -w apps/web` após a correção final → PASS, 56 arquivos e 423 testes.
+- `index.billing.test.ts` após a correção final → PASS.
+- Testes focados web de billing/subscription/parceiros após a correção final →
+  PASS, 23 testes.
 - `schema-alignment.test.ts` e `migration-chain-safety.test.ts` → PASS.
 - `billing-access.service.test.ts` → PASS (precedência, 7/14 dias e idempotência).
 - `index.onboarding-completion.test.ts` → PASS (usuário autenticado e repetição segura).
@@ -76,20 +98,51 @@ parceiros e Stripe ainda pendentes.
 
 ## Descobertas importantes
 
-- `/comecar` não marca `profiles.onboarding_done`; o fluxo legado marca.
-- Configurações ainda navega para `/onboarding/guiado`.
-- Stripe live está com `charges_enabled=false`, capacidades pendentes, sem webhook e sem portal.
-- O preço anual configurado existe; o mensal configurado não corresponde ao preço mensal ativo.
-- O convite atual não tem backend nem atribuição.
+- O estado live conhecido anteriormente indicava `charges_enabled=false`,
+  capacidades pendentes, sem webhook e sem portal; isso precisa ser atualizado
+  após o novo login antes de qualquer afirmação atual.
+- A API conectada do Stripe retorna `oauth_token_invalid_grant` mesmo depois do
+  login bem-sucedido no painel, pois são sessões de autenticação separadas.
+- A conta AIRIA foi confirmada no Chrome, mas a leitura de qualquer aba
+  autenticada expira ou fica em carregamento vazio no controlador disponível.
 - A Alline confirmou três ofertas: mensal R$ 29,90, anual R$ 249 e vitalícia
   R$ 99. A vitalícia será pagamento único e oferta controlável; ainda precisa
   ser criada no Stripe.
 
+## Falha atual
+
+Configuração externa do Stripe bloqueada porque o conector API exige
+reautenticação e o controle da aba autenticada do Chrome expira em toda leitura.
+Não há chave secreta disponível no repositório; nenhuma cobrança real foi feita.
+
+## Tentativas já feitas
+
+### Tentativa 1
+
+API conectada Stripe → `UNAUTHORIZED` / `oauth_token_invalid_grant`.
+
+### Tentativa 2
+
+Login no Chrome → sucesso; conta `AIRIA` e página inicial confirmadas, sem ler
+credenciais ou chaves.
+
+### Tentativa 3
+
+Controle Chrome por aba existente, aba nova, reload, DOM e screenshot → todos
+expiram ou retornam carregamento vazio após a primeira leitura.
+
+### Tentativa 4
+
+Fallback visual do Windows → a versão instalada não expõe a documentação de
+segurança obrigatória da skill; não foi usado para improvisar cliques em conta
+financeira.
+
 ## Próxima melhor ação
 
-Executar Tasks 6–7: contratos e rotas seguras para cadastro CRP e indicação.
-Na Task 8, suportar mensal/anual como assinatura e vitalício como pagamento
-único de R$ 99.
+Reautenticar o app/conector Stripe do Codex ou restabelecer o controle do Chrome;
+então confirmar preços/capacidades, criar ou alinhar o vitalício de R$ 99,
+webhook e portal sem cobrança real. Browser autenticado do produto e ativação
+em produção dependem de autorização para migração/deploy.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos
