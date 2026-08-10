@@ -31,6 +31,11 @@ import { JournalExternalMessageSchema, JournalMessageStreamSchema, JournalStartS
 import { EventLogCreateSchema } from './contracts/event-log.contract';
 import { OnboardingProcessSchema, tracksMenstrualCycle, type BiologicalSex } from './contracts/onboarding.contract';
 import {
+  ProfessionalApplicationSchema,
+  ProfessionalVerificationSchema,
+  ReferralClaimSchema,
+} from './contracts/professional-partner.contract';
+import {
   CONSENT_TYPES,
   CURRENT_CONSENT_VERSION,
   revokeConsent,
@@ -65,6 +70,8 @@ import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-int
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { BillingAccessService } from './services/billing-access.service';
+import { ProfessionalPartnerService } from './services/professional-partner.service';
+import { ReferralService } from './services/referral.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
 import { RoutineBuilderService } from './services/routine-builder.service';
@@ -505,6 +512,8 @@ type AppDependencies = {
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
   billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
+  professionalPartnerService?: Pick<ProfessionalPartnerService, 'apply' | 'getMe' | 'verify'>;
+  referralService?: Pick<ReferralService, 'claim' | 'getMine'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
   generateGoalSubtasks?: GoalSubtasksSuggestionGenerator;
@@ -2037,12 +2046,32 @@ async function generateGoalSubtasksForRecovery(
   return { items: decomposition.steps.map((step) => step.title) };
 }
 
+function serializeProfessionalPartner(partner: any) {
+  if (!partner) return null;
+  return {
+    id: partner.id,
+    professionalName: partner.professionalName,
+    crpRegion: partner.crpRegion,
+    crpNumber: partner.crpNumber,
+    verificationStatus: partner.verificationStatus,
+    verificationNote: partner.verificationNote ?? null,
+    verifiedAt: partner.verifiedAt ?? null,
+    lastVerifiedAt: partner.lastVerifiedAt ?? null,
+    active: partner.active,
+    referralCode: partner.verificationStatus === 'verified' && partner.active
+      ? partner.referralCode
+      : null,
+  };
+}
+
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const prisma = dependencies.prisma ?? defaultPrisma;
   const billingAccessService = dependencies.billingAccessService ?? new BillingAccessService(prisma, {
     checkoutAvailable: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
   });
+  const professionalPartnerService = dependencies.professionalPartnerService ?? new ProfessionalPartnerService(prisma);
+  const referralService = dependencies.referralService ?? new ReferralService(prisma);
   const aiService = dependencies.aiService ?? AIService;
   const journalService = dependencies.journalService ?? JournalService;
   const auraCommandService = dependencies.auraCommandService ?? AuraCommandService;
@@ -2342,6 +2371,25 @@ export function createApp(dependencies: AppDependencies = {}) {
     return res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
+  // POST /api/admin/professional-partners/:partnerId/verify — verificação CRP protegida por chave administrativa
+  app.post('/api/admin/professional-partners/:partnerId/verify', async (req: Request, res: Response) => {
+    const adminKey = req.headers['x-admin-key'];
+    if (!adminKey || adminKey !== process.env.ADMIN_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try {
+      const input = ProfessionalVerificationSchema.parse(req.body);
+      const partner = await professionalPartnerService.verify(req.params.partnerId, input);
+      return res.json({ partner: serializeProfessionalPartner(partner) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[professional-partners/verify] Error:', error);
+      return res.status(500).json({ error: 'Failed to verify professional partner' });
+    }
+  });
+
   // POST /api/admin/push-install-reminder — envia lembrete de instalação a todos os subscribers
   app.post('/api/admin/push-install-reminder', async (req: Request, res: Response) => {
     const adminKey = req.headers['x-admin-key'];
@@ -2515,6 +2563,68 @@ export function createApp(dependencies: AppDependencies = {}) {
     } catch (error) {
       console.error('[onboarding/complete] Error:', error);
       return res.status(500).json({ error: 'Failed to complete onboarding' });
+    }
+  });
+
+  app.post('/api/professional-partners/apply', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const input = ProfessionalApplicationSchema.parse(req.body);
+      const partner = await professionalPartnerService.apply(userId, input);
+      return res.status(201).json({ partner: serializeProfessionalPartner(partner) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      if (error instanceof Error && error.message === 'professional_crp_already_registered') {
+        return res.status(409).json({ error: error.message });
+      }
+      console.error('[professional-partners/apply] Error:', error);
+      return res.status(500).json({ error: 'Failed to submit professional application' });
+    }
+  });
+
+  app.get('/api/professional-partners/me', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const partner = await professionalPartnerService.getMe(userId);
+      return res.json({ partner: serializeProfessionalPartner(partner) });
+    } catch (error) {
+      console.error('[professional-partners/me] Error:', error);
+      return res.status(500).json({ error: 'Failed to load professional application' });
+    }
+  });
+
+  app.post('/api/referrals/claim', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { code } = ReferralClaimSchema.parse(req.body);
+      const referral = await referralService.claim(userId, code);
+      return res.json({ referral });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      if (error instanceof Error && [
+        'referral_invalid_or_inactive',
+        'referral_self_claim',
+        'referral_already_claimed',
+      ].includes(error.message)) {
+        return res.status(error.message === 'referral_already_claimed' ? 409 : 400).json({ error: error.message });
+      }
+      console.error('[referrals/claim] Error:', error);
+      return res.status(500).json({ error: 'Failed to claim referral' });
+    }
+  });
+
+  app.get('/api/referrals/me', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const referral = await referralService.getMine(userId);
+      return res.json({ referral });
+    } catch (error) {
+      console.error('[referrals/me] Error:', error);
+      return res.status(500).json({ error: 'Failed to load referral' });
     }
   });
 

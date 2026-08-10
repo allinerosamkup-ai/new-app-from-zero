@@ -606,3 +606,55 @@ Side effects:
 - Creates `event_logs.event_name = "timeline.block_postponed"`.
 - Stores AI action feedback with `status = "scheduled"`, `surface = "planner"` and `sourceType = "timeline-postpone"`.
 - Recent postponements are included in `DailyContext.postponedActions` and in the AI grounding text.
+
+## Professional partners and referrals
+
+All non-admin routes below require the authenticated Supabase user. A `userId`
+sent in the request body is ignored.
+
+### `POST /professional-partners/apply`
+
+Normalizes and submits a professional CRP application. New or changed
+professional identities return to `pending` until verified.
+
+```json
+{
+  "professionalName": "Dra. Ana Lima",
+  "crpRegion": "06",
+  "crpNumber": "123456"
+}
+```
+
+The response includes the applicant's own status. `referralCode` is `null`
+until the application is both `verified` and active.
+
+### `GET /professional-partners/me`
+
+Returns the authenticated professional's application, verification status and,
+after approval, their persistent referral code. It never returns referred-user
+identities or a patient list.
+
+### `POST /referrals/claim`
+
+Claims one verified, active referral code for the authenticated user.
+
+```json
+{ "code": "AIRIA-AB12CD" }
+```
+
+A valid pre-onboarding claim grants a 14-day benefit. A claim made after an
+initial trial was already granted records attribution but never restarts or
+extends that trial. Self-referral, inactive codes and replacing a previous
+claim are rejected.
+
+### `GET /referrals/me`
+
+Returns benefit days, whether the benefit was applied, and only the public
+professional name. It does not expose CRP details, health data or therapeutic
+relationship data.
+
+### `POST /admin/professional-partners/:partnerId/verify`
+
+Requires a valid `x-admin-key` matching `ADMIN_SECRET`; normal authentication is
+not sufficient. Accepts `verified`, `rejected` or `review_required`, stamps the
+verification time and stores an optional short review note.
