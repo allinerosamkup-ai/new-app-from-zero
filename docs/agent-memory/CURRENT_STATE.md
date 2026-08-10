@@ -17,7 +17,7 @@
 
 ## Status
 
-`EM VERIFICAÇÃO — Stripe live configurado; release verificado e aguardando deploy/E2E`
+`EM VERIFICAÇÃO — Checkout live validado; capacidade financeira Stripe ainda pending`
 
 ## Objetivo
 
@@ -77,6 +77,14 @@ ativar cobrança Stripe confiável.
   `/opt/airia/app/deploy/airia/.env.backend`, arquivo `0600`; todos os três IDs
   de preço e a oferta vitalícia estão definidos.
 - SDK Stripe atualizado para 22.4.0 e Checkout alinhado à API atual.
+- Checkout passou a declarar `card` explicitamente: a configuração dinâmica da
+  conta ainda não oferece métodos enquanto `card_payments` está `pending`, mas
+  a Stripe aceita e renderiza as sessões quando cartão é declarado.
+- Release `1014696c74a823a1971fa53e841684caaf36d2b8` publicada com migração,
+  healthchecks e identidade iguais no GitHub, VPS, containers e site.
+- O serviço Stripe compilado dentro do container de produção criou mensal,
+  anual e vitalício live com os valores/modos corretos; as três sessões foram
+  expiradas e a cliente técnica removida sem cobrança.
 
 ## O que falta
 
@@ -87,6 +95,7 @@ ativar cobrança Stripe confiável.
 - [x] Task 12: configuração Stripe externa e validação read-only.
 - [ ] Task 13: browser autenticado mobile e ativação em ambiente com a migração.
 - [x] Task 13 local: revisão Airia, reverificação integral e fechamento Git.
+- [x] Task 13 produção: migração, deploy e três Checkouts live sem cobrança.
 
 ## Verificações executadas
 
@@ -99,7 +108,7 @@ ativar cobrança Stripe confiável.
 - `npm run typecheck -w apps/web` → PASS.
 - `npm run test:auth -w apps/backend` → PASS.
 - `npm run test -w apps/backend` após a correção final → PASS, 102 suítes.
-- `npm run test -w apps/web` após a correção final → PASS, 56 arquivos e 423 testes.
+- `npm run test -w apps/web` após integrar o `master` → PASS, 57 arquivos e 429 testes.
 - `index.billing.test.ts` após a correção final → PASS.
 - Testes focados web de billing/subscription/parceiros após a correção final →
   PASS, 23 testes.
@@ -112,11 +121,20 @@ ativar cobrança Stripe confiável.
 - varredura por `sk_live_`, `rk_live_` e `whsec_` → PASS; apenas fixture
   `whsec_test` em teste.
 - servidor confirmou `STRIPE_SECRET_KEY=SET` e modo `0600`, sem revelar valor.
+- `npm run test -w apps/backend` após declarar cartão → PASS, 102 suítes.
+- `stripe.service.test.ts`, `index.billing.test.ts` e build backend → PASS.
+- Deploy oficial `1014696` → PASS; `/api/health`, `/home`, `/billing` e
+  `/comecar` responderam 200.
+- Serviço compilado de produção → mensal `2990`/mês, anual `24900`/ano e
+  vitalício `9900` único; host `checkout.stripe.com`, estado `open/unpaid` e
+  limpeza completa das três sessões/cliente → PASS.
 
 ## Descobertas importantes
 
 - A conta live está `charges_enabled=false` e `payouts_enabled=false`: a Stripe
   mostra revisão pendente do representante e pagamentos/repasses pausados.
+- A capacidade `card_payments` está `pending`, sem requisitos ou erros expostos
+  pela API; o representante existe, mas a liberação depende da revisão Stripe.
 - Produtos, preços, portal e webhook estão configurados apesar dessa pausa; o
   bloqueio restante é cadastral da conta, não de integração do app.
 - A API conectada do Stripe retorna `oauth_token_invalid_grant` mesmo depois do
@@ -127,10 +145,10 @@ ativar cobrança Stripe confiável.
 
 ## Falha atual
 
-O conector Stripe do Codex ainda exige reautenticação OAuth, mas o painel e a
-credencial segura do app permitiram concluir a configuração. O bloqueio externo
-real é a pausa de pagamentos/repasses da própria Stripe enquanto o representante
-da conta não for atualizado. Nenhuma cobrança real será usada para validação.
+O app cria corretamente os três Checkouts live, mas a conta ainda não pode
+capturar uma cobrança real porque `charges_enabled=false`,
+`payouts_enabled=false` e `card_payments=pending`. O painel mostra a revisão do
+representante; dados legais não podem ser inferidos ou preenchidos pelo agente.
 
 ## Tentativas já feitas
 
@@ -149,12 +167,22 @@ webhook e variáveis live configurados sem persistir segredo no Git.
 Revisão completa local → 102 suítes backend, 56 arquivos/423 testes web,
 autenticação, typecheck e builds aprovados.
 
+### Tentativa 4
+
+Checkout dinâmico live → recusado porque nenhum método estava disponível;
+cliente técnica removida.
+
+### Tentativa 5
+
+Cartão explícito no código de produção → mensal, anual e vitalício criados com
+valores e modos corretos; sessões expiradas e cliente removida sem cobrança.
+
 ## Próxima melhor ação
 
-Integrar a branch no `master`, publicar pelo deploy oficial, aplicar a migração,
-confirmar o mesmo SHA em GitHub/VPS/containers/site e abrir os três Checkouts em
-produção sem concluir cobrança. Depois, a atualização cadastral do representante
-precisa ser concluída na Stripe para liberar pagamentos e repasses reais.
+Concluir a revisão/atualização cadastral do representante no painel Stripe.
+Depois, reconsultar `charges_enabled`, `payouts_enabled` e `card_payments`, fazer
+o fluxo autenticado mobile/onboarding → Checkout sem concluir pagamento e fechar
+a tarefa somente com as capacidades financeiras ativas.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos
