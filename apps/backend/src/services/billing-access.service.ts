@@ -9,7 +9,7 @@ export type BillingAccessSummary = {
   access: 'pro' | 'free';
   source: 'paid' | 'professional' | 'trial' | 'free';
   subscriptionStatus: string | null;
-  plan: 'monthly' | 'annual' | null;
+  plan: 'monthly' | 'annual' | 'lifetime' | null;
   periodEnd: string | null;
   trialEndsAt: string | null;
   daysRemaining: number;
@@ -53,7 +53,7 @@ export function resolveAccess(
         : 'free';
 
   const rawPlan = state.subscriptionPlan;
-  const plan = rawPlan === 'monthly' || rawPlan === 'annual' ? rawPlan : null;
+  const plan = rawPlan === 'monthly' || rawPlan === 'annual' || rawPlan === 'lifetime' ? rawPlan : null;
   const daysRemaining = trialActive && trialEndsAt
     ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / DAY_MS))
     : 0;

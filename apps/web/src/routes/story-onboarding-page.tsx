@@ -60,7 +60,7 @@ export type BillingAccessSummary = {
   access: "pro" | "free";
   source: "paid" | "professional" | "trial" | "free";
   subscriptionStatus: string | null;
-  plan: "monthly" | "annual" | null;
+  plan: "monthly" | "annual" | "lifetime" | null;
   periodEnd: string | null;
   trialEndsAt: string | null;
   daysRemaining: number;

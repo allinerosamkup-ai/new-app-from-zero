@@ -76,6 +76,10 @@ function createPrismaMock(options: {
 
 async function run() {
   assert.equal(resolveAccess({ subscriptionStatus: 'active' }, NOW).source, 'paid');
+  assert.equal(
+    resolveAccess({ subscriptionStatus: 'active', subscriptionPlan: 'lifetime' }, NOW).plan,
+    'lifetime',
+  );
   assert.equal(resolveAccess({ professionalVerified: true }, NOW).source, 'professional');
   assert.equal(resolveAccess({ trialEndsAt: new Date(NOW.getTime() + DAY_MS) }, NOW).source, 'trial');
   assert.equal(resolveAccess({ trialEndsAt: new Date(NOW.getTime() - DAY_MS) }, NOW).source, 'free');
