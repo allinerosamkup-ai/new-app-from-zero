@@ -64,6 +64,7 @@ import { TaskDecompositionService } from './services/task-decomposition.service'
 import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-interpreter.service';
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
+import { BillingAccessService } from './services/billing-access.service';
 import { AiBackgroundService } from './services/ai-background.service';
 import { SuggestionMemoryService } from './services/suggestion-memory.service';
 import { RoutineBuilderService } from './services/routine-builder.service';
@@ -503,6 +504,7 @@ type AppDependencies = {
   auraMemoryIngestionService?: Pick<AuraMemoryIngestionService, 'ingest'>;
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
+  billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
   generateGoalSubtasks?: GoalSubtasksSuggestionGenerator;
@@ -2038,6 +2040,9 @@ async function generateGoalSubtasksForRecovery(
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const prisma = dependencies.prisma ?? defaultPrisma;
+  const billingAccessService = dependencies.billingAccessService ?? new BillingAccessService(prisma, {
+    checkoutAvailable: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
+  });
   const aiService = dependencies.aiService ?? AIService;
   const journalService = dependencies.journalService ?? JournalService;
   const auraCommandService = dependencies.auraCommandService ?? AuraCommandService;
@@ -2494,6 +2499,22 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
       console.error('[onboarding/operational-profile] Error:', error);
       return res.status(500).json({ error: 'Failed to save operational profile' });
+    }
+  });
+
+  app.post('/api/onboarding/complete', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      await prisma.profile.upsert({
+        where: { id: userId },
+        update: { onboardingDone: true },
+        create: { id: userId, onboardingDone: true },
+      });
+      const billing = await billingAccessService.grantInitialTrial(userId);
+      return res.json({ saved: true, billing });
+    } catch (error) {
+      console.error('[onboarding/complete] Error:', error);
+      return res.status(500).json({ error: 'Failed to complete onboarding' });
     }
   });
 

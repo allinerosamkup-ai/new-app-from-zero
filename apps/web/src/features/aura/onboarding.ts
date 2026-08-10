@@ -2,6 +2,8 @@ import {
   DEFAULT_MORNING_CHECKIN_TIME,
 } from "./settings";
 
+export const CANONICAL_ONBOARDING_ROUTE = "/comecar";
+
 export const PRIOR_DIAGNOSIS_OPTIONS = [
   { value: "bipolar_ii", label: "Bipolaridade tipo II" },
   { value: "cyclothymia", label: "Ciclotimia" },
@@ -153,7 +155,7 @@ export function restartOnboardingFlow(
   navigate: (path: string) => void,
 ): void {
   resetDraft();
-  navigate("/onboarding/guiado");
+  navigate(CANONICAL_ONBOARDING_ROUTE);
 }
 
 function clean(value: unknown): string {

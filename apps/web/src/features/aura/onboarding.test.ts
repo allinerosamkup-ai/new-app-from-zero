@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CANONICAL_ONBOARDING_ROUTE,
   ONBOARDING_BASIC_STEPS,
   buildOnboardingProcessPayload,
   createEmptyOnboardingDraft,
@@ -21,7 +22,7 @@ describe("onboarding flow", () => {
     expect(JSON.stringify(draft)).not.toContain("Cansada mas esperançosa");
   });
 
-  it("restarts onboarding by clearing only the draft before opening the guided flow", () => {
+  it("restarts onboarding by clearing only the draft before opening the canonical flow", () => {
     const calls: string[] = [];
 
     restartOnboardingFlow(
@@ -29,7 +30,8 @@ describe("onboarding flow", () => {
       (path) => calls.push(`navigate:${path}`),
     );
 
-    expect(calls).toEqual(["reset", "navigate:/onboarding/guiado"]);
+    expect(CANONICAL_ONBOARDING_ROUTE).toBe("/comecar");
+    expect(calls).toEqual(["reset", `navigate:${CANONICAL_ONBOARDING_ROUTE}`]);
   });
 
   it("builds the backend payload from new answers", () => {
