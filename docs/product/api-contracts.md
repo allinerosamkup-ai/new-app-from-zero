@@ -658,3 +658,65 @@ relationship data.
 Requires a valid `x-admin-key` matching `ADMIN_SECRET`; normal authentication is
 not sufficient. Accepts `verified`, `rejected` or `review_required`, stamps the
 verification time and stores an optional short review note.
+
+## Billing and access
+
+All status, Checkout, verification, and portal routes except the Stripe webhook
+require the authenticated user. Body `userId` values are ignored.
+
+### `GET /billing/status`
+
+Returns the canonical entitlement summary plus the server-owned offer catalog.
+`access`, not a frontend guess from `subscriptionStatus`, decides Pro access.
+
+```json
+{
+  "access": "pro",
+  "source": "trial",
+  "subscriptionStatus": null,
+  "plan": null,
+  "periodEnd": null,
+  "trialEndsAt": "2026-08-17T12:00:00.000Z",
+  "daysRemaining": 7,
+  "checkoutAvailable": true,
+  "offers": [
+    { "plan": "monthly", "amountCents": 2990, "currency": "BRL", "billingPeriod": "month", "enabled": true },
+    { "plan": "annual", "amountCents": 24900, "currency": "BRL", "billingPeriod": "year", "enabled": true },
+    { "plan": "lifetime", "amountCents": 9900, "currency": "BRL", "billingPeriod": "once", "enabled": true }
+  ]
+}
+```
+
+### `POST /billing/checkout`
+
+Accepts exactly `monthly`, `annual`, or `lifetime`. Recurring plans open a Stripe
+subscription Checkout; lifetime opens a one-time payment Checkout. The server
+uses the authenticated identity, configured Price IDs, metadata, and Stripe
+idempotency. Invalid or disabled offers never fall back silently to another plan.
+
+```json
+{ "email": "ana@example.com", "plan": "lifetime" }
+```
+
+### `GET /billing/checkout-session/:sessionId`
+
+Confirms that the Checkout belongs to the authenticated user and reports whether
+payment/subscription state is confirmed. A URL alone never activates access.
+
+### `POST /billing/portal`
+
+Creates a customer-portal session for the authenticated Stripe customer. Missing
+customers return `no_subscription`.
+
+### `POST /billing/webhook`
+
+Public only for Stripe delivery. It requires a valid `stripe-signature` over the
+raw body. Events are deduplicated by Stripe event ID and synchronize subscription,
+invoice, cancellation, and paid lifetime state transactionally.
+
+## Privacy export additions
+
+The authenticated privacy export includes only the caller's billing/trial state,
+professional application, and referral benefit. It excludes Stripe customer,
+subscription and Price IDs; administrative verification notes; internal partner
+foreign keys; other users; and the Stripe webhook ledger.

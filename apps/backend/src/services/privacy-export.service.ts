@@ -14,6 +14,9 @@ export type PrivacyExportPayload = {
   profile: Record<string, unknown> | null;
   onboarding: unknown;
   preferences: (Record<string, unknown> & { googleCalendarConnected: boolean }) | null;
+  billing: Record<string, unknown> | null;
+  professionalPartner: Record<string, unknown> | null;
+  referral: Record<string, unknown> | null;
   consents: unknown[];
   data: {
     checkins: unknown[];
@@ -77,6 +80,45 @@ function redactCheckins(values: unknown[]): unknown[] {
   });
 }
 
+function selectFields(value: unknown, fields: string[]): Record<string, unknown> | null {
+  const record = asRecord(value);
+  if (!record) return null;
+  return Object.fromEntries(fields
+    .filter((field) => field in record)
+    .map((field) => [field, record[field]]));
+}
+
+function redactBilling(value: unknown) {
+  return selectFields(value, [
+    'userId', 'subscriptionStatus', 'subscriptionPlan', 'currentPeriodEnd',
+    'cancelAtPeriodEnd', 'trialStartedAt', 'trialEndsAt', 'trialSource',
+    'createdAt', 'updatedAt',
+  ]);
+}
+
+function redactProfessionalPartner(value: unknown) {
+  return selectFields(value, [
+    'id', 'userId', 'professionalName', 'crpRegion', 'crpNumber',
+    'verificationStatus', 'verifiedAt', 'lastVerifiedAt', 'referralCode',
+    'active', 'createdAt', 'updatedAt',
+  ]);
+}
+
+function redactReferral(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return null;
+  const safe = selectFields(record, [
+    'id', 'referredUserId', 'referralCode', 'benefitDays', 'claimedAt', 'convertedAt',
+  ]) ?? {};
+  const professionalPartner = asRecord(record.professionalPartner);
+  return {
+    ...safe,
+    professional: professionalPartner && typeof professionalPartner.professionalName === 'string'
+      ? { professionalName: professionalPartner.professionalName }
+      : null,
+  };
+}
+
 async function findUnique(model: PrivacyExportModel | undefined, args: FindUniqueArgs) {
   if (!model?.findUnique) return null;
   return model.findUnique(args);
@@ -95,6 +137,9 @@ export async function buildPrivacyExport(
     profile,
     onboarding,
     preferences,
+    billing,
+    professionalPartner,
+    referral,
     consents,
     checkins,
     journalSessions,
@@ -122,6 +167,12 @@ export async function buildPrivacyExport(
     findUnique(prisma.profile, { where: { id: userId } }),
     findUnique(prisma.onboardingResponse, { where: { userId } }),
     findUnique(prisma.userPreference, { where: { userId } }),
+    findUnique(prisma.billingAccount, { where: { userId } }),
+    findUnique(prisma.professionalPartner, { where: { userId } }),
+    findUnique(prisma.referralAttribution, {
+      where: { referredUserId: userId },
+      include: { professionalPartner: { select: { professionalName: true } } },
+    }),
     findMany(prisma.consent, { where: { userId }, orderBy: { createdAt: 'asc' } }),
     findMany(prisma.dailyCheckin, { where: { userId }, orderBy: { recordedAt: 'asc' } }),
     findMany(prisma.journalSession, { where: { userId }, orderBy: { startedAt: 'asc' } }),
@@ -157,6 +208,9 @@ export async function buildPrivacyExport(
     profile: asRecord(profile),
     onboarding,
     preferences: redactPreferences(preferences),
+    billing: redactBilling(billing),
+    professionalPartner: redactProfessionalPartner(professionalPartner),
+    referral: redactReferral(referral),
     consents,
     data: {
       checkins: redactCheckins(checkins),

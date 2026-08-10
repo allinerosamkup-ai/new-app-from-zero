@@ -113,3 +113,34 @@ Na aplicação:
 - Uma ação só entra no Planner depois de escolha explícita de quando executá-la.
 - Hábitos preservam frequência, dias, período e duração; adiar ou pular vale apenas para o dia.
 - A visão de tarefas do Planner é outra leitura da mesma fonte de agenda, não uma lista paralela.
+
+## Acesso, cobrança e profissionais verificadas
+
+O onboarding canônico termina em `/comecar` e concede uma única experiência Pro
+confirmada pelo servidor: 7 dias no fluxo normal ou 14 dias quando uma indicação
+profissional verificada foi atribuída antes da primeira concessão. Refazer o
+onboarding recalibra o perfil, mas não reinicia período, troca indicação nem apaga
+histórico.
+
+Existem três ofertas comerciais explícitas:
+
+- mensal: R$ 29,90 por mês;
+- anual: R$ 249 por ano;
+- vitalícia especial: R$ 99 em pagamento único.
+
+Mensal e anual são assinaturas; vitalícia é compra única e pode ser fechada para
+novas vendas sem retirar o acesso de quem já pagou. A interface nunca ativa Pro
+por parâmetro de URL: retorno de Checkout fica pendente até o servidor confirmar
+propriedade e estado, e o webhook Stripe é a fonte de verdade para cobrança.
+
+Psicólogas com CRP ativo podem solicitar verificação. A aprovação concede Pro sem
+custo e libera um código persistente que oferece 14 dias Pro a uma nova usuária.
+O CRP comprova registro profissional, não vínculo terapêutico. A Airia não é
+terapia, não promete resultado clínico e não compartilha lista, identidade, saúde
+ou atividade das pessoas indicadas com a profissional.
+
+Cobrança, exportação e acesso obedecem a fronteiras separadas: recursos de
+privacidade, segurança, exportação e dados já registrados não podem ser bloqueados
+por paywall. O próprio export inclui situação do plano, período, cadastro
+profissional e indicação, mas remove identificadores Stripe, notas administrativas,
+IDs internos de relacionamento e todo o ledger de webhooks.

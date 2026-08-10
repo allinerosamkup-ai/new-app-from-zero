@@ -80,6 +80,53 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'stripeCustomerId',
     ],
   },
+  BillingAccount: {
+    include: [
+      'userId',
+      'subscriptionStatus',
+      'subscriptionPlan',
+      'currentPeriodEnd',
+      'cancelAtPeriodEnd',
+      'trialStartedAt',
+      'trialEndsAt',
+      'trialSource',
+      'createdAt',
+      'updatedAt',
+    ],
+    redact: [
+      'stripeCustomerId',
+      'stripeSubscriptionId',
+      'priceId',
+    ],
+  },
+  ProfessionalPartner: {
+    include: [
+      'id',
+      'userId',
+      'professionalName',
+      'crpRegion',
+      'crpNumber',
+      'verificationStatus',
+      'verifiedAt',
+      'lastVerifiedAt',
+      'referralCode',
+      'active',
+      'createdAt',
+      'updatedAt',
+    ],
+    redact: ['verificationNote'],
+  },
+  ReferralAttribution: {
+    include: [
+      'id',
+      'referredUserId',
+      'referralCode',
+      'benefitDays',
+      'claimedAt',
+      'convertedAt',
+    ],
+    redact: ['professionalPartnerId'],
+  },
   UserPreference: {
     include: [
       'id',
@@ -545,6 +592,9 @@ export const PRIVACY_EXPORT_EXCLUDED_MODELS = new Set<string>([
   // content the user wrote — only lock tokens, attempt counters and the last
   // internal error. The objective itself is exported via Objective.
   'ObjectiveActionRecoveryClaim',
+  // Stripe delivery ledger is internal payment infrastructure. It is not
+  // user-scoped and raw processor events never belong in a privacy export.
+  'StripeWebhookEvent',
 ]);
 
 export function classifyField(model: string, field: string): AllowlistMode | 'unknown' {

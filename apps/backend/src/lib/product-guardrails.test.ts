@@ -44,6 +44,9 @@ const unsafeClinicalClaimPatterns = [
   /\btratamento\s+(?:da|pela)\s+Airia\b/i,
   /\b(?:sou|somos|serei|a\s+Airia\s+[eé])\s+(?:sua\s+)?(?:psic[oó]loga|terapeuta|psiquiatra)\b/i,
   /\b(?:substituo|substitu[ií]mos|a\s+Airia\s+substitui)\s+(?:psic[oó]loga|psiquiatra|terapia|emerg[eê]ncia)\b/i,
+  /\bAiria\s+(?:faz|oferece|fornece)\s+terapia\b/i,
+  /\bresultados?\s+cl[ií]nicos?\s+garantidos?\b/i,
+  /\bmelhora\s+garantida\b/i,
 ];
 
 const fabricatedUngroundedActionPatterns = [

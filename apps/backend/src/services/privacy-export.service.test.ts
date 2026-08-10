@@ -5,6 +5,7 @@ import { deleteAllMemoryData } from './memory.service';
 
 async function run() {
   const calls: string[] = [];
+  const scopedQueries: Array<{ model: string; args: any }> = [];
   const prisma = {
     profile: {
       findUnique: async () => {
@@ -21,6 +22,29 @@ async function run() {
         gcalRefreshToken: 'secret-refresh',
       }),
     },
+    billingAccount: { findUnique: async (args: any) => {
+      scopedQueries.push({ model: 'billing', args });
+      return {
+        userId: 'user-1', stripeCustomerId: 'cus_secret', stripeSubscriptionId: 'sub_secret',
+        priceId: 'price_secret', subscriptionStatus: 'active', subscriptionPlan: 'annual',
+        trialStartedAt: new Date('2026-08-10T00:00:00.000Z'), trialEndsAt: new Date('2026-08-17T00:00:00.000Z'),
+      };
+    } },
+    professionalPartner: { findUnique: async (args: any) => {
+      scopedQueries.push({ model: 'partner', args });
+      return {
+        id: 'partner-1', userId: 'user-1', professionalName: 'Dra. Ana', crpRegion: '06', crpNumber: '123456',
+        verificationStatus: 'verified', verificationNote: 'internal admin note', referralCode: 'AIRIA-REAL12', active: true,
+      };
+    } },
+    referralAttribution: { findUnique: async (args: any) => {
+      scopedQueries.push({ model: 'referral', args });
+      return {
+        id: 'ref-1', referredUserId: 'user-1', professionalPartnerId: 'partner-1', referralCode: 'AIRIA-REAL12',
+        benefitDays: 14, professionalPartner: { professionalName: 'Dra. Ana', crpNumber: 'must-not-leak' },
+      };
+    } },
+    stripeWebhookEvent: { findMany: async () => { throw new Error('webhooks_must_not_be_exported'); } },
     consent: { findMany: async () => [{ consentType: 'privacy', granted: true }] },
     dailyCheckin: { findMany: async () => [{
       moodScore: 4,
@@ -78,6 +102,21 @@ async function run() {
   assert.equal(payload.data.canonicalMemories.length, 1);
   assert.equal(payload.data.memoryEvidence.length, 1);
   assert.equal(payload.data.knowledgeGraph.entities.length, 1);
+  assert.equal(payload.billing?.subscriptionPlan, 'annual');
+  assert.equal(payload.billing?.trialEndsAt instanceof Date, true);
+  assert.equal(payload.billing?.stripeCustomerId, undefined);
+  assert.equal(payload.billing?.stripeSubscriptionId, undefined);
+  assert.equal(payload.billing?.priceId, undefined);
+  assert.equal(payload.professionalPartner?.professionalName, 'Dra. Ana');
+  assert.equal(payload.professionalPartner?.verificationNote, undefined);
+  assert.equal(payload.referral?.benefitDays, 14);
+  assert.equal(payload.referral?.professionalPartnerId, undefined);
+  assert.deepEqual(payload.referral?.professional, { professionalName: 'Dra. Ana' });
+  assert.deepEqual(scopedQueries.map(({ args }) => args.where), [
+    { userId: 'user-1' },
+    { userId: 'user-1' },
+    { referredUserId: 'user-1' },
+  ]);
   assert.deepEqual(calls, ['profile']);
 
   const deleted: string[] = [];
