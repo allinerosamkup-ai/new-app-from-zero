@@ -38,7 +38,8 @@ ativar cobrança Stripe confiável.
 
 ## Status
 
-IN PROGRESS — design e plano TDD registrados; implementação vertical pendente.
+IN PROGRESS — primeiro lote TDD concluído (Tasks 1–3); integração visual,
+parceiros e Stripe ainda pendentes.
 
 ## O que já foi feito
 
@@ -48,11 +49,16 @@ IN PROGRESS — design e plano TDD registrados; implementação vertical pendent
 - Design aprovado registrado em `docs/plans/2026-08-10-onboarding-stripe-professional-partners-design.md`.
 - Plano TDD registrado em `docs/plans/2026-08-10-onboarding-stripe-professional-partners-implementation.md`.
 - Worktree dedicado criado em `C:\Users\allin\Projetos\Apps\new-app-fron-zero\.worktrees\onboarding-stripe-partners`.
+- Persistência separada criada para cobrança, período Pro, profissionais, indicações e eventos Stripe.
+- Regra central de acesso criada: 7 dias padrão, 14 por indicação verificada, sem reinício no refazer.
+- Endpoint autenticado `POST /api/onboarding/complete` criado e idempotente.
+- Configurações agora reinicia o fluxo canônico em `/comecar`.
 
 ## O que falta
 
 - [x] Plano de implementação TDD.
-- [ ] Implementação vertical por contrato.
+- [x] Tasks 1–3: persistência, acesso/período e conclusão canônica.
+- [ ] Tasks 4–13: oferta final, rotas legadas, parceiros, Stripe, paywalls e validação.
 - [ ] Configuração Stripe externa e validação real.
 - [ ] Revisão Airia, builds, browser e fechamento Git/worktree.
 
@@ -61,6 +67,11 @@ IN PROGRESS — design e plano TDD registrados; implementação vertical pendent
 - `npm run test -w apps/web -- src/features/aura/onboarding.test.ts src/features/routine-builder/import-routine-dialog.test.tsx` → PASS, 11 testes.
 - `npm run typecheck -w apps/web` → PASS.
 - `npm run build -w apps/backend` → PASS.
+- `schema-alignment.test.ts` e `migration-chain-safety.test.ts` → PASS.
+- `billing-access.service.test.ts` → PASS (precedência, 7/14 dias e idempotência).
+- `index.onboarding-completion.test.ts` → PASS (usuário autenticado e repetição segura).
+- `apps/web/src/features/aura/onboarding.test.ts` → PASS, 4 testes.
+- Typecheck backend e web após Tasks 1–3 → PASS.
 
 ## Descobertas importantes
 
@@ -72,7 +83,9 @@ IN PROGRESS — design e plano TDD registrados; implementação vertical pendent
 
 ## Próxima melhor ação
 
-Iniciar Task 1 do plano com testes vermelhos de schema e migração.
+Executar Tasks 4–5: ligar a conclusão real e a oferta gradual ao final de
+`/comecar`, depois transformar todas as rotas antigas em redirecionamentos para
+o fluxo canônico.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos
