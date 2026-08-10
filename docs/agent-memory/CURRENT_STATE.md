@@ -114,6 +114,8 @@ ativar cobrança Stripe confiável.
 Configuração externa do Stripe bloqueada porque o conector API exige
 reautenticação e o controle da aba autenticada do Chrome expira em toda leitura.
 Não há chave secreta disponível no repositório; nenhuma cobrança real foi feita.
+Em 2026-08-10, depois da instalação do plugin Stripe informada pela usuária, a
+primeira leitura oficial continuou retornando `requires reauthentication`.
 
 ## Tentativas já feitas
 
@@ -137,12 +139,18 @@ Fallback visual do Windows → a versão instalada não expõe a documentação 
 segurança obrigatória da skill; não foi usado para improvisar cliques em conta
 financeira.
 
+### Tentativa 5
+
+Plugin Stripe instalado → `get_stripe_account_info` ainda responde que a conexão
+do app precisa ser reautenticada antes de qualquer outra ação. Instalação do
+plugin e login no Dashboard não substituem a autorização OAuth do conector.
+
 ## Próxima melhor ação
 
-Reautenticar o app/conector Stripe do Codex ou restabelecer o controle do Chrome;
-então confirmar preços/capacidades, criar ou alinhar o vitalício de R$ 99,
-webhook e portal sem cobrança real. Browser autenticado do produto e ativação
-em produção dependem de autorização para migração/deploy.
+Concluir a autorização OAuth do app/conector Stripe dentro do Codex; então
+confirmar preços/capacidades, criar ou alinhar o vitalício de R$ 99, webhook e
+portal sem cobrança real. Browser autenticado do produto e ativação em produção
+dependem de autorização para migração/deploy.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos

@@ -76,7 +76,7 @@ removida.
 | `.worktrees/repair-pwa` | `codex/pwa-release-repair` / `b351128` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/repair-voice` | `codex/voice-overlap-repair` / `4ef1d04` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/routine-builder` | `codex/routine-builder` / `59778e5` | `AUDIT_PENDING` | identificar dono |
-| `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `6512a7f` | `BLOCKED` | Codex: código Tasks 1–11 verificado; conector Stripe exige reautenticação e controle Chrome expira. Configurar live quando houver canal autenticado operável; migração/deploy seguem sem autorização |
+| `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `6512a7f` | `BLOCKED` | Codex: código Tasks 1–11 verificado; mesmo após instalar o plugin, a leitura oficial ainda exige reautenticação OAuth do conector Stripe. Configurar live quando houver canal autenticado operável; migração/deploy seguem sem autorização |
 
 Nenhuma entrada acima deve ser removida automaticamente. A limpeza é uma tarefa
 separada: revisar status/diff, confirmar que não há commit único, integrar ou
