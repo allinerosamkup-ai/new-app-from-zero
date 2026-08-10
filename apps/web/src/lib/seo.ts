@@ -113,54 +113,6 @@ export function buildStructuredData(language: string | null | undefined): string
   });
 }
 
-// ── Páginas públicas que não são a raiz ───────────────────────────────────
-
-const PAGES = content.pages;
-
-export type StandalonePageName = keyof typeof PAGES;
-
-export type StandalonePageSeo = {
-  htmlLang: string;
-  title: string;
-  description: string;
-  shortDescription: string;
-  keywords: string;
-  /** URL própria. É o ponto inteiro: sem ela a página herda a canônica da raiz. */
-  canonical: string;
-  ogLocale: string;
-  ogImage: string;
-  imageAlt: string;
-};
-
-/**
- * Metadados de uma página pública com URL própria.
- *
- * Diferença que importa em relação à raiz: **os dois idiomas dividem a mesma
- * URL**. A página troca de idioma sozinha e não existe `?lang=` para ela, então
- * não há `hreflang` a declarar — e o `hreflang` que ela herda do `index.html`
- * precisa ser removido, porque afirma que as versões desta página são `/` e
- * `/?lang=en`. Declaração errada é pior que ausente: o Google segue a errada.
- */
-export function buildStandalonePageSeo(
-  page: StandalonePageName,
-  language: string | null | undefined,
-): StandalonePageSeo {
-  const entry = PAGES[page];
-  const copy = entry.languages[toSeoLanguage(language)];
-
-  return {
-    htmlLang: copy.htmlLang,
-    title: copy.title,
-    description: copy.description,
-    shortDescription: copy.shortDescription,
-    keywords: copy.keywords,
-    canonical: entry.url,
-    ogLocale: copy.ogLocale,
-    ogImage: entry.image,
-    imageAlt: copy.imageAlt,
-  };
-}
-
 // ── Aplicação no documento ────────────────────────────────────────────────
 // Daqui para baixo não há decisão, só escrita. Tudo marcado com
 // `data-seo-managed` para a troca de idioma poder substituir o que ela mesma
@@ -228,46 +180,4 @@ export function applySeoMetadata(language: string | null | undefined): void {
     document.head.appendChild(script);
   }
   script.textContent = buildStructuredData(language);
-}
-
-/**
- * Aplica o `<head>` de uma página pública com URL própria.
- *
- * O `<head>` estático correto já vem do servidor (`scripts/build-seo-html.mjs`
- * gera `dist/livro.html` e o nginx o serve em `/livro`), que é o que resolve
- * crawler e prévia de link. Isto aqui cobre o outro caminho: quem chega pela
- * raiz e navega por dentro do app leva no documento o `<head>` da raiz, com a
- * canônica da home — e é esse DOM que o buscador enxerga se rastrear a partir
- * de um link interno.
- */
-export function applyStandalonePageSeo(
-  page: StandalonePageName,
-  language: string | null | undefined,
-): void {
-  if (typeof document === "undefined") return;
-
-  const meta = buildStandalonePageSeo(page, language);
-
-  document.documentElement.lang = meta.htmlLang;
-  document.title = meta.title;
-
-  setMeta('meta[name="description"]', "name", "description", meta.description);
-  setMeta('meta[name="keywords"]', "name", "keywords", meta.keywords);
-  setMeta('meta[property="og:title"]', "property", "og:title", meta.title);
-  setMeta('meta[property="og:description"]', "property", "og:description", meta.shortDescription);
-  setMeta('meta[property="og:url"]', "property", "og:url", meta.canonical);
-  setMeta('meta[property="og:image"]', "property", "og:image", meta.ogImage);
-  setMeta('meta[property="og:image:alt"]', "property", "og:image:alt", meta.imageAlt);
-  setMeta('meta[property="og:locale"]', "property", "og:locale", meta.ogLocale);
-  setMeta('meta[name="twitter:title"]', "name", "twitter:title", meta.title);
-  setMeta('meta[name="twitter:description"]', "name", "twitter:description", meta.shortDescription);
-  setMeta('meta[name="twitter:image"]', "name", "twitter:image", meta.ogImage);
-
-  setLink("canonical", meta.canonical);
-
-  // Uma URL só para os dois idiomas: `hreflang` herdado da raiz aqui é
-  // afirmação falsa sobre esta página, não declaração incompleta.
-  for (const alternate of document.head.querySelectorAll('link[rel="alternate"][hreflang]')) {
-    alternate.remove();
-  }
 }

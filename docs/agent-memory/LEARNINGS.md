@@ -238,18 +238,15 @@ Search Console. As rotas do SPA nunca tiveram esse problema porque herdam a
 canônica do `index.html` estático.
 Trava: `apps/web/src/lib/public-pages-canonical.test.ts` (arquivo) + checagem de
 canônica nos dois hosts no `deploy.sh` (produção).
-**Corrigido junto:** todas as rotas do SPA herdam a canônica da raiz, então
-`/livro` — página de vendas com tráfego pago — se declarava duplicata da home e
-não tinha como ser indexada por si. Hoje ela tem `<head>` estático próprio
-(`dist/livro.html`, gerado por `build-seo-html.mjs`, servido pelo nginx em
-`location = /livro`), canônica própria, JSON-LD de `Book` e a capa no Open Graph
-no lugar do print da home. Os `hreflang` da raiz são removidos: eles afirmavam
-que as versões de `/livro` eram `/` e `/?lang=en`, o que é falso — a página é uma
-URL só que troca de idioma sozinha.
-**Por que não bastou injetar em JS:** canônica só no cliente deixa o HTML cru
-contradizendo o DOM renderizado, e é o caso em que o buscador costuma ficar com
-a versão errada. Fora que prévia de link não executa JS — o link do anúncio se
-apresentava como o app de humor.
+**Aviso para rota pública nova:** toda rota do SPA herda a canônica do
+`index.html`, que aponta para a raiz — então nasce se declarando duplicata da
+home e sem como ser indexada por si. Foi o caso de `/livro`, corrigido com
+`<head>` estático próprio e depois removido junto com a página (o e-book saiu do
+produto em 2026-08-10; a rota ficou redirecionando para a home, como Planner e
+Hábitos). O caminho está provado e documentado em `apps/web/CLAUDE.md`: gerar o
+`<head>` em `build-seo-html.mjs` e servir pelo nginx. Canônica só em JavaScript
+não resolve — deixa o HTML cru contradizendo o DOM renderizado, e prévia de link
+não executa JS.
 
 ### [FATO] Deploy verde não significa build completa
 `Dockerfile.web` chamava `node ./node_modules/vite/bin/vite.js build`, então

@@ -193,7 +193,7 @@ echo "www: API respondendo 200 (PWA instalado nesse host preservado)"
 # são arquivos estáticos e não passam pelo `<head>` da SPA.
 # A checagem roda nos DOIS hosts: é a versão do `www` que precisa apontar para
 # o host sem `www`, e é justamente ela que ninguém abre para conferir.
-for CANONICAL_ENTRY in "/=https://airia.pro/" "/livro=https://airia.pro/livro" "/privacy=https://airia.pro/privacy" "/terms=https://airia.pro/terms"; do
+for CANONICAL_ENTRY in "/=https://airia.pro/" "/privacy=https://airia.pro/privacy" "/terms=https://airia.pro/terms"; do
   CANONICAL_PATH="${CANONICAL_ENTRY%%=*}"
   CANONICAL_URL="${CANONICAL_ENTRY#*=}"
   for CANONICAL_HOST in airia.pro www.airia.pro; do
@@ -216,26 +216,6 @@ case "$PUBLIC_EN" in
     echo "FALHA: /?lang=en respondeu 200 mas sem o head em inglês"
     exit 1
     ;;
-esac
-
-# Canônica certa e `<head>` errado passariam juntos na checagem acima: o
-# `livro.html` sai do mesmo `index.html`, e uma substituição que não pegou
-# devolve a página com o texto do app. É o destino de anúncio pago — prévia de
-# link errada custa dinheiro por clique.
-PUBLIC_LIVRO="$(curl -fsS --max-time 10 'https://airia.pro/livro')"
-case "$PUBLIC_LIVRO" in
-  *'<title>Antes de se Cobrar'*) echo "/livro: head próprio do e-book confirmado" ;;
-  *)
-    echo "FALHA: /livro respondeu 200 mas com o head do app, não o do e-book"
-    exit 1
-    ;;
-esac
-case "$PUBLIC_LIVRO" in
-  *hreflang*)
-    echo "FALHA: /livro carrega hreflang da raiz; declara como versões dela a home e a /?lang=en"
-    exit 1
-    ;;
-  *) echo "/livro: sem hreflang herdado" ;;
 esac
 
 PUBLIC_SW="$(curl -fsS --max-time 10 'https://airia.pro/sw.js')"

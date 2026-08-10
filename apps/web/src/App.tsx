@@ -34,7 +34,6 @@ const loadOnboardingDonePage = () => import("./routes/onboarding-done-page");
 const loadPrivacyPage = () => import("./routes/privacy-page");
 const loadBillingPage = () => import("./routes/billing-page");
 const loadJornadaPage = () => import("./routes/jornada-page");
-const loadLivroPage = () => import("./routes/livro-page");
 const loadTermsPage = () => import("./routes/terms-page");
 const loadConteudoPage = () => import("./routes/conteudo-page");
 const loadContextoPage = () => import("./routes/contexto-page");
@@ -75,7 +74,6 @@ const PrivacyPage = lazy(() => loadPrivacyPage().then((module) => ({ default: mo
 const TermsPage = lazy(() => loadTermsPage().then((module) => ({ default: module.TermsPage })));
 const BillingPage = lazy(() => loadBillingPage().then((module) => ({ default: module.default })));
 const JornadaPage = lazy(() => loadJornadaPage().then((module) => ({ default: module.default })));
-const LivroPage = lazy(() => loadLivroPage().then((module) => ({ default: module.default })));
 const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: module.ConteudoPage })));
 const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: module.ContextoPage })));
 const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
@@ -273,7 +271,9 @@ export default function App() {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/billing" element={<BillingPage />} />
-        <Route path="/livro" element={<LivroPage />} />
+        {/* O e-book saiu do produto. A rota fica redirecionando, como Planner e
+            Hábitos: anúncio já veiculado e link salvo não podem cair em 404. */}
+        <Route path="/livro" element={<Navigate to="/" replace />} />
 
         {/* Rotas de preview sem auth — só desenvolvimento */}
         <Route path="/dev" element={<DevLayout />}>
