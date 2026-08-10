@@ -150,6 +150,7 @@ export class StripeService {
       client_reference_id: userId,
       integration_identifier: integrationIdentifier,
       mode,
+      payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${this.config.appUrl}/billing?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${this.config.appUrl}/billing?status=canceled`,
