@@ -76,7 +76,7 @@ removida.
 | `.worktrees/repair-pwa` | `codex/pwa-release-repair` / `b351128` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/repair-voice` | `codex/voice-overlap-repair` / `4ef1d04` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/routine-builder` | `codex/routine-builder` / `59778e5` | `AUDIT_PENDING` | identificar dono |
-| `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `5661d72` | `ACTIVE` | Codex: registrar plano TDD e implementar onboarding único, período Pro, parceiros CRP e Stripe |
+| `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `bfb3eb1` | `ACTIVE` | Codex: executar plano TDD de onboarding único, período Pro, parceiros CRP e Stripe |
 
 Nenhuma entrada acima deve ser removida automaticamente. A limpeza é uma tarefa
 separada: revisar status/diff, confirmar que não há commit único, integrar ou

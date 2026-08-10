@@ -38,7 +38,7 @@ ativar cobrança Stripe confiável.
 
 ## Status
 
-IN PROGRESS — design aprovado e baseline verde; plano TDD em elaboração.
+IN PROGRESS — design e plano TDD registrados; implementação vertical pendente.
 
 ## O que já foi feito
 
@@ -46,11 +46,12 @@ IN PROGRESS — design aprovado e baseline verde; plano TDD em elaboração.
 - Causa da duplicidade localizada em rotas/atalhos antigos.
 - Estado live da Stripe consultado por API sem expor segredos.
 - Design aprovado registrado em `docs/plans/2026-08-10-onboarding-stripe-professional-partners-design.md`.
+- Plano TDD registrado em `docs/plans/2026-08-10-onboarding-stripe-professional-partners-implementation.md`.
 - Worktree dedicado criado em `C:\Users\allin\Projetos\Apps\new-app-fron-zero\.worktrees\onboarding-stripe-partners`.
 
 ## O que falta
 
-- [ ] Plano de implementação TDD.
+- [x] Plano de implementação TDD.
 - [ ] Implementação vertical por contrato.
 - [ ] Configuração Stripe externa e validação real.
 - [ ] Revisão Airia, builds, browser e fechamento Git/worktree.
@@ -71,8 +72,7 @@ IN PROGRESS — design aprovado e baseline verde; plano TDD em elaboração.
 
 ## Próxima melhor ação
 
-Escrever e commitar o plano de implementação; iniciar o primeiro teste vermelho
-para a rota canônica do onboarding.
+Iniciar Task 1 do plano com testes vermelhos de schema e migração.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos
