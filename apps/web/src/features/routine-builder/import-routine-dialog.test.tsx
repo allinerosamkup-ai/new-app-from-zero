@@ -20,9 +20,12 @@ function services(): ImportRoutineServices {
 describe("ImportRoutineDialog", () => {
   it("mantém uma única ação de refazer onboarding nas Configurações", () => {
     const source = readFileSync(resolve(process.cwd(), "src/routes/preferences-page.tsx"), "utf8");
+    const onboardingSource = readFileSync(resolve(process.cwd(), "src/features/aura/onboarding.ts"), "utf8");
 
     expect(source.match(/t\("config\.redoOnboarding"\)/g)).toHaveLength(1);
     expect(source.match(/onClick=\{handleRedoOnboarding\}/g)).toHaveLength(1);
+    expect(onboardingSource).toContain('CANONICAL_ONBOARDING_ROUTE = "/comecar"');
+    expect(onboardingSource).not.toContain('navigate("/onboarding');
   });
 
   it("cancelar fecha o diálogo sem acionar o fluxo de importação", () => {

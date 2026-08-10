@@ -214,7 +214,13 @@ export function AuraLayout() {
   }
 
   useEffect(() => {
-    if (!hydrated || !hasSession || !onboardingPromptEligible || location.pathname.startsWith('/onboarding')) {
+    if (
+      !hydrated
+      || !hasSession
+      || !onboardingPromptEligible
+      || location.pathname.startsWith('/comecar')
+      || location.pathname.startsWith('/onboarding')
+    ) {
       setShowOnboardingPrompt(false);
       return;
     }
@@ -315,7 +321,7 @@ export function AuraLayout() {
                 <button
                   onClick={() => {
                     dismissOnboardingPrompt(true);
-                    navigate("/onboarding");
+                    navigate("/comecar");
                   }}
                   style={{ flex: 1, height: 32, border: "none", borderRadius: 10, background: "var(--accent-peach)", color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer" }}
                 >

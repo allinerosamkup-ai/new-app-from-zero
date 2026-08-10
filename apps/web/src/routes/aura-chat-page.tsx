@@ -636,7 +636,7 @@ export function AuraChatPage() {
     if (response.action !== "start_routine_builder") return;
     const sourceText = typeof response.payload.sourceText === "string" ? response.payload.sourceText : "";
     if (!hasSubstantiveRoutineSource(sourceText)) {
-      navigate("/onboarding/guiado");
+      navigate("/comecar");
       return;
     }
     navigate("/routine-builder", {

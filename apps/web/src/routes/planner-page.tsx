@@ -3378,7 +3378,7 @@ export function PlannerPage() {
             title="Monte um dia possivel"
               description={t("planner.emptyDescription")}
               ctaLabel={t("planner.buildRoutine")}
-            onAction={() => navigate("/onboarding/guiado")}
+            onAction={() => navigate("/comecar")}
             secondaryLabel={t("planner.singleTask")}
             onSecondaryAction={() => openNewFormAt(getCurrentTimeRounded())}
             examples={[

@@ -10,7 +10,6 @@ const loadHomePage = () => import("./routes/home-page");
 const loadJournalPage = () => import("./routes/journal-page");
 const loadGoalsPage = () => import("./routes/goals-page");
 const loadPreferencesPage = () => import("./routes/preferences-page");
-const loadOnboardingPage = () => import("./routes/onboarding-page");
 const loadEditorialShowcase = () => import("./routes/editorial-showcase");
 const loadAuthV2Page = () => import("./routes/auth-v2-page");
 const loadCheckinPage = () => import("./routes/checkin-page");
@@ -26,11 +25,6 @@ const loadAuraChatPage = () => import("./routes/aura-chat-page");
 const loadSplashPage = () => import("./routes/splash-page");
 const loadForgotPasswordPage = () => import("./routes/forgot-password-page");
 const loadResetPasswordPage = () => import("./routes/reset-password-page");
-const loadOnboardingEnergyPage = () => import("./routes/onboarding-energy-page");
-const loadOnboardingCyclePage = () => import("./routes/onboarding-cycle-page");
-const loadOnboardingSleepPage = () => import("./routes/onboarding-sleep-page");
-const loadOnboardingPreferencesPage = () => import("./routes/onboarding-preferences-page");
-const loadOnboardingDonePage = () => import("./routes/onboarding-done-page");
 const loadPrivacyPage = () => import("./routes/privacy-page");
 const loadBillingPage = () => import("./routes/billing-page");
 const loadJornadaPage = () => import("./routes/jornada-page");
@@ -39,7 +33,6 @@ const loadTermsPage = () => import("./routes/terms-page");
 const loadConteudoPage = () => import("./routes/conteudo-page");
 const loadContextoPage = () => import("./routes/contexto-page");
 const loadRoutineBuilderPage = () => import("./routes/routine-builder-page");
-const loadGuidedOnboardingPage = () => import("./routes/guided-onboarding-page");
 const loadStoryOnboardingPage = () => import("./routes/story-onboarding-page");
 const loadRunPage = () => import("./routes/run-page");
 const loadCapturesPage = () => import("./routes/captures-page");
@@ -50,7 +43,6 @@ const HomePage = lazy(() => loadHomePage().then((module) => ({ default: module.H
 const JournalPage = lazy(() => loadJournalPage().then((module) => ({ default: module.JournalPage })));
 const GoalsPage = lazy(() => loadGoalsPage().then((module) => ({ default: module.GoalsPage })));
 const PreferencesPage = lazy(() => loadPreferencesPage().then((module) => ({ default: module.PreferencesPage })));
-const OnboardingPage = lazy(() => loadOnboardingPage().then((module) => ({ default: module.OnboardingPage })));
 const EditorialShowcase = lazy(() => loadEditorialShowcase().then((module) => ({ default: module.EditorialShowcase })));
 const AuthV2Page = lazy(() => loadAuthV2Page().then((module) => ({ default: module.AuthV2Page })));
 const CheckinPage = lazy(() => loadCheckinPage().then((module) => ({ default: module.CheckinPage })));
@@ -66,11 +58,6 @@ const AuraChatPage = lazy(() => loadAuraChatPage().then((module) => ({ default: 
 const SplashPage = lazy(() => loadSplashPage().then((module) => ({ default: module.SplashPage })));
 const ForgotPasswordPage = lazy(() => loadForgotPasswordPage().then((module) => ({ default: module.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => loadResetPasswordPage().then((module) => ({ default: module.ResetPasswordPage })));
-const OnboardingEnergyPage = lazy(() => loadOnboardingEnergyPage().then((module) => ({ default: module.OnboardingEnergyPage })));
-const OnboardingCyclePage = lazy(() => loadOnboardingCyclePage().then((module) => ({ default: module.OnboardingCyclePage })));
-const OnboardingSleepPage = lazy(() => loadOnboardingSleepPage().then((module) => ({ default: module.OnboardingSleepPage })));
-const OnboardingPreferencesPage = lazy(() => loadOnboardingPreferencesPage().then((module) => ({ default: module.OnboardingPreferencesPage })));
-const OnboardingDonePage = lazy(() => loadOnboardingDonePage().then((module) => ({ default: module.OnboardingDonePage })));
 const PrivacyPage = lazy(() => loadPrivacyPage().then((module) => ({ default: module.PrivacyPage })));
 const TermsPage = lazy(() => loadTermsPage().then((module) => ({ default: module.TermsPage })));
 const BillingPage = lazy(() => loadBillingPage().then((module) => ({ default: module.default })));
@@ -79,7 +66,6 @@ const LivroPage = lazy(() => loadLivroPage().then((module) => ({ default: module
 const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: module.ConteudoPage })));
 const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: module.ContextoPage })));
 const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
-const GuidedOnboardingPage = lazy(() => loadGuidedOnboardingPage().then((module) => ({ default: module.GuidedOnboardingPage })));
 const StoryOnboardingPage = lazy(() => loadStoryOnboardingPage().then((module) => ({ default: module.default })));
 const RunPage = lazy(() => loadRunPage().then((module) => ({ default: module.RunPage })));
 const CapturesPage = lazy(() => loadCapturesPage().then((module) => ({ default: module.CapturesPage })));
@@ -256,12 +242,13 @@ export default function App() {
             Fica fora do AuraLayout de propósito — tela cheia, sem barra
             competindo com o conteúdo. */}
         <Route path="/comecar" element={<StoryOnboardingPage />} />
-        <Route path="/onboarding/guiado" element={<GuidedOnboardingPage />} />
-        <Route path="/onboarding/energy" element={<OnboardingEnergyPage />} />
-        <Route path="/onboarding/cycle" element={<OnboardingCyclePage />} />
-        <Route path="/onboarding/sleep" element={<OnboardingSleepPage />} />
-        <Route path="/onboarding/preferences" element={<OnboardingPreferencesPage />} />
-        <Route path="/onboarding/done" element={<OnboardingDonePage />} />
+        <Route path="/onboarding" element={<Navigate to="/comecar" replace />} />
+        <Route path="/onboarding/guiado" element={<Navigate to="/comecar" replace />} />
+        <Route path="/onboarding/energy" element={<Navigate to="/comecar" replace />} />
+        <Route path="/onboarding/cycle" element={<Navigate to="/comecar" replace />} />
+        <Route path="/onboarding/sleep" element={<Navigate to="/comecar" replace />} />
+        <Route path="/onboarding/preferences" element={<Navigate to="/comecar" replace />} />
+        <Route path="/onboarding/done" element={<Navigate to="/comecar" replace />} />
         {/* Execução: tela cheia, sem bottom nav. Um passo por vez quer dizer
             nada mais na tela competindo com o passo. */}
         <Route path="/run" element={<RunPage />} />
@@ -304,7 +291,6 @@ export default function App() {
           <Route path="/habits" element={FEATURES.habits ? <HabitsPage /> : <Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/profile" element={<Navigate to="/insights" replace />} />
           <Route path="/preferences" element={<PreferencesPage />} />
-          <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
           <Route path="/planner" element={FEATURES.planner ? <PlannerPage /> : <Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/insights" element={<InsightsPage />} />

@@ -343,7 +343,7 @@ export function RoutineBuilderPage() {
                     <label htmlFor="routine-week">{t('routineBuilder.weekLabel')}</label>
                     <input id="routine-week" type="date" value={weekStart} onChange={(event) => setWeekStart(event.target.value)} />
                   </div>
-                  <button className="routine-secondary" type="button" onClick={() => navigate('/onboarding/guiado')}>
+                  <button className="routine-secondary" type="button" onClick={() => navigate('/comecar')}>
                     {t('routineBuilder.guidedStartAction', { defaultValue: 'Prefiro montar por botões' })}
                   </button>
                 </div>
