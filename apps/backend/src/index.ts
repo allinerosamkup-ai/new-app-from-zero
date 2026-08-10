@@ -70,6 +70,7 @@ import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-int
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { BillingAccessService } from './services/billing-access.service';
+import { createStripeServiceFromEnv, StripeService } from './services/stripe.service';
 import { ProfessionalPartnerService } from './services/professional-partner.service';
 import { ReferralService } from './services/referral.service';
 import { AiBackgroundService } from './services/ai-background.service';
@@ -512,6 +513,8 @@ type AppDependencies = {
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
   billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
+  stripeService?: Pick<StripeService,
+    'createCheckoutSession' | 'createPortalSession' | 'verifyCheckoutSession' | 'handleWebhook'>;
   professionalPartnerService?: Pick<ProfessionalPartnerService, 'apply' | 'getMe' | 'verify'>;
   referralService?: Pick<ReferralService, 'claim' | 'getMine'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
@@ -2070,6 +2073,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const billingAccessService = dependencies.billingAccessService ?? new BillingAccessService(prisma, {
     checkoutAvailable: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
   });
+  const stripeService = dependencies.stripeService ?? createStripeServiceFromEnv(prisma);
   const professionalPartnerService = dependencies.professionalPartnerService ?? new ProfessionalPartnerService(prisma);
   const referralService = dependencies.referralService ?? new ReferralService(prisma);
   const aiService = dependencies.aiService ?? AIService;
@@ -2341,8 +2345,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     const sig = req.headers['stripe-signature'] as string;
     if (!sig) return res.status(400).json({ error: 'no_signature' });
     try {
-      const { StripeService } = await import('./services/stripe.service');
-      await StripeService.handleWebhook(req.body as Buffer, sig);
+      await stripeService.handleWebhook(req.body as Buffer, sig);
       res.json({ received: true });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -7764,36 +7767,69 @@ JSON APENAS: {"profileSummary":"..."}`,
   app.post('/api/billing/checkout', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
-      const email = typeof req.body?.email === 'string' ? req.body.email : undefined;
-      const plan = req.body?.plan === 'annual' ? 'annual' : 'monthly';
-      const { StripeService } = await import('./services/stripe.service');
-      const url = await StripeService.createCheckoutSession(userId, email, plan);
-      res.json({ url });
-    } catch {
-      res.status(500).json({ error: 'checkout_failed' });
+      const input = z.object({
+        email: z.string().email().optional(),
+        plan: z.enum(['monthly', 'annual', 'lifetime']),
+      }).parse(req.body);
+      const headerKey = req.headers['idempotency-key'];
+      const attemptKey = typeof headerKey === 'string' && headerKey.length <= 100
+        ? headerKey
+        : randomUUID();
+      const url = await stripeService.createCheckoutSession(
+        userId,
+        input.email,
+        input.plan,
+        attemptKey,
+      );
+      return res.json({ url });
+    } catch (error: any) {
+      if (error instanceof z.ZodError || error?.message === 'invalid_plan') {
+        return res.status(400).json({ error: 'invalid_plan' });
+      }
+      if (
+        error?.message === 'billing_unavailable'
+        || error?.message === 'billing_plan_unavailable'
+        || error?.message === 'lifetime_offer_unavailable'
+      ) return res.status(503).json({ error: error.message });
+      return res.status(500).json({ error: 'checkout_failed' });
     }
   });
 
   app.post('/api/billing/portal', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
-      const { StripeService } = await import('./services/stripe.service');
-      const url = await StripeService.createPortalSession(userId);
-      res.json({ url });
+      const url = await stripeService.createPortalSession(userId);
+      return res.json({ url });
     } catch (err: any) {
       if (err.message === 'no_stripe_customer') return res.status(404).json({ error: 'no_subscription' });
-      res.status(500).json({ error: 'portal_failed' });
+      if (err.message === 'billing_unavailable') return res.status(503).json({ error: err.message });
+      return res.status(500).json({ error: 'portal_failed' });
     }
   });
 
   app.get('/api/billing/status', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
-      const { StripeService } = await import('./services/stripe.service');
-      const data = await StripeService.getSubscriptionStatus(userId);
-      res.json(data);
+      const data = await billingAccessService.getSummary(userId);
+      return res.json(data);
     } catch {
-      res.status(500).json({ error: 'status_failed' });
+      return res.status(500).json({ error: 'status_failed' });
+    }
+  });
+
+  app.get('/api/billing/checkout-session/:sessionId', async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const sessionId = z.string().trim().min(1).max(255).parse(req.params.sessionId);
+      const result = await stripeService.verifyCheckoutSession(userId, sessionId);
+      return res.json(result);
+    } catch (error: any) {
+      if (error?.message === 'checkout_session_forbidden') {
+        return res.status(403).json({ error: error.message });
+      }
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'invalid_session' });
+      if (error?.message === 'billing_unavailable') return res.status(503).json({ error: error.message });
+      return res.status(500).json({ error: 'checkout_verification_failed' });
     }
   });
 
