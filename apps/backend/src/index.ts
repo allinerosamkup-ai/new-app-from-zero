@@ -514,7 +514,7 @@ type AppDependencies = {
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
   billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
   stripeService?: Pick<StripeService,
-    'createCheckoutSession' | 'createPortalSession' | 'verifyCheckoutSession' | 'handleWebhook'>;
+    'createCheckoutSession' | 'createPortalSession' | 'verifyCheckoutSession' | 'handleWebhook' | 'getOfferCatalog'>;
   professionalPartnerService?: Pick<ProfessionalPartnerService, 'apply' | 'getMe' | 'verify'>;
   referralService?: Pick<ReferralService, 'claim' | 'getMine'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
@@ -7811,7 +7811,7 @@ JSON APENAS: {"profileSummary":"..."}`,
     try {
       const userId = (req as AuthRequest).userId;
       const data = await billingAccessService.getSummary(userId);
-      return res.json(data);
+      return res.json({ ...data, offers: stripeService.getOfferCatalog() });
     } catch {
       return res.status(500).json({ error: 'status_failed' });
     }

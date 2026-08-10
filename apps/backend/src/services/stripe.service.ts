@@ -13,6 +13,14 @@ export type StripeServiceConfig = {
   lifetimeEnabled: boolean;
 };
 
+export type BillingOffer = {
+  plan: BillingPlan;
+  amountCents: number;
+  currency: 'BRL';
+  billingPeriod: 'month' | 'year' | 'once';
+  enabled: boolean;
+};
+
 type StripeServiceDependencies = {
   prisma: PrismaClient;
   stripe: any | null;
@@ -72,6 +80,32 @@ export class StripeService {
   private planForPrice(priceId: string | null): BillingPlan | null {
     if (!priceId) return null;
     return BILLING_PLANS.find((plan) => this.config.priceIds[plan] === priceId) ?? null;
+  }
+
+  getOfferCatalog(): BillingOffer[] {
+    return [
+      {
+        plan: 'monthly',
+        amountCents: 2990,
+        currency: 'BRL',
+        billingPeriod: 'month',
+        enabled: Boolean(this.config.priceIds.monthly),
+      },
+      {
+        plan: 'annual',
+        amountCents: 24900,
+        currency: 'BRL',
+        billingPeriod: 'year',
+        enabled: Boolean(this.config.priceIds.annual),
+      },
+      {
+        plan: 'lifetime',
+        amountCents: 9900,
+        currency: 'BRL',
+        billingPeriod: 'once',
+        enabled: this.config.lifetimeEnabled && Boolean(this.config.priceIds.lifetime),
+      },
+    ];
   }
 
   async getOrCreateCustomer(userId: string, email?: string): Promise<string> {

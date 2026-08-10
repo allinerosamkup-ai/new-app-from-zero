@@ -7,6 +7,11 @@ const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 async function run() {
   const checkoutCalls: any[] = [];
+  const offers = [
+    { plan: 'monthly', amountCents: 2990, currency: 'BRL', billingPeriod: 'month', enabled: true },
+    { plan: 'annual', amountCents: 24900, currency: 'BRL', billingPeriod: 'year', enabled: true },
+    { plan: 'lifetime', amountCents: 9900, currency: 'BRL', billingPeriod: 'once', enabled: true },
+  ];
   const stripeService = {
     createCheckoutSession: async (userId: string, email: string | undefined, plan: string, attemptKey: string) => {
       checkoutCalls.push({ userId, email, plan, attemptKey });
@@ -19,6 +24,7 @@ async function run() {
       userId,
       sessionId,
     }),
+    getOfferCatalog: () => offers,
     handleWebhook: async () => ({ duplicate: false }),
   };
   const summary = {
@@ -69,7 +75,7 @@ async function run() {
     assert.deepEqual(checkoutCalls.map((call) => call.plan), ['monthly', 'annual', 'lifetime']);
 
     const status = await (await fetch(`${baseUrl}/api/billing/status`)).json();
-    assert.deepEqual(status, summary);
+    assert.deepEqual(status, { ...summary, offers });
 
     const verification = await fetch(`${baseUrl}/api/billing/checkout-session/cs_test`);
     assert.equal(verification.status, 200);

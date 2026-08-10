@@ -111,6 +111,11 @@ function fixture(options: { lifetimeEnabled?: boolean } = {}) {
 
 async function run() {
   const f = fixture();
+  assert.deepEqual(f.service.getOfferCatalog(), [
+    { plan: 'monthly', amountCents: 2990, currency: 'BRL', billingPeriod: 'month', enabled: true },
+    { plan: 'annual', amountCents: 24900, currency: 'BRL', billingPeriod: 'year', enabled: true },
+    { plan: 'lifetime', amountCents: 9900, currency: 'BRL', billingPeriod: 'once', enabled: true },
+  ]);
   const customer = await f.service.getOrCreateCustomer('user-1', 'user@example.com');
   assert.equal(customer, 'cus_1');
   assert.equal(f.billing.get('user-1').stripeCustomerId, 'cus_1');

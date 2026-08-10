@@ -1,60 +1,132 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Sparkles, CheckCircle2, ExternalLink, Zap, Check } from "lucide-react";
+import { Check, CheckCircle2, ChevronLeft, ExternalLink, Sparkles } from "lucide-react";
+
+import { useLocalizedCopy, useLanguage } from "../i18n";
 import { api } from "../lib/api";
 import { supabase } from "../lib/supabase";
 import { trackEvent } from "../lib/track";
-import { useTranslation } from "react-i18next";
-import { resolveIntlLocale } from "../i18n";
+import {
+  useSubscription,
+  type BillingOffer,
+  type BillingPlan,
+} from "../hooks/useSubscription";
 
-type SubscriptionStatus = {
+type CheckoutVerification = {
+  confirmed: boolean;
+  plan: BillingPlan | null;
   status: string | null;
-  plan: string | null;
-  periodEnd: string | null;
 };
 
-type BillingPlan = "monthly" | "annual";
+type ConfirmationDependencies = {
+  get?: (path: string) => Promise<CheckoutVerification>;
+  delay?: (milliseconds: number) => Promise<void>;
+  attempts?: number;
+};
+
+const wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+export async function confirmCheckoutSession(
+  sessionId: string,
+  dependencies: ConfirmationDependencies = {},
+): Promise<CheckoutVerification> {
+  const get = dependencies.get ?? ((path) => api.get(path) as Promise<CheckoutVerification>);
+  const delay = dependencies.delay ?? wait;
+  const attempts = dependencies.attempts ?? 5;
+  let last: CheckoutVerification = { confirmed: false, plan: null, status: "pending" };
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      last = await get(`/api/billing/checkout-session/${encodeURIComponent(sessionId)}`);
+      if (last.confirmed) return last;
+      lastError = null;
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < attempts - 1) await delay(1200);
+  }
+  if (lastError) throw lastError;
+  return last;
+}
+
+function formatMoney(amountCents: number, language: string) {
+  return new Intl.NumberFormat(language === "en" ? "en-US" : "pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+  }).format(amountCents / 100);
+}
+
+function offerName(plan: BillingPlan, l: ReturnType<typeof useLocalizedCopy>) {
+  if (plan === "monthly") return l("Mensal", "Monthly");
+  if (plan === "annual") return l("Anual", "Annual");
+  return l("Oferta vitalícia", "Lifetime offer");
+}
+
+function offerPeriod(offer: BillingOffer, l: ReturnType<typeof useLocalizedCopy>) {
+  if (offer.billingPeriod === "month") return l("por mês", "per month");
+  if (offer.billingPeriod === "year") return l("por ano", "per year");
+  return l("pagamento único", "one-time payment");
+}
 
 export default function BillingPage() {
-  const { t, i18n } = useTranslation();
+  const l = useLocalizedCopy();
+  const language = useLanguage();
   const navigate = useNavigate();
-  const [sub, setSub] = useState<SubscriptionStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
+  const subscription = useSubscription();
+  const enabledOffers = useMemo(
+    () => subscription.offers.filter((offer) => offer.enabled),
+    [subscription.offers],
+  );
   const [selectedPlan, setSelectedPlan] = useState<BillingPlan>("annual");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [verification, setVerification] = useState<"idle" | "pending" | "confirmed" | "delayed" | "error">("idle");
 
-  const searchParams = new URLSearchParams(window.location.search);
-  const statusParam = searchParams.get("status");
+  const sessionId = new URLSearchParams(window.location.search).get("session_id");
 
   useEffect(() => {
-    if (statusParam === "success") {
-      trackEvent("subscription_started", { plan: selectedPlan });
+    if (!enabledOffers.some((offer) => offer.plan === selectedPlan) && enabledOffers[0]) {
+      setSelectedPlan(enabledOffers[0].plan);
     }
-    (api.get("/api/billing/status") as Promise<SubscriptionStatus>)
-      .then((data) => setSub(data))
-      .catch(() => setSub({ status: null, plan: null, periodEnd: null }))
-      .finally(() => setLoading(false));
-  }, []);
+  }, [enabledOffers, selectedPlan]);
 
-  const isActive = sub?.status === "active" || sub?.status === "trialing";
-
-  const monthlyPrice = 29;
-  const annualTotal = 249;
-  const annualMonthly = Math.round(annualTotal / 12);
-  const savingsPct = Math.round((1 - annualMonthly / monthlyPrice) * 100);
-  const annualSavings = monthlyPrice * 12 - annualTotal;
+  useEffect(() => {
+    if (!sessionId) return;
+    let alive = true;
+    setVerification("pending");
+    confirmCheckoutSession(sessionId)
+      .then((result) => {
+        if (!alive) return;
+        if (result.confirmed) {
+          setVerification("confirmed");
+          trackEvent("subscription_started", { plan: result.plan });
+          subscription.refresh();
+        } else {
+          setVerification("delayed");
+        }
+      })
+      .catch(() => { if (alive) setVerification("error"); });
+    return () => { alive = false; };
+    // The checkout session belongs to the URL; refresh is intentionally not a trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   async function handleCheckout() {
     setCheckoutLoading(true);
+    setCheckoutError(null);
     trackEvent("upgrade_clicked", { plan: selectedPlan });
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const res = await api.post("/api/billing/checkout", {
+      const result = await api.post("/api/billing/checkout", {
         email: session?.user?.email,
         plan: selectedPlan,
       }) as { url: string };
-      window.location.href = res.url;
+      window.location.assign(result.url);
+    } catch {
+      setCheckoutError("checkout_failed");
     } finally {
       setCheckoutLoading(false);
     }
@@ -63,211 +135,136 @@ export default function BillingPage() {
   async function handlePortal() {
     setPortalLoading(true);
     try {
-      const res = await api.post("/api/billing/portal", {}) as { url: string };
-      window.location.href = res.url;
+      const result = await api.post("/api/billing/portal", {}) as { url: string };
+      window.location.assign(result.url);
     } finally {
       setPortalLoading(false);
     }
   }
 
+  const paid = subscription.source === "paid";
+  const showOffers = subscription.source === "free" || subscription.source === "trial";
+
   return (
-    <div style={{ minHeight: "100dvh", background: "var(--warm-bg)", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "16px 20px 0", display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-1)", padding: 4 }}
-        >
+    <main style={{ minHeight: "100dvh", background: "var(--warm-bg)", paddingBottom: 32 }}>
+      <header style={{ padding: "16px 20px 4px", display: "flex", alignItems: "center", gap: 12 }}>
+        <button type="button" aria-label={l("Voltar", "Back")} onClick={() => navigate(-1)} style={{ border: 0, background: "none", padding: 4, cursor: "pointer" }}>
           <ChevronLeft size={24} />
         </button>
-        <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{t("billing.title")}</h1>
-      </div>
+        <h1 style={{ margin: 0, fontSize: 20 }}>{l("Plano", "Plan")}</h1>
+      </header>
 
-      <div style={{ flex: 1, padding: "20px", display: "flex", flexDirection: "column", gap: 16 }}>
-
-        {statusParam === "success" && (
-          <div style={{
-            padding: "14px 16px", borderRadius: 16,
-            background: "rgba(150,199,179,0.12)", border: "1.5px solid rgba(150,199,179,0.3)",
-            display: "flex", alignItems: "center", gap: 10,
-          }}>
-            <CheckCircle2 size={18} color="var(--accent-sage)" />
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--accent-sage)" }}>
-              {t("billing.activated")}
-            </p>
-          </div>
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: 20, display: "grid", gap: 16 }}>
+        {verification !== "idle" && (
+          <section role="status" style={{ padding: 16, borderRadius: 16, background: "rgba(150,199,179,.12)", border: "1px solid rgba(150,199,179,.3)" }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              {verification === "confirmed" ? <CheckCircle2 size={18} /> : <Sparkles size={18} />}
+              <strong>
+                {verification === "confirmed"
+                  ? l("Pagamento confirmado", "Payment confirmed")
+                  : verification === "pending"
+                    ? l("Confirmando seu pagamento", "Confirming your payment")
+                    : l("A confirmação está demorando um pouco", "Confirmation is taking a little longer")}
+              </strong>
+            </div>
+            {(verification === "delayed" || verification === "error") && (
+              <button type="button" onClick={() => window.location.reload()} style={{ marginTop: 10 }}>
+                {l("Tentar novamente", "Try again")}
+              </button>
+            )}
+          </section>
         )}
 
-        {loading ? (
-          <div style={{ height: 80, borderRadius: 20, background: "var(--warm-border)", animation: "pulse 1.5s infinite" }} />
+        {subscription.loading ? (
+          <div role="status" aria-label={l("Carregando plano", "Loading plan")} style={{ minHeight: 96, borderRadius: 20, background: "var(--warm-border)" }} />
+        ) : subscription.error ? (
+          <section style={{ padding: 20, borderRadius: 20, background: "#fff", border: "1px solid var(--warm-border)" }}>
+            <strong>{l("Não consegui carregar seu plano agora.", "Your plan could not be loaded right now.")}</strong>
+            <button type="button" onClick={subscription.refresh} style={{ display: "block", marginTop: 12 }}>
+              {l("Tentar novamente", "Try again")}
+            </button>
+          </section>
         ) : (
-          <div style={{
-            padding: "18px 20px", borderRadius: 20,
-            border: isActive ? "1.5px solid rgba(150,199,179,0.35)" : "1.5px solid rgba(134,183,154,0.2)",
-            background: isActive ? "rgba(150,199,179,0.07)" : "rgba(255,255,255,.85)",
-          }}>
-            <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: isActive ? "var(--accent-sage)" : "var(--text-3)" }}>
-              {isActive ? t("billing.currentPlan") : t("billing.freePlan")}
-            </p>
-            <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: "var(--text-1)" }}>
-              {isActive ? "Airia Pro" : t("billing.free")}
-            </p>
-            {isActive && sub?.periodEnd && (
-              <p style={{ margin: 0, fontSize: 11, color: "var(--text-3)" }}>
-                {t("billing.renewsOn", { date: new Date(sub.periodEnd).toLocaleDateString(resolveIntlLocale(i18n.language)) })}
+          <section style={{ padding: 20, borderRadius: 20, background: "#fff", border: "1px solid var(--warm-border)" }}>
+            <small style={{ fontWeight: 900, textTransform: "uppercase", color: "var(--text-3)" }}>
+              {l("Seu acesso", "Your access")}
+            </small>
+            <h2 style={{ margin: "5px 0", fontSize: 22 }}>
+              {subscription.source === "trial"
+                ? l(`Airia Pro · ${subscription.daysRemaining} dias restantes`, `Airia Pro · ${subscription.daysRemaining} days left`)
+                : subscription.source === "professional"
+                  ? l("Airia Pro · profissional verificada", "Airia Pro · verified professional")
+                  : paid
+                    ? `Airia Pro · ${offerName(subscription.plan ?? "monthly", l)}`
+                    : l("Plano gratuito", "Free plan")}
+            </h2>
+            {subscription.trialEndsAt && subscription.source === "trial" && (
+              <p style={{ margin: 0, color: "var(--text-2)" }}>
+                {l("Seu período Pro continua até ", "Your Pro period continues until ")}
+                {new Date(subscription.trialEndsAt).toLocaleDateString(language === "en" ? "en-US" : "pt-BR")}.
               </p>
             )}
-          </div>
+          </section>
         )}
 
-        {!isActive && (
-          <div style={{ padding: "20px", borderRadius: 20, border: "1.5px solid rgba(134,183,154,0.28)", background: "rgba(255,253,249,.97)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-              <Sparkles size={16} color="var(--accent-peach)" />
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "var(--text-1)" }}>Airia Pro</p>
+        {showOffers && enabledOffers.length > 0 && (
+          <section style={{ padding: 20, borderRadius: 20, background: "rgba(255,253,249,.98)", border: "1.5px solid rgba(134,183,154,.28)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <Sparkles size={17} />
+              <strong>{l("Continue com a Airia Pro", "Continue with Airia Pro")}</strong>
             </div>
-
-            <div style={{ display: "flex", background: "rgba(134,183,154,0.08)", borderRadius: 14, padding: 4, marginBottom: 18, gap: 4 }}>
-              {(["monthly", "annual"] as BillingPlan[]).map((p) => {
-                const active = selectedPlan === p;
+            <div role="radiogroup" aria-label={l("Escolha um plano", "Choose a plan")} style={{ display: "grid", gap: 10 }}>
+              {enabledOffers.map((offer) => {
+                const selected = selectedPlan === offer.plan;
                 return (
                   <button
-                    key={p}
-                    onClick={() => setSelectedPlan(p)}
-                    style={{
-                      flex: 1, height: 40, borderRadius: 10, border: "none",
-                      background: active ? "var(--accent-peach)" : "transparent",
-                      color: active ? "#fff" : "var(--text-2)",
-                      fontFamily: "'Plus Jakarta Sans', sans-serif",
-                      fontSize: 12.5, fontWeight: 800, cursor: "pointer",
-                      transition: "all .2s ease",
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                    }}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    key={offer.plan}
+                    onClick={() => setSelectedPlan(offer.plan)}
+                    style={{ minHeight: 70, padding: "12px 14px", borderRadius: 14, textAlign: "left", cursor: "pointer", background: selected ? "rgba(134,183,154,.12)" : "#fff", border: selected ? "2px solid var(--accent-peach)" : "1px solid var(--warm-border)" }}
                   >
-                    {p === "monthly" ? t("billing.monthly") : t("billing.annual")}
-                    {p === "annual" && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 900,
-                        background: active ? "rgba(255,255,255,0.25)" : "var(--accent-peach)",
-                        color: "#fff", padding: "1px 6px", borderRadius: 999, letterSpacing: ".04em",
-                      }}>
-                        -{savingsPct}%
-                      </span>
-                    )}
+                    <span style={{ display: "flex", justifyContent: "space-between", gap: 12, fontWeight: 900 }}>
+                      <span>{offerName(offer.plan, l)}</span>
+                      <span>{formatMoney(offer.amountCents, language)}</span>
+                    </span>
+                    <small style={{ color: "var(--text-2)" }}>{offerPeriod(offer, l)}</small>
                   </button>
                 );
               })}
             </div>
 
-            <div style={{ marginBottom: 18, textAlign: "center" }}>
-              {selectedPlan === "monthly" ? (
-                <div>
-                  <span style={{ fontSize: 36, fontWeight: 900, color: "var(--accent-peach-ink)" }}>R$29</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-3)" }}>{t("billing.perMonth")}</span>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4 }}>
-                    <span style={{ fontSize: 36, fontWeight: 900, color: "var(--accent-peach-ink)" }}>
-                      {"R$"}{annualMonthly}
-                    </span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-3)" }}>{t("billing.perMonth")}</span>
-                  </div>
-                  <p style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--text-3)" }}>
-                    {t("billing.annualCharge", { total: annualTotal })}{" "}
-                    <span style={{
-                      background: "rgba(150,199,179,0.18)", color: "var(--accent-sage)",
-                      padding: "1px 7px", borderRadius: 999, fontWeight: 800, fontSize: 10.5,
-                    }}>
-                      {t("billing.annualSaving", { saving: annualSavings })}
-                    </span>
-                  </p>
-                </div>
-              )}
+            <div style={{ display: "grid", gap: 7, margin: "18px 0" }}>
+              {[
+                l("Airia, Planner e Check-in com IA", "AI across Airia, Planner, and Check-in"),
+                l("Memória e padrões de longo prazo", "Long-term memory and patterns"),
+                l("Hábitos e insights avançados", "Advanced habits and insights"),
+              ].map((feature) => <span key={feature}><Check size={13} /> {feature}</span>)}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-              {(t("billing.proFeatures", { returnObjects: true }) as string[]).map((f) => (
-                <div key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                  <div style={{
-                    width: 18, height: 18, borderRadius: "50%",
-                    background: "rgba(150,199,179,0.18)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, marginTop: 1,
-                  }}>
-                    <Check size={11} color="var(--accent-sage)" strokeWidth={3} />
-                  </div>
-                  <span style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>{f}</span>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={handleCheckout}
-              disabled={checkoutLoading}
-              style={{
-                width: "100%", minHeight: 50, borderRadius: 999, border: "none",
-                background: "var(--accent-peach)", color: "#fff",
-                fontSize: 15, fontWeight: 900,
-                cursor: checkoutLoading ? "default" : "pointer",
-                opacity: checkoutLoading ? 0.7 : 1,
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                boxShadow: "0 8px 24px rgba(134,183,154,0.28)",
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-              }}
-            >
-              {checkoutLoading ? t("billing.wait") : (
-                <>
-                  <Zap size={16} />
-                  {selectedPlan === "annual"
-                    ? t("billing.subscribeAnnual", { total: annualTotal })
-                    : t("billing.subscribeMonthly")}
-                </>
-              )}
+            <button type="button" onClick={handleCheckout} disabled={checkoutLoading || !subscription.checkoutAvailable} style={{ width: "100%", minHeight: 50, borderRadius: 999, border: 0, background: "var(--accent-peach)", color: "#fff", fontWeight: 900, cursor: "pointer" }}>
+              {checkoutLoading ? l("Abrindo pagamento...", "Opening checkout...") : l("Escolher este plano", "Choose this plan")}
             </button>
-
-            <p style={{ margin: "10px 0 0", fontSize: 11, color: "var(--text-3)", textAlign: "center" }}>
-              {t("billing.cancelAnytime")}
+            {checkoutError && <p role="alert">{l("Não consegui abrir o pagamento. Tente novamente.", "Checkout could not be opened. Try again.")}</p>}
+            <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: 12, color: "var(--text-3)" }}>
+              {selectedPlan === "lifetime"
+                ? l("Uma única cobrança. Sem renovação.", "One charge. No renewal.")
+                : l("Você pode cancelar a renovação quando quiser.", "You can cancel renewal at any time.")}
             </p>
-          </div>
+          </section>
         )}
 
-        {isActive && (
-          <button
-            onClick={handlePortal}
-            disabled={portalLoading}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              width: "100%", minHeight: 48, borderRadius: 999,
-              border: "1.5px solid rgba(134,183,154,0.22)",
-              background: "rgba(255,255,255,.85)", color: "var(--text-1)",
-              fontSize: 13, fontWeight: 700,
-              cursor: portalLoading ? "default" : "pointer",
-              opacity: portalLoading ? 0.7 : 1,
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-            }}
-          >
-            <ExternalLink size={15} />
-            {portalLoading ? t("billing.wait") : t("billing.manage")}
+        {paid && (
+          <button type="button" onClick={handlePortal} disabled={portalLoading} style={{ minHeight: 48, borderRadius: 999, border: "1px solid var(--warm-border)", background: "#fff", fontWeight: 800 }}>
+            <ExternalLink size={15} /> {portalLoading ? l("Abrindo...", "Opening...") : l("Gerenciar pagamento", "Manage payment")}
           </button>
         )}
 
-        {!isActive && (
-          <div style={{ padding: "16px 20px", borderRadius: 18, background: "rgba(255,255,255,.7)", border: "1px solid var(--warm-border)" }}>
-            <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)" }}>
-              {t("billing.freeIncludes")}
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {(t("billing.freeFeatures", { returnObjects: true }) as string[]).map((f) => (
-                <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Check size={12} color="var(--text-3)" strokeWidth={2.5} />
-                  <span style={{ fontSize: 12, color: "var(--text-3)" }}>{f}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
+        <button type="button" onClick={() => navigate("/")} style={{ minHeight: 44, border: 0, background: "none", color: "var(--text-2)", fontWeight: 800, cursor: "pointer" }}>
+          {l("Continuar gratuitamente", "Continue for free")}
+        </button>
       </div>
-    </div>
+    </main>
   );
 }

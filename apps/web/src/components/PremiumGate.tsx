@@ -10,6 +10,8 @@ type PremiumGateProps = {
   feature?: string;
   /** Se true, mostra o conteúdo desfocado por trás do CTA em vez de escondê-lo. */
   blurBehind?: boolean;
+  /** Fecha apenas esta oferta; o estado da tela que a abriu permanece intacto. */
+  onDismiss?: () => void;
 };
 
 /**
@@ -17,12 +19,15 @@ type PremiumGateProps = {
  * Caso contrário, mostra um CTA de upgrade que leva para /billing.
  * Enquanto carrega o status, renderiza children (evita flash de paywall em quem é Pro).
  */
-export function PremiumGate({ children, feature, blurBehind = false }: PremiumGateProps) {
+export function PremiumGate({ children, feature, blurBehind = false, onDismiss }: PremiumGateProps) {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
-  const { isPro, loading } = useSubscription();
+  const { isPro, loading, error, refresh } = useSubscription();
 
-  if (loading || isPro) return <>{children}</>;
+  if (isPro) return <>{children}</>;
+  if (loading) {
+    return <div role="status" aria-label={l("Confirmando acesso", "Checking access")} style={{ minHeight: 88 }} />;
+  }
 
   return (
     <div style={{ position: "relative", borderRadius: 20, overflow: "hidden" }}>
@@ -86,6 +91,24 @@ export function PremiumGate({ children, feature, blurBehind = false }: PremiumGa
             <Sparkles size={15} />
             {l("Conhecer o Pro", "Explore Pro")}
           </button>
+          {error && (
+            <button
+              type="button"
+              onClick={refresh}
+              style={{ display: "block", margin: "10px auto 0", border: 0, background: "none", color: "var(--text-2)", fontWeight: 800, cursor: "pointer" }}
+            >
+              {l("Tentar novamente", "Try again")}
+            </button>
+          )}
+          {onDismiss && (
+            <button
+              type="button"
+              onClick={onDismiss}
+              style={{ display: "block", margin: "10px auto 0", border: 0, background: "none", color: "var(--text-2)", fontWeight: 700, cursor: "pointer" }}
+            >
+              {l("Continuar gratuitamente", "Continue for free")}
+            </button>
+          )}
         </div>
       </div>
     </div>
