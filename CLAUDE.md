@@ -152,7 +152,9 @@ isso é o gate do protocolo.
 ## Memória do projeto
 
 Conhecimento persistente vive em [`docs/agent-memory/`](docs/agent-memory/):
-`PROJECT_CONTEXT.md` (stack, comandos, portas, invariantes), `VERIFICATION.md`
+`PROJECT_CONTEXT.md` (stack, comandos, portas, invariantes), `INFRA_ACCESS.md`
+(o que cada ambiente alcança — SSH, DNS, deploy — e o caminho que funciona
+quando o óbvio não funciona), `VERIFICATION.md`
 (como verificar aqui, custo real, falsos positivos conhecidos), `LEARNINGS.md`
 (fatos, decisões e abordagens que já falharam), `KNOWN_ISSUES.md` e
 `CURRENT_STATE.md` (tarefa em andamento e handoff).

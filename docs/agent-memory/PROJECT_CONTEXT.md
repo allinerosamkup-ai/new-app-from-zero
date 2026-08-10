@@ -167,6 +167,7 @@ As 8 fases visíveis oficiais: `Voo Alto`, `Fluindo`, `Estável`, `Desacelerando
 | Base clínica | `docs/product/base-clinica-padroes-e-acoes.md` |
 | Processo de verificação | `docs/CLAUDE_ITERATION_PROTOCOL.md` |
 | Memória operacional | `docs/agent-memory/` (este diretório) |
+| Acesso de infra (SSH, DNS, deploy) | `docs/agent-memory/INFRA_ACCESS.md` |
 | Skills do projeto | `skills/<nome>/SKILL.md` + `skills/_registry.md` |
 
 **Não criar arquivo solto.** Cada tipo tem destino.
