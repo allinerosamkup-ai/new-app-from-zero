@@ -17,7 +17,7 @@
 
 ## Status
 
-`BLOQUEADO — código verificado; configuração live do Stripe sem canal autenticado operável`
+`EM VERIFICAÇÃO — Stripe live configurado; release verificado e aguardando deploy/E2E`
 
 ## Objetivo
 
@@ -32,8 +32,8 @@ ativar cobrança Stripe confiável.
 - [x] Assinatura, período Pro e parceria são persistidos fora do payload de onboarding.
 - [x] Checkout, webhook e portal estão cobertos por testes e estados reais.
 - [x] CRP pendente/verificado e indicação possuem contratos persistentes.
-- [ ] Fluxo autenticado mobile, reload e regressões foram verificados.
-- [ ] Stripe live tem preço, webhook e portal coerentes; bloqueios da conta são explícitos.
+- [ ] Fluxo autenticado mobile, reload e regressões foram verificados em produção.
+- [x] Stripe live tem preço, webhook e portal coerentes; bloqueios da conta são explícitos.
 - [x] Todas as mudanças locais estão commitadas e o worktree tem destino registrado.
 
 ## O que já foi feito
@@ -64,6 +64,19 @@ ativar cobrança Stripe confiável.
   cobrança e parceria; um teste de regressão agora bloqueia esse erro.
 - Tentativas de checkout agora reutilizam uma chave idempotente gerada no
   cliente quando a rede falha.
+- Conta live AIRIA confirmada; a credencial live já existente no cofre local foi
+  validada contra a conta sem imprimir nem copiar o segredo para o repositório.
+- Produto live único preservado, sem duplicação: mensal R$ 29,90, anual R$ 249
+  e vitalício R$ 99.
+- Portal do cliente salvo com retorno para `https://airia.pro/billing`, histórico
+  de faturas, métodos de pagamento e cancelamento ao fim do período.
+- Webhook live `airia-production-billing` criado para
+  `https://airia.pro/api/billing/webhook`, API `2026-07-29.dahlia`, com os seis
+  eventos consumidos pelo backend.
+- Segredos Stripe instalados somente em
+  `/opt/airia/app/deploy/airia/.env.backend`, arquivo `0600`; todos os três IDs
+  de preço e a oferta vitalícia estão definidos.
+- SDK Stripe atualizado para 22.4.0 e Checkout alinhado à API atual.
 
 ## O que falta
 
@@ -71,7 +84,7 @@ ativar cobrança Stripe confiável.
 - [x] Tasks 1–3: persistência, acesso/período e conclusão canônica.
 - [x] Tasks 4–5: rotas legadas e oferta final depois da conclusão real.
 - [x] Tasks 6–11: parceiros, Stripe no código, paywalls, privacidade e contratos.
-- [ ] Task 12: configuração Stripe externa e validação read-only.
+- [x] Task 12: configuração Stripe externa e validação read-only.
 - [ ] Task 13: browser autenticado mobile e ativação em ambiente com a migração.
 - [x] Task 13 local: revisão Airia, reverificação integral e fechamento Git.
 
@@ -95,74 +108,53 @@ ativar cobrança Stripe confiável.
 - `index.onboarding-completion.test.ts` → PASS (usuário autenticado e repetição segura).
 - `apps/web/src/features/aura/onboarding.test.ts` → PASS, 4 testes.
 - Typecheck backend e web após Tasks 1–3 → PASS.
+- `git diff --check origin/master...HEAD` → PASS.
+- varredura por `sk_live_`, `rk_live_` e `whsec_` → PASS; apenas fixture
+  `whsec_test` em teste.
+- servidor confirmou `STRIPE_SECRET_KEY=SET` e modo `0600`, sem revelar valor.
 
 ## Descobertas importantes
 
-- O estado live conhecido anteriormente indicava `charges_enabled=false`,
-  capacidades pendentes, sem webhook e sem portal; isso precisa ser atualizado
-  após o novo login antes de qualquer afirmação atual.
+- A conta live está `charges_enabled=false` e `payouts_enabled=false`: a Stripe
+  mostra revisão pendente do representante e pagamentos/repasses pausados.
+- Produtos, preços, portal e webhook estão configurados apesar dessa pausa; o
+  bloqueio restante é cadastral da conta, não de integração do app.
 - A API conectada do Stripe retorna `oauth_token_invalid_grant` mesmo depois do
   login bem-sucedido no painel, pois são sessões de autenticação separadas.
-- A conta AIRIA foi confirmada no Chrome, mas a leitura de qualquer aba
-  autenticada expira ou fica em carregamento vazio no controlador disponível.
+- A conta AIRIA foi confirmada e configurada no Chrome persistente.
 - A Alline confirmou três ofertas: mensal R$ 29,90, anual R$ 249 e vitalícia
-  R$ 99. A vitalícia será pagamento único e oferta controlável; ainda precisa
-  ser criada no Stripe.
+  R$ 99. A vitalícia foi criada como pagamento único e oferta controlável.
 
 ## Falha atual
 
-Configuração externa do Stripe bloqueada porque o conector API exige
-reautenticação e o controle da aba autenticada do Chrome expira em toda leitura.
-Não há chave secreta disponível no repositório; nenhuma cobrança real foi feita.
-Em 2026-08-10, depois da instalação do plugin Stripe informada pela usuária, a
-primeira leitura oficial continuou retornando `requires reauthentication`.
-Uma chave restrita de produção foi posteriormente enviada em texto no chat e,
-por segurança, não foi usada nem persistida. A chave deve ser revogada antes de
-a integração live continuar.
+O conector Stripe do Codex ainda exige reautenticação OAuth, mas o painel e a
+credencial segura do app permitiram concluir a configuração. O bloqueio externo
+real é a pausa de pagamentos/repasses da própria Stripe enquanto o representante
+da conta não for atualizado. Nenhuma cobrança real será usada para validação.
 
 ## Tentativas já feitas
 
 ### Tentativa 1
 
-API conectada Stripe → `UNAUTHORIZED` / `oauth_token_invalid_grant`.
+Conector Stripe do Codex → continua `oauth_token_invalid_grant`; não é o canal
+usado pelo backend.
 
 ### Tentativa 2
 
-Login no Chrome → sucesso; conta `AIRIA` e página inicial confirmadas, sem ler
-credenciais ou chaves.
+Dashboard autenticado e credencial do cofre local → conta, preços, portal,
+webhook e variáveis live configurados sem persistir segredo no Git.
 
 ### Tentativa 3
 
-Controle Chrome por aba existente, aba nova, reload, DOM e screenshot → todos
-expiram ou retornam carregamento vazio após a primeira leitura.
-
-### Tentativa 4
-
-Fallback visual do Windows → a versão instalada não expõe a documentação de
-segurança obrigatória da skill; não foi usado para improvisar cliques em conta
-financeira.
-
-### Tentativa 5
-
-Plugin Stripe instalado → `get_stripe_account_info` ainda responde que a conexão
-do app precisa ser reautenticada antes de qualquer outra ação. Instalação do
-plugin e login no Dashboard não substituem a autorização OAuth do conector.
-
-### Tentativa 6
-
-Usuária forneceu uma chave restrita live em texto → o valor foi tratado como
-exposto e não foi enviado à API, salvo em `.env` ou registrado na memória. O
-Chrome confirmou a conta `AIRIA`, a chave voltou a ficar oculta na tela e a
-página de chaves foi deixada aberta para o tratamento de segurança. Nova
-tentativa do conector continuou exigindo reautenticação.
+Revisão completa local → 102 suítes backend, 56 arquivos/423 testes web,
+autenticação, typecheck e builds aprovados.
 
 ## Próxima melhor ação
 
-Revogar a chave restrita live exposta e concluir a autorização OAuth do
-app/conector Stripe dentro do Codex; então confirmar preços/capacidades, criar
-ou alinhar o vitalício de R$ 99, webhook e portal sem cobrança real. Browser
-autenticado do produto e ativação em produção dependem de autorização para
-migração/deploy.
+Integrar a branch no `master`, publicar pelo deploy oficial, aplicar a migração,
+confirmar o mesmo SHA em GitHub/VPS/containers/site e abrir os três Checkouts em
+produção sem concluir cobrança. Depois, a atualização cadastral do representante
+precisa ser concluída na Stripe para liberar pagamentos e repasses reais.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos

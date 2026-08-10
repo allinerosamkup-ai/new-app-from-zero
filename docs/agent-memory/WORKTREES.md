@@ -76,7 +76,7 @@ removida.
 | `.worktrees/repair-pwa` | `codex/pwa-release-repair` / `b351128` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/repair-voice` | `codex/voice-overlap-repair` / `4ef1d04` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/routine-builder` | `codex/routine-builder` / `59778e5` | `AUDIT_PENDING` | identificar dono |
-| `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `6512a7f` | `BLOCKED` | Codex: código Tasks 1–11 verificado; conector Stripe exige reautenticação OAuth e uma chave restrita live exposta no chat não foi usada nem persistida. Revogar a chave antes de configurar live; migração/deploy seguem sem autorização |
+| `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `a73c2b4` | `READY_TO_MERGE` | Codex: código e Stripe live configurados; 102 suítes backend, 56 arquivos/423 testes web, typecheck e builds aprovados. Integrar no `master`, publicar, validar três Checkouts sem cobrança e registrar o bloqueio cadastral de pagamentos/repasses da Stripe |
 
 Nenhuma entrada acima deve ser removida automaticamente. A limpeza é uma tarefa
 separada: revisar status/diff, confirmar que não há commit único, integrar ou
