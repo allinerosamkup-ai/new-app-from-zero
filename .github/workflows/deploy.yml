@@ -1,0 +1,85 @@
+name: Deploy VPS
+
+# Deploy sob demanda, pelo botão "Run workflow" na aba Actions.
+#
+# Por que isto existe: o deploy sempre dependeu de alguém abrir um terminal e
+# rodar `ssh root@195.35.17.102 ...` da própria máquina. Quem trabalha no
+# repositório de dentro de um ambiente sem saída na porta 22 — o Claude Code na
+# nuvem, por exemplo — consegue corrigir, testar e commitar, e trava no último
+# passo. O runner do GitHub tem saída na 22, então ele faz a ponte.
+#
+# NÃO dispara sozinho no push. Deploy é ação de fora para dentro e com
+# consequência para quem está usando o app agora; quem aperta é uma pessoa.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch ou commit a publicar (o script exige que seja o mesmo commit de origin/master)'
+        required: false
+        default: 'master'
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      # Segredo ausente falha aqui, com o nome do segredo e onde cadastrar, em
+      # vez de falhar dez linhas abaixo com "Permission denied (publickey)".
+      - name: Conferir segredos
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          FALTA=""
+          [ -n "$VPS_SSH_KEY" ] || FALTA="$FALTA VPS_SSH_KEY"
+          [ -n "$VPS_HOST" ] || FALTA="$FALTA VPS_HOST"
+          if [ -n "$FALTA" ]; then
+            echo "FALHA: faltam segredos do repositório:$FALTA"
+            echo "Cadastre em Settings → Secrets and variables → Actions → New repository secret."
+            echo "  VPS_SSH_KEY — chave PRIVADA que já tenha acesso root na VPS (conteúdo inteiro, com BEGIN/END)"
+            echo "  VPS_HOST    — IP ou host da VPS"
+            echo "  VPS_USER    — opcional, padrão root"
+            exit 1
+          fi
+
+      - name: Preparar SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # A chave do host entra por `ssh-keyscan` em vez de
+          # `StrictHostKeyChecking=no`: aceitar qualquer host é aceitar também o
+          # errado, e este passo carrega uma chave com root.
+          ssh-keyscan -T 20 "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          test -s ~/.ssh/known_hosts || { echo "FALHA: não consegui ler a chave de host de $VPS_HOST"; exit 1; }
+
+      - name: Publicar
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          REF: ${{ inputs.ref }}
+        run: |
+          USER_FINAL="${VPS_USER:-root}"
+          # `deploy.sh` já cancela sozinho se o checkout da VPS divergir de
+          # origin/master, então não há o que validar aqui — o script é a
+          # autoridade, e duplicar a regra criaria duas versões dela.
+          ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 "${USER_FINAL}@${VPS_HOST}" \
+            "cd /opt/airia/app && git fetch origin ${REF} && git checkout ${REF} && git pull origin ${REF} && sh ./deploy/airia/deploy.sh"
+
+      - name: Conferir o que está no ar
+        if: always()
+        run: |
+          # Roda mesmo se o passo anterior falhar: deploy que quebra no meio
+          # deixa a produção em algum estado, e não saber qual é pior.
+          for URL in https://airia.pro/ https://www.airia.pro/ https://airia.pro/api/health; do
+            CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$URL" || echo 000)"
+            echo "$URL -> HTTP $CODE"
+          done

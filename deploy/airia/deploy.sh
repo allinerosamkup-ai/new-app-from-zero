@@ -185,6 +185,31 @@ if [ "$WWW_CODE" != "200" ]; then
 fi
 echo "www: API respondendo 200 (PWA instalado nesse host preservado)"
 
+# Como os dois hosts servem 200 de propósito, `rel=canonical` é o ÚNICO sinal
+# que diz ao buscador qual URL é a verdadeira. Canônica ausente numa página faz
+# aquela URL existir em dois hosts sem nada os ligando, e o host que o Google
+# eleger pode ser o `www` — que não está na propriedade do Search Console
+# (`https://airia.pro/`), então a página some do relatório e não dá para pedir
+# indexação dela. Foi exatamente o que aconteceu com `/privacy` e `/terms`, que
+# são arquivos estáticos e não passam pelo `<head>` da SPA.
+# A checagem roda nos DOIS hosts: é a versão do `www` que precisa apontar para
+# o host sem `www`, e é justamente ela que ninguém abre para conferir.
+for CANONICAL_ENTRY in "/=https://airia.pro/" "/privacy=https://airia.pro/privacy" "/terms=https://airia.pro/terms"; do
+  CANONICAL_PATH="${CANONICAL_ENTRY%%=*}"
+  CANONICAL_URL="${CANONICAL_ENTRY#*=}"
+  for CANONICAL_HOST in airia.pro www.airia.pro; do
+    CANONICAL_BODY="$(curl -fsS --max-time 10 "https://${CANONICAL_HOST}${CANONICAL_PATH}" 2>/dev/null)" || CANONICAL_BODY=""
+    case "$CANONICAL_BODY" in
+      *"rel=\"canonical\" href=\"${CANONICAL_URL}\""*) ;;
+      *)
+        echo "FALHA: https://${CANONICAL_HOST}${CANONICAL_PATH} não declara canônica ${CANONICAL_URL}"
+        exit 1
+        ;;
+    esac
+  done
+  echo "canônica ${CANONICAL_PATH}: ${CANONICAL_URL} nos dois hosts"
+done
+
 PUBLIC_EN="$(curl -fsS --max-time 10 'https://airia.pro/?lang=en')"
 case "$PUBLIC_EN" in
   *'<html lang="en-US"'*) echo "/?lang=en: head em inglês confirmado" ;;

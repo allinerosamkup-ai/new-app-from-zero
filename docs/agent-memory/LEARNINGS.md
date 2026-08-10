@@ -233,19 +233,51 @@ redirecionamento" — nunca indexada, zero cliques de busca. Hoje `/` renderiza 
 splash e `/splash` manda para a raiz.
 Segundo problema no mesmo diagnóstico: `www.airia.pro` e `airia.pro` serviam o
 site com 200, e o Google elegeu o **www** como canônico — host que nem estava na
-propriedade cadastrada. O nginx devolve 301 de www para o host sem www, e o
-deploy valida esse 301.
+propriedade cadastrada. A correção por 301 foi revertida no mesmo dia (ver
+"Tentativas que já falharam"): os dois hosts continuam servindo 200 de propósito,
+e a consolidação é feita **só** por `rel=canonical`. O deploy valida que o `www`
+responde 200 e que a canônica aponta para o host sem `www` nas duas versões.
 **Propriedade no Search Console:** `https://airia.pro/` (prefixo de URL), na
-conta allinerosamkup@gmail.com. Não existe propriedade de domínio.
+conta allinerosamkup@gmail.com. Não existe propriedade de domínio — e por isso
+qualquer URL que o Google resolva eleger no `www` fica invisível no relatório e
+sem como pedir indexação. Propriedade de domínio cobriria os dois hosts de uma
+vez; exige um registro TXT no DNS (Hostinger, zona `airia.pro`).
+
+### [FATO] O DNS de `airia.pro` já cobre os dois hosts — o buraco era a canônica
+Medido em 2026-08-10, via DoH: `airia.pro` tem `A → 195.35.17.102` e
+`www.airia.pro` tem `CNAME → airia.pro`, ambos em `ns1/ns2.dns-parking.com`
+(Hostinger). Os dois hosts servem HTTP 200 com o mesmo `etag`, o certificado
+Let's Encrypt cobre os dois (`CN=airia.pro` + SAN `www.airia.pro`) e o `http://`
+de cada um faz 301 para o próprio `https://`. **Reclamação de "página não
+reconhecida no www" não é DNS** — não há registro faltando para criar.
+
+O que faltava: `privacy.html` e `terms.html` são arquivos estáticos servidos
+fora do `<head>` da SPA e **não tinham `rel=canonical` nenhum**, sendo duas das
+quatro URLs do sitemap. Com dois hosts em 200 e nenhum sinal de consolidação,
+o Google pode eleger `www.airia.pro/privacy` — host fora da propriedade do
+Search Console. As rotas do SPA nunca tiveram esse problema porque herdam a
+canônica do `index.html` estático.
+Trava: `apps/web/src/lib/public-pages-canonical.test.ts` (arquivo) + checagem de
+canônica nos dois hosts no `deploy.sh` (produção).
+**Aviso para rota pública nova:** toda rota do SPA herda a canônica do
+`index.html`, que aponta para a raiz — então nasce se declarando duplicata da
+home e sem como ser indexada por si. Foi o caso de `/livro`, corrigido com
+`<head>` estático próprio e depois removido junto com a página (o e-book saiu do
+produto em 2026-08-10; a rota ficou redirecionando para a home, como Planner e
+Hábitos). O caminho está provado e documentado em `apps/web/CLAUDE.md`: gerar o
+`<head>` em `build-seo-html.mjs` e servir pelo nginx. Canônica só em JavaScript
+não resolve — deixa o HTML cru contradizendo o DOM renderizado, e prévia de link
+não executa JS.
 
 ### [FATO] Deploy verde não significa build completa
 `Dockerfile.web` chamava `node ./node_modules/vite/bin/vite.js build`, então
 tudo que o script `build` faz além do Vite era pulado — `index.en.html` saiu
 verde no build local e simplesmente não existia na imagem, com `?lang=en` em
 404 na produção, e o deploy passou inteiro. Hoje o Dockerfile usa `npm run
-build` e o deploy valida `/?lang=en`, `/robots.txt`, `/sitemap.xml` e o 301 do
-www. O `build` invoca o Vite pelo caminho do node porque no Alpine o atalho em
-`.bin` chega sem permissão de execução.
+build` e o deploy valida `/?lang=en`, `/robots.txt`, `/sitemap.xml`, o 200 do
+`www` e a canônica das páginas indexáveis nos dois hosts. O `build` invoca o
+Vite pelo caminho do node porque no Alpine o atalho em `.bin` chega sem permissão
+de execução.
 
 ### [FATO] `input[type=range]` não dispara evento ao tocar onde o polegar já está
 Campo opcional começa com o polegar no meio da escala, então o valor do meio —

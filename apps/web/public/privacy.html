@@ -8,6 +8,20 @@
   <meta property="og:title" content="Política de Privacidade — Airia">
   <meta property="og:description" content="Sua privacidade é a base da Airia. Protegemos cada dado com o mais alto rigor técnico e ético.">
   <meta property="og:type" content="website">
+  <!--
+    Canônica no host sem `www`. Esta página e a de termos são servidas idênticas
+    em `airia.pro` e `www.airia.pro` com HTTP 200, e são as únicas do sitemap
+    além da raiz. Sem esta linha elas não tinham nenhum sinal de consolidação de
+    host: o buscador podia eleger `www.airia.pro/privacy` como versão canônica —
+    host que não está na propriedade do Search Console (`https://airia.pro/`),
+    então a página some do relatório e não dá para pedir indexação dela.
+    O `index.html` do app já declarava a sua; estes dois arquivos estáticos
+    ficaram de fora porque não passam pelo `<head>` da SPA.
+    Redirecionar `www` não é opção: o PWA está instalado nesse host (ver
+    `deploy/airia/nginx.conf`).
+  -->
+  <link rel="canonical" href="https://airia.pro/privacy">
+  <meta property="og:url" content="https://airia.pro/privacy">
   <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

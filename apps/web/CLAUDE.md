@@ -76,14 +76,31 @@ Só `setLanguage()`, em Preferências, escreve `airia_lang`. `dropDetectorCache(
 limpa o cache antigo pelo formato — o detector gravava `pt-BR`, a escolha grava
 `pt`.
 
-**A splash é a única página pública, e é ela que carrega o SEO.** `lib/seo.ts`
-decide (função pura, testada) e aplica no `<head>`: título, descrição, canônica,
-`hreflang`, Open Graph, Twitter e JSON-LD, tudo trocando com o idioma. As telas
+**São três páginas públicas, e cada uma precisa declarar a própria canônica.**
+A splash (`/`) carrega SEO por `lib/seo.ts` — função pura, testada, que decide,
+e escrita boba que aplica no `<head>`. `/privacy` e `/terms` são arquivos
+estáticos em `public/` e trazem a canônica escrita no próprio arquivo. As telas
 internas não entram — sobrescrever o título delas com texto de marketing não
-ajuda ninguém, e elas estão bloqueadas no `robots.txt` porque exigem sessão.
+ajuda ninguém, e estão bloqueadas no `robots.txt` porque exigem sessão.
 
-Cada idioma tem URL própria (`/` e `/?lang=en`); sem isso `hreflang` não
+**Canônica não é opcional em nenhuma delas.** `airia.pro` e `www.airia.pro`
+servem o mesmo site com 200 de propósito (o PWA está instalado no `www`), então
+`rel=canonical` é o único sinal que diz qual URL é a verdadeira. `privacy.html` e
+`terms.html` ficaram sem nenhuma até 2026-08-10, sendo duas das URLs do sitemap:
+o Google podia eleger a versão `www`, host fora da propriedade do Search Console.
+Trava: `lib/public-pages-canonical.test.ts` + checagem nos dois hosts no
+`deploy.sh`.
+
+Cada idioma da raiz tem URL própria (`/` e `/?lang=en`); sem isso `hreflang` não
 significa nada. As declarações são recíprocas, senão o Google descarta.
+
+**Rota nova que seja pública precisa de canônica própria antes de entrar no
+sitemap.** Toda rota do SPA herda o `<head>` do `index.html`, canônica inclusive
+— ou seja, nasce se declarando duplicata da home. O caminho já existe e está
+provado: `scripts/build-seo-html.mjs` gera um `<head>` estático a partir de
+`seo-content.json` e o nginx serve na URL certa (é o que faz o `index.en.html`).
+Injetar canônica só em JavaScript não serve: deixa o HTML cru contradizendo o
+DOM renderizado, e prévia de link não executa JS.
 
 **Limite honesto:** isto roda no cliente. O Googlebot executa JS e enxerga;
 prévia de link no WhatsApp e no Slack **não executa**, então o compartilhamento
