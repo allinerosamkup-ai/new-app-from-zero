@@ -20,8 +20,9 @@ confiável e criar a fundação de um programa de psicólogas verificadas pelo C
   mas não marca `profiles.onboarding_done`. Só o fluxo antigo faz isso.
 - A tela de billing trata `?status=success` como assinatura ativada antes da
   confirmação do servidor.
-- O Stripe live tem produto e preços de R$ 29,90/mês e R$ 249/ano, mas a conta
-  ainda está com cobranças desabilitadas, sem webhook e sem portal configurado.
+- O Stripe live tem produto e preços de R$ 29,90/mês e R$ 249/ano, mas ainda
+  não tem a oferta vitalícia de R$ 99 pedida pela Alline. A conta também está com
+  cobranças desabilitadas, sem webhook e sem portal configurado.
 - `STRIPE_PRICE_ID_ANNUAL` aponta para um preço ativo; `STRIPE_PRICE_ID` não.
 - O convite atual é apenas um hash local do `userId`; não há atribuição,
   persistência, benefício nem prevenção de fraude.
@@ -78,8 +79,10 @@ confiável e criar a fundação de um programa de psicólogas verificadas pelo C
 - A partir do dia 3: uma oferta discreta somente depois de um momento de valor
   registrado, como check-in concluído ou resposta útil da Airia.
 - Dia 5: lembrete de dois dias, com resumo baseado em uso real.
-- Dia 7/14: tela de continuidade com mensal e anual; o anual é recomendado sem
-  esconder o mensal.
+- Dia 7/14: tela de continuidade com mensal, anual e vitalício. Nenhuma opção
+  fica escondida. O vitalício de R$ 99 é tratado como oferta especial
+  controlável, porque seu valor é inferior ao anual e tende a canibalizar as
+  assinaturas se ficar disponível sem estratégia de encerramento.
 - Depois do vencimento: núcleo gratuito + paywalls contextuais com cooldown.
 - Ações de segurança, privacidade, exportação e acesso aos próprios dados nunca
   ficam atrás de paywall.
@@ -92,7 +95,8 @@ Nova relação 1:1 com `Profile`, separada de `OnboardingResponse`:
 
 - `userId` único;
 - `stripeCustomerId` e `stripeSubscriptionId` únicos e opcionais;
-- `status`, `plan`, `priceId` e `currentPeriodEnd`;
+- `status`, `plan` (`monthly`, `annual` ou `lifetime`), `priceId` e
+  `currentPeriodEnd`;
 - `trialStartedAt`, `trialEndsAt` e `trialSource`;
 - `cancelAtPeriodEnd`;
 - timestamps.
@@ -150,6 +154,8 @@ Esse registro impede efeitos duplicados quando o Stripe reenvia eventos.
 ## Stripe
 
 - Checkout usa somente IDs de preço definidos e validados no servidor.
+- Mensal e anual usam Checkout `subscription`; vitalício usa Checkout `payment`
+  e só concede acesso permanente depois da confirmação server-side do pagamento.
 - `success_url` inclui `{CHECKOUT_SESSION_ID}`; a UI mostra `processando` até a
   confirmação do servidor/webhook.
 - A sessão recebe `client_reference_id`, metadata de usuário e plano e chave de
@@ -159,8 +165,8 @@ Esse registro impede efeitos duplicados quando o Stripe reenvia eventos.
   `customer.subscription.deleted`, `invoice.paid` e `invoice.payment_failed`.
 - Portal permite atualizar pagamento, consultar faturas e cancelar assinatura.
 - O webhook live aponta para `https://airia.pro/api/billing/webhook`.
-- O preço mensal local é alinhado ao preço ativo de R$ 29,90 e o anual permanece
-  R$ 249.
+- O preço mensal local é alinhado ao preço ativo de R$ 29,90, o anual permanece
+  R$ 249 e o vitalício é um pagamento único de R$ 99.
 - Nenhuma tela afirma sucesso apenas porque recebeu um parâmetro de URL.
 
 ## Estados de erro

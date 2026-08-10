@@ -476,7 +476,8 @@ git commit -m "feat(partners): expose secure application and referral APIs"
 Inject a narrow Stripe client interface and test:
 
 - customer creation uses `BillingAccount`, not `OnboardingResponse`;
-- monthly/annual map only to configured active IDs;
+- monthly/annual/lifetime map only to configured active IDs;
+- monthly and annual use subscription mode; lifetime uses one-time payment mode;
 - checkout includes `client_reference_id`, user/plan metadata,
   `{CHECKOUT_SESSION_ID}` in success URL, and idempotency options;
 - checkout session verification checks owner and payment/subscription state;
@@ -500,7 +501,8 @@ storage.
 Use a constructor/factory that receives Prisma and Stripe clients. Keep raw-body
 webhook registration before `express.json()`. Validate `plan` with Zod and return
 specific safe error codes (`billing_unavailable`, `invalid_plan`,
-`checkout_failed`, `no_subscription`).
+`checkout_failed`, `no_subscription`). A confirmed lifetime Checkout persists
+`plan=lifetime`, paid access without `currentPeriodEnd`, and no subscription ID.
 
 **Step 4: Run and verify GREEN**
 
@@ -527,8 +529,8 @@ git commit -m "fix(billing): make Stripe the reliable paid-access source"
 
 **Step 1: Write failing UI tests**
 
-Cover free, trial, professional, paid, pending Checkout, past due, canceled, and
-API error. Assert that:
+Cover free, trial, professional, paid monthly, paid annual, paid lifetime,
+pending Checkout, past due, canceled, and API error. Assert that:
 
 - `isPro` comes from `access === 'pro'`, not a front-end status guess;
 - success UI waits for server-confirmed Checkout ownership/state;
@@ -547,8 +549,9 @@ Expected: FAIL because the current contract is only status/plan/periodEnd.
 **Step 3: Implement the typed summary and screens**
 
 Use the backend summary verbatim. On `session_id`, poll with bounded retries and
-show pending instead of activated until confirmed. Keep monthly and annual
-prices explicit and accessible.
+show pending instead of activated until confirmed. Keep monthly, annual and
+lifetime offers explicit and accessible. Lifetime displays R$ 99 from the
+server contract and can be disabled independently as a special offer.
 
 **Step 4: Run and verify GREEN**
 
@@ -676,7 +679,9 @@ cannot be completed from existing verified data, record exact blocker in
 **Step 3: Align runtime price IDs**
 
 Set monthly to the active BRL monthly price and annual to the active BRL annual
-price. Verify both through Stripe API before updating runtime env.
+price. Verify both through Stripe API before updating runtime env. Create or
+align the one-time BRL lifetime price at R$ 99, then store it as
+`STRIPE_PRICE_ID_LIFETIME`.
 
 **Step 4: Create/update webhook endpoint**
 

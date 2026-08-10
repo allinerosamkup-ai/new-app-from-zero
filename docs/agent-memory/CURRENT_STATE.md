@@ -58,7 +58,8 @@ parceiros e Stripe ainda pendentes.
 
 - [x] Plano de implementação TDD.
 - [x] Tasks 1–3: persistência, acesso/período e conclusão canônica.
-- [ ] Tasks 4–13: oferta final, rotas legadas, parceiros, Stripe, paywalls e validação.
+- [x] Tasks 4–5: rotas legadas e oferta final depois da conclusão real.
+- [ ] Tasks 6–13: parceiros, Stripe com três ofertas, paywalls e validação.
 - [ ] Configuração Stripe externa e validação real.
 - [ ] Revisão Airia, builds, browser e fechamento Git/worktree.
 
@@ -80,12 +81,15 @@ parceiros e Stripe ainda pendentes.
 - Stripe live está com `charges_enabled=false`, capacidades pendentes, sem webhook e sem portal.
 - O preço anual configurado existe; o mensal configurado não corresponde ao preço mensal ativo.
 - O convite atual não tem backend nem atribuição.
+- A Alline confirmou três ofertas: mensal R$ 29,90, anual R$ 249 e vitalícia
+  R$ 99. A vitalícia será pagamento único e oferta controlável; ainda precisa
+  ser criada no Stripe.
 
 ## Próxima melhor ação
 
-Executar Tasks 4–5: ligar a conclusão real e a oferta gradual ao final de
-`/comecar`, depois transformar todas as rotas antigas em redirecionamentos para
-o fluxo canônico.
+Executar Tasks 6–7: contratos e rotas seguras para cadastro CRP e indicação.
+Na Task 8, suportar mensal/anual como assinatura e vitalício como pagamento
+único de R$ 99.
 
 Último trabalho registrado (2026-08-09): protocolo permanente de iteração,
 memória e conclusão alinhado ao runner real do monorepo e aos eventos
