@@ -2,7 +2,7 @@
 
 ## Status
 
-`PRONTO PARA COMMIT — implementação, regressão e revisão independente concluídas`
+`READY_TO_MERGE — implementação, regressão, revisão e commit concluídos`
 
 ## Objetivo
 
@@ -79,7 +79,8 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 
 ## Arquivos alterados
 
-- Ver `git status --short`; todas as alterações pertencem a esta tarefa.
+- Commit funcional: `7b33baa feat: add contextual objective intelligence`.
+- Worktree sem alterações funcionais fora dos commits desta tarefa.
 
 ## Verificações executadas
 
@@ -115,4 +116,4 @@ autenticado persistente. Código, testes integrais, builds e preview local passa
 
 ## Próxima melhor ação
 
-Commitar a branch e manter o worktree pronto para integração sem publicar.
+Integrar a branch somente após decisão explícita; não publicar automaticamente.
