@@ -123,18 +123,27 @@ import {
   shouldSendPersistentReminder,
 } from './lib/notification-filters';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
-import { normalizeObjectiveSubgoals, ObjectiveSubgoalsSchema } from './lib/objective-subgoals';
+import { normalizeObjectiveSubgoals } from './lib/objective-subgoals';
+import { PRODUCT_CAPABILITIES, type ProductCapabilities } from './contracts/product-capabilities';
 import {
   ObjectiveActionRecoveryService,
   type GoalSubtasksSuggestionGenerator,
-  type GoalSubtasksSuggestionRequest,
 } from './services/objective-action-recovery.service';
 import {
   GoalIntelligenceService,
+  type GoalDecomposition,
   type GoalIntelligenceInput,
 } from './services/goal-intelligence.service';
 import { OperationalProfileService } from './services/operational-profile.service';
 import { ObjectiveProgressionError, ObjectiveProgressionService } from './services/objective-progression.service';
+import {
+  ObjectivePathConflictError,
+  ObjectivePathInvalidProposalError,
+  ObjectivePathNotFoundError,
+  ObjectivePathService,
+} from './services/objective-path.service';
+import { DailyPrioritiesService } from './services/daily-priorities.service';
+import { ObjectiveRevisionRelevanceService } from './services/objective-revision-relevance.service';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
   AuraCommandMessageStreamSchema,
@@ -520,6 +529,8 @@ type AppDependencies = {
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
   generateJournalSuggestedTasks?: typeof generateJournalSuggestedTasks;
   generateGoalSubtasks?: GoalSubtasksSuggestionGenerator;
+  goalDecompose?: (input: GoalIntelligenceInput) => Promise<GoalDecomposition>;
+  capabilities?: ProductCapabilities;
   routineBuilderService?: Pick<RoutineBuilderService,
     'createSession' | 'getSession' | 'ingestSource' | 'submitGuidedAnswers' | 'updateItems' | 'answerClarifications' | 'compose' | 'apply'>;
 };
@@ -807,23 +818,28 @@ async function resolveAuraCompletionTargets(input: {
   userId: string;
   localDate: string;
   items: unknown;
+  capabilities: ProductCapabilities;
 }) {
   if (!Array.isArray(input.items)) return [];
+  const unresolvedItems = input.items.map((item) => (
+    item && typeof item === 'object' ? item as Record<string, unknown> : { title: item }
+  ));
+  if (!input.capabilities.planner && !input.capabilities.habits) return unresolvedItems;
   const dayStart = new Date(`${input.localDate}T00:00:00.000Z`);
   const dayEnd = new Date(`${input.localDate}T23:59:59.999Z`);
   const [blocks, habits] = await Promise.all([
-    input.prisma.timelineBlock.findMany({
+    input.capabilities.planner ? input.prisma.timelineBlock.findMany({
       where: {
         userId: input.userId,
         localDate: { gte: dayStart, lte: dayEnd },
         status: { not: 'completed' },
       },
       select: { id: true, title: true },
-    }),
-    input.prisma.habit.findMany({
+    }) : Promise.resolve([]),
+    input.capabilities.habits ? input.prisma.habit.findMany({
       where: { userId: input.userId, archived: false },
       select: { id: true, title: true },
-    }),
+    }) : Promise.resolve([]),
   ]);
 
   return input.items.map((item) => {
@@ -904,7 +920,11 @@ async function buildTodayPlannerContext(prisma: PrismaClient, userId: string): P
   return `AGENDA DE HOJE (${todayStr}):\n${lines.join('\n')}`;
 }
 
-async function buildTodayCompletionContext(prisma: PrismaClient, userId: string): Promise<{
+async function buildTodayCompletionContext(
+  prisma: PrismaClient,
+  userId: string,
+  capabilities: ProductCapabilities,
+): Promise<{
   text: string | null;
   titles: string[];
 }> {
@@ -915,19 +935,19 @@ async function buildTodayCompletionContext(prisma: PrismaClient, userId: string)
   const titles: string[] = [];
 
   const [completedBlocks, completedHabits, objectives] = await Promise.all([
-    prisma.timelineBlock.findMany({
+    capabilities.planner ? prisma.timelineBlock.findMany({
       where: { userId, localDate: { gte: dayStart, lte: dayEnd }, status: 'completed' },
       orderBy: { startAt: 'asc' },
       select: { title: true, startAt: true, category: true },
-    }).catch(() => []),
-    prisma.habit.findMany({
+    }).catch(() => []) : Promise.resolve([]),
+    capabilities.habits ? prisma.habit.findMany({
       where: {
         userId,
         archived: false,
         completions: { some: { date: { gte: dayStart, lte: dayEnd } } },
       },
       select: { title: true, category: true },
-    }).catch(() => []),
+    }).catch(() => []) : Promise.resolve([]),
     prisma.objective.findMany({
       where: { userId, archived: false },
       select: { title: true, progress: true, subgoals: true },
@@ -2029,24 +2049,128 @@ export function buildGoalIntelligenceInput(input: {
   };
 }
 
-/**
- * Recuperação de objetivo sem ações.
- *
- * Passa pelo mesmo cérebro do fluxo normal: se a interpretação não se sustentar,
- * o objetivo continua sem ações e o serviço tenta de novo depois. Encher com
- * lista genérica seria pior — a pessoa abriria o objetivo e veria passos que não
- * têm nada a ver com a situação dela.
- */
-async function generateGoalSubtasksForRecovery(
-  request: GoalSubtasksSuggestionRequest,
-  _options?: { signal?: AbortSignal },
-): Promise<unknown> {
-  const decomposition = await GoalIntelligenceService.decompose({
-    goalTitle: request.context.goalTitle,
-    existingActions: request.context.existingSubtasks,
-    locale: request.context.locale,
-  });
-  return { items: decomposition.steps.map((step) => step.title) };
+function objectiveDate(value: Date | string | null | undefined): string | null {
+  if (!value) return null;
+  return (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10);
+}
+
+function serializeObjective(objective: any, primaryObjectiveId: string | null = null) {
+  const subgoals = normalizeObjectiveSubgoals(Array.isArray(objective.subgoals) ? objective.subgoals : []);
+  const storedMilestones = Array.isArray(objective.milestones) ? objective.milestones : [];
+  // Objetivos antigos entram numa etapa canônica, sem regenerar nem perder ações.
+  const milestones = storedMilestones.length > 0
+    ? storedMilestones
+    : subgoals.length > 0
+      ? [{ id: 'legacy-current', title: 'Caminho atual', order: 0, doneWhen: objective.resultDefinition ?? objective.title, actions: [] }]
+      : [];
+  return {
+    id: objective.id,
+    title: objective.title,
+    description: objective.description ?? null,
+    category: objective.category,
+    progress: objective.progress,
+    subgoals,
+    aiInsight: objective.aiInsight ?? null,
+    deadline: objectiveDate(objective.deadline),
+    pausedAt: objective.pausedAt instanceof Date ? objective.pausedAt.toISOString() : objective.pausedAt ?? null,
+    resultDefinition: objective.resultDefinition ?? null,
+    currentReality: objective.currentReality ?? null,
+    milestones,
+    pathVersion: objective.pathVersion ?? 1,
+    pathProposal: objective.pathProposal ?? null,
+    pathProposalCreatedAt: objective.pathProposalCreatedAt instanceof Date
+      ? objective.pathProposalCreatedAt.toISOString()
+      : objective.pathProposalCreatedAt ?? null,
+    pathStatus: subgoals.length > 0 && (!objective.pathStatus || objective.pathStatus === 'not_started')
+      ? 'ready'
+      : objective.pathStatus ?? 'not_started',
+    pathQuestion: objective.pathQuestion ?? null,
+    isPrimary: primaryObjectiveId === objective.id,
+    createdAt: objective.createdAt instanceof Date ? objective.createdAt.toISOString() : objective.createdAt,
+  };
+}
+
+export function isCurrentObjectiveContext(createdAt: unknown, now = new Date(), maxAgeHours = 48): boolean {
+  const timestamp = createdAt instanceof Date ? createdAt.getTime() : new Date(String(createdAt ?? '')).getTime();
+  if (!Number.isFinite(timestamp)) return false;
+  const age = now.getTime() - timestamp;
+  return age >= 0 && age <= maxAgeHours * 60 * 60 * 1000;
+}
+
+async function loadObjectiveIntelligenceContext(prisma: any, userId: string, objectiveId: string) {
+  const now = new Date();
+  const todayKey = getSaoPauloDateContext(now).dateKey;
+  const [journal, aura, decisions, memories, checkin, operationalProfile] = await Promise.all([
+    prisma.journalMessage?.findMany?.({
+      where: { userId, role: 'user', createdAt: { gte: new Date(now.getTime() - 48 * 60 * 60 * 1000) } },
+      orderBy: { createdAt: 'desc' }, take: 8, select: { content: true, createdAt: true },
+    }).catch(() => []) ?? [],
+    prisma.auraCommandMessage?.findMany?.({
+      where: { userId, role: 'user', createdAt: { gte: new Date(now.getTime() - 48 * 60 * 60 * 1000) } },
+      orderBy: { createdAt: 'desc' }, take: 8, select: { content: true, createdAt: true },
+    }).catch(() => []) ?? [],
+    prisma.eventLog?.findMany?.({
+      where: {
+        userId,
+        eventName: { in: ['objective_path_answered', 'objective_action_rejected', 'objective_action_deferred', 'objective_action_completed'] },
+      },
+      orderBy: { createdAt: 'desc' }, take: 40, select: { eventName: true, properties: true },
+    }).catch(() => []) ?? [],
+    prisma.userMemory?.findMany?.({
+      where: { userId, lifecycle: 'active' }, orderBy: [{ salience: 'desc' }, { lastSeenAt: 'desc' }], take: 20,
+      select: { kind: true, content: true, confidence: true },
+    }).catch(() => []) ?? [],
+    prisma.dailyCheckin?.findFirst?.({
+      where: { userId, localDate: getSaoPauloDateContext(now).dbDate }, orderBy: { recordedAt: 'desc' },
+      select: { energyScore: true, moodScore: true, signalMetadata: true, localDate: true },
+    }).catch(() => null) ?? null,
+    OperationalProfileService.get(prisma, userId),
+  ]);
+  const objectiveDecisions = (decisions as any[]).filter((row) => (
+    row?.properties && String(row.properties.objectiveId ?? '') === objectiveId
+  ));
+  const answers = objectiveDecisions.flatMap((row) => (
+    row.eventName === 'objective_path_answered' && typeof row.properties?.answer === 'string'
+      ? [row.properties.answer]
+      : []
+  ));
+  const blockedActions = objectiveDecisions.flatMap((row) => (
+    ['objective_action_rejected', 'objective_action_deferred'].includes(row.eventName)
+      && typeof row.properties?.title === 'string'
+      ? [row.properties.title]
+      : []
+  ));
+  const canonicalFacts = (memories as any[])
+    .filter((memory) => ['fact', 'decision', 'context', 'preference'].includes(memory.kind) && Number(memory.confidence) >= 0.6)
+    .map((memory) => String(memory.content)).filter(Boolean).slice(0, 12);
+  const patterns = (memories as any[])
+    .filter((memory) => memory.kind === 'pattern')
+    .map((memory) => String(memory.content)).filter(Boolean).slice(0, 6);
+  const checkinDateKey = checkin?.localDate
+    ? new Date(checkin.localDate).toISOString().slice(0, 10)
+    : null;
+  const currentCheckin = checkinDateKey === todayKey ? checkin : null;
+  const metadata = currentCheckin?.signalMetadata && typeof currentCheckin.signalMetadata === 'object'
+    ? currentCheckin.signalMetadata as Record<string, unknown>
+    : {};
+  const note = typeof metadata.note === 'string' ? metadata.note : '';
+  const userStatements = [
+    ...answers,
+    note,
+    ...(journal as any[]).filter((row) => isCurrentObjectiveContext(row.createdAt, now)).map((row) => String(row.content ?? '')),
+    ...(aura as any[]).filter((row) => isCurrentObjectiveContext(row.createdAt, now)).map((row) => String(row.content ?? '')),
+  ].map((value) => value.trim()).filter(Boolean).slice(0, 18);
+  const energyScore = typeof currentCheckin?.energyScore === 'number' ? currentCheckin.energyScore : null;
+  return {
+    userStatements,
+    blockedActions,
+    canonicalFacts,
+    patternContext: patterns.join('\n').slice(0, 1600) || null,
+    energyScore,
+    moodLabel: typeof currentCheckin?.moodScore === 'number' ? `humor ${currentCheckin.moodScore}/10` : null,
+    capacity: energyScore === null ? null : energyScore <= 3 ? 'quick' as const : energyScore >= 7 ? 'heavy' as const : 'moderate' as const,
+    operationalProfile,
+  };
 }
 
 function serializeProfessionalPartner(partner: any) {
@@ -2070,6 +2194,7 @@ function serializeProfessionalPartner(partner: any) {
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const prisma = dependencies.prisma ?? defaultPrisma;
+  const capabilities = dependencies.capabilities ?? PRODUCT_CAPABILITIES;
   const billingAccessService = dependencies.billingAccessService ?? new BillingAccessService(prisma, {
     checkoutAvailable: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
   });
@@ -2091,12 +2216,148 @@ export function createApp(dependencies: AppDependencies = {}) {
     extractor: conservativeAuraExtractor,
   });
   const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
-  const contextGroundingService = new ContextGroundingService(prisma);
+  const contextGroundingService = new ContextGroundingService(prisma, capabilities);
   const objectiveProgressionService = new ObjectiveProgressionService(prisma as any);
+  const persistConfirmedObjectivePath = async (transaction: any, objective: any, source: string) => {
+    const actions = normalizeObjectiveSubgoals(objective.subgoals);
+    const current = actions.find((action) => !action.done && action.status !== 'rejected' && action.status !== 'deferred');
+    await new CanonicalMemoryService(transaction).write({
+      userId: objective.userId,
+      kind: 'decision',
+      scope: `objective:${objective.id}`,
+      canonicalKey: `objective.${objective.id}.confirmed_path`,
+      content: [
+        `Objetivo: ${objective.title}`,
+        objective.resultDefinition ? `Resultado: ${objective.resultDefinition}` : '',
+        objective.currentReality ? `Realidade atual: ${objective.currentReality}` : '',
+        current ? `Ação atual: ${current.title}` : '',
+      ].filter(Boolean).join('\n'),
+      structuredValue: {
+        objectiveId: objective.id,
+        pathVersion: objective.pathVersion,
+        milestones: objective.milestones,
+        currentActions: current ? [{ id: current.id, title: current.title }] : [],
+      },
+      confidence: 1,
+      salience: 0.9,
+      source,
+      sourceId: `${objective.id}:${objective.pathVersion}`,
+      targetType: 'objective',
+      targetId: objective.id,
+    });
+  };
+  const objectivePathService = new ObjectivePathService(
+    prisma as any,
+    dependencies.goalDecompose,
+    persistConfirmedObjectivePath,
+  );
+  const reviewObjectivePathsAfterContext = async (
+    userId: string,
+    statement: string,
+    source: 'journal' | 'checkin' | 'aura',
+  ) => {
+    if (!statement.trim()) return [] as Array<{ objectiveId: string; reason: string }>;
+    if (!prisma.objective?.findMany) return [] as Array<{ objectiveId: string; reason: string }>;
+    const objectives = await prisma.objective.findMany({
+      where: {
+        userId,
+        archived: false,
+        pausedAt: null,
+        pathStatus: 'ready',
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+    });
+    const proposed: Array<{ objectiveId: string; reason: string }> = [];
+    for (const objective of objectives) {
+      if (objective.pathProposal) continue;
+      const actions = normalizeObjectiveSubgoals(objective.subgoals);
+      const relevance = await ObjectiveRevisionRelevanceService.evaluate({
+        objectiveTitle: objective.title,
+        resultDefinition: objective.resultDefinition,
+        currentReality: objective.currentReality,
+        milestones: objective.milestones,
+        currentActions: actions
+          .filter((action) => !action.done && action.status !== 'rejected' && action.status !== 'deferred')
+          .slice(0, 2)
+          .map((action) => action.title),
+        newContext: statement,
+        source,
+      });
+      if (!relevance.relevant || !relevance.reason) continue;
+      try {
+        const context = await loadObjectiveIntelligenceContext(prisma, userId, objective.id);
+        await objectivePathService.proposeRevision({
+          userId,
+          objectiveId: objective.id,
+          locale: 'pt-BR',
+          reason: relevance.reason,
+          ...context,
+          userStatements: [...context.userStatements, statement],
+        });
+        proposed.push({ objectiveId: objective.id, reason: relevance.reason });
+      } catch (error) {
+        // Contexto novo nunca pode impedir Diário ou Check-in de serem salvos.
+        console.warn(`[objective-revision] proposta ignorada para ${objective.id}:`, error);
+      }
+    }
+    return proposed;
+  };
   const objectiveActionRecoveryService = new ObjectiveActionRecoveryService(
     prisma as any,
-    dependencies.generateGoalSubtasks ?? generateGoalSubtasksForRecovery,
+    dependencies.generateGoalSubtasks ?? (async (request) => {
+      const context = await loadObjectiveIntelligenceContext(
+        prisma,
+        request.context.userId,
+        request.context.objectiveId,
+      );
+      const decomposition = await GoalIntelligenceService.decompose({
+        goalTitle: request.context.goalTitle,
+        existingActions: request.context.existingSubtasks,
+        locale: request.context.locale,
+        ...context,
+      });
+      return {
+        items: decomposition.steps.map((step) => step.title),
+        steps: decomposition.steps,
+        question: decomposition.question,
+        resultDefinition: decomposition.resultDefinition,
+        currentReality: decomposition.currentReality,
+        milestones: decomposition.milestones,
+      };
+    }),
   );
+  const projectObjectivePathToMemory = async (objective: any, source: string) => {
+    if (!objective || objective.pathStatus !== 'ready') return;
+    const actions = normalizeObjectiveSubgoals(objective.subgoals);
+    const currentActions = actions.filter((action) => (
+      !action.done && action.status !== 'rejected' && action.status !== 'deferred'
+    ));
+    await canonicalMemoryService.write({
+      userId: objective.userId,
+      kind: 'decision',
+      scope: `objective:${objective.id}`,
+      canonicalKey: `objective.${objective.id}.confirmed_path`,
+      content: [
+        `Objetivo: ${objective.title}`,
+        objective.resultDefinition ? `Resultado: ${objective.resultDefinition}` : '',
+        objective.currentReality ? `Realidade atual: ${objective.currentReality}` : '',
+        currentActions[0] ? `Ação atual: ${currentActions[0].title}` : '',
+      ].filter(Boolean).join('\n'),
+      structuredValue: {
+        objectiveId: objective.id,
+        pathVersion: objective.pathVersion,
+        milestones: objective.milestones,
+        currentActions: currentActions.map((action) => ({ id: action.id, title: action.title })),
+      },
+      confidence: 1,
+      salience: 0.9,
+      source,
+      sourceId: `${objective.id}:${objective.pathVersion}`,
+      targetType: 'objective',
+      targetId: objective.id,
+    });
+  };
   const applyAuraAgendaAdaptation = async ({
     userId,
     localDate,
@@ -2155,8 +2416,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
       const [runtimeContext, plannerContext, completionContext, recentSuggestionItems, memories] = await Promise.all([
         resolveAiRuntimeContext(prisma, data.userId, {}),
-        buildTodayPlannerContext(prisma, data.userId),
-        buildTodayCompletionContext(prisma, data.userId),
+        capabilities.planner || capabilities.connectedCalendar
+          ? buildTodayPlannerContext(prisma, data.userId)
+          : Promise.resolve(null),
+        buildTodayCompletionContext(prisma, data.userId, capabilities),
         SuggestionMemoryService.getRecent(prisma, data.userId),
         memoryService.retrieve(data.userId, checkinRagQuery || 'check-in de hoje e padrões anteriores', 3).catch(() => []),
       ]);
@@ -2522,7 +2785,17 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   // Todas as rotas abaixo exigem autenticação Supabase
   app.use('/api', dependencies.authMiddleware ?? requireAuth);
-  app.use('/api/routine-builder', createRoutineBuilderRouter({ service: routineBuilderService }));
+  const disabledCapability = (_req: Request, res: Response) => res.status(404).json({ error: 'capability_disabled' });
+  if (!capabilities.planner) {
+    app.use(['/api/timeline', '/api/planner', '/api/agenda', '/api/ai/planner-suggestions'], disabledCapability);
+  }
+  if (!capabilities.habits) app.use('/api/habits', disabledCapability);
+  if (!capabilities.connectedCalendar) app.use('/api/gcal', disabledCapability);
+  if (capabilities.planner || capabilities.habits) {
+    app.use('/api/routine-builder', createRoutineBuilderRouter({ service: routineBuilderService }));
+  } else {
+    app.use('/api/routine-builder', disabledCapability);
+  }
 
   /**
    * POST /api/onboarding/operational-profile
@@ -2852,7 +3125,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       const result = await checkinApplicationService.record(data, {
         requestContext: req.body as Record<string, unknown>,
       });
-      return res.json(result);
+      const checkinStatement = data.note?.trim() ?? '';
+      const objectivePathProposals = checkinStatement
+        ? await reviewObjectivePathsAfterContext(data.userId, checkinStatement, 'checkin').catch(() => [])
+        : [];
+      return res.json({ ...result, objectivePathProposals });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -3016,11 +3293,18 @@ export function createApp(dependencies: AppDependencies = {}) {
         select: { id: true, orderIndex: true, createdAt: true },
       });
 
+      const objectivePathProposals = await reviewObjectivePathsAfterContext(userId, data.message, 'journal')
+        .catch((error) => {
+          console.warn('[objective-revision] falha após mensagem do diário:', error);
+          return [];
+        });
+
       return res.status(201).json({
         sessionId,
         messageId: created.id,
         orderIndex: created.orderIndex,
         createdAt: created.createdAt.toISOString(),
+        objectivePathProposals,
       });
     } catch (error: any) {
       console.error('[journal/external-message] Error:', error);
@@ -3153,7 +3437,9 @@ export function createApp(dependencies: AppDependencies = {}) {
       const [routineCtx, runtimeContext, journalPlannerContext, recentSuggestionItems] = await Promise.all([
         journalService.buildRoutineContext(prisma, data.userId),
         resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
-        buildTodayPlannerContext(prisma, data.userId),
+        capabilities.planner || capabilities.connectedCalendar
+          ? buildTodayPlannerContext(prisma, data.userId)
+          : Promise.resolve(null),
         SuggestionMemoryService.getRecent(prisma, data.userId),
       ]);
       const recentSuggestionMemory = SuggestionMemoryService.formatForPrompt(recentSuggestionItems);
@@ -3595,6 +3881,11 @@ export function createApp(dependencies: AppDependencies = {}) {
         role: 'user',
         content: data.message,
       });
+      const objectivePathProposals = await reviewObjectivePathsAfterContext(
+        data.userId,
+        data.message,
+        'aura',
+      ).catch(() => []);
       const [runtimeContext, recentSuggestionItems] = await Promise.all([
         resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
         SuggestionMemoryService.getRecent(prisma, data.userId),
@@ -3608,6 +3899,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       writeSseEvent(res, 'session.started', {
         sessionId: data.sessionId,
+        objectivePathProposals,
       });
 
       // Shared Brain: busca memórias relevantes antes de interpretar o comando
@@ -3620,7 +3912,9 @@ export function createApp(dependencies: AppDependencies = {}) {
       const commandRagContext = commandMemories ? canonicalMemoryService.formatForPrompt(commandMemories, data.locale) : '';
 
       // Planner Brain: injeta agenda completa de hoje (planner interno + Google Calendar)
-      const plannerContext = await buildTodayPlannerContext(prisma, data.userId);
+      const plannerContext = capabilities.planner || capabilities.connectedCalendar
+        ? await buildTodayPlannerContext(prisma, data.userId)
+        : null;
       const commandGroundingContext = await contextGroundingService.buildForSuggest({
         userId: data.userId,
         type: 'aura-command',
@@ -3764,18 +4058,54 @@ export function createApp(dependencies: AppDependencies = {}) {
           : typeof responsePayload.goalTitle === 'string'
             ? responsePayload.goalTitle
             : '';
-        const goalSteps = await TaskDecompositionService.decompose({
-          title: goalTitle,
-          durationMinutes: 75,
+        const goalDecomposition = await GoalIntelligenceService.decompose({
+          goalTitle,
           locale: data.locale,
+          userStatements: [
+            data.message,
+            typeof responsePayload.description === 'string' ? responsePayload.description : '',
+          ].filter(Boolean),
+          completedActions: Array.isArray((commandGroundingContext as any)?.grounding?.completedSubgoalTitles)
+            ? (commandGroundingContext as any).grounding.completedSubgoalTitles
+            : [],
           phase: typeof (req.body as any)?.phase === 'string' ? (req.body as any).phase : null,
           energyScore: typeof (req.body as any)?.energyScore === 'number' ? (req.body as any).energyScore : null,
-          category: typeof responsePayload.category === 'string' ? responsePayload.category : null,
-          note: typeof responsePayload.description === 'string' ? responsePayload.description : null,
-        }).catch(() => []);
-        if (goalSteps.length > 0) {
-          responsePayload.subgoals = goalSteps.map((step) => step.title);
+          capacity: (req.body as any)?.capacity === 'quick' || (req.body as any)?.capacity === 'moderate' || (req.body as any)?.capacity === 'heavy'
+            ? (req.body as any).capacity
+            : null,
+          operationalProfile: await OperationalProfileService.get(prisma, data.userId),
+          patternContext: commandRagContext || null,
+        }).catch(() => null);
+        if (goalDecomposition?.mode === 'actions' && goalDecomposition.steps.length > 0) {
+          responsePayload.subgoals = goalDecomposition.steps.map((step, index) => ({
+            id: `goal-action-${Date.now()}-${index}`,
+            title: step.title,
+            done: false,
+            milestoneId: step.milestoneId,
+            doneWhen: step.doneWhen,
+            effortSize: step.effortSize,
+            basedOn: step.basedOn,
+            evidenceRefs: step.evidenceRefs,
+          }));
+          responsePayload.resultDefinition = goalDecomposition.resultDefinition;
+          responsePayload.currentReality = goalDecomposition.currentReality;
+          responsePayload.milestones = goalDecomposition.milestones.map((milestone) => ({
+            id: milestone.id, title: milestone.title, order: milestone.order, doneWhen: milestone.doneWhen,
+          }));
           responsePayload.wasDecomposed = true;
+          responsePayload.pathStatus = 'ready';
+          responsePayload.pathQuestion = null;
+        } else if (goalDecomposition?.question) {
+          responsePayload.subgoals = [];
+          responsePayload.question = goalDecomposition.question;
+          responsePayload.pathStatus = 'needs_answer';
+          responsePayload.pathQuestion = goalDecomposition.question;
+          responsePayload.wasDecomposed = false;
+        } else {
+          responsePayload.subgoals = [];
+          responsePayload.pathStatus = 'retrying';
+          responsePayload.pathQuestion = null;
+          responsePayload.wasDecomposed = false;
         }
       }
 
@@ -3804,6 +4134,7 @@ export function createApp(dependencies: AppDependencies = {}) {
                 userId: data.userId,
                 localDate,
                 items: response.payload.items,
+                capabilities,
               }),
             },
           }
@@ -3819,13 +4150,15 @@ export function createApp(dependencies: AppDependencies = {}) {
       const targetDate = [rawPayload.date, rawPayload.localDate, rawPayload.newDate, localDate]
         .find((value): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value))
         ?? localDate;
-      const busyWindows = await buildCommandBusyWindows({
-        prisma,
-        userId: data.userId,
-        date: targetDate,
-        calendarId: defaultCalendarId,
-        timezone: commandSession.timezone,
-      });
+      const busyWindows = capabilities.planner || capabilities.connectedCalendar
+        ? await buildCommandBusyWindows({
+          prisma,
+          userId: data.userId,
+          date: targetDate,
+          calendarId: defaultCalendarId,
+          timezone: commandSession.timezone,
+        })
+        : [];
       const builtPlans = planResponses.map((response) => AuraCommandPlanBuilderService.build({
         response,
         userMessage: data.message,
@@ -3849,7 +4182,20 @@ export function createApp(dependencies: AppDependencies = {}) {
         defaultCalendarId,
         busyWindows,
       });
-      const combinedOperations = builtPlans.flatMap((plan) => plan.operations);
+      const combinedOperations = builtPlans.flatMap((plan) => plan.operations).filter((operation) => {
+        if (!capabilities.planner && [
+          'create_planner_task', 'adapt_agenda', 'postpone_timeline_task',
+        ].includes(operation.type)) return false;
+        if (!capabilities.habits && operation.type === 'create_habit') return false;
+        if (!capabilities.connectedCalendar && operation.type === 'create_calendar_event') return false;
+        if ((operation.type === 'update_item' || operation.type === 'delete_item') && operation.payload.targetType === 'timeline') {
+          return capabilities.planner;
+        }
+        if ((operation.type === 'update_item' || operation.type === 'delete_item') && operation.payload.targetType === 'habit') {
+          return capabilities.habits;
+        }
+        return true;
+      });
       const combinedMissingFields = [...new Set(builtPlans.flatMap((plan) => plan.missingFields))];
       const commandPlan = {
         ...primaryPlan,
@@ -4385,6 +4731,14 @@ export function createApp(dependencies: AppDependencies = {}) {
 
     // Agendar RAG indexing para absorver o que foi escrito no diário
     AiBackgroundService.scheduleJob(userId, 'rag-indexing', '1h').catch(() => {});
+    const objectivePathProposals = await reviewObjectivePathsAfterContext(
+      userId,
+      finalization.summary.summary,
+      'journal',
+    ).catch((error) => {
+      console.warn('[objective-revision] falha após finalizar diário:', error);
+      return [];
+    });
 
     return res.json({
       sessionId: finalization.updatedSession.id,
@@ -4396,6 +4750,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       },
       suggestedTasks: finalization.suggestedTasks,
       sessionStatus: 'completed',
+      objectivePathProposals,
     });
   } catch (error: any) {
     console.error('[journal/finalize] Error:', error);
@@ -4937,23 +5292,16 @@ export function createApp(dependencies: AppDependencies = {}) {
    * GET /api/objectives
    * Lista objetivos ativos do usuário.
    */
+  app.get('/api/capabilities', (_req: Request, res: Response) => res.json(capabilities));
+
   app.get('/api/objectives', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     try {
-      const objectives = await prisma.objective.findMany({
-        where: { userId, archived: false },
-        orderBy: { createdAt: 'asc' },
-      });
-      return res.json(objectives.map((o) => ({
-        id: o.id,
-        title: o.title,
-        description: o.description,
-        category: o.category,
-        progress: o.progress,
-        subgoals: normalizeObjectiveSubgoals(Array.isArray(o.subgoals) ? o.subgoals : []),
-        aiInsight: o.aiInsight,
-        createdAt: o.createdAt.toISOString(),
-      })));
+      const [objectives, preferences] = await Promise.all([
+        prisma.objective.findMany({ where: { userId, archived: false }, orderBy: { createdAt: 'asc' } }),
+        prisma.userPreference.findUnique({ where: { userId }, select: { primaryObjectiveId: true } }),
+      ]);
+      return res.json(objectives.map((objective) => serializeObjective(objective, preferences?.primaryObjectiveId ?? null)));
     } catch (error: any) {
       console.error('[objectives/list] Error:', error);
       return res.status(500).json({ error: 'Failed to fetch objectives' });
@@ -4970,12 +5318,22 @@ export function createApp(dependencies: AppDependencies = {}) {
       title: z.string().min(1),
       description: z.string().optional(),
       category: z.string().default('geral'),
-      subgoals: ObjectiveSubgoalsSchema.default([]),
-    });
+      deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      locale: z.string().default('pt-BR'),
+    }).strict();
     try {
       const data = Schema.parse(req.body);
       const obj = await prisma.objective.create({
-        data: { userId, ...data, subgoals: data.subgoals as any },
+        data: {
+          userId,
+          title: data.title,
+          description: data.description,
+          category: data.category,
+          deadline: data.deadline ? new Date(`${data.deadline}T00:00:00.000Z`) : null,
+          subgoals: [],
+          pathStatus: 'not_started',
+          milestones: [],
+        },
       });
       // Vetoriza a meta (fire-and-forget)
       memoryService.store({
@@ -4985,7 +5343,22 @@ export function createApp(dependencies: AppDependencies = {}) {
         content: `Meta: ${data.title}${data.description ? `. ${data.description}` : ''}`,
         metadata: { category: data.category, objectiveId: obj.id, progress: obj.progress, archived: obj.archived },
       }).catch(() => {});
-      return res.status(201).json({ id: obj.id, title: obj.title, category: obj.category, progress: obj.progress, subgoals: normalizeObjectiveSubgoals(Array.isArray(obj.subgoals) ? obj.subgoals : []), createdAt: obj.createdAt.toISOString() });
+      let pathGenerationFailed = false;
+      try {
+        const context = await loadObjectiveIntelligenceContext(prisma, userId, obj.id);
+        await objectivePathService.generate({ userId, objectiveId: obj.id, locale: data.locale, ...context });
+      } catch (pathError) {
+        pathGenerationFailed = true;
+        console.warn(`[objectives/create] objetivo ${obj.id} preservado para nova tentativa:`, pathError);
+        await prisma.objective.updateMany({
+          where: { id: obj.id, userId },
+          data: { pathStatus: 'retrying', pathQuestion: null },
+        }).catch(() => ({ count: 0 }));
+      }
+      const created = await prisma.objective.findFirst({ where: { id: obj.id, userId } });
+      return res.status(201).json(serializeObjective(pathGenerationFailed
+        ? { ...(created ?? obj), pathStatus: 'retrying', pathQuestion: null }
+        : (created ?? obj)));
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
       console.error('[objectives/create] Error:', error);
@@ -5004,6 +5377,262 @@ export function createApp(dependencies: AppDependencies = {}) {
     } catch (error) {
       console.error('[objectives/recover-actions] Error:', error);
       return res.status(500).json({ error: 'Failed to recover objective actions' });
+    }
+  });
+
+  const sendObjectivePathError = (error: unknown, res: Response) => {
+    if (error instanceof ObjectivePathNotFoundError) return res.status(404).json({ error: 'objective_not_found' });
+    if (error instanceof ObjectivePathConflictError) return res.status(409).json({ error: 'objective_path_changed' });
+    if (error instanceof ObjectivePathInvalidProposalError) return res.status(422).json({ error: error.message });
+    console.error('[objective-path] Error:', error);
+    return res.status(500).json({ error: 'objective_path_failed' });
+  };
+
+  app.post('/api/objectives/:id/path/generate', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { locale, userStatements } = z.object({
+        locale: z.string().default('pt-BR'),
+        userStatements: z.array(z.string().trim().min(1).max(2000)).max(8).optional().default([]),
+      }).parse(req.body ?? {});
+      const context = await loadObjectiveIntelligenceContext(prisma, userId, req.params.id);
+      const result = await objectivePathService.generate({
+        userId, objectiveId: req.params.id, locale, ...context,
+        userStatements: [...context.userStatements, ...userStatements],
+      });
+      const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId } });
+      return res.json({ ...result, objective: objective ? serializeObjective(objective) : null });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return sendObjectivePathError(error, res);
+    }
+  });
+
+  app.post('/api/objectives/:id/path/answer', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({ answer: z.string().trim().min(1).max(2000), locale: z.string().default('pt-BR') }).parse(req.body);
+      const context = await loadObjectiveIntelligenceContext(prisma, userId, req.params.id);
+      const result = await objectivePathService.answer({
+        userId, objectiveId: req.params.id, locale: data.locale, answer: data.answer,
+        ...context,
+        userStatements: context.userStatements,
+      });
+      await canonicalMemoryService.write({
+        userId, kind: 'context', scope: `objective:${req.params.id}`,
+        canonicalKey: `objective.${req.params.id}.answer`, content: data.answer,
+        confidence: 1, salience: 0.8, source: 'objective_path_answer', sourceId: `${req.params.id}:${result.pathVersion}`,
+        targetType: 'objective', targetId: req.params.id,
+      }).catch((error: unknown) => console.error('[objective-path/answer] canonical memory failed:', error));
+      const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId } });
+      return res.json({ ...result, objective: objective ? serializeObjective(objective) : null });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return sendObjectivePathError(error, res);
+    }
+  });
+
+  app.post('/api/objectives/:id/path/advance', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({ expectedVersion: z.number().int().positive(), locale: z.string().default('pt-BR') }).parse(req.body);
+      const context = await loadObjectiveIntelligenceContext(prisma, userId, req.params.id);
+      const result = await objectivePathService.advance({
+        userId, objectiveId: req.params.id, expectedVersion: data.expectedVersion, locale: data.locale, ...context,
+      });
+      const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId } });
+      return res.json({ ...result, objective: objective ? serializeObjective(objective) : null });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return sendObjectivePathError(error, res);
+    }
+  });
+
+  app.post('/api/objectives/:id/path/propose-revision', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({ reason: z.string().trim().min(3).max(2000), locale: z.string().default('pt-BR') }).parse(req.body);
+      const context = await loadObjectiveIntelligenceContext(prisma, userId, req.params.id);
+      const result = await objectivePathService.proposeRevision({
+        userId, objectiveId: req.params.id, locale: data.locale, reason: data.reason, ...context,
+      });
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return sendObjectivePathError(error, res);
+    }
+  });
+
+  app.post('/api/objectives/:id/path/confirm-revision', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { expectedVersion } = z.object({ expectedVersion: z.number().int().positive() }).parse(req.body);
+      const result = await objectivePathService.confirmRevision({ userId, objectiveId: req.params.id, expectedVersion });
+      const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId } });
+      return res.json({ ...result, objective: objective ? serializeObjective(objective) : null });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      return sendObjectivePathError(error, res);
+    }
+  });
+
+  app.put('/api/objectives/primary', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { objectiveId } = z.object({ objectiveId: z.string().uuid().nullable() }).parse(req.body);
+      if (objectiveId) {
+        const exists = await prisma.objective.findFirst({ where: { id: objectiveId, userId, archived: false, pausedAt: null }, select: { id: true } });
+        if (!exists) return res.status(404).json({ error: 'objective_not_found' });
+      }
+      await prisma.$transaction(async (transaction) => {
+        await transaction.userPreference.upsert({
+          where: { userId },
+          update: { primaryObjectiveId: objectiveId },
+          create: { userId, ...defaultUserPreferences, primaryObjectiveId: objectiveId },
+        });
+        await transaction.eventLog.create({
+          data: { userId, eventName: 'objective_primary_changed', properties: { objectiveId, source: 'manual' } },
+        });
+      });
+      return res.json({ objectiveId, source: objectiveId ? 'manual' : null });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/primary] Error:', error);
+      return res.status(500).json({ error: 'Failed to update primary objective' });
+    }
+  });
+
+  app.post('/api/objectives/:id/actions', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({
+        expectedVersion: z.number().int().positive(),
+        title: z.string().trim().min(1).max(300),
+        scheduledFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      }).parse(req.body);
+      const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId, archived: false } });
+      if (!objective) return res.status(404).json({ error: 'objective_not_found' });
+      if (objective.pathVersion !== data.expectedVersion) return res.status(409).json({ error: 'objective_path_changed' });
+      const actions = normalizeObjectiveSubgoals(objective.subgoals);
+      const milestones = Array.isArray(objective.milestones) ? objective.milestones as Array<{ id?: string }> : [];
+      const currentMilestoneId = actions.find((action) => (
+        !action.done && action.status !== 'rejected' && action.status !== 'deferred'
+      ))?.milestoneId ?? milestones[0]?.id ?? 'manual-current';
+      const action = {
+        id: randomUUID(), title: data.title, done: false, order: actions.length, aiGenerated: false, userEdited: true,
+        milestoneId: currentMilestoneId, scheduledFor: data.scheduledFor ?? null, status: 'pending' as const,
+      };
+      const committed = await prisma.$transaction(async (transaction) => {
+        const write = await transaction.objective.updateMany({
+          where: { id: objective.id, userId, pathVersion: data.expectedVersion },
+          data: { subgoals: [...actions, action] as any, pathVersion: { increment: 1 }, pathStatus: 'ready' },
+        });
+        if (write.count !== 1) return false;
+        await transaction.eventLog.create({ data: { userId, eventName: 'objective_action_created', properties: { objectiveId: objective.id, actionId: action.id, title: action.title, source: 'manual', toVersion: data.expectedVersion + 1 } } });
+        await new CanonicalMemoryService(transaction).write({
+          userId, kind: 'decision', scope: `objective:${objective.id}`,
+          canonicalKey: `objective.${objective.id}.action.${action.id}.manual`, content: action.title,
+          confidence: 1, salience: 0.8, source: 'objective_action_created', sourceId: action.id,
+          targetType: 'objective_action', targetId: action.id,
+        });
+        return true;
+      });
+      if (!committed) return res.status(409).json({ error: 'objective_path_changed' });
+      return res.status(201).json({ action, pathVersion: data.expectedVersion + 1 });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/action-create] Error:', error);
+      return res.status(500).json({ error: 'Failed to create objective action' });
+    }
+  });
+
+  app.patch('/api/objectives/:id/actions/:actionId', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({
+        expectedVersion: z.number().int().positive(),
+        title: z.string().trim().min(1).max(300).optional(),
+        scheduledFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        state: z.enum(['pending', 'done', 'rejected', 'deferred']).optional(),
+      }).refine((value) => value.title !== undefined || value.scheduledFor !== undefined || value.state !== undefined, 'empty action patch').parse(req.body);
+      const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId, archived: false } });
+      if (!objective) return res.status(404).json({ error: 'objective_not_found' });
+      if (objective.pathVersion !== data.expectedVersion) return res.status(409).json({ error: 'objective_path_changed' });
+      const actions = normalizeObjectiveSubgoals(objective.subgoals);
+      const current = actions.find((action) => action.id === req.params.actionId);
+      if (!current) return res.status(404).json({ error: 'objective_action_not_found' });
+      if (current.done && (data.title !== undefined || data.scheduledFor !== undefined || (data.state && data.state !== 'done'))) {
+        return res.status(409).json({ error: 'completed_action_is_protected' });
+      }
+      const now = new Date().toISOString();
+      const updatedActions = actions.map((action) => action.id !== current.id ? action : {
+        ...action,
+        ...(data.title !== undefined ? { title: data.title, userEdited: true } : {}),
+        ...(data.scheduledFor !== undefined ? { scheduledFor: data.scheduledFor, userEdited: true } : {}),
+        ...(data.state ? {
+          status: data.state,
+          done: data.state === 'done',
+          rejectedAt: data.state === 'rejected' ? now : null,
+          deferredAt: data.state === 'deferred' ? now : null,
+        } : {}),
+      });
+      const eventName = data.state
+        ? `objective_action_${data.state}`
+        : data.scheduledFor !== undefined
+          ? 'objective_action_scheduled'
+          : 'objective_action_edited';
+      const write = await prisma.$transaction(async (transaction) => {
+        const result = await transaction.objective.updateMany({
+          where: { id: objective.id, userId, pathVersion: data.expectedVersion },
+          data: { subgoals: updatedActions, pathVersion: { increment: 1 }, pathProposal: null, pathProposalCreatedAt: null } as any,
+        });
+        if (result.count !== 1) return false;
+        await transaction.eventLog.create({
+          data: { userId, eventName, properties: { objectiveId: objective.id, actionId: current.id, title: data.title ?? current.title, scheduledFor: data.scheduledFor, fromVersion: data.expectedVersion, toVersion: data.expectedVersion + 1 } },
+        });
+        const memoryState = data.state ?? (data.scheduledFor !== undefined ? 'scheduled' : 'edited');
+        const negativeState = data.state === 'rejected' ? 'rejected' : data.state === 'done' ? 'completed' : data.state === 'deferred' ? 'scheduled' : null;
+        await new CanonicalMemoryService(transaction).write({
+          userId, kind: 'decision', scope: `objective:${objective.id}`,
+          canonicalKey: `objective.${objective.id}.action.${current.id}.${memoryState}`,
+          content: [
+            `${memoryState}: ${data.title ?? current.title}`,
+            data.scheduledFor !== undefined ? `Data: ${data.scheduledFor ?? 'sem data'}` : '',
+          ].filter(Boolean).join('\n'),
+          confidence: 1, salience: 0.7, source: eventName, sourceId: `${current.id}:${data.expectedVersion + 1}`,
+          negativeState, targetType: 'objective_action', targetId: current.id,
+        });
+        return true;
+      });
+      if (!write) return res.status(409).json({ error: 'objective_path_changed' });
+      return res.json({ action: updatedActions.find((action) => action.id === current.id), pathVersion: data.expectedVersion + 1 });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/action-patch] Error:', error);
+      return res.status(500).json({ error: 'Failed to update objective action' });
+    }
+  });
+
+  app.get('/api/daily-priorities', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const { localDate } = z.object({ localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(req.query);
+      const [objectives, preferences, context] = await Promise.all([
+        prisma.objective.findMany({ where: { userId, archived: false, pausedAt: null, progress: { lt: 100 } }, orderBy: { updatedAt: 'desc' } }),
+        prisma.userPreference.findUnique({ where: { userId }, select: { primaryObjectiveId: true } }),
+        loadObjectiveIntelligenceContext(prisma, userId, ''),
+      ]);
+      const result = await DailyPrioritiesService.prioritize({
+        localDate,
+        objectives: objectives.map((objective) => ({ ...objective, deadline: objectiveDate(objective.deadline) })),
+        manualPrimaryObjectiveId: preferences?.primaryObjectiveId ?? null,
+        contextStatements: context.userStatements,
+      });
+      return res.json({ ...result, capabilities });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[daily-priorities] Error:', error);
+      return res.status(500).json({ error: 'Failed to build daily priorities' });
     }
   });
 
@@ -5046,6 +5675,18 @@ export function createApp(dependencies: AppDependencies = {}) {
           .catch((error: unknown) => { console.error('[objectives/complete-subgoal] event log failed:', error); })
       )));
 
+      await canonicalMemoryService.write({
+        userId, kind: 'decision', scope: `objective:${req.params.id}`,
+        canonicalKey: `objective.${req.params.id}.action.${req.params.subgoalId}.completed`,
+        content: `Concluída: ${actionTitle}`,
+        confidence: 1, salience: 0.8, source: 'objective_action_completed',
+        sourceId: `${req.params.subgoalId}:${completionDate}`,
+        negativeState: 'completed', targetType: 'objective_action', targetId: req.params.subgoalId,
+      }).catch((error: unknown) => console.error('[objectives/complete-subgoal] canonical memory failed:', error));
+      const completedObjective = await prisma.objective.findFirst({ where: { id: req.params.id, userId } }).catch(() => null);
+      await projectObjectivePathToMemory(completedObjective, 'objective_action_completed')
+        .catch((error: unknown) => console.error('[objectives/complete-subgoal] path projection failed:', error));
+
       const reward = buildCompletionReward({
         title: actionTitle,
         kind: result.objectiveCompletedNow ? 'goal_completed' : 'goal_action_done',
@@ -5067,7 +5708,7 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   /**
    * PATCH /api/objectives/:id
-   * Atualiza título, progresso ou sub-metas de um objetivo.
+   * Atualiza somente metadados do objetivo. Ações usam endpoints versionados.
    */
   app.patch('/api/objectives/:id', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
@@ -5076,16 +5717,24 @@ export function createApp(dependencies: AppDependencies = {}) {
       title: z.string().min(1).optional(),
       description: z.string().optional(),
       category: z.string().optional(),
-      progress: z.number().int().min(0).max(100).optional(),
-      subgoals: ObjectiveSubgoalsSchema.optional(),
       aiInsight: z.string().nullable().optional(),
       archived: z.boolean().optional(),
-    });
+      deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+      pausedAt: z.string().datetime().nullable().optional(),
+    }).strict().refine((value) => Object.keys(value).length > 0, 'empty objective patch');
     try {
       const data = Schema.parse(req.body);
+      const { deadline, pausedAt, ...plainData } = data;
       const obj = await prisma.objective.updateMany({
         where: { id, userId },
-        data: { ...data, subgoals: data.subgoals as any },
+        data: {
+          ...plainData,
+          ...(deadline !== undefined ? { deadline: deadline ? new Date(`${deadline}T00:00:00.000Z`) : null } : {}),
+          ...(pausedAt !== undefined ? { pausedAt: pausedAt ? new Date(pausedAt) : null } : {}),
+          pathVersion: { increment: 1 },
+          pathProposal: null,
+          pathProposalCreatedAt: null,
+        } as any,
       });
       if (obj.count === 0) return res.status(404).json({ error: 'Objective not found' });
       const updated = await prisma.objective.findUnique({ where: { id } });
@@ -8163,6 +8812,7 @@ if (require.main === module) {
   });
 
   cron.schedule('7 * * * *', async () => {
+    if (!PRODUCT_CAPABILITIES.planner && !PRODUCT_CAPABILITIES.habits) return;
     try {
       const purged = await new RoutineBuilderService(defaultPrisma).purgeExpiredSources();
       if (purged > 0) console.log(`[cron/routine-builder] fontes temporárias removidas=${purged}`);
@@ -8178,6 +8828,7 @@ if (require.main === module) {
       const saoPauloToday = getSaoPauloDateContext(now);
       const spDayStartUtc = getSaoPauloDayStartUtc(saoPauloToday.dateKey);
 
+      if (PRODUCT_CAPABILITIES.habits) {
       const habitsNow = await defaultPrisma.habit.findMany({
         where: { archived: false, reminderEnabled: true, reminderTime: currentTimeStr },
         include: {
@@ -8229,7 +8880,9 @@ if (require.main === module) {
           tag: `habit-${habit.id}`,
         });
       }
+      }
 
+      if (PRODUCT_CAPABILITIES.planner) {
       const windowStart = new Date(now);
       windowStart.setUTCSeconds(0, 0);
       const windowEnd = new Date(windowStart.getTime() + 60000);
@@ -8351,6 +9004,7 @@ if (require.main === module) {
             data: { userId: task.userId, eventName: 'push.persistent_sent', properties: { blockId: task.id, localDate: saoPauloToday.dateKey, fireCount } },
           }).catch((error) => console.warn('[push-cron] falha ao registrar lembrete persistente:', error));
         }
+      }
       }
 
       const prefsCheckin = await defaultPrisma.userPreference.findMany({ where: { notificationsOn: true } });

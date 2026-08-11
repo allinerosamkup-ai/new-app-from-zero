@@ -262,35 +262,23 @@ async function executeInternalOperation(
           subgoals: operation.payload.subgoals.map((item, index) => ({
             id: item.id ?? `subgoal-${index + 1}`,
             title: item.title,
-            completed: item.done,
+            done: item.done,
+            order: index,
+            aiGenerated: true,
+            milestoneId: item.milestoneId ?? null,
+            doneWhen: item.doneWhen ?? null,
+            effortSize: item.effortSize ?? null,
+            basedOn: item.basedOn,
+            evidenceRefs: item.evidenceRefs,
           })),
+          resultDefinition: operation.payload.resultDefinition ?? null,
+          currentReality: operation.payload.currentReality ?? null,
+          milestones: operation.payload.milestones,
+          pathStatus: operation.payload.pathStatus ?? (operation.payload.subgoals.length > 0 ? 'ready' : 'retrying'),
+          pathQuestion: operation.payload.pathQuestion ?? null,
         },
       });
-      let firstActionId: string | null = null;
-      if (operation.payload.firstAction) {
-        const firstAction = operation.payload.firstAction;
-        const date = localDate(firstAction.date);
-        const startAt = PlannerService.parseTimeToDate(date, firstAction.startTime);
-        const task = await tx.timelineBlock.create({
-          data: {
-            userId,
-            localDate: date,
-            startAt,
-            endAt: addMinutes(startAt, firstAction.durationMinutes),
-            title: firstAction.title,
-            category: normalizeTimelineCategory(operation.payload.category),
-            intensity: 'M',
-            isAiSuggested: true,
-            sourceCommandOperationId: databaseOperationId,
-            temporalPolicy: 'flexible',
-            adaptationPermission: 'eligible',
-            adaptabilitySource: 'ai',
-            adaptabilityConfidence: 0.9,
-          },
-        });
-        firstActionId = task.id;
-      }
-      return { objectiveId: objective.id, firstActionId };
+      return { objectiveId: objective.id, firstActionId: null };
     }
     case 'create_habit': {
       const habit = await tx.habit.create({

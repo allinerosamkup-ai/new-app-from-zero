@@ -42,6 +42,7 @@ async function run() {
   };
 
   const app = createApp({
+    capabilities: { planner: true, habits: false, connectedCalendar: false },
     prisma: prisma as any,
     authMiddleware: (req: any, _res: any, next: any) => {
       req.userId = '550e8400-e29b-41d4-a716-446655440000';

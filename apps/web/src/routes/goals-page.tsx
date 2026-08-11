@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronUp,
   CirclePause,
-  Clock3,
   Edit3,
   Pause,
   Play,
@@ -28,18 +27,8 @@ import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
-import { parseAiSuggestion } from "../lib/ai";
-import { readPrimaryGoalId } from "../utils/goal-priority-actions";
-// A chave de objetivos pausados vive num lugar só: a Home lê para escolher o
-// foco e esta tela escreve. Duas cópias da mesma string é como as duas telas
-// passam a discordar sobre o que está pausado.
-import { PAUSED_GOALS_KEY, setPrimaryGoal } from "../features/aura/use-focus-goal";
 import {
   buildGoalCardModel,
-  buildGoalTaskSchedule,
-  parsePausedGoalIds,
-  togglePausedGoalId,
-  type GoalTaskPlacement,
 } from "../utils/goal-priority-actions";
 import "../styles/aura.css";
 import "../styles/editorial.css";
@@ -50,7 +39,22 @@ type GoalLike = {
   completedPct: number;
   /** Texto livre do objetivo. É onde fica o que a pessoa já respondeu sobre ele. */
   progress?: string;
-  subtasks: Array<{ id: string | number; title: string; done: boolean; order?: number; plannerBlockId?: string | null }>;
+  subtasks: Array<{
+    id: string | number; title: string; done: boolean; order?: number;
+    milestoneId?: string | null; scheduledFor?: string | null; doneWhen?: string | null;
+    effortSize?: 'small' | 'medium' | 'large' | null; status?: 'pending' | 'done' | 'rejected' | 'deferred';
+  }>;
+  description?: string | null;
+  resultDefinition?: string | null;
+  currentReality?: string | null;
+  milestones?: Array<{ id: string; title: string; order: number; doneWhen?: string | null }>;
+  pathVersion?: number;
+  pathStatus?: 'not_started' | 'retrying' | 'needs_answer' | 'ready';
+  pathQuestion?: string | null;
+  deadline?: string | null;
+  pausedAt?: string | null;
+  isPrimary?: boolean;
+  pathProposal?: unknown;
 };
 
 type GoalTemplate = {
@@ -59,20 +63,6 @@ type GoalTemplate = {
   nextAction: string;
 };
 
-type TaskDraft = {
-  goalId: string | number;
-  goalTitle: string;
-  actionId: string | number;
-  actionTitle: string;
-};
-
-type ScheduledAction = {
-  taskId: string | number;
-  date: string;
-  time: string;
-};
-
-const SCHEDULED_ACTIONS_KEY = "airia-goal-action-tasks-v1";
 
 export async function recoverGoalActionsOnce(
   guard: { status: 'idle' | 'inFlight' | 'completed' },
@@ -192,19 +182,6 @@ const quietButtonStyle: CSSProperties = {
   gap: 6,
 };
 
-function readScheduledActions(): Record<string, ScheduledAction> {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(SCHEDULED_ACTIONS_KEY) || "{}");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function actionKey(goalId: string | number, actionId: string | number): string {
-  return `${goalId}:${actionId}`;
-}
-
 function CreationSheet({
   open,
   saving,
@@ -214,16 +191,18 @@ function CreationSheet({
   open: boolean;
   saving: boolean;
   onClose: () => void;
-  onCreate: (result: string) => Promise<void>;
+  onCreate: (result: string, deadline: string | null) => Promise<void>;
 }) {
   const l = useLocalizedCopy();
   const [result, setResult] = useState("");
   const [selectedDirection, setSelectedDirection] = useState("");
+  const [deadline, setDeadline] = useState("");
 
   useEffect(() => {
     if (!open) {
       setResult("");
       setSelectedDirection("");
+      setDeadline("");
     }
   }, [open]);
 
@@ -332,13 +311,39 @@ function CreationSheet({
           />
         </label>
 
+        <label style={{ display: "block", marginBottom: 16 }}>
+          <span style={{ display: "block", marginBottom: 6, color: "var(--text-2)", fontSize: 12, fontWeight: 800 }}>
+            {l("Prazo (opcional)", "Deadline (optional)")}
+          </span>
+          <input
+            type="date"
+            value={deadline}
+            onChange={(event) => setDeadline(event.target.value)}
+            aria-label={l("Prazo do objetivo", "Goal deadline")}
+            style={{
+              width: "100%",
+              minHeight: 46,
+              boxSizing: "border-box",
+              border: "1.5px solid rgba(99,152,169,.24)",
+              borderRadius: 14,
+              background: "#fff",
+              color: "var(--text-1)",
+              padding: "10px 14px",
+              fontSize: 14,
+            }}
+          />
+          <span style={{ display: "block", marginTop: 5, color: "var(--text-3)", fontSize: 11 }}>
+            {l("Pode ficar sem prazo. A data ajuda a ordenar, mas não decide sozinha o que importa.", "It can stay open-ended. The date helps ordering, but does not decide importance alone.")}
+          </span>
+        </label>
+
         <p style={{ margin: "0 0 18px", color: "var(--text-3)", fontSize: 12, lineHeight: 1.45 }}>
           {l("A Airia organiza o caminho em microações e deixa só o primeiro movimento em foco.", "Airia turns this into micro-actions and keeps only the first move in focus.")}
         </p>
 
         <button
           disabled={!ready || saving}
-          onClick={() => ready && onCreate(result.trim())}
+          onClick={() => ready && onCreate(result.trim(), deadline || null)}
           style={{
             width: "100%",
             minHeight: 52,
@@ -358,107 +363,10 @@ function CreationSheet({
   );
 }
 
-function TaskPlacementSheet({
-  draft,
-  saving,
-  onClose,
-  onChoose,
-}: {
-  draft: TaskDraft | null;
-  saving: boolean;
-  onClose: () => void;
-  onChoose: (placement: GoalTaskPlacement) => Promise<void>;
-}) {
-  const l = useLocalizedCopy();
-  if (!draft) return null;
-
-  const nowSchedule = buildGoalTaskSchedule("now");
-  const laterSchedule = buildGoalTaskSchedule("later");
-  const options: Array<{ value: GoalTaskPlacement; label: string; detail: string }> = [
-    { value: "now", label: l("Agora", "Now"), detail: `${l("hoje", "today")}, ${nowSchedule.time}` },
-    { value: "later", label: l("Mais tarde", "Later"), detail: `${l("hoje", "today")}, ${laterSchedule.time}` },
-    { value: "tomorrow", label: l("Amanhã", "Tomorrow"), detail: l("às 9h", "at 9 AM") },
-  ];
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={l("Colocar próxima ação no dia", "Place next action in your day")}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 125,
-        display: "flex",
-        alignItems: "flex-end",
-        justifyContent: "center",
-        background: "rgba(20,27,23,.30)",
-        backdropFilter: "blur(4px)",
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          width: "min(100%, 560px)",
-          borderRadius: "32px 32px 0 0",
-          background: "var(--warm-bg)",
-          padding: "18px 18px calc(24px + env(safe-area-inset-bottom))",
-          boxShadow: "0 -18px 50px rgba(26,34,29,.16)",
-        }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div style={{ width: 42, height: 4, borderRadius: 99, background: "rgba(20,27,23,.14)", margin: "0 auto 18px" }} />
-        <p style={{ margin: "0 0 5px", color: "var(--lagune)", fontSize: 11, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase" }}>
-          {l("Próxima ação", "Next action")}
-        </p>
-        <h2 style={{ margin: "0 0 7px", color: "var(--text-1)", fontSize: 20, lineHeight: 1.3 }}>
-          {draft.actionTitle}
-        </h2>
-        <p style={{ margin: "0 0 18px", color: "var(--text-3)", fontSize: 12 }}>
-          {l("Ligada ao resultado:", "Linked to result:")} {draft.goalTitle}
-        </p>
-        <div style={{ display: "grid", gap: 8 }}>
-          {options.map((option) => (
-            <button
-              key={option.value}
-              disabled={saving}
-              onClick={() => onChoose(option.value)}
-              style={{
-                minHeight: 58,
-                borderRadius: 16,
-                border: "1px solid rgba(99,152,169,.22)",
-                background: "#fff",
-                color: "var(--text-1)",
-                padding: "10px 14px",
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                textAlign: "left",
-                cursor: saving ? "default" : "pointer",
-              }}
-            >
-              <Clock3 size={18} color="var(--lagune)" />
-              <span style={{ flex: 1 }}>
-                <strong style={{ display: "block", fontSize: 14 }}>{option.label}</strong>
-                <span style={{ color: "var(--text-3)", fontSize: 11 }}>{option.detail}</span>
-              </span>
-              <ArrowRight size={16} color="var(--text-3)" />
-            </button>
-          ))}
-        </div>
-        <button onClick={onClose} style={{ ...quietButtonStyle, width: "100%", marginTop: 10 }}>
-          {l("Voltar sem agendar", "Go back without scheduling")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function GoalCard({
   goal,
   paused,
   focused,
-  scheduledActions,
   loadingSuggestion,
   suggestionDraft,
   completingActionId,
@@ -466,8 +374,12 @@ function GoalCard({
   onAddAction,
   onRequestSuggestion,
   onAcceptSuggestion,
-  onPlanAction,
+  onScheduleAction,
+  onUpdateAction,
+  onAdvance,
+  onConfirmRevision,
   onEditResult,
+  onEditDeadline,
   onPause,
   onArchive,
   isPrimary,
@@ -476,7 +388,6 @@ function GoalCard({
   goal: GoalLike;
   paused: boolean;
   focused: boolean;
-  scheduledActions: Record<string, ScheduledAction>;
   loadingSuggestion: boolean;
   suggestionDraft: string[];
   completingActionId: string | number | null;
@@ -484,8 +395,12 @@ function GoalCard({
   onAddAction: (title: string) => Promise<void>;
   onRequestSuggestion: () => Promise<void>;
   onAcceptSuggestion: (title: string) => Promise<void>;
-  onPlanAction: (draft: TaskDraft) => void;
+  onScheduleAction: (actionId: string | number, date: string | null) => Promise<void>;
+  onUpdateAction: (actionId: string | number, patch: { title?: string; state?: 'pending' | 'rejected' | 'deferred' }) => Promise<void>;
+  onAdvance: () => Promise<void>;
+  onConfirmRevision: () => Promise<void>;
   onEditResult: (title: string) => Promise<void>;
+  onEditDeadline: (deadline: string | null) => Promise<void>;
   onPause: () => void;
   onArchive: () => Promise<void>;
   isPrimary: boolean;
@@ -499,21 +414,31 @@ function GoalCard({
   const [editingResult, setEditingResult] = useState(false);
   const [resultTitle, setResultTitle] = useState(goal.title);
   const [showManagement, setShowManagement] = useState(false);
+  const [editingAction, setEditingAction] = useState(false);
+  const [actionEditTitle, setActionEditTitle] = useState("");
 
   useEffect(() => {
     if (focused) setOpen(true);
   }, [focused]);
 
-  const scheduled = model.nextAction
-    ? scheduledActions[actionKey(goal.id, model.nextAction.id)]
-    : null;
   const orderedActions = [...goal.subtasks]
     .map((action, index) => ({ action, index }))
     .sort((left, right) => (left.action.order ?? left.index) - (right.action.order ?? right.index) || left.index - right.index)
     .map(({ action }) => action);
-  const linkedPlannerBlockId = model.nextAction
-    ? orderedActions.find((action) => action.id === model.nextAction?.id)?.plannerBlockId
+  const currentAction = model.nextAction
+    ? orderedActions.find((action) => action.id === model.nextAction?.id) ?? null
     : null;
+  const deferredAction = orderedActions.find((action) => !action.done && action.status === 'deferred') ?? null;
+  const milestones = [...(goal.milestones ?? [])].sort((left, right) => left.order - right.order);
+  const currentMilestoneId = currentAction?.milestoneId
+    ?? deferredAction?.milestoneId
+    ?? [...orderedActions].reverse().find((action) => action.done)?.milestoneId
+    ?? milestones[0]?.id
+    ?? null;
+  const currentMilestone = milestones.find((milestone) => milestone.id === currentMilestoneId) ?? milestones[0] ?? null;
+  const futureMilestones = currentMilestone
+    ? milestones.filter((milestone) => milestone.order > currentMilestone.order)
+    : milestones.slice(1);
 
   return (
     <article
@@ -573,8 +498,19 @@ function GoalCard({
             padding: "13px",
           }}>
             <p style={{ margin: "0 0 6px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>
-              {l("Próxima ação", "Next action")}
+              {currentMilestone ? `${l('Etapa atual', 'Current stage')} · ${currentMilestone.title}` : l("Próxima ação", "Next action")}
             </p>
+
+            {goal.resultDefinition && (
+              <p style={{ margin: '0 0 8px', color: 'var(--text-2)', fontSize: 12, lineHeight: 1.45 }}>
+                <strong>{l('Resultado:', 'Outcome:')}</strong> {goal.resultDefinition}
+              </p>
+            )}
+            {goal.currentReality && (
+              <p style={{ margin: '0 0 11px', color: 'var(--text-3)', fontSize: 11, lineHeight: 1.45 }}>
+                <strong>{l('Ponto de partida:', 'Starting point:')}</strong> {goal.currentReality}
+              </p>
+            )}
 
             {model.completed ? (
               <div style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text-2)" }}>
@@ -611,60 +547,116 @@ function GoalCard({
                   </p>
                 </div>
 
-                {scheduled ? (
-                  <div style={{
-                    marginTop: 11,
+                <label
+                  style={{
+                    width: "100%",
+                    minHeight: 43,
+                    marginTop: 12,
+                    border: 0,
+                    borderRadius: 13,
+                    background: "var(--lagune)",
+                    color: "#fff",
                     display: "flex",
                     alignItems: "center",
+                    justifyContent: "center",
                     gap: 7,
-                    color: "var(--lagune)",
-                    fontSize: 11,
-                    fontWeight: 750,
-                  }}>
-                    <CalendarPlus size={14} />
-                    {l("No seu dia em", "In your day on")} {scheduled.date} · {scheduled.time}
-                  </div>
-                ) : linkedPlannerBlockId ? (
-                  <p style={{ margin: "11px 0 0", color: "var(--lagune)", fontSize: 11, fontWeight: 750 }}>
-                    <CalendarPlus size={14} style={{ verticalAlign: "-2px", marginRight: 5 }} />
-                    {l("Esta ação já está agendada.", "This action is already scheduled.")}
-                  </p>
-                ) : (
-                  <button
-                    onClick={() => onPlanAction({
-                      goalId: goal.id,
-                      goalTitle: goal.title,
-                      actionId: model.nextAction!.id,
-                      actionTitle: model.nextAction!.title,
-                    })}
-                    style={{
-                      width: "100%",
-                      minHeight: 43,
-                      marginTop: 12,
-                      border: 0,
-                      borderRadius: 13,
-                      background: "var(--lagune)",
-                      color: "#fff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 7,
-                      fontSize: 12,
-                      fontWeight: 850,
-                      cursor: "pointer",
+                    fontSize: 12,
+                    fontWeight: 850,
+                    cursor: "default",
+                  }}
+                >
+                  <CalendarPlus size={16} />
+                  <span>{currentAction?.scheduledFor ? l("Planejada para", "Planned for") : l("Escolher uma data", "Choose a date")}</span>
+                  <input
+                    key={currentAction?.scheduledFor ?? 'without-date'}
+                    type="date"
+                    value={currentAction?.scheduledFor ?? ''}
+                    aria-label={l('Data da ação', 'Action date')}
+                    onChange={(event) => {
+                      const nextDate = event.target.value || null;
+                      const previousDate = currentAction?.scheduledFor ?? null;
+                      if (previousDate && nextDate !== previousDate && !window.confirm(l('Confirmar a mudança da data desta ação?', 'Confirm changing this action date?'))) {
+                        event.currentTarget.value = previousDate;
+                        return;
+                      }
+                      void onScheduleAction(model.nextAction!.id, nextDate);
                     }}
-                  >
-                    <CalendarPlus size={16} />
-                    {l("Colocar no meu dia", "Place in my day")}
-                  </button>
+                    style={{ maxWidth: 132, border: 0, borderRadius: 8, padding: '5px 7px', color: 'var(--text-1)' }}
+                  />
+                </label>
+
+                {editingAction ? (
+                  <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                    <input
+                      autoFocus
+                      value={actionEditTitle}
+                      onChange={(event) => setActionEditTitle(event.target.value)}
+                      aria-label={l('Editar ação atual', 'Edit current action')}
+                      style={{ minHeight: 42, border: '1px solid rgba(99,152,169,.35)', borderRadius: 11, padding: '8px 10px' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        disabled={actionEditTitle.trim().length < 3}
+                        onClick={async () => {
+                          await onUpdateAction(model.nextAction!.id, { title: actionEditTitle.trim() });
+                          setEditingAction(false);
+                        }}
+                        style={{ ...quietButtonStyle, flex: 1 }}
+                      >
+                        {l('Salvar', 'Save')}
+                      </button>
+                      <button onClick={() => setEditingAction(false)} style={quietButtonStyle}>{l('Cancelar', 'Cancel')}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 9 }}>
+                    <button
+                      onClick={() => { setActionEditTitle(model.nextAction!.title); setEditingAction(true); }}
+                      style={{ ...quietButtonStyle, flex: 1 }}
+                    >
+                      <Edit3 size={13} /> {l('Editar', 'Edit')}
+                    </button>
+                    <button
+                      onClick={() => onUpdateAction(model.nextAction!.id, { state: 'deferred' })}
+                      style={{ ...quietButtonStyle, flex: 1 }}
+                    >
+                      <CirclePause size={13} /> {l('Pode esperar', 'Can wait')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(l('Remover esta ação do caminho futuro?', 'Remove this action from the future path?'))) {
+                          void onUpdateAction(model.nextAction!.id, { state: 'rejected' });
+                        }
+                      }}
+                      style={{ ...quietButtonStyle, flex: 1, color: 'var(--text-2)' }}
+                    >
+                      <X size={13} /> {l('Não faz sentido', 'Not relevant')}
+                    </button>
+                  </div>
                 )}
               </>
             ) : (
               <>
                 <p style={{ margin: "0 0 11px", color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
-                  {l("Este resultado ainda não tem um passo concreto. Você decide o primeiro; a Airia não inventa por você.", "This result has no concrete step yet. You decide the first one; Airia does not invent it for you.")}
+                  {deferredAction
+                    ? l('Esta ação ficou para depois. Ela continua protegida no caminho e pode ser retomada aqui.', 'This action was left for later. It stays protected in the path and can be resumed here.')
+                    : futureMilestones.length > 0
+                    ? l('A etapa atual terminou. A próxima só ganha ações quando você confirmar que quer abri-la.', 'The current stage is complete. The next one only gets actions after you confirm opening it.')
+                    : goal.pathStatus === 'retrying'
+                      ? l('O objetivo está salvo. A Airia está retomando a interpretação sem preencher com uma lista genérica.', 'The goal is saved. Airia is retrying without filling it with a generic list.')
+                      : l("Este resultado ainda não tem um passo concreto. Você decide o primeiro; a Airia não inventa por você.", "This result has no concrete step yet. You decide the first one; Airia does not invent it for you.")}
                 </p>
-                {!addingAction && (
+                {deferredAction && (
+                  <button onClick={() => onUpdateAction(deferredAction.id, { state: 'pending' })} style={{ ...quietButtonStyle, width: '100%' }}>
+                    <Play size={14} /> {l('Retomar esta ação', 'Resume this action')}
+                  </button>
+                )}
+                {!deferredAction && futureMilestones.length > 0 && (
+                  <button onClick={onAdvance} style={{ ...quietButtonStyle, width: '100%', color: 'var(--nectarine-11)', borderColor: 'var(--nectarine-a5)' }}>
+                    <Sparkles size={14} /> {l(`Abrir: ${futureMilestones[0].title}`, `Open: ${futureMilestones[0].title}`)}
+                  </button>
+                )}
+                {!deferredAction && !addingAction && futureMilestones.length === 0 && (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={() => setAddingAction(true)} style={{ ...quietButtonStyle, flex: 1 }}>
                       <Plus size={14} /> {l("Definir próxima ação", "Define next action")}
@@ -808,6 +800,49 @@ function GoalCard({
             </details>
           )}
 
+          {futureMilestones.length > 0 && (
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--text-3)', fontSize: 11, fontWeight: 750 }}>
+                {l('Próximas etapas', 'Future stages')} · {futureMilestones.length}
+              </summary>
+              <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
+                {futureMilestones.map((milestone) => (
+                  <div key={milestone.id} style={{ borderLeft: '2px solid rgba(99,152,169,.22)', padding: '5px 0 5px 10px' }}>
+                    <strong style={{ display: 'block', color: 'var(--text-2)', fontSize: 12 }}>{milestone.title}</strong>
+                    {milestone.doneWhen && <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{milestone.doneWhen}</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {Boolean(goal.pathProposal) && (
+            <div style={{ marginTop: 12, border: '1px solid rgba(225,154,104,.3)', borderRadius: 14, padding: 11, background: 'rgba(225,154,104,.08)' }}>
+              <strong style={{ display: 'block', color: 'var(--text-1)', fontSize: 12 }}>{l('Proposta de revisão', 'Revision proposal')}</strong>
+              <span style={{ display: 'block', margin: '4px 0 9px', color: 'var(--text-3)', fontSize: 11 }}>{String((goal.pathProposal as any).reason ?? l('Novo contexto mudou o caminho futuro.', 'New context changed the future path.'))}</span>
+              {(goal.pathProposal as any)?.resultDefinition && (goal.pathProposal as any).resultDefinition !== goal.resultDefinition && (
+                <span style={{ display: 'block', marginBottom: 6, color: 'var(--text-2)', fontSize: 11 }}>
+                  <strong>{l('Resultado proposto:', 'Proposed outcome:')}</strong> {String((goal.pathProposal as any).resultDefinition)}
+                </span>
+              )}
+              {(goal.pathProposal as any)?.currentReality && (goal.pathProposal as any).currentReality !== goal.currentReality && (
+                <span style={{ display: 'block', marginBottom: 8, color: 'var(--text-2)', fontSize: 11 }}>
+                  <strong>{l('Nova leitura do ponto de partida:', 'Updated starting point:')}</strong> {String((goal.pathProposal as any).currentReality)}
+                </span>
+              )}
+              {Array.isArray((goal.pathProposal as any)?.milestones) && (
+                <div style={{ display: 'grid', gap: 5, margin: '0 0 10px' }}>
+                  {(goal.pathProposal as any).milestones.slice(1).map((milestone: any) => (
+                    <span key={String(milestone.id)} style={{ color: 'var(--text-2)', fontSize: 11 }}>
+                      → {String(milestone.title)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <button onClick={onConfirmRevision} style={{ ...quietButtonStyle, width: '100%' }}>{l('Revisar e aceitar mudanças futuras', 'Review and accept future changes')}</button>
+            </div>
+          )}
+
           <div style={{ marginTop: 12 }}>
             <button onClick={() => setShowManagement((value) => !value)} style={{ ...quietButtonStyle, width: "100%", minHeight: 36, border: 0, background: "transparent", color: "var(--text-3)" }}>
               {l("Gerenciar objetivo", "Manage goal")}
@@ -841,6 +876,27 @@ function GoalCard({
                 <button onClick={onArchive} style={{ ...quietButtonStyle, padding: "8px 6px", color: "var(--nectarine-11)" }}>
                   <Archive size={14} /> {l("Arquivar", "Archive")}
                 </button>
+                <label style={{ ...quietButtonStyle, gridColumn: '1 / -1', padding: '8px 10px' }}>
+                  <CalendarPlus size={14} />
+                  <span>{goal.deadline ? l('Prazo', 'Deadline') : l('Definir prazo', 'Set deadline')}</span>
+                  <input
+                    type="date"
+                    value={goal.deadline ?? ''}
+                    aria-label={l('Prazo do objetivo', 'Goal deadline')}
+                    onChange={(event) => { void onEditDeadline(event.target.value || null); }}
+                    style={{ minWidth: 0, flex: 1, border: 0, background: 'transparent', color: 'var(--text-1)' }}
+                  />
+                  {goal.deadline && (
+                    <button
+                      type="button"
+                      aria-label={l('Remover prazo', 'Remove deadline')}
+                      onClick={(event) => { event.preventDefault(); void onEditDeadline(null); }}
+                      style={{ border: 0, background: 'transparent', color: 'var(--text-3)', padding: 2 }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </label>
               </div>
             )}
           </div>
@@ -881,51 +937,22 @@ function GoalCard({
   );
 }
 
-/**
- * Contrato de `/api/ai/suggest` para objetivos.
- *
- * `items` continua igual para compatibilidade, mas agora a resposta pode vir
- * com `question` e sem nenhum item — quando a Airia não tem informação para uma
- * boa recomendação, perguntar É a recomendação.
- */
-function parseGoalSuggestion(raw: unknown): { items: string[]; question: string | null; resultDefinition: string | null } {
-  const parsed = parseAiSuggestion<{ items?: unknown; question?: unknown; resultDefinition?: unknown } | string[]>(raw);
-  const rawItems = Array.isArray(parsed) ? parsed : parsed?.items;
-  const items = Array.isArray(rawItems)
-    ? rawItems.map((item) => String(item).trim()).filter(Boolean)
-    : [];
-  const question = !Array.isArray(parsed) && typeof parsed?.question === "string" && parsed.question.trim()
-    ? parsed.question.trim()
-    : null;
-  const resultDefinition = !Array.isArray(parsed) && typeof parsed?.resultDefinition === "string" && parsed.resultDefinition.trim()
-    ? parsed.resultDefinition.trim()
-    : null;
-  return { items, question, resultDefinition };
-}
-
 export function GoalsPage() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
   const location = useLocation();
   const {
     state,
-    addGoal,
-    addGoalWithSubGoals,
-    addSubGoals,
     refreshData,
-    linkGoalActionToPlannerBlock,
     toggleSubGoal,
     removeGoal,
     updateGoal,
-    addTask,
     recoverGoalActions,
   } = useAuraStore();
   const { showError, showSuccess } = useToast();
 
   const [creationOpen, setCreationOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [taskDraft, setTaskDraft] = useState<TaskDraft | null>(null);
-  const [scheduling, setScheduling] = useState(false);
   const [completedOpen, setCompletedOpen] = useState(false);
   const [pausedOpen, setPausedOpen] = useState(false);
   const [loadingSuggestion, setLoadingSuggestion] = useState<string | number | null>(null);
@@ -937,24 +964,20 @@ export function GoalsPage() {
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
   const [pendingQuestion, setPendingQuestion] = useState<{ goalId?: string | number; goalTitle: string; question: string } | null>(null);
   const [questionAnswer, setQuestionAnswer] = useState("");
-  const [primaryGoalId, setPrimaryGoalId] = useState<string | null>(() => readPrimaryGoalId());
-  const [pausedIds, setPausedIds] = useState<string[]>(() => {
-    try {
-      return parsePausedGoalIds(localStorage.getItem(PAUSED_GOALS_KEY));
-    } catch {
-      return [];
-    }
-  });
-  const [scheduledActions, setScheduledActions] = useState<Record<string, ScheduledAction>>(() => {
-    try {
-      return readScheduledActions();
-    } catch {
-      return {};
-    }
-  });
+  const [primaryGoalId, setPrimaryGoalId] = useState<string | null>(null);
 
   const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
   const goals = state.goals as unknown as GoalLike[];
+
+  useEffect(() => {
+    setPrimaryGoalId(goals.find((goal) => goal.isPrimary)?.id?.toString() ?? null);
+  }, [goals]);
+
+  useEffect(() => {
+    if (pendingQuestion) return;
+    const waiting = goals.find((goal) => goal.pathStatus === 'needs_answer' && goal.pathQuestion);
+    if (waiting?.pathQuestion) setPendingQuestion({ goalId: waiting.id, goalTitle: waiting.title, question: waiting.pathQuestion });
+  }, [goals, pendingQuestion]);
 
   // A fase vem do mesmo motor de sempre. O mascote não a calcula nem a infere:
   // se cada tela adivinhasse por conta própria, o mascote diria uma coisa e a
@@ -962,22 +985,18 @@ export function GoalsPage() {
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
 
   const activeGoals = useMemo(
-    () => goals.filter((goal) => goal.completedPct < 100 && !pausedIds.includes(String(goal.id))),
-    [goals, pausedIds],
+    () => goals.filter((goal) => goal.completedPct < 100 && !goal.pausedAt),
+    [goals],
   );
   const pausedGoals = useMemo(
-    () => goals.filter((goal) => goal.completedPct < 100 && pausedIds.includes(String(goal.id))),
-    [goals, pausedIds],
+    () => goals.filter((goal) => goal.completedPct < 100 && Boolean(goal.pausedAt)),
+    [goals],
   );
   const completedGoals = useMemo(
     () => goals.filter((goal) => goal.completedPct >= 100),
     [goals],
   );
   const goalsWithAction = activeGoals.filter((goal) => buildGoalCardModel(goal).nextAction).length;
-
-  useEffect(() => {
-    localStorage.setItem(PAUSED_GOALS_KEY, JSON.stringify(pausedIds));
-  }, [pausedIds]);
 
   async function executeGoalRecovery() {
     await recoverGoalActionsOnce(recoveryGuardRef.current, async () => {
@@ -1015,10 +1034,6 @@ export function GoalsPage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(SCHEDULED_ACTIONS_KEY, JSON.stringify(scheduledActions));
-  }, [scheduledActions]);
-
-  useEffect(() => {
     if (!focusedGoalId) return;
     const timer = window.setTimeout(() => {
       document.getElementById(`goal-${focusedGoalId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1035,37 +1050,24 @@ export function GoalsPage() {
    * ações, e a pergunta aparece na tela. Bloquear a criação até a pessoa
    * responder seria transferir para ela o custo de um problema que é nosso.
    */
-  async function createGoal(result: string, clarifications: string[] = []) {
+  async function createGoal(result: string, deadline: string | null) {
     setCreating(true);
     try {
-      const response = await api.post("/ai/suggest", {
-        type: "goal-subtasks",
-        context: {
-          goalTitle: result,
-          existingSubtasks: [],
-          userStatements: clarifications,
-        },
-      }) as { suggestion?: unknown };
-      const suggestion = parseGoalSuggestion(response.suggestion);
-      const actions = suggestion.items
-        .filter((item, index, all) => item.length >= 3 && all.indexOf(item) === index)
-        .slice(0, 5);
-
-      if (actions.length >= 2) {
-        await addGoalWithSubGoals(result, actions);
-        setCreationOpen(false);
-        showSuccess(l("Objetivo criado com o primeiro movimento em foco.", "Goal created with the first move in focus."));
-        return;
+      const objective = await api.post('/objectives', {
+        title: result,
+        category: 'geral',
+        deadline,
+        locale: navigator.language || 'pt-BR',
+      }) as GoalLike;
+      await refreshData();
+      setCreationOpen(false);
+      if (objective.pathQuestion) {
+        setPendingQuestion({ goalId: objective.id, goalTitle: objective.title, question: objective.pathQuestion });
+      } else if (objective.pathStatus === 'retrying') {
+        showError(l('O objetivo foi salvo. A Airia vai tentar interpretar o caminho novamente.', 'The goal was saved. Airia will retry the path interpretation.'));
+      } else {
+        showSuccess(l('Objetivo criado com um caminho ligado à sua realidade.', 'Goal created with a path grounded in your reality.'));
       }
-
-      if (suggestion.question) {
-        await addGoal(result);
-        setCreationOpen(false);
-        setPendingQuestion({ goalTitle: result, question: suggestion.question });
-        return;
-      }
-
-      throw new Error(l("A Airia não conseguiu montar um caminho executável agora.", "Airia could not assemble an executable path right now."));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível criar o objetivo.", "Could not create the goal."));
     } finally {
@@ -1076,34 +1078,14 @@ export function GoalsPage() {
   async function requestSuggestion(goal: GoalLike, clarifications: string[] = []) {
     setLoadingSuggestion(goal.id);
     try {
-      const response = await api.post("/ai/suggest", {
-        type: "goal-subtasks",
-        context: {
-          goalTitle: goal.title,
-          existingSubtasks: goal.subtasks.filter((subtask) => !subtask.done).map((subtask) => subtask.title),
-          completedSubgoalTitles: goal.subtasks.filter((subtask) => subtask.done).map((subtask) => subtask.title),
-          // A descrição guarda o que a pessoa já respondeu sobre este objetivo.
-          userStatements: [
-            goal.progress && goal.progress !== "Em andamento" ? goal.progress : "",
-            ...clarifications,
-          ].filter(Boolean),
-        },
-      }) as { suggestion?: unknown };
-      const suggestion = parseGoalSuggestion(response.suggestion);
-      const items = suggestion.items.slice(0, 3);
-
-      if (items.length > 0) {
-        setSuggestionDrafts((current) => ({ ...current, [String(goal.id)]: items }));
-        return;
-      }
-
-      // Sem caminho confiável, a melhor próxima ação da Airia é a pergunta.
-      if (suggestion.question) {
-        setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: suggestion.question });
-        return;
-      }
-
-      showError(l("A Airia não encontrou uma opção concreta. Defina o primeiro passo com suas palavras.", "Airia did not find a concrete option. Define the first step in your own words."));
+      const response = await api.post(`/objectives/${goal.id}/path/generate`, {
+        locale: navigator.language || 'pt-BR',
+        userStatements: clarifications,
+      }) as { status: string; question?: string | null; objective?: GoalLike };
+      await refreshData();
+      if (response.question) setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: response.question });
+      else if (response.status === 'ready') showSuccess(l('O caminho foi atualizado.', 'The path was updated.'));
+      else showError(l('O objetivo continua salvo; a Airia tentará novamente.', 'The goal remains saved; Airia will retry.'));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível gerar opções agora.", "Could not generate options right now."));
     } finally {
@@ -1129,19 +1111,23 @@ export function GoalsPage() {
     if (goalId === undefined) return;
 
     try {
-      await api.patch(`/objectives/${goalId}`, { description: answer });
+      const response = await api.post(`/objectives/${goalId}/path/answer`, {
+        answer,
+        locale: navigator.language || 'pt-BR',
+      }) as { status: string; question?: string | null };
       await refreshData();
-    } catch {
-      // Não gravou: a resposta ainda vale para esta geração.
+      if (response.question) setPendingQuestion({ goalId, goalTitle: target.goalTitle, question: response.question });
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l('Não foi possível salvar a resposta.', 'Could not save the answer.'));
     }
-
-    const goal = (state.goals || []).find((item) => item.id === goalId);
-    if (goal) await requestSuggestion(goal, [answer]);
   }
 
   async function addAction(goalId: string | number, title: string) {
     try {
-      await addSubGoals(goalId, [title]);
+      const goal = goals.find((item) => String(item.id) === String(goalId));
+      if (!goal) return;
+      await api.post(`/objectives/${goalId}/actions`, { title, expectedVersion: goal.pathVersion ?? 1 });
+      await refreshData();
       setSuggestionDrafts((current) => ({ ...current, [String(goalId)]: [] }));
       showSuccess(l("Próxima ação adicionada.", "Next action added."));
     } catch (error) {
@@ -1149,8 +1135,11 @@ export function GoalsPage() {
     }
   }
 
-  function togglePaused(goalId: string | number) {
-    setPausedIds((current) => togglePausedGoalId(current, goalId));
+  async function togglePaused(goalId: string | number) {
+    const goal = goals.find((item) => String(item.id) === String(goalId));
+    if (!goal) return;
+    await api.patch(`/objectives/${goalId}`, { pausedAt: goal.pausedAt ? null : new Date().toISOString() });
+    await refreshData();
   }
 
   async function archiveGoal(goal: GoalLike) {
@@ -1164,39 +1153,9 @@ export function GoalsPage() {
 
     try {
       await removeGoal(goal.id);
-      setPausedIds((current) => current.filter((id) => id !== String(goal.id)));
       showSuccess(l("Objetivo arquivado.", "Goal archived."));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível arquivar.", "Could not archive."));
-    }
-  }
-
-  async function placeAction(placement: GoalTaskPlacement) {
-    if (!taskDraft) return;
-    setScheduling(true);
-    try {
-      const schedule = buildGoalTaskSchedule(placement);
-      const created = await addTask(taskDraft.actionTitle, schedule.time, "objetivo", {
-        date: schedule.date,
-        note: `${l("Próxima ação de", "Next action for")}: ${taskDraft.goalTitle}`,
-      });
-      if (!created) throw new Error(l("A tarefa não foi criada.", "The task was not created."));
-      await linkGoalActionToPlannerBlock(taskDraft.goalId, taskDraft.actionId, created.id);
-
-      setScheduledActions((current) => ({
-        ...current,
-        [actionKey(taskDraft.goalId, taskDraft.actionId)]: {
-          taskId: created.id,
-          date: schedule.date,
-          time: schedule.time,
-        },
-      }));
-      setTaskDraft(null);
-      showSuccess(l("A próxima ação entrou no seu dia.", "The next action was added to your day."));
-    } catch (error) {
-      showError(error instanceof Error ? error.message : l("Não foi possível colocar a ação no seu dia.", "Could not place the action in your day."));
-    } finally {
-      setScheduling(false);
     }
   }
 
@@ -1204,9 +1163,8 @@ export function GoalsPage() {
     <GoalCard
       key={goal.id}
       goal={goal}
-      paused={pausedIds.includes(String(goal.id))}
+      paused={Boolean(goal.pausedAt)}
       focused={focusedGoalId != null && String(focusedGoalId) === String(goal.id)}
-      scheduledActions={scheduledActions}
       loadingSuggestion={loadingSuggestion === goal.id}
       suggestionDraft={suggestionDrafts[String(goal.id)] ?? []}
       completingActionId={completingActionId}
@@ -1239,7 +1197,51 @@ export function GoalsPage() {
       onAddAction={(title) => addAction(goal.id, title)}
       onRequestSuggestion={() => requestSuggestion(goal)}
       onAcceptSuggestion={(title) => addAction(goal.id, title)}
-      onPlanAction={setTaskDraft}
+      onScheduleAction={async (actionId, date) => {
+        try {
+          await api.patch(`/objectives/${goal.id}/actions/${actionId}`, { expectedVersion: goal.pathVersion ?? 1, scheduledFor: date });
+          await refreshData();
+          showSuccess(l('Data da ação atualizada.', 'Action date updated.'));
+        } catch (error) {
+          showError(error instanceof Error ? error.message : l('Não foi possível atualizar a data.', 'Could not update the date.'));
+        }
+      }}
+      onUpdateAction={async (actionId, patch) => {
+        try {
+          await api.patch(`/objectives/${goal.id}/actions/${actionId}`, {
+            expectedVersion: goal.pathVersion ?? 1,
+            ...patch,
+          });
+          await refreshData();
+          showSuccess(patch.state === 'deferred'
+            ? l('A ação ficou para depois.', 'The action was left for later.')
+            : patch.state === 'rejected'
+              ? l('A ação saiu do caminho futuro.', 'The action was removed from the future path.')
+              : patch.state === 'pending'
+                ? l('A ação voltou para o caminho atual.', 'The action is active again.')
+                : l('Ação atualizada.', 'Action updated.'));
+        } catch (error) {
+          showError(error instanceof Error ? error.message : l('Não foi possível atualizar a ação.', 'Could not update the action.'));
+        }
+      }}
+      onAdvance={async () => {
+        try {
+          const response = await api.post(`/objectives/${goal.id}/path/advance`, { expectedVersion: goal.pathVersion ?? 1, locale: navigator.language || 'pt-BR' }) as { question?: string | null };
+          await refreshData();
+          if (response.question) setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: response.question });
+        } catch (error) {
+          showError(error instanceof Error ? error.message : l('Não foi possível abrir a próxima etapa.', 'Could not open the next stage.'));
+        }
+      }}
+      onConfirmRevision={async () => {
+        try {
+          await api.post(`/objectives/${goal.id}/path/confirm-revision`, { expectedVersion: goal.pathVersion ?? 1 });
+          await refreshData();
+          showSuccess(l('O caminho futuro foi revisado.', 'The future path was revised.'));
+        } catch (error) {
+          showError(error instanceof Error ? error.message : l('O objetivo mudou; gere uma nova proposta.', 'The goal changed; generate a new proposal.'));
+        }
+      }}
       onEditResult={async (title) => {
         try {
           await updateGoal(goal.id, { title });
@@ -1248,17 +1250,32 @@ export function GoalsPage() {
           showError(error instanceof Error ? error.message : l("Não foi possível atualizar.", "Could not update."));
         }
       }}
-      onPause={() => togglePaused(goal.id)}
+      onPause={() => { void togglePaused(goal.id); }}
       onArchive={() => archiveGoal(goal)}
       isPrimary={String(goal.id) === primaryGoalId}
       onMakePrimary={() => {
-        // Tocar de novo no que já é principal devolve a escolha à heurística.
         const next = String(goal.id) === primaryGoalId ? null : goal.id;
-        setPrimaryGoal(next);
-        setPrimaryGoalId(next === null ? null : String(next));
-        showSuccess(next === null
-          ? l("Voltei a escolher sozinha qual é o principal.", "I'll pick the primary one again.")
-          : l("Esse é o seu objetivo principal agora.", "That's your primary goal now."));
+        void (async () => {
+          try {
+            await api.put('/objectives/primary', { objectiveId: next === null ? null : String(next) });
+            await refreshData();
+            setPrimaryGoalId(next === null ? null : String(next));
+            showSuccess(next === null
+              ? l('A Airia volta a sugerir o foco sem fixá-lo.', 'Airia will suggest focus again without pinning it.')
+              : l('Esse é o seu objetivo em foco agora.', 'This is your focus goal now.'));
+          } catch (error) {
+            showError(error instanceof Error ? error.message : l('Não foi possível atualizar o foco.', 'Could not update focus.'));
+          }
+        })();
+      }}
+      onEditDeadline={async (deadline) => {
+        try {
+          await api.patch(`/objectives/${goal.id}`, { deadline });
+          await refreshData();
+          showSuccess(deadline ? l('Prazo atualizado.', 'Deadline updated.') : l('Objetivo deixado sem prazo.', 'Goal left open-ended.'));
+        } catch (error) {
+          showError(error instanceof Error ? error.message : l('Não foi possível atualizar o prazo.', 'Could not update the deadline.'));
+        }
       }}
     />
   );
@@ -1462,7 +1479,6 @@ export function GoalsPage() {
           </div>
         </div>
       )}
-      <TaskPlacementSheet draft={taskDraft} saving={scheduling} onClose={() => !scheduling && setTaskDraft(null)} onChoose={placeAction} />
       <RewardBurst reward={reward} onDone={() => setReward(null)} />
     </div>
   );

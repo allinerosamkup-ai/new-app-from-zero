@@ -49,10 +49,14 @@ export type GoalIntelligenceInput = {
   existingActions?: string[];
   /** Ações já concluídas — evita sugerir o que já aconteceu. */
   completedActions?: string[];
+  /** Ações rejeitadas ou adiadas; calibram sem serem sugeridas novamente. */
+  blockedActions?: string[];
   userName?: string;
   locale?: string;
   /** O que a PESSOA escreveu: nota de check-in, diário, fala para a Airia. */
   userStatements?: string[];
+  /** Fatos e decisões canônicos, com origem conhecida na memória. */
+  canonicalFacts?: string[];
   /** Estado de hoje, quando existir check-in. */
   moodLabel?: string | null;
   energyScore?: number | null;
@@ -98,12 +102,29 @@ export type GoalStep = {
    */
   basedOn: 'stated' | 'inferred';
   rationale?: string;
+  milestoneId?: string;
+  doneWhen?: string;
+  effortSize?: 'small' | 'medium' | 'large';
+  evidenceRefs?: string[];
+};
+
+export type GoalMilestone = {
+  id: string;
+  title: string;
+  order: number;
+  doneWhen: string;
+  actions: GoalStep[];
 };
 
 export type GoalDecomposition = {
   mode: 'actions' | 'question';
   /** O que "concluído" significa para este objetivo, na leitura da IA. */
   resultDefinition: string | null;
+  /** Fotografia do ponto de partida sustentada pelo contexto disponível. */
+  currentReality: string | null;
+  /** Etapa vigente; só ela contém ações detalhadas. */
+  currentMilestoneId: string | null;
+  milestones: GoalMilestone[];
   /** O que a IA assumiu sem ter dado — fica visível, não escondido. */
   assumptions: string[];
   steps: GoalStep[];
@@ -127,14 +148,30 @@ export type GoalDecomposition = {
  */
 const clipped = (max: number) => z.string().transform((value) => value.trim().slice(0, max));
 
+const GoalActionPayloadSchema = z.object({
+  title: clipped(160),
+  basedOn: z.enum(['stated', 'inferred']).catch('inferred').optional().default('inferred'),
+  rationale: clipped(240).optional().default(''),
+  doneWhen: clipped(240).optional().default(''),
+  effortSize: z.enum(['small', 'medium', 'large']).optional(),
+  evidenceRefs: z.array(clipped(120)).optional().default([]),
+});
+
 const StepsPayloadSchema = z.object({
   resultDefinition: clipped(240).optional().default(''),
+  currentReality: clipped(480).optional().default(''),
+  currentMilestoneId: clipped(120).optional().default(''),
   assumptions: z.array(clipped(240)).optional().default([]),
-  steps: z.array(z.object({
+  decisiveQuestion: clipped(320).nullable().optional().default(null),
+  milestones: z.array(z.object({
+    id: clipped(120),
     title: clipped(160),
-    basedOn: z.enum(['stated', 'inferred']).catch('inferred').optional().default('inferred'),
-    rationale: clipped(240).optional().default(''),
+    order: z.number().int().nonnegative().optional().default(0),
+    doneWhen: clipped(240).optional().default(''),
+    actions: z.array(GoalActionPayloadSchema).optional().default([]),
   })).optional().default([]),
+  // Compatibilidade temporária com respostas e objetivos anteriores.
+  steps: z.array(GoalActionPayloadSchema).optional().default([]),
 });
 
 /** Contrato da chamada dedicada de pergunta. */
@@ -305,6 +342,8 @@ export function buildContextText(input: GoalIntelligenceInput): string {
     ...(input.userStatements ?? []),
     ...(input.existingActions ?? []),
     ...(input.completedActions ?? []),
+    ...(input.blockedActions ?? []),
+    ...(input.canonicalFacts ?? []),
   ].filter(Boolean).join(' \n ');
 }
 
@@ -314,7 +353,7 @@ export function buildGoalDecompositionPrompt(input: GoalIntelligenceInput): stri
 
   const said = (input.userStatements ?? []).filter(Boolean);
   const saidBlock = said.length > 0
-    ? `\nO QUE ELA REALMENTE DISSE (única fonte de fato):\n${said.map((line) => `- "${line}"`).join('\n')}`
+    ? `\nO QUE ELA REALMENTE DISSE (fonte atual de maior autoridade):\n${said.map((line) => `- "${line}"`).join('\n')}`
     : '\nO QUE ELA REALMENTE DISSE: nada além do título do objetivo.';
 
   const existing = (input.existingActions ?? []).filter(Boolean);
@@ -324,6 +363,14 @@ export function buildGoalDecompositionPrompt(input: GoalIntelligenceInput): stri
   const completed = (input.completedActions ?? []).filter(Boolean);
   const completedBlock = completed.length > 0
     ? `\nJá concluído (nunca sugira de novo): ${completed.join(' | ')}`
+    : '';
+  const blocked = (input.blockedActions ?? []).filter(Boolean);
+  const blockedBlock = blocked.length > 0
+    ? `\nRejeitado ou adiado (não repita nem reformule): ${blocked.join(' | ')}`
+    : '';
+  const canonicalFacts = (input.canonicalFacts ?? []).filter(Boolean);
+  const canonicalBlock = canonicalFacts.length > 0
+    ? `\nFATOS E DECISÕES CANÔNICOS DA MEMÓRIA:\n${canonicalFacts.map((line) => `- ${line}`).join('\n')}`
     : '';
 
   const today = [
@@ -350,13 +397,21 @@ export function buildGoalDecompositionPrompt(input: GoalIntelligenceInput): stri
   return `${name} tem o objetivo abaixo. Sua tarefa é INTERPRETAR o objetivo e devolver o caminho real até ele.
 ${language}
 
-OBJETIVO: "${input.goalTitle}"${saidBlock}${existingBlock}${completedBlock}${todayBlock}${capacityBlock}${patternBlock}${profileLines(input.operationalProfile)}
+OBJETIVO: "${input.goalTitle}"${saidBlock}${existingBlock}${completedBlock}${blockedBlock}${canonicalBlock}${todayBlock}${capacityBlock}${patternBlock}${profileLines(input.operationalProfile)}
 
 RACIOCÍNIO OBRIGATÓRIO, NESTA ORDEM:
 1. O que este objetivo significa? Qual é o resultado final esperado?
 2. O que eu SEI sobre a situação atual (só o que está escrito acima)?
 3. O que eu estou apenas SUPONDO?
 4. Qual é a próxima sequência realmente lógica até o resultado?
+
+ORDEM DE AUTORIDADE:
+1. descrição e respostas específicas deste objetivo;
+2. contexto atual do Diário, Check-in e Aura;
+3. ações concluídas, editadas, rejeitadas ou adiadas;
+4. fatos canônicos da memória;
+5. padrões históricos, apenas para calibrar;
+6. inferência geral, sempre marcada como inferred.
 
 REGRA CRÍTICA — NÃO INVENTAR OBSTÁCULO:
 Você NÃO pode assumir problema que ninguém relatou. Se o objetivo é "deixar a sala
@@ -382,26 +437,35 @@ MARCAÇÃO OBRIGATÓRIA:
 - "basedOn": "inferred" → o passo vem de conhecimento geral sobre esse tipo de
   objetivo. Permitido, desde que não invente objeto, defeito nem circunstância.
 
-PERGUNTAR NÃO É UMA OPÇÃO NESTA RESPOSTA:
-${said.length > 0
-  ? `Ela JÁ CONTOU o que falta (veja o bloco acima). Devolver pergunta aqui é o
-pior comportamento possível — é jogar de volta para ela o esforço que ela já
-fez. Use a fala dela e entregue os passos.`
-  : `Não peça esclarecimento. "Está sujo?", "o que tem na sala?", "o que impede o
-uso?" são perguntas que o próprio caminho resolve — retirar o que não pertence,
-organizar, deixar utilizável e conferir cobre qualquer resposta possível. Se
-faltar detalhe, você AINDA ASSIM entrega os passos, no nível de generalidade que
-o dado permite, e declara o que supôs em "assumptions".`}
+UMA PERGUNTA DECISIVA:
+- Use "decisiveQuestion" somente se a resposta levar a caminhos materialmente diferentes;
+  escolher sem ela criaria ações genéricas ou erradas.
+- Faça UMA pergunta curta. Não faça questionário e não pergunte detalhe que só
+  muda acabamento.
+- Não pergunte o que pode inferir com segurança nem o que ela JÁ CONTOU.
+- Exemplo que exige pergunta: "organizar minhas finanças" sem contexto, porque
+  dívida, gasto mensal e falta de controle exigem caminhos diferentes.
+- Exemplo que não exige: "deixar a sala pronta para uso", porque é seguro começar
+  tornando o ambiente funcional sem inventar defeito ou objeto.
+- Quando usar a pergunta, devolva milestones vazias. Caso contrário,
+  "decisiveQuestion" deve ser null.
 
 FORMATO:
-- ${MIN_STEPS} a ${MAX_STEPS} passos, ordenados, cada um um movimento real e observável.
-- Nenhum passo pode ser o objetivo reescrito com menos palavras.
+- "currentReality" resume somente o ponto de partida sustentado pelo contexto.
+- "milestones" contém as etapas causalmente ordenadas entre a realidade e o resultado.
+- "currentMilestoneId" identifica a única etapa vigente.
+- Detalhe de 1 a ${MAX_STEPS} ações somente na etapa vigente. As etapas futuras ficam
+  resumidas com "actions": []; falsa precisão não é planejamento.
+- Cada "doneWhen" descreve a evidência observável de conclusão da etapa ou ação.
+- A ação começa com verbo executável e produz mudança observável. Não use "planejar",
+  "organizar melhor", "pensar sobre" nem reformule o objetivo.
+- Baixa energia reduz apenas a ação atual, nunca o resultado ou as etapas futuras.
 - Não repita nem disfarce ação que já existe ou já foi concluída.
 - "resultDefinition" diz, em uma frase, o que significa concluir isso.
 - "assumptions" lista o que você supôs sem ter dado. Seja honesto.
 
 JSON APENAS:
-{"resultDefinition":"...","assumptions":["..."],"steps":[{"title":"...","basedOn":"stated|inferred","rationale":"..."}]}`;
+{"resultDefinition":"...","currentReality":"...","assumptions":["..."],"decisiveQuestion":null,"currentMilestoneId":"m-1","milestones":[{"id":"m-1","title":"...","order":0,"doneWhen":"...","actions":[{"title":"...","basedOn":"stated|inferred","rationale":"...","doneWhen":"...","effortSize":"small|medium|large","evidenceRefs":["statement:0"]}]},{"id":"m-2","title":"...","order":1,"doneWhen":"...","actions":[]}]}`;
 }
 
 /**
@@ -459,7 +523,7 @@ export function buildActionValidationPrompt(input: {
     ? 'Answer in English, same JSON contract.'
     : 'Responda em português do Brasil, mesmo contrato JSON.';
 
-  return `Você revisa uma decomposição de objetivo. Procure UM tipo de erro: fato inventado.
+  return `Você revisa uma decomposição de objetivo de forma independente.
 ${language}
 
 OBJETIVO: "${input.goalTitle}"
@@ -488,6 +552,11 @@ TESTE RÁPIDO: o passo funcionaria em QUALQUER situação coberta por esse
 objetivo? Então é inferência — aprove. Ele depende de um detalhe que só existe
 se alguém tiver dito? Então é invenção — reprove.
 
+REPROVE TAMBÉM quando a sequência não tem vínculo causal com o resultado, a
+ação não é executável, não produz mudança observável, repete algo concluído ou
+antecipa com falsa precisão uma etapa futura. Uma regra lexical nunca substitui
+esta revisão semântica.
+
 NÃO SÃO MOTIVOS DE REPROVAÇÃO:
 - "pressupõe que existam itens/elementos a organizar" — isso é o objetivo.
 - "pressupõe um uso pretendido" — está no título, não precisa ser detalhado.
@@ -514,8 +583,8 @@ async function completeJson(
   system: string,
   user: string,
   maxTokens: number,
+  model = getOpenAiModel(),
 ): Promise<unknown> {
-  const model = getOpenAiModel();
   const response = await client.chat.completions.create({
     model,
     messages: [
@@ -532,6 +601,53 @@ async function completeJson(
 
 const GENERATOR_SYSTEM = 'Você interpreta objetivos e devolve o caminho real até eles. Nunca inventa fato, objeto ou defeito. Responde só JSON.';
 const VALIDATOR_SYSTEM = 'Você revisa recomendações e reprova o que não se sustenta em dado real. Responde só JSON.';
+const FALLBACK_MODEL = 'gpt-4.1-mini';
+
+type ParsedPathPayload = z.infer<typeof StepsPayloadSchema>;
+
+function normalizePathPayload(payload: ParsedPathPayload): {
+  milestones: GoalMilestone[];
+  currentMilestoneId: string | null;
+  steps: GoalStep[];
+} {
+  const sourceMilestones = payload.milestones.length > 0
+    ? payload.milestones
+    : payload.steps.length > 0
+      ? [{
+          id: 'milestone-1',
+          title: 'Caminho atual',
+          order: 0,
+          doneWhen: payload.resultDefinition,
+          actions: payload.steps,
+        }]
+      : [];
+
+  const milestones: GoalMilestone[] = sourceMilestones
+    .map((milestone, index) => ({
+      id: milestone.id || `milestone-${index + 1}`,
+      title: milestone.title || `Etapa ${index + 1}`,
+      order: milestone.order ?? index,
+      doneWhen: milestone.doneWhen || '',
+      actions: milestone.actions.map((action) => ({
+        title: action.title,
+        basedOn: action.basedOn,
+        ...(action.rationale ? { rationale: action.rationale } : {}),
+        milestoneId: milestone.id || `milestone-${index + 1}`,
+        ...(action.doneWhen ? { doneWhen: action.doneWhen } : {}),
+        ...(action.effortSize ? { effortSize: action.effortSize } : {}),
+        ...(action.evidenceRefs.length > 0 ? { evidenceRefs: action.evidenceRefs } : {}),
+      })),
+    }))
+    .sort((left, right) => left.order - right.order);
+
+  const requestedCurrent = payload.currentMilestoneId || milestones[0]?.id || null;
+  const currentMilestoneId = milestones.some((item) => item.id === requestedCurrent)
+    ? requestedCurrent
+    : milestones[0]?.id ?? null;
+  const steps = milestones.find((item) => item.id === currentMilestoneId)?.actions ?? [];
+
+  return { milestones, currentMilestoneId, steps };
+}
 
 export class GoalIntelligenceService {
   /** Exposto para teste: o prompt é contrato, não detalhe interno. */
@@ -593,6 +709,9 @@ export class GoalIntelligenceService {
     const empty: GoalDecomposition = {
       mode: 'question',
       resultDefinition: null,
+      currentReality: null,
+      currentMilestoneId: null,
+      milestones: [],
       assumptions: [],
       steps: [],
       question: null,
@@ -609,10 +728,10 @@ export class GoalIntelligenceService {
       let feedback = '';
       let lastRejections: Array<{ title: string; reason: string }> = [];
       let lastResultDefinition: string | null = null;
+      let lastCurrentReality: string | null = null;
       let lastAssumptions: string[] = [];
-      // Passos que sobreviveram à guarda determinística, mesmo que o revisor
-      // tenha implicado. Só existem se de fato havia caminho.
-      let survivedGuard: GoalStep[] = [];
+      const primaryModel = process.env.OPENAI_DECOMPOSITION_MODEL?.trim() || getOpenAiModel();
+      const fallbackModel = process.env.OPENAI_DECOMPOSITION_FALLBACK_MODEL?.trim() || FALLBACK_MODEL;
 
       // Duas tentativas: a segunda recebe o motivo exato da reprovação. Mais que
       // isso vira loop caro sem ganho — se falhou duas vezes com o motivo na
@@ -622,7 +741,9 @@ export class GoalIntelligenceService {
           ? buildGoalDecompositionPrompt(input)
           : `${buildGoalDecompositionPrompt(input)}\n\nA TENTATIVA ANTERIOR FOI REPROVADA:\n${feedback}\nCorrija exatamente isso, sem inventar objeto, defeito nem circunstância.`;
 
-        const raw = await completeJson(chat, GENERATOR_SYSTEM, prompt, 900);
+        const generationModel = attempt === 0 ? primaryModel : fallbackModel;
+        const validationModel = generationModel === fallbackModel ? primaryModel : fallbackModel;
+        const raw = await completeJson(chat, GENERATOR_SYSTEM, prompt, 1200, generationModel);
         const parsed = StepsPayloadSchema.safeParse(raw);
         if (!parsed.success) {
           // Loga o motivo: parse silencioso já escondeu uma geração perfeita
@@ -638,9 +759,24 @@ export class GoalIntelligenceService {
         const payload = parsed.data;
         const assumptions = payload.assumptions.filter(Boolean).slice(0, 4);
         lastResultDefinition = payload.resultDefinition || lastResultDefinition;
+        lastCurrentReality = payload.currentReality || lastCurrentReality;
         lastAssumptions = assumptions.length > 0 ? assumptions : lastAssumptions;
 
-        const screened = this.screenSteps(payload.steps, input);
+        if (payload.decisiveQuestion) {
+          return {
+            mode: 'question',
+            resultDefinition: payload.resultDefinition || null,
+            currentReality: payload.currentReality || null,
+            currentMilestoneId: null,
+            milestones: [],
+            assumptions,
+            steps: [],
+            question: payload.decisiveQuestion,
+          };
+        }
+
+        const path = normalizePathPayload(payload);
+        const screened = this.screenSteps(path.steps, input);
         lastRejections = screened.rejected;
 
         if (screened.kept.length === 0) {
@@ -650,19 +786,26 @@ export class GoalIntelligenceService {
         }
 
         const steps = screened.kept.slice(0, MAX_STEPS);
-        survivedGuard = steps;
+        const milestones = path.milestones.map((milestone) => (
+          milestone.id === path.currentMilestoneId
+            ? { ...milestone, actions: steps }
+            : { ...milestone, actions: [] }
+        ));
         const verdict = await this.validate({
           goalTitle: input.goalTitle,
           contextText: buildContextText(input),
           resultDefinition: payload.resultDefinition || null,
           steps,
           locale: input.locale,
-        }, chat);
+        }, chat, validationModel);
 
         if (verdict.approved) {
           return {
             mode: 'actions',
             resultDefinition: payload.resultDefinition || null,
+            currentReality: payload.currentReality || null,
+            currentMilestoneId: path.currentMilestoneId,
+            milestones,
             assumptions,
             steps,
             question: null,
@@ -674,40 +817,16 @@ export class GoalIntelligenceService {
         feedback = verdict.failures.join('\n') || 'reprovado pelo revisor sem motivo declarado';
       }
 
-      /**
-       * Revisor reprovou duas vezes, mas a guarda aprovou passos.
-       *
-       * Entrega os passos. O revisor é instruído a ser adversarial, e com modelo
-       * pequeno isso vira reprovação sistemática — em produção ele derrubou uma
-       * decomposição correta ("retirar o que não pertence", "organizar os
-       * elementos principais", "limpeza básica", "conferir se está utilizável")
-       * duas vezes seguidas, e o pipeline caía na pergunta.
-       *
-       * A rede de segurança dura contra o erro que importa — invenção de objeto,
-       * defeito ou circunstância — é a guarda determinística, e ela já rodou.
-       * Pergunta é para quando NÃO HÁ caminho, não para quando um revisor
-       * implicou com o caminho que existe.
-       */
-      if (survivedGuard.length > 0) {
-        console.info(
-          `[goal-intelligence] revisor reprovou 2x; entregando ${survivedGuard.length} passo(s) aprovado(s) pela guarda`,
-        );
-        return {
-          mode: 'actions',
-          resultDefinition: lastResultDefinition,
-          assumptions: lastAssumptions,
-          steps: survivedGuard,
-          question: null,
-          rejectedSteps: lastRejections,
-        };
-      }
-
-      // Nenhuma das duas tentativas produziu passo utilizável. Agora sim — e só
-      // agora — a pergunta é a melhor próxima ação, e vai numa chamada dedicada.
+      // Nenhuma tentativa produziu caminho semanticamente aprovado. Uma guarda
+      // determinística pode barrar invenção, mas nunca aprova sentido, sequência
+      // ou vínculo causal no lugar do revisor independente.
       const question = await this.askClarifyingQuestion(input, chat);
       return {
         mode: 'question',
         resultDefinition: lastResultDefinition,
+        currentReality: lastCurrentReality,
+        currentMilestoneId: null,
+        milestones: [],
         assumptions: lastAssumptions,
         steps: [],
         question,
@@ -754,20 +873,19 @@ export class GoalIntelligenceService {
       locale?: string;
     },
     client?: ChatClient,
+    model = process.env.OPENAI_DECOMPOSITION_FALLBACK_MODEL?.trim() || FALLBACK_MODEL,
   ): Promise<{ approved: boolean; failures: string[]; missingInfo: string | null }> {
     if (input.steps.length === 0) {
       return { approved: false, failures: ['nenhum passo para validar'], missingInfo: null };
     }
     if (!client && !process.env.OPENAI_API_KEY) {
-      return { approved: true, failures: [], missingInfo: null };
+      return { approved: false, failures: ['revisor sem modelo disponível'], missingInfo: null };
     }
     try {
-      const raw = await completeJson(client ?? getOpenAI(), VALIDATOR_SYSTEM, buildActionValidationPrompt(input), 500);
+      const raw = await completeJson(client ?? getOpenAI(), VALIDATOR_SYSTEM, buildActionValidationPrompt(input), 500, model);
       const parsed = ValidationPayloadSchema.safeParse(raw);
       if (!parsed.success) {
-        // Validador quebrado não pode virar aprovação silenciosa nem bloqueio
-        // total: os passos já passaram pela guarda determinística, então seguem.
-        return { approved: true, failures: [], missingInfo: null };
+        return { approved: false, failures: ['resposta do revisor fora do contrato'], missingInfo: null };
       }
       return {
         approved: parsed.data.approved,
@@ -775,7 +893,7 @@ export class GoalIntelligenceService {
         missingInfo: parsed.data.missingInfo,
       };
     } catch {
-      return { approved: true, failures: [], missingInfo: null };
+      return { approved: false, failures: ['revisor indisponível'], missingInfo: null };
     }
   }
 }

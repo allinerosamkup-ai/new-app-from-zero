@@ -27,6 +27,20 @@ precisa de dono, branch, estado e handoff. `git status --short --branch` e
 encerrar trabalho. Não criar cópia para a mesma tarefa sem motivo registrado e
 não deixar worktree/branch/arquivo sem destino.
 
+### [DECISÃO] Reutilizar antes de inventar
+Antes de escrever código novo, pesquisar no repositório, worktrees, histórico,
+dependências, documentação oficial e fontes externas relevantes, como GitHub,
+registries, templates, conectores e catálogos de aplicativos. Reutilizar ou
+adaptar apenas depois de conferir comportamento, licença, segurança,
+compatibilidade e manutenção; registrar escolhas relevantes e verificar a
+solução no mesmo ciclo do código novo.
+
+### [FATO] Avaliações OpenAI locais usam a cadeia de certificados do Windows
+Neste ambiente, a API da OpenAI responde HTTP 200 e a chave é válida, mas o
+Node pode falhar com `UNABLE_TO_VERIFY_LEAF_SIGNATURE`. Para `aura:eval` e
+`ai:smoke`, usar `NODE_OPTIONS=--use-system-ca`; nunca desabilitar a validação
+TLS. Com esse ajuste, `gpt-5.4-mini` passou em 10/12 e 11/11 respectivamente.
+
 ### [FATO] `TaskCompleted` é um evento próprio e não aceita matcher
 No Claude Code atual, `Stop`, `SubagentStop` e `TaskCompleted` disparam sem
 matcher. `TaskCompleted` recebe `task_subject`/`task_description` e pode impedir
@@ -302,6 +316,34 @@ o Chrome mostrou a conta AIRIA autenticada enquanto as chamadas do conector
 continuaram retornando `oauth_token_invalid_grant`. Não tratar login no painel
 como recuperação da API; reautenticar o conector ou usar uma sessão de navegador
 controlável, sem copiar chave secreta para o chat.
+
+### [FATO] Objetivo é direção versionada; Home recebe só a ação vigente
+Desde 2026-08-11, `GoalIntelligenceService` é o motor único para objetivos. O
+contrato separa resultado, realidade atual, marcos futuros resumidos e ações
+detalhadas somente da etapa vigente. Ações concluídas ou editadas pela pessoa
+impedem regeneração direta: contexto novo cria `pathProposal` cercada por
+`pathVersion`, e só a confirmação na mesma versão altera o futuro. A estrela
+humana fica em `UserPreference.primaryObjectiveId` e sempre vence a sugestão da
+Airia. Prazo do objetivo e data da ação ajudam a leitura, mas nunca substituem
+significado e contexto. Planner, Hábitos e Google Agenda permanecem capacidades
+desligadas; fluxo de objetivo não cria timeline.
+
+### [FATO] Escritas versionadas de Objetivos não aceitam envelope global do web
+O cliente injeta horário, contexto adaptativo e idioma em mutações genéricas,
+mas `/objectives` e suas subrotas usam contratos estritos e devem receber o body
+exato. Enriquecê-las no wrapper gera `unrecognized_keys` antes da criação.
+
+### [FATO] Consulta informativa da Aura não é contexto novo
+Perguntar qual é o objetivo, realidade ou prioridade apenas lê o estado e não
+autoriza proposta de revisão. Mudança material declarada continua acionando a
+revisão. Ao combinar etapas preservadas com etapas geradas, normalize IDs para
+unicidade antes de persistir a proposta; modelos podem repetir IDs existentes.
+
+### [DECISÃO] Divergência de histórico bloqueia `supabase db push`, não a validação segura
+Quando as migrações locais e remotas divergem, não reparar histórico durante uma
+feature. Validar o SQL integral contra os dados reais em transação revertida e
+exercitar o runtime em schema isolado. Aplicação pública fica para uma janela de
+produção autorizada com reconciliação explícita.
 
 ---
 

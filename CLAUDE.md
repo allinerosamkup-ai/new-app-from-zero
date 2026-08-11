@@ -133,6 +133,11 @@ vale sempre, sem precisar abrir o documento:
   encerra tarefa.
 - Critérios de aceite viram lista **antes** de implementar, não depois de ver o
   que deu para construir.
+- Antes de escrever código novo, procurar no repositório, worktrees, histórico,
+  dependências, documentação oficial e, quando necessário, GitHub, registries,
+  templates, conectores e catálogos de aplicativos. Reutilizar/adaptar só após
+  conferir comportamento, licença, segurança, compatibilidade e manutenção.
+  Ver `SEARCH / REUSE BEFORE INVENT` no protocolo.
 - `CODE CORRECTNESS IS NOT PRODUCT CORRECTNESS.` Mudança visível na tela se prova
   no navegador. Saída de IA tecnicamente válida e semanticamente errada é `FAIL`.
 - Bug: `REPRODUZIR → CAUSA RAIZ → CORRIGIR → REPRODUZIR DE NOVO → REGRESSÃO`.

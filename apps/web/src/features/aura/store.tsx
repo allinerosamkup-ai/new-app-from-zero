@@ -26,6 +26,7 @@ import { postNativeShellMessage } from "../../utils/native-shell";
 import { buildCheckinSubmission, type CheckinSubmission } from "./checkin-submission";
 import { resolveMoodFromCheckin } from "./checkin-mood";
 import { hydrateCheckinEntry } from "./checkin-hydration";
+import { FEATURES } from "../../config/features";
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -123,7 +124,26 @@ function mapCanonicalObjectives(value: unknown): Goal[] {
       done: subgoal.done ?? subgoal.completed ?? false,
       order: subgoal.order ?? index,
       plannerBlockId: subgoal.plannerBlockId ?? null,
+      milestoneId: subgoal.milestoneId ?? null,
+      scheduledFor: subgoal.scheduledFor ?? null,
+      doneWhen: subgoal.doneWhen ?? null,
+      effortSize: subgoal.effortSize ?? null,
+      basedOn: subgoal.basedOn,
+      aiGenerated: subgoal.aiGenerated ?? false,
+      userEdited: subgoal.userEdited ?? false,
+      status: subgoal.status,
     })) : [],
+    description: objective.description ?? null,
+    resultDefinition: objective.resultDefinition ?? null,
+    currentReality: objective.currentReality ?? null,
+    milestones: Array.isArray(objective.milestones) ? objective.milestones : [],
+    pathVersion: objective.pathVersion ?? 1,
+    pathStatus: objective.pathStatus ?? 'not_started',
+    pathQuestion: objective.pathQuestion ?? null,
+    deadline: objective.deadline ?? null,
+    pausedAt: objective.pausedAt ?? null,
+    isPrimary: objective.isPrimary ?? false,
+    pathProposal: objective.pathProposal ?? null,
   }));
 }
 
@@ -171,15 +191,12 @@ type AuraStoreContextValue = {
     riskSafety?: unknown;
   }>;
   addGoal: (title: string) => Promise<void>;
-  addGoalWithSubGoals: (title: string, subgoals: string[]) => Promise<void>;
   addSubGoals: (goalId: string | number, titles: string[]) => Promise<void>;
   /** Corrige o texto de uma ação sem mexer em progresso nem em ordem. */
   updateSubGoalTitle: (goalId: string | number, subGoalId: string | number, title: string) => Promise<void>;
-  linkGoalActionToPlannerBlock: (goalId: string | number, subGoalId: string | number, plannerBlockId: string | number) => Promise<void>;
-  setGoalStatus: (goalId: string | number, progress: number) => Promise<void>;
   toggleSubGoal: (goalId: string | number, subGoalId: string | number) => Promise<GoalActionCompletion | null>;
   removeGoal: (goalId: string | number) => Promise<void>;
-  updateGoal: (goalId: string | number, updates: Partial<{ title: string; progress: number }>) => Promise<void>;
+  updateGoal: (goalId: string | number, updates: Partial<{ title: string }>) => Promise<void>;
   addTask: (
     title: string,
     time: string,
@@ -316,10 +333,14 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const today = getLocalDateKey();
         const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw, profileRaw] = await Promise.all([
           api.get('/checkins?days=90').catch(e => { console.error(e); return null; }),
-          api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; }),
+          FEATURES.planner
+            ? api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; })
+            : Promise.resolve([]),
           api.get('/objectives').catch(e => { console.error(e); return null; }),
           api.get('/preferences').catch(e => { console.error(e); return null; }),
-          api.get('/habits').catch(e => { console.error(e); return null; }),
+          FEATURES.habits
+            ? api.get('/habits').catch(e => { console.error(e); return null; })
+            : Promise.resolve([]),
           (async () => {
             try {
               const r = await supabase.from('profiles').select('cycle_start, cycle_length, luteal_length, onboarding_done, created_at').eq('id', session.user.id).maybeSingle();
@@ -706,41 +727,17 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         await api.post('/objectives', {
           title,
           category: 'geral',
-          subgoals: []
-        });
-        await refreshData();
-      },
-      addGoalWithSubGoals: async (title, subgoals) => {
-        const normalizedSubgoals = subgoals
-          .map((item, index) => ({
-            id: `ai-${Date.now()}-${index}`,
-            title: item.trim(),
-            done: false,
-            order: index,
-            aiGenerated: true,
-          }))
-          .filter((item) => item.title.length > 0);
-
-        await api.post('/objectives', {
-          title,
-          category: 'geral',
-          subgoals: normalizedSubgoals,
         });
         await refreshData();
       },
       addSubGoals: async (goalId, titles) => {
         const goal = state.goals.find(g => g.id === goalId);
         if (!goal) return;
-        const existing = goal.subtasks.map((s, index) => ({
-          id: String(s.id), title: s.title, done: s.done, order: s.order ?? index,
-          plannerBlockId: s.plannerBlockId ?? null, aiGenerated: false,
-        }));
-        const newSubs = titles.map((t, i) => ({
-          id: `ai-${Date.now()}-${i}`, title: t, done: false, order: existing.length + i, aiGenerated: true,
-        }));
-        const merged = [...existing, ...newSubs];
-        const pct = merged.length > 0 ? Math.round(merged.filter(s => s.done).length / merged.length * 100) : 0;
-        await api.patch(`/objectives/${goalId}`, { progress: pct, subgoals: merged });
+        let expectedVersion = goal.pathVersion ?? 1;
+        for (const title of titles.map((item) => item.trim()).filter(Boolean)) {
+          const result = await api.post(`/objectives/${goalId}/actions`, { expectedVersion, title }) as { pathVersion: number };
+          expectedVersion = result.pathVersion;
+        }
         await refreshData();
       },
       /**
@@ -757,44 +754,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const goal = state.goals.find((item) => item.id === goalId);
         if (!goal) return;
 
-        const subgoals = goal.subtasks.map((subgoal, index) => ({
-          id: String(subgoal.id),
-          title: String(subgoal.id) === String(subGoalId) ? clean : subgoal.title,
-          done: subgoal.done,
-          order: subgoal.order ?? index,
-          plannerBlockId: subgoal.plannerBlockId ?? null,
-          aiGenerated: false,
-        }));
-
-        await api.patch(`/objectives/${goalId}`, { subgoals });
-        await refreshData();
-      },
-      linkGoalActionToPlannerBlock: async (goalId, subGoalId, plannerBlockId) => {
-        const goal = state.goals.find((item) => item.id === goalId);
-        if (!goal) return;
-        await api.patch(`/objectives/${goalId}`, {
-          subgoals: goal.subtasks.map((subgoal, index) => ({
-            id: String(subgoal.id),
-            title: subgoal.title,
-            done: subgoal.done,
-            order: subgoal.order ?? index,
-            plannerBlockId: String(subgoal.id) === String(subGoalId)
-              ? String(plannerBlockId)
-              : subgoal.plannerBlockId ?? null,
-            aiGenerated: false,
-          })),
-        });
-        await refreshData();
-      },
-      setGoalStatus: async (goalId, progress) => {
-        const goal = state.goals.find(g => g.id === goalId);
-        if (!goal) return;
-        await api.patch(`/objectives/${goalId}`, {
-          progress,
-          subgoals: goal.subtasks.map((s, index) => ({
-            id: String(s.id), title: s.title, done: progress === 100 ? true : s.done,
-            order: s.order ?? index, plannerBlockId: s.plannerBlockId ?? null,
-          }))
+        await api.patch(`/objectives/${goalId}/actions/${subGoalId}`, {
+          expectedVersion: goal.pathVersion ?? 1,
+          title: clean,
         });
         await refreshData();
       },
@@ -818,11 +780,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       updateGoal: async (goalId, updates) => {
         const goal = state.goals.find(g => g.id === goalId);
         if (!goal) return;
-        await api.patch(`/objectives/${goalId}`, {
-          title: updates.title ?? goal.title,
-          progress: updates.progress ?? goal.completedPct,
-          subgoals: goal.subtasks.map((s, index) => ({ ...s, id: String(s.id), order: s.order ?? index, aiGenerated: false }))
-        });
+        if (updates.title !== undefined) await api.patch(`/objectives/${goalId}`, { title: updates.title });
         await refreshData();
       },
       recoverGoalActions: async () => {

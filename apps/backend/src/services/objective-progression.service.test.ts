@@ -5,13 +5,15 @@ import { ObjectiveProgressionService } from './objective-progression.service';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 const OBJECTIVE_ID = '660e8400-e29b-41d4-a716-446655440000';
 
-function createRepository(subgoals: unknown[]) {
+function createRepository(subgoals: unknown[], milestones: unknown[] = []) {
   const objective = {
     id: OBJECTIVE_ID,
     userId: USER_ID,
     title: 'Publicar portfólio',
     progress: 0,
     subgoals,
+    milestones,
+    pathVersion: 1,
   };
 
   const repository: any = {
@@ -48,9 +50,10 @@ async function run() {
     assert.equal(result.objectiveCompletedNow, false);
     assert.equal(result.nextAction?.id, 'two');
     assert.deepEqual(objective.subgoals, [
-      { id: 'one', title: 'Separar fotos', done: true, order: 0, aiGenerated: false },
+      { id: 'one', title: 'Separar fotos', done: true, order: 0, aiGenerated: false, status: 'done' },
       { id: 'two', title: 'Escolher capa', done: false, order: 1, aiGenerated: false },
     ]);
+    assert.equal(objective.pathVersion, 2);
   }
 
   {
@@ -67,8 +70,25 @@ async function run() {
     assert.equal(duplicate.objectiveCompletedNow, false);
     assert.equal(objective.progress, 100);
     assert.deepEqual(objective.subgoals, [
-      { id: 'only', title: 'Enviar versão final', done: true, order: 0, aiGenerated: false },
+      { id: 'only', title: 'Enviar versão final', done: true, order: 0, aiGenerated: false, status: 'done' },
     ]);
+  }
+
+  {
+    const { repository, objective } = createRepository(
+      [{ id: 'stage-action', title: 'Concluir etapa atual', done: false, order: 0, milestoneId: 'm-1' }],
+      [
+        { id: 'm-1', title: 'Etapa atual', order: 0, doneWhen: 'Atual concluída', actions: [] },
+        { id: 'm-2', title: 'Etapa futura', order: 1, doneWhen: 'Futura concluída', actions: [] },
+      ],
+    );
+    const service = new ObjectiveProgressionService(repository);
+
+    const result = await service.completeActiveAction({ userId: USER_ID, objectiveId: OBJECTIVE_ID, subgoalId: 'stage-action' });
+
+    assert.equal(result.objectiveCompletedNow, false);
+    assert.equal(result.nextMilestone?.id, 'm-2');
+    assert.ok(objective.progress < 100);
   }
 }
 

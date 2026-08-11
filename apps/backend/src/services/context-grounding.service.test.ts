@@ -54,7 +54,7 @@ async function run() {
     },
   };
 
-  const service = new ContextGroundingService(prisma as any);
+  const service = new ContextGroundingService(prisma as any, { planner: true, habits: true });
   const context = await service.buildForSuggest({
     userId: 'user-1',
     type: 'stability-analysis',
@@ -130,7 +130,7 @@ async function run() {
         : [],
       findFirst: async () => null,
     },
-  } as any);
+  } as any, { planner: true, habits: true });
   const behaviorContext = await behaviorService.buildDailyContext({
     userId: 'user-1',
     type: 'agenda-adapt',
@@ -140,6 +140,18 @@ async function run() {
   assert.equal(behaviorContext.tasks[0].adaptationPermission, 'eligible');
   assert.equal(behaviorContext.tasks[0].adaptabilitySource, 'behavior');
   assert.equal(behaviorContext.postponedActions?.[0]?.blockId, 'task-behavior');
+
+  let plannerReads = 0;
+  let habitReads = 0;
+  const disabledContext = await new ContextGroundingService({
+    timelineBlock: { findMany: async () => { plannerReads += 1; return []; } },
+    habit: { findMany: async () => { habitReads += 1; return []; } },
+    objective: { findMany: async () => [] },
+  } as any).buildDailyContext({ userId: 'user-1', type: 'checkin', context: { localDate: '2026-04-30' } });
+  assert.equal(plannerReads, 0);
+  assert.equal(habitReads, 0);
+  assert.deepEqual(disabledContext.tasks, []);
+  assert.deepEqual(disabledContext.habits, []);
 }
 
 run().then(() => {

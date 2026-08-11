@@ -21,8 +21,8 @@ export const NotificationPreferencesSchema = z.object({
 export const defaultNotificationPreferences = {
   checkin: true,
   journal: true,
-  planner: true,
-  habits: true,
+  planner: false,
+  habits: false,
   persistent: true,
   aiSuggestions: true,
   journalMorningTime: DEFAULT_JOURNAL_MORNING_TIME,
@@ -37,6 +37,9 @@ export function normalizeNotificationPreferences(value: unknown) {
   return NotificationPreferencesSchema.parse({
     ...defaultNotificationPreferences,
     ...payload,
+    // Estas superfícies não participam desta versão do produto.
+    planner: false,
+    habits: false,
   });
 }
 

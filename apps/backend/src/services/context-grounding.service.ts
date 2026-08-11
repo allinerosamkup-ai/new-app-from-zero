@@ -3,6 +3,7 @@ import type { SuggestionMemoryItem } from './suggestion-memory.service';
 import { AiActionFeedbackService, type AiActionFeedbackItem } from './ai-action-feedback.service';
 import { DecisionEngine, type DecisionSurface } from './decision-engine.service';
 import type { AdaptiveAgendaPlan } from './adaptive-agenda-engine.service';
+import { PRODUCT_CAPABILITIES } from '../contracts/product-capabilities';
 import {
   resolveTimelineAdaptability,
   type AdaptationPermission,
@@ -298,7 +299,17 @@ function surfaceFromType(type: string): DecisionSurface {
 }
 
 export class ContextGroundingService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly capabilities: { planner: boolean; habits: boolean };
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    capabilities: { planner?: boolean; habits?: boolean } = PRODUCT_CAPABILITIES,
+  ) {
+    this.capabilities = {
+      planner: capabilities.planner ?? true,
+      habits: capabilities.habits ?? true,
+    };
+  }
 
   /** Detecta a fase do ciclo menstrual a partir do histórico de checkins recentes.
    *  Retorna label e dia do ciclo estimado, ou null se não houver dados. */
@@ -341,7 +352,7 @@ export class ContextGroundingService {
     const prismaAny = this.prisma as any;
 
     const [rawTasks, rawHabits, rawGoals, actionFeedback, rawPostponements, rawHealthSignals, rawLastCheckin, rawSnoozeEvents, rawFlowCheckins, rawNegativeMemories] = await Promise.all([
-      prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
+      this.capabilities.planner && prismaAny.timelineBlock?.findMany ? prismaAny.timelineBlock.findMany({
         where: { userId: input.userId, localDate: { gte: start, lte: end } },
         orderBy: { startAt: 'asc' },
         select: {
@@ -361,7 +372,7 @@ export class ContextGroundingService {
           recurring: true,
         },
       }).catch(() => []) : Promise.resolve([]),
-      prismaAny.habit?.findMany ? prismaAny.habit.findMany({
+      this.capabilities.habits && prismaAny.habit?.findMany ? prismaAny.habit.findMany({
         where: { userId: input.userId, archived: false },
         orderBy: { createdAt: 'asc' },
         select: {
@@ -383,7 +394,7 @@ export class ContextGroundingService {
         select: { id: true, title: true, progress: true, subgoals: true },
       }).catch(() => []) : Promise.resolve([]),
       AiActionFeedbackService.getRecent(prismaAny, input.userId).catch(() => []),
-      prismaAny.eventLog?.findMany ? prismaAny.eventLog.findMany({
+      this.capabilities.planner && prismaAny.eventLog?.findMany ? prismaAny.eventLog.findMany({
         where: { userId: input.userId, eventName: 'timeline.block_postponed' },
         orderBy: { createdAt: 'desc' },
         take: 20,
@@ -423,7 +434,7 @@ export class ContextGroundingService {
         select: { localDate: true },
       }).catch(() => null) : Promise.resolve(null),
       // Eventos de Deriva (snooze) dos últimos 14 dias — para detectar padrão recorrente
-      prismaAny.eventLog?.findMany ? prismaAny.eventLog.findMany({
+      this.capabilities.planner && prismaAny.eventLog?.findMany ? prismaAny.eventLog.findMany({
         where: {
           userId: input.userId,
           eventName: 'timeline.block_snoozed',

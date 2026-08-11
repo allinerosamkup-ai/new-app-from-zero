@@ -36,6 +36,14 @@ export type SubGoal = {
   done: boolean;
   order?: number;
   plannerBlockId?: string | null;
+  milestoneId?: string | null;
+  scheduledFor?: string | null;
+  doneWhen?: string | null;
+  effortSize?: 'small' | 'medium' | 'large' | null;
+  basedOn?: 'stated' | 'inferred';
+  aiGenerated?: boolean;
+  userEdited?: boolean;
+  status?: 'pending' | 'done' | 'rejected' | 'deferred';
 };
 
 export type Goal = {
@@ -44,6 +52,17 @@ export type Goal = {
   progress: string;
   subtasks: SubGoal[];
   completedPct: number;
+  description?: string | null;
+  resultDefinition?: string | null;
+  currentReality?: string | null;
+  milestones?: Array<{ id: string; title: string; order: number; doneWhen?: string | null }>;
+  pathVersion?: number;
+  pathStatus?: 'not_started' | 'retrying' | 'needs_answer' | 'ready';
+  pathQuestion?: string | null;
+  deadline?: string | null;
+  pausedAt?: string | null;
+  isPrimary?: boolean;
+  pathProposal?: unknown;
 };
 
 export type CheckinEntry = {

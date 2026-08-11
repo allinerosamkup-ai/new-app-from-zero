@@ -9,6 +9,8 @@ type ObjectiveRow = {
   title: string;
   progress: number;
   subgoals: unknown;
+  milestones?: unknown;
+  pathVersion?: number;
 };
 
 type ObjectiveProgressionPrisma = {
@@ -27,6 +29,7 @@ export type ObjectiveProgressionResult = {
   progress: number;
   subgoals: ObjectiveSubgoal[];
   nextAction: Pick<ObjectiveSubgoal, 'id' | 'title' | 'order' | 'plannerBlockId'> | null;
+  nextMilestone: { id: string; title: string; order: number; doneWhen: string | null } | null;
   completedNow: boolean;
   objectiveCompletedNow: boolean;
 };
@@ -52,7 +55,17 @@ function progressFor(subgoals: ObjectiveSubgoal[]): number {
 }
 
 function nextPending(subgoals: ObjectiveSubgoal[]) {
-  return subgoals.find((subgoal) => !subgoal.done) ?? null;
+  return subgoals.find((subgoal) => !subgoal.done && subgoal.status !== 'rejected' && subgoal.status !== 'deferred') ?? null;
+}
+
+function orderedMilestones(value: unknown): Array<{ id: string; title: string; order: number; doneWhen: string | null }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const row = item as Record<string, unknown>;
+    if (typeof row.id !== 'string' || typeof row.title !== 'string') return [];
+    return [{ id: row.id, title: row.title, order: typeof row.order === 'number' ? row.order : 0, doneWhen: typeof row.doneWhen === 'string' ? row.doneWhen : null }];
+  }).sort((left, right) => left.order - right.order);
 }
 
 export class ObjectiveProgressionService {
@@ -92,12 +105,19 @@ export class ObjectiveProgressionService {
     if (!requested) throw new ObjectiveProgressionError('objective_action_not_found');
 
     const active = nextPending(subgoals);
+    const milestones = orderedMilestones(objective.milestones);
+    const currentMilestoneId = requested.milestoneId ?? milestones[0]?.id ?? null;
+    const currentMilestone = milestones.find((milestone) => milestone.id === currentMilestoneId) ?? null;
+    const nextMilestone = currentMilestone
+      ? milestones.find((milestone) => milestone.order > currentMilestone.order) ?? null
+      : null;
     if (requested.done) {
       return {
         objectiveId: objective.id,
         progress: progressFor(subgoals),
         subgoals,
         nextAction: active,
+        nextMilestone: active ? null : nextMilestone,
         completedNow: false,
         objectiveCompletedNow: false,
       };
@@ -107,23 +127,30 @@ export class ObjectiveProgressionService {
     }
 
     const advanced = subgoals.map((subgoal) => (
-      subgoal.id === requested.id ? { ...subgoal, done: true } : subgoal
+      subgoal.id === requested.id ? { ...subgoal, done: true, status: 'done' as const } : subgoal
     ));
-    const progress = progressFor(advanced);
+    const currentActionsDone = advanced
+      .filter((action) => !currentMilestoneId || action.milestoneId === currentMilestoneId || !action.milestoneId)
+      .every((action) => action.done || action.status === 'rejected');
+    const progress = milestones.length > 0 && currentMilestone && currentActionsDone && nextMilestone
+      ? Math.max(objective.progress, Math.round(((currentMilestone.order + 1) / milestones.length) * 100))
+      : progressFor(advanced);
     const nextAction = nextPending(advanced);
     const wasCompleted = objective.progress >= 100;
+    const objectiveCompleted = nextAction === null && nextMilestone === null;
     await tx.objective.update({
       where: { id: objective.id },
-      data: { subgoals: advanced as any, progress },
+      data: { subgoals: advanced as any, progress: objectiveCompleted ? 100 : Math.min(progress, 99), pathVersion: (objective.pathVersion ?? 1) + 1 },
     });
 
     return {
       objectiveId: objective.id,
-      progress,
+      progress: objectiveCompleted ? 100 : Math.min(progress, 99),
       subgoals: advanced,
       nextAction,
+      nextMilestone: nextAction ? null : nextMilestone,
       completedNow: true,
-      objectiveCompletedNow: !wasCompleted && progress === 100,
+      objectiveCompletedNow: !wasCompleted && objectiveCompleted,
     };
   }
 }

@@ -14,7 +14,13 @@ export type GoalPrioritySource = {
   id: string | number;
   title: string;
   completedPct?: number;
-  subtasks?: Array<{ id: string | number; title: string; done: boolean; order?: number }>;
+  subtasks?: Array<{
+    id: string | number;
+    title: string;
+    done: boolean;
+    order?: number;
+    status?: 'pending' | 'done' | 'rejected' | 'deferred';
+  }>;
 };
 
 export type GoalCardModel = {
@@ -132,7 +138,9 @@ export function buildGoalPriorityActions(
   const goalActions = goals
     .filter((goal) => (goal.completedPct ?? 0) < 100)
     .map((goal) => {
-      const pending = orderedSubtasks(goal.subtasks).filter((subtask) => !subtask.done);
+      const pending = orderedSubtasks(goal.subtasks).filter((subtask) => (
+        !subtask.done && subtask.status !== 'rejected' && subtask.status !== 'deferred'
+      ));
       // O objetivo em foco entra a partir da segunda: se só tem uma pendente,
       // ela já está no card e o objetivo não contribui para a lista.
       const nextSub = String(goal.id) === focusId ? pending[1] : pending[0];
@@ -266,7 +274,9 @@ export function selectFocusGoal(
 export function buildGoalCardModel(goal: GoalPrioritySource): GoalCardModel {
   const subtasks = orderedSubtasks(goal.subtasks);
   const completedActions = subtasks.filter((subtask) => subtask.done).length;
-  const nextAction = subtasks.find((subtask) => !subtask.done) ?? null;
+  const nextAction = subtasks.find((subtask) => (
+    !subtask.done && subtask.status !== 'rejected' && subtask.status !== 'deferred'
+  )) ?? null;
   const completed = (goal.completedPct ?? 0) >= 100;
 
   const progressLabel = completed

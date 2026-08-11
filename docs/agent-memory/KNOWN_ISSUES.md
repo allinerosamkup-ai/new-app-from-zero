@@ -82,7 +82,7 @@ Worktrees foram criados por sessões e agentes diferentes sem um ciclo comum de
 registro, handoff, commit e remoção.
 
 ### Status
-**Aberto.** A auditoria de 2026-08-09 encontrou 24 entradas em
+**Aberto.** A auditoria de 2026-08-11 encontrou 25 entradas em
 `git worktree list --porcelain`. Nenhuma foi removida automaticamente porque a
 propriedade e o valor de cada branch ainda precisam ser confirmados.
 

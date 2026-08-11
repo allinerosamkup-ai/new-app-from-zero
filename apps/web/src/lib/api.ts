@@ -233,17 +233,24 @@ function uploadContentType(file: File): string {
   return (extension && byExtension[extension]) || 'application/octet-stream';
 }
 
+function enrichWriteBody(endpoint: string, body: unknown): unknown {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+
+  // Objetivos possuem contratos versionados e estritos. O contexto relevante
+  // é recuperado no backend a partir de Diário, Check-in, Aura e memória; o
+  // envelope global do cliente não pertence a essas mutações.
+  if (endpoint === '/objectives' || endpoint.startsWith('/objectives/')) return body;
+
+  return { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) };
+}
+
 export const api = {
   async get(endpoint: string) {
     return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, { headers }));
   },
 
   async post(endpoint: string, body: unknown) {
-    // Injeta horário do cliente em qualquer POST com body objeto.
-    // Backend usa pra calibrar sugestões; rotas que não precisam ignoram silenciosamente.
-    const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
-      : body;
+    const enrichedBody = enrichWriteBody(endpoint, body);
     return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, {
       method: 'POST',
       headers,
@@ -252,9 +259,7 @@ export const api = {
   },
 
   async patch(endpoint: string, body: unknown) {
-    const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
-      : body;
+    const enrichedBody = enrichWriteBody(endpoint, body);
     return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, {
       method: 'PATCH',
       headers,
@@ -263,9 +268,7 @@ export const api = {
   },
 
   async put(endpoint: string, body: unknown) {
-    const enrichedBody = body && typeof body === 'object' && !Array.isArray(body)
-      ? { ...getClientTimeContext(), ...getAdaptiveSnapshot(), ...getLocaleContext(), ...(body as Record<string, unknown>) }
-      : body;
+    const enrichedBody = enrichWriteBody(endpoint, body);
     return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, {
       method: 'PUT',
       headers,
