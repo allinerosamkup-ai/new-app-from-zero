@@ -35,6 +35,12 @@ adaptar apenas depois de conferir comportamento, licença, segurança,
 compatibilidade e manutenção; registrar escolhas relevantes e verificar a
 solução no mesmo ciclo do código novo.
 
+### [FATO] Avaliações OpenAI locais usam a cadeia de certificados do Windows
+Neste ambiente, a API da OpenAI responde HTTP 200 e a chave é válida, mas o
+Node pode falhar com `UNABLE_TO_VERIFY_LEAF_SIGNATURE`. Para `aura:eval` e
+`ai:smoke`, usar `NODE_OPTIONS=--use-system-ca`; nunca desabilitar a validação
+TLS. Com esse ajuste, `gpt-5.4-mini` passou em 10/12 e 11/11 respectivamente.
+
 ### [FATO] `TaskCompleted` é um evento próprio e não aceita matcher
 No Claude Code atual, `Stop`, `SubagentStop` e `TaskCompleted` disparam sem
 matcher. `TaskCompleted` recebe `task_subject`/`task_description` e pode impedir

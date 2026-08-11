@@ -2,7 +2,7 @@
 
 ## Status
 
-`PR RASCUNHO #10 — implementação, regressão, revisão, commit e push concluídos; gates externos bloqueados`
+`PR RASCUNHO #10 — IA real validada; E2E autenticado e migração ainda bloqueados`
 
 ## Objetivo
 
@@ -75,7 +75,8 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 - [x] Contratos e serviços com TDD.
 - [x] APIs e memória.
 - [x] Objetivos e Home.
-- [ ] Avaliação real com chave, E2E autenticado persistente e validação da migração no ambiente autorizado.
+- [x] Avaliação real com `gpt-5.4-mini`: `aura:eval` 10/12 e `ai:smoke` 11/11.
+- [ ] E2E autenticado persistente e validação da migração no ambiente autorizado.
 - [x] Branch publicada e PR rascunho #10 aberto sem merge ou deploy.
 
 ## Arquivos alterados
@@ -97,7 +98,11 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 - API canônica: criar → perguntar → responder → fixar foco → datar ação — PASS.
 - Preview mobile local: HTTP 200 e capturas de Objetivos/Home; sem página branca.
 - `git diff --check` — PASS.
-- `aura:eval` e `ai:smoke` — BLOQUEADO: `OPENAI_API_KEY` ausente.
+- `aura:eval` com modelo real `gpt-5.4-mini` — PASS: 10/12, no limiar exigido.
+- `ai:smoke` com modelo real `gpt-5.4-mini` — PASS: 11/11 superfícies com contrato respeitado.
+- A chave já existia no projeto. O Node local precisou de `--use-system-ca`
+  porque a chamada falhava com `UNABLE_TO_VERIFY_LEAF_SIGNATURE`; a mesma API
+  respondia HTTP 200 pelo armazenamento de certificados do Windows.
 
 ## Descobertas importantes
 
@@ -112,10 +117,10 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 
 ## Falha atual
 
-`BLOQUEADO` somente para dois gates externos: avaliação com modelo real e E2E
-autenticado persistente. Código, testes integrais, builds e preview local passam.
+`BLOQUEADO` somente para E2E autenticado persistente e validação da migração no
+ambiente autorizado. Código, IA real, testes integrais, builds e preview local passam.
 
 ## Próxima melhor ação
 
-Executar os três gates externos registrados no PR #10. Só então retirar o
+Executar os dois gates externos restantes registrados no PR #10. Só então retirar o
 rascunho e integrar após autorização explícita; não publicar automaticamente.
