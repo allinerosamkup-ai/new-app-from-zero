@@ -13,6 +13,11 @@ const ChecklistItemSchema = z.object({
   id: z.string().trim().min(1).max(120).optional(),
   title: z.string().trim().min(1).max(500),
   done: z.boolean().default(false),
+  milestoneId: z.string().trim().min(1).max(120).nullable().optional(),
+  doneWhen: z.string().trim().min(1).max(500).nullable().optional(),
+  effortSize: z.enum(['small', 'medium', 'large']).nullable().optional(),
+  basedOn: z.enum(['stated', 'inferred']).optional(),
+  evidenceRefs: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
 });
 
 const PlannerTaskOperationSchema = z.object({
@@ -51,7 +56,17 @@ const GoalOperationSchema = z.object({
     title: z.string().trim().min(1).max(500),
     description: z.string().trim().max(10000).nullable().optional(),
     category: z.string().trim().min(1).max(80).default('geral'),
-    subgoals: z.array(ChecklistItemSchema).min(1).max(30),
+    subgoals: z.array(ChecklistItemSchema).max(30).default([]),
+    resultDefinition: z.string().trim().max(2000).nullable().optional(),
+    currentReality: z.string().trim().max(4000).nullable().optional(),
+    milestones: z.array(z.object({
+      id: z.string().trim().min(1).max(120),
+      title: z.string().trim().min(1).max(500),
+      order: z.number().int().nonnegative(),
+      doneWhen: z.string().trim().max(1000).nullable().optional(),
+    })).max(20).default([]),
+    pathStatus: z.enum(['ready', 'needs_answer', 'retrying']).optional(),
+    pathQuestion: z.string().trim().max(2000).nullable().optional(),
     firstAction: z.object({
       title: z.string().trim().min(1).max(500),
       date: DateSchema,

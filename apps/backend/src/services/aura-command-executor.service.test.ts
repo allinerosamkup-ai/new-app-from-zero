@@ -245,7 +245,32 @@ async function main() {
     now: new Date('2026-07-28T15:00:00.000Z'),
   });
   assert.equal(explicitGoal.objectiveCreates[0]?.category, 'geral');
-  assert.equal(explicitGoal.timelineCreates[0]?.category, 'pessoal');
+  assert.equal(explicitGoal.timelineCreates.length, 0, 'criar objetivo não direciona ação ao Planner');
+  assert.equal(explicitGoal.objectiveCreates[0]?.pathStatus, 'ready');
+
+  const broadGoal = createPrismaFixture('auto_apply');
+  broadGoal.operations.push({
+    ...explicitGoal.operations[0],
+    id: '10000000-0000-4000-8000-000000000005',
+    planId: broadGoal.plan.id,
+    userId: broadGoal.plan.userId,
+    clientOperationId: 'goal-question',
+    type: 'create_goal',
+    status: 'proposed', selected: true, result: null, error: null, idempotencyKey: null, appliedAt: null,
+    payload: {
+      title: 'Organizar minhas finanças', description: null, category: 'geral', subgoals: [],
+      milestones: [], pathStatus: 'needs_answer', pathQuestion: 'O foco é dívida, controle do mês ou entender os gastos?',
+      firstAction: null,
+    },
+  });
+  await AuraCommandExecutorService.apply({
+    prisma: broadGoal.prisma, calendarGateway, userId: broadGoal.plan.userId, planId: broadGoal.plan.id,
+    operationIds: ['goal-question'], idempotencyKey: 'command-goal-question-0001',
+    now: new Date('2026-07-28T15:00:00.000Z'),
+  });
+  assert.equal(broadGoal.objectiveCreates[0]?.pathStatus, 'needs_answer');
+  assert.match(String(broadGoal.objectiveCreates[0]?.pathQuestion ?? ''), /dívida/);
+  assert.deepEqual(broadGoal.objectiveCreates[0]?.subgoals, []);
 
   const second = await AuraCommandExecutorService.apply({
     prisma: fixture.prisma,

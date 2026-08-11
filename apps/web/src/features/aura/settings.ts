@@ -16,8 +16,8 @@ export function normalizeTimeInput(value: unknown, fallback: string): string {
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   checkin: true,
   journal: true,
-  planner: true,
-  habits: true,
+  planner: false,
+  habits: false,
   persistent: true,
   aiSuggestions: true,
   journalMorningTime: DEFAULT_JOURNAL_MORNING_TIME,

@@ -156,7 +156,7 @@ async function run() {
 
     assert.deepEqual(requests, [{
       type: 'goal-subtasks',
-      context: { goalTitle: 'Publicar o portfólio', existingSubtasks: [], locale: 'pt-BR' },
+      context: { userId: USER_ID, objectiveId: 'active-empty', goalTitle: 'Publicar o portfólio', existingSubtasks: [], locale: 'pt-BR' },
     }]);
     assert.deepEqual(result, {
       eligible: 1, attempted: 1, recovered: 1, failed: 0, deferred: 0, retryAfterMs: null,
@@ -233,7 +233,7 @@ async function run() {
     });
     assert.deepEqual(endpointRequest, {
       type: 'goal-subtasks',
-      context: { goalTitle: 'Publicar o site', existingSubtasks: [], locale: 'en-US' },
+      context: { userId: USER_ID, objectiveId: 'endpoint-active', goalTitle: 'Publicar o site', existingSubtasks: [], locale: 'en-US' },
     });
     assert.equal(Array.isArray(objectives[0].subgoals), true);
 

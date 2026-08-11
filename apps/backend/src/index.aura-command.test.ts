@@ -605,13 +605,10 @@ async function run() {
     assert.equal(combinedCompleted.response.action, 'create_task');
     assert.equal(combinedCompleted.response.actions[0].action, 'record_checkin');
     assert.deepEqual(combinedCompleted.plan.operations.map((operation: any) => operation.type), [
-      'create_planner_task',
       'record_checkin',
     ]);
     assert.equal(combinedCompleted.execution.status, 'applied');
-    assert.equal(createdBlocks.length, 1);
-    assert.equal(createdBlocks[0].title, 'comprar ração');
-    assert.equal(createdBlocks[0].startAt.toISOString(), '2026-04-08T10:00:00.000Z');
+    assert.equal(createdBlocks.length, 0, 'Planner desligado não pode receber a tarefa');
     assert.equal(savedCheckins.length, 2);
 
     const energyAndTaskResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
@@ -636,11 +633,8 @@ async function run() {
     assert.ok(energyAndTaskFrame);
     const energyAndTaskCompleted = JSON.parse(energyAndTaskFrame.slice(6));
     assert.equal(energyAndTaskCompleted.response.action, 'create_task');
-    assert.deepEqual(energyAndTaskCompleted.plan.operations.map((operation: any) => operation.type), [
-      'create_planner_task',
-    ]);
-    assert.equal(energyAndTaskCompleted.execution.status, 'applied');
-    assert.equal(createdBlocks.length, 2);
+    assert.equal(energyAndTaskCompleted.plan, null, 'tarefa de Planner desligada não cria plano vazio');
+    assert.equal(createdBlocks.length, 0, 'Planner desligado não pode receber a tarefa isolada');
     assert.equal(savedCheckins.length, 2, 'energia isolada não deve inventar humor para completar check-in');
 
     const longCommandResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
@@ -673,27 +667,13 @@ async function run() {
     assert.equal(explicitMoveResponse.status, 200);
     assert.equal(updatedBlocks.length, 0);
     assert.match(explicitMoveBody, /update_task/);
-    assert.match(explicitMoveBody, /review_required/);
-    assert.match(explicitMoveBody, /update_item/);
     const completedFrame = explicitMoveBody
       .split('\n')
       .find((line) => line.startsWith('data: ') && line.includes('"plan"'));
     assert.ok(completedFrame);
     const completedData = JSON.parse(completedFrame.slice(6));
-    const movePlanId = completedData.plan.id as string;
-    const moveOperationId = completedData.plan.operations[0].id as string;
-    const applyMoveResponse = await fetch(`${baseUrl}/api/aura/command/plans/${movePlanId}/apply`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operationIds: [moveOperationId],
-        idempotencyKey: 'authenticated-move-apply-0001',
-      }),
-    });
-    const appliedMove = await applyMoveResponse.json() as any;
-    assert.equal(applyMoveResponse.status, 200);
-    assert.equal(appliedMove.execution.status, 'applied');
-    assert.equal(updatedBlocks.length, 1);
+    assert.equal(completedData.plan, null, 'mover tarefa não cria operação enquanto Planner está desligado');
+    assert.equal(updatedBlocks.length, 0);
 
     const plansBeforeBlockedVent = commandPlans.length;
     const blockedVentResponse = await fetch(`${baseUrl}/api/aura/command/stream`, {
@@ -707,7 +687,7 @@ async function run() {
     });
     const blockedVentBody = await readResponseText(blockedVentResponse);
     assert.equal(blockedVentResponse.status, 200);
-    assert.equal(updatedBlocks.length, 1);
+    assert.equal(updatedBlocks.length, 0);
     assert.match(blockedVentBody, /ask_clarification/);
     assert.doesNotMatch(blockedVentBody, /Pronto, movi a tarefa/);
     const blockedVentCompletedFrame = blockedVentBody
@@ -730,7 +710,7 @@ async function run() {
     });
     const blockedEnglishNegationBody = await readResponseText(blockedEnglishNegationResponse);
     assert.equal(blockedEnglishNegationResponse.status, 200);
-    assert.equal(updatedBlocks.length, 1);
+    assert.equal(updatedBlocks.length, 0);
     assert.match(blockedEnglishNegationBody, /ask_clarification/);
     assert.match(blockedEnglishNegationBody, /I won't turn this into a task/i);
     assert.doesNotMatch(blockedEnglishNegationBody, /Pronto, movi a tarefa/);

@@ -31,7 +31,6 @@ const loadJornadaPage = () => import("./routes/jornada-page");
 const loadTermsPage = () => import("./routes/terms-page");
 const loadConteudoPage = () => import("./routes/conteudo-page");
 const loadContextoPage = () => import("./routes/contexto-page");
-const loadRoutineBuilderPage = () => import("./routes/routine-builder-page");
 const loadStoryOnboardingPage = () => import("./routes/story-onboarding-page");
 const loadRunPage = () => import("./routes/run-page");
 const loadCapturesPage = () => import("./routes/captures-page");
@@ -63,7 +62,6 @@ const BillingPage = lazy(() => loadBillingPage().then((module) => ({ default: mo
 const JornadaPage = lazy(() => loadJornadaPage().then((module) => ({ default: module.default })));
 const ConteudoPage = lazy(() => loadConteudoPage().then((module) => ({ default: module.ConteudoPage })));
 const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: module.ContextoPage })));
-const RoutineBuilderPage = lazy(() => loadRoutineBuilderPage().then((module) => ({ default: module.RoutineBuilderPage })));
 const StoryOnboardingPage = lazy(() => loadStoryOnboardingPage().then((module) => ({ default: module.default })));
 const RunPage = lazy(() => loadRunPage().then((module) => ({ default: module.RunPage })));
 const CapturesPage = lazy(() => loadCapturesPage().then((module) => ({ default: module.CapturesPage })));
@@ -303,7 +301,7 @@ export default function App() {
           <Route path="/captures" element={<CapturesPage />} />
           <Route path="/conteudo" element={<ConteudoPage />} />
           <Route path="/contexto" element={<ContextoPage />} />
-          <Route path="/routine-builder" element={<RoutineBuilderPage />} />
+          <Route path="/routine-builder" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
         </Route>
       </Routes>
       </div>

@@ -54,6 +54,12 @@ const objectiveRecoveryMigration = fs.readFileSync(
   path.resolve(__dirname, '../../../../supabase/migrations/20260801163000_add_objective_action_recovery_claims.sql'),
   'utf8',
 );
+const objectiveIntelligenceMigrationPath = path.resolve(
+  __dirname,
+  '../../../../supabase/migrations/20260811120000_add_objective_intelligence.sql',
+);
+assert.ok(fs.existsSync(objectiveIntelligenceMigrationPath), 'objective intelligence migration must exist');
+const objectiveIntelligenceMigration = fs.readFileSync(objectiveIntelligenceMigrationPath, 'utf8');
 const billingPartnersMigrationPath = path.resolve(
   __dirname,
   '../../../../supabase/migrations/20260810130000_add_billing_trials_and_professional_partners.sql',
@@ -182,6 +188,36 @@ assert.match(
   prismaSchema,
   /objective\s+Objective\s+@relation\(fields: \[userId, objectiveId\], references: \[userId, id\], onDelete: Cascade\)/,
 );
+for (const field of [
+  'deadline',
+  'pausedAt',
+  'resultDefinition',
+  'currentReality',
+  'milestones',
+  'pathVersion',
+  'pathProposal',
+  'pathProposalCreatedAt',
+  'pathStatus',
+  'pathQuestion',
+]) {
+  assert.match(prismaSchema, new RegExp(`\\b${field}\\b`), `Objective.${field} must exist`);
+}
+assert.match(prismaSchema, /primaryObjectiveId\s+String\?\s+@map\("primary_objective_id"\)\s+@db\.Uuid/);
+assert.match(prismaSchema, /primaryObjective\s+Objective\?\s+@relation\("PrimaryObjective", fields: \[primaryObjectiveId\], references: \[id\], onDelete: SetNull\)/);
+assert.match(prismaSchema, /primaryForUsers\s+UserPreference\[\]\s+@relation\("PrimaryObjective"\)/);
+assert.match(prismaSchema, /deadline\s+DateTime\?\s+@db\.Date/);
+assert.match(objectiveIntelligenceMigration, /add column if not exists deadline date/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists paused_at timestamptz/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists result_definition text/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists current_reality text/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists milestones jsonb/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists path_version integer/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists path_proposal jsonb/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists path_status text/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists path_question text/i);
+assert.match(objectiveIntelligenceMigration, /add column if not exists primary_objective_id uuid/i);
+assert.match(objectiveIntelligenceMigration, /foreign key \(primary_objective_id\) references public\.objectives\(id\) on delete set null/i);
+assert.match(objectiveIntelligenceMigration, /update public\.objectives[\s\S]*'legacy-current'[\s\S]*path_status = 'ready'/i);
 
 for (const table of [
   'billing_accounts',

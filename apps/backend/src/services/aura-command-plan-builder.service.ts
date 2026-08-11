@@ -49,11 +49,26 @@ function itemTitles(value: unknown): string[] {
 }
 
 function checklistItems(value: unknown) {
-  return itemTitles(value).map((title, index) => ({
-    id: `item-${index + 1}`,
-    title,
-    done: false,
-  }));
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item, index) => {
+    const source = record(item);
+    const title = typeof item === 'string' ? item.trim() : text(source.title) ?? text(source.text) ?? '';
+    if (!title) return [];
+    return [{
+      id: text(source.id) ?? `item-${index + 1}`,
+      title,
+      done: source.done === true,
+      ...(text(source.milestoneId) ? { milestoneId: text(source.milestoneId) } : {}),
+      ...(text(source.doneWhen) ? { doneWhen: text(source.doneWhen) } : {}),
+      ...(source.effortSize === 'small' || source.effortSize === 'medium' || source.effortSize === 'large'
+        ? { effortSize: source.effortSize as 'small' | 'medium' | 'large' }
+        : {}),
+      ...(source.basedOn === 'stated' || source.basedOn === 'inferred'
+        ? { basedOn: source.basedOn as 'stated' | 'inferred' }
+        : {}),
+      ...(Array.isArray(source.evidenceRefs) ? { evidenceRefs: source.evidenceRefs.filter((entry): entry is string => typeof entry === 'string') } : {}),
+    }];
+  });
 }
 
 function nextDate(date: string): string {
@@ -187,10 +202,9 @@ export class AuraCommandPlanBuilderService {
         const title = text(payload.title) ?? text(payload.goalTitle);
         const subgoals = checklistItems(payload.subgoals ?? payload.subtasks ?? payload.items);
         if (!title) missingFields.push('title');
-        if (subgoals.length === 0) missingFields.push('subgoals');
-        if (!title || subgoals.length === 0) break;
-        const firstSlot = schedule(input.localDate, 25)[0] ?? null;
-        if (firstSlot) inferredValue = true;
+        if (!title) break;
+        const pathQuestion = text(payload.pathQuestion) ?? text(payload.question);
+        const pathStatus = subgoals.length > 0 ? 'ready' : pathQuestion ? 'needs_answer' : 'retrying';
         operations.push({
           id: makeId(),
           type: 'create_goal',
@@ -201,12 +215,14 @@ export class AuraCommandPlanBuilderService {
             description: text(payload.description),
             category: text(payload.category) ?? 'geral',
             subgoals,
-            firstAction: firstSlot ? {
-              title: subgoals[0].title,
-              date: input.localDate,
-              startTime: firstSlot.startTime,
-              durationMinutes: 25,
-            } : null,
+            resultDefinition: text(payload.resultDefinition),
+            currentReality: text(payload.currentReality),
+            milestones: Array.isArray(payload.milestones) ? payload.milestones : [],
+            pathStatus,
+            pathQuestion,
+            // Objetivo não cria tarefa no Planner. Data da ação pertence ao
+            // próprio caminho e só muda com confirmação explícita.
+            firstAction: null,
           },
         });
         break;

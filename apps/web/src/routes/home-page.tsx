@@ -1,7 +1,6 @@
 // Home Page v4 — babá digital IA + mensagens personalizadas + agenda por blocos
 import { FEATURES } from "../config/features";
-import { GoalFocusCard } from "../components/GoalFocusCard";
-import { NextActionsCard } from "../components/NextActionsCard";
+import { DailyPrioritiesCards } from "../components/DailyPrioritiesCards";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
@@ -2005,8 +2004,7 @@ export function HomePage() {
             ação que importa agora, depois as demais possibilidades. Inverter
             isso devolve a lista antes da direção, que é exatamente o que trava
             quem já está sem combustível para escolher. ── */}
-        <GoalFocusCard />
-        <NextActionsCard />
+        <DailyPrioritiesCards />
 
         {/* ── Presença sem cobrança ── */}
         {(state.checkinHistory || []).length > 0 && (

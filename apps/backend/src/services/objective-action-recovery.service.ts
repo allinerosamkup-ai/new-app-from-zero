@@ -10,6 +10,7 @@ type ObjectiveRecoveryRow = {
   archived: boolean;
   subgoals: unknown;
   updatedAt?: Date | string | null;
+  pathVersion?: number;
 };
 
 type ObjectiveActionRecoveryTransaction = {
@@ -43,6 +44,8 @@ type RecoveryClaimRow = {
 export type GoalSubtasksSuggestionRequest = {
   type: 'goal-subtasks';
   context: {
+    userId: string;
+    objectiveId: string;
     goalTitle: string;
     existingSubtasks: string[];
     locale: string;
@@ -83,7 +86,7 @@ const DEFAULT_LEASE_MS = 120_000;
 const DEFAULT_GENERATION_TIMEOUT_MS = 90_000;
 const LEASE_FENCE_MARGIN_MS = 1;
 
-function suggestionItems(value: unknown): string[] {
+function suggestionItems(value: unknown): Array<{ title: string; metadata?: Record<string, unknown> }> {
   const payload = value && typeof value === 'object' && 'suggestion' in value
     ? (value as { suggestion?: unknown }).suggestion
     : value;
@@ -94,24 +97,40 @@ function suggestionItems(value: unknown): string[] {
       : [];
 
   const seen = new Set<string>();
-  return items.flatMap((item) => {
-    if (typeof item !== 'string') return [];
-    const title = item.trim();
+  const structuredSteps = value && typeof value === 'object' && Array.isArray((value as any).steps)
+    ? (value as any).steps as Array<Record<string, unknown>>
+    : [];
+  return items.flatMap((item, index) => {
+    const title = typeof item === 'string' ? item.trim() : '';
     const identity = title.toLocaleLowerCase('pt-BR');
     if (!title || seen.has(identity)) return [];
     seen.add(identity);
-    return [title];
+    return [{ title, metadata: structuredSteps[index] }];
   });
 }
 
-function recoveredActions(objectiveId: string, titles: string[]): ObjectiveSubgoal[] {
-  return normalizeObjectiveSubgoals(titles.map((title, index) => ({
+function recoveredActions(objectiveId: string, items: Array<{ title: string; metadata?: Record<string, unknown> }>): ObjectiveSubgoal[] {
+  return normalizeObjectiveSubgoals(items.map((item, index) => ({
     id: `recovered-${objectiveId}-${index + 1}`,
-    title,
+    title: item.title,
     done: false,
     order: index,
     aiGenerated: true,
+    milestoneId: typeof item.metadata?.milestoneId === 'string' ? item.metadata.milestoneId : undefined,
+    doneWhen: typeof item.metadata?.doneWhen === 'string' ? item.metadata.doneWhen : undefined,
+    effortSize: item.metadata?.effortSize,
+    basedOn: item.metadata?.basedOn,
+    evidenceRefs: Array.isArray(item.metadata?.evidenceRefs) ? item.metadata.evidenceRefs : undefined,
   })));
+}
+
+function recoveredPath(value: unknown) {
+  const payload = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    resultDefinition: typeof payload.resultDefinition === 'string' ? payload.resultDefinition : undefined,
+    currentReality: typeof payload.currentReality === 'string' ? payload.currentReality : undefined,
+    milestones: Array.isArray(payload.milestones) ? payload.milestones : undefined,
+  };
 }
 
 export class ObjectiveActionRecoveryService {
@@ -151,6 +170,7 @@ export class ObjectiveActionRecoveryService {
         archived: true,
         subgoals: true,
         updatedAt: true,
+        pathVersion: true,
       },
     });
     const eligible = rows.filter((objective) => (
@@ -231,6 +251,7 @@ export class ObjectiveActionRecoveryService {
         archived: true,
         subgoals: true,
         updatedAt: true,
+        pathVersion: true,
       },
     });
     if (!fresh) {
@@ -251,6 +272,8 @@ export class ObjectiveActionRecoveryService {
         request: {
           type: 'goal-subtasks',
           context: {
+            userId: input.userId,
+            objectiveId: input.objective.id,
             goalTitle: titleSnapshot,
             existingSubtasks: [],
             locale: input.locale,
@@ -259,6 +282,7 @@ export class ObjectiveActionRecoveryService {
         leaseUntilMs: claim.leaseUntilMs,
       });
       const actions = recoveredActions(input.objective.id, suggestionItems(suggestion));
+      const path = recoveredPath(suggestion);
       if (actions.length < 2) {
         await this.markFailure(input.userId, input.objective.id, claim.token, 'generation_returned_fewer_than_two_actions');
         return { status: 'failed', attempted: true, retryAfterMs: this.backoffMs };
@@ -272,6 +296,7 @@ export class ObjectiveActionRecoveryService {
         updatedAtSnapshot,
         subgoalsSnapshot,
         actions,
+        path,
       });
       if (!committed) {
         return { status: 'deferred', attempted: true, retryAfterMs: 0 };
@@ -325,6 +350,7 @@ export class ObjectiveActionRecoveryService {
     updatedAtSnapshot: Date | string | null | undefined;
     subgoalsSnapshot: unknown;
     actions: ObjectiveSubgoal[];
+    path: { resultDefinition?: string; currentReality?: string; milestones?: unknown[] };
   }): Promise<boolean> {
     return this.prisma.$transaction(async (transaction) => {
       const nowMs = this.now();
@@ -351,7 +377,15 @@ export class ObjectiveActionRecoveryService {
             ? { updatedAt: input.updatedAtSnapshot }
             : {}),
         },
-        data: { subgoals: input.actions as any },
+        data: {
+          subgoals: input.actions as any,
+          ...(input.path.resultDefinition !== undefined ? { resultDefinition: input.path.resultDefinition } : {}),
+          ...(input.path.currentReality !== undefined ? { currentReality: input.path.currentReality } : {}),
+          ...(input.path.milestones !== undefined ? { milestones: input.path.milestones as any } : {}),
+          ...(input.objective.pathVersion !== undefined ? { pathVersion: { increment: 1 } } : {}),
+          pathStatus: 'ready',
+          pathQuestion: null,
+        },
       });
       const deleted = await transaction.objectiveActionRecoveryClaim.deleteMany({
         where: {

@@ -118,22 +118,22 @@ describe('buildGoalDecompositionPrompt', () => {
     assert.doesNotMatch(prompt, /Nomeie objetos reais/i);
   });
 
-  it('coloca o que a pessoa disse como única fonte de fato', () => {
+  it('coloca o que a pessoa disse como fonte atual de maior autoridade', () => {
     const prompt = buildGoalDecompositionPrompt({
       goalTitle: SALA,
       userStatements: ['Falta organizar os móveis'],
     });
 
-    assert.match(prompt, /única fonte de fato/);
+    assert.match(prompt, /fonte atual de maior autoridade/);
     assert.match(prompt, /Falta organizar os móveis/);
   });
 
-  it('não oferece a pergunta como saída no contrato de decomposição', () => {
+  it('permite uma única pergunta somente quando ela muda materialmente o caminho', () => {
     const prompt = buildGoalDecompositionPrompt({ goalTitle: SALA });
 
-    assert.match(prompt, /PERGUNTAR NÃO É UMA OPÇÃO/);
-    // O JSON de saída não tem campo de pergunta: sem a opção, não há escolha.
-    assert.doesNotMatch(prompt, /"question"\s*:/);
+    assert.match(prompt, /UMA PERGUNTA DECISIVA/);
+    assert.match(prompt, /decisiveQuestion/);
+    assert.match(prompt, /caminhos materialmente diferentes/i);
   });
 
   it('lembra que ela já contou, quando contou', () => {
@@ -143,6 +143,20 @@ describe('buildGoalDecompositionPrompt', () => {
     });
 
     assert.match(prompt, /JÁ CONTOU/);
+  });
+
+  it('pede um caminho estruturado com realidade, etapas e evidência de avanço', () => {
+    const prompt = buildGoalDecompositionPrompt({
+      goalTitle: 'Conquistar a primeira cliente de maquiagem para noivas',
+      userStatements: ['Já tenho portfólio e uso o Instagram; não tenho verba para anúncios'],
+    });
+
+    assert.match(prompt, /currentReality/);
+    assert.match(prompt, /milestones/);
+    assert.match(prompt, /currentMilestoneId/);
+    assert.match(prompt, /doneWhen/);
+    assert.match(prompt, /etapas futuras/i);
+    assert.match(prompt, /não tenho verba para anúncios/i);
   });
 });
 
@@ -161,6 +175,20 @@ describe('GoalIntelligenceService.decompose', () => {
       },
     } as any;
   }
+
+  it('objetivo amplo sem contexto suficiente gera pergunta decisiva, não checklist genérico', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: 'Organizar minhas finanças' },
+      clientReturning({
+        resultDefinition: '', currentReality: '', milestones: [],
+        decisiveQuestion: 'Hoje o principal problema é dívida, gasto mensal ou falta de controle do dinheiro?',
+      }),
+    );
+
+    assert.equal(result.mode, 'question');
+    assert.match(result.question ?? '', /dívida, gasto mensal ou falta de controle/i);
+    assert.equal(result.steps.length, 0);
+  });
 
   it('devolve passos quando geração e validação concordam', async () => {
     const result = await GoalIntelligenceService.decompose(
@@ -183,10 +211,59 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.equal(result.steps.length, 2);
   });
 
-  it('entrega os passos quando o revisor reprova mas a guarda aprovou', async () => {
-    // Regressão de produção: o revisor é adversarial por instrução e, com
-    // modelo pequeno, reprovava sistematicamente uma decomposição correta. O
-    // pipeline caía na pergunta com o caminho pronto na mão.
+  it('preserva a estrutura causal do caminho e detalha apenas a etapa atual', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      {
+        goalTitle: 'Conquistar a primeira cliente de maquiagem para noivas',
+        userStatements: ['Já tenho portfólio e uso o Instagram; não tenho verba para anúncios'],
+      },
+      clientReturning(
+        {
+          resultDefinition: 'Uma noiva contratou e confirmou o serviço',
+          currentReality: 'Ela já tem portfólio e um canal orgânico no Instagram',
+          assumptions: [],
+          currentMilestoneId: 'm-1',
+          milestones: [
+            {
+              id: 'm-1',
+              title: 'Transformar o portfólio em uma apresentação clara',
+              order: 0,
+              doneWhen: 'O perfil mostra trabalhos de noiva e uma forma de contato',
+              actions: [
+                {
+                  title: 'Selecionar no portfólio três maquiagens de noiva para destacar',
+                  basedOn: 'stated',
+                  rationale: 'Usa o portfólio que ela disse já ter',
+                  doneWhen: 'As três imagens estiverem separadas',
+                  effortSize: 'medium',
+                  evidenceRefs: ['statement:0'],
+                },
+              ],
+            },
+            {
+              id: 'm-2',
+              title: 'Abrir conversas com noivas pelo canal existente',
+              order: 1,
+              doneWhen: 'Existirem conversas reais sobre disponibilidade',
+              actions: [],
+            },
+          ],
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.currentReality, 'Ela já tem portfólio e um canal orgânico no Instagram');
+    assert.equal(result.currentMilestoneId, 'm-1');
+    assert.equal(result.milestones.length, 2);
+    assert.equal(result.milestones[1].actions.length, 0);
+    assert.equal(result.steps[0].milestoneId, 'm-1');
+    assert.equal(result.steps[0].doneWhen, 'As três imagens estiverem separadas');
+    assert.deepEqual(result.steps[0].evidenceRefs, ['statement:0']);
+  });
+
+  it('não deixa a guarda determinística aprovar um caminho reprovado semanticamente', async () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: SALA },
       clientReturning(
@@ -196,13 +273,124 @@ describe('GoalIntelligenceService.decompose', () => {
             { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
           ],
         },
-        { approved: false, failures: ['poderia ser mais específico'], missingInfo: null },
+        { approved: false, failures: ['o segundo passo não demonstra avanço causal'], missingInfo: null },
+        {
+          steps: [
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' },
+            { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
+          ],
+        },
+        { approved: false, failures: ['a sequência continua sem vínculo causal suficiente'], missingInfo: null },
+        { question: 'Para qual uso a sala precisa ficar pronta?' },
       ),
     );
 
+    assert.equal(result.mode, 'question');
+    assert.equal(result.steps.length, 0);
+    assert.match(result.question ?? '', /qual uso/i);
+  });
+
+  it('usa o modelo alternativo depois de uma reprovação', async () => {
+    const models: string[] = [];
+    let calls = 0;
+    const client = {
+      chat: { completions: { create: async (request: any) => {
+        models.push(request.model);
+        calls += 1;
+        const payload = calls === 1
+          ? { steps: [{ title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' }] }
+          : calls === 2
+            ? { approved: false, failures: ['sem vínculo causal'], missingInfo: null }
+            : calls === 3
+              ? { steps: [{ title: 'Deixe a sala pronta para uso', basedOn: 'inferred' }] }
+              : calls === 4
+                ? { approved: true, failures: [], missingInfo: null }
+                : { question: null };
+        return { choices: [{ message: { content: JSON.stringify(payload) } }] };
+      } } },
+    } as any;
+
+    const result = await GoalIntelligenceService.decompose({ goalTitle: SALA }, client);
+
     assert.equal(result.mode, 'actions');
-    assert.equal(result.steps.length, 2);
-    assert.equal(result.question, null);
+    assert.equal(models[2], 'gpt-4.1-mini');
+  });
+
+  it('corrige caminho de dívida sem introduzir investimento ou contas não mencionadas', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: 'Organizar minhas finanças', userStatements: ['Tenho uma dívida que preciso quitar'] },
+      clientReturning(
+        { steps: [{ title: 'Abrir uma conta de investimentos', basedOn: 'inferred' }] },
+        { approved: false, failures: ['inventou investimento'], missingInfo: null },
+        {
+          resultDefinition: 'Dívida quitada ou com acordo executável', currentReality: 'Existe uma dívida informada', currentMilestoneId: 'debt-1',
+          milestones: [{ id: 'debt-1', title: 'Dimensionar a dívida', order: 0, doneWhen: 'Valor e condições conhecidos', actions: [
+            { title: 'Registrar o valor e as condições conhecidas da dívida', basedOn: 'stated', doneWhen: 'Dados conhecidos registrados' },
+          ] }],
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+    assert.equal(result.mode, 'actions');
+    assert.doesNotMatch(result.steps.map((step) => step.title).join(' '), /invest|conta nova/i);
+    assert.match(result.steps[0].title, /dívida/i);
+  });
+
+  it('usa portfólio e Instagram sem inventar site, anúncios pagos ou ferramenta', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: 'Conquistar clientes de noiva', userStatements: ['Tenho portfólio e uso Instagram; não tenho verba para anúncios'] },
+      clientReturning(
+        { steps: [{ title: 'Criar um site e campanha de anúncios pagos', basedOn: 'inferred' }] },
+        { approved: false, failures: ['inventou site e anúncios'], missingInfo: null },
+        {
+          resultDefinition: 'Primeira conversa real com potencial cliente', currentReality: 'Já há portfólio e Instagram', currentMilestoneId: 'organic-1',
+          milestones: [{ id: 'organic-1', title: 'Apresentar o trabalho no canal existente', order: 0, doneWhen: 'Trabalho publicado', actions: [
+            { title: 'Selecionar no portfólio um trabalho de noiva para publicar no Instagram', basedOn: 'stated', doneWhen: 'Trabalho selecionado' },
+          ] }],
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+    assert.equal(result.mode, 'actions');
+    assert.doesNotMatch(result.steps[0].title, /site|anúncio|ferramenta/i);
+    assert.match(result.steps[0].title, /portfólio|Instagram/i);
+  });
+
+  it('contexto de mudança não preserva caixas, carro ou transportadora inventados', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: 'Concluir minha mudança de casa', userStatements: ['Já defini a nova casa e preciso concluir a mudança'] },
+      clientReturning(
+        { steps: [{ title: 'Compre caixas e reserve uma transportadora com carro', basedOn: 'inferred' }] },
+        {
+          resultDefinition: 'Itens essenciais transferidos para a nova casa', currentReality: 'A nova casa já foi definida', currentMilestoneId: 'move-1',
+          milestones: [{ id: 'move-1', title: 'Definir o primeiro conjunto real', order: 0, doneWhen: 'Primeiro conjunto identificado', actions: [
+            { title: 'Identificar o primeiro conjunto de itens que precisa sair da casa atual', basedOn: 'inferred', doneWhen: 'Conjunto identificado' },
+          ] }],
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+    assert.equal(result.mode, 'actions');
+    assert.doesNotMatch(result.steps[0].title, /caixa|carro|transportadora|defeito/i);
+  });
+
+  it('baixa energia reduz a ação atual sem reduzir o resultado nem as etapas', async () => {
+    const result = await GoalIntelligenceService.decompose(
+      { goalTitle: 'Publicar meu portfólio', energyScore: 2, capacity: 'quick', userStatements: ['Já selecionei os trabalhos'] },
+      clientReturning(
+        {
+          resultDefinition: 'Portfólio publicado e acessível', currentReality: 'Trabalhos já selecionados', currentMilestoneId: 'publish-1',
+          milestones: [
+            { id: 'publish-1', title: 'Montar apresentação', order: 0, doneWhen: 'Estrutura iniciada', actions: [{ title: 'Escrever o título da apresentação', basedOn: 'stated', effortSize: 'small', doneWhen: 'Título escrito' }] },
+            { id: 'publish-2', title: 'Publicar o portfólio', order: 1, doneWhen: 'Link acessível', actions: [] },
+          ],
+        },
+        { approved: true, failures: [], missingInfo: null },
+      ),
+    );
+    assert.equal(result.resultDefinition, 'Portfólio publicado e acessível');
+    assert.equal(result.milestones.length, 2);
+    assert.equal(result.steps[0].effortSize, 'small');
   });
 
   it('só pergunta depois que a decomposição falhou nas duas tentativas', async () => {

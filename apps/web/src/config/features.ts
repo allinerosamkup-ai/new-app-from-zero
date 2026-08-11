@@ -22,6 +22,8 @@
 export const FEATURES = {
   planner: false,
   habits: false,
+  connectedCalendar: false,
+  routineBuilder: false,
 } as const;
 
 /** Para onde vai quem tenta abrir uma rota desligada. */

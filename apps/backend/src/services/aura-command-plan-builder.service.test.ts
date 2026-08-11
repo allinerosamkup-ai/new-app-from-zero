@@ -217,8 +217,25 @@ function run() {
   });
   assert.equal(goal.operations[0]?.type, 'create_goal');
   if (goal.operations[0]?.type === 'create_goal') {
-    assert.equal(goal.operations[0].payload.firstAction?.title, 'Definir promessa');
-    assert.equal(goal.operations[0].payload.firstAction?.startTime, '10:00');
+    assert.equal(goal.operations[0].payload.firstAction, null, 'objetivo não pode criar tarefa no Planner');
+  }
+
+  const broadGoal = AuraCommandPlanBuilderService.build({
+    response: {
+      assistantMessage: 'Guardei o objetivo e preciso de uma resposta para montar o caminho.',
+      intent: 'goal_project', action: 'create_goal',
+      payload: { title: 'Organizar minhas finanças', subgoals: [], question: 'O foco é dívida, controle do mês ou entender os gastos?' },
+      needsConfirmation: false, needsClarification: false, clarifyingQuestion: null,
+    },
+    sessionId: '550e8400-e29b-41d4-a716-446655440001',
+    sourceMessageId: '550e8400-e29b-41d4-a716-446655440002',
+    localDate: '2026-07-28', currentTime: '09:00', defaultCalendarId: 'primary', busyWindows: [], idFactory,
+  });
+  assert.equal(broadGoal.operations[0]?.type, 'create_goal');
+  if (broadGoal.operations[0]?.type === 'create_goal') {
+    assert.equal(broadGoal.operations[0].payload.pathStatus, 'needs_answer');
+    assert.match(broadGoal.operations[0].payload.pathQuestion ?? '', /dívida/);
+    assert.deepEqual(broadGoal.operations[0].payload.subgoals, []);
   }
 
   const completed = AuraCommandPlanBuilderService.build({

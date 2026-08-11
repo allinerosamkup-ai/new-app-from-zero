@@ -311,6 +311,17 @@ continuaram retornando `oauth_token_invalid_grant`. Não tratar login no painel
 como recuperação da API; reautenticar o conector ou usar uma sessão de navegador
 controlável, sem copiar chave secreta para o chat.
 
+### [FATO] Objetivo é direção versionada; Home recebe só a ação vigente
+Desde 2026-08-11, `GoalIntelligenceService` é o motor único para objetivos. O
+contrato separa resultado, realidade atual, marcos futuros resumidos e ações
+detalhadas somente da etapa vigente. Ações concluídas ou editadas pela pessoa
+impedem regeneração direta: contexto novo cria `pathProposal` cercada por
+`pathVersion`, e só a confirmação na mesma versão altera o futuro. A estrela
+humana fica em `UserPreference.primaryObjectiveId` e sempre vence a sugestão da
+Airia. Prazo do objetivo e data da ação ajudam a leitura, mas nunca substituem
+significado e contexto. Planner, Hábitos e Google Agenda permanecem capacidades
+desligadas; fluxo de objetivo não cria timeline.
+
 ---
 
 ## Tentativas que já falharam
