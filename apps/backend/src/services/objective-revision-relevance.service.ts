@@ -46,9 +46,22 @@ Marque relevant=true apenas quando o novo contexto muda materialmente o resultad
 o ponto de partida, uma dependência, recurso, limitação, compromisso ou a sequência
 das etapas futuras. Mudança momentânea de humor ou energia ajusta somente o passo de
 hoje e NÃO autoriza reescrever a ambição. Assunto não relacionado é false.
+Perguntas que apenas pedem para repetir, explicar ou mostrar o objetivo, a realidade,
+o foco ou a prioridade já existentes são false: elas não trazem contexto novo.
 Não altere nada; apenas explique em uma frase factual por que caberia uma proposta.
 
 JSON APENAS: {"relevant":true|false,"reason":"...|null"}`;
+}
+
+function isInformationalAuraQuery(input: ObjectiveRevisionRelevanceInput): boolean {
+  if (input.source !== 'aura') return false;
+  const text = input.newContext.trim().toLocaleLowerCase('pt-BR');
+  if (!text.endsWith('?')) return false;
+  const asksForExistingState = /^(qual|quais|o que|como (?:está|esta)|me diga|mostre|liste|lembre)\b/.test(text)
+    && /\b(objetivo|meta|foco|realidade|prioridade|caminho|ação|acao)\b/.test(text);
+  if (!asksForExistingState) return false;
+  const statesMaterialChange = /\b(agora (?:eu )?(?:só |so )?consigo|mudou|mudei|caiu|aumentou|diminuiu|perdi|recebi|decidi|não consigo|nao consigo|deixou de|preciso adiar|quero mudar)\b/.test(text);
+  return !statesMaterialChange;
 }
 
 export class ObjectiveRevisionRelevanceService {
@@ -57,6 +70,9 @@ export class ObjectiveRevisionRelevanceService {
     client?: ChatClient,
   ): Promise<ObjectiveRevisionRelevance> {
     if (!input.newContext.trim() || (!client && !process.env.OPENAI_API_KEY)) {
+      return { relevant: false, reason: null };
+    }
+    if (isInformationalAuraQuery(input)) {
       return { relevant: false, reason: null };
     }
     const chat = client ?? defaultClient();

@@ -204,4 +204,21 @@ describe("api — recuperação de sessão", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(refreshSession).not.toHaveBeenCalled();
   });
+
+  it("mantém o contrato exato em todas as escritas de objetivos", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { api } = await import("./api");
+    const payload = { title: "Organizar minhas finanças", locale: "pt-BR" };
+
+    await api.post("/objectives", payload);
+    await api.patch("/objectives/goal-1", payload);
+    await api.put("/objectives/primary", payload);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(JSON.parse(String(init?.body))).toEqual(payload);
+    }
+  });
 });

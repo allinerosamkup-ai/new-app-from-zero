@@ -41,6 +41,20 @@ describe('ObjectiveRevisionRelevanceService', () => {
     assert.match(result.reason ?? '', /canal disponível/);
   });
 
+  it('não trata uma consulta informativa da Aura como contexto novo', async () => {
+    const fake = client([
+      { relevant: true, reason: 'A consulta menciona o objetivo.' },
+    ]);
+    const result = await ObjectiveRevisionRelevanceService.evaluate({
+      ...input,
+      source: 'aura',
+      newContext: 'Qual é meu objetivo em foco, minha realidade atual e a prioridade de hoje?',
+    }, fake);
+
+    assert.deepEqual(result, { relevant: false, reason: null });
+    assert.deepEqual(fake.calls, []);
+  });
+
   it('falha fechada quando a resposta é inválida nos dois modelos', async () => {
     const fake = client(['inválido', { relevant: true, reason: null }]);
     const result = await ObjectiveRevisionRelevanceService.evaluate(input, fake);

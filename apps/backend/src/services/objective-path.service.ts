@@ -102,6 +102,24 @@ function proposalOf(value: unknown): ObjectivePathProposal | null {
   return row as ObjectivePathProposal;
 }
 
+function withUniqueMilestoneIds(
+  milestones: GoalMilestone[],
+  reservedIds: Iterable<string>,
+): GoalMilestone[] {
+  const used = new Set(reservedIds);
+  return milestones.map((milestone) => {
+    const baseId = milestone.id.trim() || 'milestone';
+    let id = baseId;
+    let suffix = 2;
+    while (used.has(id)) {
+      id = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    used.add(id);
+    return { ...milestone, id };
+  });
+}
+
 export class ObjectivePathService {
   constructor(
     private readonly prisma: ObjectivePathPrisma,
@@ -391,7 +409,10 @@ export class ObjectivePathService {
       0,
       decomposition.milestones.findIndex((milestone) => milestone.id === decomposition.currentMilestoneId),
     );
-    const generatedFuture = decomposition.milestones.slice(generatedCurrentIndex + 1).map((milestone, index) => ({
+    const generatedFuture = withUniqueMilestoneIds(
+      decomposition.milestones.slice(generatedCurrentIndex + 1),
+      preservedMilestones.map((milestone) => milestone.id),
+    ).map((milestone, index) => ({
       ...milestone,
       order: preservedMilestones.length + index,
       actions: [],

@@ -159,6 +159,39 @@ describe('ObjectivePathService', () => {
     );
   });
 
+  it('renomeia etapas futuras geradas quando a IA repete um id preservado', async () => {
+    const state = repository({
+      ...baseObjective,
+      pathVersion: 5,
+      pathStatus: 'ready',
+      milestones: [
+        { id: 'm-1', title: 'Etapa concluída', order: 0, doneWhen: 'Concluída', actions: [] },
+        { id: 'm-2', title: 'Etapa atual', order: 1, doneWhen: 'Atual concluída', actions: [] },
+      ],
+      subgoals: [
+        { id: 'done-1', title: 'Ação concluída', done: true, order: 0, milestoneId: 'm-1', aiGenerated: true },
+        { id: 'current-1', title: 'Ação vigente', done: false, order: 1, milestoneId: 'm-2', aiGenerated: true },
+      ],
+    });
+    const service = new ObjectivePathService(state.prisma, async () => ({
+      mode: 'actions', resultDefinition: 'Novo resultado', currentReality: 'Novo contexto', currentMilestoneId: 'generated-current',
+      assumptions: [], question: null, rejectedSteps: [], steps: [],
+      milestones: [
+        { id: 'generated-current', title: 'Atual gerada', order: 0, doneWhen: 'Atual', actions: [] },
+        { id: 'm-2', title: 'Etapa futura com id repetido', order: 1, doneWhen: 'Futura', actions: [] },
+        { id: 'm-2', title: 'Outra etapa futura com id repetido', order: 2, doneWhen: 'Outra futura', actions: [] },
+      ],
+    }));
+
+    const result = await service.proposeRevision({
+      userId: 'user-1', objectiveId: 'goal-1', locale: 'pt-BR', reason: 'A limitação central mudou',
+    });
+    const ids = result.proposal.milestones.map((milestone) => milestone.id);
+
+    assert.equal(new Set(ids).size, ids.length);
+    assert.deepEqual(ids.slice(0, 2), ['m-1', 'm-2']);
+  });
+
   it('abre a próxima etapa somente após confirmação e preserva todo histórico', async () => {
     const state = repository({
       ...baseObjective, pathVersion: 7, pathStatus: 'ready', progress: 50,
