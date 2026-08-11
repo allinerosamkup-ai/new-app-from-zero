@@ -27,6 +27,14 @@ precisa de dono, branch, estado e handoff. `git status --short --branch` e
 encerrar trabalho. Não criar cópia para a mesma tarefa sem motivo registrado e
 não deixar worktree/branch/arquivo sem destino.
 
+### [DECISÃO] Reutilizar antes de inventar
+Antes de escrever código novo, pesquisar no repositório, worktrees, histórico,
+dependências, documentação oficial e fontes externas relevantes, como GitHub,
+registries, templates, conectores e catálogos de aplicativos. Reutilizar ou
+adaptar apenas depois de conferir comportamento, licença, segurança,
+compatibilidade e manutenção; registrar escolhas relevantes e verificar a
+solução no mesmo ciclo do código novo.
+
 ### [FATO] `TaskCompleted` é um evento próprio e não aceita matcher
 No Claude Code atual, `Stop`, `SubagentStop` e `TaskCompleted` disparam sem
 matcher. `TaskCompleted` recebe `task_subject`/`task_description` e pode impedir

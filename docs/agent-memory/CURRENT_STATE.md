@@ -170,10 +170,10 @@ permanece apenas como ponte de compatibilidade. `AGENTS.md`, `CLAUDE.md` e o
 AGENTS global do Codex apontam para a mesma fonte; o hook Claude-only foi mantido.
 Referências, JSON, sintaxe do hook, diff e cenários isolados foram verificados.
 
-Trabalho concluído (2026-08-09): separação dos gates de commit e worktree no
+Trabalho concluído (2026-08-11): separação dos gates de commit e worktree no
 protocolo (§22). A regra agora exige que toda alteração tenha commit, remoção
 consciente ou bloqueio documentado, e que todo worktree tenha dono, branch,
-estado e handoff. A auditoria inicial encontrou 24 worktrees; nenhum foi
+estado e handoff. A auditoria inicial encontrou 25 worktrees; nenhum foi
 removido sem confirmar propriedade e commits exclusivos. O inventário está em
 `docs/agent-memory/WORKTREES.md` e a limpeza permanece uma tarefa separada.
 

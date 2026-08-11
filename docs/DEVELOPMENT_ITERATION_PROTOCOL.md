@@ -46,7 +46,7 @@ em trinta segundos. Tarefa de fluxo de usuário ou de IA não atravessa.
 ```
 LER MEMÓRIA
    ↓
-UNDERSTAND ──→ DEFINE DONE ──→ INSPECT ──→ IMPLEMENT ──→ RUN ──→ VERIFY
+UNDERSTAND ──→ DEFINE DONE ──→ INSPECT ──→ SEARCH/REUSE ──→ IMPLEMENT ──→ RUN ──→ VERIFY
                                                                     │
                                              ┌──────────────────────┤
                                           FALHOU                 PASSOU
@@ -97,6 +97,47 @@ Ver §3.
 
 Ler o código atual antes de escrever o novo. Rodar o app quando o
 comportamento atual for parte do diagnóstico (bug) — ver §9.
+
+### SEARCH / REUSE BEFORE INVENT
+
+Antes de escrever qualquer código novo, procurar se uma solução compatível já
+existe. **Criar do zero é a última opção razoável, não o reflexo padrão.** A
+busca deve seguir esta ordem, adaptando o alcance ao risco e à natureza da
+tarefa:
+
+1. código e padrões já existentes no repositório;
+2. todas as worktrees e branches relevantes, histórico Git, planos e memória;
+3. dependências já instaladas, scripts, componentes, serviços e contratos do
+   monorepo;
+4. documentação oficial e exemplos oficiais da tecnologia ou integração;
+5. quando autorizado e necessário, GitHub/code search, repositórios open source
+   mantidos, package registries, bibliotecas de componentes, templates,
+   conectores e catálogos/bancos de aplicativos que ofereçam a mesma função ou
+   uma função próxima;
+6. somente depois, projetar e escrever uma solução nova.
+
+Para cada candidato externo relevante, conferir antes de copiar ou adaptar:
+
+- se resolve o comportamento pedido, e não apenas algo visualmente parecido;
+- licença, atribuição e compatibilidade com o uso deste projeto;
+- manutenção, atividade, releases, issues e compatibilidade com as versões
+  atuais;
+- segurança, dependências transitivas, permissões, coleta de dados e risco de
+  supply chain;
+- qualidade dos testes, tratamento de erro, acessibilidade e performance;
+- custo de adotar e manter a solução contra o custo de implementá-la aqui.
+
+Preferir reutilizar e adaptar uma solução compreendida, pequena e compatível.
+Não copiar código cegamente, não incorporar dependência sem necessidade e não
+trazer código cuja licença, origem ou comportamento não possam ser explicados.
+Não executar scripts de instalação remotos ou introduzir credenciais para
+experimentar um candidato.
+
+Registrar em `CURRENT_STATE.md` ou `LEARNINGS.md`, quando a busca for relevante,
+o que foi encontrado, o que foi escolhido ou rejeitado e o motivo. Se nada
+adequado existir, registrar brevemente quais fontes foram consultadas antes de
+inventar a implementação. A busca não substitui os testes: código reutilizado
+entra no mesmo ciclo de verificação, segurança e regressão do código novo.
 
 ### IMPLEMENT
 
@@ -736,6 +777,8 @@ Antes de declarar `DONE`:
 [ ] Risco de regressão vizinha conferido
 [ ] Nenhum problema crítico conhecido restante
 [ ] Existe evidência para tudo acima
+[ ] Soluções existentes foram procuradas antes de escrever código novo
+[ ] Código reutilizado tem origem, licença, compatibilidade e motivo registrados quando aplicável
 [ ] `git status --short --branch` foi revisado
 [ ] Cada alteração que deve permanecer está em commit
 [ ] Nenhum arquivo novo ficou sem decisão (commit, remoção consciente ou bloqueio documentado)

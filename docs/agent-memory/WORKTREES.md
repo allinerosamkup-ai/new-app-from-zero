@@ -43,9 +43,9 @@ git status --short --branch
 Não criar outra cópia para o mesmo objetivo sem registrar o motivo. Ao trocar
 de agente, atualizar esta página e `CURRENT_STATE.md` antes de sair.
 
-## Auditoria inicial — 2026-08-09
+## Auditoria inicial — 2026-08-11
 
-`git worktree list --porcelain` encontrou 24 entradas. A lista abaixo é um
+`git worktree list --porcelain` encontrou 25 entradas. A lista abaixo é um
 inventário inicial para impedir que fiquem invisíveis; ela não substitui o
 comando Git e cada linha precisa receber dono/estado antes de ser reutilizada ou
 removida.
@@ -71,6 +71,7 @@ removida.
 | `.worktrees/airia-command-integration` | `codex/airia-command-integration` / `5580d17` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/airia-integrated-checkin` | `codex/airia-integrated-checkin` / `34ce3c2` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/airia-orbital-mascot` | `codex/airia-orbital-mascot` / `a1dd8e3` | `AUDIT_PENDING` | identificar dono |
+| `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `edc7844` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/repair-checkin` | `codex/checkin-contextual-repair` / `13cc358` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/repair-goals` | `codex/goals-legacy-recovery` / `282f557` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/repair-pwa` | `codex/pwa-release-repair` / `b351128` | `AUDIT_PENDING` | identificar dono |

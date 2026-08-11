@@ -19,6 +19,14 @@ Alterar arquivos não significa concluir. Toda tarefa deve passar por critérios
 
 Durante tarefas longas, atualizar `docs/agent-memory/CURRENT_STATE.md`. Registrar descobertas reutilizáveis em `LEARNINGS.md`, corrigir memória desatualizada e não repetir abordagens já reprovadas sem nova evidência.
 
+Antes de escrever código novo, procurar primeiro no repositório, nas worktrees e
+branches, no histórico Git, nas dependências e nos padrões já usados. Depois,
+quando necessário e autorizado, procurar documentação oficial, GitHub/code
+search, registries, bibliotecas, templates, conectores e catálogos de
+aplicativos. Preferir adaptar solução existente; verificar licença, segurança,
+compatibilidade e manutenção antes de copiar qualquer coisa. Ver
+`SEARCH / REUSE BEFORE INVENT` no protocolo.
+
 Commit e worktree são gates separados. Antes de criar ou entrar em um worktree,
 consultar `git worktree list --porcelain` e `docs/agent-memory/WORKTREES.md`;
 reutilizar trabalho existente, registrar dono/branch/caminho e deixar handoff
