@@ -53,7 +53,7 @@ removida.
 | Caminho | Branch/HEAD | Estado | Próxima ação |
 |---|---|---|---|
 | `C:\Users\allin\Projetos\Apps\new-app-fron-zero` | `master` / `1cc869f` | `ACTIVE` | usar como base atual |
-| `.worktrees/objective-intelligence` | `codex/objective-intelligence` / handoff após `7b33baa` | `READY_TO_MERGE` | Codex: Objetivos inteligentes concluídos; 107 suítes backend, 57 arquivos/429 testes web, typechecks, builds e duas revisões aprovados. Aguardar decisão de integração; não publicar sem autorização |
+| `.worktrees/objective-intelligence` | `codex/objective-intelligence` / `d9d533e` | `BLOCKED` | PR rascunho #10 aberto; código local aprovado. Executar avaliação com modelo real, E2E autenticado persistente e migração no ambiente autorizado antes de liberar merge; não publicar sem autorização |
 | `C:\Users\allin\.codex\worktrees\5cd3\new-app-fron-zero` | detached / `4035e42` | `AUDIT_PENDING` | identificar dono |
 | `C:\Users\allin\.codex\worktrees\6d3e\new-app-fron-zero` | detached / `aa9906d` | `AUDIT_PENDING` | identificar dono |
 | `.claude/worktrees/adoring-perlman-c4c02a` | `work/intuitive-vps` / `8c42be1` | `AUDIT_PENDING` | identificar dono |

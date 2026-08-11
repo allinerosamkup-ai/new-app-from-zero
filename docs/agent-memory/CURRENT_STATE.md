@@ -2,7 +2,7 @@
 
 ## Status
 
-`READY_TO_MERGE — implementação, regressão, revisão e commit concluídos`
+`PR RASCUNHO #10 — implementação, regressão, revisão, commit e push concluídos; gates externos bloqueados`
 
 ## Objetivo
 
@@ -75,7 +75,8 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 - [x] Contratos e serviços com TDD.
 - [x] APIs e memória.
 - [x] Objetivos e Home.
-- [ ] Avaliação real com chave, E2E autenticado persistente e fechamento Git.
+- [ ] Avaliação real com chave, E2E autenticado persistente e validação da migração no ambiente autorizado.
+- [x] Branch publicada e PR rascunho #10 aberto sem merge ou deploy.
 
 ## Arquivos alterados
 
@@ -116,4 +117,5 @@ autenticado persistente. Código, testes integrais, builds e preview local passa
 
 ## Próxima melhor ação
 
-Integrar a branch somente após decisão explícita; não publicar automaticamente.
+Executar os três gates externos registrados no PR #10. Só então retirar o
+rascunho e integrar após autorização explícita; não publicar automaticamente.
