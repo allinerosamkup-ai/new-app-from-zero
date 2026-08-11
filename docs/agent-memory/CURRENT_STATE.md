@@ -2,7 +2,7 @@
 
 ## Status
 
-`PR RASCUNHO #10 — IA real validada; E2E autenticado e migração ainda bloqueados`
+`PR #10 — gates locais, IA real, migração segura e E2E autenticado aprovados; sem deploy`
 
 ## Objetivo
 
@@ -28,7 +28,7 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
       mutações, notificações ou decisões desta versão.
 - [x] Migração, contratos, memória, privacidade, timezone e concorrência têm
       cobertura automatizada.
-- [ ] Fluxo autenticado mobile cobre criar, responder, concluir, revisar,
+- [x] Fluxo autenticado mobile cobre criar, responder, concluir, revisar,
       confirmar, recarregar e verificar persistência.
 - [x] Builds, testes integrais, avaliação semântica determinística, revisão
       Airia e gates Git locais foram executados com evidência recente.
@@ -67,6 +67,15 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
   decisão entra na memória na mesma transação da mutação canônica.
 - Duas rodadas de revisão independente corrigiram todos os P1/P2 encontrados;
   a última varredura não encontrou bloqueante restante.
+- O E2E autenticado mobile criou um objetivo amplo, respondeu duas perguntas
+  decisivas, concluiu e abriu ações, registrou mudança no Diário, confirmou
+  revisão, recarregou Objetivos/Home e consultou a Aura com persistência no banco.
+- O E2E revelou e corrigiu dois defeitos ausentes nos testes anteriores: o
+  envelope global do web quebrava contratos estritos de Objetivos; consulta
+  informativa da Aura podia propor revisão e a IA podia repetir IDs de etapas.
+- A migração foi executada sobre os dados reais dentro de transação com
+  `ROLLBACK` e o runtime completo foi exercitado em schema isolado. A base
+  pública permaneceu com 42 objetivos, 7 preferências e sem a migração aplicada.
 
 ## O que falta
 
@@ -76,19 +85,20 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 - [x] APIs e memória.
 - [x] Objetivos e Home.
 - [x] Avaliação real com `gpt-5.4-mini`: `aura:eval` 10/12 e `ai:smoke` 11/11.
-- [ ] E2E autenticado persistente e validação da migração no ambiente autorizado.
-- [x] Branch publicada e PR rascunho #10 aberto sem merge ou deploy.
+- [x] E2E autenticado persistente e validação segura da migração.
+- [x] Branch publicada e PR #10 aberto sem merge ou deploy.
 
 ## Arquivos alterados
 
 - Commit funcional: `7b33baa feat: add contextual objective intelligence`.
+- Correções encontradas no E2E: `9396159 fix: harden objective validation flows`.
 - Worktree sem alterações funcionais fora dos commits desta tarefa.
 
 ## Verificações executadas
 
 - Baseline: backend 102 suítes; web 57 arquivos / 429 testes — PASS.
 - Final: backend 107 suítes — PASS.
-- Final: web 57 arquivos / 429 testes — PASS.
+- Final: web 57 arquivos / 430 testes — PASS.
 - `npm run generate -w packages/database` e build do database — PASS.
 - `npm run build -w apps/backend` — PASS.
 - `npm run build -w apps/web` — PASS.
@@ -100,6 +110,14 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 - `git diff --check` — PASS.
 - `aura:eval` com modelo real `gpt-5.4-mini` — PASS: 10/12, no limiar exigido.
 - `ai:smoke` com modelo real `gpt-5.4-mini` — PASS: 11/11 superfícies com contrato respeitado.
+- Migração real: execução integral em `BEGIN`/`ROLLBACK` — PASS; produção sem
+  colunas, FK ou registro de migração novos após a validação.
+- E2E autenticado 390×844: criação canônica, pergunta, caminho, conclusão,
+  abertura de etapa, Diário, proposta, confirmação, recarga, Home, Aura e
+  memória canônica — PASS.
+- Persistência isolada final: objetivo `ready`, versão 6, proposta limpa,
+  histórico concluído, IDs de etapas únicos e memórias de Diário/Aura presentes.
+- Usuário, sessão, schema e servidores temporários do E2E foram removidos.
 - A chave já existia no projeto. O Node local precisou de `--use-system-ca`
   porque a chamada falhava com `UNABLE_TO_VERIFY_LEAF_SIGNATURE`; a mesma API
   respondia HTTP 200 pelo armazenamento de certificados do Windows.
@@ -112,15 +130,17 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
   não cria caminhos de objetivo.
 - Contexto de Diário/Aura é limitado às últimas 48 horas quando representa o
   presente; Check-in só vale como estado atual no dia local de São Paulo.
-- O runner local não possui chave OpenAI nem credenciais de banco/Supabase; por
-  isso avaliação com modelo real e E2E autenticado não podem ser alegados.
+- O histórico remoto de migrações diverge da árvore local; `supabase db push`
+  não pode ser usado até uma reconciliação própria. A migração desta feature foi
+  validada por transação revertida e schema isolado, sem reparar histórico.
 
 ## Falha atual
 
-`BLOQUEADO` somente para E2E autenticado persistente e validação da migração no
-ambiente autorizado. Código, IA real, testes integrais, builds e preview local passam.
+Sem bloqueio técnico conhecido. A migração pública, merge e deploy continuam
+intencionalmente não executados porque exigem autorização explícita de produção.
 
 ## Próxima melhor ação
 
-Executar os dois gates externos restantes registrados no PR #10. Só então retirar o
-rascunho e integrar após autorização explícita; não publicar automaticamente.
+Revisar e integrar o PR #10 quando houver autorização. No deploy autorizado,
+reconciliar o histórico remoto antes de aplicar a migração; não usar `db push`
+automaticamente e não publicar a partir desta worktree.

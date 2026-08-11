@@ -328,6 +328,23 @@ Airia. Prazo do objetivo e data da ação ajudam a leitura, mas nunca substituem
 significado e contexto. Planner, Hábitos e Google Agenda permanecem capacidades
 desligadas; fluxo de objetivo não cria timeline.
 
+### [FATO] Escritas versionadas de Objetivos não aceitam envelope global do web
+O cliente injeta horário, contexto adaptativo e idioma em mutações genéricas,
+mas `/objectives` e suas subrotas usam contratos estritos e devem receber o body
+exato. Enriquecê-las no wrapper gera `unrecognized_keys` antes da criação.
+
+### [FATO] Consulta informativa da Aura não é contexto novo
+Perguntar qual é o objetivo, realidade ou prioridade apenas lê o estado e não
+autoriza proposta de revisão. Mudança material declarada continua acionando a
+revisão. Ao combinar etapas preservadas com etapas geradas, normalize IDs para
+unicidade antes de persistir a proposta; modelos podem repetir IDs existentes.
+
+### [DECISÃO] Divergência de histórico bloqueia `supabase db push`, não a validação segura
+Quando as migrações locais e remotas divergem, não reparar histórico durante uma
+feature. Validar o SQL integral contra os dados reais em transação revertida e
+exercitar o runtime em schema isolado. Aplicação pública fica para uma janela de
+produção autorizada com reconciliação explícita.
+
 ---
 
 ## Tentativas que já falharam
