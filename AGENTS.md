@@ -27,6 +27,17 @@ aplicativos. Preferir adaptar solução existente; verificar licença, seguranç
 compatibilidade e manutenção antes de copiar qualquer coisa. Ver
 `SEARCH / REUSE BEFORE INVENT` no protocolo.
 
+Toda tarefa deve ser coordenada por subagentes em papéis separados:
+`COORDENADOR → EXECUTOR → VERIFICADOR → VERIFICADOR DE INTEGRAÇÃO →
+META-VERIFICADOR → DONE`. O executor não aprova o próprio trabalho. Quando
+houver fatias independentes, usar comunicação horizontal entre executores;
+entregas, reprovações e aprovações seguem comunicação vertical entre os LLMs.
+Toda mensagem entre LLMs precisa carregar contexto, evidência, decisão e próxima
+ação em handoff persistente; não depender apenas do chat. Worktree físico
+por papel só existe quando necessário; os papéis não autorizam criar cópias sem
+destino. O meta-verificador é o único que autoriza `DONE`. Ver §§8.9 e 14 do
+protocolo.
+
 Commit e worktree são gates separados. Antes de criar ou entrar em um worktree,
 consultar `git worktree list --porcelain` e `docs/agent-memory/WORKTREES.md`;
 reutilizar trabalho existente, registrar dono/branch/caminho e deixar handoff

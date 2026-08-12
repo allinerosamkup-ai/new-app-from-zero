@@ -138,6 +138,14 @@ vale sempre, sem precisar abrir o documento:
   templates, conectores e catálogos de aplicativos. Reutilizar/adaptar só após
   conferir comportamento, licença, segurança, compatibilidade e manutenção.
   Ver `SEARCH / REUSE BEFORE INVENT` no protocolo.
+- Toda tarefa passa por `COORDENADOR → EXECUTOR → VERIFICADOR → VERIFICADOR DE
+  INTEGRAÇÃO → META-VERIFICADOR → DONE`. O executor não aprova o próprio
+  trabalho; UI, UX, dados, IA, i18n e superfícies consumidoras são avaliados
+  juntos quando houver impacto. Comunicação horizontal registra fatos e
+  conflitos entre executores; comunicação vertical entre os LLMs registra
+  entrega, falha e aprovação. Todo handoff leva contexto, evidência, decisão e
+  próxima ação para `CURRENT_STATE.md`/memória, não apenas para o chat. Ver
+  §§8.9 e 14 do protocolo.
 - `CODE CORRECTNESS IS NOT PRODUCT CORRECTNESS.` Mudança visível na tela se prova
   no navegador. Saída de IA tecnicamente válida e semanticamente errada é `FAIL`.
 - Bug: `REPRODUZIR → CAUSA RAIZ → CORRIGIR → REPRODUZIR DE NOVO → REGRESSÃO`.

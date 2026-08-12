@@ -612,6 +612,65 @@ FALHA OBSERVADA → REPRODUZIR → SEGUIR O FLUXO DA USUÁRIA → SEGUIR O DADO
 
 Não comece editando o arquivo que "parece relacionado".
 
+### 8.9 Contrato integrado da Airia: IA, dados, UI e UX
+
+Neste aplicativo, uma tarefa não é avaliada apenas na tela ou no arquivo que
+foi alterado. Quando houver impacto em uma superfície de produto, o contrato de
+verificação deve declarar:
+
+| Campo | Pergunta obrigatória |
+|---|---|
+| Superfícies | Quais páginas, componentes, APIs, serviços de IA e consumidores do dado são afetados? |
+| Intenção | O que a usuária deve conseguir fazer, sem precisar adivinhar o próximo passo? |
+| Dados | Qual entrada chega ao payload, ao banco, ao contexto da IA e às regras? |
+| Âncoras | Qual meta, tarefa, hábito, compromisso ou pedido atual sustenta a ação? |
+| Idiomas | O fluxo inteiro funciona em português e inglês, inclusive conteúdo dinâmico, backend e IA? |
+| Estados | Vazio, carregando, sucesso, erro, parcial, inválido, retry, reload, offline e duplo clique foram considerados? |
+| UI/UX | A hierarquia, interação, acessibilidade, responsividade, animação e visual ajudam a usuária a agir? |
+| Evidência | Quais ações, logs, requests, dados persistidos, screenshots e resultados comprovam cada critério? |
+
+O pipeline integrado a verificar é:
+
+```text
+entrada da usuária
+→ UI/UX
+→ normalização
+→ contexto atual
+→ prompt/modelo
+→ saída estruturada
+→ filtros e regras
+→ persistência
+→ UI de retorno
+→ próxima ação
+→ outras superfícies consumidoras
+```
+
+Para qualquer alteração de IA, dados ou regra, o verificador deve confirmar que
+os campos capturados chegam ao destino correto, são persistidos, são lidos de
+volta, são usados pela IA/regras quando pertinente e não reaparecem como
+informação inventada, velha, concluída ou rejeitada.
+
+Para qualquer alteração visual ou interativa, o verificador deve confirmar:
+
+- todos os botões e caminhos executam a ação real, incluindo loading, erro,
+  retry, sucesso e prevenção de duplo clique;
+- labels, mensagens, datas, números, erros e respostas dinâmicas permanecem
+  coerentes em português e inglês;
+- hierarquia, espaçamento, contraste, clipping, overflow, tipografia, foco,
+  teclado, semântica, ARIA, alvos de toque e textos longos funcionam;
+- o fluxo é legível e utilizável em `320×800`, `390×844`, `768×1024` e desktop;
+- gráficos não dependem só de cor e animações não escondem conteúdo, bloqueiam
+  interação ou substituem feedback textual;
+- `prefers-reduced-motion`, scroll, modal, teclado virtual, orientação e safe
+  areas são tratados quando aplicável.
+
+“Impressionante” é a ambição de qualidade, não uma justificativa subjetiva de
+aprovação. O resultado só passa quando há evidência de fidelidade à intenção,
+grounding, não invenção, utilidade, granularidade executável, consistência,
+idioma correto, segurança, continuidade da ação, concisão e acabamento visual
+sem regressão. Se o verificador não consegue mostrar isso, o resultado é
+`FAIL` ou `BLOQUEADO`, nunca uma aprovação por gosto.
+
 ---
 
 ## 9. Bug Fix Protocol
@@ -757,6 +816,96 @@ agente que implementou tende a defender a própria solução.
 
 Neste repo, a skill `skills/airia-pr-review/SKILL.md` é a checklist de QA
 obrigatória para PR, fechamento de feature, publicação e deploy.
+
+### Orquestração obrigatória por subagentes
+
+Toda tarefa deve passar por papéis separados, mesmo quando a tarefa tiver uma
+única fatia executável:
+
+```text
+COORDENADOR
+→ EXECUTOR
+→ VERIFICADOR
+→ VERIFICADOR DE INTEGRAÇÃO
+→ META-VERIFICADOR
+→ DONE
+```
+
+- **Coordenador:** transforma o pedido em critérios de aceite, divide por
+  comportamento verificável, atribui escopo e controla os estados.
+- **Executor:** implementa uma fatia vertical e entrega mudanças, testes e
+  evidências. Não aprova o próprio trabalho.
+- **Verificador:** atua de forma adversarial, não altera o código que verifica e
+  produz `PASS`, `FAIL`, `BLOQUEADO` ou `N/A` justificado por critério.
+- **Verificador de integração:** confere o comportamento combinado entre UI,
+  API, banco, regras, IA, ferramentas e superfícies consumidoras.
+- **Meta-verificador:** audita o processo inteiro, os handoffs, a qualidade das
+  evidências, a regressão, os commits e worktrees. É o único papel que autoriza
+  `DONE`.
+
+Quando existirem fatias independentes, usar executores em paralelo. A divisão
+deve ser por comportamento ou contrato (`entrada → processamento → efeito →
+saída observável`), não por arquivo ou camada isolada. Executores mantêm
+comunicação horizontal sobre fatos, dependências, conflitos e contratos; a
+comunicação vertical entrega, reprova, corrige e aprova cada passagem de estado.
+
+Essa comunicação é comunicação entre LLMs/agentes, não uma expectativa implícita
+de memória compartilhada. Cada LLM deve receber ou consultar o contexto
+operacional necessário e responder com um registro persistente quando a
+informação puder afetar outro agente. Mensagens importantes não podem depender
+de o próximo LLM ler o histórico inteiro da conversa.
+
+Formato mínimo para comunicação entre LLMs:
+
+```text
+[task_id][subtask_id][HORIZONTAL|VERTICAL][FINDING|DEPENDENCY|CONFLICT|PASS|FAIL|BLOCKED]
+origem_llm:
+destino_llm:
+contexto_consultado:
+fato_ou_critério:
+evidência:
+impacto_na_integração:
+decisão:
+próxima_ação:
+```
+
+O LLM destinatário deve confirmar `RECEIVED`, `HANDOFF_ACCEPTED`,
+`HANDOFF_REJECTED` ou `BLOCKED`, com justificativa. O LLM que envia continua
+responsável por verificar se a mensagem foi compreendida; “enviei no chat” não é
+prova de handoff.
+
+Quando houver LLMs de plataformas diferentes — por exemplo Codex/GPT e Claude
+Code — a ponte obrigatória é `CURRENT_STATE.md`, `WORKTREES.md`, o contrato da
+tarefa e as evidências no repositório. Não transferir decisões críticas apenas
+por texto efêmero de uma sessão.
+
+Os papéis são obrigatórios; um worktree físico por papel não é. Criar cópia
+física somente quando isolamento, conflito ou execução paralela realmente
+exigir. Verificadores trabalham em leitura e não iniciam uma segunda edição
+silenciosa no worktree do executor.
+
+Handoff mínimo:
+
+```text
+task_id · subtask_id · origem · destino · objetivo · critérios · escopo
+branch/worktree · commit/estado · arquivos · verificações · evidências
+falhas · próxima ação · condição de aceite
+```
+
+Nenhuma tarefa salta de `EM_EXECUÇÃO` para `DONE`. A cadeia de estados é:
+`PLANEJADA → EM_EXECUÇÃO → PRONTA_PARA_VERIFICAÇÃO → VERIFICADA →
+PRONTA_PARA_INTEGRAÇÃO → INTEGRADA → META_APROVADA → DONE`; falha retorna para
+`RETRABALHO` e impedimento real para `BLOQUEADA`.
+
+Se a plataforma não oferecer subagentes físicos, executar os papéis em passes
+separados e registrar a limitação. Não apresentar uma autoavaliação como
+verificação independente.
+
+O meta-verificador deve confirmar que todos os critérios têm estado e evidência,
+que nenhum agente aprovou o próprio trabalho, que a integração foi testada no
+contexto correto, que os dados e worktrees têm destino e que não há conclusão
+baseada apenas em código, build, teste isolado ou HTTP 200. Qualquer falha
+retorna para `RETRABALHO` ou `BLOQUEADA`.
 
 ---
 

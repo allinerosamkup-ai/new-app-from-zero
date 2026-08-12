@@ -35,6 +35,15 @@ adaptar apenas depois de conferir comportamento, licença, segurança,
 compatibilidade e manutenção; registrar escolhas relevantes e verificar a
 solução no mesmo ciclo do código novo.
 
+### [DECISÃO] Orquestração entre subagentes e LLMs
+Toda tarefa segue papéis separados de coordenador, executor, verificador,
+verificador de integração e meta-verificador. Executores podem se comunicar
+horizontalmente; entregas e aprovações seguem comunicação vertical entre LLMs.
+Handoffs carregam contexto, evidência, decisão e próxima ação em registro
+persistente. A Airia exige que a integração de UI/UX, i18n, dados, regras e IA
+seja avaliada quando a mudança tocar essas superfícies; “impressionante” só vale
+quando convertido em critérios observáveis.
+
 ### [FATO] Avaliações OpenAI locais usam a cadeia de certificados do Windows
 Neste ambiente, a API da OpenAI responde HTTP 200 e a chave é válida, mas o
 Node pode falhar com `UNABLE_TO_VERIFY_LEAF_SIGNATURE`. Para `aura:eval` e
