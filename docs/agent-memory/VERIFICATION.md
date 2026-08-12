@@ -157,6 +157,26 @@ curl -sI https://airia.pro/home
 Regra de release (`AGENTS.md`): GitHub, VPS e produção no mesmo SHA, com
 healthcheck público 200 nos dois endpoints.
 
+## Verificação do contrato de subagentes e LLMs
+
+O contrato operacional tem CLI e testes isolados. Eles não substituem a
+verificação do produto; provam apenas que as barreiras de inicialização,
+transição, comunicação e meta-aprovação estão funcionando.
+
+```bash
+node scripts/agent-protocol.mjs init --task-id <id> --objective "<objetivo>"
+node scripts/agent-protocol.mjs role --role executor --agent <llm> --status assigned --evidence "Escopo recebido"
+node --test scripts/agent-protocol.test.mjs scripts/orchestration-guard.test.mjs
+node --check .claude/hooks/orchestration-guard.mjs
+node --check .claude/hooks/verification-guard.mjs
+```
+
+O estado em `.claude/.state/` é operacional e ignorado pelo Git. Handoffs
+entre sessões, plataformas ou worktrees devem ir para `CURRENT_STATE.md` e
+`WORKTREES.md`, com fato, evidência, decisão e próxima ação.
+
+---
+
 ## Verificação de Git e worktrees
 
 Antes de iniciar trabalho paralelo ou retomar uma tarefa:

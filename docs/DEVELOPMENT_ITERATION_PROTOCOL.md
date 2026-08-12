@@ -1103,8 +1103,9 @@ Se algo não pôde ser verificado, **não escreva "nenhum"**. Diga o quê e por 
 ## 21. Enforcement por plataforma
 
 O protocolo comportamental vale para todos os agentes. Neste repositório, uma
-parte dele é reforçada por hook específico do Claude Code, não por boa vontade:
-`.claude/hooks/verification-guard.mjs`, registrado em `.claude/settings.json`.
+parte dele é reforçada por hooks específicos do Claude Code, não por boa
+vontade: `.claude/hooks/verification-guard.mjs` e
+`.claude/hooks/orchestration-guard.mjs`, registrados em `.claude/settings.json`.
 
 **O problema que ele resolve:** o agente edita arquivo de código-fonte e tenta
 encerrar a sessão sem ter rodado nenhuma verificação.
@@ -1129,6 +1130,14 @@ sem nenhuma verificação tentada.
 - `Stop`, `SubagentStop` e `TaskCompleted` não usam matcher — são eventos sem
   matcher no Claude Code atual. O registro real está em `.claude/settings.json`.
 
+O `orchestration-guard` acrescenta as barreiras de processo: edição de código
+exige contrato inicializado por `node scripts/agent-protocol.mjs init`,
+`SubagentStart` injeta o contexto comum, `SubagentStop` exige handoff com
+estado/evidência e `Stop`/`TaskCompleted` exigem meta-aprovação. O estado técnico
+fica em `.claude/.state/agent-protocol.json` (ignorado pelo Git); a comunicação
+durável entre LLMs continua sendo registrada em `CURRENT_STATE.md`,
+`WORKTREES.md` e na memória relevante.
+
 O guard não sabe se a verificação foi suficiente, não associa automaticamente
 um arquivo a uma subtarefa específica e não avalia coerência de UI, persistência,
 qualidade semântica da IA ou regressão. Esses continuam sendo julgamento do
@@ -1142,6 +1151,7 @@ Separação usada no desenho:
 | build/typecheck/teste rodaram? | o requisito foi realmente cumprido? |
 | arquivo obrigatório existe? | a UI está coerente? |
 | alguma verificação aconteceu? | o fluxo funciona ponta a ponta? |
+| contrato, handoff e meta-aprovação existem? | a cadeia de subagentes integrou o resultado? |
 | — | a saída da IA faz sentido? |
 | — | existe funcionalidade só aparente? |
 
