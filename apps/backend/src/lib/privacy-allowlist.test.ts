@@ -112,9 +112,12 @@ function run() {
   assert.ok(PRIVACY_EXPORT_ALLOWLIST.BillingAccount.include.includes('trialEndsAt'));
   assert.ok(PRIVACY_EXPORT_ALLOWLIST.BillingAccount.redact.includes('stripeCustomerId'));
   assert.ok(PRIVACY_EXPORT_ALLOWLIST.BillingAccount.redact.includes('stripeSubscriptionId'));
+  assert.ok(PRIVACY_EXPORT_ALLOWLIST.BillingAccount.redact.includes('externalSubscriptionId'));
   assert.ok(PRIVACY_EXPORT_ALLOWLIST.ProfessionalPartner.redact.includes('verificationNote'));
   assert.ok(PRIVACY_EXPORT_ALLOWLIST.ReferralAttribution.redact.includes('professionalPartnerId'));
   assert.ok(PRIVACY_EXPORT_EXCLUDED_MODELS.has('StripeWebhookEvent'));
+  assert.ok(PRIVACY_EXPORT_EXCLUDED_MODELS.has('BillingCheckoutAttempt'));
+  assert.ok(PRIVACY_EXPORT_EXCLUDED_MODELS.has('BillingWebhookEvent'));
 
   console.log('privacy-allowlist tests passed');
 }

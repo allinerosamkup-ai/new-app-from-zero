@@ -23,7 +23,8 @@ async function run() {
   const billingSummary = {
     access: 'pro' as const,
     source: 'trial' as const,
-    subscriptionStatus: null,
+      subscriptionStatus: null,
+      provider: null,
     plan: null,
     periodEnd: null,
     trialEndsAt: TRIAL_END,

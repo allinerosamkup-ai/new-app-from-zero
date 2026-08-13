@@ -155,6 +155,18 @@ async function run() {
     /checkout_session_forbidden/,
   );
 
+  const staleLifetimeVerification = fixture();
+  staleLifetimeVerification.billing.set('user-lifetime', {
+    userId: 'user-lifetime', billingProvider: 'cakto', subscriptionStatus: 'active',
+    subscriptionPlan: 'annual', externalSubscriptionId: 'cakto-sub-current',
+  });
+  const staleLifetimeResult = await staleLifetimeVerification.service.verifyCheckoutSession(
+    'user-lifetime', 'cs_lifetime',
+  );
+  assert.equal(staleLifetimeResult.confirmed, true);
+  assert.equal(staleLifetimeVerification.billing.get('user-lifetime').billingProvider, 'cakto');
+  assert.equal(staleLifetimeVerification.billing.get('user-lifetime').subscriptionPlan, 'annual');
+
   const disabledOffer = fixture({ lifetimeEnabled: false });
   await assert.rejects(
     () => disabledOffer.service.createCheckoutSession(
@@ -217,6 +229,47 @@ async function run() {
   });
   await f.service.handleWebhook(Buffer.from('{}'), 'valid');
   assert.equal(f.billing.get('user-1').subscriptionStatus, 'canceled');
+
+  const stale = fixture();
+  stale.billing.set('cakto-user', {
+    userId: 'cakto-user',
+    billingProvider: 'cakto',
+    stripeCustomerId: 'cus_stale',
+    stripeSubscriptionId: 'sub_stale',
+    subscriptionStatus: 'active',
+    subscriptionPlan: 'monthly',
+  });
+  stale.setWebhookEvent({
+    id: 'evt_stale_stripe_active',
+    type: 'customer.subscription.updated',
+    livemode: true,
+    data: { object: {
+      id: 'sub_stale', customer: 'cus_stale', status: 'active', current_period_end: 1790000000,
+      cancel_at_period_end: false, items: { data: [{ price: { id: 'price_month' } }] },
+    } },
+  });
+  await stale.service.handleWebhook(Buffer.from('{}'), 'valid');
+  assert.equal(stale.billing.get('cakto-user').billingProvider, 'cakto');
+  assert.equal(stale.billing.get('cakto-user').subscriptionPlan, 'monthly');
+
+  const staleLifetimeWebhook = fixture();
+  staleLifetimeWebhook.billing.set('user-lifetime', {
+    userId: 'user-lifetime', billingProvider: 'cakto', subscriptionStatus: 'active',
+    subscriptionPlan: 'annual', externalSubscriptionId: 'cakto-sub-current',
+  });
+  staleLifetimeWebhook.setWebhookEvent({
+    id: 'evt_stale_lifetime_checkout',
+    type: 'checkout.session.completed',
+    livemode: true,
+    data: { object: {
+      id: 'cs_stale_lifetime', client_reference_id: 'user-lifetime',
+      metadata: { userId: 'user-lifetime', plan: 'lifetime' },
+      customer: 'cus_stale_lifetime', status: 'complete', payment_status: 'paid',
+    } },
+  });
+  await staleLifetimeWebhook.service.handleWebhook(Buffer.from('{}'), 'valid');
+  assert.equal(staleLifetimeWebhook.billing.get('user-lifetime').billingProvider, 'cakto');
+  assert.equal(staleLifetimeWebhook.billing.get('user-lifetime').subscriptionPlan, 'annual');
 }
 
 run().then(() => console.log('stripe.service tests passed'));

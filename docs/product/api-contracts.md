@@ -674,6 +674,7 @@ Returns the canonical entitlement summary plus the server-owned offer catalog.
   "access": "pro",
   "source": "trial",
   "subscriptionStatus": null,
+  "provider": null,
   "plan": null,
   "periodEnd": null,
   "trialEndsAt": "2026-08-17T12:00:00.000Z",
@@ -689,34 +690,57 @@ Returns the canonical entitlement summary plus the server-owned offer catalog.
 
 ### `POST /billing/checkout`
 
-Accepts exactly `monthly`, `annual`, or `lifetime`. Recurring plans open a Stripe
-subscription Checkout; lifetime opens a one-time payment Checkout. The server
-uses the authenticated identity, configured Price IDs, metadata, and Stripe
-idempotency. Invalid or disabled offers never fall back silently to another plan.
+Accepts exactly `monthly`, `annual`, or `lifetime`. The provider is selected only
+by `BILLING_PROVIDER`: Cakto is primary and Stripe is an explicit contingency,
+never an automatic fallback. Cakto opens its hosted checkout with a server-created
+attempt token in `sck`; monthly and annual are subscriptions and lifetime is a
+one-time R$ 99 purchase. The authenticated identity owns the attempt.
 
 ```json
 { "email": "ana@example.com", "plan": "lifetime" }
 ```
 
+Response:
+
+```json
+{ "url": "https://pay.cakto.com.br/...", "verificationId": "uuid-da-tentativa" }
+```
+
 ### `GET /billing/checkout-session/:sessionId`
 
-Confirms that the Checkout belongs to the authenticated user and reports whether
-payment/subscription state is confirmed. A URL alone never activates access.
+Confirms that the provider-neutral checkout attempt belongs to the authenticated
+user and reports whether the server confirmed payment. The web app keeps the
+`verificationId` in session storage across the hosted checkout. A URL, redirect,
+email or client response alone never activates access.
 
 ### `POST /billing/portal`
 
-Creates a customer-portal session for the authenticated Stripe customer. Missing
-customers return `no_subscription`.
+Creates a customer-portal session only when Stripe was explicitly selected.
+Cakto does not expose a hosted buyer portal through this contract.
+
+### `POST /billing/cancel`
+
+Cancels renewal only for a Cakto subscription after an explicit `{ "confirm": true }`
+request. Lifetime purchases cannot be canceled through this route. Cancellation
+keeps access through `periodEnd`; refund and chargeback revoke the matching access.
 
 ### `POST /billing/webhook`
 
-Public only for Stripe delivery. It requires a valid `stripe-signature` over the
-raw body. Events are deduplicated by Stripe event ID and synchronize subscription,
-invoice, cancellation, and paid lifetime state transactionally.
+Legacy alias for Stripe delivery. `/billing/webhook/stripe` is the explicit Stripe
+route and requires a valid `stripe-signature` over the raw body.
+
+### `POST /billing/webhook/cakto`
+
+Public only for Cakto delivery. It compares the body `secret` in constant time,
+then retrieves the order from Cakto with OAuth and checks order, paid state, offer,
+product, amount and `sck` before writing access. Events are deduplicated by a
+provider-scoped canonical key. External Cakto IDs, checkout attempts and webhook
+ledgers are never returned by the privacy export.
 
 ## Privacy export additions
 
 The authenticated privacy export includes only the caller's billing/trial state,
 professional application, and referral benefit. It excludes Stripe customer,
-subscription and Price IDs; administrative verification notes; internal partner
-foreign keys; other users; and the Stripe webhook ledger.
+subscription and Price IDs; Cakto customer, subscription, order and offer IDs;
+checkout attempts and payment webhooks; administrative verification notes;
+internal partner foreign keys; and other users.

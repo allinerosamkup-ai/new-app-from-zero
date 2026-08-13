@@ -97,6 +97,11 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'stripeCustomerId',
       'stripeSubscriptionId',
       'priceId',
+      'billingProvider',
+      'externalCustomerId',
+      'externalSubscriptionId',
+      'externalOrderId',
+      'externalOfferId',
     ],
   },
   ProfessionalPartner: {
@@ -606,6 +611,8 @@ export const PRIVACY_EXPORT_EXCLUDED_MODELS = new Set<string>([
   // Stripe delivery ledger is internal payment infrastructure. It is not
   // user-scoped and raw processor events never belong in a privacy export.
   'StripeWebhookEvent',
+  'BillingCheckoutAttempt',
+  'BillingWebhookEvent',
 ]);
 
 export function classifyField(model: string, field: string): AllowlistMode | 'unknown' {

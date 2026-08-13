@@ -4,23 +4,15 @@ import Stripe from 'stripe';
 import type { PrismaClient } from '@app/database';
 
 import { sendSubscribeEvent } from './meta-capi.service';
+import type { BillingOffer, BillingPlan } from './billing-provider';
 
-export const BILLING_PLANS = ['monthly', 'annual', 'lifetime'] as const;
-export type BillingPlan = typeof BILLING_PLANS[number];
+const STRIPE_BILLING_PLANS: BillingPlan[] = ['monthly', 'annual', 'lifetime'];
 
 export type StripeServiceConfig = {
   appUrl: string;
   webhookSecret?: string;
   priceIds: Record<BillingPlan, string | undefined>;
   lifetimeEnabled: boolean;
-};
-
-export type BillingOffer = {
-  plan: BillingPlan;
-  amountCents: number;
-  currency: 'BRL';
-  billingPeriod: 'month' | 'year' | 'once';
-  enabled: boolean;
 };
 
 type StripeServiceDependencies = {
@@ -36,7 +28,7 @@ type CheckoutVerification = {
 };
 
 function isBillingPlan(value: unknown): value is BillingPlan {
-  return typeof value === 'string' && BILLING_PLANS.includes(value as BillingPlan);
+  return typeof value === 'string' && STRIPE_BILLING_PLANS.includes(value as BillingPlan);
 }
 
 function stripeId(value: unknown): string | null {
@@ -81,7 +73,7 @@ export class StripeService {
 
   private planForPrice(priceId: string | null): BillingPlan | null {
     if (!priceId) return null;
-    return BILLING_PLANS.find((plan) => this.config.priceIds[plan] === priceId) ?? null;
+    return STRIPE_BILLING_PLANS.find((plan) => this.config.priceIds[plan] === priceId) ?? null;
   }
 
   getOfferCatalog(): BillingOffer[] {
@@ -177,10 +169,12 @@ export class StripeService {
     if (plan === 'lifetime') {
       const confirmed = session.status === 'complete' && session.payment_status === 'paid';
       if (confirmed) {
-        await this.prisma.billingAccount.upsert({
+        const account = await this.prisma.billingAccount.findUnique({ where: { userId } });
+        if (account?.billingProvider !== 'cakto') await this.prisma.billingAccount.upsert({
           where: { userId },
           create: {
             userId,
+            billingProvider: 'stripe',
             stripeCustomerId: stripeId(session.customer),
             subscriptionStatus: 'active',
             subscriptionPlan: 'lifetime',
@@ -189,6 +183,7 @@ export class StripeService {
             cancelAtPeriodEnd: false,
           },
           update: {
+            billingProvider: 'stripe',
             stripeCustomerId: stripeId(session.customer) ?? undefined,
             subscriptionStatus: 'active',
             subscriptionPlan: 'lifetime',
@@ -240,6 +235,7 @@ export class StripeService {
         : null;
     const userId = account?.userId ?? metadataUserId;
     if (!userId || !plan) return null;
+    if (account?.billingProvider === 'cakto') return userId;
 
     const currentPeriodEnd = unixDate(
       subscription.current_period_end ?? item?.current_period_end,
@@ -248,6 +244,7 @@ export class StripeService {
       where: { userId },
       create: {
         userId,
+        billingProvider: 'stripe',
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         subscriptionStatus: subscription.status,
@@ -257,6 +254,7 @@ export class StripeService {
         cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
       },
       update: {
+        billingProvider: 'stripe',
         stripeCustomerId: customerId ?? undefined,
         stripeSubscriptionId: subscriptionId ?? undefined,
         subscriptionStatus: subscription.status,
@@ -278,10 +276,13 @@ export class StripeService {
       || session.payment_status !== 'paid'
     ) return null;
 
+    const account = await client.billingAccount.findUnique({ where: { userId } });
+    if (account?.billingProvider === 'cakto') return userId;
     await client.billingAccount.upsert({
       where: { userId },
       create: {
         userId,
+        billingProvider: 'stripe',
         stripeCustomerId: stripeId(session.customer),
         subscriptionStatus: 'active',
         subscriptionPlan: 'lifetime',
@@ -290,6 +291,7 @@ export class StripeService {
         cancelAtPeriodEnd: false,
       },
       update: {
+        billingProvider: 'stripe',
         stripeCustomerId: stripeId(session.customer) ?? undefined,
         subscriptionStatus: 'active',
         subscriptionPlan: 'lifetime',
@@ -311,6 +313,7 @@ export class StripeService {
         ? await client.billingAccount.findUnique({ where: { stripeCustomerId: customerId } })
         : null;
     if (!account) return null;
+    if (account.billingProvider === 'cakto') return account.userId;
     await client.billingAccount.update({
       where: { userId: account.userId },
       data: { subscriptionStatus: status },
@@ -410,21 +413,21 @@ export class StripeService {
   }
 }
 
-export function createStripeServiceFromEnv(prisma: PrismaClient): StripeService {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  const lifetimePriceId = process.env.STRIPE_PRICE_ID_LIFETIME;
+export function createStripeServiceFromEnv(prisma: PrismaClient, env: NodeJS.ProcessEnv = process.env): StripeService {
+  const secretKey = env.STRIPE_SECRET_KEY;
+  const lifetimePriceId = env.STRIPE_PRICE_ID_LIFETIME;
   return new StripeService({
     prisma,
     stripe: secretKey ? new Stripe(secretKey, { apiVersion: '2026-07-29.dahlia' }) : null,
     config: {
-      appUrl: process.env.APP_URL || 'https://airia.pro',
-      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+      appUrl: env.APP_URL || 'https://airia.pro',
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET,
       priceIds: {
-        monthly: process.env.STRIPE_PRICE_ID,
-        annual: process.env.STRIPE_PRICE_ID_ANNUAL,
+        monthly: env.STRIPE_PRICE_ID,
+        annual: env.STRIPE_PRICE_ID_ANNUAL,
         lifetime: lifetimePriceId,
       },
-      lifetimeEnabled: process.env.STRIPE_LIFETIME_ENABLED !== 'false' && Boolean(lifetimePriceId),
+      lifetimeEnabled: env.STRIPE_LIFETIME_ENABLED !== 'false' && Boolean(lifetimePriceId),
     },
   });
 }

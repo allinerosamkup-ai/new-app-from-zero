@@ -10,12 +10,14 @@ const checkinName = '20260731120000_unify_checkin_signals.sql';
 const authProfileName = '20260801002000_ensure_auth_profiles.sql';
 const objectiveRecoveryName = '20260801163000_add_objective_action_recovery_claims.sql';
 const billingPartnersName = '20260810130000_add_billing_trials_and_professional_partners.sql';
+const caktoBillingName = '20260813143000_add_provider_neutral_billing.sql';
 const rlsIndex = migrations.indexOf(rlsName);
 const canonicalIndex = migrations.indexOf(canonicalName);
 const checkinIndex = migrations.indexOf(checkinName);
 const authProfileIndex = migrations.indexOf(authProfileName);
 const objectiveRecoveryIndex = migrations.indexOf(objectiveRecoveryName);
 const billingPartnersIndex = migrations.indexOf(billingPartnersName);
+const caktoBillingIndex = migrations.indexOf(caktoBillingName);
 
 assert.ok(rlsIndex >= 0 && canonicalIndex >= 0 && rlsIndex < canonicalIndex,
   'the legacy memory RLS migration runs before the canonical migration creates memory_embeddings');
@@ -27,6 +29,8 @@ assert.ok(objectiveRecoveryIndex > authProfileIndex,
   'objective recovery claims must run after profile repair');
 assert.ok(billingPartnersIndex > objectiveRecoveryIndex,
   'billing and professional partner tables must run after the existing profile-owned schema');
+assert.ok(caktoBillingIndex > billingPartnersIndex,
+  'provider-neutral billing must run after the original Stripe billing tables');
 
 const legacyRls = fs.readFileSync(path.join(migrationsDir, rlsName), 'utf8');
 assert.match(legacyRls, /to_regclass\('public\.memory_embeddings'\) is not null/i,
@@ -38,6 +42,7 @@ const checkinMigration = fs.readFileSync(path.join(migrationsDir, checkinName), 
 const authProfileMigration = fs.readFileSync(path.join(migrationsDir, authProfileName), 'utf8');
 const objectiveRecoveryMigration = fs.readFileSync(path.join(migrationsDir, objectiveRecoveryName), 'utf8');
 const billingPartnersMigration = fs.readFileSync(path.join(migrationsDir, billingPartnersName), 'utf8');
+const caktoBillingMigration = fs.readFileSync(path.join(migrationsDir, caktoBillingName), 'utf8');
 const deployScript = fs.readFileSync(
   path.resolve(__dirname, '../../../../deploy/airia/deploy.sh'),
   'utf8',
@@ -62,6 +67,7 @@ const deployedCheckinIndex = deployScript.indexOf(checkinName);
 const deployedAuthProfileIndex = deployScript.indexOf(authProfileName);
 const deployedObjectiveRecoveryIndex = deployScript.indexOf(objectiveRecoveryName);
 const deployedBillingPartnersIndex = deployScript.indexOf(billingPartnersName);
+const deployedCaktoBillingIndex = deployScript.indexOf(caktoBillingName);
 assert.ok(
   deployedCheckinIndex >= 0
     && deployedAuthProfileIndex > deployedCheckinIndex
@@ -69,6 +75,8 @@ assert.ok(
     && deployedBillingPartnersIndex > deployedObjectiveRecoveryIndex,
   'deploy must apply billing partners after its database prerequisites',
 );
+assert.ok(deployedCaktoBillingIndex > deployedBillingPartnersIndex,
+  'deploy must apply provider-neutral billing after the original billing schema');
 assert.match(objectiveRecoveryMigration, /create table if not exists public\.objective_action_recovery_claims/i);
 for (const column of [
   'id',
@@ -106,5 +114,13 @@ assert.doesNotMatch(billingPartnersMigration, /drop table|truncate/i,
   'billing migration must preserve existing user and subscription history');
 assert.match(billingPartnersMigration, /alter table public\.stripe_webhook_events enable row level security/i);
 assert.match(billingPartnersMigration, /revoke all on table public\.stripe_webhook_events from anon, authenticated/i);
+assert.doesNotMatch(caktoBillingMigration, /drop table|drop column|truncate|delete\s+from/i,
+  'Cakto migration must be additive and preserve billing history');
+for (const table of ['billing_checkout_attempts', 'billing_webhook_events']) {
+  assert.match(caktoBillingMigration, new RegExp(`create table if not exists public\\.${table}`, 'i'));
+  assert.match(caktoBillingMigration, new RegExp(`alter table public\\.${table} enable row level security`, 'i'));
+  assert.match(caktoBillingMigration, new RegExp(`revoke all on table public\\.${table} from anon, authenticated`, 'i'));
+  assert.match(caktoBillingMigration, new RegExp(`grant select, insert, update, delete on table public\\.${table} to service_role`, 'i'));
+}
 
 console.log('migration chain safety tests passed');

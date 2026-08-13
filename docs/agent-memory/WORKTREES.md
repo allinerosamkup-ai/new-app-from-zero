@@ -79,6 +79,7 @@ removida.
 | `.worktrees/repair-voice` | `codex/voice-overlap-repair` / `4ef1d04` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/routine-builder` | `codex/routine-builder` / `59778e5` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `a73c2b4` | `READY_TO_MERGE` | Codex: código e Stripe live configurados; 102 suítes backend, 56 arquivos/423 testes web, typecheck e builds aprovados. Integrar no `master`, publicar, validar três Checkouts sem cobrança e registrar o bloqueio cadastral de pagamentos/repasses da Stripe |
+| `.worktrees/onboarding-stripe-partners` | `codex/cakto-billing` / `85e73a8` | `INTEGRATION_PASS` | Codex: migração Cakto isolada sobre `origin/master`; 109 suítes backend, 57 arquivos/435 testes web e todos os builds aprovados. Aguardar meta-verificação, publicação e validação live; cadastro financeiro Cakto ainda depende da titular |
 
 Nenhuma entrada acima deve ser removida automaticamente. A limpeza é uma tarefa
 separada: revisar status/diff, confirmar que não há commit único, integrar ou

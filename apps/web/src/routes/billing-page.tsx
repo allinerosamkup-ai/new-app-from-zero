@@ -25,6 +25,14 @@ type ConfirmationDependencies = {
 };
 
 const wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+const VERIFICATION_STORAGE_KEY = "airia:billing:verification";
+
+export function storeCheckoutVerification(
+  verificationId: string,
+  storage: Pick<Storage, "setItem"> = window.sessionStorage,
+) {
+  storage.setItem(VERIFICATION_STORAGE_KEY, verificationId);
+}
 
 export async function confirmCheckoutSession(
   sessionId: string,
@@ -83,10 +91,15 @@ export default function BillingPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState<string | null>(null);
   const [verification, setVerification] = useState<"idle" | "pending" | "confirmed" | "delayed" | "error">("idle");
-  const checkoutAttemptKey = useRef<string | null>(null);
+  const checkoutAttempt = useRef<{ plan: BillingPlan; key: string } | null>(null);
+  const checkoutInFlight = useRef(false);
 
-  const sessionId = new URLSearchParams(window.location.search).get("session_id");
+  const sessionId = new URLSearchParams(window.location.search).get("session_id")
+    ?? window.sessionStorage.getItem(VERIFICATION_STORAGE_KEY);
 
   useEffect(() => {
     if (!enabledOffers.some((offer) => offer.plan === selectedPlan) && enabledOffers[0]) {
@@ -102,6 +115,7 @@ export default function BillingPage() {
       .then((result) => {
         if (!alive) return;
         if (result.confirmed) {
+          window.sessionStorage.removeItem(VERIFICATION_STORAGE_KEY);
           setVerification("confirmed");
           trackEvent("subscription_started", { plan: result.plan });
           subscription.refresh();
@@ -111,27 +125,46 @@ export default function BillingPage() {
       })
       .catch(() => { if (alive) setVerification("error"); });
     return () => { alive = false; };
-    // The checkout session belongs to the URL; refresh is intentionally not a trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   async function handleCheckout() {
+    if (checkoutInFlight.current) return;
+    checkoutInFlight.current = true;
     setCheckoutLoading(true);
     setCheckoutError(null);
     trackEvent("upgrade_clicked", { plan: selectedPlan });
     try {
-      checkoutAttemptKey.current ??= globalThis.crypto.randomUUID();
+      if (!checkoutAttempt.current || checkoutAttempt.current.plan !== selectedPlan) {
+        checkoutAttempt.current = { plan: selectedPlan, key: globalThis.crypto.randomUUID() };
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const result = await api.post("/billing/checkout", {
         email: session?.user?.email,
         plan: selectedPlan,
-        attemptKey: checkoutAttemptKey.current,
-      }) as { url: string };
+        attemptKey: checkoutAttempt.current.key,
+      }) as { url: string; verificationId: string };
+      storeCheckoutVerification(result.verificationId);
       window.location.assign(result.url);
     } catch {
       setCheckoutError("checkout_failed");
     } finally {
       setCheckoutLoading(false);
+      checkoutInFlight.current = false;
+    }
+  }
+
+  async function handleCancel() {
+    setCancelLoading(true);
+    setCancelMessage(null);
+    try {
+      await api.post("/billing/cancel", { confirm: true });
+      setCancelConfirm(false);
+      setCancelMessage("canceled");
+      subscription.refresh();
+    } catch {
+      setCancelMessage("error");
+    } finally {
+      setCancelLoading(false);
     }
   }
 
@@ -258,10 +291,35 @@ export default function BillingPage() {
           </section>
         )}
 
-        {paid && (
+        {paid && subscription.provider === "stripe" && (
           <button type="button" onClick={handlePortal} disabled={portalLoading} style={{ minHeight: 48, borderRadius: 999, border: "1px solid var(--warm-border)", background: "#fff", fontWeight: 800 }}>
             <ExternalLink size={15} /> {portalLoading ? l("Abrindo...", "Opening...") : l("Gerenciar pagamento", "Manage payment")}
           </button>
+        )}
+
+        {paid && subscription.provider === "cakto" && subscription.plan !== "lifetime" && (
+          <section style={{ display: "grid", gap: 10 }}>
+            {!cancelConfirm ? (
+              <button type="button" onClick={() => setCancelConfirm(true)} style={{ minHeight: 48, borderRadius: 999, border: "1px solid var(--warm-border)", background: "#fff", fontWeight: 800 }}>
+                {l("Cancelar renovação", "Cancel renewal")}
+              </button>
+            ) : (
+              <div role="alert" style={{ padding: 16, borderRadius: 16, background: "#fff", border: "1px solid var(--warm-border)" }}>
+                <strong>{l("Confirmar cancelamento da renovação?", "Confirm renewal cancellation?")}</strong>
+                <p>{l("Seu acesso continua até o fim do período já pago.", "Your access continues through the paid period.")}</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={handleCancel} disabled={cancelLoading}>
+                    {cancelLoading ? l("Cancelando...", "Canceling...") : l("Confirmar cancelamento", "Confirm cancellation")}
+                  </button>
+                  <button type="button" onClick={() => setCancelConfirm(false)} disabled={cancelLoading}>
+                    {l("Manter assinatura", "Keep subscription")}
+                  </button>
+                </div>
+              </div>
+            )}
+            {cancelMessage === "canceled" && <p role="status">{l("Renovação cancelada. Seu acesso continua até o fim do período pago.", "Renewal canceled. Access continues through the paid period.")}</p>}
+            {cancelMessage === "error" && <p role="alert">{l("Não consegui cancelar agora. Tente novamente.", "Cancellation failed. Try again.")}</p>}
+          </section>
         )}
 
         <button type="button" onClick={() => navigate("/")} style={{ minHeight: 44, border: 0, background: "none", color: "var(--text-2)", fontWeight: 800, cursor: "pointer" }}>

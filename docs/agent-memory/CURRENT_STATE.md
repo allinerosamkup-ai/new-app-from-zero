@@ -2,7 +2,91 @@
 
 ## Status
 
-`PR #10 — gates locais, IA real, migração segura e E2E autenticado aprovados; sem deploy`
+`IN PROGRESS — migração da cobrança para Cakto, com Stripe preservado como contingência`
+
+## Sprint Contract — Cakto
+
+- **Implementar:** Cakto como provedor principal dos planos mensal, anual e
+  vitalício de R$ 99; Checkout real; confirmação no servidor; webhooks
+  idempotentes; sincronização de acesso; gestão/cancelamento adaptada às
+  capacidades da Cakto; configuração segura e publicação validada.
+- **Não alterar:** fluxos de Objetivos, Planner, Aura, Check-in e mobile; regra
+  de acesso já comprada; histórico Stripe; preços mensal/anual já aprovados.
+- **Aceite:** a mesma UI de cobrança oferece os três planos; o backend cria
+  Checkout Cakto live; nenhum parâmetro de URL libera acesso; assinatura e
+  vitalício convergem no estado canônico; falhas aparecem sem sucesso simulado;
+  segredos não entram no Git; testes, builds, deploy, SHA e fluxo autenticado
+  passam com evidência.
+- **Busca/reuso:** fluxo Stripe e rotas genéricas atuais; documentação oficial
+  Cakto; SDKs/pacotes oficiais quando existirem; candidatos, adaptação e
+  rejeições serão registrados antes de código novo.
+- **Papéis:** coordenador nesta sessão; pesquisa e arquitetura em agentes
+  horizontais; executor, verificador, verificador de integração e
+  meta-verificador com handoffs persistidos e notas mínimas de 8/10.
+
+## Execução e handoffs — 2026-08-13
+
+- **Busca/reuso registrada:** foram inspecionados o provedor Stripe, as rotas
+  genéricas `/api/billing/*`, `BillingAccessService`, `/comecar`, a tela única
+  `/billing`, schema, migrações, deploy e histórico/worktrees. Foram consultados
+  os contratos oficiais Cakto de autenticação, produtos, ofertas, pedidos,
+  assinaturas, cancelamento e webhooks. Não existe SDK oficial necessário para
+  este fluxo; foi mantido `fetch` nativo, sem dependência nova.
+- **Escolha:** preservar a superfície genérica e trocar somente o adaptador de
+  pagamento. Cakto é principal por `BILLING_PROVIDER=cakto`; Stripe só pode ser
+  selecionado explicitamente e eventos Stripe não substituem uma conta Cakto.
+- **Configuração externa criada:** produtos de assinatura e vitalício, ofertas
+  mensal R$ 29,90, anual R$ 249 e vitalícia R$ 99, checkout hospedado e webhook
+  de produção para os dois produtos. Nenhuma credencial real foi gravada no Git.
+- **EXECUTOR → VERIFICADOR:** primeira implementação passou testes focados e
+  builds, mas o verificador independente reprovou com **4/10**. Ele encontrou
+  incompatibilidade com o pedido oficial, assinatura tratada como objeto,
+  evento Stripe ativo capaz de sobrescrever Cakto e renovação recusada ignorada.
+- **CORREÇÃO:** validação passou a usar `baseAmount`, produto, tipo, `checkoutUrl`
+  e `sck` do pedido oficial; assinaturas são reconsultadas pelo ID oficial antes
+  de ativar/cancelar; cancelamento e renovação recusada exigem a assinatura
+  atualmente ligada à conta; evento Stripe nunca rebaixa a posse da Cakto;
+  tentativas idempotentes não podem trocar de plano. Descontos permanecem
+  compatíveis porque a validação usa o valor-base da oferta, não o total com
+  taxas ou desconto.
+- **VERIFICADOR → CORREÇÃO 2:** a reverificação subiu para **5/10**, mas ainda
+  reprovou ao encontrar Checkout vitalício Stripe sobrescrevendo Cakto,
+  cancelamento concorrente atualizando uma assinatura nova e chave de tentativa
+  mantida após troca de plano. Todos os caminhos vitalícios Stripe agora
+  preservam contas Cakto; a atualização pós-cancelamento exige o mesmo provedor
+  e ID de assinatura; a UI gera nova chave somente quando o plano muda e reutiliza
+  a anterior em retentativa do mesmo plano. Os três casos viraram regressões
+  automatizadas e passaram.
+- **VERIFICADOR final → INTEGRAÇÃO:** terceira rodada independente aprovou com
+  **9/10**, sem falha crítica ou alta. Foram reproduzidos os contratos oficiais,
+  todos os caminhos stale Stripe, cancelamento concorrente, troca de plano,
+  renovação recusada, reembolso/chargeback e rejeição de segredo inválido.
+- **INTEGRAÇÃO → CORREÇÃO 3:** o gate integral executou 109 suítes backend e
+  57 arquivos/435 testes web com sucesso, mas reprovou com **7/10** porque uma
+  confirmação Cakto positiva antiga ainda podia substituir uma compra Cakto
+  nova. A ativação agora só mantém a mesma compra/assinatura ou aceita uma
+  tentativa criada estritamente depois do estado atual; vitalício nunca é
+  rebaixado por assinatura recorrente. Eventos positivos antigos e transição
+  nova válida ganharam regressões e passaram, junto do build backend.
+- **INTEGRAÇÃO final → META-VERIFICAÇÃO:** reverificação aprovada com **9/10**,
+  sem falha crítica ou alta. Evidência integral preservada: 109 suítes backend,
+  57 arquivos/435 testes web, Prisma/database/backend/web builds, typecheck,
+  schema, migração, RLS, privacidade e ausência de credenciais literais.
+- **Evidência na branch limpa:** o commit funcional foi isolado sobre
+  `origin/master` em `codex/cakto-billing`; 109 suítes backend e 57 arquivos/435
+  testes web passaram novamente. Prisma generate, database build, backend
+  build, web typecheck e build/PWA também passaram. Seguem pendentes
+  meta-verificação, publicação, segredo seguro em produção, webhook real e E2E
+  autenticado.
+- **Bloqueio externo conhecido:** a Cakto ainda exige que a titular conclua os
+  dados legais/financeiros sensíveis no painel. Esses dados não podem ser
+  inferidos pelo agente e a capacidade real de receber/repassar valores não será
+  declarada pronta antes dessa conclusão.
+
+## Histórico preservado
+
+- PR #10: gates locais, IA real, migração segura e E2E autenticado aprovados;
+  sem deploy nesta linha de trabalho.
 
 ## Objetivo
 

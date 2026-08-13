@@ -87,6 +87,16 @@ async function run() {
     resolveAccess({ subscriptionStatus: 'past_due', trialEndsAt: new Date(NOW.getTime() - DAY_MS) }, NOW).access,
     'free',
   );
+  const canceledPaidPeriod = resolveAccess({
+    subscriptionStatus: 'canceled',
+    subscriptionPlan: 'monthly',
+    currentPeriodEnd: new Date(NOW.getTime() + DAY_MS),
+  }, NOW);
+  assert.equal(canceledPaidPeriod.source, 'paid', 'canceled renewal keeps access through the paid period');
+  assert.equal(resolveAccess({
+    subscriptionStatus: 'canceled', currentPeriodEnd: new Date(NOW.getTime() - DAY_MS),
+  }, NOW).source, 'free');
+  assert.equal(resolveAccess({ subscriptionStatus: 'active', subscriptionPlan: 'lifetime' }, NOW).source, 'paid');
 
   const standard = createPrismaMock();
   const standardService = new BillingAccessService(standard.client);
