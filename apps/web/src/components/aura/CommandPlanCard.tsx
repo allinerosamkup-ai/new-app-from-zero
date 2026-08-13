@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 
 import { AuraButtonV2 } from "../editorial/AuraButtonV2";
 import type { AuraCommandOperation, AuraCommandPlan } from "../../features/aura/command-types";
+import { FEATURES } from "../../config/features";
 
 type Props = {
   plan: AuraCommandPlan;
@@ -53,7 +54,12 @@ function operationTitle(operation: AuraCommandOperation, t: TFunction) {
 export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const selected = plan.operations.filter((operation) => operation.selected);
+  const visibleOperations = plan.operations.filter((operation) => (
+    !(operation.type === "create_habit" && !FEATURES.habits)
+    && !(operation.type === "create_planner_task" && !FEATURES.planner)
+    && !(operation.type === "create_calendar_event" && !FEATURES.planner)
+  ));
+  const selected = visibleOperations.filter((operation) => operation.selected);
   const canApply = plan.executionPolicy !== "clarification"
     && selected.some((operation) => operation.status !== "applied")
     && !applying;
@@ -86,7 +92,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
           </p>
         </div>
         <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-          {plan.operations.length} {plan.operations.length === 1 ? t("aura.commandPlan.action", "ação") : t("aura.commandPlan.actions", "ações")}
+          {visibleOperations.length} {visibleOperations.length === 1 ? t("aura.commandPlan.action", "ação") : t("aura.commandPlan.actions", "ações")}
         </span>
       </div>
 
@@ -97,7 +103,7 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
       )}
 
       <div style={{ display: "grid", gap: 8 }}>
-        {plan.operations.map((operation) => {
+        {visibleOperations.map((operation) => {
           const payload = operation.payload;
           const title = typeof payload.title === "string" ? payload.title : "";
           const dateKey = typeof payload.date === "string" ? "date" : typeof payload.localDate === "string" ? "localDate" : null;

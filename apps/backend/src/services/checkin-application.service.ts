@@ -151,6 +151,7 @@ export class PrismaCheckinApplicationRepository implements CheckinApplicationRep
   async upsertBySlot(input: CheckinPersistenceInput): Promise<PersistedCheckin> {
     const values = {
       recordedAt: input.recordedAt,
+      checkinPurpose: input.checkinPurpose ?? 'window',
       moodScore: input.moodScore,
       energyScore: input.energyScore,
       clarityScore: input.clarityScore ?? null,

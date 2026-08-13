@@ -11,7 +11,7 @@ export type RiskSafety = {
 
 type SafetyProtocolCardProps = {
   riskSafety?: RiskSafety | null;
-  surface: "checkin_result" | "aura_chat" | "journal";
+  surface: "checkin_result" | "aura_chat" | "journal" | "home" | "insights" | "daily_summary" | "goals";
   onAdaptDay?: () => void;
 };
 

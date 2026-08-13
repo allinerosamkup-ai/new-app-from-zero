@@ -15,7 +15,6 @@ import {
 } from "../features/story-onboarding/reading";
 import {
   BLOCKERS,
-  CAPACITY,
   COMMITMENT,
   COMMITMENT_REPLY,
   DRAINS,
@@ -27,7 +26,6 @@ import {
   RESTORERS,
   STORY_STEPS,
 } from "../features/story-onboarding/steps";
-import { buildFirstCheckin } from "../features/story-onboarding/first-checkin";
 import "../features/story-onboarding/story.css";
 
 /**
@@ -216,7 +214,6 @@ export default function StoryOnboardingPage() {
    */
   const [goalTitles, setGoalTitles] = useState<string[]>([]);
   const [freeGoal, setFreeGoal] = useState("");
-  const [capacity, setCapacity] = useState<string | null>(null);
   const [commitment, setCommitment] = useState<string | null>(null);
 
   // Resultado real do motor de interpretação.
@@ -284,7 +281,7 @@ export default function StoryOnboardingPage() {
       try {
         const response = await api.post("/ai/suggest", {
           type: "goal-subtasks",
-          context: { goalTitle: title, existingSubtasks: [], capacity, userStatements: statements },
+          context: { goalTitle: title, existingSubtasks: [], userStatements: statements },
         }) as { suggestion?: { items?: string[]; question?: string | null; resultDefinition?: string | null } };
 
         const suggestion = response.suggestion ?? {};
@@ -308,7 +305,7 @@ export default function StoryOnboardingPage() {
     setSteps(principal?.steps ?? []);
     setQuestion(principal?.question ?? null);
     setThinking(false);
-  }, [answers.feeling, capacity]);
+  }, [answers.feeling]);
 
   const requestCompletion = useCallback(async () => {
     setCompletionLoading(true);
@@ -379,12 +376,9 @@ export default function StoryOnboardingPage() {
       }));
       marcar(2);
 
-      // Check-in com o que ela respondeu, não com um número de enfeite. O humor
-      // fixo em 5 que ficava aqui era dado inventado entrando no motor de ciclo —
-      // exatamente o que o app promete não fazer.
-      try {
-        await comPrazo(api.post("/checkins", buildFirstCheckin(answers, capacity)));
-      } catch { /* check-in inicial é bônus de calibragem, não requisito */ }
+      // Onboarding gera contexto de perfil, não um check-in. Uma sensação
+      // qualitativa não é observação confirmada nas escalas e não pode alterar
+      // baseline, cobertura ou confiança do padrão.
       marcar(3);
     };
 
@@ -401,7 +395,7 @@ export default function StoryOnboardingPage() {
     } finally {
       setBuildingReady(true);
     }
-  }, [answers, capacity, goalTitles, plans, refreshData, requestCompletion]);
+  }, [answers, goalTitles, plans, refreshData, requestCompletion]);
 
   // Efeitos de passo: interpretar no 'understanding', gravar no 'building'.
   useEffect(() => {
@@ -455,7 +449,7 @@ export default function StoryOnboardingPage() {
       case "restorers": return true;
       case "preference": return answers.listPreference !== null;
       case "goal": return goalTitles.length > 0;
-      case "checkin": return capacity !== null;
+      case "checkin": return true;
       case "commitment": return commitment !== null;
       default: return true;
     }
@@ -775,33 +769,14 @@ export default function StoryOnboardingPage() {
 
         {step === "checkin" && (<>
           <p className="story-eyebrow">{l("Todo dia vai ser assim", "Every day looks like this")}</p>
-          <h1 className="story-title">{l("O que cabe hoje?", "What fits today?")}</h1>
-          <p className="story-body">{l("Essa pergunta define o tamanho do que eu vou te propor. Nos dias ruins eu diminuo.", "This sets the size of what I propose. On bad days I shrink it.")}</p>
-          <div className="story-choices">
-            {CAPACITY.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className="story-choice"
-                aria-pressed={capacity === option.id}
-                onClick={() => setCapacity(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
+          <h1 className="story-title">{l("Eu vou aprender o seu ritmo", "I will learn your rhythm")}</h1>
+          <p className="story-body">{l("Você não precisa decidir o tamanho do seu dia. A Airia cruza seus sinais, seu contexto e seus objetivos antes de propor um próximo passo.", "You do not need to decide the size of your day. Airia connects your signals, context, and goals before proposing a next step.")}</p>
         </>)}
 
         {step === "nextAction" && (<>
           <p className="story-eyebrow">{l("Então hoje", "So today")}</p>
           <h1 className="story-title">{steps[0] ?? l("Vamos começar pelo primeiro passo.", "Let us start with the first step.")}</h1>
-          <p className="story-body">
-            {capacity === "quick"
-              ? l("Você disse que hoje cabe pouco. Então é só isso — e isso já conta.", "You said today is light. So that is all — and it already counts.")
-              : capacity === "heavy"
-                ? l("Você disse que hoje aguenta mais. Se sobrar gás, o próximo passo já está esperando.", "You said today can take more. If there is fuel left, the next step is waiting.")
-                : l("Um passo. Se render, tem mais. Se não render, tudo bem.", "One step. If it flows, there is more. If not, that is fine.")}
-          </p>
+          <p className="story-body">{l("Quando houver sinais suficientes, a Airia propõe um passo real. Você pode confirmar, corrigir ou vetar.", "When there are enough signals, Airia proposes a real step. You can confirm, correct, or veto it.")}</p>
         </>)}
 
         {step === "done" && (<>

@@ -7,8 +7,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
 import { trackEvent } from "../lib/track";
-import { saveNextAction } from "../utils/save-next-action";
 import { useToast } from "../components/Toast";
+import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
+import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
 import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { AiriaMascot } from "../components/airia/AiriaMascot";
@@ -157,6 +158,7 @@ export function InsightsPage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
   const { state, refreshData } = useAuraStore();
+  const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
 
   // Refresh on mount and on page focus (catches returning from check-in)
   useEffect(() => {
@@ -174,6 +176,7 @@ export function InsightsPage() {
   const [weeklyQuestion, setWeeklyQuestion] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<string[]>([]);
   const [taskAdded, setTaskAdded] = useState(false);
+  const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
   const [period, setPeriod] = useState<PeriodPreset>('7d');
   // Intervalo personalizado: só é usado quando period === 'custom'.
   const [customStart, setCustomStart] = useState('');
@@ -219,9 +222,10 @@ export function InsightsPage() {
   );
   const phaseHistory = useMemo(() => computePhaseHistory(allHistory, 30), [allHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
-  const currentPhaseLabel = cycleReport.phase !== "insufficient_data"
+  // O seletor muda o relatório histórico, nunca a leitura atual da Airia.
+  const currentPhaseLabel = canonicalReading?.currentState.phase ?? (cycleReport.phase !== "insufficient_data"
     ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)
-    : cycleReport.phaseLabel;
+    : cycleReport.phaseLabel);
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -438,27 +442,27 @@ export function InsightsPage() {
   }
 
   function applyAction() {
+    if (canonicalReading?.decision) {
+      void applyCanonicalDecision();
+      return;
+    }
     if (!aiInsight) return;
     if (!insightDecision?.canSaveToPlanner) {
       showError(insightDecision?.reason ?? "Ainda falta base para transformar isso em tarefa.");
       return;
     }
-    // Sem hora: o insight vira ação sem data nas Próximas ações, que é onde a
-    // pessoa realmente vai reencontrar isso.
-    saveNextAction({
-      text: aiInsight.actionTitle,
-      razao: "Ação confirmada a partir de um padrão dos Insights.",
-      source: "insights",
-    })
-      .then((result) => {
-        setTaskAdded(true);
-        showSuccess(result.created
-          ? "Entrou nas suas proximas acoes."
-          : "Isso ja estava nas suas proximas acoes.");
-      })
-      .catch((error) => {
-        showError(error instanceof Error ? error.message : "Nao foi possivel salvar a acao.");
-      });
+    // Padrões explicam e calibram; não criam tarefa por fora do contrato.
+    setTaskAdded(true);
+    navigate("/goals");
+  }
+
+  async function applyCanonicalDecision() {
+    const decision = canonicalReading?.decision;
+    if (!decision || canonicalFeedbackPending) return;
+    setCanonicalFeedbackPending(true);
+    const saved = await sendAiriaDecisionFeedback(decision.id, "accepted", "insights");
+    if (saved) await reloadCanonicalReading();
+    setCanonicalFeedbackPending(false);
   }
 
   function exportCSV() {
@@ -524,6 +528,16 @@ export function InsightsPage() {
   return (
     <div className="insights-page">
       <div className="screen-content">
+        <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="insights" />
+
+        {canonicalReading?.decision && (
+          <section style={{ marginBottom: 12, padding: 14, borderRadius: 16, background: "rgba(255,253,249,.97)", border: "1.5px solid rgba(143,192,164,.32)" }}>
+            <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Proposta atual da Airia", "Airia's current proposal")}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--text-1)" }}>{canonicalReading.decision.title}</p>
+            <p style={{ margin: "6px 0 10px", fontSize: 12, lineHeight: 1.45, color: "var(--text-2)" }}>{canonicalReading.decision.reason}</p>
+            {canonicalReading.decision.requiresConfirmation && <AuraButtonV2 className="btn btn-primary btn-full" disabled={canonicalFeedbackPending} onClick={() => void applyCanonicalDecision()}>{l("Faz sentido", "That fits")}</AuraButtonV2>}
+          </section>
+        )}
 
         {/* ── Header ── */}
         <div className="aura-page-header insights-header">

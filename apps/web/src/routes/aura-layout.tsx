@@ -149,10 +149,7 @@ export function AuraLayout() {
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [showOnboardingPrompt, setShowOnboardingPrompt] = useState(false);
 
-  useHabitReminders(state.habits ?? [], state.tasks ?? [], state.notificationPreferences, {
-    morning: state.morningCheckinTime,
-    evening: state.eveningCheckinTime,
-  });
+  useHabitReminders(state.habits ?? [], state.tasks ?? [], state.notificationPreferences);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
+import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
+import { useAiriaReading } from "../lib/airia-reading";
 
 type CaptureItem = { id?: string; title: string; done: boolean };
 type Capture = {
@@ -19,6 +21,7 @@ type Capture = {
 export function CapturesPage() {
   const { t } = useTranslation();
   const { showError } = useToast();
+  const { reading } = useAiriaReading();
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -60,6 +63,7 @@ export function CapturesPage() {
         <p style={{ margin: "7px 0 0", color: "var(--text-2)", fontSize: 13, lineHeight: 1.5 }}>
           {t("captures.subtitle", "Tudo o que você pediu para a Airia guardar, sem misturar com metas ou agenda.")}
         </p>
+        <SafetyProtocolCard riskSafety={reading?.riskSafety} surface="daily_summary" />
       </header>
 
       <section style={{ maxWidth: 720, margin: "0 auto", display: "grid", gap: 10 }}>

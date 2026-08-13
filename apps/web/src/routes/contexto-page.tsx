@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../components/Toast";
 import { api } from "../lib/api";
 import { useLocalizedCopy } from "../i18n";
+import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
+import { useAiriaReading } from "../lib/airia-reading";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -67,6 +69,7 @@ export function ContextoPage() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
+  const { reading } = useAiriaReading();
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<KGStatus | null>(null);
   const [entities, setEntities] = useState<UserEntity[]>([]);
@@ -156,6 +159,7 @@ export function ContextoPage() {
       <p style={{ fontSize: 13, color: "var(--text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
         {l("A Airia aprende automaticamente do seu diário e check-ins. Você pode corrigir, apagar e marcar decisões como resolvidas.", "Airia learns automatically from your journal and check-ins. You can correct or delete patterns and mark decisions as resolved.")}
       </p>
+      <SafetyProtocolCard riskSafety={reading?.riskSafety} surface="daily_summary" />
 
       {/* Status compacto, sem botão */}
       {status && (

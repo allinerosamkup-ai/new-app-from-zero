@@ -91,13 +91,6 @@ export const GOAL_SHORTCUTS: Choice[] = [
   { id: 'Cuidar de uma pendência de saúde', label: 'Resolver algo de saúde' },
 ];
 
-/** Capacidade do dia — mesma pergunta do check-in diário. */
-export const CAPACITY: Choice[] = [
-  { id: 'quick', label: 'Algo rápido' },
-  { id: 'moderate', label: 'Moderado' },
-  { id: 'heavy', label: 'Mais trabalhoso' },
-];
-
 export const COMMITMENT: Choice[] = [
   { id: 'high', label: 'Muito. Quero que mude.' },
   { id: 'medium', label: 'Bastante, no meu ritmo.' },
@@ -143,6 +136,6 @@ export type StoryStepId = (typeof STORY_STEPS)[number];
 /** Telas que só mostram — sem entrada, avançam num toque. */
 export const READ_ONLY_STEPS = new Set<StoryStepId>([
   'welcome', 'problem', 'solution', 'reckoning', 'bridge', 'mirror',
-  'understanding', 'path', 'nextAction', 'done', 'building', 'outlook',
+  'understanding', 'path', 'checkin', 'nextAction', 'done', 'building', 'outlook',
   'offer',
 ]);

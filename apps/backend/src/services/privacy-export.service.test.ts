@@ -66,6 +66,8 @@ async function run() {
     objective: { findMany: async () => [{ id: 'goal-1', title: 'Dormir melhor' }] },
     habit: { findMany: async () => [{ id: 'habit-1', title: 'Agua', completions: [] }] },
     weeklyInsight: { findMany: async () => [{ id: 'insight-1', summary: 'Semana oscilou' }] },
+    airiaReading: { findMany: async () => [{ id: 'reading-1', currentState: { phase: 'Retomada' } }] },
+    airiaDecision: { findMany: async () => [{ id: 'airia-decision-1', status: 'accepted' }] },
     memoryEmbedding: { findMany: async () => [{ id: 'mem-1', content: 'preferencia registrada' }] },
     userMemory: { findMany: async () => [{ id: 'canonical-1', canonicalKey: 'routine.focus' }] },
     userMemoryEvidence: { findMany: async () => [{ id: 'evidence-1', memoryId: 'canonical-1' }] },
@@ -100,6 +102,8 @@ async function run() {
   assert.equal(firstHabit.title, 'Agua');
   assert.equal(firstPushSubscription.endpoint, 'push-endpoint');
   assert.equal(payload.data.canonicalMemories.length, 1);
+  assert.equal(payload.data.airia.readings.length, 1);
+  assert.equal(payload.data.airia.decisions.length, 1);
   assert.equal(payload.data.memoryEvidence.length, 1);
   assert.equal(payload.data.knowledgeGraph.entities.length, 1);
   assert.equal(payload.billing?.subscriptionPlan, 'annual');

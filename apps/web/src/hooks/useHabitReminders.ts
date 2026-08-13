@@ -2,8 +2,6 @@ import { useEffect, useRef } from 'react';
 import type { Habit, NotificationPreferences, Task } from '../features/aura/types';
 import { getHabitCompletionCount, getHabitTargetCount, isHabitCompleteForDate, isHabitDueOnDate } from '../features/aura/habit-helpers';
 import {
-  DEFAULT_EVENING_CHECKIN_TIME,
-  DEFAULT_MORNING_CHECKIN_TIME,
   DEFAULT_NOTIFICATION_PREFERENCES,
 } from '../features/aura/settings';
 import { getLocalDateKey } from '../utils/day-context';
@@ -29,7 +27,6 @@ export function useHabitReminders(
   habits: Habit[],
   tasks: Task[] = [],
   notificationPreferences: NotificationPreferences = DEFAULT_NOTIFICATION_PREFERENCES,
-  checkinTimes: { morning?: string; evening?: string } = {},
 ) {
   const firedRef = useRef<Set<string>>(new Set());
 
@@ -46,7 +43,10 @@ export function useHabitReminders(
     const tasksWithReminders = preferences.planner
       ? tasks.filter(shouldNotifyPlannerTask)
       : [];
-    const hasFixedReminders = preferences.checkin || preferences.journal;
+    // Check-ins são enviados pelo servidor: três janelas adaptativas no fuso
+    // da pessoa, com idempotência por janela. Este hook não pode reviver o
+    // lembrete local fixo de manhã/noite em paralelo.
+    const hasFixedReminders = preferences.journal;
     if (habitsWithReminders.length === 0 && tasksWithReminders.length === 0 && !hasFixedReminders) return;
 
     const checkAndFire = () => {
@@ -55,21 +55,6 @@ export function useHabitReminders(
       const todayKey = getLocalDateKey(now);
       const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
-      const morningCheckinTime = checkinTimes.morning ?? DEFAULT_MORNING_CHECKIN_TIME;
-      const eveningCheckinTime = checkinTimes.evening ?? DEFAULT_EVENING_CHECKIN_TIME;
-
-      if (preferences.checkin && (hhmm === morningCheckinTime || hhmm === eveningCheckinTime)) {
-        const firedKey = `checkin-${todayKey}-${hhmm}`;
-        if (!firedRef.current.has(firedKey)) {
-          firedRef.current.add(firedKey);
-          new Notification('Check-in da Airia', {
-            body: 'Registre humor e energia para manter seu padrão atualizado.',
-            icon: '/favicon.ico',
-            tag: `checkin-${todayKey}`,
-          });
-        }
-      }
 
       if (preferences.journal && (hhmm === preferences.journalMorningTime || hhmm === preferences.journalEveningTime)) {
         const firedKey = `journal-${todayKey}-${hhmm}`;
@@ -162,7 +147,7 @@ export function useHabitReminders(
       clearTimeout(timeout);
       clearInterval(interval);
     };
-  }, [habits, tasks, notificationPreferences, checkinTimes.morning, checkinTimes.evening]);
+  }, [habits, tasks, notificationPreferences]);
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {

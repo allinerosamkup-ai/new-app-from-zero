@@ -25,9 +25,9 @@ import {
   TranscriptSession,
 } from "../features/voice/transcript-session";
 import "../styles/aura.css";
-import { saveNextAction } from "../utils/save-next-action";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { MessageSquareText } from "lucide-react";
+import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
 
 type Message = {
   id?: string;
@@ -101,45 +101,6 @@ function buildCommitmentSuggestions(summary: JournalSummary | null, temporalLabe
   return summary.suggestions.slice(0, 3).map((suggestion) => `${temporalLabel}: ${suggestion}`);
 }
 
-const ACTION_SAVE_VERB_RE = /\b(salva|salvar|grave|grava|guardar|guarda|registra|registrar|adiciona|adicionar|coloca|colocar|manda|mandar|joga|jogar|inclui|incluir)\b/i;
-const ACTION_SAVE_TARGET_RE = /\b(ações|acoes|ação|acao|próxima ação|proxima acao|próximas ações|proximas acoes)\b/i;
-
-function sanitizeExplicitActionText(text: string): string {
-  return text
-    .replace(/["“”]/g, "")
-    .replace(/\b(por favor|pra mim|para mim|nas minhas|nas|em|para|pra|minhas|minha)\b/gi, " ")
-    .replace(ACTION_SAVE_VERB_RE, " ")
-    .replace(ACTION_SAVE_TARGET_RE, " ")
-    .replace(/\b(isso aqui|isso|essa sugestão|essa sugestao|esta sugestão|esta sugestao|essa ação|essa acao|esta ação|esta acao)\b/gi, " ")
-    .replace(/[.:;,\-–—]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function pickActionFromAssistant(messages: Message[]): string | null {
-  const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant" && message.content.trim());
-  if (!lastAssistant) return null;
-
-  const candidate = lastAssistant.content
-    .split(/\n+/)
-    .map((line) => line.replace(/^\s*(?:[-*•→]|\d+[.)])\s*/, "").trim())
-    .find((line) => line.length >= 12 && !line.endsWith("?"));
-
-  return candidate ? candidate.slice(0, 180) : null;
-}
-
-function extractExplicitActionSave(text: string, messages: Message[]): string | null {
-  if (!ACTION_SAVE_VERB_RE.test(text) || !ACTION_SAVE_TARGET_RE.test(text)) return null;
-
-  const quoted = text.match(/["“”']([^"“”']{4,180})["“”']/);
-  if (quoted?.[1]?.trim()) return quoted[1].trim();
-
-  const cleaned = sanitizeExplicitActionText(text);
-  if (cleaned.length >= 8 && cleaned.split(/\s+/).length >= 2) return cleaned.slice(0, 180);
-
-  return pickActionFromAssistant(messages);
-}
-
 function formatSessionDate(localDate: string, startedAt: string, locale: string): string {
   const date = localDate ? new Date(`${localDate}T12:00:00`) : new Date(startedAt);
 
@@ -154,6 +115,8 @@ export function JournalPage() {
   const l = useLocalizedCopy();
   const { state, refreshData } = useAuraStore();
   const { showError, showSuccess } = useToast();
+  const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
+  const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const routeState = location.state as { initialDraft?: string; contextLabel?: string } | null;
@@ -230,9 +193,19 @@ export function JournalPage() {
   const voiceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showFinalizationModal, setShowFinalizationModal] = useState(false);
   const [finalizationResult, setFinalizationResult] = useState<JournalFinalizationResult | null>(null);
-  const [addingToPlanner, setAddingToPlanner] = useState<string | null>(null);
   const [addedToPlanner, setAddedToPlanner] = useState<Set<string>>(new Set());
   const [liveReplyPending, setLiveReplyPending] = useState(false);
+
+  const sharedRiskSafety = canonicalReading?.riskSafety ?? lastRiskSafety;
+
+  async function feedbackCanonicalDecision(status: "accepted" | "rejected") {
+    const decision = canonicalReading?.decision;
+    if (!decision || canonicalFeedbackPending) return;
+    setCanonicalFeedbackPending(true);
+    const saved = await sendAiriaDecisionFeedback(decision.id, status, "journal");
+    if (saved) await reloadCanonicalReading();
+    setCanonicalFeedbackPending(false);
+  }
   const liveReplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const voiceInputBaseRef = useRef("");
@@ -368,29 +341,12 @@ export function JournalPage() {
     if (!text || !sessionId || isTyping || isFinalizing) return;
 
     const userMessage: Message = { role: "user", content: text };
-    const explicitAction = extractExplicitActionSave(text, messages);
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsTyping(true);
     setLastRiskSafety(null);
 
     try {
-      if (explicitAction) {
-        const saved = await saveNextAction({
-          text: explicitAction,
-          razao: "Pedido explícito feito dentro do diário.",
-          source: "journal",
-        });
-        // Se já existia equivalente, dizer que salvou seria mentira: a pessoa
-        // procuraria um item novo que não foi criado.
-        showSuccess(saved.created
-          ? t("journal.savedActions")
-          : l(
-            `Isso já está nas suas próximas ações: "${saved.item.titulo || saved.item.text}".`,
-            `That is already in your next actions: "${saved.item.titulo || saved.item.text}".`,
-          ));
-      }
-
       const { data: { session: authSession } } = await supabase.auth.getSession();
 
       const response = await fetch(`${API_URL}/journal/message/stream`, {
@@ -591,28 +547,11 @@ export function JournalPage() {
    * "hoje ou amanhã?" — decisão de agenda para quem acabou de escrever sobre um
    * dia difícil. A régua mudou: o que importa é concluir, não caber no relógio.
    */
-  async function addSuggestionToNextActions(key: string, task: SuggestedTask) {
-    setAddingToPlanner(key);
-    try {
-      const result = await saveNextAction({
-        text: task.title,
-        razao: "Sugerido a partir do diário.",
-        source: "journal",
-      });
-
-      setAddedToPlanner((prev) => new Set([...prev, key]));
-      trackEvent("journal_suggestion_to_next_actions", {
-        source: "journal",
-        created: result.created,
-      });
-      showSuccess(result.created
-        ? l("Entrou nas suas próximas ações.", "Added to your next actions.")
-        : l("Isso já estava nas suas próximas ações.", "That was already in your next actions."));
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Não foi possível salvar a ação.");
-    } finally {
-      setAddingToPlanner(null);
-    }
+  async function addSuggestionToNextActions(key: string, _task: SuggestedTask) {
+    // O Diário não transforma texto em tarefa. Ele guarda contexto; a decisão
+    // compartilhada aparece na Home quando há base e destino operacional.
+    setAddedToPlanner((prev) => new Set([...prev, key]));
+    navigate("/home");
   }
 
   const activePersistedSession = sessions.find((session) => session.status === "active");
@@ -704,7 +643,7 @@ export function JournalPage() {
                   <p style={{ margin: 0, fontSize: 12.5, color: "var(--text-1)", lineHeight: 1.5 }}>{item}</p>
                   <button
                     onClick={() => { if (!added) void addSuggestionToNextActions(key, fakeTask); }}
-                    disabled={added || addingToPlanner === key}
+                    disabled={added}
                     style={{
                       alignSelf: "flex-start", border: "none", borderRadius: 8, cursor: added ? "default" : "pointer",
                       padding: "5px 12px", fontSize: 11, fontWeight: 700,
@@ -713,7 +652,7 @@ export function JournalPage() {
                       transition: "all 200ms",
                     }}
                   >
-                    {added ? l("✓ Adicionado", "✓ Added") : addingToPlanner === key ? l("Adicionando...", "Adding...") : l("+ Próximas ações", "+ Next actions")}
+                    {added ? l("✓ Lido na Home", "✓ Opened in Home") : l("Ver leitura na Home", "View reading in Home")}
                   </button>
                 </div>
               );
@@ -748,7 +687,7 @@ export function JournalPage() {
                     ) : null}
                     <button
                       onClick={() => { if (!added) void addSuggestionToNextActions(key, task); }}
-                      disabled={added || addingToPlanner === key}
+                      disabled={added}
                       style={{
                         marginLeft: "auto", border: "none", borderRadius: 8, cursor: added ? "default" : "pointer",
                         padding: "5px 12px", fontSize: 11, fontWeight: 700,
@@ -758,7 +697,7 @@ export function JournalPage() {
                         transition: "all 200ms",
                       }}
                     >
-                      {added ? l("✓ Adicionado", "✓ Added") : addingToPlanner === key ? "..." : l("+ Próximas ações", "+ Next actions")}
+                      {added ? l("✓ Lido na Home", "✓ Opened in Home") : l("Ver leitura na Home", "View reading in Home")}
                     </button>
                   </div>
                 </div>
@@ -1302,8 +1241,20 @@ export function JournalPage() {
             />
           )}
 
+          {canonicalReading?.decision && sharedRiskSafety?.route !== "crisis_protocol" && sharedRiskSafety?.route !== "human_support" && (
+            <section style={{ margin: "2px 0 0 33px", padding: 12, borderRadius: 14, border: "1px solid rgba(143,192,164,.34)", background: "rgba(255,255,255,.82)" }}>
+              <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Leitura que estou usando", "Reading I am using")}</p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--text-1)" }}>{canonicalReading.decision.title}</p>
+              <p style={{ margin: "5px 0 9px", fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45 }}>{canonicalReading.decision.reason}</p>
+              {canonicalReading.decision.requiresConfirmation && <div style={{ display: "flex", gap: 7 }}>
+                <AuraButtonV2 className="btn btn-ghost" size="sm" style={{ flex: 1 }} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("rejected")}>{l("Não agora", "Not now")}</AuraButtonV2>
+                <AuraButtonV2 className="btn btn-primary" size="sm" style={{ flex: 1 }} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("accepted")}>{l("Faz sentido", "That fits")}</AuraButtonV2>
+              </div>}
+            </section>
+          )}
+
           <SafetyProtocolCard
-            riskSafety={lastRiskSafety}
+            riskSafety={sharedRiskSafety}
             surface="journal"
             
           />

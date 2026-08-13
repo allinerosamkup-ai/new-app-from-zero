@@ -3,6 +3,7 @@ import type { CheckinEntry } from "./types";
 type Input = {
   localDate: string;
   checkinSlot: string;
+  checkinPurpose?: "window" | "extra";
   entry: Omit<CheckinEntry, "date">;
 };
 
@@ -18,7 +19,7 @@ type Input = {
  * explícito vindo de outras superfícies, mas não podem voltar a ser uma etapa
  * obrigatória de decisão no check-in principal.
  */
-export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input) {
+export function buildCheckinSubmission({ localDate, checkinSlot, checkinPurpose = "window", entry }: Input) {
   const note = entry.note?.trim() || undefined;
   const dayPlan = {
     ...(entry.capacity !== undefined ? { capacity: entry.capacity } : {}),
@@ -27,6 +28,7 @@ export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input)
   return {
     localDate,
     checkinSlot,
+    checkinPurpose,
     moodScore: entry.humor,
     energyScore: entry.energia,
     ...(entry.clareza !== undefined ? { clarityScore: entry.clareza } : {}),

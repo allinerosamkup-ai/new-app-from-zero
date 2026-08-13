@@ -39,11 +39,16 @@ function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'aut
   return 'outro';
 }
 
-function deriveCheckinSlotToken(recordedAt: Date): string {
+function deriveCheckinBaseSlot(recordedAt: Date): "morning" | "midday" | "evening" {
   const hour = recordedAt.getHours();
+  return hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 18 ? 'midday' : 'evening';
+}
+
+function deriveCheckinSlotToken(recordedAt: Date): string {
+  const baseSlot = deriveCheckinBaseSlot(recordedAt);
   const minute = recordedAt.getMinutes();
   const second = recordedAt.getSeconds();
-  const baseSlot = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 18 ? 'midday' : 'evening';
+  const hour = recordedAt.getHours();
   return `${baseSlot}-${String(hour).padStart(2, '0')}${String(minute).padStart(2, '0')}${String(second).padStart(2, '0')}`;
 }
 
@@ -671,10 +676,17 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       addCheckin: async (entry) => {
         const today = getLocalDateKey();
         const recordedAtDate = new Date();
+        const baseSlot = deriveCheckinBaseSlot(recordedAtDate);
         const checkinSlot = deriveCheckinSlotToken(recordedAtDate);
+        // O primeiro registro de cada janela é a observação principal. Outros
+        // são bem-vindos, mas não podem inflar cobertura ou confiança do dia.
+        const checkinPurpose = state.checkinHistory.some((checkin) => (
+          checkin.date === today && checkin.checkinSlot?.startsWith(baseSlot)
+        )) ? "extra" as const : "window" as const;
         const payload = buildCheckinSubmission({
           localDate: today,
           checkinSlot,
+          checkinPurpose,
           entry,
         });
 

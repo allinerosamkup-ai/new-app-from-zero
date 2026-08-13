@@ -1,19 +1,19 @@
-import { dedupeActions, findEquivalentAction } from "./action-similarity";
+import { dedupeActions } from "./action-similarity";
 
 export type GoalPriorityAction = {
   id: string;
   text: string;
-  source: "goal" | "capture";
+  source: "goal";
   goalId?: string | number;
   goalTitle?: string;
   subId?: string | number;
-  gtdId?: string;
 };
 
 export type GoalPrioritySource = {
   id: string | number;
   title: string;
   completedPct?: number;
+  pausedAt?: string | null;
   subtasks?: Array<{
     id: string | number;
     title: string;
@@ -35,91 +35,9 @@ export type GoalCardModel = {
 
 export type GoalTaskPlacement = "now" | "later" | "tomorrow";
 
-export type StoredGtdAction = {
-  id: string;
-  text: string;
-  titulo?: string;
-  razao?: string;
-  source?: string;
-  capturedAt?: string;
-  meta_sugerida?: string;
-  tipo?: string;
-  done?: boolean;
-  archived?: boolean;
-  sentToGoal?: boolean;
-  linkedGoalId?: string | number | null;
-  clarified?: boolean;
-};
-
-export function readStoredGtdActions(): StoredGtdAction[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem("gtd-inbox-v1") || "[]");
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
-
-/** Corrige o texto de um item do Inbox, preservando o resto do registro. */
-export function renameStoredGtdAction(itemId: string, title: string) {
-  const clean = title.trim();
-  if (!clean) return;
-  const updated = readStoredGtdActions().map((item) => (
-    item.id === itemId ? { ...item, text: clean, titulo: clean } : item
-  ));
-  localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
-  window.dispatchEvent(new CustomEvent("gtd-inbox-updated", { detail: { id: itemId } }));
-}
-
-export function markStoredGtdActionDone(itemId: string) {
-  const raw = readStoredGtdActions();
-  const updated = raw.map((item) => item.id === itemId ? { ...item, done: true } : item);
-  localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
-}
-
-/**
- * Grava uma ação no Inbox, ou devolve a equivalente que já estava lá.
- *
- * `created: false` significa que nada foi escrito — a chamadora deve dizer à
- * pessoa que aquilo já existe, em vez de fingir que registrou. Sugerir de novo
- * o que já está na lista é como o app perde confiança rápido.
- */
-export function appendStoredGtdAction(input: {
-  text: string;
-  titulo?: string;
-  razao?: string;
-  source?: string;
-}): StoredGtdAction & { created: boolean } {
-  const title = (input.titulo || input.text).trim();
-
-  // Só compara com o que ainda está valendo: item concluído ou arquivado não
-  // deve impedir a pessoa de registrar a mesma coisa outra vez.
-  const active = readStoredGtdActions().filter((item) => !item.done && !item.archived);
-  const existing = findEquivalentAction(title, active, (item) => item.titulo || item.text);
-  if (existing) return { ...existing, created: false };
-
-  const item: StoredGtdAction = {
-    id: `gtd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    text: title,
-    titulo: title,
-    razao: input.razao,
-    source: input.source,
-    capturedAt: new Date().toISOString(),
-    clarified: true,
-    tipo: "proxima_acao",
-    done: false,
-    archived: false,
-  };
-  const updated = [item, ...readStoredGtdActions()];
-  localStorage.setItem("gtd-inbox-v1", JSON.stringify(updated));
-  window.dispatchEvent(new CustomEvent("gtd-inbox-updated", { detail: item }));
-  return { ...item, created: true };
-}
-
 export function buildGoalPriorityActions(
   goals: GoalPrioritySource[],
   options: {
-    gtdItems?: StoredGtdAction[];
     limit?: number;
     /**
      * Objetivo que já está no card grande da Home.
@@ -157,20 +75,7 @@ export function buildGoalPriorityActions(
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  const gtdItems = options.gtdItems ?? readStoredGtdActions();
-  const captureActions = gtdItems
-    .filter((item) => !item.archived && !item.sentToGoal && !item.done && item.clarified && item.tipo === "proxima_acao" && !item.linkedGoalId)
-    .map((item) => ({
-      id: `capture-${item.id}`,
-      text: item.titulo || item.text,
-      source: "capture" as const,
-      gtdId: item.id,
-    }));
-
-  // Metas primeiro, e o dedupe preserva o primeiro de cada grupo: se a mesma
-  // ação existe como passo de meta e como item solto do Inbox, quem fica é a
-  // versão ligada à meta, que tem contexto e move progresso.
-  const actions = dedupeActions([...goalActions, ...captureActions], (action) => action.text);
+  const actions = dedupeActions(goalActions, (action) => action.text);
   return typeof options.limit === "number" ? actions.slice(0, options.limit) : actions;
 }
 
@@ -186,52 +91,20 @@ export const NEXT_ACTIONS_LIMIT = 5;
  */
 export function buildNextActions(
   goals: GoalPrioritySource[],
-  options: { gtdItems?: StoredGtdAction[]; limit?: number; focusGoalId?: string | number | null } = {},
+  options: { limit?: number; focusGoalId?: string | number | null } = {},
 ): GoalPriorityAction[] {
   return buildGoalPriorityActions(goals, {
-    gtdItems: options.gtdItems,
     limit: options.limit ?? NEXT_ACTIONS_LIMIT,
     focusGoalId: options.focusGoalId,
   });
-}
-
-/** Onde fica o objetivo que a pessoa marcou como principal. */
-export const PRIMARY_GOAL_KEY = "airia-primary-goal-v1";
-
-export function readPrimaryGoalId(): string | null {
-  try {
-    const raw = localStorage.getItem(PRIMARY_GOAL_KEY);
-    return raw && raw.trim() ? raw.trim() : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writePrimaryGoalId(goalId: string | number | null) {
-  try {
-    if (goalId === null) localStorage.removeItem(PRIMARY_GOAL_KEY);
-    else localStorage.setItem(PRIMARY_GOAL_KEY, String(goalId));
-  } catch {
-    /* modo privado: a escolha vale só para esta sessão */
-  }
 }
 
 /**
  * Escolhe o objetivo que ocupa o card grande da Home e devolve o resto para a
  * lista compacta.
  *
- * A ordem é: o que ela marcou como principal, e só então a heurística.
- *
- * A heurística ("o mais perto de fechar") continua sendo o padrão porque
- * funciona sem pedir nada e resolve de graça a troca de foco — quando o objetivo
- * em destaque conclui, ele sai dos elegíveis e o seguinte assume sozinho. Mas
- * quem sabe o que é urgente é ela, não a porcentagem, então a escolha manual
- * passa na frente.
- *
- * `preferredId` só vale se o objetivo ainda for elegível: existir, não estar
- * pausado, não estar concluído e ter ação pendente. Falhando qualquer uma
- * dessas, cai na heurística — é o que impede a escolha de ontem de virar um card
- * morto hoje.
+ * A ordem é determinística sobre dados persistidos; prioridade pessoal e
+ * capacidade não vivem no navegador como uma segunda verdade.
  */
 export function selectFocusGoal(
   goals: GoalPrioritySource[],
@@ -247,14 +120,6 @@ export function selectFocusGoal(
     // Sem ação pendente o card grande não teria botão — vai para a lista.
     && model.nextAction !== null
   ));
-
-  const preferred = options.preferredId === undefined || options.preferredId === null
-    ? null
-    : eligible.find((model) => String(model.id) === String(options.preferredId)) ?? null;
-
-  if (preferred) {
-    return { focus: preferred, others: models.filter((model) => model.id !== preferred.id) };
-  }
 
   const focus = eligible.length === 0 ? null : [...eligible].sort((left, right) => {
     const leftPct = left.totalActions === 0 ? 0 : left.completedActions / left.totalActions;

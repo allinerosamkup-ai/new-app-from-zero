@@ -16,6 +16,7 @@ import { PlannerService, buildPostponeAdaptabilityUpdate, resolveTimelineAdaptab
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
 import { CheckinApplicationService, PrismaCheckinApplicationRepository } from './services/checkin-application.service';
+import { AiriaReadingService, type AiriaDecisionStatus } from './services/airia-reading.service';
 import {
   CHECKIN_CANONICAL_EMOTIONS,
   CHECKIN_CANONICAL_FACTORS,
@@ -122,6 +123,7 @@ import {
   shouldSendJournalNudge,
   shouldSendPersistentReminder,
 } from './lib/notification-filters';
+import { resolveAdaptiveCheckinWindows, shouldSendCheckinSlotNudge } from './lib/checkin-windows';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
 import { normalizeObjectiveSubgoals } from './lib/objective-subgoals';
 import { PRODUCT_CAPABILITIES, type ProductCapabilities } from './contracts/product-capabilities';
@@ -521,6 +523,7 @@ type AppDependencies = {
   auraMemoryIngestionService?: Pick<AuraMemoryIngestionService, 'ingest'>;
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
+  airiaReadingService?: Pick<AiriaReadingService, 'rebuild' | 'get' | 'feedback'>;
   billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
   stripeService?: Pick<StripeService,
     'createCheckoutSession' | 'createPortalSession' | 'verifyCheckoutSession' | 'handleWebhook' | 'getOfferCatalog'>;
@@ -2440,6 +2443,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     };
   };
   const routineBuilderService = dependencies.routineBuilderService ?? new RoutineBuilderService(prisma);
+  const airiaReadingService = dependencies.airiaReadingService ?? new AiriaReadingService(prisma);
   const checkinApplicationService = dependencies.checkinApplicationService ?? new CheckinApplicationService({
     repository: new PrismaCheckinApplicationRepository(prisma),
     evaluate: async (data) => {
@@ -2584,6 +2588,12 @@ export function createApp(dependencies: AppDependencies = {}) {
       };
     },
     afterPersist: async ({ data, checkin, evaluation, applicationContext }) => {
+      await airiaReadingService.rebuild({
+        userId: data.userId,
+        localDate: data.localDate,
+        sourceCheckinId: checkin.id,
+        surface: 'checkin',
+      });
       if (data.note && data.note.trim().length >= 10) {
         void memoryService.store({
           userId: data.userId,
@@ -3159,6 +3169,64 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * Fonte única para Home, Check-in, Diário, Aura, Padrões e Objetivos.
+   * `to` é a data da leitura; `from` existe para manter o contrato das
+   * superfícies longitudinais, mas a janela histórica é sempre calculada pelo
+   * servidor com peso igual para cada dia observado.
+   */
+  app.get('/api/airia/reading', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const requestedFrom = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const requestedTo = typeof req.query.to === 'string' ? req.query.to : undefined;
+    if ((requestedFrom && !/^\d{4}-\d{2}-\d{2}$/.test(requestedFrom)) || (requestedTo && !/^\d{4}-\d{2}-\d{2}$/.test(requestedTo))) {
+      return res.status(400).json({ error: 'from/to must be YYYY-MM-DD' });
+    }
+    try {
+      const preferences = await prisma.userPreference.findUnique({ where: { userId }, select: { timezone: true } });
+      const localDate = getLocalTimeContext(new Date(), preferences?.timezone).dateKey;
+      return res.json(await airiaReadingService.rebuild({
+        userId,
+        localDate,
+        periodFrom: requestedFrom,
+        periodTo: requestedTo,
+        surface: 'read',
+      }));
+    } catch (error) {
+      console.error('[airia/reading] Error:', error);
+      return res.status(500).json({ error: 'Failed to build Airia reading' });
+    }
+  });
+
+  app.post('/api/airia/decisions/:decisionId/feedback', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const payloadSchema = z.object({
+      status: z.enum(['accepted', 'corrected', 'rejected', 'done', 'substituted']),
+      correction: z.string().trim().max(1_000).optional(),
+      note: z.string().trim().max(1_000).optional(),
+      surface: z.string().trim().max(80).optional(),
+    });
+    try {
+      const payload = payloadSchema.parse(req.body);
+      const statusMap: Record<typeof payload.status, AiriaDecisionStatus> = {
+        accepted: 'aceita', corrected: 'corrigida', rejected: 'rejeitada', done: 'concluída', substituted: 'substituída',
+      };
+      return res.json(await airiaReadingService.feedback({
+        userId,
+        decisionId: req.params.decisionId,
+        status: statusMap[payload.status],
+        surface: payload.surface ?? 'unknown',
+        correction: payload.correction,
+        note: payload.note,
+      }));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      if (error instanceof Error && error.message === 'AIRIA_DECISION_NOT_FOUND') return res.status(404).json({ error: 'Decision not found' });
+      console.error('[airia/decision-feedback] Error:', error);
+      return res.status(500).json({ error: 'Failed to persist decision feedback' });
+    }
+  });
+
+  /**
    * POST /api/checkins
    * Salva o check-in diário e dispara a IA para avaliação de estado.
    */
@@ -3168,11 +3236,12 @@ export function createApp(dependencies: AppDependencies = {}) {
       const result = await checkinApplicationService.record(data, {
         requestContext: req.body as Record<string, unknown>,
       });
+      const reading = await airiaReadingService.rebuild({ userId: data.userId, localDate: data.localDate, sourceCheckinId: result.checkinId, surface: 'checkin' });
       const checkinStatement = data.note?.trim() ?? '';
       const objectivePathProposals = checkinStatement
         ? await reviewObjectivePathsAfterContext(data.userId, checkinStatement, 'checkin').catch(() => [])
         : [];
-      return res.json({ ...result, objectivePathProposals });
+      return res.json({ ...result, reading, objectivePathProposals });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -8792,15 +8861,27 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
 }
 
 function getSaoPauloHHMM(date: Date): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Sao_Paulo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
-  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
-  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
-  return `${hour}:${minute}`;
+  return getLocalTimeContext(date, 'America/Sao_Paulo').time;
+}
+
+function getLocalTimeContext(date: Date, timezone?: string | null): { dateKey: string; time: string; dbDate: Date } {
+  const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone : 'America/Sao_Paulo';
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: resolvedTimezone,
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(date);
+  } catch {
+    return getLocalTimeContext(date, 'America/Sao_Paulo');
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes, fallback: string) => parts.find((entry) => entry.type === type)?.value ?? fallback;
+  const dateKey = `${part('year', '1970')}-${part('month', '01')}-${part('day', '01')}`;
+  return {
+    dateKey,
+    time: `${part('hour', '00')}:${part('minute', '00')}`,
+    dbDate: new Date(`${dateKey}T00:00:00.000Z`),
+  };
 }
 
 const checkinNudgeTimeCache = new Map<string, { dateKey: string; time: string }>();
@@ -9084,31 +9165,41 @@ if (require.main === module) {
           : [];
 
         if (notifPrefs.checkin) {
-          const nudgeTime = await resolveUserCheckinNudgeTime(pref.userId, pref.morningCheckinTime, saoPauloToday.dateKey);
-          if (nudgeTime === currentTimeStr) {
-            const [todayCheckin, nudgesSentToday] = await Promise.all([
-              defaultPrisma.dailyCheckin.findFirst({
-                where: { userId: pref.userId, localDate: saoPauloToday.dbDate },
-                select: { id: true },
-              }),
-              countNudgesSentToday(pref.userId, spDayStartUtc),
+          const userNow = getLocalTimeContext(now, pref.timezone);
+          const recent = await defaultPrisma.dailyCheckin.findMany({
+            where: { userId: pref.userId, recordedAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } },
+            select: { checkinSlot: true, recordedAt: true },
+            orderBy: { recordedAt: 'desc' },
+            take: 90,
+          });
+          const recentBySlot: Record<'morning' | 'midday' | 'evening', string[]> = { morning: [], midday: [], evening: [] };
+          for (const entry of recent) {
+            const slot = String(entry.checkinSlot).split('-')[0] as keyof typeof recentBySlot;
+            if (!(slot in recentBySlot)) continue;
+            recentBySlot[slot].push(getLocalTimeContext(entry.recordedAt, pref.timezone).time);
+          }
+          const windows = resolveAdaptiveCheckinWindows({ wakeTime: pref.wakeTime, sleepTime: pref.sleepTime, recentBySlot });
+          const dueWindow = windows.find((window) => window.targetTime === userNow.time);
+          if (dueWindow) {
+            const [todayCheckins, sentEvents] = await Promise.all([
+              defaultPrisma.dailyCheckin.findMany({ where: { userId: pref.userId, localDate: userNow.dbDate }, select: { checkinSlot: true } }),
+              defaultPrisma.eventLog.findMany({ where: { userId: pref.userId, eventName: NUDGE_EVENT_NAME, createdAt: { gte: new Date(now.getTime() - 30 * 60 * 60 * 1000) } }, select: { properties: true } }),
             ]);
-            const decision = shouldSendCheckinNudge({
-              currentTime: currentTimeStr,
-              nudgeTime,
-              hasCheckinToday: Boolean(todayCheckin),
-              nudgesSentToday,
-            });
+            const completedSlots = todayCheckins.map((entry) => String(entry.checkinSlot).split('-')[0]);
+            const nudgedSlots = sentEvents
+              .filter((event) => (event.properties as any)?.kind === 'checkin' && (event.properties as any)?.localDate === userNow.dateKey)
+              .map((event) => String((event.properties as any)?.slot ?? ''));
+            const decision = shouldSendCheckinSlotNudge({ currentTime: userNow.time, window: dueWindow, completedSlots, nudgedSlots });
             if (decision.send) {
               await sendPushToUser(pref.userId, {
                 title: '✨ Como você tá agora?',
-                body: '1 toque e pronto — a Airia calibra seu dia.',
+                body: 'Um registro breve ajuda a Airia a entender como seu dia mudou.',
                 url: '/checkin',
-                tag: 'checkin-reminder',
+                tag: `checkin-reminder-${dueWindow.slot}`,
               });
-              await logNudgeSent(pref.userId, 'checkin', nudgeTime);
+              await defaultPrisma.eventLog.create({ data: { userId: pref.userId, eventName: NUDGE_EVENT_NAME, properties: { kind: 'checkin', slot: dueWindow.slot, time: dueWindow.targetTime, localDate: userNow.dateKey, timezone: pref.timezone ?? 'America/Sao_Paulo' } } });
             } else {
-              console.log(`[push-cron] checkin nudge skipped for ${pref.userId}: ${decision.reason}`);
+              console.log(`[push-cron] checkin ${dueWindow.slot} skipped for ${pref.userId}: ${decision.reason}`);
             }
           }
         }
