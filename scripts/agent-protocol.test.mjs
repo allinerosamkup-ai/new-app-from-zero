@@ -37,10 +37,11 @@ function init(cwd) {
   return run(['init', '--task-id', 'task-123', '--objective', 'Entregar o contrato operacional'], cwd);
 }
 
-function assignAndPass(cwd, role, agent) {
+function assignAndPass(cwd, role, agent, score) {
   assert.equal(run(['role', '--role', role, '--agent', agent, '--status', 'assigned', '--evidence', 'Escopo recebido'], cwd).status, 0);
   assert.equal(run(['role', '--role', role, '--agent', agent, '--status', 'ready_verify', '--evidence', 'Implementação pronta para verificação'], cwd).status, 0);
-  assert.equal(run(['role', '--role', role, '--agent', agent, '--status', 'pass', '--evidence', 'Critérios verificados'], cwd).status, 0);
+  const scoreArgs = score === undefined ? [] : ['--score', String(score)];
+  assert.equal(run(['role', '--role', role, '--agent', agent, '--status', 'pass', '--evidence', 'Critérios verificados', ...scoreArgs], cwd).status, 0);
 }
 
 test('init cria o contrato e recusa substituir uma tarefa ativa', () => {
@@ -90,6 +91,24 @@ test('role recusa transição inválida e exige argumentos válidos', () => {
       '--evidence', 'Escopo recebido',
     ], cwd);
     assert.notEqual(malformed.status, 0);
+
+    const invalidScore = run([
+      'role', '--role', 'verifier', '--agent', 'llm-verifier', '--status', 'assigned',
+      '--evidence', 'Escopo recebido', '--score', 'eleven',
+    ], cwd);
+    assert.notEqual(invalidScore.status, 0);
+    assert.match(invalidScore.output, /score.*0 e 10/i);
+
+    const outOfRangeScore = run([
+      'role', '--role', 'verifier', '--agent', 'llm-verifier', '--status', 'assigned',
+      '--evidence', 'Escopo recebido', '--score', '11',
+    ], cwd);
+    assert.notEqual(outOfRangeScore.status, 0);
+
+    const unsupportedScore = run([
+      'init', '--task-id', 'task-score', '--objective', 'Contrato', '--score', '8',
+    ], cwd);
+    assert.notEqual(unsupportedScore.status, 0);
   } finally {
     cleanup(cwd);
   }
@@ -136,9 +155,9 @@ test('meta-approve recusa gate incompleto', () => {
   try {
     assert.equal(init(cwd).status, 0);
     assignAndPass(cwd, 'executor', 'llm-executor');
-    assignAndPass(cwd, 'verifier', 'llm-verifier');
+    assignAndPass(cwd, 'verifier', 'llm-verifier', 8);
 
-    const incomplete = run(['meta-approve', '--evidence', 'Executor e verificador passaram'], cwd);
+    const incomplete = run(['meta-approve', '--evidence', 'Executor e verificador passaram', '--score', '8'], cwd);
     assert.notEqual(incomplete.status, 0);
     assert.match(incomplete.output, /integration|integração|pass|aprov/i);
     assert.equal(stateAt(cwd).metaApproval, null);
@@ -152,16 +171,75 @@ test('meta-approve aprova após executor, verifier e integration passarem', () =
   try {
     assert.equal(init(cwd).status, 0);
     assignAndPass(cwd, 'executor', 'llm-executor');
-    assignAndPass(cwd, 'verifier', 'llm-verifier');
-    assignAndPass(cwd, 'integration', 'llm-integration');
+    assignAndPass(cwd, 'verifier', 'llm-verifier', 8.5);
+    assignAndPass(cwd, 'integration', 'llm-integration', 9);
 
-    const approved = run(['meta-approve', '--evidence', 'Todos os gates foram verificados'], cwd);
+    const approved = run(['meta-approve', '--evidence', 'Todos os gates foram verificados', '--score', '8.5'], cwd);
     assert.equal(approved.status, 0, approved.output);
 
     const state = stateAt(cwd);
     assert.equal(state.task.status, 'approved');
     assert.equal(state.roles.meta.status, 'approved');
+    assert.equal(state.roles.verifier.score, 8.5);
+    assert.equal(state.roles.integration.score, 9);
+    assert.equal(state.roles.meta.score, 8.5);
     assert.equal(state.metaApproval.evidence, 'Todos os gates foram verificados');
+    assert.equal(state.metaApproval.score, 8.5);
+
+    const readable = run(['status'], cwd);
+    assert.equal(readable.status, 0, readable.output);
+    assert.match(readable.stdout, /verifier: pass \(llm-verifier, score: 8\.5\)/);
+    assert.match(readable.stdout, /Meta-aprovação: sim \(score: 8\.5\)/);
+
+    const jsonStatus = run(['status', '--json'], cwd);
+    assert.equal(jsonStatus.status, 0, jsonStatus.output);
+    const json = JSON.parse(jsonStatus.stdout);
+    assert.equal(json.state.roles.integration.score, 9);
+    assert.equal(json.state.metaApproval.score, 8.5);
+  } finally {
+    cleanup(cwd);
+  }
+});
+
+test('verifier e integration recusam pass com score abaixo de 8', () => {
+  const cwd = workspace();
+  try {
+    assert.equal(init(cwd).status, 0);
+    for (const role of ['verifier', 'integration']) {
+      assert.equal(run(['role', '--role', role, '--agent', `llm-${role}`, '--status', 'assigned', '--evidence', 'Escopo recebido'], cwd).status, 0);
+      assert.equal(run(['role', '--role', role, '--agent', `llm-${role}`, '--status', 'ready_verify', '--evidence', 'Implementação pronta'], cwd).status, 0);
+      const rejected = run([
+        'role', '--role', role, '--agent', `llm-${role}`, '--status', 'pass',
+        '--evidence', 'Resultado abaixo do limiar', '--score', '7.99',
+      ], cwd);
+      assert.notEqual(rejected.status, 0, rejected.output);
+      assert.match(rejected.output, /score.*8/i);
+    }
+  } finally {
+    cleanup(cwd);
+  }
+});
+
+test('meta-approve recusa score abaixo de 8 e aceita score válido', () => {
+  const cwd = workspace();
+  try {
+    assert.equal(init(cwd).status, 0);
+    assignAndPass(cwd, 'executor', 'llm-executor');
+    assignAndPass(cwd, 'verifier', 'llm-verifier', 8);
+    assignAndPass(cwd, 'integration', 'llm-integration', 8);
+
+    const missingScore = run(['meta-approve', '--evidence', 'Gate sem nota'], cwd);
+    assert.notEqual(missingScore.status, 0, missingScore.output);
+    assert.match(missingScore.output, /score.*obrigatório/i);
+
+    const rejected = run(['meta-approve', '--evidence', 'Gate insuficiente', '--score', '7'], cwd);
+    assert.notEqual(rejected.status, 0, rejected.output);
+    assert.match(rejected.output, /score.*8/i);
+    assert.equal(stateAt(cwd).metaApproval, null);
+
+    const approved = run(['meta-approve', '--evidence', 'Gate impressionante e integrado', '--score', '8'], cwd);
+    assert.equal(approved.status, 0, approved.output);
+    assert.equal(stateAt(cwd).metaApproval.score, 8);
   } finally {
     cleanup(cwd);
   }

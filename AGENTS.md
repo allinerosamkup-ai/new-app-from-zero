@@ -15,6 +15,14 @@ Alline é a pessoa das ideias. O agente técnico transforma ideias em produto, c
 
 Antes de trabalho relevante, consultar [`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`](docs/DEVELOPMENT_ITERATION_PROTOCOL.md) e ler somente a memória relevante em `docs/agent-memory/`.
 
+Quando a tarefa afetar produto, UX, IA, fluxo ou arquitetura da Airia, consultar
+também [`docs/product/PRODUCT_CONSTITUTION.md`](docs/product/PRODUCT_CONSTITUTION.md).
+Ela é a fonte canônica do comportamento do produto: a Airia deve interpretar
+os sinais, propor uma ação concreta e preservar confirmação, correção e veto da
+usuária. Não aceitar como solução uma interface que devolva para a usuária uma
+decisão que a Airia já poderia tomar. Contratos técnicos, prompts e memória
+explicam a implementação; não podem criar uma segunda constituição.
+
 Alterar arquivos não significa concluir. Toda tarefa deve passar por critérios de aceite, execução, verificação, diagnóstico, correção, reverificação e regressão proporcional ao risco. Antes de finalizar, registrar evidência real; se houver bloqueio, declarar `BLOQUEADO`, nunca `DONE`.
 
 Durante tarefas longas, atualizar `docs/agent-memory/CURRENT_STATE.md`. Registrar descobertas reutilizáveis em `LEARNINGS.md`, corrigir memória desatualizada e não repetir abordagens já reprovadas sem nova evidência.
@@ -37,6 +45,13 @@ ação em handoff persistente; não depender apenas do chat. Worktree físico
 por papel só existe quando necessário; os papéis não autorizam criar cópias sem
 destino. O meta-verificador é o único que autoriza `DONE`. Ver §§8.9 e 14 do
 protocolo.
+
+O verificador, o verificador de integração e o meta-verificador devem registrar
+nota objetiva de `0–10`; aprovação exige mínimo `8/10` e ausência de falha
+crítica. “Impressionante” não é opinião solta: precisa de critérios e evidência.
+Antes de escrever código novo, a busca por soluções existentes deve ser
+registrada com fontes consultadas, candidatos, escolha/adaptação ou rejeição e
+motivo. Sem essa evidência, a tarefa não está pronta para aprovação.
 
 Commit e worktree são gates separados. Antes de criar ou entrar em um worktree,
 consultar `git worktree list --porcelain` e `docs/agent-memory/WORKTREES.md`;

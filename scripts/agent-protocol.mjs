@@ -69,6 +69,21 @@ function requireEnum(value, label, allowed) {
   return value;
 }
 
+function requireScore(value, label, required = false) {
+  if (value === undefined) {
+    if (required) fail(`${label} é obrigatório.`);
+    return undefined;
+  }
+  if (typeof value !== 'string' || value.trim() === '') {
+    fail(`${label} deve ser um número entre 0 e 10.`);
+  }
+  const score = Number(value);
+  if (!Number.isFinite(score) || score < 0 || score > 10) {
+    fail(`${label} deve ser um número entre 0 e 10.`);
+  }
+  return score;
+}
+
 function parseArgs(argv) {
   const [command, ...tokens] = argv;
   if (!command) {
@@ -83,6 +98,7 @@ function parseArgs(argv) {
     '--agent': { key: 'agent', takesValue: true },
     '--status': { key: 'status', takesValue: true },
     '--evidence': { key: 'evidence', takesValue: true },
+    '--score': { key: 'score', takesValue: true },
     '--channel': { key: 'channel', takesValue: true },
     '--type': { key: 'type', takesValue: true },
     '--from': { key: 'from', takesValue: true },
@@ -116,9 +132,9 @@ function parseArgs(argv) {
 
   const allowedByCommand = {
     init: ['taskId', 'objective', 'json'],
-    role: ['role', 'agent', 'status', 'evidence', 'json'],
+    role: ['role', 'agent', 'status', 'evidence', 'score', 'json'],
     message: ['channel', 'type', 'from', 'to', 'fact', 'evidence', 'action', 'json'],
-    'meta-approve': ['evidence', 'json'],
+    'meta-approve': ['evidence', 'score', 'json'],
     status: ['json'],
     reset: ['force', 'json'],
   };
@@ -216,11 +232,16 @@ function recordRole(options) {
   const status = requireEnum(options.status, 'status', ROLE_STATUSES);
   const agent = requireText(options.agent, 'agent', 200);
   const evidence = requireText(options.evidence, 'evidence');
+  const score = requireScore(options.score, 'score',
+    status === 'pass' && ['verifier', 'integration'].includes(role));
   if (status === 'approved') {
     fail('approved só pode ser registrado por meta-approve após o gate completo.');
   }
   if (role === 'meta' && status === 'pass') {
     fail('o papel meta deve ser aprovado por meta-approve, não por role --status pass.');
+  }
+  if (status === 'pass' && ['verifier', 'integration'].includes(role) && score < 8) {
+    fail(`${role} só pode registrar pass com score >= 8.`);
   }
   if (state.task.status === 'approved') fail('a tarefa já foi meta-aprovada e não aceita novas transições.');
 
@@ -237,6 +258,7 @@ function recordRole(options) {
     evidence,
     updatedAt: now(),
   };
+  if (score !== undefined) state.roles[role].score = score;
   touch(state);
   writeState(state);
   return { state, message: `Papel ${role} registrado como ${status}.` };
@@ -271,10 +293,13 @@ function metaApprove(options) {
   const state = requireState();
   if (state.task.status === 'approved') fail('a tarefa já foi meta-aprovada.');
   const evidence = requireText(options.evidence, 'evidence');
+  const score = requireScore(options.score, 'score', true);
+  if (score < 8) fail('meta-aprovação exige score >= 8.');
   const requiredRoles = ['executor', 'verifier', 'integration'];
   const missing = requiredRoles.filter((role) => {
     const entry = state.roles[role];
-    return !entry || !['pass', 'approved'].includes(entry.status) || !entry.evidence;
+    return !entry || !['pass', 'approved'].includes(entry.status) || !entry.evidence
+      || (['verifier', 'integration'].includes(role) && entry.score < 8);
   });
   if (missing.length > 0) {
     fail(`meta-aprovação recusada; papéis sem pass/approved e evidência: ${missing.join(', ')}.`);
@@ -285,9 +310,10 @@ function metaApprove(options) {
     agent: state.roles.meta?.agent ?? 'meta-verifier',
     status: 'approved',
     evidence,
+    score,
     updatedAt: timestamp,
   };
-  state.metaApproval = { evidence, approvedAt: timestamp };
+  state.metaApproval = { evidence, score, approvedAt: timestamp };
   state.task.status = 'approved';
   touch(state);
   writeState(state);
@@ -305,7 +331,7 @@ function readableStatus(state) {
   const roles = ROLES
     .map((role) => {
       const entry = state.roles[role];
-      return `  ${role}: ${entry ? `${entry.status} (${entry.agent})` : 'não atribuído'}`;
+      return `  ${role}: ${entry ? `${entry.status} (${entry.agent}${entry.score !== undefined ? `, score: ${entry.score}` : ''})` : 'não atribuído'}`;
     })
     .join('\n');
   return [
@@ -315,7 +341,7 @@ function readableStatus(state) {
     'Papéis:',
     roles,
     `Mensagens: ${state.messages.length}`,
-    `Meta-aprovação: ${state.metaApproval ? 'sim' : 'não'}`,
+    `Meta-aprovação: ${state.metaApproval ? `sim (score: ${state.metaApproval.score})` : 'não'}`,
   ].join('\n');
 }
 

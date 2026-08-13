@@ -121,6 +121,13 @@ sessão não há onde gravar.
 
 ## Como se conclui uma tarefa aqui (obrigatório)
 
+Para qualquer mudança de produto, UX, IA, fluxo ou arquitetura, consultar
+primeiro [`docs/product/PRODUCT_CONSTITUTION.md`](docs/product/PRODUCT_CONSTITUTION.md).
+O fluxo constitucional é `INFERIR → PROPOR → CONFIRMAR`: a Airia reduz a carga
+de decisão e a usuária mantém correção e veto. Perguntas que obrigam a usuária
+a classificar capacidade, priorizar opções e devolver a decisão para a Airia
+quando já há contexto suficiente são `PRODUCT FAIL`.
+
 **Alterar arquivo não conclui tarefa.** O protocolo completo está em
 [`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`](docs/DEVELOPMENT_ITERATION_PROTOCOL.md). O que
 vale sempre, sem precisar abrir o documento:
@@ -146,6 +153,11 @@ vale sempre, sem precisar abrir o documento:
   entrega, falha e aprovação. Todo handoff leva contexto, evidência, decisão e
   próxima ação para `CURRENT_STATE.md`/memória, não apenas para o chat. Ver
   §§8.9 e 14 do protocolo.
+- Verificadores e meta-verificador dão nota objetiva de `0–10`; nenhum deles
+  aprova com menos de `8/10` ou diante de falha crítica. Antes de código novo,
+  registrar a pesquisa no repositório, worktrees, histórico, dependências e
+  fontes externas aplicáveis, incluindo candidatos reutilizáveis e motivos de
+  escolha ou rejeição.
 - `CODE CORRECTNESS IS NOT PRODUCT CORRECTNESS.` Mudança visível na tela se prova
   no navegador. Saída de IA tecnicamente válida e semanticamente errada é `FAIL`.
 - Bug: `REPRODUZIR → CAUSA RAIZ → CORRIGIR → REPRODUZIR DE NOVO → REGRESSÃO`.

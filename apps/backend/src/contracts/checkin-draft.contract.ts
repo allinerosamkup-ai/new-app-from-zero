@@ -30,11 +30,12 @@ export const CheckinSignalSchema = CheckinSignalObservationSchema.extend({
 /**
  * O que a pessoa respondeu sobre o dia e que não é um sinal de 1 a 10.
  *
- * Capacidade ("o que cabe hoje") e objetivo prioritário são perguntados no
- * check-in e definem o tamanho e o alvo do que a Airia sugere. Eram jogados
- * fora: viajavam só pelo estado de navegação até a tela de resultado e morriam
- * ao fechar o app. Pergunta que não vira dado é esforço cobrado à toa de quem
- * já está sem combustível.
+ * Capacidade ("o que cabe hoje") e objetivo prioritário podem chegar como
+ * contexto explícito de outras superfícies, mas não são perguntas obrigatórias
+ * do check-in principal. Quando ausentes, a Airia deve inferi-los a partir dos
+ * sinais atuais, histórico e objetivos. Se forem informados explicitamente,
+ * entram na memória operacional para que a confirmação da pessoa seja
+ * respeitada sem transformar a tela em um painel de decisões.
  *
  * Entram aqui, na coluna Json que já existe, porque não têm forma de sinal
  * observado — não têm escala, provenance nem confiança. Colocá-los como

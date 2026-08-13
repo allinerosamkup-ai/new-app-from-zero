@@ -20,6 +20,8 @@ Entradas das plataformas:
 
 Memória e documentação relacionadas:
 - `docs/agent-memory/` — memória persistente (o que já foi descoberto).
+- `docs/product/PRODUCT_CONSTITUTION.md` — fonte canônica do comportamento,
+  da carga cognitiva e das decisões de produto da Airia.
 - `skills/airia-pr-review/SKILL.md` — revisão obrigatória de PR/feature/deploy.
 - `AGENTS.md` e `CLAUDE.md` — identidade de produto e regras de conteúdo.
 
@@ -71,6 +73,9 @@ para §11.
 Antes de editar:
 
 - entender o comportamento pedido, não a frase pedida;
+- quando a tarefa afetar produto, UX, IA, fluxo ou arquitetura, ler
+  `docs/product/PRODUCT_CONSTITUTION.md` e transformar seus princípios em
+  critérios de aceite;
 - localizar **todos** os arquivos relevantes — este repo tem funcionalidade
   espelhada em `apps/web`, `apps/backend` e `apps/mobile`, e mudar só o primeiro
   arquivo encontrado é o erro clássico daqui;
@@ -138,6 +143,11 @@ o que foi encontrado, o que foi escolhido ou rejeitado e o motivo. Se nada
 adequado existir, registrar brevemente quais fontes foram consultadas antes de
 inventar a implementação. A busca não substitui os testes: código reutilizado
 entra no mesmo ciclo de verificação, segurança e regressão do código novo.
+
+Para qualquer tarefa que crie ou altere código, a evidência de busca é parte do
+contrato de execução: registrar as fontes consultadas, os candidatos relevantes,
+a decisão de reutilizar/adaptar ou a rejeição fundamentada. “Não encontrei” sem
+fontes, consultas e justificativa não satisfaz o gate.
 
 ### IMPLEMENT
 
@@ -671,6 +681,33 @@ idioma correto, segurança, continuidade da ação, concisão e acabamento visua
 sem regressão. Se o verificador não consegue mostrar isso, o resultado é
 `FAIL` ou `BLOQUEADO`, nunca uma aprovação por gosto.
 
+### 8.10 Nota objetiva do verificador: mínimo 8/10
+
+Todo `verifier`, `verificador de integração` e `meta-verificador` deve emitir
+uma nota de qualidade de `0` a `10`, acompanhada de evidência. Para aprovar, a
+nota mínima é **8/10**. A palavra “impressionante” só pode ser usada como
+resumo depois que a nota e os critérios abaixo estiverem comprovados:
+
+| Ponto | Evidência exigida |
+|---:|---|
+| 1 | comportamento pedido e critérios de aceite realmente atendidos |
+| 1 | evidência reproduzível do comportamento e integração correta |
+| 1 | UI/UX, acessibilidade e responsividade quando aplicável |
+| 1 | dados, persistência, IA, grounding e regras quando aplicável |
+| 1 | português/inglês e conteúdo dinâmico coerentes quando aplicável |
+| 1 | loading, vazio, erro, retry, reload e edge cases |
+| 1 | verificação proporcional ao risco, incluindo runtime/browser quando necessário |
+| 1 | regressão vizinha e segurança/privacidade sem falha crítica conhecida |
+| 1 | pesquisa de soluções existentes antes de inventar, com escolha/rejeição registrada |
+| 1 | handoff entre LLMs, memória, commit e worktree com destino definido |
+
+Cada ponto precisa de evidência. Um item não aplicável exige justificativa e
+evidência substituta; `N/A` não pode esconder uma lacuna. Uma falha crítica —
+evidência inventada, segredo exposto, dependência sem origem/licença aceitável,
+caminho principal quebrado, perda de dado, regressão de segurança ou requisito
+essencial não verificado — anula a aprovação independentemente da média. Nota
+abaixo de 8 ou falha crítica é `FAIL`/`BLOQUEADO` e retorna para retrabalho.
+
 ---
 
 ## 9. Bug Fix Protocol
@@ -836,12 +873,16 @@ COORDENADOR
 - **Executor:** implementa uma fatia vertical e entrega mudanças, testes e
   evidências. Não aprova o próprio trabalho.
 - **Verificador:** atua de forma adversarial, não altera o código que verifica e
-  produz `PASS`, `FAIL`, `BLOQUEADO` ou `N/A` justificado por critério.
+  produz `PASS`, `FAIL`, `BLOQUEADO` ou `N/A` justificado por critério, sempre
+  com nota `0–10`; só pode produzir `PASS` com nota mínima `8/10` e sem falha
+  crítica.
 - **Verificador de integração:** confere o comportamento combinado entre UI,
-  API, banco, regras, IA, ferramentas e superfícies consumidoras.
+  API, banco, regras, IA, ferramentas e superfícies consumidoras; também deve
+  registrar nota `0–10`, com mínimo `8/10` para aprovação.
 - **Meta-verificador:** audita o processo inteiro, os handoffs, a qualidade das
-  evidências, a regressão, os commits e worktrees. É o único papel que autoriza
-  `DONE`.
+  evidências, a regressão, os commits e worktrees. Deve registrar sua própria
+  nota `0–10`, com mínimo `8/10` e sem falha crítica; é o único papel que
+  autoriza `DONE`.
 
 Quando existirem fatias independentes, usar executores em paralelo. A divisão
 deve ser por comportamento ou contrato (`entrada → processamento → efeito →
@@ -904,7 +945,9 @@ verificação independente.
 O meta-verificador deve confirmar que todos os critérios têm estado e evidência,
 que nenhum agente aprovou o próprio trabalho, que a integração foi testada no
 contexto correto, que os dados e worktrees têm destino e que não há conclusão
-baseada apenas em código, build, teste isolado ou HTTP 200. Qualquer falha
+baseada apenas em código, build, teste isolado ou HTTP 200. Deve conferir as
+notas dos verificadores, a sua própria nota mínima de `8/10` e a pesquisa de
+reuso registrada antes da criação de código. Qualquer falha ou nota insuficiente
 retorna para `RETRABALHO` ou `BLOQUEADA`.
 
 ---
@@ -927,6 +970,10 @@ Antes de declarar `DONE`:
 [ ] Nenhum problema crítico conhecido restante
 [ ] Existe evidência para tudo acima
 [ ] Soluções existentes foram procuradas antes de escrever código novo
+[ ] A pesquisa de reuso foi registrada com fontes, candidatos e decisão
+[ ] Verificador e integração têm nota documentada de pelo menos 8/10
+[ ] Meta-verificador tem nota documentada de pelo menos 8/10
+[ ] Nenhuma falha crítica anula as notas
 [ ] Código reutilizado tem origem, licença, compatibilidade e motivo registrados quando aplicável
 [ ] `git status --short --branch` foi revisado
 [ ] Cada alteração que deve permanecer está em commit
@@ -1133,7 +1180,9 @@ sem nenhuma verificação tentada.
 O `orchestration-guard` acrescenta as barreiras de processo: edição de código
 exige contrato inicializado por `node scripts/agent-protocol.mjs init`,
 `SubagentStart` injeta o contexto comum, `SubagentStop` exige handoff com
-estado/evidência e `Stop`/`TaskCompleted` exigem meta-aprovação. O estado técnico
+estado/evidência e `Stop`/`TaskCompleted` exigem meta-aprovação. O CLI exige
+nota mínima `8/10` para `verifier`, `integration` e `meta-verifier` antes de
+aceitar `PASS`/`meta-approve`. O estado técnico
 fica em `.claude/.state/agent-protocol.json` (ignorado pelo Git); a comunicação
 durável entre LLMs continua sendo registrada em `CURRENT_STATE.md`,
 `WORKTREES.md` e na memória relevante.

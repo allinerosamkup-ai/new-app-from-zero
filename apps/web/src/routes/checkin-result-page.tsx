@@ -197,9 +197,9 @@ export function CheckinResultPage() {
     analysis?: string | null;
     recommendations?: string[];
     suggestedIntensity?: string | null;
-    /** O que cabe hoje, respondido no check-in. Define o tamanho do passo. */
+    /** Contexto explícito, quando uma superfície compatível o informou. */
     capacity?: "quick" | "moderate" | "heavy" | null;
-    /** Objetivo que a pessoa apontou como prioridade de hoje. */
+    /** Objetivo explicitamente confirmado pela pessoa em outra superfície. */
     priorityGoalId?: string | null;
     riskSafety?: {
       riskLevel?: RiskSafety["riskLevel"];
@@ -359,7 +359,8 @@ export function CheckinResultPage() {
    */
   const focusGoal = useMemo(() => {
     const active = (state.goals || []).filter((goal) => goal.completedPct < 100);
-    // A escolha da pessoa no check-in ganha de qualquer heurística nossa.
+    // Uma prioridade explicitamente confirmada em outra superfície ganha de
+    // qualquer heurística; o check-in principal não terceiriza essa decisão.
     const chosen = checkinAI?.priorityGoalId
       ? active.find((goal) => String(goal.id) === String(checkinAI.priorityGoalId))
       : undefined;

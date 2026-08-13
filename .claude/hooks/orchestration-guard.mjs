@@ -43,6 +43,16 @@ function loadState() {
   }
 }
 
+function hasApprovedQuality(state) {
+  if (!state?.metaApproval || Number(state.metaApproval.score) < 8) return false;
+  if (state.roles?.meta?.status !== 'approved' || Number(state.roles.meta.score) < 8) return false;
+  return ['verifier', 'integration'].every((role) => {
+    const entry = state.roles?.[role];
+    return entry && ['pass', 'approved'].includes(entry.status)
+      && Number(entry.score) >= 8 && Boolean(entry.evidence);
+  });
+}
+
 function writeState(state) {
   const directory = dirname(STATE_FILE);
   mkdirSync(directory, { recursive: true });
@@ -76,6 +86,7 @@ function protocolContext() {
     '3. Registre handoffs e comunicação entre LLMs com contexto, evidência, decisão e próxima ação.',
     '4. O meta-verificador deve registrar meta-approve antes de DONE.',
     '5. Consulte docs/DEVELOPMENT_ITERATION_PROTOCOL.md e a memória relevante.',
+    '6. Se a tarefa afetar produto, UX, IA, fluxo ou arquitetura, consulte docs/product/PRODUCT_CONSTITUTION.md.',
   ].join('\n');
 }
 
@@ -151,7 +162,7 @@ function main() {
   }
 
   if (event === 'TaskCompleted') {
-    if (!state || !state.metaApproval) {
+    if (!hasApprovedQuality(state)) {
       block('TASK COMPLETION BLOQUEADA: a tarefa não tem meta-aprovação registrada. O verificador, o verificador de integração e o meta-verificador precisam registrar evidência antes de concluir.');
     }
     return;
@@ -159,8 +170,8 @@ function main() {
 
   if (event === 'Stop') {
     if (payload.stop_hook_active === true) return;
-    if (state && !state.metaApproval) {
-      block('STOP BLOQUEADO: existe contrato ativo sem meta-aprovação. Registre PASS do executor, verificador e integração, depois execute meta-approve com evidência.');
+    if (state && !hasApprovedQuality(state)) {
+      block('STOP BLOQUEADO: existe contrato ativo sem meta-aprovação de qualidade. Registre PASS do verificador e da integração com score >= 8, depois execute meta-approve com score >= 8 e evidência.');
     }
   }
 }

@@ -30,7 +30,12 @@ function writeState(cwd, metaApproval = null) {
   writeFileSync(join(cwd, '.claude', '.state', 'agent-protocol.json'), JSON.stringify({
     version: 1,
     task: { id: 'guard-test', objective: 'Testar enforcement', status: metaApproval ? 'approved' : 'active' },
-    roles: {},
+    roles: metaApproval ? {
+      executor: { status: 'pass', evidence: 'executor passou' },
+      verifier: { status: 'pass', score: 8, evidence: 'verifier passou' },
+      integration: { status: 'pass', score: 8, evidence: 'integration passou' },
+      meta: { status: 'approved', score: metaApproval.score ?? 8, evidence: 'meta passou' },
+    } : {},
     messages: [],
     metaApproval,
   }));
@@ -62,6 +67,7 @@ test('SubagentStart injeta contexto mesmo antes da inicialização', () => {
     assert.equal(result.status, 0, result.output);
     const response = JSON.parse(result.stdout);
     assert.match(response.hookSpecificOutput.additionalContext, /PROTOCOLO OPERACIONAL OBRIGATÓRIO/);
+    assert.match(response.hookSpecificOutput.additionalContext, /PRODUCT_CONSTITUTION\.md/);
   } finally {
     cleanup(cwd);
   }
@@ -98,10 +104,23 @@ test('Stop respeita stop_hook_active e bloqueia encerramento sem meta-aprovaçã
 test('Stop libera encerramento depois da meta-aprovação', () => {
   const cwd = workspace();
   try {
-    writeState(cwd, { evidence: 'executor, verifier e integration aprovados' });
+    writeState(cwd, { evidence: 'executor, verifier e integration aprovados', score: 8 });
     const result = run(cwd, { hook_event_name: 'Stop' });
     assert.equal(result.status, 0, result.output);
     assert.equal(result.stdout, '');
+  } finally {
+    cleanup(cwd);
+  }
+});
+
+test('Stop bloqueia meta-aprovação com score abaixo de 8', () => {
+  const cwd = workspace();
+  try {
+    writeState(cwd, { evidence: 'meta abaixo do limiar', score: 7 });
+    const result = run(cwd, { hook_event_name: 'Stop' });
+    assert.equal(result.status, 0, result.output);
+    assert.equal(JSON.parse(result.stdout).decision, 'block');
+    assert.match(result.stdout, /score >= 8/i);
   } finally {
     cleanup(cwd);
   }

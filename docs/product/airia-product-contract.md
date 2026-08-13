@@ -1,4 +1,9 @@
-# Contrato central da Airia
+# Contrato técnico central da Airia
+
+> A fonte canônica de decisões de produto é
+> [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Este arquivo mantém os
+> contratos técnicos e comportamentais de implementação, persistência e
+> integração. Não crie aqui uma interpretação divergente do produto.
 
 ## Entrega principal
 
