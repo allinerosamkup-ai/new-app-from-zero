@@ -6,7 +6,7 @@
 - **Ciclo primário:** ciclo de humor/energia (EWMA + desvio padrão + tendência de 7 dias).
 - **Ciclo secundário:** ciclo menstrual como modulador biológico, não como identidade principal.
 - **Público-alvo:** pessoas com TDAH, ciclotimia, transtorno depressivo, bipolar tipo II e variações hormonais/cíclicas.
-- **Princípio operacional:** contexto antigo explica padrão; contexto de hoje decide ação.
+- **Princípio operacional:** contexto antigo explica padrão; contexto de hoje decide ação. Padrões verificados podem alimentar a ação quando são relevantes, ancorados e rastreáveis.
 
 ## Módulo Core — MoodCycleEngine
 Localizado em `apps/web/src/utils/mood-cycle-engine.ts`.
@@ -49,20 +49,20 @@ packages/
 - Metodologia interna: Aliança Divergente, TCC prática, exposição gradual, leitura de padrão, manobra concreta e autonomia.
 
 ## Airia como centro de comando
-- Tudo que se faz por tela tem que dar para pedir falando: criar tarefa, compromisso, hábito, meta e checklist; concluir, apagar, mover, adiar e começar; **registrar check-in**; adaptar a agenda; abrir uma tela.
+- Tudo que se faz por tela tem que dar para pedir falando: registrar check-in, consultar padrões, avançar em Objetivo, criar/editar/concluir uma Ação e abrir uma tela. Capacidades legadas de tarefa, hábito, agenda e Planner só entram quando explicitamente reativadas no contrato do produto.
 - Uma fala pode conter mais de uma ação (`actions[]`, até 8). A segunda coisa dita nunca é descartada.
 - **Estado é captura paralela.** Sempre que a fala revela como a pessoa está — com pedido junto ou não — isso vira check-in registrado, sem sequestrar a resposta. É o dado que alimenta fase, capacidade do dia e toda sugestão de agendamento.
 - Antes de agir, a Airia confere o dia real: o que já existe, o que já foi feito, o que está ocupado. Ela conclui em vez de duplicar e reconhece em vez de sugerir o que já aconteceu.
 
 ## Contexto Diário e Agenda Adaptativa
 - Fonte central: `apps/backend/src/services/context-grounding.service.ts`.
-- `DailyContext` reúne agenda pendente/feita, hábitos pendentes/feitos, metas ativas/concluídas, subtarefas feitas, sugestões recentes, feedback de ações e memória RAG relevante.
+- `DailyContext` reúne sinais atuais, estado calculado, Objetivos ativos, Ações pendentes/concluídas, sugestões recentes, feedback de ações, padrões verificados e memória RAG relevante. Dados legados podem ser preservados para compatibilidade, mas não entram como fontes ativas enquanto suas capacidades estiverem desligadas.
 - Cérebro operacional: `apps/backend/src/services/decision-engine.service.ts`.
 - Agenda adaptativa: `apps/backend/src/services/adaptive-agenda-engine.service.ts`, exposta por `AgendaAdaptationService`.
 - **A Airia decide e preenche.** Quando a fala contém um item — compromisso marcado, prazo, algo que pediram à usuária, intenção de retomar algo — ela entrega o item montado: título, data, hora e duração já resolvidos. Devolver a lacuna como pergunta para quem já contou o que precisa fazer é transferir esforço para quem está sem combustível.
-- Âncora de uma sugestão pode ser agenda pendente, hábito devido, meta ativa, ação aceita **ou o que a usuária acabou de contar**. O que não vale é sugestão tirada do relógio ("um café às 9h") — isso é enchimento, não ajuda.
+- Âncora de uma sugestão pode ser Objetivo ativo, Ação pendente, ação aceita, intenção explícita ou o que a usuária acabou de contar. Padrão confirmado pode ajustar prioridade, tamanho, ritmo, proteção ou adiamento dessa ação. O que não vale é sugestão tirada do relógio ("um café às 9h") — isso é enchimento, não ajuda.
 - O que a Airia não inventa: o título do item. Sem saber o que é a coisa, ela faz uma pergunta curta — só essa.
-- Memória RAG serve para explicar padrão, compreender o usuario,seus compromiisos, suas questoes emocinais, tudo que o usuario compartilhar com o app
+- Memória RAG serve para explicar padrões e compreender o que a usuária compartilha com o app; padrões confirmados podem influenciar uma Ação somente com relevância atual, destino operacional, capacidade, segurança e evidência persistida.
 - Feedback de ações fica em `AiActionFeedbackService` e bloqueia repetição de ações feitas, excluídas, rejeitadas, puladas ou agendadas.
 - O Decision Brain separa `real_commitment`, `suggested_commitment`, `insight_only`, `blocked` e autorização de notificação.
 - Sugestão de compromisso entra no dia sozinha, com desfazer e ajustar à mão. **Criar não é o mesmo que notificar:** gravar um bloco é barato, tocar o celular não é — `notificationAllowed` continua sendo decisão separada.

@@ -43,6 +43,11 @@ type GoalLike = {
     id: string | number; title: string; done: boolean; order?: number;
     milestoneId?: string | null; scheduledFor?: string | null; doneWhen?: string | null;
     effortSize?: 'small' | 'medium' | 'large' | null; status?: 'pending' | 'done' | 'rejected' | 'deferred';
+    evidenceRefs?: string[];
+    patternBasis?: Array<{
+      pattern: string; evidenceCount: number; distinctDays: number; windowDays: number;
+      confidence: number; limitation: string; impact: string;
+    }>;
   }>;
   description?: string | null;
   resultDefinition?: string | null;
@@ -792,6 +797,11 @@ function GoalCard({
                     <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
                       {action.title}
                       {active ? <small style={{ display: "block", marginTop: 2, color: "var(--menthe)", fontWeight: 800 }}>{l("Agora", "Now")}</small> : null}
+                      {action.patternBasis?.map((basis) => (
+                        <small key={`${action.id}-${basis.pattern}`} style={{ display: "block", marginTop: 5, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.45, textDecoration: "none" }}>
+                          {l("Base desta adaptação", "Basis for this adaptation")}: {basis.pattern} · {basis.evidenceCount} {l("evidências", "evidence")} em {basis.distinctDays} {l("dias", "days")}/{basis.windowDays} · {Math.round(basis.confidence * 100)}% {l("confiança", "confidence")}. {basis.impact} {basis.limitation}
+                        </small>
+                      ))}
                     </span>
                   </button>
                   );

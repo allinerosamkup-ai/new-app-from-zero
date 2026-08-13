@@ -1,5 +1,12 @@
 # Documento 2 — PRD do MVP (Product Requirements Document)
 
+> **Status:** PRD histórico/fundador. A tese de transformar sinais subjetivos e
+> biométricos em adaptação prática continua sendo requisito de produto. A
+> implementação ativa foi reduzida a Check-in, Objetivos, Ações, Diário,
+> Padrões e Aura; Planner, Hábitos e agenda descritos como módulos do MVP estão
+> isolados/desligados, não removidos do histórico. O contrato vigente está em
+> [`docs/product/PRODUCT_CONSTITUTION.md`](product/PRODUCT_CONSTITUTION.md).
+
 ## 1. Resumo executivo
 
 O MVP é um aplicativo mobile (com visão futura web) que combina:

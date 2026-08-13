@@ -247,7 +247,7 @@ function formatGroundingBlock(lists: GroundingLists & { postponedActions?: Groun
     lists.menstrualPhaseLabel
       ? `Ciclo menstrual: ${lists.menstrualPhaseLabel}${lists.menstrualCycleDay !== null ? ` (D${lists.menstrualCycleDay})` : ''} — usar como modulador biológico ao interpretar energia e humor, não como tema central.`
       : '',
-    'Regra de grounding: memórias e histórico explicam padrão; ação nova só pode nascer de agenda pendente, hábito pendente ou meta ativa de hoje.',
+    'Regra de grounding: memórias e histórico explicam padrões; uma ação nova só pode nascer de Objetivo ativo, Ação pendente, intenção/relato atual ou âncora real de hoje. Um padrão verificado pode calibrar essa ação, nunca inventar destino operacional.',
     'Regra de compromisso: sugestão opcional pode ser proposta, mas só compromisso real salvo/confirmado pode virar pendência ou notificação.',
     ragContext ? 'Memórias RAG entram como padrão/contexto, não como autorização para inventar tarefa operacional.' : '',
   ].filter(Boolean);

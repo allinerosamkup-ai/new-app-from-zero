@@ -30,9 +30,9 @@ Skill operacional criada em `skills/airia-pr-review/SKILL.md` e registrada em `s
 
 5. **IA ancorada em contexto atual**
    - Evidência: commits `0af5d58`, `4f362be`, `f8f7db4`, `9267dba` e `20128b2` reforçaram grounding, Decision Brain e raciocínio operacional.
-   - Prática obrigatória: sugestão operacional da Airia precisa citar âncora real do dia: tarefa ou subtarefa pendente, compromisso real, hábito devido, meta ativa ou pedido explícito. Sem âncora, perguntar.
-   - Diário e Check-in são contexto para interpretar humor, energia e padrão; não são autoridade operacional para criar tarefa. Só autorizam ação quando registram um pedido explícito atual ou apontam para uma âncora operacional já existente.
-   - Pergunta de revisão: "qual dado atual sustenta essa ação?". Se a resposta for só memória antiga, padrão genérico ou intuição da IA, a ação deve virar pergunta curta.
+   - Prática obrigatória: sugestão operacional da Airia precisa citar âncora real do dia: Objetivo ativo, Ação pendente, intenção/relato atual ou pedido explícito. Um padrão confirmado pode alimentar a decisão quando sua relevância, evidência, capacidade e segurança estiverem documentadas.
+   - Diário e Check-in são contexto para interpretar humor, energia e padrão; podem sustentar ação quando registram um pedido atual, apontam para um destino operacional existente ou quando um padrão verificado altera de forma explicável a Ação escolhida.
+   - Pergunta de revisão: "qual dado atual sustenta essa ação e qual padrão/evidência a calibraram?". Se a resposta for só memória antiga, padrão não verificado ou intuição da IA, a ação deve virar explicação ou pergunta curta.
 
 6. **Segurança sem terapeuta falsa**
    - Evidência: `riskSafety` foi adicionado a Check-in, Diário e Aura; revisão recente exigiu produto final, não copy de clínica/pitch.

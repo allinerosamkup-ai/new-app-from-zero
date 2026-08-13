@@ -633,7 +633,10 @@ verificação deve declarar:
 | Superfícies | Quais páginas, componentes, APIs, serviços de IA e consumidores do dado são afetados? |
 | Intenção | O que a usuária deve conseguir fazer, sem precisar adivinhar o próximo passo? |
 | Dados | Qual entrada chega ao payload, ao banco, ao contexto da IA e às regras? |
-| Âncoras | Qual meta, tarefa, hábito, compromisso ou pedido atual sustenta a ação? |
+| Âncoras | Qual Objetivo, Ação, intenção ou relato atual sustenta a ação? Um padrão verificado está sendo usado como fonte de decisão? |
+| Padrões | Como o padrão foi calculado, quantas evidências/dias o sustentam, qual sua confiança, janela, estado e limitação? |
+| Influência | O padrão está alterando prioridade, tamanho, ritmo, proteção ou adiamento de uma Ação de forma explicável? |
+| Devolução | A usuária vê observação, evidência, confiança, impacto, proposta e opções de confirmar/corrigir/rejeitar? |
 | Idiomas | O fluxo inteiro funciona em português e inglês, inclusive conteúdo dinâmico, backend e IA? |
 | Estados | Vazio, carregando, sucesso, erro, parcial, inválido, retry, reload, offline e duplo clique foram considerados? |
 | UI/UX | A hierarquia, interação, acessibilidade, responsividade, animação e visual ajudam a usuária a agir? |
@@ -645,15 +648,49 @@ O pipeline integrado a verificar é:
 entrada da usuária
 → UI/UX
 → normalização
-→ contexto atual
+→ contexto atual + estado calculado
+→ padrões candidatos e evidências
+→ padrões verificados e limitações
+→ capacidade e segurança
+→ Objetivo/Ação de destino
 → prompt/modelo
 → saída estruturada
 → filtros e regras
 → persistência
 → UI de retorno
+→ feedback da usuária
 → próxima ação
 → outras superfícies consumidoras
 ```
+
+### 8.9.1 Contrato de padrões como fonte de ação
+
+Padrões não são proibidos de alimentar ações. A regra é impedir que uma camada
+de memória grave uma ação diretamente e desconectada do presente. O caminho
+obrigatório é:
+
+```text
+evidência → hipótese → verificação → relevância atual
+→ Objetivo/intenção + capacidade + segurança
+→ proposta de Ação/proteção/adiamento
+→ confirmação ou correção → persistência com evidências
+```
+
+O verificador deve confirmar, com evidência:
+
+- cálculo reproduzível do padrão a partir de dados reais;
+- mínimo de 3 evidências em 2 dias distintos para padrão inferido confirmado;
+- distinção entre estado atual, associação, padrão longitudinal e diagnóstico;
+- padrão confirmado podendo alterar prioridade, tamanho, ordem, duração, ritmo,
+  proteção ou adiamento de uma Ação;
+- padrão sem destino operacional não criando Ação isolada;
+- nenhuma reativação de Ação concluída, rejeitada, excluída ou adiada;
+- decisão devolvida com base, confiança, limitação e possibilidade de correção;
+- correção/exclusão impedindo uso futuro indevido e atualizando as superfícies;
+- referência persistida do padrão e das evidências na decisão resultante.
+
+Se qualquer superfície calcular ou narrar um resultado diferente do estado
+persistido, o resultado é `INTEGRATION_PENDING` até a fonte comum ser corrigida.
 
 Para qualquer alteração de IA, dados ou regra, o verificador deve confirmar que
 os campos capturados chegam ao destino correto, são persistidos, são lidos de

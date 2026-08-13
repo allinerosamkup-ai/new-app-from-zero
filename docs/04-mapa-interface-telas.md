@@ -1,5 +1,10 @@
 # Documento 4 — Mapa de Telas e Interface (Wireframing Textual)
 
+> **Status:** wireframe fundador. Mantém a tese de Home, Diário, Padrões e
+> organização adaptativa, mas Planner, Tarefas, Hábitos e timeline são
+> históricos/desligados na superfície atual. Hoje, o destino operacional é
+> Objetivo/Ação e toda tela deve consumir o contrato global da Airia.
+
 ## 1. Visão Geral da Interface
 
 A interface deve priorizar uma UX "Glassmorphism", calma, suave e extremamente responsiva. Inspirada na limpeza do Structured e na abordagem humana do Justly. Sem "botões gritantes" ou excesso de informações.

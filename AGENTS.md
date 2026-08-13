@@ -62,20 +62,24 @@ arquivo, branch ou worktree pode ficar sem destino. O ciclo completo está em
 §22 de `docs/DEVELOPMENT_ITERATION_PROTOCOL.md`.
 
 ## Regra Central de IA
-Contexto antigo explica padrão; contexto de hoje decide ação.
+Contexto antigo explica padrão; contexto de hoje decide ação. Padrões verificados
+também são fontes legítimas para priorizar, reduzir, dividir, proteger ou
+adiar uma Ação, desde que tenham relação atual, destino em Objetivo/intenção,
+capacidade e segurança compatíveis, e referência persistida às evidências.
 
 Toda sugestão operacional da Airia deve estar ancorada em dado real atual:
-- agenda pendente;
-- hábito devido;
-- meta ativa;
-- subtarefa pendente;
-- ação explicitamente aceita pela usuária.
+- Objetivo ativo;
+- Ação pendente;
+- intenção ou relato atual com resultado concreto;
+- padrão verificado que altere de forma explicável uma decisão já ancorada.
 
-Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejeitados ou agendados entram como bloqueio, não como sugestão nova.
+Memória RAG não grava Ação diretamente. Itens concluídos, excluídos, rejeitados
+ou adiados entram como bloqueio, não como sugestão nova.
 
 ## Superfícies da Airia
-- **Home:** visão do dia, ciclo, agenda curta, card “Análise e Autonomia”.
-- **Planner:** timeline editável e futura superfície principal de adaptação da agenda.
+- **Home:** visão do dia, estado, padrões relevantes, Objetivos e Ações.
+- **Planner:** superfície preservada/desligada; se reativada, deverá consumir o
+  mesmo contrato global de estado, padrões e Ações.
 - **Check-in:** leitura do estado atual; sugestões precisam respeitar horário local e o que já foi feito.
 - **Check-in/Diário/Aura:** devem renderizar protocolo de segurança quando `riskSafety.route` exigir apoio humano ou crise.
 - **Diário:** superfície reflexiva, com resposta natural e leitura de padrão.
@@ -89,6 +93,12 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 - Prompt Aura: `apps/backend/src/lib/aura-prompt.ts`.
 - Segurança mínima IA: `apps/backend/src/lib/risk-safety.ts`.
 - Evento de segurança: `risk_protocol_triggered`.
+
+O fluxo integrado obrigatório é:
+`sinais → estado atual → padrões verificados → capacidade/segurança →
+Objetivo/Ação → devolução → confirmação/correção → persistência`. Alterar um
+produtor sem revisar seus consumidores, a devolução e o feedback é
+`INTEGRATION_PENDING`, não conclusão.
 
 ## Regra de Produto Consumidor
 O app não deve ter modo demo, seed de demo, copy de investidor, pitch, “produto vendável”, “carregar demo” ou explicações comerciais internas. A interface final é sempre para a usuária usar.

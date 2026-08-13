@@ -264,7 +264,7 @@ Returns the backend-grounded day package used by AI surfaces. This is the canoni
       "createdAt": "2026-04-30T10:00:00.000Z"
     }
   ],
-  "operationalRule": "Contexto antigo explica padrão; ação do dia precisa de âncora operacional atual."
+  "operationalRule": "Contexto antigo explica padrão; padrão verificado pode calibrar uma Ação quando há relevância atual, Objetivo/intenção, capacidade, segurança e evidência persistida."
 }
 ```
 

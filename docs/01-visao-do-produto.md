@@ -1,5 +1,12 @@
 # Documento 1 — Visão do Produto
 
+> **Status:** visão fundadora ainda válida para a essência da Airia. O app
+> ativo atualmente usa Check-in, Objetivos, Ações, Diário, Padrões e Aura; as
+> superfícies de Planner, Hábitos e integrações biométricas permanecem
+> preservadas, adiadas ou desligadas conforme a configuração. Consulte a
+> [`PRODUCT_CONSTITUTION.md`](product/PRODUCT_CONSTITUTION.md) para o contrato
+> atual.
+
 ## 1. Nome provisório
 
 Nome de trabalho: app de gestão de ciclagem de humor e energia psíquica.

@@ -149,15 +149,20 @@ As 8 fases visíveis oficiais: `Voo Alto`, `Fluindo`, `Estável`, `Desacelerando
 3. **Nada de demo/pitch/copy comercial** em `apps/web/src` ou `apps/backend/src`
    — travado por `product-guardrails.test.ts`.
 4. **Sem botão morto, sucesso simulado ou placeholder** em fluxo de produto.
-5. **A IA não inventa tarefa:** sugestão operacional precisa de âncora real —
-   agenda pendente, hábito devido, meta ativa, subtarefa pendente ou aceite
-   explícito. Memória RAG explica padrão, não cria ação.
+5. **Padrões alimentam decisões com rastreabilidade:** um padrão verificado
+   pode priorizar, reduzir, dividir, proteger ou adiar uma Ação quando é relevante
+   para o estado atual e tem Objetivo/intenção como destino. Memória RAG não
+   grava Ação diretamente; sem âncora atual, a Airia explica ou pergunta.
 6. **Limite clínico:** nunca nomear transtorno, comentar medicação ou apresentar
    leitura de padrão como diagnóstico.
 7. **Identidade verde:** `--accent-primary` `#BFDCCB`. Não reintroduzir rosa nos
    apelidos. A logo é exceção deliberada (`AuraIcon.tsx`, bloco `LOGO` em
    `splash-page.tsx`).
 8. **Servidor de agenda em UTC** — `setUTCHours`, nunca `setHours` cru.
+9. **Contrato global:** `sinais → estado → padrões verificados →
+   capacidade/segurança → Objetivo/Ação → devolução → feedback → persistência`.
+   Toda mudança deve revisar a cadeia inteira; alteração isolada é
+   `INTEGRATION_PENDING`.
 
 ---
 

@@ -225,7 +225,14 @@ Exporta:
 - **Carregamento**: Começa com `Loading: true`. Exibe `Skeleton`.
 - **Contexto**: Sempre passar `moodCycleContext: cycleReport.aiContext` no payload.
 - **Renderização**: Só exibe conteúdo após resposta da IA. Nunca usar texto fixo como fallback.
-- **Grounding**: sugestões operacionais devem usar o contexto diário do backend. O frontend pode enviar contexto local, mas o backend é a fonte de verdade para pendentes, concluídos e feedback.
+- **Grounding**: sugestões operacionais devem usar estado, padrões verificados,
+  Objetivos, Ações e feedback do backend. O frontend pode exibir uma prévia
+  local, mas o backend é a fonte de verdade para evidências, confiança,
+  pendentes, concluídos e decisão.
+- **Padrões como fonte**: um padrão confirmado pode mudar prioridade, tamanho,
+  ritmo, proteção ou adiamento de uma Ação quando houver relevância atual e
+  destino em Objetivo/intenção. A UI nunca deve tratar o padrão como fato
+  clínico nem criar Ação fora do contrato persistido.
 - **Decision Brain**: quando a resposta do backend trouxer `decisionBrain` ou `adaptiveAgenda`, a UI deve respeitar `kind`, `requiresConfirmation` e `notificationAllowed`.
 - **Feedback**: quando uma ação sugerida for marcada como feita, pulada, excluída ou agendada, registrar também em `/api/ai/action-feedback`.
 - **Não repetir**: se uma sugestão saiu da tela por ação da usuária, ela não deve voltar após refresh.
@@ -233,7 +240,7 @@ Exporta:
 ## Home e Análise/Autonomia
 - O card “Análise e Autonomia” continua renderizando `stabilityScore`, `state`, `pattern`, `insight`, `actions`.
 - A Home mantém feedback local para resposta imediata e envia o mesmo feedback ao backend para memória entre sessões.
-- O card deve mostrar menos ações ou nenhuma ação se não houver sugestão ancorada no dia real.
+- O card deve mostrar menos ações ou nenhuma ação se não houver sugestão ancorada no dia real. Se um padrão participar, exibir sua base e limitação.
 - Sugestão opcional pode aparecer, mas precisa ser apresentada como proposta. Não criar tarefa, bloco ou notificação sem aceite explícito.
 
 ## Planner

@@ -2,7 +2,11 @@
 
 ## Regra de autoridade
 
-A memória explica contexto, reconhece padrões e calibra iniciativa. Ela nunca autoriza uma ação operacional sozinha. Todo registro canônico tem `actionAuthority = none`; tarefa, compromisso e notificação continuam exigindo uma âncora atual real ou confirmação explícita.
+A memória explica contexto, reconhece padrões e calibra iniciativa. Padrões
+verificados podem alimentar a decisão de uma Ação quando houver relevância atual,
+Objetivo/intenção, capacidade e segurança compatíveis. Ela nunca grava uma Ação
+sozinha. Todo registro canônico tem `actionAuthority = none`; a decisão final
+precisa guardar a evidência e o destino operacional.
 
 ## Camadas
 
@@ -21,7 +25,12 @@ Após a resposta ser entregue, a mensagem da usuária e uma janela curta da conv
 
 `AgendaPatternRecognitionService` observa até 42 dias de blocos, eventos comportamentais, onboarding e memórias dos escopos `agenda`, `work` e `routine`. Ele calcula liberdade contínua, confiança, proporções protegida/importada/recorrente, variância, janelas estáveis por dia da semana, adiamentos, snoozes e conclusões.
 
-Pouca amostra não confirma padrão e ausência de compromisso não prova autonomia. Um padrão confirmado é persistido em `agenda.style.current` por 14 dias, com proveniência. Em `/api/agenda/adapt`, somente confiança a partir de 0,65 pode calibrar a iniciativa, com peso longitudinal de 20%; o dia real continua dominante e o padrão jamais cria âncora ou tarefa.
+Pouca amostra não confirma padrão e ausência de compromisso não prova autonomia.
+Um padrão confirmado é persistido com proveniência, evidências, dias distintos,
+confiança e validade. Somente padrão confirmado e atual pode calibrar a
+iniciativa; o dia real e o Objetivo/Ação continuam dominantes. Agenda adaptativa
+é capacidade legada/desligada na versão atual e não deve ser tratada como fonte
+ativa enquanto a flag permanecer falsa.
 
 ## Memória negativa
 
@@ -37,6 +46,10 @@ O export inclui memórias canônicas, evidências, embeddings e Knowledge Graph.
 
 O onboarding guiado usa a mesma sessão persistente, mas não precisa guardar documento: escolhas de toque são convertidas diretamente em compromissos protegidos, hábitos, objetivos e referências de capacidade. A sessão pode ser retomada até a aplicação. Um novo pedido explícito da Aura invalida a restauração visual de uma sessão antiga para não misturar contextos.
 
-O histórico longitudinal participa apenas de duas decisões: explicar capacidade/padrão e impedir repetição. Ele não cria uma tarefa por conta própria. Itens do documento só ganham autoridade operacional depois da revisão da usuária; a confirmação final é aplicada atomicamente em `Objective`, `Habit` e `TimelineBlock`.
+O histórico longitudinal participa da interpretação de capacidade/padrão,
+priorização, redução, proteção, adiamento e prevenção de repetição. Ele não cria
+uma Ação por conta própria. A confirmação final da versão ativa é aplicada
+atomicamente no `Objective`; `Habit` e `TimelineBlock` permanecem destinos
+legados até reativação explícita.
 
 Eventos do Montador registram apenas identificador da sessão, contagens, tipo de fonte e nível de capacidade. Conteúdo bruto, trechos do documento e respostas pessoais não entram em `EventLog`.

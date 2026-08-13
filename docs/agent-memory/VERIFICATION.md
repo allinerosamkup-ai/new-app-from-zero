@@ -1,5 +1,21 @@
 # VERIFICATION — como se verifica coisa neste repositório
 
+## Contrato global de padrões e ações
+
+Ao validar uma mudança que toca IA, estado ou objetivos, comprovar a cadeia
+`sinais → estado atual → padrão/evidências → verificação → capacidade/segurança
+→ Objetivo/Ação → devolução → feedback → persistência`. Padrões são fontes
+legítimas para priorizar, reduzir, dividir, proteger ou adiar Ações quando
+confirmados e relevantes; não podem gravar Ação diretamente. Confirmar também:
+
+- padrão inferido com pelo menos 3 evidências em 2 dias distintos;
+- estado insuficiente, associação e padrão longitudinal distinguidos na UI;
+- evidências, janela, confiança e limitações devolvidas à usuária;
+- rejeição, correção, exclusão e conclusão respeitadas sem ressurreição;
+- Home, Check-in, Insights, Contexto, Diário, Aura e Objetivos coerentes com a
+  mesma decisão persistida;
+- PT/EN, erro, reload e persistência real verificados.
+
 > Camada A. Comandos reais, custo real, e as verificações que **parecem** válidas
 > mas produzem falso positivo. Consulte antes de escolher como provar uma
 > mudança. O protocolo que diz *quando* usar cada uma é

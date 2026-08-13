@@ -1,5 +1,11 @@
 # Documento 5 — Prompt Pack para outras IAs
 
+> **Status:** prompts fundadores para referência. Ao usar qualquer trecho hoje,
+> aplicar primeiro `docs/product/PRODUCT_CONSTITUTION.md`: padrões verificados
+> podem alimentar Objetivos/Ações quando relevantes, Planner/Hábitos/agenda
+> permanecem condicionados à ativação e nenhuma tela pode devolver à usuária
+> decisões que a Airia já consegue inferir.
+
 Use os blocos abaixo copiando e colando direto na IA que você quiser (Figma, dev, UX writer, etc.). Sempre que possível, cole o texto inteiro do prompt antes de pedir algo específico.
 
 ---

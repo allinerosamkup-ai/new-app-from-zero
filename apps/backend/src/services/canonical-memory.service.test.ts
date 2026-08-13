@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { CanonicalMemoryService } from './canonical-memory.service';
+import { CanonicalMemoryService, isDecisionEligiblePattern } from './canonical-memory.service';
 
 function fakePrisma() {
   const memories: any[] = [];
@@ -74,6 +74,12 @@ async function run() {
   }
   const pattern = db.memories.find((m) => m.canonicalKey === 'agenda.late-focus');
   assert.equal((pattern.structuredValue as any).confirmed, true, 'pattern needs 3 evidence items across 2 days');
+  assert.equal((pattern.structuredValue as any).evidenceIds.length, 3, 'confirmed pattern keeps evidence references');
+  assert.equal(isDecisionEligiblePattern(pattern), true, 'confirmed pattern can feed a decision');
+  assert.equal(isDecisionEligiblePattern({ kind: 'pattern', structuredValue: { inferred: true, confirmed: false } }), false,
+    'unconfirmed inferred pattern cannot feed a decision');
+  assert.equal(isDecisionEligiblePattern({ kind: 'pattern', structuredValue: { confirmed: true, evidenceCount: 3, distinctDays: 2, evidenceIds: ['e1', 'e2'] } }), false,
+    'confirmation without three persisted evidence references cannot feed a decision');
 
   await service.write({ ...base, sourceId: 'msg-2', content: 'Prefere foco a tarde', observedAt: new Date('2026-07-13') });
   assert.equal(db.memories.filter((m) => m.canonicalKey === 'routine.focus' && m.lifecycle === 'active').length, 1);
