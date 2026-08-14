@@ -68,6 +68,15 @@ durável é `docs/agent-memory/`.
 `npm run build -w apps/backend` é `tsc` e faz esse papel. Procurar por
 `typecheck` no backend e concluir "não dá para checar tipo" é erro de leitura.
 
+### [FATO] Migração escrita não é migração aplicada — a lista real é o `deploy.sh`
+`deploy/airia/deploy.sh` aplica **exatamente** os arquivos de `MIGRATION_FILES`,
+um a um. Arquivo criado em `supabase/migrations/` e ausente dessa lista nunca
+roda em produção, e nada no build reclama: em 2026-08-14 o
+`20260811120000_add_objective_intelligence.sql` estava mergeado no master, com
+CI verde, e o banco público não tinha nenhuma das colunas. Ao criar migração,
+acrescente a linha no `deploy.sh` na posição cronológica; o
+`migration-chain-safety.test.ts` agora trava a omissão e a ordem.
+
 ---
 
 ## Testes
@@ -338,6 +347,20 @@ Perguntar qual é o objetivo, realidade ou prioridade apenas lê o estado e não
 autoriza proposta de revisão. Mudança material declarada continua acionando a
 revisão. Ao combinar etapas preservadas com etapas geradas, normalize IDs para
 unicidade antes de persistir a proposta; modelos podem repetir IDs existentes.
+
+### [DECISÃO] `BILLING_PROVIDER` não tem fallback automático, e o padrão é `cakto`
+`billing-provider.ts` só usa Stripe quando alguém escreve `stripe`; sem os
+segredos da Cakto o provedor vira `UnavailableBillingProvider` e
+`checkoutAvailable` fica `false` — a tela de plano deixa de vender em vez de
+cair para o Stripe calado. É de propósito: dois provedores ativos ao mesmo tempo
+duplicariam cobrança. Consequência operacional: **subir o código sem os segredos
+desliga a compra**; o contorno explícito é `BILLING_PROVIDER=stripe`.
+
+### [FATO] Aviso de "confirmando pagamento" precisa de prazo, não de confirmação
+O retorno do checkout Cakto não traz `session_id` na URL, então a tentativa fica
+em `sessionStorage`. Apagar só quando confirma faz quem desistiu do pagamento
+reencontrar "Confirmando seu pagamento" para sempre. A chave vale 30 minutos;
+perder o aviso não perde compra, porque quem libera acesso é o webhook.
 
 ### [DECISÃO] Divergência de histórico bloqueia `supabase db push`, não a validação segura
 Quando as migrações locais e remotas divergem, não reparar histórico durante uma

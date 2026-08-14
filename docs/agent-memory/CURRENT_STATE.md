@@ -2,7 +2,9 @@
 
 ## Status
 
-`IN PROGRESS — migração da cobrança para Cakto, com Stripe preservado como contingência`
+`BLOQUEADO EXTERNAMENTE — código da Cakto meta-verificado e integrado na branch
+claude/codex-session-finalize-n3oeqy; falta a titular concluir os dados
+legais/financeiros no painel Cakto e a autorização de produção`
 
 ## Sprint Contract — Cakto
 
@@ -82,6 +84,41 @@
   dados legais/financeiros sensíveis no painel. Esses dados não podem ser
   inferidos pelo agente e a capacidade real de receber/repassar valores não será
   declarada pronta antes dessa conclusão.
+
+## Meta-verificação independente — 2026-08-14 (Claude Code, sessão remota)
+
+Retomada do trabalho iniciado no Codex (`codex/cakto-billing`, commit `39b3813`).
+A branch foi trazida sem rebase para `claude/codex-session-finalize-n3oeqy`, que
+partia exatamente de `2eeb1c9` (`origin/master`).
+
+- **Baseline reproduzido do zero, em container Linux limpo:** backend 109 suítes
+  PASS, web 57 arquivos / 435 testes PASS, `generate`/build do database, build do
+  backend, typecheck e build do web PASS. Os números do handoff do Codex
+  bateram — o relatório dele era honesto.
+- **Defeito P1 encontrado fora do escopo declarado, com evidência em produção:**
+  `supabase/migrations/20260811120000_add_objective_intelligence.sql`, mergeada
+  no master pelo PR #10, **nunca entrou na lista `MIGRATION_FILES` do
+  `deploy/airia/deploy.sh`**. O deploy aplica exatamente o que está listado, e o
+  banco público confirmou: 0 das colunas de objetivo inteligente, 42 objetivos
+  reais, `billing_checkout_attempts` e `billing_webhook_events` inexistentes.
+  A release pública ainda era `1014696`, anterior ao merge — ou seja, o estrago
+  aconteceria no **próximo** deploy, com build verde e Objetivos quebrando em
+  produção. Corrigido, e a trava agora é genérica em
+  `migration-chain-safety.test.ts`: a partir do primeiro arquivo que o deploy
+  aplica, nenhuma migração posterior pode faltar nem sair de ordem. A trava foi
+  provada por mutação (remover a linha faz o teste falhar).
+- **Defeito P2 no retorno do checkout:** a tentativa gravada em `sessionStorage`
+  só era apagada quando o pagamento confirmava. Quem abrisse o checkout e
+  desistisse reencontraria "Confirmando seu pagamento" em toda visita a
+  `/billing` — aviso sobre uma compra que não existe. Agora a tentativa vale 30
+  minutos; perder o aviso não perde compra, porque a liberação vem do webhook.
+- **Risco avaliado e descartado com dado real:** conta Stripe legada ficaria com
+  `billing_provider` nulo e sem botão de gerenciar. `select count(*) from
+  billing_accounts` retornou **0** — não existe assinante legado, e todo caminho
+  Stripe novo já grava `'stripe'`. Nada a corrigir; fica registrado para não ser
+  redescoberto.
+- **Segredos:** varredura do diff não achou credencial literal (só `whsec_test`
+  em fixture de teste).
 
 ## Histórico preservado
 
@@ -220,11 +257,24 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 
 ## Falha atual
 
-Sem bloqueio técnico conhecido. A migração pública, merge e deploy continuam
-intencionalmente não executados porque exigem autorização explícita de produção.
+`BLOQUEADO` — não é falha técnica do código. Faltam, nesta ordem:
+
+1. **Dados legais/financeiros da titular no painel da Cakto.** Sem isso a conta
+   não recebe de verdade e nenhum agente pode preencher no lugar dela.
+2. **Segredos de produção** (`CAKTO_CLIENT_ID`, `CAKTO_CLIENT_SECRET`,
+   `CAKTO_WEBHOOK_SECRET`, IDs de produto e oferta) no `.env.backend` da VPS.
+   `BILLING_PROVIDER` já tem `cakto` como padrão: **subir este código sem os
+   segredos desliga a compra**, porque `isConfigured()` fica falso e
+   `checkoutAvailable` vira `false`. O contorno explícito é
+   `BILLING_PROVIDER=stripe`.
+3. **Webhook real** apontando para `POST /api/billing/webhook/cakto` nos dois
+   produtos, e **E2E autenticado** de compra ponta a ponta. Os dois dependem
+   de 1 e 2 e só valem contra a Cakto real — nenhum deles foi executado.
 
 ## Próxima melhor ação
 
-Revisar e integrar o PR #10 quando houver autorização. No deploy autorizado,
-reconciliar o histórico remoto antes de aplicar a migração; não usar `db push`
+Quando 1 e 2 existirem: aplicar as duas migrações pendentes na ordem do
+`deploy.sh` (`20260811120000` antes de `20260813143000`), publicar e só então
+rodar o E2E de compra. No deploy autorizado, reconciliar o histórico remoto
+antes de aplicar a migração; não usar `db push`
 automaticamente e não publicar a partir desta worktree.
