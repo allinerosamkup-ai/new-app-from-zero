@@ -11,6 +11,8 @@ artifacts/.env*
 # Build
 dist/
 build/
+# Cache do Gradle (GRADLE_USER_HOME apontado para dentro do repo)
+.g/
 # Service worker de desenvolvimento — regenerado a cada `vite dev`
 dev-dist/
 

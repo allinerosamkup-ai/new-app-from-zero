@@ -381,8 +381,10 @@ Para cada mudança de produto, o verificador deve responder com evidência:
 - Dados de Check-in, Diário, Objetivos, Padrões e Aura permanecem coerentes?
 
 Se a resposta for negativa, o resultado é `PRODUCT FAIL`, mesmo que os testes
-técnicos passem. Para aprovação, aplicar também o gate de nota mínima `8/10`
-em [`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`](../DEVELOPMENT_ITERATION_PROTOCOL.md).
+técnicos passem. Para aprovação, aplicar também o gate de qualidade em
+[`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`](../DEVELOPMENT_ITERATION_PROTOCOL.md):
+a barra é o resultado extraordinário, e a nota mínima `8/10` é o piso de
+entrada, não o critério de aprovação.
 
 ## 10. Fontes de implementação
 

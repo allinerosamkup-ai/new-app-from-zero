@@ -41,9 +41,13 @@ verificador de integração e meta-verificador. Executores podem se comunicar
 horizontalmente; entregas e aprovações seguem comunicação vertical entre LLMs.
 Handoffs carregam contexto, evidência, decisão e próxima ação em registro
 persistente. A Airia exige que a integração de UI/UX, i18n, dados, regras e IA
-seja avaliada quando a mudança tocar essas superfícies; “impressionante” só vale
-quando convertido em critérios observáveis. Verifier, integração e
+seja avaliada quando a mudança tocar essas superfícies. Verifier, integração e
 meta-verificador registram nota de 0–10; menos de 8 ou falha crítica é FAIL.
+**Atualizado em 2026-08-14:** “impressionante” deixou de ser só uma exigência de
+evidência e virou a barra de aprovação — o verificador só libera o que o
+impressiona, `8/10` é mínimo necessário e nunca suficiente, e nota alta em
+entrega morna é FAIL com recalibração. A justificativa do que torna o resultado
+extraordinário continua obrigatória, com critério e evidência.
 Antes de inventar código, registrar fontes, candidatos reutilizáveis e decisão
 de escolha/rejeição.
 

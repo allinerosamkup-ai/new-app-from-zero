@@ -47,8 +47,12 @@ destino. O meta-verificador é o único que autoriza `DONE`. Ver §§8.9 e 14 do
 protocolo.
 
 O verificador, o verificador de integração e o meta-verificador devem registrar
-nota objetiva de `0–10`; aprovação exige mínimo `8/10` e ausência de falha
-crítica. “Impressionante” não é opinião solta: precisa de critérios e evidência.
+nota objetiva de `0–10`. A barra de aprovação é o resultado extraordinário: só
+libera quem olha a entrega e se impressiona, nunca quem apenas confirma que ela
+atende ao pedido. `8/10` e ausência de falha crítica são o mínimo necessário,
+jamais o suficiente — nota alta em entrega morna é `FAIL` e recalibração.
+“Impressionante” não é opinião solta: quem aprova declara o que tornou a entrega
+extraordinária, contra quais critérios e com qual evidência.
 Antes de escrever código novo, a busca por soluções existentes deve ser
 registrada com fontes consultadas, candidatos, escolha/adaptação ou rejeição e
 motivo. Sem essa evidência, a tarefa não está pronta para aprovação.

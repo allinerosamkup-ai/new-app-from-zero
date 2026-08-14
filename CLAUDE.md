@@ -154,7 +154,10 @@ vale sempre, sem precisar abrir o documento:
   próxima ação para `CURRENT_STATE.md`/memória, não apenas para o chat. Ver
   §§8.9 e 14 do protocolo.
 - Verificadores e meta-verificador dão nota objetiva de `0–10`; nenhum deles
-  aprova com menos de `8/10` ou diante de falha crítica. Antes de código novo,
+  aprova com menos de `8/10` ou diante de falha crítica. A barra real é o
+  resultado extraordinário: `8/10` é mínimo necessário, nunca suficiente, e nota
+  alta em entrega morna é `FAIL`. Quem aprova declara o que tornou a entrega
+  extraordinária, com critério e evidência. Antes de código novo,
   registrar a pesquisa no repositório, worktrees, histórico, dependências e
   fontes externas aplicáveis, incluindo candidatos reutilizáveis e motivos de
   escolha ou rejeição.

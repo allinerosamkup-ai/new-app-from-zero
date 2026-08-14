@@ -711,19 +711,25 @@ Para qualquer alteração visual ou interativa, o verificador deve confirmar:
 - `prefers-reduced-motion`, scroll, modal, teclado virtual, orientação e safe
   areas são tratados quando aplicável.
 
-“Impressionante” é a ambição de qualidade, não uma justificativa subjetiva de
-aprovação. O resultado só passa quando há evidência de fidelidade à intenção,
-grounding, não invenção, utilidade, granularidade executável, consistência,
-idioma correto, segurança, continuidade da ação, concisão e acabamento visual
-sem regressão. Se o verificador não consegue mostrar isso, o resultado é
-`FAIL` ou `BLOQUEADO`, nunca uma aprovação por gosto.
+“Impressionante” é a **barra de aprovação**, não um elogio opcional. O
+verificador só libera quando olha a entrega e ela o impressiona — nunca quando
+ela apenas atende ao pedido, está aceitável ou “dá para melhorar depois”.
+Entrega morna é `FAIL` com a lista do que falta para ficar extraordinária.
 
-### 8.10 Nota objetiva do verificador: mínimo 8/10
+Barra alta não autoriza aprovação por gosto: o resultado só passa quando há
+evidência de fidelidade à intenção, grounding, não invenção, utilidade,
+granularidade executável, consistência, idioma correto, segurança, continuidade
+da ação, concisão e acabamento visual sem regressão. Se o verificador não
+consegue mostrar isso, o resultado é `FAIL` ou `BLOQUEADO`.
+
+### 8.10 Nota objetiva do verificador: 8/10 é o mínimo necessário
 
 Todo `verifier`, `verificador de integração` e `meta-verificador` deve emitir
-uma nota de qualidade de `0` a `10`, acompanhada de evidência. Para aprovar, a
-nota mínima é **8/10**. A palavra “impressionante” só pode ser usada como
-resumo depois que a nota e os critérios abaixo estiverem comprovados:
+uma nota de qualidade de `0` a `10`, acompanhada de evidência. `8/10` é o piso
+de entrada, **não o critério de aprovação**: nota suficiente com entrega morna
+continua sendo `FAIL`. Quem aprova precisa dizer o que tornou o resultado
+extraordinário, contra quais critérios e com qual evidência — os pontos abaixo
+são o que sustenta essa afirmação:
 
 | Ponto | Evidência exigida |
 |---:|---|
@@ -744,6 +750,10 @@ evidência inventada, segredo exposto, dependência sem origem/licença aceitáv
 caminho principal quebrado, perda de dado, regressão de segurança ou requisito
 essencial não verificado — anula a aprovação independentemente da média. Nota
 abaixo de 8 ou falha crítica é `FAIL`/`BLOQUEADO` e retorna para retrabalho.
+
+Nota igual ou acima de 8 em entrega que não impressiona também é `FAIL`: ou a
+régua foi aplicada frouxa, ou os pontos estão marcados sem evidência real. Nesse
+caso o verificador recalibra e reavalia — não aprova pela média.
 
 ---
 
@@ -911,15 +921,16 @@ COORDENADOR
   evidências. Não aprova o próprio trabalho.
 - **Verificador:** atua de forma adversarial, não altera o código que verifica e
   produz `PASS`, `FAIL`, `BLOQUEADO` ou `N/A` justificado por critério, sempre
-  com nota `0–10`; só pode produzir `PASS` com nota mínima `8/10` e sem falha
-  crítica.
+  com nota `0–10`; só pode produzir `PASS` quando a entrega o impressiona, com
+  nota mínima `8/10` e sem falha crítica.
 - **Verificador de integração:** confere o comportamento combinado entre UI,
   API, banco, regras, IA, ferramentas e superfícies consumidoras; também deve
-  registrar nota `0–10`, com mínimo `8/10` para aprovação.
+  registrar nota `0–10`, com mínimo `8/10`, e aplicar a mesma barra de resultado
+  extraordinário.
 - **Meta-verificador:** audita o processo inteiro, os handoffs, a qualidade das
   evidências, a regressão, os commits e worktrees. Deve registrar sua própria
   nota `0–10`, com mínimo `8/10` e sem falha crítica; é o único papel que
-  autoriza `DONE`.
+  autoriza `DONE`, e só autoriza diante de resultado extraordinário justificado.
 
 Quando existirem fatias independentes, usar executores em paralelo. A divisão
 deve ser por comportamento ou contrato (`entrada → processamento → efeito →
@@ -985,7 +996,9 @@ contexto correto, que os dados e worktrees têm destino e que não há conclusã
 baseada apenas em código, build, teste isolado ou HTTP 200. Deve conferir as
 notas dos verificadores, a sua própria nota mínima de `8/10` e a pesquisa de
 reuso registrada antes da criação de código. Qualquer falha ou nota insuficiente
-retorna para `RETRABALHO` ou `BLOQUEADA`.
+retorna para `RETRABALHO` ou `BLOQUEADA`. Nota suficiente sem justificativa do
+que torna o resultado extraordinário também retorna: o piso numérico nunca
+substitui a barra de qualidade.
 
 ---
 
@@ -1011,6 +1024,7 @@ Antes de declarar `DONE`:
 [ ] Verificador e integração têm nota documentada de pelo menos 8/10
 [ ] Meta-verificador tem nota documentada de pelo menos 8/10
 [ ] Nenhuma falha crítica anula as notas
+[ ] Está registrado o que torna o resultado extraordinário, com critério e evidência
 [ ] Código reutilizado tem origem, licença, compatibilidade e motivo registrados quando aplicável
 [ ] `git status --short --branch` foi revisado
 [ ] Cada alteração que deve permanecer está em commit
