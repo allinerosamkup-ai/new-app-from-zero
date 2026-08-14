@@ -77,6 +77,25 @@ assert.ok(
 );
 assert.ok(deployedCaktoBillingIndex > deployedBillingPartnersIndex,
   'deploy must apply provider-neutral billing after the original billing schema');
+
+// Migration escrita e nunca listada no deploy é banco atrasado em produção com
+// build verde: foi o que aconteceu com `20260811120000_add_objective_intelligence.sql`,
+// mergeada no master e ausente de `deploy.sh`. A partir do primeiro arquivo que o
+// deploy aplica, nenhum arquivo posterior pode ficar de fora nem fora de ordem.
+const deployListedMigrations = migrations.filter((name) => deployScript.includes(name));
+assert.ok(deployListedMigrations.length > 0, 'deploy.sh must apply at least one migration');
+const expectedDeployMigrations = migrations.filter((name) => name >= deployListedMigrations[0]);
+assert.deepEqual(
+  deployListedMigrations,
+  expectedDeployMigrations,
+  'every migration created after the first deployed one must be listed in deploy.sh',
+);
+const deployPositions = deployListedMigrations.map((name) => deployScript.indexOf(name));
+assert.deepEqual(
+  deployPositions,
+  [...deployPositions].sort((left, right) => left - right),
+  'deploy.sh must list migrations in chronological order',
+);
 assert.match(objectiveRecoveryMigration, /create table if not exists public\.objective_action_recovery_claims/i);
 for (const column of [
   'id',
