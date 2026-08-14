@@ -16,7 +16,11 @@ vi.mock("../lib/track", () => ({ trackEvent: mocks.track }));
 vi.mock("../lib/supabase", () => ({ supabase: { auth: { getSession: mocks.getSession } } }));
 
 import { setLanguage } from "../i18n";
-import BillingPage, { confirmCheckoutSession, storeCheckoutVerification } from "./billing-page";
+import BillingPage, {
+  confirmCheckoutSession,
+  readCheckoutVerification,
+  storeCheckoutVerification,
+} from "./billing-page";
 import type { BillingAccessSummary } from "../hooks/useSubscription";
 
 const freeSummary: BillingAccessSummary = {
@@ -49,12 +53,28 @@ describe("BillingPage", () => {
 
   it("stores the provider-neutral verification id before leaving checkout", async () => {
     const storage = { setItem: vi.fn() };
-    storeCheckoutVerification("attempt-123", storage);
-    expect(storage.setItem).toHaveBeenCalledWith("airia:billing:verification", "attempt-123");
+    storeCheckoutVerification("attempt-123", storage, () => 1_000);
+    expect(storage.setItem).toHaveBeenCalledWith(
+      "airia:billing:verification",
+      JSON.stringify({ id: "attempt-123", at: 1_000 }),
+    );
+  });
+
+  it("forgets an abandoned checkout instead of confirming a payment that never happened", async () => {
+    const storage = {
+      getItem: vi.fn(() => JSON.stringify({ id: "attempt-abandoned", at: 0 })),
+      removeItem: vi.fn(),
+    };
+    expect(readCheckoutVerification(storage, () => 31 * 60 * 1000)).toBeNull();
+    expect(storage.removeItem).toHaveBeenCalledWith("airia:billing:verification");
+    expect(readCheckoutVerification(
+      { getItem: vi.fn(() => JSON.stringify({ id: "attempt-fresh", at: 0 })), removeItem: vi.fn() },
+      () => 29 * 60 * 1000,
+    )).toBe("attempt-fresh");
   });
 
   it("uses the stored verification id after returning without trusting the URL", async () => {
-    window.sessionStorage.setItem("airia:billing:verification", "attempt-stored");
+    storeCheckoutVerification("attempt-stored", window.sessionStorage);
     mocks.get.mockImplementation((path: string) => path === "/billing/status"
       ? Promise.resolve(freeSummary)
       : Promise.resolve({ confirmed: true, plan: "monthly", status: "paid" }));

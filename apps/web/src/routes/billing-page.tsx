@@ -26,12 +26,37 @@ type ConfirmationDependencies = {
 
 const wait = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 const VERIFICATION_STORAGE_KEY = "airia:billing:verification";
+// A tentativa guardada existe só para sobreviver ao retorno do checkout. Quem
+// abriu o pagamento e desistiu não pode reencontrar "Confirmando seu pagamento"
+// em toda visita seguinte: perder o aviso não perde compra nenhuma, porque a
+// liberação vem do webhook no servidor.
+const VERIFICATION_MAX_AGE_MS = 30 * 60 * 1000;
 
 export function storeCheckoutVerification(
   verificationId: string,
   storage: Pick<Storage, "setItem"> = window.sessionStorage,
+  now: () => number = () => Date.now(),
 ) {
-  storage.setItem(VERIFICATION_STORAGE_KEY, verificationId);
+  storage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify({ id: verificationId, at: now() }));
+}
+
+export function readCheckoutVerification(
+  storage: Pick<Storage, "getItem" | "removeItem"> = window.sessionStorage,
+  now: () => number = () => Date.now(),
+): string | null {
+  const raw = storage.getItem(VERIFICATION_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    const stored = JSON.parse(raw) as { id?: unknown; at?: unknown };
+    if (typeof stored.id === "string" && stored.id
+      && typeof stored.at === "number" && now() - stored.at <= VERIFICATION_MAX_AGE_MS) {
+      return stored.id;
+    }
+  } catch {
+    // formato desconhecido é descartado junto com o vencido, logo abaixo
+  }
+  storage.removeItem(VERIFICATION_STORAGE_KEY);
+  return null;
 }
 
 export async function confirmCheckoutSession(
@@ -98,8 +123,8 @@ export default function BillingPage() {
   const checkoutAttempt = useRef<{ plan: BillingPlan; key: string } | null>(null);
   const checkoutInFlight = useRef(false);
 
-  const sessionId = new URLSearchParams(window.location.search).get("session_id")
-    ?? window.sessionStorage.getItem(VERIFICATION_STORAGE_KEY);
+  const [sessionId] = useState<string | null>(() => new URLSearchParams(window.location.search).get("session_id")
+    ?? readCheckoutVerification());
 
   useEffect(() => {
     if (!enabledOffers.some((offer) => offer.plan === selectedPlan) && enabledOffers[0]) {
