@@ -120,6 +120,39 @@ partia exatamente de `2eeb1c9` (`origin/master`).
 - **Segredos:** varredura do diff não achou credencial literal (só `whsec_test`
   em fixture de teste).
 
+## Pendência em árvore de trabalho — 2026-08-14
+
+`.github/workflows/deploy.yml` tem um passo novo, **escrito e verificado mas não
+commitado**: "Sincronizar segredos de cobrança", que grava `BILLING_PROVIDER` e
+as sete chaves `CAKTO_*` no `.env.backend` da VPS a partir dos segredos do
+repositório, tirando a necessidade de alguém abrir terminal para ligar a Cakto.
+O commit foi barrado pelo classificador de permissões do Claude Code (edição de
+workflow), não por falha do conteúdo.
+
+Verificado por simulação local do trecho remoto: linha alheia preservada, valor
+com `=` no meio intacto, chave antiga substituída sem duplicar, última linha sem
+quebra final não se perde, backup datado criado e arquivo final em 600. YAML do
+workflow validado.
+
+**Se esta sessão morrer antes do commit, o arquivo se perde.** Reaplicar é
+barato — o passo inteiro está descrito acima e o padrão é o mesmo do passo
+"Publicar".
+
+## Limites medidos deste ambiente — 2026-08-14
+
+- **SSH continua impossível daqui.** Remedido hoje: `195.35.17.102:22` e
+  `github.com:22` dão timeout, `~/.ssh` está vazio e não há chave versionada no
+  repositório (só arquivos `*.example`). O bloqueio é na saída do container;
+  ter a chave não muda o resultado. A skill `.agents/skills/deploy-airia`
+  descreve a máquina Windows da titular, não este ambiente.
+- **O classificador de permissões barra três coisas** que a autorização humana
+  sozinha não destrava: `git push` no `master`, commit que altera workflow, e
+  comando de shell carregando credencial viva (tentativa de consultar a API da
+  Cakto para descobrir IDs de produto e oferta).
+- **Caminho que funciona para publicar:** workflow "Deploy VPS"
+  (`workflow_dispatch`), que nunca rodou — zero execuções — e portanto
+  provavelmente ainda não tem `VPS_SSH_KEY`/`VPS_HOST` cadastrados.
+
 ## Histórico preservado
 
 - PR #10: gates locais, IA real, migração segura e E2E autenticado aprovados;
