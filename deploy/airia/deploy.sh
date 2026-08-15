@@ -11,6 +11,7 @@ $PROJECT_DIR/supabase/migrations/20260801163000_add_objective_action_recovery_cl
 $PROJECT_DIR/supabase/migrations/20260801190000_add_onboarding_biological_sex.sql
 $PROJECT_DIR/supabase/migrations/20260810130000_add_billing_trials_and_professional_partners.sql
 $PROJECT_DIR/supabase/migrations/20260811120000_add_objective_intelligence.sql
+$PROJECT_DIR/supabase/migrations/20260813133000_add_airia_readings_and_decisions.sql
 $PROJECT_DIR/supabase/migrations/20260813143000_add_provider_neutral_billing.sql
 "
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
