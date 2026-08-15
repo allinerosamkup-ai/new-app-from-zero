@@ -14,6 +14,24 @@ Formato: `### [TIPO] Título` + o que muda na prática.
 
 ## Ferramentas e ambiente
 
+### [FATO] Build Android exige SDK fixo no app e Health Connect travado no alpha08
+`apps/mobile/android/app/build.gradle` deixou de herdar `rootProject.ext` e fixa
+`compileSdk 34`, `minSdkVersion 26`, `targetSdkVersion 34`. O `minSdk` sobe
+porque o default do projeto raiz é `23` e o Health Connect não roda ali.
+`androidx.health.connect:connect-client` está preso em `1.1.0-alpha08`; o cache
+do Gradle mostra que `1.1.0`, `1.1.0-rc03` e `1.2.0-alpha02` foram baixadas e
+descartadas. Evidência de que essa combinação funciona: APK de release gerado em
+2026-08-12, `versionCode 17` / `versionName 1.0.16`.
+
+**HIPÓTESE, não fato:** o motivo de o alpha08 ter ganhado da 1.1.0 estável nunca
+foi registrado. Antes de "atualizar" essa dependência, reproduzir o build — a
+troca já foi tentada e revertida por alguém.
+
+### [FATO] versionCode do Android e do app.json desincronizam sozinhos
+`app.json` e `android/app/build.gradle` guardam a versão em dois lugares e
+chegaram a divergir (`16`/`1.0.15` contra `15`/`1.0.14`). Conferir os dois antes
+de qualquer release; hoje ambos estão em `17`/`1.0.16`.
+
 ### [DECISÃO] O protocolo de desenvolvimento tem uma fonte única e neutra
 `docs/DEVELOPMENT_ITERATION_PROTOCOL.md` é a fonte compartilhada por Codex/GPT,
 Claude Code e demais agentes. `AGENTS.md`, `CLAUDE.md` e o AGENTS global do
