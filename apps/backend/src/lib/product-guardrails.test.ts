@@ -257,9 +257,18 @@ function run() {
     reviewSkillMatches.push(`AGENTS.md must require ${reviewSkillPath}`);
   }
 
+  // A asserção antiga exigia a frase "não são autoridade operacional". Essa regra
+  // foi substituída de propósito: a §5.3 da Constituição passou a permitir que um
+  // padrão verificado calibre uma Ação, desde que passe por relevância,
+  // atualidade, capacidade/segurança e âncora operacional. O guardrail continua
+  // existindo, só que agora protege a regra vigente — Diário e Check-in seguem
+  // sendo contexto, e ação a partir deles continua exigindo condição explícita.
   const roadmap = readFileSync(path.join(repoRoot, 'docs/product/pr-review-skill-roadmap.md'), 'utf8');
-  if (!/Di[aá]rio e Check-in s[aã]o contexto[^\n]+n[aã]o (?:s[aã]o )?autoridade operacional/i.test(roadmap)) {
-    reviewSkillMatches.push('pr-review roadmap must state that Journal and Check-in are context, not operational authority');
+  if (!/Di[aá]rio e Check-in s[aã]o contexto/i.test(roadmap)) {
+    reviewSkillMatches.push('pr-review roadmap must state that Journal and Check-in are context');
+  }
+  if (!/Di[aá]rio e Check-in s[aã]o contexto[^\n]*(pedido atual|destino operacional|padr[aã]o verificado)/i.test(roadmap)) {
+    reviewSkillMatches.push('pr-review roadmap must condition action on an explicit request, an operational anchor or a verified pattern');
   }
 
   assert.deepEqual(
