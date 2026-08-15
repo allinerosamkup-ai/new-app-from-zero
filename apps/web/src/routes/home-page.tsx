@@ -47,7 +47,8 @@ import {
   readHomeAutonomyFeedback,
   rememberHomeAutonomyActionFeedback,
 } from "./home-page.helpers";
-import { saveNextAction } from "../utils/save-next-action";
+import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import {
   MessageSquareText,
   Activity,
@@ -264,12 +265,6 @@ function formatCheckinMomentLabel(
   return labels.now;
 }
 
-function evidenceExcerpt(value: string, fallback = "Sem trecho suficiente para exibir."): string {
-  const normalized = value.trim().replace(/\s+/g, " ");
-  if (!normalized) return fallback;
-  return normalized.length > 150 ? `${normalized.slice(0, 147)}...` : normalized;
-}
-
 // ── Helpers de tempo ──────────────────────────────────────
 function getGreetingKey(h: number): "home.greetingMorning" | "home.greetingAfternoon" | "home.greetingNight" {
   if (h >= 5 && h < 12) return "home.greetingMorning";
@@ -368,6 +363,8 @@ export function HomePage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
   const { state, addHabit, refreshData, setProactiveNudge, hydrated } = useAuraStore();
+  const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
+  const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
   const handlePullRefresh = useCallback(() => refreshData(), [refreshData]);
   const { containerRef, pullDistance, isRefreshing, isReady } = usePullToRefresh(handlePullRefresh);
@@ -398,9 +395,8 @@ export function HomePage() {
   useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const homeOpenedRef = useRef(false);
   const navigate = useNavigate();
-  const { showError, showSuccess } = useToast();
+  const { showError } = useToast();
   const [addedActionTitles, setAddedActionTitles] = useState<Set<string>>(new Set());
-  const [addingActionTitle, setAddingActionTitle] = useState<string | null>(null);
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
   const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
   // Gráfico tátil (design emocional P3): dedo/cursor sobre o gráfico acende o ponto.
@@ -537,9 +533,9 @@ export function HomePage() {
   );
   const isCheckinReentry = (daysSinceLastCheckin ?? 0) >= REENTRY_GAP_DAYS;
   const phaseColor = getPhaseColor(cycleReport.phase);
-  const currentPhaseLabel = cycleReport.phase !== "insufficient_data"
+  const currentPhaseLabel = canonicalReading?.currentState.phase ?? (cycleReport.phase !== "insufficient_data"
     ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)
-    : cycleReport.phaseLabel;
+    : cycleReport.phaseLabel);
   const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const energyForecast = useMemo(() => forecastEnergy7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
 
@@ -989,37 +985,36 @@ export function HomePage() {
    * mais para estourar: a ação entra sem relógio e fica até ser concluída.
    */
   async function acceptHomeAction(action: { title: string; category: string }) {
-    if (addingActionTitle) return;
-    const title = polishHomeActionTitle(action.title);
-    setAddingActionTitle(title);
-    try {
-      const result = await saveNextAction({
-        text: title,
-        razao: "Sugestão aceita na Home.",
-        source: "home-autonomy",
-      });
-      setAddedActionTitles((prev) => new Set([...prev, action.title, title]));
-      recordHomeAutonomyFeedback(action.title, "accepted");
-      trackEvent("home_action_to_next_actions", {
-        source: "home",
-        created: result.created,
-        matched_by: result.matchedBy ?? "none",
-      });
-      showSuccess(result.created
-        ? l("Entrou nas suas próximas ações.", "Added to your next actions.")
-        : l("Isso já estava nas suas próximas ações.", "That was already in your next actions."));
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel salvar a sugestao.");
-    } finally {
-      setAddingActionTitle(null);
-    }
+    // Ações da Home não criam um inbox local. Sem decisão canônica, a pessoa
+    // segue para o objetivo que já contém as ações persistidas.
+    recordHomeAutonomyFeedback(action.title, "accepted");
+    setAddedActionTitles((prev) => new Set([...prev, action.title]));
+    navigate("/goals", { state: buildGoalSuggestionRouteState(`${action.title} ${action.category}`, state.goals || []) });
+  }
+
+  async function acceptCanonicalDecision() {
+    const decision = canonicalReading?.decision;
+    if (!decision || canonicalFeedbackPending) return;
+    setCanonicalFeedbackPending(true);
+    await sendAiriaDecisionFeedback(decision.id, "accepted", "home");
+    await reloadCanonicalReading();
+    setCanonicalFeedbackPending(false);
   }
 
   const importantAlerts = useMemo(() => {
+    if (canonicalReading) {
+      return canonicalReading.alerts.map((alert) => ({
+        key: alert.id,
+        title: alert.title,
+        description: alert.detail,
+        evidence: alert.evidenceIds?.length ? `Base: ${alert.evidenceIds.join(", ")}` : l("Leitura canônica da Airia.", "Airia's canonical reading."),
+        tone: alert.severity,
+        actionPath: alert.route,
+        actionLabel: alert.route ? l("Abrir", "Open") : undefined,
+      }));
+    }
     const alerts: ImportantAlert[] = [];
     const stagnantGoals = state.goals.filter((goal) => goal.completedPct === 0 && goal.subtasks.length > 0);
-    const insightText = `${state.autonomousInsight?.pattern ?? ""} ${state.autonomousInsight?.insight ?? ""}`.toLowerCase();
-    const hasCompulsionSignal = /(compuls|impuls|compra|comprando|gasto|excesso)/i.test(insightText);
 
     if (stagnantGoals.length > 0) {
       alerts.push({
@@ -1062,20 +1057,9 @@ export function HomePage() {
       });
     }
 
-    if (hasCompulsionSignal) {
-      alerts.push({
-        key: "compulsion-signal",
-        title: "A Airia percebeu sinal de impulso ou compulsão",
-        description: "O padrão recente sugere comportamento mais automático do que o normal. Vale pausar estímulos e nomear isso no diário antes de agir.",
-        evidence: `Base: ${evidenceExcerpt(state.autonomousInsight?.pattern || state.autonomousInsight?.insight || "")}`,
-        tone: "critical",
-        actionLabel: "Registrar agora",
-        actionPath: "/journal",
-      });
-    }
-
     return alerts.slice(0, 4);
   }, [
+    canonicalReading,
     clockTime,
     currentPhaseLabel,
     cycleReport.daysInPhase,
@@ -1083,8 +1067,6 @@ export function HomePage() {
     cycleReport.stabilityScore,
     cycleReport.trend7d,
     cycleReport.warningFlags,
-    state.autonomousInsight?.insight,
-    state.autonomousInsight?.pattern,
     state.goals,
     state.tasks,
   ]);
@@ -1154,6 +1136,7 @@ export function HomePage() {
         </div>
       )}
       <div className="screen-content" style={{ position: "relative", zIndex: 1 }}>
+        <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="home" />
 
         {/* Header com relógio */}
         <div className="home-header" style={{ position: "relative", paddingBottom: "18px" }}>
@@ -2022,18 +2005,22 @@ export function HomePage() {
         {/* ── Card compacto: Ritmo + Autonomia ── */}
         {(() => {
           const ins = state.autonomousInsight;
+          const canonicalDecision = canonicalReading?.decision;
+          const usesCanonicalDecision = Boolean(canonicalDecision);
           const hasInsight = Boolean(ins);
           const cfg = hasInsight ? (STATE_CONFIG[ins!.state] ?? STATE_CONFIG.stable) : STATE_CONFIG.stable;
           const score = hasInsight ? ins!.stabilityScore : cycleReport.stabilityScore;
           const isUrgent = hasInsight && score < 40;
-          const visibleActions = hasInsight
+          const visibleActions = !usesCanonicalDecision && hasInsight
             ? ins!.actions.filter(
                 a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && !isHomeAutonomyActionBlocked(a.title)
               )
             : [];
           const primaryAction = visibleActions[0] ?? null;
           const hasCycleData = cycleReport.phase !== "insufficient_data";
-          const rhythmCopy = hasInsight
+          const rhythmCopy = usesCanonicalDecision
+            ? canonicalDecision!.reason
+            : hasInsight
             ? ins!.insight
             : hasCycleData
               ? t(`phases.${cycleReport.phase}.tip`, cycleReport.phaseTip)
@@ -2115,7 +2102,17 @@ export function HomePage() {
                   </div>
                 )}
 
-                {primaryAction ? (
+                {usesCanonicalDecision && canonicalDecision?.requiresConfirmation ? (
+                  <AuraButtonV2
+                    variant="primary"
+                    size="md"
+                    onClick={() => void acceptCanonicalDecision()}
+                    disabled={canonicalFeedbackPending}
+                    style={{ width: "100%", minHeight: 44, marginTop: 12 }}
+                  >
+                    {canonicalDecision.title}
+                  </AuraButtonV2>
+                ) : primaryAction ? (
                   <AuraButtonV2
                     variant="primary"
                     size="md"
@@ -2167,7 +2164,6 @@ export function HomePage() {
                           {t("home.nextMoves")}
                         </p>
                         {visibleActions.slice(0, 2).map((action) => {
-                          const isAdding = addingActionTitle === action.title;
                           const routeState = buildGoalSuggestionRouteState(`${action.title} ${action.why}`, state.goals || []);
                           return (
                             <div key={action.title} style={{
@@ -2187,13 +2183,12 @@ export function HomePage() {
                                 className="home-touch-button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  if (!isAdding) void acceptHomeAction(action);
+                                  void acceptHomeAction(action);
                                 }}
-                                disabled={isAdding}
               aria-label={t("home.addToNextActions")}
               title={t("home.addToNextActions")}
                               >
-                                {isAdding ? "..." : "+"}
+                                +
                               </button>
                               <button
                                 className="home-touch-button"

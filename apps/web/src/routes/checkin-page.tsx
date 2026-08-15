@@ -277,7 +277,6 @@ function BooleanChoice({ value, onChange, yes, no, legend, group }: {
   );
 }
 
-type CheckinCapacity = "quick" | "moderate" | "heavy";
 type FlowIntensity = "leve" | "moderado" | "intenso";
 type DayType = "up" | "down" | "mixed" | "stable";
 
@@ -294,8 +293,6 @@ export function CheckinPage() {
     ? "checkin.emotionsMale"
     : "checkin.emotions";
   const dayContext = getClientDayContext(new Date(), resolveIntlLocale(i18n.language));
-  const activeGoals = (state.goals || []).filter((goal) => goal.completedPct < 100);
-
   const [humor, setHumor] = useState<number | null>(null);
   const [energia, setEnergia] = useState<number | null>(null);
   const [emotions, setEmotions] = useState<string[]>(INITIAL_EMOTIONS_SELECTED);
@@ -316,8 +313,6 @@ export function CheckinPage() {
   const [hyperfocusOccurred, setHyperfocusOccurred] = useState<boolean | null>(null);
   const [dayType, setDayType] = useState<DayType | null>(null);
   const [mixedEpisodeNote, setMixedEpisodeNote] = useState("");
-  const [capacity, setCapacity] = useState<CheckinCapacity | null>(null);
-  const [priorityGoalId, setPriorityGoalId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [contextOpen, setContextOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -435,8 +430,6 @@ export function CheckinPage() {
         ...(irritabilidade !== null ? { irritabilidade } : {}),
         ...(fisico !== null ? { fisico } : {}),
         ...(social !== null ? { social } : {}),
-        ...(capacity !== null ? { capacity } : {}),
-        ...(priorityGoalId !== null ? { priorityGoalId } : {}),
         ...(isFlowing !== null ? { isFlowing } : {}),
         ...(flowDay !== null ? { flowDay } : {}),
         ...(flowIntensity !== null ? { flowIntensity } : {}),
@@ -475,21 +468,8 @@ export function CheckinPage() {
             emotions_count: emotions.length,
             has_voice_context: Boolean(voiceTranscript.trim()),
             has_optional_context: [sono, sleepHours, clareza, irritabilidade, fisico, social, isFlowing, medicationTakenToday, focusScore, hyperfocusOccurred, dayType].some((value) => value !== null),
-            has_capacity: capacity !== null,
-            has_priority_goal: Boolean(priorityGoalId),
           });
-          /**
-           * A navegação leva capacidade e prioridade para a tela seguinte montar
-           * a sugestão sem uma ida ao servidor. Isso é atalho de renderização —
-           * a gravação já aconteceu, dentro de `signalMetadata.dayPlan`.
-           */
-          navigate("/checkin-result", {
-            state: {
-              ...checkinAI,
-              capacity,
-              priorityGoalId,
-            },
-          });
+          navigate("/checkin-result", { state: checkinAI });
         },
       });
     } catch (error) {
@@ -549,58 +529,23 @@ export function CheckinPage() {
           <ScoreSlider label={l("Energia", "Energy")} value={energia} onChange={setEnergia} emptyHint={l("arraste", "drag")} />
         </Section>
 
-        {/* ── Perguntas condicionais ──
-            O check-in não vira formulário maior para todo mundo: estas duas só
-            aparecem quando têm função. Capacidade só faz sentido depois que
-            humor e energia existem — antes disso não há o que calibrar. E a
-            pergunta de prioridade só aparece se houver mais de um objetivo
-            ativo; com um só, perguntar qual priorizar é fazer a pessoa
-            responder algo que o app já sabe. ── */}
+        {/* A Airia interpreta capacidade e foco a partir dos sinais registrados.
+            A pessoa pode corrigir a proposta depois, mas não precisa operar o
+            sistema escolhendo tamanho de tarefa e objetivo prioritário. */}
         {humor !== null && energia !== null && (
           <Section
-            section="capacity"
-            title={l("O que cabe hoje", "What fits today")}
-            subtitle={l("Isso define o tamanho do que a Airia vai sugerir.", "This sets the size of what Airia will suggest.")}
+            section="airia-interpretation"
+            title={l("A Airia cuida da próxima decisão", "Airia handles the next decision")}
+            subtitle={l("Vou cruzar seu estado de agora com seu histórico e seus objetivos ativos.", "I’ll combine your current state with your history and active goals.")}
           >
-            <fieldset data-choice-group="capacity" style={{ margin: 0, padding: 0, border: 0 }}>
-              <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800 }}>
-                {l("Hoje você lida melhor com algo:", "Today you can better handle something:")}
-              </legend>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
-                {(["quick", "moderate", "heavy"] as CheckinCapacity[]).map((option) => (
-                  <ChoiceButton
-                    key={option}
-                    active={capacity === option}
-                    onClick={() => setCapacity(capacity === option ? null : option)}
-                  >
-                    {{
-                      quick: l("Rápido", "Quick"),
-                      moderate: l("Moderado", "Moderate"),
-                      heavy: l("Mais trabalhoso", "Heavier"),
-                    }[option]}
-                  </ChoiceButton>
-                ))}
-              </div>
-            </fieldset>
-
-            {activeGoals.length > 1 && (
-              <fieldset data-choice-group="priority-goal" style={{ margin: "16px 0 0", padding: 0, border: 0 }}>
-                <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 800 }}>
-                  {l("O que mais precisa da sua atenção hoje?", "What needs your attention most today?")}
-                </legend>
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {activeGoals.slice(0, 4).map((goal) => (
-                    <ChoiceButton
-                      key={String(goal.id)}
-                      active={priorityGoalId === String(goal.id)}
-                      onClick={() => setPriorityGoalId(priorityGoalId === String(goal.id) ? null : String(goal.id))}
-                    >
-                      {goal.title}
-                    </ChoiceButton>
-                  ))}
-                </div>
-              </fieldset>
-            )}
+            <div role="status" style={{ borderRadius: 14, padding: 14, background: "rgba(255,255,255,.72)", border: "1.5px solid var(--warm-border-2)" }}>
+              <strong style={{ display: "block", fontSize: 13, color: "var(--text-1)" }}>
+                {l("Depois do registro, eu proponho um próximo passo proporcional à sua energia.", "After you check in, I’ll propose a next step matched to your energy.")}
+              </strong>
+              <span style={{ display: "block", marginTop: 5, fontSize: 12, lineHeight: 1.5, color: "var(--text-3)" }}>
+                {l("Você poderá confirmar, corrigir ou recusar — sem precisar montar a análise.", "You can confirm, correct, or reject it — without having to build the analysis yourself.")}
+              </span>
+            </div>
           </Section>
         )}
 

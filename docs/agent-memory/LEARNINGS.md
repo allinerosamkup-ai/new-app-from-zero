@@ -35,6 +35,30 @@ adaptar apenas depois de conferir comportamento, licença, segurança,
 compatibilidade e manutenção; registrar escolhas relevantes e verificar a
 solução no mesmo ciclo do código novo.
 
+### [DECISÃO] Orquestração entre subagentes e LLMs
+Toda tarefa segue papéis separados de coordenador, executor, verificador,
+verificador de integração e meta-verificador. Executores podem se comunicar
+horizontalmente; entregas e aprovações seguem comunicação vertical entre LLMs.
+Handoffs carregam contexto, evidência, decisão e próxima ação em registro
+persistente. A Airia exige que a integração de UI/UX, i18n, dados, regras e IA
+seja avaliada quando a mudança tocar essas superfícies. Verifier, integração e
+meta-verificador registram nota de 0–10; menos de 8 ou falha crítica é FAIL.
+**Atualizado em 2026-08-14:** “impressionante” deixou de ser só uma exigência de
+evidência e virou a barra de aprovação — o verificador só libera o que o
+impressiona, `8/10` é mínimo necessário e nunca suficiente, e nota alta em
+entrega morna é FAIL com recalibração. A justificativa do que torna o resultado
+extraordinário continua obrigatória, com critério e evidência.
+Antes de inventar código, registrar fontes, candidatos reutilizáveis e decisão
+de escolha/rejeição.
+
+### [DECISÃO] A Constituição do produto impede terceirização da decisão
+`docs/product/PRODUCT_CONSTITUTION.md` é a fonte canônica de comportamento da
+Airia. O fluxo obrigatório é `INFERIR → PROPOR → CONFIRMAR`; a pessoa mantém
+correção e veto, mas não deve ser obrigada a classificar a própria capacidade,
+priorizar manualmente objetivos e devolver a decisão para a Airia quando já há
+sinais suficientes. O fluxo da captura de tela de 2026-08-13 é `PRODUCT FAIL`
+nessa condição, mesmo com testes técnicos passando.
+
 ### [FATO] Avaliações OpenAI locais usam a cadeia de certificados do Windows
 Neste ambiente, a API da OpenAI responde HTTP 200 e a chave é válida, mas o
 Node pode falhar com `UNABLE_TO_VERIFY_LEAF_SIGNATURE`. Para `aura:eval` e
@@ -266,13 +290,21 @@ qualquer URL que o Google resolva eleger no `www` fica invisível no relatório 
 sem como pedir indexação. Propriedade de domínio cobriria os dois hosts de uma
 vez; exige um registro TXT no DNS (Hostinger, zona `airia.pro`).
 
-### [FATO] O DNS de `airia.pro` já cobre os dois hosts — o buraco era a canônica
-Medido em 2026-08-10, via DoH: `airia.pro` tem `A → 195.35.17.102` e
+### [FATO] O DNS de `airia.pro` cobre os dois hosts e as duas famílias de IP
+Medido em 2026-08-10, via DoH: `airia.pro` tinha `A → 195.35.17.102` e
 `www.airia.pro` tem `CNAME → airia.pro`, ambos em `ns1/ns2.dns-parking.com`
 (Hostinger). Os dois hosts servem HTTP 200 com o mesmo `etag`, o certificado
 Let's Encrypt cobre os dois (`CN=airia.pro` + SAN `www.airia.pro`) e o `http://`
-de cada um faz 301 para o próprio `https://`. **Reclamação de "página não
-reconhecida no www" não é DNS** — não há registro faltando para criar.
+de cada um faz 301 para o próprio `https://`. Portanto, a reclamação de página
+não encontrada no `www` não era falta do `CNAME` nem de TLS.
+
+Em 2026-08-12 foi confirmado um buraco diferente: a VPS tinha o IPv6 global
+`2a02:4780:14:ddb2::1`, funcional em SNI/TLS e no `/api/health`, mas a zona não
+tinha `AAAA`. Isso deixava redes móveis IPv6-only dependentes de NAT64/DNS64 da
+operadora. O `AAAA` foi publicado somente na raiz; o `www` o herda pelo CNAME.
+Hostinger, nameserver autoritativo, Google DNS e Cloudflare DoH confirmaram a
+propagação; IPv4 e IPv6 responderam 200. Não usar o IPv6 fictício do teste nem
+reativar o redirecionamento de host.
 
 O que faltava: `privacy.html` e `terms.html` são arquivos estáticos servidos
 fora do `<head>` da SPA e **não tinham `rel=canonical` nenhum**, sendo duas das

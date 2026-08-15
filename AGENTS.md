@@ -15,6 +15,14 @@ Alline é a pessoa das ideias. O agente técnico transforma ideias em produto, c
 
 Antes de trabalho relevante, consultar [`docs/DEVELOPMENT_ITERATION_PROTOCOL.md`](docs/DEVELOPMENT_ITERATION_PROTOCOL.md) e ler somente a memória relevante em `docs/agent-memory/`.
 
+Quando a tarefa afetar produto, UX, IA, fluxo ou arquitetura da Airia, consultar
+também [`docs/product/PRODUCT_CONSTITUTION.md`](docs/product/PRODUCT_CONSTITUTION.md).
+Ela é a fonte canônica do comportamento do produto: a Airia deve interpretar
+os sinais, propor uma ação concreta e preservar confirmação, correção e veto da
+usuária. Não aceitar como solução uma interface que devolva para a usuária uma
+decisão que a Airia já poderia tomar. Contratos técnicos, prompts e memória
+explicam a implementação; não podem criar uma segunda constituição.
+
 Alterar arquivos não significa concluir. Toda tarefa deve passar por critérios de aceite, execução, verificação, diagnóstico, correção, reverificação e regressão proporcional ao risco. Antes de finalizar, registrar evidência real; se houver bloqueio, declarar `BLOQUEADO`, nunca `DONE`.
 
 Durante tarefas longas, atualizar `docs/agent-memory/CURRENT_STATE.md`. Registrar descobertas reutilizáveis em `LEARNINGS.md`, corrigir memória desatualizada e não repetir abordagens já reprovadas sem nova evidência.
@@ -27,6 +35,28 @@ aplicativos. Preferir adaptar solução existente; verificar licença, seguranç
 compatibilidade e manutenção antes de copiar qualquer coisa. Ver
 `SEARCH / REUSE BEFORE INVENT` no protocolo.
 
+Toda tarefa deve ser coordenada por subagentes em papéis separados:
+`COORDENADOR → EXECUTOR → VERIFICADOR → VERIFICADOR DE INTEGRAÇÃO →
+META-VERIFICADOR → DONE`. O executor não aprova o próprio trabalho. Quando
+houver fatias independentes, usar comunicação horizontal entre executores;
+entregas, reprovações e aprovações seguem comunicação vertical entre os LLMs.
+Toda mensagem entre LLMs precisa carregar contexto, evidência, decisão e próxima
+ação em handoff persistente; não depender apenas do chat. Worktree físico
+por papel só existe quando necessário; os papéis não autorizam criar cópias sem
+destino. O meta-verificador é o único que autoriza `DONE`. Ver §§8.9 e 14 do
+protocolo.
+
+O verificador, o verificador de integração e o meta-verificador devem registrar
+nota objetiva de `0–10`. A barra de aprovação é o resultado extraordinário: só
+libera quem olha a entrega e se impressiona, nunca quem apenas confirma que ela
+atende ao pedido. `8/10` e ausência de falha crítica são o mínimo necessário,
+jamais o suficiente — nota alta em entrega morna é `FAIL` e recalibração.
+“Impressionante” não é opinião solta: quem aprova declara o que tornou a entrega
+extraordinária, contra quais critérios e com qual evidência.
+Antes de escrever código novo, a busca por soluções existentes deve ser
+registrada com fontes consultadas, candidatos, escolha/adaptação ou rejeição e
+motivo. Sem essa evidência, a tarefa não está pronta para aprovação.
+
 Commit e worktree são gates separados. Antes de criar ou entrar em um worktree,
 consultar `git worktree list --porcelain` e `docs/agent-memory/WORKTREES.md`;
 reutilizar trabalho existente, registrar dono/branch/caminho e deixar handoff
@@ -36,20 +66,24 @@ arquivo, branch ou worktree pode ficar sem destino. O ciclo completo está em
 §22 de `docs/DEVELOPMENT_ITERATION_PROTOCOL.md`.
 
 ## Regra Central de IA
-Contexto antigo explica padrão; contexto de hoje decide ação.
+Contexto antigo explica padrão; contexto de hoje decide ação. Padrões verificados
+também são fontes legítimas para priorizar, reduzir, dividir, proteger ou
+adiar uma Ação, desde que tenham relação atual, destino em Objetivo/intenção,
+capacidade e segurança compatíveis, e referência persistida às evidências.
 
 Toda sugestão operacional da Airia deve estar ancorada em dado real atual:
-- agenda pendente;
-- hábito devido;
-- meta ativa;
-- subtarefa pendente;
-- ação explicitamente aceita pela usuária.
+- Objetivo ativo;
+- Ação pendente;
+- intenção ou relato atual com resultado concreto;
+- padrão verificado que altere de forma explicável uma decisão já ancorada.
 
-Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejeitados ou agendados entram como bloqueio, não como sugestão nova.
+Memória RAG não grava Ação diretamente. Itens concluídos, excluídos, rejeitados
+ou adiados entram como bloqueio, não como sugestão nova.
 
 ## Superfícies da Airia
-- **Home:** visão do dia, ciclo, agenda curta, card “Análise e Autonomia”.
-- **Planner:** timeline editável e futura superfície principal de adaptação da agenda.
+- **Home:** visão do dia, estado, padrões relevantes, Objetivos e Ações.
+- **Planner:** superfície preservada/desligada; se reativada, deverá consumir o
+  mesmo contrato global de estado, padrões e Ações.
 - **Check-in:** leitura do estado atual; sugestões precisam respeitar horário local e o que já foi feito.
 - **Check-in/Diário/Aura:** devem renderizar protocolo de segurança quando `riskSafety.route` exigir apoio humano ou crise.
 - **Diário:** superfície reflexiva, com resposta natural e leitura de padrão.
@@ -63,6 +97,12 @@ Memória RAG não autoriza inventar tarefa. Itens concluídos, excluídos, rejei
 - Prompt Aura: `apps/backend/src/lib/aura-prompt.ts`.
 - Segurança mínima IA: `apps/backend/src/lib/risk-safety.ts`.
 - Evento de segurança: `risk_protocol_triggered`.
+
+O fluxo integrado obrigatório é:
+`sinais → estado atual → padrões verificados → capacidade/segurança →
+Objetivo/Ação → devolução → confirmação/correção → persistência`. Alterar um
+produtor sem revisar seus consumidores, a devolução e o feedback é
+`INTEGRATION_PENDING`, não conclusão.
 
 ## Regra de Produto Consumidor
 O app não deve ter modo demo, seed de demo, copy de investidor, pitch, “produto vendável”, “carregar demo” ou explicações comerciais internas. A interface final é sempre para a usuária usar.

@@ -178,6 +178,7 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'localDate',
       'recordedAt',
       'checkinSlot',
+      'checkinPurpose',
       'moodScore',
       'energyScore',
       'clarityScore',
@@ -212,6 +213,22 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'updatedAt',
     ],
     redact: ['sourceMessageId', 'idempotencyKey'],
+  },
+  AiriaReading: {
+    include: [
+      'id', 'userId', 'localDate', 'version', 'fingerprint', 'currentState',
+      'intraday', 'historical', 'riskSafety', 'sourceSnapshot',
+      'sourceCheckinId', 'createdAt', 'updatedAt',
+    ],
+    redact: [],
+  },
+  AiriaDecision: {
+    include: [
+      'id', 'userId', 'readingId', 'objectiveId', 'status', 'surface',
+      'decision', 'evidence', 'feedback', 'validUntil', 'resolvedAt',
+      'createdAt', 'updatedAt',
+    ],
+    redact: [],
   },
   JournalSession: {
     include: [

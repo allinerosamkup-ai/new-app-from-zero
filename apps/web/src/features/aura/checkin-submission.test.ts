@@ -16,6 +16,22 @@ describe("manual check-in submission", () => {
     expect(payload).not.toHaveProperty("socialScore");
   });
 
+  it("marks only one primary observation per window; extras are explicit", () => {
+    const primary = buildCheckinSubmission({
+      localDate: "2026-08-13",
+      checkinSlot: "morning-081500",
+      entry: { humor: 8, energia: 8 },
+    });
+    const extra = buildCheckinSubmission({
+      localDate: "2026-08-13",
+      checkinSlot: "morning-093000",
+      checkinPurpose: "extra",
+      entry: { humor: 7, energia: 6 },
+    });
+    expect(primary.checkinPurpose).toBe("window");
+    expect(extra.checkinPurpose).toBe("extra");
+  });
+
   it("keeps sleep hours separate from the optional sleep score", () => {
     const payload = buildCheckinSubmission({
       localDate: "2026-07-31",

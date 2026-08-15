@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Check, ListChecks, Pencil } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,9 +7,6 @@ import { useAuraStore } from "../features/aura/store";
 import { useFocusGoal } from "../features/aura/use-focus-goal";
 import {
   buildNextActions,
-  markStoredGtdActionDone,
-  readStoredGtdActions,
-  renameStoredGtdAction,
   type GoalPriorityAction,
 } from "../utils/goal-priority-actions";
 import { tapHaptic } from "../utils/haptics";
@@ -26,13 +23,10 @@ import { tapHaptic } from "../utils/haptics";
  * vez só.
  */
 
-const INBOX_UPDATED_EVENT = "gtd-inbox-updated";
-
 export function NextActionsCard() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
   const { state, toggleSubGoal, updateSubGoalTitle } = useAuraStore();
-  const [inboxTick, setInboxTick] = useState(0);
   const [completingId, setCompletingId] = useState<string | null>(null);
   // Ação em edição e o texto sendo digitado. A ação nasce da leitura da IA e nem
   // sempre sai com as palavras dela; sem poder corrigir, a saída seria apagar e
@@ -40,21 +34,11 @@ export function NextActionsCard() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
-  // O Inbox vive no armazenamento local, fora do store. Sem ouvir o evento, um
-  // item registrado pelo diário só apareceria no próximo carregamento da tela.
-  useEffect(() => {
-    const bump = () => setInboxTick((tick) => tick + 1);
-    window.addEventListener(INBOX_UPDATED_EVENT, bump);
-    return () => window.removeEventListener(INBOX_UPDATED_EVENT, bump);
-  }, []);
-
   // A primeira ação do objetivo principal já está no card acima. Passar o id do
   // foco faz esta lista mostrar a SEGUINTE dele, em vez de repetir a mesma coisa
   // duas vezes na mesma tela.
   const { focus } = useFocusGoal(state.goals ?? []);
   const actions = buildNextActions(state.goals ?? [], {
-    // inboxTick força a releitura; o valor em si não é usado.
-    gtdItems: inboxTick >= 0 ? readStoredGtdActions() : undefined,
     focusGoalId: focus?.id ?? null,
   });
 
@@ -68,9 +52,6 @@ export function NextActionsCard() {
     try {
       if (action.source === "goal" && action.goalId !== undefined && action.subId !== undefined) {
         await updateSubGoalTitle(action.goalId, action.subId, clean);
-      } else if (action.gtdId) {
-        renameStoredGtdAction(action.gtdId, clean);
-        setInboxTick((tick) => tick + 1);
       }
     } catch {
       // Falhou ao gravar: o texto antigo continua na tela, que é a verdade.
@@ -84,9 +65,6 @@ export function NextActionsCard() {
     try {
       if (action.source === "goal" && action.goalId !== undefined && action.subId !== undefined) {
         await toggleSubGoal(action.goalId, action.subId);
-      } else if (action.gtdId) {
-        markStoredGtdActionDone(action.gtdId);
-        setInboxTick((tick) => tick + 1);
       }
     } catch {
       // Conclusão fora de ordem é recusada pelo backend com 409. Não é erro da

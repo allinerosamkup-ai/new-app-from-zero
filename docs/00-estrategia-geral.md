@@ -1,5 +1,12 @@
 # Documento 0 — Estratégia e Núcleo do Produto
 
+> **Status:** documento fundador. A tese de sincronizar humor, energia,
+> contexto e organização continua vigente. Planner, Hábitos, agenda e
+> wearables descritos abaixo são capacidades históricas, futuras ou desligadas
+> na versão ativa; não devem ser tratados como páginas atuais sem decisão
+> explícita. A definição operacional vigente está em
+> [`docs/product/PRODUCT_CONSTITUTION.md`](product/PRODUCT_CONSTITUTION.md).
+
 *Este documento consolida os insights valiosos gerados nas reuniões iniciais de concepção (do Perplexity), servindo de bússola para o projeto.*
 
 ## 1. Núcleo do Aplicativo

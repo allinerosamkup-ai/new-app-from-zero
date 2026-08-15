@@ -16,6 +16,15 @@ const ObjectiveSubgoalInputSchema = z.object({
   effortSize: z.enum(['small', 'medium', 'large']).nullable().optional(),
   basedOn: z.enum(['stated', 'inferred']).optional(),
   evidenceRefs: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+  patternBasis: z.array(z.object({
+    pattern: z.string().trim().min(1).max(240),
+    evidenceCount: z.number().int().nonnegative(),
+    distinctDays: z.number().int().nonnegative(),
+    windowDays: z.number().int().positive(),
+    confidence: z.number().min(0).max(1),
+    limitation: z.string().trim().min(1).max(240),
+    impact: z.string().trim().min(1).max(240),
+  })).max(4).optional(),
   userEdited: z.boolean().optional(),
   status: z.enum(['pending', 'done', 'rejected', 'deferred']).optional(),
   rejectedAt: z.string().datetime().nullable().optional(),
@@ -35,6 +44,15 @@ export const ObjectiveSubgoalSchema = z.object({
   effortSize: z.enum(['small', 'medium', 'large']).nullable().optional(),
   basedOn: z.enum(['stated', 'inferred']).optional(),
   evidenceRefs: z.array(z.string()).optional(),
+  patternBasis: z.array(z.object({
+    pattern: z.string(),
+    evidenceCount: z.number().int().nonnegative(),
+    distinctDays: z.number().int().nonnegative(),
+    windowDays: z.number().int().positive(),
+    confidence: z.number().min(0).max(1),
+    limitation: z.string(),
+    impact: z.string(),
+  })).optional(),
   userEdited: z.boolean().optional(),
   status: z.enum(['pending', 'done', 'rejected', 'deferred']).optional(),
   rejectedAt: z.string().nullable().optional(),
@@ -69,6 +87,7 @@ export function normalizeObjectiveSubgoals(subgoals: unknown): ObjectiveSubgoal[
       if (subgoal.effortSize !== undefined) normalized.effortSize = subgoal.effortSize;
       if (subgoal.basedOn !== undefined) normalized.basedOn = subgoal.basedOn;
       if (subgoal.evidenceRefs !== undefined) normalized.evidenceRefs = subgoal.evidenceRefs;
+      if (subgoal.patternBasis !== undefined) normalized.patternBasis = subgoal.patternBasis;
       if (subgoal.userEdited !== undefined) normalized.userEdited = subgoal.userEdited;
       if (subgoal.status !== undefined) normalized.status = subgoal.status;
       if (subgoal.rejectedAt !== undefined) normalized.rejectedAt = subgoal.rejectedAt;

@@ -72,8 +72,18 @@ function evidenceHash(input: CanonicalMemoryWrite): string {
   ])).digest('hex');
 }
 
-function isConfirmedPattern(memory: any): boolean {
-  return memory.kind !== 'pattern' || memory.structuredValue?.confirmed === true || memory.structuredValue?.inferred !== true;
+export function isDecisionEligiblePattern(memory: any): boolean {
+  if (memory.kind !== 'pattern') return true;
+  const structured = memory.structuredValue && typeof memory.structuredValue === 'object'
+    ? memory.structuredValue as Record<string, unknown>
+    : {};
+  const evidenceCount = Number(structured.evidenceCount ?? 0);
+  const distinctDays = Number(structured.distinctDays ?? 0);
+  const evidenceIds = Array.isArray(structured.evidenceIds) ? structured.evidenceIds : [];
+  return structured.confirmed === true
+    && evidenceCount >= 3
+    && distinctDays >= 2
+    && evidenceIds.length >= 3;
 }
 
 export class CanonicalMemoryService {
@@ -157,7 +167,7 @@ export class CanonicalMemoryService {
     const duplicate = await db.userMemoryEvidence.findFirst({ where: { memoryId: memory.id, hash } });
     if (duplicate) {
       if (historicalOnly) {
-        return { accepted: isConfirmedPattern(memory), memory, evidenceCreated: false, projectionNeeded: false };
+        return { accepted: isDecisionEligiblePattern(memory), memory, evidenceCreated: false, projectionNeeded: false };
       }
       memory = await db.userMemory.update({
         where: { id: memory.id },
@@ -169,7 +179,7 @@ export class CanonicalMemoryService {
           salience: clamp(raw.salience, memory.salience ?? 0.5),
         },
       });
-      return { accepted: isConfirmedPattern(memory), memory, evidenceCreated: false, projectionNeeded: false };
+      return { accepted: isDecisionEligiblePattern(memory), memory, evidenceCreated: false, projectionNeeded: false };
     }
 
     await db.userMemoryEvidence.create({
@@ -188,7 +198,7 @@ export class CanonicalMemoryService {
 
     let accepted = true;
     if (historicalOnly) {
-      return { accepted: isConfirmedPattern(memory), memory, evidenceCreated: true, projectionNeeded: false };
+      return { accepted: isDecisionEligiblePattern(memory), memory, evidenceCreated: true, projectionNeeded: false };
     }
     if (raw.kind === 'pattern' && raw.inferred) {
       const allEvidence = await db.userMemoryEvidence.findMany({ where: { memoryId: memory.id }, orderBy: { observedAt: 'asc' } });
@@ -197,7 +207,15 @@ export class CanonicalMemoryService {
       memory = await db.userMemory.update({
         where: { id: memory.id },
         data: {
-          structuredValue: { ...(memory.structuredValue ?? {}), ...(raw.structuredValue ?? {}), inferred: true, confirmed: accepted, evidenceCount: allEvidence.length, distinctDays },
+          structuredValue: {
+            ...(memory.structuredValue ?? {}),
+            ...(raw.structuredValue ?? {}),
+            inferred: true,
+            confirmed: accepted,
+            evidenceCount: allEvidence.length,
+            distinctDays,
+            evidenceIds: allEvidence.map((item: any) => item.id).filter(Boolean).slice(-12),
+          },
           confidence: accepted ? Math.max(clamp(raw.confidence, 0.65), 0.65) : Math.min(clamp(raw.confidence, 0.5), 0.64),
           salience: clamp(raw.salience, memory.salience ?? 0.5),
           validUntil: raw.validUntil ?? memory.validUntil ?? null,
@@ -281,7 +299,7 @@ export class CanonicalMemoryService {
     ]);
     const merged = new Map<string, any>();
     for (const memory of [...vectorMemories, ...recent]) {
-      if ((memory.locale !== locale && memory.locale !== 'und') || (memory.validUntil && new Date(memory.validUntil) < now) || !isConfirmedPattern(memory)) continue;
+      if ((memory.locale !== locale && memory.locale !== 'und') || (memory.validUntil && new Date(memory.validUntil) < now) || !isDecisionEligiblePattern(memory)) continue;
       merged.set(memory.id, memory);
     }
     const similarity = new Map(vectorRows.map((row) => [String(row.memoryId ?? row.memory_id ?? ''), Number(row.similarity ?? 0)]));
@@ -316,7 +334,13 @@ export class CanonicalMemoryService {
     for (const kind of ['fact', 'pattern', 'preference', 'decision', 'context'] as CanonicalMemoryKind[]) {
       const values = retrieval.buckets[kind];
       if (values.length === 0) continue;
-      lines.push(`${labels[kind]}: ${values.map((memory) => `${memory.content} [${memory.lifecycle}; ${Math.round(Number(memory.confidence ?? 0) * 100)}%]`).join(' | ')}`);
+      lines.push(`${labels[kind]}: ${values.map((memory) => {
+        const structured = memory.structuredValue ?? {};
+        const evidence = kind === 'pattern' && Number(structured.evidenceCount ?? 0) > 0
+          ? `; evidências ${Number(structured.evidenceCount)}; dias ${Number(structured.distinctDays ?? 0)}`
+          : '';
+        return `${memory.content} [${memory.lifecycle}; ${Math.round(Number(memory.confidence ?? 0) * 100)}%${evidence}]`;
+      }).join(' | ')}`);
     }
     const guards = [...retrieval.hardGuards.targetIds, ...retrieval.hardGuards.canonicalKeys];
     if (guards.length > 0) lines.push(`${english ? 'EXACT GUARDS' : 'BLOQUEIOS EXATOS'}: ${guards.join(' | ')}`);

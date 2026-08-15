@@ -15,7 +15,6 @@ import {
   Play,
   Plus,
   Sparkles,
-  Star,
   Target,
   X,
 } from "lucide-react";
@@ -27,6 +26,8 @@ import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
+import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import {
   buildGoalCardModel,
 } from "../utils/goal-priority-actions";
@@ -43,6 +44,11 @@ type GoalLike = {
     id: string | number; title: string; done: boolean; order?: number;
     milestoneId?: string | null; scheduledFor?: string | null; doneWhen?: string | null;
     effortSize?: 'small' | 'medium' | 'large' | null; status?: 'pending' | 'done' | 'rejected' | 'deferred';
+    evidenceRefs?: string[];
+    patternBasis?: Array<{
+      pattern: string; evidenceCount: number; distinctDays: number; windowDays: number;
+      confidence: number; limitation: string; impact: string;
+    }>;
   }>;
   description?: string | null;
   resultDefinition?: string | null;
@@ -382,8 +388,6 @@ function GoalCard({
   onEditDeadline,
   onPause,
   onArchive,
-  isPrimary,
-  onMakePrimary,
 }: {
   goal: GoalLike;
   paused: boolean;
@@ -403,8 +407,6 @@ function GoalCard({
   onEditDeadline: (deadline: string | null) => Promise<void>;
   onPause: () => void;
   onArchive: () => Promise<void>;
-  isPrimary: boolean;
-  onMakePrimary: () => void;
 }) {
   const l = useLocalizedCopy();
   const model = buildGoalCardModel(goal);
@@ -792,6 +794,11 @@ function GoalCard({
                     <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
                       {action.title}
                       {active ? <small style={{ display: "block", marginTop: 2, color: "var(--menthe)", fontWeight: 800 }}>{l("Agora", "Now")}</small> : null}
+                      {action.patternBasis?.map((basis) => (
+                        <small key={`${action.id}-${basis.pattern}`} style={{ display: "block", marginTop: 5, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.45, textDecoration: "none" }}>
+                          {l("Base desta adaptação", "Basis for this adaptation")}: {basis.pattern} · {basis.evidenceCount} {l("evidências", "evidence")} em {basis.distinctDays} {l("dias", "days")}/{basis.windowDays} · {Math.round(basis.confidence * 100)}% {l("confiança", "confidence")}. {basis.impact} {basis.limitation}
+                        </small>
+                      ))}
                     </span>
                   </button>
                   );
@@ -852,22 +859,6 @@ function GoalCard({
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7, marginTop: 6 }}>
                 <button onClick={() => setEditingResult(true)} style={{ ...quietButtonStyle, padding: "8px 6px" }}>
                   <Edit3 size={14} /> {l("Editar", "Edit")}
-                </button>
-                {/* Quem sabe o que é urgente é ela, não a porcentagem de
-                    conclusão. A heurística continua sendo o padrão; isto é a
-                    palavra final. */}
-                <button
-                  onClick={onMakePrimary}
-                  style={{
-                    ...quietButtonStyle,
-                    padding: "8px 6px",
-                    ...(isPrimary
-                      ? { borderColor: "var(--accent-primary-strong)", color: "var(--accent-primary-ink)" }
-                      : {}),
-                  }}
-                >
-                  <Star size={14} />
-                  {isPrimary ? l("É o principal", "Is primary") : l("Tornar principal", "Make primary")}
                 </button>
                 <button onClick={onPause} style={{ ...quietButtonStyle, padding: "8px 6px" }}>
                   {paused ? <Play size={14} /> : <Pause size={14} />}
@@ -950,6 +941,8 @@ export function GoalsPage() {
     recoverGoalActions,
   } = useAuraStore();
   const { showError, showSuccess } = useToast();
+  const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
+  const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
 
   const [creationOpen, setCreationOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -964,14 +957,18 @@ export function GoalsPage() {
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
   const [pendingQuestion, setPendingQuestion] = useState<{ goalId?: string | number; goalTitle: string; question: string } | null>(null);
   const [questionAnswer, setQuestionAnswer] = useState("");
-  const [primaryGoalId, setPrimaryGoalId] = useState<string | null>(null);
 
   const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
   const goals = state.goals as unknown as GoalLike[];
 
-  useEffect(() => {
-    setPrimaryGoalId(goals.find((goal) => goal.isPrimary)?.id?.toString() ?? null);
-  }, [goals]);
+  async function feedbackCanonicalDecision(status: "accepted" | "rejected") {
+    const decision = canonicalReading?.decision;
+    if (!decision || canonicalFeedbackPending) return;
+    setCanonicalFeedbackPending(true);
+    const saved = await sendAiriaDecisionFeedback(decision.id, status, "goals");
+    if (saved) await reloadCanonicalReading();
+    setCanonicalFeedbackPending(false);
+  }
 
   useEffect(() => {
     if (pendingQuestion) return;
@@ -1252,22 +1249,6 @@ export function GoalsPage() {
       }}
       onPause={() => { void togglePaused(goal.id); }}
       onArchive={() => archiveGoal(goal)}
-      isPrimary={String(goal.id) === primaryGoalId}
-      onMakePrimary={() => {
-        const next = String(goal.id) === primaryGoalId ? null : goal.id;
-        void (async () => {
-          try {
-            await api.put('/objectives/primary', { objectiveId: next === null ? null : String(next) });
-            await refreshData();
-            setPrimaryGoalId(next === null ? null : String(next));
-            showSuccess(next === null
-              ? l('A Airia volta a sugerir o foco sem fixá-lo.', 'Airia will suggest focus again without pinning it.')
-              : l('Esse é o seu objetivo em foco agora.', 'This is your focus goal now.'));
-          } catch (error) {
-            showError(error instanceof Error ? error.message : l('Não foi possível atualizar o foco.', 'Could not update focus.'));
-          }
-        })();
-      }}
       onEditDeadline={async (deadline) => {
         try {
           await api.patch(`/objectives/${goal.id}`, { deadline });
@@ -1283,6 +1264,18 @@ export function GoalsPage() {
   return (
     <div className="page-shell" style={{ minHeight: "100%", background: "var(--warm-bg)" }}>
       <div className="screen-content" style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 118 }}>
+        <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="goals" />
+        {canonicalReading?.decision && canonicalReading.decision.objectiveId && (
+          <section style={{ margin: "14px 2px 0", padding: 12, borderRadius: 14, border: "1px solid rgba(143,192,164,.34)", background: "rgba(255,255,255,.8)" }}>
+            <p style={{ margin: "0 0 4px", color: "var(--accent-primary-ink)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Proposta vinculada ao seu objetivo", "Proposal linked to your goal")}</p>
+            <p style={{ margin: 0, color: "var(--text-1)", fontSize: 13, fontWeight: 800 }}>{canonicalReading.decision.title}</p>
+            <p style={{ margin: "5px 0 9px", color: "var(--text-2)", fontSize: 11.5, lineHeight: 1.45 }}>{canonicalReading.decision.reason}</p>
+            {canonicalReading.decision.requiresConfirmation && <div style={{ display: "flex", gap: 7 }}>
+              <button style={quietButtonStyle} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("rejected")}>{l("Não agora", "Not now")}</button>
+              <button style={quietButtonStyle} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("accepted")}>{l("Faz sentido", "That fits")}</button>
+            </div>}
+          </section>
+        )}
         <header style={{ padding: "18px 2px 16px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
             {/* Aqui a Airia apoia o próximo movimento — órbita firme, discreta,

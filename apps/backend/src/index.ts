@@ -16,6 +16,7 @@ import { PlannerService, buildPostponeAdaptabilityUpdate, resolveTimelineAdaptab
 import { InsightService } from './services/insight.service';
 import { CheckinService } from './services/checkin.service';
 import { CheckinApplicationService, PrismaCheckinApplicationRepository } from './services/checkin-application.service';
+import { AiriaReadingService, type AiriaDecisionStatus } from './services/airia-reading.service';
 import {
   CHECKIN_CANONICAL_EMOTIONS,
   CHECKIN_CANONICAL_FACTORS,
@@ -58,7 +59,7 @@ import { AuraCommandPlanBuilderService } from './services/aura-command-plan-buil
 import { AuraCommandExecutorService } from './services/aura-command-executor.service';
 import { AuraCommandPersistenceService } from './services/aura-command-persistence.service';
 import { MemoryService } from './services/memory.service';
-import { CanonicalMemoryService } from './services/canonical-memory.service';
+import { CanonicalMemoryService, isDecisionEligiblePattern } from './services/canonical-memory.service';
 import { AuraMemoryIngestionService, conservativeAuraExtractor } from './services/aura-memory-ingestion.service';
 import { AgendaPatternRecognitionService } from './services/agenda-pattern-recognition.service';
 import { ContextGroundingService } from './services/context-grounding.service';
@@ -128,6 +129,7 @@ import {
   shouldSendJournalNudge,
   shouldSendPersistentReminder,
 } from './lib/notification-filters';
+import { resolveAdaptiveCheckinWindows, shouldSendCheckinSlotNudge } from './lib/checkin-windows';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
 import { normalizeObjectiveSubgoals } from './lib/objective-subgoals';
 import { PRODUCT_CAPABILITIES, type ProductCapabilities } from './contracts/product-capabilities';
@@ -527,6 +529,7 @@ type AppDependencies = {
   auraMemoryIngestionService?: Pick<AuraMemoryIngestionService, 'ingest'>;
   auraCommandService?: Pick<typeof AuraCommandService, 'interpretCommand'>;
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
+  airiaReadingService?: Pick<AiriaReadingService, 'rebuild' | 'get' | 'feedback'>;
   billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
   stripeService?: Pick<StripeService,
     'createCheckoutSession' | 'createPortalSession' | 'verifyCheckoutSession' | 'handleWebhook' | 'getOfferCatalog'>;
@@ -1997,8 +2000,9 @@ function stringList(value: unknown, limit = 12): string[] {
  *
  * A separação importante aqui é entre FATO e PADRÃO. `userStatements` são falas
  * da pessoa e podem sustentar um passo. `patternContext` (RAG/memória) explica
- * comportamento e nunca vira fato novo — por isso vai num campo separado, com
- * essa instrução no prompt.
+ * comportamento e nunca vira fato novo — por isso vai num campo separado. Um
+ * padrão confirmado pode calibrar a ação, mas a elegibilidade já foi filtrada
+ * pela memória canônica e o destino continua sendo o Objetivo/Ação atual.
  */
 export function buildGoalIntelligenceInput(input: {
   type: string;
@@ -2050,10 +2054,14 @@ export function buildGoalIntelligenceInput(input: {
       ? context.capacity
       : null,
     operationalProfile: (context.operationalProfile ?? null) as GoalIntelligenceInput['operationalProfile'],
-    patternContext: [input.ragContext, context.moodCycleContext]
+    patternContext: [context.verifiedPatternContext, context.moodCycleContext]
       .filter((part) => typeof part === 'string' && part.trim())
       .join('\n')
       .slice(0, 1200) || null,
+    patternEvidenceRefs: Array.isArray(context.patternEvidenceRefs)
+      ? context.patternEvidenceRefs.filter((ref: unknown): ref is string => typeof ref === 'string').slice(0, 12)
+      : [],
+    patternBasis: Array.isArray(context.patternBasis) ? context.patternBasis.slice(0, 4) : [],
   };
 }
 
@@ -2126,7 +2134,11 @@ async function loadObjectiveIntelligenceContext(prisma: any, userId: string, obj
     }).catch(() => []) ?? [],
     prisma.userMemory?.findMany?.({
       where: { userId, lifecycle: 'active' }, orderBy: [{ salience: 'desc' }, { lastSeenAt: 'desc' }], take: 20,
-      select: { kind: true, content: true, confidence: true },
+      select: {
+        id: true, canonicalKey: true, kind: true, content: true, confidence: true,
+        structuredValue: true, validUntil: true, lastSeenAt: true,
+        evidence: { select: { id: true, observedAt: true }, orderBy: { observedAt: 'desc' }, take: 12 },
+      },
     }).catch(() => []) ?? [],
     prisma.dailyCheckin?.findFirst?.({
       where: { userId, localDate: getSaoPauloDateContext(now).dbDate }, orderBy: { recordedAt: 'desc' },
@@ -2151,9 +2163,41 @@ async function loadObjectiveIntelligenceContext(prisma: any, userId: string, obj
   const canonicalFacts = (memories as any[])
     .filter((memory) => ['fact', 'decision', 'context', 'preference'].includes(memory.kind) && Number(memory.confidence) >= 0.6)
     .map((memory) => String(memory.content)).filter(Boolean).slice(0, 12);
-  const patterns = (memories as any[])
-    .filter((memory) => memory.kind === 'pattern')
-    .map((memory) => String(memory.content)).filter(Boolean).slice(0, 6);
+  const eligiblePatterns = (memories as any[])
+    .filter((memory) => memory.kind === 'pattern'
+      && isDecisionEligiblePattern(memory)
+      && (!memory.validUntil || new Date(memory.validUntil).getTime() >= now.getTime()))
+    .slice(0, 6);
+  const patterns = eligiblePatterns.map((memory) => {
+      const structured = memory.structuredValue && typeof memory.structuredValue === 'object'
+        ? memory.structuredValue as Record<string, unknown>
+        : {};
+      const evidenceCount = Number(structured.evidenceCount ?? 0);
+      const distinctDays = Number(structured.distinctDays ?? 0);
+      const confidence = Number(memory.confidence ?? 0);
+      const metadata = evidenceCount > 0 || distinctDays > 0
+        ? ` [evidências: ${evidenceCount}; dias: ${distinctDays}; confiança: ${confidence.toFixed(2)}]`
+        : '';
+      return `${String(memory.content)}${metadata}`;
+  }).filter(Boolean);
+  const patternBasis = eligiblePatterns.map((memory) => {
+    const structured = memory.structuredValue && typeof memory.structuredValue === 'object'
+      ? memory.structuredValue as Record<string, unknown>
+      : {};
+    return {
+      pattern: String(memory.content),
+      evidenceCount: Number(structured.evidenceCount ?? 0),
+      distinctDays: Number(structured.distinctDays ?? 0),
+      windowDays: Number(structured.windowDays ?? 14),
+      confidence: Number(memory.confidence ?? 0),
+      limitation: 'Associação observada; não prova causa nem diagnóstico.',
+      impact: 'Pode calibrar prioridade, tamanho, ordem, duração, ritmo, proteção ou adiamento da Ação atual.',
+    };
+  });
+  const patternEvidenceRefs = eligiblePatterns.flatMap((memory) => [
+    memory.id ? `pattern:${memory.id}` : '',
+    ...(Array.isArray(memory.evidence) ? memory.evidence.map((item: any) => item?.id ? `evidence:${item.id}` : '') : []),
+  ]).filter(Boolean).slice(0, 24);
   const checkinDateKey = checkin?.localDate
     ? new Date(checkin.localDate).toISOString().slice(0, 10)
     : null;
@@ -2174,6 +2218,8 @@ async function loadObjectiveIntelligenceContext(prisma: any, userId: string, obj
     blockedActions,
     canonicalFacts,
     patternContext: patterns.join('\n').slice(0, 1600) || null,
+    patternEvidenceRefs,
+    patternBasis,
     energyScore,
     moodLabel: typeof currentCheckin?.moodScore === 'number' ? `humor ${currentCheckin.moodScore}/10` : null,
     capacity: energyScore === null ? null : energyScore <= 3 ? 'quick' as const : energyScore >= 7 ? 'heavy' as const : 'moderate' as const,
@@ -2413,6 +2459,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     };
   };
   const routineBuilderService = dependencies.routineBuilderService ?? new RoutineBuilderService(prisma);
+  const airiaReadingService = dependencies.airiaReadingService ?? new AiriaReadingService(prisma);
   const checkinApplicationService = dependencies.checkinApplicationService ?? new CheckinApplicationService({
     repository: new PrismaCheckinApplicationRepository(prisma),
     evaluate: async (data) => {
@@ -2557,6 +2604,12 @@ export function createApp(dependencies: AppDependencies = {}) {
       };
     },
     afterPersist: async ({ data, checkin, evaluation, applicationContext }) => {
+      await airiaReadingService.rebuild({
+        userId: data.userId,
+        localDate: data.localDate,
+        sourceCheckinId: checkin.id,
+        surface: 'checkin',
+      });
       if (data.note && data.note.trim().length >= 10) {
         void memoryService.store({
           userId: data.userId,
@@ -3149,6 +3202,64 @@ export function createApp(dependencies: AppDependencies = {}) {
   });
 
   /**
+   * Fonte única para Home, Check-in, Diário, Aura, Padrões e Objetivos.
+   * `to` é a data da leitura; `from` existe para manter o contrato das
+   * superfícies longitudinais, mas a janela histórica é sempre calculada pelo
+   * servidor com peso igual para cada dia observado.
+   */
+  app.get('/api/airia/reading', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const requestedFrom = typeof req.query.from === 'string' ? req.query.from : undefined;
+    const requestedTo = typeof req.query.to === 'string' ? req.query.to : undefined;
+    if ((requestedFrom && !/^\d{4}-\d{2}-\d{2}$/.test(requestedFrom)) || (requestedTo && !/^\d{4}-\d{2}-\d{2}$/.test(requestedTo))) {
+      return res.status(400).json({ error: 'from/to must be YYYY-MM-DD' });
+    }
+    try {
+      const preferences = await prisma.userPreference.findUnique({ where: { userId }, select: { timezone: true } });
+      const localDate = getLocalTimeContext(new Date(), preferences?.timezone).dateKey;
+      return res.json(await airiaReadingService.rebuild({
+        userId,
+        localDate,
+        periodFrom: requestedFrom,
+        periodTo: requestedTo,
+        surface: 'read',
+      }));
+    } catch (error) {
+      console.error('[airia/reading] Error:', error);
+      return res.status(500).json({ error: 'Failed to build Airia reading' });
+    }
+  });
+
+  app.post('/api/airia/decisions/:decisionId/feedback', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    const payloadSchema = z.object({
+      status: z.enum(['accepted', 'corrected', 'rejected', 'done', 'substituted']),
+      correction: z.string().trim().max(1_000).optional(),
+      note: z.string().trim().max(1_000).optional(),
+      surface: z.string().trim().max(80).optional(),
+    });
+    try {
+      const payload = payloadSchema.parse(req.body);
+      const statusMap: Record<typeof payload.status, AiriaDecisionStatus> = {
+        accepted: 'aceita', corrected: 'corrigida', rejected: 'rejeitada', done: 'concluída', substituted: 'substituída',
+      };
+      return res.json(await airiaReadingService.feedback({
+        userId,
+        decisionId: req.params.decisionId,
+        status: statusMap[payload.status],
+        surface: payload.surface ?? 'unknown',
+        correction: payload.correction,
+        note: payload.note,
+      }));
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      if (error instanceof Error && error.message === 'AIRIA_DECISION_NOT_FOUND') return res.status(404).json({ error: 'Decision not found' });
+      console.error('[airia/decision-feedback] Error:', error);
+      return res.status(500).json({ error: 'Failed to persist decision feedback' });
+    }
+  });
+
+  /**
    * POST /api/checkins
    * Salva o check-in diário e dispara a IA para avaliação de estado.
    */
@@ -3158,11 +3269,12 @@ export function createApp(dependencies: AppDependencies = {}) {
       const result = await checkinApplicationService.record(data, {
         requestContext: req.body as Record<string, unknown>,
       });
+      const reading = await airiaReadingService.rebuild({ userId: data.userId, localDate: data.localDate, sourceCheckinId: result.checkinId, surface: 'checkin' });
       const checkinStatement = data.note?.trim() ?? '';
       const objectivePathProposals = checkinStatement
         ? await reviewObjectivePathsAfterContext(data.userId, checkinStatement, 'checkin').catch(() => [])
         : [];
-      return res.json({ ...result, objectivePathProposals });
+      return res.json({ ...result, reading, objectivePathProposals });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -3370,11 +3482,11 @@ export function createApp(dependencies: AppDependencies = {}) {
               take: 1,
               select: { startedAt: true, themes: true },
             }),
-            prisma.userPattern.findMany({
-              where: { userId: data.userId, strength: { gt: 0.55 } },
-              orderBy: { lastConfirmedAt: 'desc' },
-              take: 1,
-              select: { pattern: true, lastConfirmedAt: true },
+            prisma.userMemory.findMany({
+              where: { userId: data.userId, kind: 'pattern', lifecycle: 'active' },
+              orderBy: { lastSeenAt: 'desc' },
+              take: 12,
+              select: { content: true, lastSeenAt: true, validUntil: true, structuredValue: true },
             }),
           ]);
 
@@ -3390,11 +3502,14 @@ export function createApp(dependencies: AppDependencies = {}) {
             parts.push(`A última sessão foi ${dayLabel}${themes}.`);
           }
 
-          const topPattern = topPatterns[0];
+          const topPattern = (topPatterns as any[]).find((pattern) => (
+            isDecisionEligiblePattern({ kind: 'pattern', structuredValue: pattern.structuredValue })
+            && (!pattern.validUntil || new Date(pattern.validUntil).getTime() >= Date.now())
+          ));
           if (topPattern) {
-            const daysSince = Math.floor((Date.now() - new Date(topPattern.lastConfirmedAt).getTime()) / 86400000);
+            const daysSince = Math.floor((Date.now() - new Date(topPattern.lastSeenAt).getTime()) / 86400000);
             if (daysSince <= 14) {
-              parts.push(`Tenho percebido: ${topPattern.pattern.toLowerCase()}.`);
+              parts.push(`Tenho percebido: ${String(topPattern.content).toLowerCase()}.`);
             }
           }
 
@@ -6464,6 +6579,29 @@ export function createApp(dependencies: AppDependencies = {}) {
         // tela mandar, cada superfície nova nasceria sem personalização e o
         // onboarding teria sido preenchido à toa.
         const operationalProfile = await OperationalProfileService.get(prisma, userId);
+        const verifiedGoalMemory = await canonicalMemoryService.retrieve({
+          userId,
+          query: getRagIntent(type, context),
+          locale: typeof context.locale === 'string' ? context.locale : 'pt-BR',
+          limit: 12,
+        }).catch(() => null);
+        if (verifiedGoalMemory) {
+          const verifiedPatterns = verifiedGoalMemory.memories.filter((memory) => memory.kind === 'pattern');
+          context.verifiedPatternContext = canonicalMemoryService.formatForPrompt(verifiedGoalMemory, typeof context.locale === 'string' ? context.locale : 'pt-BR');
+          context.patternEvidenceRefs = verifiedPatterns.flatMap((memory) => [
+            `pattern:${memory.id}`,
+            ...((memory.structuredValue?.evidenceIds as unknown[] | undefined) ?? []).filter((id): id is string => typeof id === 'string').map((id) => `evidence:${id}`),
+          ]);
+          context.patternBasis = verifiedPatterns.map((memory) => ({
+            pattern: memory.content,
+            evidenceCount: Number(memory.structuredValue?.evidenceCount ?? 0),
+            distinctDays: Number(memory.structuredValue?.distinctDays ?? 0),
+            windowDays: Number(memory.structuredValue?.windowDays ?? 14),
+            confidence: Number(memory.confidence ?? 0),
+            limitation: 'Associação observada; não prova causa nem diagnóstico.',
+            impact: 'Pode calibrar prioridade, tamanho, ordem, duração, ritmo, proteção ou adiamento da Ação atual.',
+          }));
+        }
         const decomposition = await GoalIntelligenceService.decompose({
           ...buildGoalIntelligenceInput({ type, context, userName, ragContext }),
           operationalProfile,
@@ -6742,14 +6880,14 @@ Com base em IPSRT, DBT e ritmo social, retorne:
 5. 2-3 sugestões baseadas em evidência, preventivas e práticas. Elas podem ser micro-ações, uma tarefa objetiva ou um compromisso concreto para hoje.
 
 REGRAS:
-- LEITURA TOTAL: cruze histórico de humor, humor atual, RAG/memória, planner, metas, hábitos e ações recentes antes de sugerir.
+- LEITURA TOTAL: cruze histórico de humor, estado atual, memória canônica, objetivos, ações e relatos recentes antes de sugerir. Contextos legados de planner/hábitos/agenda só valem se estiverem explicitamente habilitados pelo produto.
 - Não descreva só o óbvio; identifique implicação prática.
 - Soe como quem monitora e antecipa, não como quem espera nova crise para reagir.
 - As sugestões devem nascer dos sinais reais do histórico, não de conselhos genéricos.
-- Use histórico, memória e ciclo para o "pattern" e o "insight"; para "actions", use apenas agenda pendente, hábitos pendentes hoje, metas ativas ou âncoras reais de hoje.
+- Use histórico, memória canônica e estado atual para o "pattern" e o "insight"; para "actions", use apenas Objetivos ativos, Ações pendentes, intenção/relato atual ou âncoras reais de hoje. Um padrão verificado pode calibrar uma ação já ancorada, mas não cria sozinho um destino operacional.
 - Se não houver âncora real de hoje para uma ação, retorne menos ações ou "actions": [].
 - Não use tema recorrente, memória antiga ou fase de humor para inventar tarefa que não existe hoje.
-- Só sugira treino, exercício, ginástica, academia, roupa de treino ou kit de treino se isso aparecer explicitamente em compromissos pendentes, tarefas pendentes hoje, hábitos pendentes hoje ou âncoras reais de hoje.
+- Só sugira treino, exercício, ginástica, academia, roupa de treino ou kit de treino se isso aparecer explicitamente em um Objetivo, Ação, intenção/relato atual ou âncora real de hoje.
 - Não sugira o que já aparece como concluído em agenda, hábitos, metas ou subtarefas.
 - Não transforme coisa concluída em próxima ação. Use concluídos apenas como evidência no "pattern" ou "insight".
 - Não ressuscite ação que a pessoa marcou como feita, pulou, excluiu ou agendou pelo card.
@@ -6758,7 +6896,7 @@ REGRAS:
 - Prefira intervenções concretas de regulação: proteger sono, reduzir carga social, fracionar tarefa, cortar estímulo, ancorar rotina, criar pausa antes de agir no automático.
 - Só use corpo/respiração/água/alongamento se houver evidência explícita e atual de corpo, sede, tensão física ou sono. Do contrário, prefira ação ligada à vida real trazida no contexto.
 - Se a única sugestão possível for genérica, retorne "actions": [].
-- Se houver âncora real, tente entregar próximo passo, compromisso, tarefa, hábito ou ajuste de agenda aplicável.
+- Se houver âncora real, tente entregar próximo passo ou ajuste aplicável ao Objetivo/Ação. Não crie tarefa, hábito ou ajuste de agenda em superfícies legadas desabilitadas.
 - Se houver sinal de queda sustentada, impulsividade, compulsão, isolamento ou sobrecarga, nomeie isso no "pattern" ou no "insight" sem dramatizar.
 - Cada "why" deve explicar qual risco ou padrão a ação está tentando conter.
 - Redação dos títulos (obrigatório): estrutura = [verbo no imperativo] + [objeto concreto do dia desta usuária] + [escopo limitado: tempo OU quantidade OU critério de parada]. O título deve fazer sentido lido sozinho, sem conhecer o contexto. Tamanho ideal: 8 a 14 palavras.
@@ -8790,15 +8928,27 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
 }
 
 function getSaoPauloHHMM(date: Date): string {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'America/Sao_Paulo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(date);
-  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
-  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
-  return `${hour}:${minute}`;
+  return getLocalTimeContext(date, 'America/Sao_Paulo').time;
+}
+
+function getLocalTimeContext(date: Date, timezone?: string | null): { dateKey: string; time: string; dbDate: Date } {
+  const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone : 'America/Sao_Paulo';
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: resolvedTimezone,
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+    }).formatToParts(date);
+  } catch {
+    return getLocalTimeContext(date, 'America/Sao_Paulo');
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes, fallback: string) => parts.find((entry) => entry.type === type)?.value ?? fallback;
+  const dateKey = `${part('year', '1970')}-${part('month', '01')}-${part('day', '01')}`;
+  return {
+    dateKey,
+    time: `${part('hour', '00')}:${part('minute', '00')}`,
+    dbDate: new Date(`${dateKey}T00:00:00.000Z`),
+  };
 }
 
 const checkinNudgeTimeCache = new Map<string, { dateKey: string; time: string }>();
@@ -9082,31 +9232,41 @@ if (require.main === module) {
           : [];
 
         if (notifPrefs.checkin) {
-          const nudgeTime = await resolveUserCheckinNudgeTime(pref.userId, pref.morningCheckinTime, saoPauloToday.dateKey);
-          if (nudgeTime === currentTimeStr) {
-            const [todayCheckin, nudgesSentToday] = await Promise.all([
-              defaultPrisma.dailyCheckin.findFirst({
-                where: { userId: pref.userId, localDate: saoPauloToday.dbDate },
-                select: { id: true },
-              }),
-              countNudgesSentToday(pref.userId, spDayStartUtc),
+          const userNow = getLocalTimeContext(now, pref.timezone);
+          const recent = await defaultPrisma.dailyCheckin.findMany({
+            where: { userId: pref.userId, recordedAt: { gte: new Date(now.getTime() - 90 * 86_400_000) } },
+            select: { checkinSlot: true, recordedAt: true },
+            orderBy: { recordedAt: 'desc' },
+            take: 90,
+          });
+          const recentBySlot: Record<'morning' | 'midday' | 'evening', string[]> = { morning: [], midday: [], evening: [] };
+          for (const entry of recent) {
+            const slot = String(entry.checkinSlot).split('-')[0] as keyof typeof recentBySlot;
+            if (!(slot in recentBySlot)) continue;
+            recentBySlot[slot].push(getLocalTimeContext(entry.recordedAt, pref.timezone).time);
+          }
+          const windows = resolveAdaptiveCheckinWindows({ wakeTime: pref.wakeTime, sleepTime: pref.sleepTime, recentBySlot });
+          const dueWindow = windows.find((window) => window.targetTime === userNow.time);
+          if (dueWindow) {
+            const [todayCheckins, sentEvents] = await Promise.all([
+              defaultPrisma.dailyCheckin.findMany({ where: { userId: pref.userId, localDate: userNow.dbDate }, select: { checkinSlot: true } }),
+              defaultPrisma.eventLog.findMany({ where: { userId: pref.userId, eventName: NUDGE_EVENT_NAME, createdAt: { gte: new Date(now.getTime() - 30 * 60 * 60 * 1000) } }, select: { properties: true } }),
             ]);
-            const decision = shouldSendCheckinNudge({
-              currentTime: currentTimeStr,
-              nudgeTime,
-              hasCheckinToday: Boolean(todayCheckin),
-              nudgesSentToday,
-            });
+            const completedSlots = todayCheckins.map((entry) => String(entry.checkinSlot).split('-')[0]);
+            const nudgedSlots = sentEvents
+              .filter((event) => (event.properties as any)?.kind === 'checkin' && (event.properties as any)?.localDate === userNow.dateKey)
+              .map((event) => String((event.properties as any)?.slot ?? ''));
+            const decision = shouldSendCheckinSlotNudge({ currentTime: userNow.time, window: dueWindow, completedSlots, nudgedSlots });
             if (decision.send) {
               await sendPushToUser(pref.userId, {
                 title: '✨ Como você tá agora?',
-                body: '1 toque e pronto — a Airia calibra seu dia.',
+                body: 'Um registro breve ajuda a Airia a entender como seu dia mudou.',
                 url: '/checkin',
-                tag: 'checkin-reminder',
+                tag: `checkin-reminder-${dueWindow.slot}`,
               });
-              await logNudgeSent(pref.userId, 'checkin', nudgeTime);
+              await defaultPrisma.eventLog.create({ data: { userId: pref.userId, eventName: NUDGE_EVENT_NAME, properties: { kind: 'checkin', slot: dueWindow.slot, time: dueWindow.targetTime, localDate: userNow.dateKey, timezone: pref.timezone ?? 'America/Sao_Paulo' } } });
             } else {
-              console.log(`[push-cron] checkin nudge skipped for ${pref.userId}: ${decision.reason}`);
+              console.log(`[push-cron] checkin ${dueWindow.slot} skipped for ${pref.userId}: ${decision.reason}`);
             }
           }
         }

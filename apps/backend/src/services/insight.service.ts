@@ -78,7 +78,7 @@ export class InsightService {
     });
 
     // 2. Buscar Dados Brutos da Semana
-    const [checkins, journalSessions, timeline, habits, profile, onboarding, objectives] = await Promise.all([
+    const [checkins, journalSessions, profile, onboarding, objectives] = await Promise.all([
       prisma.dailyCheckin.findMany({
         where: { userId, localDate: { gte: weekStart, lt: weekEnd } },
         orderBy: { localDate: 'asc' }
@@ -86,18 +86,6 @@ export class InsightService {
       prisma.journalSession.findMany({
         where: { userId, localDate: { gte: weekStart, lt: weekEnd }, status: 'completed' },
         orderBy: { localDate: 'asc' }
-      }),
-      prisma.timelineBlock.findMany({
-        where: { userId, localDate: { gte: weekStart, lt: weekEnd } },
-        orderBy: { localDate: 'asc' }
-      }),
-      prisma.habit.findMany({
-        where: { userId, archived: false },
-        include: {
-          completions: {
-            where: { date: { gte: weekStart, lt: weekEnd } }
-          }
-        }
       }),
       prisma.profile.findUnique({
         where: { id: userId },
@@ -115,20 +103,10 @@ export class InsightService {
       }).catch(() => []),
     ]);
 
-    // Calcular correlações para hábitos ativos
-    const habitCorrelations = await Promise.all(
-      habits.map(async (h) => ({
-        title: h.title,
-        correlation: await InsightService.calculateHabitMoodCorrelation(userId, h.id)
-      }))
-    );
-
     const rawData = {
       checkins,
       journalSummaries: journalSessions.map(s => ({ date: s.localDate, summary: s.summary, emotions: s.emotions, themes: s.themes })),
-      timeline: timeline.map(t => ({ title: t.title, status: t.status, intensity: t.intensity })),
-      habits: habits.map(h => ({ title: h.title, completions: h.completions.length })),
-      habitCorrelations
+      objectives: objectives.map((objective) => ({ title: objective.title, progress: objective.progress })),
     };
 
     // Se já existe insight e não há novos dados relevantes (ex: checkinCount não mudou), retorna o cache
@@ -142,15 +120,13 @@ export class InsightService {
     // 3. Agregação de Dados para o Prompt
     const avgMood = checkins.reduce((acc, c) => acc + c.moodScore, 0) / (checkins.length || 1);
     const avgEnergy = checkins.reduce((acc, c) => acc + c.energyScore, 0) / (checkins.length || 1);
-    const tasksCompleted = timeline.filter(t => t.status === 'completed').length;
-
     const summary = {
       avgMood: Number(avgMood.toFixed(1)),
       avgEnergy: Number(avgEnergy.toFixed(1)),
       checkinCount: checkins.length,
       journalSessions: journalSessions.length,
-      tasksCompleted,
-      tasksTotal: timeline.length
+      tasksCompleted: 0,
+      tasksTotal: 0,
     };
     const latestCheckin = checkins[checkins.length - 1];
     const moodCycleContext = latestCheckin
@@ -241,12 +217,6 @@ export class InsightService {
     });
 
     // 4. Chamada OpenAI para Análise de Padrões
-    const habitLines = rawData.habits.map(h => `- ${h.title}: ${h.completions} conclusões`).join('\n');
-    const correlationLines = rawData.habitCorrelations
-      .filter(c => Math.abs(c.correlation) > 0.1)
-      .map(c => `- ${c.title}: impacto de ${Math.round(c.correlation * 100)}% no humor`)
-      .join('\n');
-
     const prompt = `
       Analise os dados semanais para identificar padrões de humor e energia de ${userName}.
       
@@ -254,19 +224,12 @@ export class InsightService {
       - Médias: Humor ${humanizeScore(summary.avgMood, 'mood')}, Energia ${humanizeScore(summary.avgEnergy, 'energy')}.
       - Check-ins: ${summary.checkinCount} realizados.
       - Diário: ${summary.journalSessions} sessões concluídas. Temas recorrentes: ${journalSessions.flatMap(s => s.themes).join(', ')}.
-      - Planner: ${summary.tasksCompleted}/${summary.tasksTotal} tarefas concluídas.
       - Metas ativas: ${objectives.map((goal: any) => goal.title).join(', ') || 'nenhuma meta ativa registrada'}.
-      
-      HÁBITOS:
-      ${habitLines || 'Nenhum hábito registrado.'}
-      
-      CORRELAÇÕES IDENTIFICADAS:
-      ${correlationLines || 'Ainda sem correlações significativas.'}
       ${ragContext}
       ${recentSuggestionMemory}
 
       REGRAS:
-      0. Faça leitura total: semana atual + humor/energia + histórico longitudinal + diário + planner + hábitos + metas + RAG/memória + sugestões recentes.
+      0. Faça leitura total: semana atual + humor/energia + histórico longitudinal + diário + metas + RAG/memória + sugestões recentes. Planner e Hábitos estão desligados e não podem entrar na leitura.
       1. Identifique 2-3 padrões (patterns) reais baseados nos dados: padrões, decisões recorrentes e ciclos de humor.
       2. Dê 2-3 recomendações práticas (recommendations) para a próxima semana, cada uma ligada a uma decisão concreta.
       3. Escreva uma análise narrativa (aiAnalysis) empática de 3-5 frases, sem motivação genérica.

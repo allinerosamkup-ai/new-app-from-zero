@@ -1,9 +1,10 @@
 // Pomodoro Page v2 — timer circular
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
+import { useAiriaReading } from "../lib/airia-reading";
 import "../styles/aura.css";
 
 type Phase = "foco" | "curta" | "longa";
@@ -25,11 +26,9 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function PomodoroPage() {
   const l = useLocalizedCopy();
-  const { state } = useAuraStore();
+  const { reading } = useAiriaReading();
   const navigate = useNavigate();
   const location = useLocation();
-
-  void state; // consumed via store, kept for pattern compliance
 
   const activeTaskTitle: string | null = (location.state as any)?.taskTitle ?? null;
 
@@ -107,6 +106,7 @@ export function PomodoroPage() {
             {activeTaskTitle}
           </p>
         )}
+        <SafetyProtocolCard riskSafety={reading?.riskSafety} surface="daily_summary" />
 
         {/* ── Phase tabs ── */}
         <div className="aura-tabs" style={{ margin: "0 0 16px" }}>
@@ -287,7 +287,9 @@ export function PomodoroPage() {
           marginTop: "16px",
           padding: "0 8px",
         }}>
-          {l("Bom ritmo! Sua energia está no pico — aproveite para as tarefas mais exigentes.", "Good rhythm! Your energy is peaking — use it for the most demanding tasks.")}
+          {reading?.currentState.intraday?.direction === "oscillating"
+            ? l("Seu dia oscilou. Use esta sessão apenas se ela fizer sentido agora; não é uma cobrança.", "Your day has shifted. Use this session only if it fits right now; it is not a demand.")
+            : l("Este cronômetro é só uma ferramenta. A Airia mantém a leitura e a prioridade no estado compartilhado.", "This timer is only a tool. Airia keeps the reading and priority in the shared state.")}
         </p>
 
         {/* Finalizar */}

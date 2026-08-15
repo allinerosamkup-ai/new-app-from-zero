@@ -46,6 +46,8 @@ describe("CheckinPage integrated flow", () => {
     expect(html).toContain('data-testid="checkin-contextual-flow"');
     expect(html).toContain('data-section="voice-emotion"');
     expect(html).toContain('data-section="mood-energy"');
+    expect(html).not.toContain('data-choice-group="capacity"');
+    expect(html).not.toContain('data-choice-group="priority-goal"');
     expect(html).toContain('data-section="influences"');
     expect(html).toContain('data-section="optional-context"');
     expect(html).toContain("Não identifiquei um fator agora");
@@ -68,6 +70,10 @@ describe("CheckinPage integrated flow", () => {
 
     expect(source).toContain('data-choice-group="flow-day"');
     expect(source).toContain('data-choice-group="flow-intensity"');
+    expect(source).toContain('section="airia-interpretation"');
+    expect(source).toContain('A Airia cuida da próxima decisão');
+    expect(source).not.toContain('Hoje você lida melhor com algo:');
+    expect(source).not.toContain('O que mais precisa da sua atenção hoje?');
     expect(source).toMatch(/outcome\.status === "queued"[\s\S]{0,900}return;[\s\S]{0,180}finalizeContextualCheckin/);
   });
 });

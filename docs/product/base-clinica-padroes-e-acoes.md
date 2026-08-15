@@ -80,18 +80,16 @@ mesmo tempo**: humor deprimido com alta energia e agitação. A característica
 central é a **simultaneidade** — é o que separa estado misto de ciclagem rápida,
 e as pessoas confundem os dois.
 
-**O motor hoje não detecta isso.** `weightedComposite` colapsa humor e energia
-num número só (`humor*0.6 + energia*0.4`). Humor 2 com energia 8 dá composto 4,4
-— lido como intermediário, invisível. E a fase `mixed` ("Turbulência") é
-definida por **volatilidade de 14 dias** ([mood-cycle-engine.ts:788](apps/web/src/utils/mood-cycle-engine.ts:788)),
-não por divergência entre humor e energia no mesmo dia.
+O composto `weightedComposite` ainda resume humor e energia para tendência, mas
+o motor atual também preserva os dois sinais separados. A flag `mixed_features`
+é calculada pela divergência `energia − humor` no mesmo dia: energia pelo menos
+3 pontos acima do humor e humor até 4, em pelo menos 3 dias da janela de 14
+dias. A fase `Turbulência` continua usando também a volatilidade do período;
+as duas leituras não devem ser confundidas.
 
-Ou seja: o app registra humor e energia separadamente — tem exatamente o dado
-necessário — e depois joga a informação fora na hora de ler.
-
-**Correção:** calcular a divergência `energia − humor` por dia. Divergência alta
-e sustentada, com humor abaixo do baseline, é estado misto. Isso vale sem
-nenhuma coluna nova.
+Isso é um alerta comportamental interno, não diagnóstico. A divergência pode
+reduzir decisões irreversíveis e aumentar proteção, mas não autoriza nomear um
+episódio clínico.
 
 O app já tem `dayType: 'mixed'` como autorrelato no check-in. O autorrelato pode
 confirmar, mas não pode ser a única fonte — a pessoa em estado misto é
@@ -105,15 +103,10 @@ O marcador fundamental de hipomania incipiente é a **diminuição da necessidad
 de sono** — sentir-se descansado com poucas horas. Não é dormir pouco. É dormir
 pouco **e estar bem**.
 
-**Hoje o app trata isso ao contrário.** O fator `slept_little` ("Dormi pouco
-(<6h)") está classificado como `negative` ([checkin-page.tsx:33](apps/web/src/routes/checkin-page.tsx:33)).
-Quem está subindo para hipomania dorme 4h, acorda ótimo, e o app conta isso como
-fator negativo — some no cálculo em vez de acender alerta.
-
-**Correção:** poucas horas de sono **com** humor e energia acima do baseline não
-é privação de sono, é redução da necessidade de sono. O sinal muda de negativo
-para alerta de elevação. Poucas horas **com** humor baixo continua sendo
-privação.
+O motor atual distingue os casos quando possui `sleepHours`: pelo menos 2 dias
+nos últimos 7 com sono de até 6 horas e composto pelo menos 0,6 acima da linha
+de base geram `reduced_sleep_need`. Poucas horas com humor baixo continuam
+sendo tratadas como privação, não como elevação.
 
 Distinguir "dia bom" de hipomania exige, além do humor elevado: duração de 1–3
 dias no mínimo, e pelo menos um dos marcadores obrigatórios — grandiosidade,

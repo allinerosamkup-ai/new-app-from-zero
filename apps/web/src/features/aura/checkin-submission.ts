@@ -3,18 +3,23 @@ import type { CheckinEntry } from "./types";
 type Input = {
   localDate: string;
   checkinSlot: string;
+  checkinPurpose?: "window" | "extra";
   entry: Omit<CheckinEntry, "date">;
 };
 
 /**
- * O que a tela pergunta precisa chegar ao banco — sem exceção silenciosa.
+ * Todo contexto explícito que chegar de uma superfície precisa chegar ao banco
+ * — sem exceção silenciosa. A tela principal não pede capacidade nem prioridade:
+ * quando esses campos existem, vieram de uma instrução explícita ou de uma
+ * superfície compatível e devem ser preservados.
  *
  * Clareza e irritabilidade tinham coluna, contrato e leitor (o motor consome
  * `irritabilidade` na agregação diária) e nenhuma pergunta. Capacidade e
- * objetivo prioritário tinham o inverso: pergunta na tela e nenhum destino,
- * porque viajavam só pelo `navigate(state)`. As duas metades se resolvem aqui.
+ * objetivo prioritário continuam opcionais no contrato para preservar contexto
+ * explícito vindo de outras superfícies, mas não podem voltar a ser uma etapa
+ * obrigatória de decisão no check-in principal.
  */
-export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input) {
+export function buildCheckinSubmission({ localDate, checkinSlot, checkinPurpose = "window", entry }: Input) {
   const note = entry.note?.trim() || undefined;
   const dayPlan = {
     ...(entry.capacity !== undefined ? { capacity: entry.capacity } : {}),
@@ -23,6 +28,7 @@ export function buildCheckinSubmission({ localDate, checkinSlot, entry }: Input)
   return {
     localDate,
     checkinSlot,
+    checkinPurpose,
     moodScore: entry.humor,
     energyScore: entry.energia,
     ...(entry.clareza !== undefined ? { clarityScore: entry.clareza } : {}),

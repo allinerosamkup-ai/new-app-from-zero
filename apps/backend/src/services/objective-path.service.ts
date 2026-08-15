@@ -91,6 +91,7 @@ function actionRows(objectiveId: string, decomposition: GoalDecomposition): Obje
     effortSize: step.effortSize ?? null,
     basedOn: step.basedOn,
     evidenceRefs: step.evidenceRefs ?? [`objective:${objectiveId}`],
+    ...(step.patternBasis?.length ? { patternBasis: step.patternBasis } : {}),
     userEdited: false,
   })));
 }
@@ -144,6 +145,8 @@ export class ObjectivePathService {
     blockedActions?: string[];
     canonicalFacts?: string[];
     patternContext?: string | null;
+    patternEvidenceRefs?: string[];
+    patternBasis?: GoalIntelligenceInput['patternBasis'];
     moodLabel?: string | null;
     energyScore?: number | null;
     capacity?: GoalIntelligenceInput['capacity'];
@@ -166,6 +169,8 @@ export class ObjectivePathService {
       userStatements: [objective.description ?? '', ...(input.userStatements ?? [])].filter(Boolean),
       locale: input.locale,
       patternContext: input.patternContext,
+      patternEvidenceRefs: input.patternEvidenceRefs,
+      patternBasis: input.patternBasis,
       moodLabel: input.moodLabel,
       energyScore: input.energyScore,
       capacity: input.capacity,
@@ -246,6 +251,8 @@ export class ObjectivePathService {
     blockedActions?: string[];
     canonicalFacts?: string[];
     patternContext?: string | null;
+    patternEvidenceRefs?: string[];
+    patternBasis?: GoalIntelligenceInput['patternBasis'];
     moodLabel?: string | null;
     energyScore?: number | null;
     capacity?: GoalIntelligenceInput['capacity'];
@@ -272,6 +279,8 @@ export class ObjectivePathService {
     blockedActions?: string[];
     canonicalFacts?: string[];
     patternContext?: string | null;
+    patternEvidenceRefs?: string[];
+    patternBasis?: GoalIntelligenceInput['patternBasis'];
     moodLabel?: string | null;
     energyScore?: number | null;
     capacity?: GoalIntelligenceInput['capacity'];
@@ -303,6 +312,8 @@ export class ObjectivePathService {
       ].filter(Boolean),
       canonicalFacts: input.canonicalFacts,
       patternContext: input.patternContext,
+      patternEvidenceRefs: input.patternEvidenceRefs,
+      patternBasis: input.patternBasis,
       moodLabel: input.moodLabel,
       energyScore: input.energyScore,
       capacity: input.capacity,
@@ -365,6 +376,8 @@ export class ObjectivePathService {
     blockedActions?: string[];
     canonicalFacts?: string[];
     patternContext?: string | null;
+    patternEvidenceRefs?: string[];
+    patternBasis?: GoalIntelligenceInput['patternBasis'];
     moodLabel?: string | null;
     energyScore?: number | null;
     capacity?: GoalIntelligenceInput['capacity'];
@@ -381,6 +394,8 @@ export class ObjectivePathService {
       userStatements: [objective.description ?? '', ...(input.userStatements ?? []), input.reason].filter(Boolean),
       locale: input.locale,
       patternContext: input.patternContext,
+      patternEvidenceRefs: input.patternEvidenceRefs,
+      patternBasis: input.patternBasis,
       moodLabel: input.moodLabel,
       energyScore: input.energyScore,
       capacity: input.capacity,

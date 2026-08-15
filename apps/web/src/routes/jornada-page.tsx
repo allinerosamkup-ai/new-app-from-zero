@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Check, Lock, BookOpen, ArrowRight } from "lucide-react";
 import { api } from "../lib/api";
-import { useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
-import { computeMoodCycle, type MoodPhase } from "../utils/mood-cycle-engine";
+import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
+import { useAiriaReading } from "../lib/airia-reading";
 
 type JornadaFeature = "journal" | "habits" | "checkin" | "insights" | "goals";
 
@@ -41,24 +41,22 @@ const FEATURE_LABEL: Record<JornadaFeature, string> = {
   goals: "Abrir meus objetivos",
 };
 
-const LOW_PHASES = new Set<MoodPhase>(["low", "depleted"]);
-
 export default function JornadaPage() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
-  const { state } = useAuraStore();
+  const { reading: canonicalReading } = useAiriaReading();
   const [data, setData] = useState<JornadaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const isLowPhase = useMemo(() => {
-    const report = computeMoodCycle(state.checkinHistory || []);
-    return LOW_PHASES.has(report.phase);
-  }, [state.checkinHistory]);
+  // A Jornada não recalcula capacidade. Ela só adapta a apresentação ao
+  // mesmo estado seguro e persistido que Home, Diário e Aura recebem.
+  const isLowPhase = canonicalReading?.riskSafety?.route === "adapt_day"
+    || canonicalReading?.currentState.intraday?.direction === "falling";
 
   useEffect(() => {
-    (api.get("/api/jornada") as Promise<JornadaData>)
+    (api.get("/jornada") as Promise<JornadaData>)
       .then((d) => { setData(d); setSelected(d.currentStep); })
       .catch(() => setData({ steps: [], currentStep: 1, completed: [] }))
       .finally(() => setLoading(false));
@@ -91,6 +89,10 @@ export default function JornadaPage() {
           {l("Do livro “Além da Solidão” — um passo por vez, no seu ritmo.", "From the book “Beyond Loneliness” — one step at a time, at your pace.")}
           </p>
         </div>
+      </div>
+
+      <div style={{ padding: "0 20px" }}>
+        <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="daily_summary" />
       </div>
 
       {/* Progresso */}

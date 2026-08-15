@@ -20,6 +20,8 @@ Entradas das plataformas:
 
 Memória e documentação relacionadas:
 - `docs/agent-memory/` — memória persistente (o que já foi descoberto).
+- `docs/product/PRODUCT_CONSTITUTION.md` — fonte canônica do comportamento,
+  da carga cognitiva e das decisões de produto da Airia.
 - `skills/airia-pr-review/SKILL.md` — revisão obrigatória de PR/feature/deploy.
 - `AGENTS.md` e `CLAUDE.md` — identidade de produto e regras de conteúdo.
 
@@ -71,6 +73,9 @@ para §11.
 Antes de editar:
 
 - entender o comportamento pedido, não a frase pedida;
+- quando a tarefa afetar produto, UX, IA, fluxo ou arquitetura, ler
+  `docs/product/PRODUCT_CONSTITUTION.md` e transformar seus princípios em
+  critérios de aceite;
 - localizar **todos** os arquivos relevantes — este repo tem funcionalidade
   espelhada em `apps/web`, `apps/backend` e `apps/mobile`, e mudar só o primeiro
   arquivo encontrado é o erro clássico daqui;
@@ -138,6 +143,11 @@ o que foi encontrado, o que foi escolhido ou rejeitado e o motivo. Se nada
 adequado existir, registrar brevemente quais fontes foram consultadas antes de
 inventar a implementação. A busca não substitui os testes: código reutilizado
 entra no mesmo ciclo de verificação, segurança e regressão do código novo.
+
+Para qualquer tarefa que crie ou altere código, a evidência de busca é parte do
+contrato de execução: registrar as fontes consultadas, os candidatos relevantes,
+a decisão de reutilizar/adaptar ou a rejeição fundamentada. “Não encontrei” sem
+fontes, consultas e justificativa não satisfaz o gate.
 
 ### IMPLEMENT
 
@@ -612,6 +622,139 @@ FALHA OBSERVADA → REPRODUZIR → SEGUIR O FLUXO DA USUÁRIA → SEGUIR O DADO
 
 Não comece editando o arquivo que "parece relacionado".
 
+### 8.9 Contrato integrado da Airia: IA, dados, UI e UX
+
+Neste aplicativo, uma tarefa não é avaliada apenas na tela ou no arquivo que
+foi alterado. Quando houver impacto em uma superfície de produto, o contrato de
+verificação deve declarar:
+
+| Campo | Pergunta obrigatória |
+|---|---|
+| Superfícies | Quais páginas, componentes, APIs, serviços de IA e consumidores do dado são afetados? |
+| Intenção | O que a usuária deve conseguir fazer, sem precisar adivinhar o próximo passo? |
+| Dados | Qual entrada chega ao payload, ao banco, ao contexto da IA e às regras? |
+| Âncoras | Qual Objetivo, Ação, intenção ou relato atual sustenta a ação? Um padrão verificado está sendo usado como fonte de decisão? |
+| Padrões | Como o padrão foi calculado, quantas evidências/dias o sustentam, qual sua confiança, janela, estado e limitação? |
+| Influência | O padrão está alterando prioridade, tamanho, ritmo, proteção ou adiamento de uma Ação de forma explicável? |
+| Devolução | A usuária vê observação, evidência, confiança, impacto, proposta e opções de confirmar/corrigir/rejeitar? |
+| Idiomas | O fluxo inteiro funciona em português e inglês, inclusive conteúdo dinâmico, backend e IA? |
+| Estados | Vazio, carregando, sucesso, erro, parcial, inválido, retry, reload, offline e duplo clique foram considerados? |
+| UI/UX | A hierarquia, interação, acessibilidade, responsividade, animação e visual ajudam a usuária a agir? |
+| Evidência | Quais ações, logs, requests, dados persistidos, screenshots e resultados comprovam cada critério? |
+
+O pipeline integrado a verificar é:
+
+```text
+entrada da usuária
+→ UI/UX
+→ normalização
+→ contexto atual + estado calculado
+→ padrões candidatos e evidências
+→ padrões verificados e limitações
+→ capacidade e segurança
+→ Objetivo/Ação de destino
+→ prompt/modelo
+→ saída estruturada
+→ filtros e regras
+→ persistência
+→ UI de retorno
+→ feedback da usuária
+→ próxima ação
+→ outras superfícies consumidoras
+```
+
+### 8.9.1 Contrato de padrões como fonte de ação
+
+Padrões não são proibidos de alimentar ações. A regra é impedir que uma camada
+de memória grave uma ação diretamente e desconectada do presente. O caminho
+obrigatório é:
+
+```text
+evidência → hipótese → verificação → relevância atual
+→ Objetivo/intenção + capacidade + segurança
+→ proposta de Ação/proteção/adiamento
+→ confirmação ou correção → persistência com evidências
+```
+
+O verificador deve confirmar, com evidência:
+
+- cálculo reproduzível do padrão a partir de dados reais;
+- mínimo de 3 evidências em 2 dias distintos para padrão inferido confirmado;
+- distinção entre estado atual, associação, padrão longitudinal e diagnóstico;
+- padrão confirmado podendo alterar prioridade, tamanho, ordem, duração, ritmo,
+  proteção ou adiamento de uma Ação;
+- padrão sem destino operacional não criando Ação isolada;
+- nenhuma reativação de Ação concluída, rejeitada, excluída ou adiada;
+- decisão devolvida com base, confiança, limitação e possibilidade de correção;
+- correção/exclusão impedindo uso futuro indevido e atualizando as superfícies;
+- referência persistida do padrão e das evidências na decisão resultante.
+
+Se qualquer superfície calcular ou narrar um resultado diferente do estado
+persistido, o resultado é `INTEGRATION_PENDING` até a fonte comum ser corrigida.
+
+Para qualquer alteração de IA, dados ou regra, o verificador deve confirmar que
+os campos capturados chegam ao destino correto, são persistidos, são lidos de
+volta, são usados pela IA/regras quando pertinente e não reaparecem como
+informação inventada, velha, concluída ou rejeitada.
+
+Para qualquer alteração visual ou interativa, o verificador deve confirmar:
+
+- todos os botões e caminhos executam a ação real, incluindo loading, erro,
+  retry, sucesso e prevenção de duplo clique;
+- labels, mensagens, datas, números, erros e respostas dinâmicas permanecem
+  coerentes em português e inglês;
+- hierarquia, espaçamento, contraste, clipping, overflow, tipografia, foco,
+  teclado, semântica, ARIA, alvos de toque e textos longos funcionam;
+- o fluxo é legível e utilizável em `320×800`, `390×844`, `768×1024` e desktop;
+- gráficos não dependem só de cor e animações não escondem conteúdo, bloqueiam
+  interação ou substituem feedback textual;
+- `prefers-reduced-motion`, scroll, modal, teclado virtual, orientação e safe
+  areas são tratados quando aplicável.
+
+“Impressionante” é a **barra de aprovação**, não um elogio opcional. O
+verificador só libera quando olha a entrega e ela o impressiona — nunca quando
+ela apenas atende ao pedido, está aceitável ou “dá para melhorar depois”.
+Entrega morna é `FAIL` com a lista do que falta para ficar extraordinária.
+
+Barra alta não autoriza aprovação por gosto: o resultado só passa quando há
+evidência de fidelidade à intenção, grounding, não invenção, utilidade,
+granularidade executável, consistência, idioma correto, segurança, continuidade
+da ação, concisão e acabamento visual sem regressão. Se o verificador não
+consegue mostrar isso, o resultado é `FAIL` ou `BLOQUEADO`.
+
+### 8.10 Nota objetiva do verificador: 8/10 é o mínimo necessário
+
+Todo `verifier`, `verificador de integração` e `meta-verificador` deve emitir
+uma nota de qualidade de `0` a `10`, acompanhada de evidência. `8/10` é o piso
+de entrada, **não o critério de aprovação**: nota suficiente com entrega morna
+continua sendo `FAIL`. Quem aprova precisa dizer o que tornou o resultado
+extraordinário, contra quais critérios e com qual evidência — os pontos abaixo
+são o que sustenta essa afirmação:
+
+| Ponto | Evidência exigida |
+|---:|---|
+| 1 | comportamento pedido e critérios de aceite realmente atendidos |
+| 1 | evidência reproduzível do comportamento e integração correta |
+| 1 | UI/UX, acessibilidade e responsividade quando aplicável |
+| 1 | dados, persistência, IA, grounding e regras quando aplicável |
+| 1 | português/inglês e conteúdo dinâmico coerentes quando aplicável |
+| 1 | loading, vazio, erro, retry, reload e edge cases |
+| 1 | verificação proporcional ao risco, incluindo runtime/browser quando necessário |
+| 1 | regressão vizinha e segurança/privacidade sem falha crítica conhecida |
+| 1 | pesquisa de soluções existentes antes de inventar, com escolha/rejeição registrada |
+| 1 | handoff entre LLMs, memória, commit e worktree com destino definido |
+
+Cada ponto precisa de evidência. Um item não aplicável exige justificativa e
+evidência substituta; `N/A` não pode esconder uma lacuna. Uma falha crítica —
+evidência inventada, segredo exposto, dependência sem origem/licença aceitável,
+caminho principal quebrado, perda de dado, regressão de segurança ou requisito
+essencial não verificado — anula a aprovação independentemente da média. Nota
+abaixo de 8 ou falha crítica é `FAIL`/`BLOQUEADO` e retorna para retrabalho.
+
+Nota igual ou acima de 8 em entrega que não impressiona também é `FAIL`: ou a
+régua foi aplicada frouxa, ou os pontos estão marcados sem evidência real. Nesse
+caso o verificador recalibra e reavalia — não aprova pela média.
+
 ---
 
 ## 9. Bug Fix Protocol
@@ -758,6 +901,105 @@ agente que implementou tende a defender a própria solução.
 Neste repo, a skill `skills/airia-pr-review/SKILL.md` é a checklist de QA
 obrigatória para PR, fechamento de feature, publicação e deploy.
 
+### Orquestração obrigatória por subagentes
+
+Toda tarefa deve passar por papéis separados, mesmo quando a tarefa tiver uma
+única fatia executável:
+
+```text
+COORDENADOR
+→ EXECUTOR
+→ VERIFICADOR
+→ VERIFICADOR DE INTEGRAÇÃO
+→ META-VERIFICADOR
+→ DONE
+```
+
+- **Coordenador:** transforma o pedido em critérios de aceite, divide por
+  comportamento verificável, atribui escopo e controla os estados.
+- **Executor:** implementa uma fatia vertical e entrega mudanças, testes e
+  evidências. Não aprova o próprio trabalho.
+- **Verificador:** atua de forma adversarial, não altera o código que verifica e
+  produz `PASS`, `FAIL`, `BLOQUEADO` ou `N/A` justificado por critério, sempre
+  com nota `0–10`; só pode produzir `PASS` quando a entrega o impressiona, com
+  nota mínima `8/10` e sem falha crítica.
+- **Verificador de integração:** confere o comportamento combinado entre UI,
+  API, banco, regras, IA, ferramentas e superfícies consumidoras; também deve
+  registrar nota `0–10`, com mínimo `8/10`, e aplicar a mesma barra de resultado
+  extraordinário.
+- **Meta-verificador:** audita o processo inteiro, os handoffs, a qualidade das
+  evidências, a regressão, os commits e worktrees. Deve registrar sua própria
+  nota `0–10`, com mínimo `8/10` e sem falha crítica; é o único papel que
+  autoriza `DONE`, e só autoriza diante de resultado extraordinário justificado.
+
+Quando existirem fatias independentes, usar executores em paralelo. A divisão
+deve ser por comportamento ou contrato (`entrada → processamento → efeito →
+saída observável`), não por arquivo ou camada isolada. Executores mantêm
+comunicação horizontal sobre fatos, dependências, conflitos e contratos; a
+comunicação vertical entrega, reprova, corrige e aprova cada passagem de estado.
+
+Essa comunicação é comunicação entre LLMs/agentes, não uma expectativa implícita
+de memória compartilhada. Cada LLM deve receber ou consultar o contexto
+operacional necessário e responder com um registro persistente quando a
+informação puder afetar outro agente. Mensagens importantes não podem depender
+de o próximo LLM ler o histórico inteiro da conversa.
+
+Formato mínimo para comunicação entre LLMs:
+
+```text
+[task_id][subtask_id][HORIZONTAL|VERTICAL][FINDING|DEPENDENCY|CONFLICT|PASS|FAIL|BLOCKED]
+origem_llm:
+destino_llm:
+contexto_consultado:
+fato_ou_critério:
+evidência:
+impacto_na_integração:
+decisão:
+próxima_ação:
+```
+
+O LLM destinatário deve confirmar `RECEIVED`, `HANDOFF_ACCEPTED`,
+`HANDOFF_REJECTED` ou `BLOCKED`, com justificativa. O LLM que envia continua
+responsável por verificar se a mensagem foi compreendida; “enviei no chat” não é
+prova de handoff.
+
+Quando houver LLMs de plataformas diferentes — por exemplo Codex/GPT e Claude
+Code — a ponte obrigatória é `CURRENT_STATE.md`, `WORKTREES.md`, o contrato da
+tarefa e as evidências no repositório. Não transferir decisões críticas apenas
+por texto efêmero de uma sessão.
+
+Os papéis são obrigatórios; um worktree físico por papel não é. Criar cópia
+física somente quando isolamento, conflito ou execução paralela realmente
+exigir. Verificadores trabalham em leitura e não iniciam uma segunda edição
+silenciosa no worktree do executor.
+
+Handoff mínimo:
+
+```text
+task_id · subtask_id · origem · destino · objetivo · critérios · escopo
+branch/worktree · commit/estado · arquivos · verificações · evidências
+falhas · próxima ação · condição de aceite
+```
+
+Nenhuma tarefa salta de `EM_EXECUÇÃO` para `DONE`. A cadeia de estados é:
+`PLANEJADA → EM_EXECUÇÃO → PRONTA_PARA_VERIFICAÇÃO → VERIFICADA →
+PRONTA_PARA_INTEGRAÇÃO → INTEGRADA → META_APROVADA → DONE`; falha retorna para
+`RETRABALHO` e impedimento real para `BLOQUEADA`.
+
+Se a plataforma não oferecer subagentes físicos, executar os papéis em passes
+separados e registrar a limitação. Não apresentar uma autoavaliação como
+verificação independente.
+
+O meta-verificador deve confirmar que todos os critérios têm estado e evidência,
+que nenhum agente aprovou o próprio trabalho, que a integração foi testada no
+contexto correto, que os dados e worktrees têm destino e que não há conclusão
+baseada apenas em código, build, teste isolado ou HTTP 200. Deve conferir as
+notas dos verificadores, a sua própria nota mínima de `8/10` e a pesquisa de
+reuso registrada antes da criação de código. Qualquer falha ou nota insuficiente
+retorna para `RETRABALHO` ou `BLOQUEADA`. Nota suficiente sem justificativa do
+que torna o resultado extraordinário também retorna: o piso numérico nunca
+substitui a barra de qualidade.
+
 ---
 
 ## 15. Final Quality Gate
@@ -778,6 +1020,11 @@ Antes de declarar `DONE`:
 [ ] Nenhum problema crítico conhecido restante
 [ ] Existe evidência para tudo acima
 [ ] Soluções existentes foram procuradas antes de escrever código novo
+[ ] A pesquisa de reuso foi registrada com fontes, candidatos e decisão
+[ ] Verificador e integração têm nota documentada de pelo menos 8/10
+[ ] Meta-verificador tem nota documentada de pelo menos 8/10
+[ ] Nenhuma falha crítica anula as notas
+[ ] Está registrado o que torna o resultado extraordinário, com critério e evidência
 [ ] Código reutilizado tem origem, licença, compatibilidade e motivo registrados quando aplicável
 [ ] `git status --short --branch` foi revisado
 [ ] Cada alteração que deve permanecer está em commit
@@ -954,8 +1201,9 @@ Se algo não pôde ser verificado, **não escreva "nenhum"**. Diga o quê e por 
 ## 21. Enforcement por plataforma
 
 O protocolo comportamental vale para todos os agentes. Neste repositório, uma
-parte dele é reforçada por hook específico do Claude Code, não por boa vontade:
-`.claude/hooks/verification-guard.mjs`, registrado em `.claude/settings.json`.
+parte dele é reforçada por hooks específicos do Claude Code, não por boa
+vontade: `.claude/hooks/verification-guard.mjs` e
+`.claude/hooks/orchestration-guard.mjs`, registrados em `.claude/settings.json`.
 
 **O problema que ele resolve:** o agente edita arquivo de código-fonte e tenta
 encerrar a sessão sem ter rodado nenhuma verificação.
@@ -980,6 +1228,16 @@ sem nenhuma verificação tentada.
 - `Stop`, `SubagentStop` e `TaskCompleted` não usam matcher — são eventos sem
   matcher no Claude Code atual. O registro real está em `.claude/settings.json`.
 
+O `orchestration-guard` acrescenta as barreiras de processo: edição de código
+exige contrato inicializado por `node scripts/agent-protocol.mjs init`,
+`SubagentStart` injeta o contexto comum, `SubagentStop` exige handoff com
+estado/evidência e `Stop`/`TaskCompleted` exigem meta-aprovação. O CLI exige
+nota mínima `8/10` para `verifier`, `integration` e `meta-verifier` antes de
+aceitar `PASS`/`meta-approve`. O estado técnico
+fica em `.claude/.state/agent-protocol.json` (ignorado pelo Git); a comunicação
+durável entre LLMs continua sendo registrada em `CURRENT_STATE.md`,
+`WORKTREES.md` e na memória relevante.
+
 O guard não sabe se a verificação foi suficiente, não associa automaticamente
 um arquivo a uma subtarefa específica e não avalia coerência de UI, persistência,
 qualidade semântica da IA ou regressão. Esses continuam sendo julgamento do
@@ -993,6 +1251,7 @@ Separação usada no desenho:
 | build/typecheck/teste rodaram? | o requisito foi realmente cumprido? |
 | arquivo obrigatório existe? | a UI está coerente? |
 | alguma verificação aconteceu? | o fluxo funciona ponta a ponta? |
+| contrato, handoff e meta-aprovação existem? | a cadeia de subagentes integrou o resultado? |
 | — | a saída da IA faz sentido? |
 | — | existe funcionalidade só aparente? |
 

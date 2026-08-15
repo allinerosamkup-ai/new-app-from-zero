@@ -1,29 +1,86 @@
-# Contrato central da Airia
+# Contrato técnico central da Airia
+
+> A fonte canônica de decisões de produto é
+> [`PRODUCT_CONSTITUTION.md`](PRODUCT_CONSTITUTION.md). Este arquivo mantém os
+> contratos técnicos e comportamentais de implementação, persistência e
+> integração. Não crie aqui uma interpretação divergente do produto.
 
 ## Entrega principal
 
 No centro está o MoodCycleEngine. Ele acompanha humor e energia e posiciona a pessoa em uma de oito fases claras: Voo Alto, Fluindo, Estável, Desacelerando, Recolhimento, Pausa, Retomada e Turbulência.
 
-A partir da fase atual, a Airia adapta a agenda, protege a energia e oferece um próximo passo concreto. Ela não é planner genérico, não é chatbot de terapia e não preenche ausência de contexto com conselho genérico.
+A partir da fase atual, a Airia protege a energia e oferece uma adaptação prática
+do dia. Na versão ativa, o destino operacional é um Objetivo e uma Ação; a
+agenda adaptativa, o Planner, os Hábitos e os wearables permanecem capacidades
+preservadas para fases futuras ou desligadas por configuração. A essência não
+muda: o estado interno precisa virar orientação concreta e proporcional.
 
 ## Regra de decisão
 
 Contexto antigo explica o padrão; contexto de hoje decide a ação.
 
-Histórico, RAG e fase podem reconhecer recorrência e calibrar tamanho, tom, horário e iniciativa. Eles não autorizam tarefa, compromisso, notificação ou mudança de agenda sozinhos.
+Histórico, RAG, fase e padrões verificados podem reconhecer recorrência e
+calibrar prioridade, tamanho, tom, horário, ritmo e iniciativa. Eles não gravam
+uma ação sozinhos: sua influência precisa passar por estado atual,
+Objetivo/intenção, capacidade, segurança e registro da decisão.
 
 A Airia existe para tirar trabalho da usuária. Quando a fala de hoje contém um item, ela entrega o item **montado** — título, data, hora e duração já decididos — e diz o que decidiu em uma frase. Não devolve a lacuna como pergunta para quem acabou de contar o que precisa fazer.
 
 Âncora atual real é qualquer uma destas:
 
-- tarefa ou subtarefa pendente;
-- compromisso real da agenda;
-- hábito devido;
-- meta ativa;
+- Objetivo ativo;
+- Ação pendente vinculada ao Objetivo;
 - ação explicitamente pedida ou aceita pela usuária;
-- **o que a usuária acabou de contar**: compromisso marcado, prazo, pedido de terceiro, intenção de retomar algo.
+- **o que a usuária acabou de contar**: resultado desejado, prazo, pedido de
+  terceiro ou intenção concreta de retomar algo.
 
-Sem nenhuma dessas, a Airia não preenche o silêncio com microação tirada do relógio. O único dado que ela nunca inventa é o título do item — aí ela faz uma pergunta curta, só essa.
+Compromisso de agenda, hábito, tarefa e subtarefa são destinos legados ou
+futuros nesta versão. Quando suas capacidades estiverem desligadas, não podem
+ser usados como fontes ativas de decisão.
+
+Sem nenhuma dessas, a Airia não preenche o silêncio com microação tirada do
+relógio. Um padrão verificado pode explicar o que está acontecendo e orientar
+proteção ou leitura, mas não recebe destino operacional sem Objetivo, Ação,
+intenção ou relato atual.
+
+## Contrato de padrões que alimentam ações
+
+O ciclo canônico é:
+
+```text
+evidência → hipótese → verificação → interpretação atual
+→ influência na decisão → proposta → confirmação/correção
+→ persistência do resultado → novo feedback
+```
+
+### Verificação
+
+Um padrão inferido exige pelo menos 3 evidências não duplicadas em 2 dias
+distintos. A memória canônica registra `inferred`, `confirmed`,
+`evidenceCount`, `distinctDays`, confiança, origem, janela e ciclo de vida.
+Padrão não confirmado pode aparecer como sinal inicial, mas não deve ser tratado
+como fato nem alimentar uma decisão operacional sem ressalva.
+
+### Influência operacional
+
+Um padrão confirmado pode ser fonte para uma Ação quando:
+
+1. corresponde ao estado atual, à intenção ou ao Objetivo;
+2. continua atual e não foi corrigido, excluído ou bloqueado;
+3. passa pelos limites de capacidade e segurança;
+4. altera de forma observável prioridade, ordem, tamanho, duração, ritmo,
+   proteção ou adiamento.
+
+Ele não pode inventar circunstância, reativar Ação rejeitada/concluída, criar
+Objetivo ou gravar Ação fora do destino operacional.
+
+### Devolução
+
+Quando influenciar uma decisão, a Airia devolve o padrão observado, a base de
+evidência, a confiança, a limitação, o impacto no Objetivo/Ação e a proposta
+concreta. A usuária pode confirmar, corrigir, rejeitar ou excluir. A decisão
+persistida guarda a referência do padrão e das evidências, para que as demais
+superfícies não produzam uma interpretação diferente.
 
 ## O que continua bloqueado
 
@@ -55,11 +112,16 @@ Para quem tem agenda livre, a Airia pode tomar mais iniciativa e propor estrutur
 
 Uma experiência da Airia só está correta quando entrega, em conjunto:
 
-1. fase atual compreensível;
-2. leitura ancorada em dados reais;
-3. adaptação de agenda compatível com a liberdade e as restrições do dia;
-4. um próximo passo específico quando existe âncora atual, ou uma pergunta curta quando ela não existe;
-5. memória que dá continuidade sem criar autoridade operacional.
+1. estado e fase atuais compreensíveis;
+2. padrão calculado com base e limitação explícitas;
+3. leitura ancorada em dados reais;
+4. adaptação de Objetivo/Ação compatível com capacidade e segurança;
+5. um próximo passo específico quando existe âncora atual, ou uma explicação/
+   pergunta curta quando ela não existe;
+6. memória que dá continuidade e pode alimentar ações sem ganhar autoridade
+   operacional isolada;
+7. devolução coerente em Home, Check-in, Insights, Contexto, Diário, Aura e
+   Objetivos.
 
 ## Check-in canônico e comando central
 

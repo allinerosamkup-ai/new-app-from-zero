@@ -21,6 +21,8 @@ model Profile {
   preferences           UserPreference?
   consents              Consent[]
   checkins              DailyCheckin[]
+  airiaReadings         AiriaReading[]
+  airiaDecisions        AiriaDecision[]
   journalSessions       JournalSession[]
   journalMessages       JournalMessage[]
   timelineBlocks        TimelineBlock[]
@@ -360,6 +362,7 @@ model DailyCheckin {
   localDate         DateTime @map("local_date") @db.Date
   recordedAt        DateTime @default(now()) @map("recorded_at") @db.Timestamptz(6)
   checkinSlot       String   @map("checkin_slot")
+  checkinPurpose    String   @default("window") @map("checkin_purpose")
   moodScore         Int      @map("mood_score")
   energyScore       Int      @map("energy_score")
   clarityScore      Int?     @map("clarity_score")
@@ -407,6 +410,58 @@ model DailyCheckin {
   @@index([userId, localDate(sort: Desc), recordedAt(sort: Desc)], name: "idx_checkins_user_date_recorded")
   @@index([userId, idempotencyKey], name: "idx_checkins_user_idempotency_lookup")
   @@map("daily_checkins")
+}
+
+/// A versão persistida da leitura operacional que todas as superfícies da
+/// Airia consomem. O snapshot é deliberadamente imutável por data: sinais
+/// novos recalculam a mesma leitura, mas jamais transformam ausência em dado.
+model AiriaReading {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  localDate       DateTime @map("local_date") @db.Date
+  version         Int      @default(1)
+  fingerprint     String
+  currentState    Json     @default("{}") @map("current_state")
+  intraday        Json     @default("{}")
+  historical      Json     @default("{}")
+  riskSafety      Json     @default("{}") @map("risk_safety")
+  sourceSnapshot  Json     @default("{}") @map("source_snapshot")
+  sourceCheckinId String?  @map("source_checkin_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     Profile        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decision AiriaDecision?
+
+  @@unique([userId, localDate])
+  @@index([userId, localDate(sort: Desc)], name: "idx_airia_readings_user_date")
+  @@map("airia_readings")
+}
+
+/// A única proposta operacional associada a uma leitura. A ação nunca nasce
+/// de padrão isolado: `decision` conserva a âncora, evidências e feedback.
+model AiriaDecision {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  readingId    String    @unique @map("reading_id") @db.Uuid
+  objectiveId  String?   @map("objective_id") @db.Uuid
+  status       String    @default("proposta")
+  surface      String    @default("system")
+  decision     Json      @default("{}")
+  evidence     Json      @default("[]")
+  feedback     Json      @default("{}")
+  validUntil   DateTime? @map("valid_until") @db.Timestamptz(6)
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user      Profile      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reading   AiriaReading @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  objective Objective?   @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, updatedAt(sort: Desc)], name: "idx_airia_decisions_user_status")
+  @@index([userId, objectiveId], name: "idx_airia_decisions_user_objective")
+  @@map("airia_decisions")
 }
 
 model JournalSession {
@@ -627,6 +682,7 @@ model Objective {
   user                 Profile                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   primaryForUsers      UserPreference[]               @relation("PrimaryObjective")
   actionRecoveryClaims ObjectiveActionRecoveryClaim[]
+  airiaDecisions      AiriaDecision[]
 
   @@unique([userId, id], name: "uq_objectives_user_id_id", map: "uq_objectives_user_id_id")
   @@index([userId, archived, createdAt(sort: Desc)], name: "idx_objectives_user")

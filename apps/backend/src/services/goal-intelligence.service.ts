@@ -63,8 +63,12 @@ export type GoalIntelligenceInput = {
   phase?: string | null;
   /** Perfil operacional montado no onboarding. */
   operationalProfile?: OperationalProfile | null;
-  /** Padrões da memória/RAG. Explicam comportamento, não criam fato novo. */
+  /** Padrões confirmados da memória/RAG. Podem calibrar a ação, não criam fato novo. */
   patternContext?: string | null;
+  /** Referências canônicas que devem acompanhar ações influenciadas por padrões. */
+  patternEvidenceRefs?: string[];
+  /** Base que a UI deve devolver junto da ação: janela, força, limites e impacto. */
+  patternBasis?: PatternBasis[];
   /**
    * O que cabe hoje, respondido no check-in.
    *
@@ -106,6 +110,17 @@ export type GoalStep = {
   doneWhen?: string;
   effortSize?: 'small' | 'medium' | 'large';
   evidenceRefs?: string[];
+  patternBasis?: PatternBasis[];
+};
+
+export type PatternBasis = {
+  pattern: string;
+  evidenceCount: number;
+  distinctDays: number;
+  windowDays: number;
+  confidence: number;
+  limitation: string;
+  impact: string;
 };
 
 export type GoalMilestone = {
@@ -155,6 +170,15 @@ const GoalActionPayloadSchema = z.object({
   doneWhen: clipped(240).optional().default(''),
   effortSize: z.enum(['small', 'medium', 'large']).optional(),
   evidenceRefs: z.array(clipped(120)).optional().default([]),
+  patternBasis: z.array(z.object({
+    pattern: clipped(240),
+    evidenceCount: z.number().int().nonnegative(),
+    distinctDays: z.number().int().nonnegative(),
+    windowDays: z.number().int().positive(),
+    confidence: z.number().min(0).max(1),
+    limitation: clipped(240),
+    impact: clipped(240),
+  })).optional().default([]),
 });
 
 const StepsPayloadSchema = z.object({
@@ -387,7 +411,7 @@ export function buildGoalDecompositionPrompt(input: GoalIntelligenceInput): stri
       }[input.capacity]}`
     : '';
   const patternBlock = input.patternContext
-    ? `\nPADRÃO OBSERVADO (explica comportamento, NÃO cria fato):\n${input.patternContext}`
+    ? `\nPADRÃO OBSERVADO (explica comportamento e pode calibrar a ação quando for relevante; NÃO cria fato novo nem destino operacional):\n${input.patternContext}`
     : '';
 
   const language = english
@@ -636,6 +660,7 @@ function normalizePathPayload(payload: ParsedPathPayload): {
         ...(action.doneWhen ? { doneWhen: action.doneWhen } : {}),
         ...(action.effortSize ? { effortSize: action.effortSize } : {}),
         ...(action.evidenceRefs.length > 0 ? { evidenceRefs: action.evidenceRefs } : {}),
+        ...(action.patternBasis.length > 0 ? { patternBasis: action.patternBasis } : {}),
       })),
     }))
     .sort((left, right) => left.order - right.order);
@@ -647,6 +672,17 @@ function normalizePathPayload(payload: ParsedPathPayload): {
   const steps = milestones.find((item) => item.id === currentMilestoneId)?.actions ?? [];
 
   return { milestones, currentMilestoneId, steps };
+}
+
+function attachPatternEvidenceRefs(steps: GoalStep[], refs: string[] | undefined, basis: PatternBasis[] | undefined): GoalStep[] {
+  const cleanRefs = [...new Set((refs ?? []).map((ref) => ref.trim()).filter(Boolean))].slice(0, 12);
+  const cleanBasis = (basis ?? []).slice(0, 4);
+  if (cleanRefs.length === 0 && cleanBasis.length === 0) return steps;
+  return steps.map((step) => ({
+    ...step,
+    ...(cleanRefs.length > 0 ? { evidenceRefs: [...new Set([...(step.evidenceRefs ?? []), ...cleanRefs])].slice(0, 16) } : {}),
+    ...(step.patternBasis?.length ? { patternBasis: step.patternBasis } : cleanBasis.length > 0 ? { patternBasis: cleanBasis } : {}),
+  }));
 }
 
 export class GoalIntelligenceService {
@@ -785,7 +821,7 @@ export class GoalIntelligenceService {
           continue;
         }
 
-        const steps = screened.kept.slice(0, MAX_STEPS);
+        const steps = attachPatternEvidenceRefs(screened.kept.slice(0, MAX_STEPS), input.patternEvidenceRefs, input.patternBasis);
         const milestones = path.milestones.map((milestone) => (
           milestone.id === path.currentMilestoneId
             ? { ...milestone, actions: steps }

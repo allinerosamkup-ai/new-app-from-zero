@@ -1,5 +1,10 @@
 # Documento 3 — Arquitetura de Software e Fluxo de Dados (MVP)
 
+> **Status:** arquitetura fundadora. Os fluxos descritos continuam sendo
+> referência para a integração futura, mas o destino operacional ativo hoje é
+> Objetivo/Ação. Qualquer agenda, hábito ou Planner citado está preservado e
+> condicionado à reativação explícita e à validação pelo contrato global.
+
 ## 1. Visão Geral da Arquitetura
 
 O produto atual roda como PWA web em produção, com backend Express/Prisma e Supabase. A arquitetura separa frontend, backend, banco e camada de IA, mas a regra principal agora é que toda sugestão operacional passe por um contexto diário único.

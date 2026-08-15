@@ -68,7 +68,7 @@ import {
   getHabitCompletionCount,
   getHabitTargetCount,
 } from "../features/aura/habit-helpers";
-import { buildGoalPriorityActions, markStoredGtdActionDone } from "../utils/goal-priority-actions";
+import { buildGoalPriorityActions } from "../utils/goal-priority-actions";
 import { aggregateCheckinsByDay, computeMoodCycle } from "../utils/mood-cycle-engine";
 import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/native-shell";
 import {
@@ -2199,7 +2199,8 @@ export function PlannerPage() {
       void (async () => {
         try {
           if (type === "tarefa") {
-            if (item.gtdId) markStoredGtdActionDone(item.gtdId);
+            // O Planner está desativado nesta versão. Não há inbox local para
+            // concluir: toda ação ativa vem do Objetivo canônico.
             setFocusActionTick((value) => value + 1);
           } else {
             const outcome = await toggleSubGoal(item.goalId, item.subId);

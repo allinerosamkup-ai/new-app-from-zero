@@ -17,9 +17,15 @@ Gera o prompt de sistema unificado para a Aura. O `domain` define a policy da su
 
 ### `ContextGroundingService.buildDailyContext(...)`
 Arquivo: `src/services/context-grounding.service.ts`
-Monta o pacote operacional único do dia (`DailyContext`): agenda pendente/concluída, hábitos pendentes/concluídos, metas ativas/concluídas, subtarefas feitas, sugestões recentes, feedback de ações e memória RAG como contexto de padrão.
+Monta o pacote operacional único do dia (`DailyContext`): sinais e estado atuais,
+Objetivos ativos/concluídos, Ações pendentes/concluídas, padrões verificados,
+sugestões recentes, feedback de ações e memória RAG. Agenda e Hábitos legados
+podem ser preservados no pacote técnico, mas não são fontes ativas enquanto as
+capacidades estiverem desligadas.
 
-Regra: memória antiga explica padrão; ação operacional precisa nascer de agenda, hábito, meta ou aceite real do dia.
+Regra: memória antiga explica padrão; padrão verificado pode alimentar uma Ação
+quando há relevância atual, Objetivo/intenção, capacidade, segurança e evidência
+persistida. A memória não grava ação diretamente.
 
 ### `AiActionFeedbackService`
 Arquivo: `src/services/ai-action-feedback.service.ts`
@@ -32,7 +38,8 @@ Cérebro operacional da Airia. Recebe `DailyContext` e a superfície (`home`, `p
 Regras principais:
 - compromisso real pode ser mantido, movido, reduzido, pausado ou notificado;
 - sugestão opcional pode virar proposta de bloco, mas não salva nem notifica sem confirmação;
-- memória antiga e RAG explicam padrão, mas não criam ação sozinhos;
+- memória antiga e RAG explicam padrão; padrões verificados podem calibrar a
+  ação, mas não criam destino operacional sozinhos;
 - concluído, rejeitado, repetido, vencido, genérico ou sem âncora vira bloqueio.
 
 ### `AdaptiveAgendaEngine`
