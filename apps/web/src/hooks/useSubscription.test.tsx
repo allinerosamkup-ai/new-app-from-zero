@@ -11,6 +11,7 @@ const base: BillingAccessSummary = {
   access: "free",
   source: "free",
   subscriptionStatus: null,
+  provider: null,
   plan: null,
   periodEnd: null,
   trialEndsAt: null,

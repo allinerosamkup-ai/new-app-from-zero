@@ -254,5 +254,10 @@ assert.match(prismaSchema, /model BillingAccount/);
 assert.match(prismaSchema, /model ProfessionalPartner/);
 assert.match(prismaSchema, /model ReferralAttribution/);
 assert.match(prismaSchema, /model StripeWebhookEvent/);
+assert.match(prismaSchema, /model BillingCheckoutAttempt/);
+assert.match(prismaSchema, /model BillingWebhookEvent/);
+for (const field of ['billingProvider', 'externalCustomerId', 'externalSubscriptionId', 'externalOrderId', 'externalOfferId']) {
+  assert.match(prismaSchema, new RegExp(`\\b${field}\\b`));
+}
 
 console.log('schema alignment tests passed');

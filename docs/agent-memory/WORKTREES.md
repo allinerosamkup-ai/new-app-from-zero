@@ -79,6 +79,24 @@ removida.
 | `.worktrees/repair-voice` | `codex/voice-overlap-repair` / `4ef1d04` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/routine-builder` | `codex/routine-builder` / `59778e5` | `AUDIT_PENDING` | identificar dono |
 | `.worktrees/onboarding-stripe-partners` | `codex/onboarding-stripe-partners` / `a73c2b4` | `READY_TO_MERGE` | Codex: código e Stripe live configurados; 102 suítes backend, 56 arquivos/423 testes web, typecheck e builds aprovados. Integrar no `master`, publicar, validar três Checkouts sem cobrança e registrar o bloqueio cadastral de pagamentos/repasses da Stripe |
+| `.worktrees/onboarding-stripe-partners` | `codex/cakto-billing` / `85e73a8` | `INTEGRATION_PASS` | Codex: migração Cakto isolada sobre `origin/master`; 109 suítes backend, 57 arquivos/435 testes web e todos os builds aprovados. Aguardar meta-verificação, publicação e validação live; cadastro financeiro Cakto ainda depende da titular |
+
+## Retomada da sessão Codex — 2026-08-14
+
+| Campo | Valor |
+|---|---|
+| Tarefa | finalizar a migração de cobrança para Cakto começada no Codex |
+| Dono/agente | Claude Code, sessão remota (container efêmero, sem worktree extra) |
+| Branch | `claude/codex-session-finalize-n3oeqy` |
+| Caminho | `/home/user/new-app-from-zero` (checkout único da sessão) |
+| Estado | `BLOCKED` — código verificado; falta cadastro Cakto e autorização de produção |
+| Último commit | ver `git log -1`; parte de `39b3813` (`codex/cakto-billing`) sem rebase |
+| Verificação | backend 109 suítes, web 57 arquivos/436 testes, builds e typecheck PASS em 2026-08-14 |
+| Próxima ação | aplicar migrações e publicar quando houver segredo e cadastro; então E2E de compra |
+| Atualizado em | 2026-08-14 |
+
+`codex/cakto-billing` continua publicada e intocada no remoto: esta sessão
+avançou por cima dela, não no lugar dela.
 
 Nenhuma entrada acima deve ser removida automaticamente. A limpeza é uma tarefa
 separada: revisar status/diff, confirmar que não há commit único, integrar ou

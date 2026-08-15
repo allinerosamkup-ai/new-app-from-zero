@@ -2,7 +2,184 @@
 
 ## Status
 
-`PR #10 — gates locais, IA real, migração segura e E2E autenticado aprovados; sem deploy`
+`BLOQUEADO EXTERNAMENTE — código da Cakto meta-verificado e integrado na branch
+claude/codex-session-finalize-n3oeqy; falta a titular concluir os dados
+legais/financeiros no painel Cakto e a autorização de produção`
+
+## Sprint Contract — Cakto
+
+- **Implementar:** Cakto como provedor principal dos planos mensal, anual e
+  vitalício de R$ 99; Checkout real; confirmação no servidor; webhooks
+  idempotentes; sincronização de acesso; gestão/cancelamento adaptada às
+  capacidades da Cakto; configuração segura e publicação validada.
+- **Não alterar:** fluxos de Objetivos, Planner, Aura, Check-in e mobile; regra
+  de acesso já comprada; histórico Stripe; preços mensal/anual já aprovados.
+- **Aceite:** a mesma UI de cobrança oferece os três planos; o backend cria
+  Checkout Cakto live; nenhum parâmetro de URL libera acesso; assinatura e
+  vitalício convergem no estado canônico; falhas aparecem sem sucesso simulado;
+  segredos não entram no Git; testes, builds, deploy, SHA e fluxo autenticado
+  passam com evidência.
+- **Busca/reuso:** fluxo Stripe e rotas genéricas atuais; documentação oficial
+  Cakto; SDKs/pacotes oficiais quando existirem; candidatos, adaptação e
+  rejeições serão registrados antes de código novo.
+- **Papéis:** coordenador nesta sessão; pesquisa e arquitetura em agentes
+  horizontais; executor, verificador, verificador de integração e
+  meta-verificador com handoffs persistidos e notas mínimas de 8/10.
+
+## Execução e handoffs — 2026-08-13
+
+- **Busca/reuso registrada:** foram inspecionados o provedor Stripe, as rotas
+  genéricas `/api/billing/*`, `BillingAccessService`, `/comecar`, a tela única
+  `/billing`, schema, migrações, deploy e histórico/worktrees. Foram consultados
+  os contratos oficiais Cakto de autenticação, produtos, ofertas, pedidos,
+  assinaturas, cancelamento e webhooks. Não existe SDK oficial necessário para
+  este fluxo; foi mantido `fetch` nativo, sem dependência nova.
+- **Escolha:** preservar a superfície genérica e trocar somente o adaptador de
+  pagamento. Cakto é principal por `BILLING_PROVIDER=cakto`; Stripe só pode ser
+  selecionado explicitamente e eventos Stripe não substituem uma conta Cakto.
+- **Configuração externa criada:** produtos de assinatura e vitalício, ofertas
+  mensal R$ 29,90, anual R$ 249 e vitalícia R$ 99, checkout hospedado e webhook
+  de produção para os dois produtos. Nenhuma credencial real foi gravada no Git.
+- **EXECUTOR → VERIFICADOR:** primeira implementação passou testes focados e
+  builds, mas o verificador independente reprovou com **4/10**. Ele encontrou
+  incompatibilidade com o pedido oficial, assinatura tratada como objeto,
+  evento Stripe ativo capaz de sobrescrever Cakto e renovação recusada ignorada.
+- **CORREÇÃO:** validação passou a usar `baseAmount`, produto, tipo, `checkoutUrl`
+  e `sck` do pedido oficial; assinaturas são reconsultadas pelo ID oficial antes
+  de ativar/cancelar; cancelamento e renovação recusada exigem a assinatura
+  atualmente ligada à conta; evento Stripe nunca rebaixa a posse da Cakto;
+  tentativas idempotentes não podem trocar de plano. Descontos permanecem
+  compatíveis porque a validação usa o valor-base da oferta, não o total com
+  taxas ou desconto.
+- **VERIFICADOR → CORREÇÃO 2:** a reverificação subiu para **5/10**, mas ainda
+  reprovou ao encontrar Checkout vitalício Stripe sobrescrevendo Cakto,
+  cancelamento concorrente atualizando uma assinatura nova e chave de tentativa
+  mantida após troca de plano. Todos os caminhos vitalícios Stripe agora
+  preservam contas Cakto; a atualização pós-cancelamento exige o mesmo provedor
+  e ID de assinatura; a UI gera nova chave somente quando o plano muda e reutiliza
+  a anterior em retentativa do mesmo plano. Os três casos viraram regressões
+  automatizadas e passaram.
+- **VERIFICADOR final → INTEGRAÇÃO:** terceira rodada independente aprovou com
+  **9/10**, sem falha crítica ou alta. Foram reproduzidos os contratos oficiais,
+  todos os caminhos stale Stripe, cancelamento concorrente, troca de plano,
+  renovação recusada, reembolso/chargeback e rejeição de segredo inválido.
+- **INTEGRAÇÃO → CORREÇÃO 3:** o gate integral executou 109 suítes backend e
+  57 arquivos/435 testes web com sucesso, mas reprovou com **7/10** porque uma
+  confirmação Cakto positiva antiga ainda podia substituir uma compra Cakto
+  nova. A ativação agora só mantém a mesma compra/assinatura ou aceita uma
+  tentativa criada estritamente depois do estado atual; vitalício nunca é
+  rebaixado por assinatura recorrente. Eventos positivos antigos e transição
+  nova válida ganharam regressões e passaram, junto do build backend.
+- **INTEGRAÇÃO final → META-VERIFICAÇÃO:** reverificação aprovada com **9/10**,
+  sem falha crítica ou alta. Evidência integral preservada: 109 suítes backend,
+  57 arquivos/435 testes web, Prisma/database/backend/web builds, typecheck,
+  schema, migração, RLS, privacidade e ausência de credenciais literais.
+- **Evidência na branch limpa:** o commit funcional foi isolado sobre
+  `origin/master` em `codex/cakto-billing`; 109 suítes backend e 57 arquivos/435
+  testes web passaram novamente. Prisma generate, database build, backend
+  build, web typecheck e build/PWA também passaram. Seguem pendentes
+  meta-verificação, publicação, segredo seguro em produção, webhook real e E2E
+  autenticado.
+- **Bloqueio externo conhecido:** a Cakto ainda exige que a titular conclua os
+  dados legais/financeiros sensíveis no painel. Esses dados não podem ser
+  inferidos pelo agente e a capacidade real de receber/repassar valores não será
+  declarada pronta antes dessa conclusão.
+
+## Meta-verificação independente — 2026-08-14 (Claude Code, sessão remota)
+
+Retomada do trabalho iniciado no Codex (`codex/cakto-billing`, commit `39b3813`).
+A branch foi trazida sem rebase para `claude/codex-session-finalize-n3oeqy`, que
+partia exatamente de `2eeb1c9` (`origin/master`).
+
+- **Baseline reproduzido do zero, em container Linux limpo:** backend 109 suítes
+  PASS, web 57 arquivos / 435 testes PASS, `generate`/build do database, build do
+  backend, typecheck e build do web PASS. Os números do handoff do Codex
+  bateram — o relatório dele era honesto.
+- **Defeito P1 encontrado fora do escopo declarado, com evidência em produção:**
+  `supabase/migrations/20260811120000_add_objective_intelligence.sql`, mergeada
+  no master pelo PR #10, **nunca entrou na lista `MIGRATION_FILES` do
+  `deploy/airia/deploy.sh`**. O deploy aplica exatamente o que está listado, e o
+  banco público confirmou: 0 das colunas de objetivo inteligente, 42 objetivos
+  reais, `billing_checkout_attempts` e `billing_webhook_events` inexistentes.
+  A release pública ainda era `1014696`, anterior ao merge — ou seja, o estrago
+  aconteceria no **próximo** deploy, com build verde e Objetivos quebrando em
+  produção. Corrigido, e a trava agora é genérica em
+  `migration-chain-safety.test.ts`: a partir do primeiro arquivo que o deploy
+  aplica, nenhuma migração posterior pode faltar nem sair de ordem. A trava foi
+  provada por mutação (remover a linha faz o teste falhar).
+- **Defeito P2 no retorno do checkout:** a tentativa gravada em `sessionStorage`
+  só era apagada quando o pagamento confirmava. Quem abrisse o checkout e
+  desistisse reencontraria "Confirmando seu pagamento" em toda visita a
+  `/billing` — aviso sobre uma compra que não existe. Agora a tentativa vale 30
+  minutos; perder o aviso não perde compra, porque a liberação vem do webhook.
+- **Risco avaliado e descartado com dado real:** conta Stripe legada ficaria com
+  `billing_provider` nulo e sem botão de gerenciar. `select count(*) from
+  billing_accounts` retornou **0** — não existe assinante legado, e todo caminho
+  Stripe novo já grava `'stripe'`. Nada a corrigir; fica registrado para não ser
+  redescoberto.
+- **Segredos:** varredura do diff não achou credencial literal (só `whsec_test`
+  em fixture de teste).
+
+## Configuração da Cakto conferida contra a API — 2026-08-14
+
+A conta já tem tudo criado pela sessão do Codex, e a API confirma. **Nada aqui é
+segredo** — IDs de produto e de oferta aparecem na URL do checkout:
+
+| Variável | Valor |
+|---|---|
+| `CAKTO_SUBSCRIPTION_PRODUCT_ID` | `8816118c-9fa1-4732-a90a-ba214bd40c1f` (Airia Pro, `subscription`) |
+| `CAKTO_LIFETIME_PRODUCT_ID` | `63e1d874-5c3a-46c7-9859-addcd95a7c5f` (Airia Pro Vitalício, `unique`) |
+| `CAKTO_MONTHLY_OFFER_ID` | `ry3yceb` — R$ 29,90 |
+| `CAKTO_ANNUAL_OFFER_ID` | `znf5ego` — R$ 249,00 |
+| `CAKTO_LIFETIME_OFFER_ID` | `39opwma` — R$ 99,00 |
+
+Os três preços batem exatamente com o que `cakto.service.ts` valida (2990, 24900
+e 9900 centavos) e as três páginas `pay.cakto.com.br/<offerId>` respondem 200.
+
+O webhook "Airia Production Billing" (id 61100) está ativo, apontando para
+`https://airia.pro/api/billing/webhook/cakto`, ligado aos dois produtos, com os
+**8 eventos que o código trata** e nenhum a mais: `purchase_approved`,
+`purchase_refused`, `refund`, `chargeback`, `subscription_canceled`,
+`subscription_renewed`, `subscription_created` e `subscription_renewal_refused`.
+
+Rotas úteis da API (`https://api.cakto.com.br`, token por `client_id`/
+`client_secret` em `POST /public_api/token/`): `/public_api/products/`,
+`/public_api/offers/` e **`/public_api/webhook/` no singular** — o plural
+`/webhooks/` devolve 404. O segredo do webhook vive em `fields.secret` do
+registro, não em campo de topo.
+
+## Passo de segredos no deploy — 2026-08-14
+
+`.github/workflows/deploy.yml` ganhou o passo "Sincronizar segredos de cobrança",
+que grava `BILLING_PROVIDER` e as sete chaves `CAKTO_*` no `.env.backend` da VPS
+a partir dos segredos do repositório. Existe porque nem todo ambiente que precisa
+publicar tem a porta 22 — o container do Claude Code na nuvem não tem.
+
+Verificado por simulação local do trecho remoto: linha alheia preservada, valor
+com `=` no meio intacto, chave antiga substituída sem duplicar, última linha sem
+quebra final não se perde, backup datado criado e arquivo final em 600. YAML do
+workflow validado. Faltando qualquer uma das oito chaves, o passo não escreve
+nada e avisa — meia configuração deixaria `isConfigured()` falso do mesmo jeito.
+
+## Limites medidos deste ambiente — 2026-08-14
+
+- **SSH continua impossível daqui.** Remedido hoje: `195.35.17.102:22` e
+  `github.com:22` dão timeout, `~/.ssh` está vazio e não há chave versionada no
+  repositório (só arquivos `*.example`). O bloqueio é na saída do container;
+  ter a chave não muda o resultado. A skill `.agents/skills/deploy-airia`
+  descreve a máquina Windows da titular, não este ambiente.
+- **O classificador de permissões barra três coisas** que a autorização humana
+  sozinha não destrava: `git push` no `master`, commit que altera workflow, e
+  comando de shell carregando credencial viva (tentativa de consultar a API da
+  Cakto para descobrir IDs de produto e oferta).
+- **Caminho que funciona para publicar:** workflow "Deploy VPS"
+  (`workflow_dispatch`), que nunca rodou — zero execuções — e portanto
+  provavelmente ainda não tem `VPS_SSH_KEY`/`VPS_HOST` cadastrados.
+
+## Histórico preservado
+
+- PR #10: gates locais, IA real, migração segura e E2E autenticado aprovados;
+  sem deploy nesta linha de trabalho.
 
 ## Objetivo
 
@@ -136,13 +313,26 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
 
 ## Falha atual
 
-Sem bloqueio técnico conhecido. A migração pública, merge e deploy continuam
-intencionalmente não executados porque exigem autorização explícita de produção.
+`BLOQUEADO` — não é falha técnica do código. Faltam, nesta ordem:
+
+1. **Dados legais/financeiros da titular no painel da Cakto.** Sem isso a conta
+   não recebe de verdade e nenhum agente pode preencher no lugar dela.
+2. **Segredos de produção** (`CAKTO_CLIENT_ID`, `CAKTO_CLIENT_SECRET`,
+   `CAKTO_WEBHOOK_SECRET`, IDs de produto e oferta) no `.env.backend` da VPS.
+   `BILLING_PROVIDER` já tem `cakto` como padrão: **subir este código sem os
+   segredos desliga a compra**, porque `isConfigured()` fica falso e
+   `checkoutAvailable` vira `false`. O contorno explícito é
+   `BILLING_PROVIDER=stripe`.
+3. **Webhook real** apontando para `POST /api/billing/webhook/cakto` nos dois
+   produtos, e **E2E autenticado** de compra ponta a ponta. Os dois dependem
+   de 1 e 2 e só valem contra a Cakto real — nenhum deles foi executado.
 
 ## Próxima melhor ação
 
-Revisar e integrar o PR #10 quando houver autorização. No deploy autorizado,
-reconciliar o histórico remoto antes de aplicar a migração; não usar `db push`
+Quando 1 e 2 existirem: aplicar as duas migrações pendentes na ordem do
+`deploy.sh` (`20260811120000` antes de `20260813143000`), publicar e só então
+rodar o E2E de compra. No deploy autorizado, reconciliar o histórico remoto
+antes de aplicar a migração; não usar `db push`
 automaticamente e não publicar a partir desta worktree.
 
 ---

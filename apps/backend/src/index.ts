@@ -72,6 +72,12 @@ import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { BillingAccessService } from './services/billing-access.service';
 import { createStripeServiceFromEnv, StripeService } from './services/stripe.service';
+import {
+  createBillingProviderFromEnv,
+  stripeBillingProvider,
+  type BillingProvider,
+} from './services/billing-provider';
+import { CaktoService, createCaktoServiceFromEnv } from './services/cakto.service';
 import { ProfessionalPartnerService } from './services/professional-partner.service';
 import { ReferralService } from './services/referral.service';
 import { AiBackgroundService } from './services/ai-background.service';
@@ -527,6 +533,8 @@ type AppDependencies = {
   billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
   stripeService?: Pick<StripeService,
     'createCheckoutSession' | 'createPortalSession' | 'verifyCheckoutSession' | 'handleWebhook' | 'getOfferCatalog'>;
+  billingProvider?: BillingProvider;
+  caktoService?: Pick<CaktoService, 'handleWebhook' | 'cancelSubscription'>;
   professionalPartnerService?: Pick<ProfessionalPartnerService, 'apply' | 'getMe' | 'verify'>;
   referralService?: Pick<ReferralService, 'claim' | 'getMine'>;
   authMiddleware?: (req: Request, res: Response, next: import('express').NextFunction) => void;
@@ -2241,10 +2249,18 @@ export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const prisma = dependencies.prisma ?? defaultPrisma;
   const capabilities = dependencies.capabilities ?? PRODUCT_CAPABILITIES;
+  const stripeService = (dependencies.stripeService ?? createStripeServiceFromEnv(prisma)) as StripeService;
+  const caktoService = dependencies.caktoService ?? createCaktoServiceFromEnv(prisma);
+  const billingProvider = dependencies.billingProvider
+    ?? (dependencies.stripeService
+      ? stripeBillingProvider(stripeService)
+      : createBillingProviderFromEnv(prisma, process.env, {
+        stripe: stripeService,
+        cakto: caktoService as CaktoService,
+      }));
   const billingAccessService = dependencies.billingAccessService ?? new BillingAccessService(prisma, {
-    checkoutAvailable: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID),
+    checkoutAvailable: billingProvider.isConfigured(),
   });
-  const stripeService = dependencies.stripeService ?? createStripeServiceFromEnv(prisma);
   const professionalPartnerService = dependencies.professionalPartnerService ?? new ProfessionalPartnerService(prisma);
   const referralService = dependencies.referralService ?? new ReferralService(prisma);
   const aiService = dependencies.aiService ?? AIService;
@@ -2657,14 +2673,31 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   // Stripe webhook — PRECISA do corpo cru (raw) e fica fora do express.json()
   // e do requireAuth. Registrado aqui de propósito, antes de tudo.
-  app.post('/api/billing/webhook', express.raw({ type: '*/*' }), async (req: Request, res: Response) => {
+  const handleStripeWebhook = async (req: Request, res: Response) => {
     const sig = req.headers['stripe-signature'] as string;
     if (!sig) return res.status(400).json({ error: 'no_signature' });
     try {
       await stripeService.handleWebhook(req.body as Buffer, sig);
-      res.json({ received: true });
+      return res.json({ received: true });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      return res.status(400).json({ error: err.message });
+    }
+  };
+  app.post('/api/billing/webhook', express.raw({ type: '*/*' }), handleStripeWebhook);
+  app.post('/api/billing/webhook/stripe', express.raw({ type: '*/*' }), handleStripeWebhook);
+  app.post('/api/billing/webhook/cakto', express.json({ limit: '128kb' }), async (req: Request, res: Response) => {
+    try {
+      const result = await caktoService.handleWebhook(req.body);
+      return res.json({ received: true, duplicate: result.duplicate });
+    } catch (error: any) {
+      const status = error?.message === 'invalid_webhook_secret' || error?.message === 'invalid_webhook_payload'
+        ? 401
+        : error?.name === 'AbortError'
+          || error?.message === 'cakto_auth_failed'
+          || String(error?.message ?? '').startsWith('cakto_api_failed:')
+          ? 503
+          : 400;
+      return res.status(status).json({ error: error?.message ?? 'webhook_failed' });
     }
   });
 
@@ -8550,7 +8583,7 @@ JSON APENAS: {"profileSummary":"..."}`,
     return res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
-  // ── Billing / Stripe (checkout/portal/status — atrás do requireAuth) ──────
+  // ── Billing provider-neutral (checkout/management/status — autenticado) ──
   app.post('/api/billing/checkout', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
@@ -8566,13 +8599,13 @@ JSON APENAS: {"profileSummary":"..."}`,
         && /^[a-zA-Z0-9:._-]+$/.test(normalizedHeaderKey)
         ? normalizedHeaderKey
         : input.attemptKey ?? randomUUID();
-      const url = await stripeService.createCheckoutSession(
+      const result = await billingProvider.createCheckoutSession(
         userId,
         input.email,
         input.plan,
         attemptKey,
       );
-      return res.json({ url });
+      return res.json(result);
     } catch (error: any) {
       if (error instanceof z.ZodError || error?.message === 'invalid_plan') {
         return res.status(400).json({ error: 'invalid_plan' });
@@ -8582,6 +8615,9 @@ JSON APENAS: {"profileSummary":"..."}`,
         || error?.message === 'billing_plan_unavailable'
         || error?.message === 'lifetime_offer_unavailable'
       ) return res.status(503).json({ error: error.message });
+      if (error?.message === 'checkout_attempt_conflict') {
+        return res.status(409).json({ error: error.message });
+      }
       return res.status(500).json({ error: 'checkout_failed' });
     }
   });
@@ -8589,6 +8625,10 @@ JSON APENAS: {"profileSummary":"..."}`,
   app.post('/api/billing/portal', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
+      const account = await prisma.billingAccount.findUnique({ where: { userId } });
+      if (account?.billingProvider !== 'stripe') {
+        return res.status(404).json({ error: 'management_unavailable' });
+      }
       const url = await stripeService.createPortalSession(userId);
       return res.json({ url });
     } catch (err: any) {
@@ -8598,11 +8638,36 @@ JSON APENAS: {"profileSummary":"..."}`,
     }
   });
 
+  app.post('/api/billing/cancel', async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthRequest).userId;
+      const input = z.object({ confirm: z.literal(true) }).parse(req.body);
+      void input;
+      const account = await prisma.billingAccount.findUnique({ where: { userId } });
+      if (account?.billingProvider !== 'cakto') {
+        return res.status(404).json({ error: 'management_unavailable' });
+      }
+      return res.json(await caktoService.cancelSubscription(userId));
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'confirmation_required' });
+      if (error?.message === 'no_subscription' || error?.message === 'lifetime_cannot_cancel') {
+        return res.status(409).json({ error: error.message });
+      }
+      if (error?.message === 'subscription_mismatch'
+        || error?.message === 'subscription_changed'
+        || error?.message === 'subscription_changed_after_cancel') {
+        return res.status(409).json({ error: error.message });
+      }
+      if (error?.message === 'billing_unavailable') return res.status(503).json({ error: error.message });
+      return res.status(500).json({ error: 'cancel_failed' });
+    }
+  });
+
   app.get('/api/billing/status', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
       const data = await billingAccessService.getSummary(userId);
-      return res.json({ ...data, offers: stripeService.getOfferCatalog() });
+      return res.json({ ...data, offers: billingProvider.getOfferCatalog() });
     } catch {
       return res.status(500).json({ error: 'status_failed' });
     }
@@ -8612,7 +8677,9 @@ JSON APENAS: {"profileSummary":"..."}`,
     try {
       const userId = (req as AuthRequest).userId;
       const sessionId = z.string().trim().min(1).max(255).parse(req.params.sessionId);
-      const result = await stripeService.verifyCheckoutSession(userId, sessionId);
+      const result = sessionId.startsWith('cs_')
+        ? await stripeService.verifyCheckoutSession(userId, sessionId)
+        : await billingProvider.verifyCheckoutSession(userId, sessionId);
       return res.json(result);
     } catch (error: any) {
       if (error?.message === 'checkout_session_forbidden') {

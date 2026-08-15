@@ -61,6 +61,83 @@ jobs:
           ssh-keyscan -T 20 "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
           test -s ~/.ssh/known_hosts || { echo "FALHA: não consegui ler a chave de host de $VPS_HOST"; exit 1; }
 
+      # A VPS só é alcançável por SSH, e nem toda pessoa que precisa publicar
+      # tem terminal aberto. Este passo sincroniza as chaves de cobrança do
+      # cofre do repositório para o `.env.backend` da VPS, sem imprimir valor
+      # nenhum e sem tocar em nenhuma outra linha do arquivo.
+      #
+      # Faltando qualquer uma das sete, o passo não escreve nada e avisa: meia
+      # configuração deixaria `isConfigured()` falso do mesmo jeito, só que com
+      # um arquivo remendado no meio.
+      - name: Sincronizar segredos de cobrança
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          BILLING_PROVIDER: ${{ secrets.BILLING_PROVIDER }}
+          CAKTO_CLIENT_ID: ${{ secrets.CAKTO_CLIENT_ID }}
+          CAKTO_CLIENT_SECRET: ${{ secrets.CAKTO_CLIENT_SECRET }}
+          CAKTO_WEBHOOK_SECRET: ${{ secrets.CAKTO_WEBHOOK_SECRET }}
+          CAKTO_SUBSCRIPTION_PRODUCT_ID: ${{ secrets.CAKTO_SUBSCRIPTION_PRODUCT_ID }}
+          CAKTO_LIFETIME_PRODUCT_ID: ${{ secrets.CAKTO_LIFETIME_PRODUCT_ID }}
+          CAKTO_MONTHLY_OFFER_ID: ${{ secrets.CAKTO_MONTHLY_OFFER_ID }}
+          CAKTO_ANNUAL_OFFER_ID: ${{ secrets.CAKTO_ANNUAL_OFFER_ID }}
+          CAKTO_LIFETIME_OFFER_ID: ${{ secrets.CAKTO_LIFETIME_OFFER_ID }}
+        run: |
+          set -eu
+          CHAVES="CAKTO_CLIENT_ID CAKTO_CLIENT_SECRET CAKTO_WEBHOOK_SECRET
+            CAKTO_SUBSCRIPTION_PRODUCT_ID CAKTO_LIFETIME_PRODUCT_ID
+            CAKTO_MONTHLY_OFFER_ID CAKTO_ANNUAL_OFFER_ID CAKTO_LIFETIME_OFFER_ID"
+          FALTA=""
+          for CHAVE in $CHAVES; do
+            eval "VALOR=\${$CHAVE}"
+            [ -n "$VALOR" ] || FALTA="$FALTA $CHAVE"
+          done
+          if [ -n "$FALTA" ]; then
+            echo "AVISO: segredos de cobrança ausentes:$FALTA"
+            echo "O deploy segue, mas com BILLING_PROVIDER=cakto sem configuração a"
+            echo "tela de plano fica SEM opção de compra (checkoutAvailable=false)."
+            echo "Cadastre em Settings → Secrets and variables → Actions, ou publique"
+            echo "com o segredo BILLING_PROVIDER=stripe para vender pelo provedor antigo."
+            exit 0
+          fi
+
+          # O corpo vai por stdin e é lido pelo shell remoto sem aparecer em
+          # linha de comando — argumento de `ssh` fica visível no `ps` da VPS.
+          {
+            echo "BILLING_PROVIDER=${BILLING_PROVIDER:-cakto}"
+            for CHAVE in $CHAVES; do
+              eval "VALOR=\${$CHAVE}"
+              echo "${CHAVE}=${VALOR}"
+            done
+          } > pares.env
+
+          USER_FINAL="${VPS_USER:-root}"
+          ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 "${USER_FINAL}@${VPS_HOST}" \
+            'set -eu
+             cd /opt/airia/app/deploy/airia
+             touch .env.backend
+             cp .env.backend ".env.backend.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+             TMP="$(mktemp)"
+             PARES="$(cat)"
+             # Preserva toda linha que não seja uma das chaves enviadas.
+             CHAVES_ENVIADAS="$(printf %s "$PARES" | cut -d= -f1)"
+             # `|| [ -n "$LINHA" ]` porque arquivo sem quebra final perderia a
+             # última linha — e aqui a última linha é segredo de produção.
+             while IFS= read -r LINHA || [ -n "$LINHA" ]; do
+               NOME="${LINHA%%=*}"
+               MANTER=1
+               for CHAVE in $CHAVES_ENVIADAS; do
+                 [ "$NOME" = "$CHAVE" ] && MANTER=0
+               done
+               [ "$MANTER" = 1 ] && printf "%s\n" "$LINHA"
+               LINHA=""
+             done < .env.backend > "$TMP"
+             printf "%s\n" "$PARES" >> "$TMP"
+             mv "$TMP" .env.backend
+             chmod 600 .env.backend
+             echo "chaves de cobrança gravadas: $(printf "%s\n" "$CHAVES_ENVIADAS" | wc -l)"' < pares.env
+          rm -f pares.env
+
       - name: Publicar
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}

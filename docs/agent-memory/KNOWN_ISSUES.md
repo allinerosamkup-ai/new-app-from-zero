@@ -98,3 +98,36 @@ cega.
 ### Não confundir com
 Uma branch antiga que já foi integrada: confirme com `git log` e `git diff`, não
 apague apenas pela idade do nome.
+
+---
+
+## 4. Produção está atrás do `master`, e o banco público não tem as migrações novas
+
+### Sintoma
+Em 2026-08-14 `https://airia.pro/release.json` respondia `1014696…`, commit
+anterior ao merge do PR #10 (`2eeb1c9`). No banco público, nenhuma coluna de
+`20260811120000_add_objective_intelligence.sql` e nenhuma tabela de
+`20260813143000_add_provider_neutral_billing.sql` existiam, com 42 objetivos
+reais gravados.
+
+### Causa
+Merge feito sem janela de deploy autorizada. A migração de objetivos ainda
+agravava o quadro por estar fora de `MIGRATION_FILES` no `deploy/airia/deploy.sh`
+— isso já foi corrigido, com trava em `migration-chain-safety.test.ts`.
+
+### Status
+**Aberto.** Não é regressão: enquanto a VPS servir `1014696`, o código antigo
+combina com o banco antigo. O risco é o próximo deploy sem aplicar as migrações.
+
+### Contorno
+No deploy autorizado, aplicar na ordem do `deploy.sh`: `20260811120000` antes de
+`20260813143000`. Ambas são aditivas e idempotentes. Não usar `supabase db push`
+enquanto o histórico remoto estiver divergente.
+
+### Arquivos relacionados
+`deploy/airia/deploy.sh`, `supabase/migrations/`,
+`apps/backend/src/contracts/migration-chain-safety.test.ts`.
+
+### Não confundir com
+Falha de código da Cakto ou do PR #10: as duas linhas passam nos gates locais. O
+que falta é aplicar em produção.

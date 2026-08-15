@@ -9,6 +9,7 @@ export type BillingAccessSummary = {
   access: 'pro' | 'free';
   source: 'paid' | 'professional' | 'trial' | 'free';
   subscriptionStatus: string | null;
+  provider: 'cakto' | 'stripe' | null;
   plan: 'monthly' | 'annual' | 'lifetime' | null;
   periodEnd: string | null;
   trialEndsAt: string | null;
@@ -23,6 +24,7 @@ export type BillingAccessState = {
   professionalVerified?: boolean;
   trialEndsAt?: Date | string | null;
   checkoutAvailable?: boolean;
+  billingProvider?: string | null;
 };
 
 function toDate(value: Date | string | null | undefined): Date | null {
@@ -40,7 +42,10 @@ export function resolveAccess(
   now = new Date(),
 ): BillingAccessSummary {
   const subscriptionStatus = state.subscriptionStatus ?? null;
-  const paid = PAID_STATUSES.has(subscriptionStatus ?? '');
+  const currentPeriodEnd = toDate(state.currentPeriodEnd);
+  const canceledPaidPeriod = subscriptionStatus === 'canceled'
+    && !!currentPeriodEnd && currentPeriodEnd.getTime() > now.getTime();
+  const paid = PAID_STATUSES.has(subscriptionStatus ?? '') || canceledPaidPeriod;
   const trialEndsAt = toDate(state.trialEndsAt);
   const trialActive = !!trialEndsAt && trialEndsAt.getTime() > now.getTime();
   const professional = state.professionalVerified === true;
@@ -62,8 +67,11 @@ export function resolveAccess(
     access: source === 'free' ? 'free' : 'pro',
     source,
     subscriptionStatus,
+    provider: state.billingProvider === 'cakto' || state.billingProvider === 'stripe'
+      ? state.billingProvider
+      : null,
     plan,
-    periodEnd: toIso(state.currentPeriodEnd),
+    periodEnd: toIso(currentPeriodEnd),
     trialEndsAt: toIso(trialEndsAt),
     daysRemaining,
     checkoutAvailable: state.checkoutAvailable ?? true,
@@ -125,6 +133,7 @@ export class BillingAccessService {
 
     return resolveAccess({
       subscriptionStatus: billing?.subscriptionStatus,
+      billingProvider: billing?.billingProvider,
       subscriptionPlan: billing?.subscriptionPlan,
       currentPeriodEnd: billing?.currentPeriodEnd,
       trialEndsAt: billing?.trialEndsAt,

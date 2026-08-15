@@ -15,6 +15,7 @@ const trial14: BillingAccessSummary = {
   access: "pro",
   source: "trial",
   subscriptionStatus: null,
+  provider: null,
   plan: null,
   periodEnd: null,
   trialEndsAt: "2026-08-24T12:00:00.000Z",

@@ -16,13 +16,18 @@ vi.mock("../lib/track", () => ({ trackEvent: mocks.track }));
 vi.mock("../lib/supabase", () => ({ supabase: { auth: { getSession: mocks.getSession } } }));
 
 import { setLanguage } from "../i18n";
-import BillingPage, { confirmCheckoutSession } from "./billing-page";
+import BillingPage, {
+  confirmCheckoutSession,
+  readCheckoutVerification,
+  storeCheckoutVerification,
+} from "./billing-page";
 import type { BillingAccessSummary } from "../hooks/useSubscription";
 
 const freeSummary: BillingAccessSummary = {
   access: "free",
   source: "free",
   subscriptionStatus: null,
+  provider: null,
   plan: null,
   periodEnd: null,
   trialEndsAt: null,
@@ -42,7 +47,71 @@ describe("BillingPage", () => {
     mocks.post.mockReset();
     mocks.track.mockReset();
     window.history.replaceState({}, "", "/billing");
+    window.sessionStorage.clear();
     await setLanguage("pt");
+  });
+
+  it("stores the provider-neutral verification id before leaving checkout", async () => {
+    const storage = { setItem: vi.fn() };
+    storeCheckoutVerification("attempt-123", storage, () => 1_000);
+    expect(storage.setItem).toHaveBeenCalledWith(
+      "airia:billing:verification",
+      JSON.stringify({ id: "attempt-123", at: 1_000 }),
+    );
+  });
+
+  it("forgets an abandoned checkout instead of confirming a payment that never happened", async () => {
+    const storage = {
+      getItem: vi.fn(() => JSON.stringify({ id: "attempt-abandoned", at: 0 })),
+      removeItem: vi.fn(),
+    };
+    expect(readCheckoutVerification(storage, () => 31 * 60 * 1000)).toBeNull();
+    expect(storage.removeItem).toHaveBeenCalledWith("airia:billing:verification");
+    expect(readCheckoutVerification(
+      { getItem: vi.fn(() => JSON.stringify({ id: "attempt-fresh", at: 0 })), removeItem: vi.fn() },
+      () => 29 * 60 * 1000,
+    )).toBe("attempt-fresh");
+  });
+
+  it("uses the stored verification id after returning without trusting the URL", async () => {
+    storeCheckoutVerification("attempt-stored", window.sessionStorage);
+    mocks.get.mockImplementation((path: string) => path === "/billing/status"
+      ? Promise.resolve(freeSummary)
+      : Promise.resolve({ confirmed: true, plan: "monthly", status: "paid" }));
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    expect(mocks.get).toHaveBeenCalledWith("/billing/checkout-session/attempt-stored");
+    expect(host.textContent).toContain("Pagamento confirmado");
+    await act(async () => root.unmount());
+  });
+
+  it("requires two explicit steps to cancel a Cakto subscription", async () => {
+    mocks.get.mockResolvedValue({ ...freeSummary, access: "pro", source: "paid", provider: "cakto", plan: "monthly" });
+    mocks.post.mockResolvedValue({ canceled: true, periodEnd: "2026-09-13T00:00:00.000Z" });
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    const first = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Cancelar renovação"));
+    expect(first).toBeTruthy();
+    await act(async () => { first?.click(); });
+    expect(mocks.post).not.toHaveBeenCalled();
+    const confirm = [...host.querySelectorAll("button")].find((button) => button.textContent?.includes("Confirmar cancelamento"));
+    await act(async () => { confirm?.click(); await Promise.resolve(); });
+    expect(mocks.post).toHaveBeenCalledWith("/billing/cancel", { confirm: true });
+    await act(async () => root.unmount());
+  });
+
+  it("does not offer cancellation for lifetime access", async () => {
+    mocks.get.mockResolvedValue({ ...freeSummary, access: "pro", source: "paid", provider: "cakto", plan: "lifetime" });
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    expect(host.textContent).not.toContain("Cancelar renovação");
+    await act(async () => root.unmount());
   });
 
   it("shows all three enabled offers with the server amounts", async () => {
@@ -125,6 +194,26 @@ describe("BillingPage", () => {
     const secondAttempt = mocks.post.mock.calls[1][1]?.attemptKey;
     expect(firstAttempt).toMatch(/^[a-zA-Z0-9-]{8,100}$/);
     expect(secondAttempt).toBe(firstAttempt);
+    await act(async () => root.unmount());
+  });
+
+  it("uses a new checkout attempt key after the selected plan changes", async () => {
+    mocks.get.mockResolvedValue(freeSummary);
+    mocks.post.mockRejectedValue(new Error("offline"));
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    const checkout = [...host.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Escolher este plano"));
+    await act(async () => { checkout?.click(); });
+    const annualAttempt = mocks.post.mock.calls[0][1]?.attemptKey;
+    const monthly = [...host.querySelectorAll("button")]
+      .find((button) => button.textContent?.includes("Mensal"));
+    await act(async () => { monthly?.click(); });
+    await act(async () => { checkout?.click(); });
+    const monthlyAttempt = mocks.post.mock.calls[1][1]?.attemptKey;
+    expect(monthlyAttempt).not.toBe(annualAttempt);
     await act(async () => root.unmount());
   });
 });

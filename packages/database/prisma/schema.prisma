@@ -46,6 +46,7 @@ model Profile {
   auraCommandOperations AuraCommandOperation[]
   captures              Capture[]
   billingAccount        BillingAccount?
+  billingCheckoutAttempts BillingCheckoutAttempt[]
   professionalPartner   ProfessionalPartner?
   referralAttribution   ReferralAttribution?   @relation("ReferredUser")
 
@@ -129,6 +130,11 @@ model BillingAccount {
   userId               String    @id @map("user_id") @db.Uuid
   stripeCustomerId     String?   @unique @map("stripe_customer_id")
   stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
+  billingProvider      String?   @map("billing_provider")
+  externalCustomerId   String?   @map("external_customer_id")
+  externalSubscriptionId String? @map("external_subscription_id")
+  externalOrderId      String?   @map("external_order_id")
+  externalOfferId      String?   @map("external_offer_id")
   subscriptionStatus   String?   @map("subscription_status")
   subscriptionPlan     String?   @map("subscription_plan")
   priceId              String?   @map("price_id")
@@ -143,6 +149,40 @@ model BillingAccount {
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("billing_accounts")
+}
+
+model BillingCheckoutAttempt {
+  id          String    @id @default(uuid()) @db.Uuid
+  publicToken String    @unique @map("public_token") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  provider    String
+  plan        String
+  offerId     String    @map("offer_id")
+  attemptKey  String    @map("attempt_key")
+  status      String    @default("pending")
+  orderId     String?   @map("order_id")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider, attemptKey])
+  @@index([userId, createdAt(sort: Desc)], name: "idx_billing_checkout_attempts_user_created")
+  @@map("billing_checkout_attempts")
+}
+
+model BillingWebhookEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  provider    String
+  eventId     String   @map("event_id")
+  eventType   String   @map("event_type")
+  result      String?
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  @@unique([provider, eventId])
+  @@map("billing_webhook_events")
 }
 
 model ProfessionalPartner {

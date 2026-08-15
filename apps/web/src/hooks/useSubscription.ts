@@ -16,6 +16,7 @@ export type BillingAccessSummary = {
   access: "pro" | "free";
   source: "paid" | "professional" | "trial" | "free";
   subscriptionStatus: string | null;
+  provider: "cakto" | "stripe" | null;
   plan: BillingPlan | null;
   periodEnd: string | null;
   trialEndsAt: string | null;
@@ -35,6 +36,7 @@ const EMPTY_SUMMARY: BillingAccessSummary = {
   access: "free",
   source: "free",
   subscriptionStatus: null,
+  provider: null,
   plan: null,
   periodEnd: null,
   trialEndsAt: null,
