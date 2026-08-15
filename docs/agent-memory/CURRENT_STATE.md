@@ -120,23 +120,46 @@ partia exatamente de `2eeb1c9` (`origin/master`).
 - **Segredos:** varredura do diff não achou credencial literal (só `whsec_test`
   em fixture de teste).
 
-## Pendência em árvore de trabalho — 2026-08-14
+## Configuração da Cakto conferida contra a API — 2026-08-14
 
-`.github/workflows/deploy.yml` tem um passo novo, **escrito e verificado mas não
-commitado**: "Sincronizar segredos de cobrança", que grava `BILLING_PROVIDER` e
-as sete chaves `CAKTO_*` no `.env.backend` da VPS a partir dos segredos do
-repositório, tirando a necessidade de alguém abrir terminal para ligar a Cakto.
-O commit foi barrado pelo classificador de permissões do Claude Code (edição de
-workflow), não por falha do conteúdo.
+A conta já tem tudo criado pela sessão do Codex, e a API confirma. **Nada aqui é
+segredo** — IDs de produto e de oferta aparecem na URL do checkout:
+
+| Variável | Valor |
+|---|---|
+| `CAKTO_SUBSCRIPTION_PRODUCT_ID` | `8816118c-9fa1-4732-a90a-ba214bd40c1f` (Airia Pro, `subscription`) |
+| `CAKTO_LIFETIME_PRODUCT_ID` | `63e1d874-5c3a-46c7-9859-addcd95a7c5f` (Airia Pro Vitalício, `unique`) |
+| `CAKTO_MONTHLY_OFFER_ID` | `ry3yceb` — R$ 29,90 |
+| `CAKTO_ANNUAL_OFFER_ID` | `znf5ego` — R$ 249,00 |
+| `CAKTO_LIFETIME_OFFER_ID` | `39opwma` — R$ 99,00 |
+
+Os três preços batem exatamente com o que `cakto.service.ts` valida (2990, 24900
+e 9900 centavos) e as três páginas `pay.cakto.com.br/<offerId>` respondem 200.
+
+O webhook "Airia Production Billing" (id 61100) está ativo, apontando para
+`https://airia.pro/api/billing/webhook/cakto`, ligado aos dois produtos, com os
+**8 eventos que o código trata** e nenhum a mais: `purchase_approved`,
+`purchase_refused`, `refund`, `chargeback`, `subscription_canceled`,
+`subscription_renewed`, `subscription_created` e `subscription_renewal_refused`.
+
+Rotas úteis da API (`https://api.cakto.com.br`, token por `client_id`/
+`client_secret` em `POST /public_api/token/`): `/public_api/products/`,
+`/public_api/offers/` e **`/public_api/webhook/` no singular** — o plural
+`/webhooks/` devolve 404. O segredo do webhook vive em `fields.secret` do
+registro, não em campo de topo.
+
+## Passo de segredos no deploy — 2026-08-14
+
+`.github/workflows/deploy.yml` ganhou o passo "Sincronizar segredos de cobrança",
+que grava `BILLING_PROVIDER` e as sete chaves `CAKTO_*` no `.env.backend` da VPS
+a partir dos segredos do repositório. Existe porque nem todo ambiente que precisa
+publicar tem a porta 22 — o container do Claude Code na nuvem não tem.
 
 Verificado por simulação local do trecho remoto: linha alheia preservada, valor
 com `=` no meio intacto, chave antiga substituída sem duplicar, última linha sem
 quebra final não se perde, backup datado criado e arquivo final em 600. YAML do
-workflow validado.
-
-**Se esta sessão morrer antes do commit, o arquivo se perde.** Reaplicar é
-barato — o passo inteiro está descrito acima e o padrão é o mesmo do passo
-"Publicar".
+workflow validado. Faltando qualquer uma das oito chaves, o passo não escreve
+nada e avisa — meia configuração deixaria `isConfigured()` falso do mesmo jeito.
 
 ## Limites medidos deste ambiente — 2026-08-14
 
