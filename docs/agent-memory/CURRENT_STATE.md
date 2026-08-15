@@ -144,3 +144,40 @@ intencionalmente não executados porque exigem autorização explícita de produ
 Revisar e integrar o PR #10 quando houver autorização. No deploy autorizado,
 reconciliar o histórico remoto antes de aplicar a migração; não usar `db push`
 automaticamente e não publicar a partir desta worktree.
+
+---
+
+## Correção DNS `www.airia.pro` em redes móveis — 2026-08-12
+
+- **Estado:** correção DNS aprovada por verificador e integração, ambos 9/10;
+  meta-verificação técnica 9/10. O primeiro gate final reteve `DONE` somente até
+  o commit isolado destes registros.
+- **Origem recuperada:** commit Claude `6a67da5`, já integrado ao `master`,
+  havia criado a ferramenta e o runbook, mas não alterado a zona real.
+- **Causa isolada:** `www` já tinha `CNAME → airia.pro`, TLS e proxy corretos;
+  faltava `AAAA` apesar de a VPS ter IPv6 global funcional.
+- **Mudança externa:** `AAAA @ → 2a02:4780:14:ddb2::1`, TTL 300, publicado na
+  Hostinger com `overwrite=false`; leitura posterior preservou A/CNAME/MX/TXT.
+- **Evidência:** teste direto IPv6 antes da publicação; validação da Hostinger;
+  nameserver autoritativo, Google e Cloudflare após a publicação; página e
+  `/api/health` 200 por IPv6; página 200 por IPv4; viewport 390×844 sem erro de
+  console. Um de três healthchecks IPv4 expirou e os dois seguintes deram 200;
+  acompanhar como instabilidade transitória, não como efeito do AAAA.
+- **Regra preservada:** não redirecionar `www` para a raiz; isso já quebrou API,
+  autenticação, `localStorage` e o PWA instalado.
+- **Verificação independente:** verificador 9/10 e integração 9/10, sem falha
+  crítica. Ambos consideram o teste em iPhone físico um aceite residual útil,
+  não um bloqueio técnico da mudança DNS.
+- **Fechamento Git:** este trabalho altera somente `CURRENT_STATE.md`,
+  `INFRA_ACCESS.md` e o fato DNS em `LEARNINGS.md`. As demais alterações já
+  presentes no `master` pertencem a dois trabalhos anteriores e ficam
+  explicitamente fora deste commit: enforcement/qualidade de verificadores
+  (`AGENTS.md`, `CLAUDE.md`, protocolo, hooks, scripts, `VERIFICATION.md`, plano
+  e `.g/`) e release mobile (`apps/mobile/android/app/build.gradle` e
+  `apps/mobile/app.json`). Não removê-las, misturá-las ou atribuí-las ao DNS.
+- **Correção de memória (2026-08-15):** o fato DNS no `LEARNINGS.md` não estava
+  pendente — entrou de carona no commit `fb3d7e5`, misturado ao trabalho de
+  enforcement. Restavam só dois registros a commitar, não três.
+- **Próxima ação:** commit isolado criado em 2026-08-15 com `CURRENT_STATE.md` e
+  `INFRA_ACCESS.md`; falta a meta-verificação deste fechamento. Monitorar o
+  timeout IPv4 transitório; não alterar proxy nem redirecionar host.

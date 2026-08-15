@@ -86,17 +86,28 @@ sem rede e sem dependência.
 
 O token dá escrita no DNS: variável de ambiente, nunca no repositório.
 
-**Não testado contra a API real** — só contra o 401. O primeiro `--apply` merece
-um `show` antes e outro depois.
+**API real validada em 2026-08-12.** A consulta autenticada, o endpoint
+`/validate` e a atualização incremental com `overwrite=false` funcionaram. A
+leitura anterior e posterior confirmou que `A`, `CNAME`, `MX` e `TXT` foram
+preservados. O conector MCP local falhou por cadeia de certificados; o
+PowerShell com a CA do Windows alcançou a mesma API.
 
 ---
 
 ## Estado do domínio, medido
 
-`airia.pro` → `A 195.35.17.102`. `www.airia.pro` → `CNAME airia.pro`.
+`airia.pro` → `A 195.35.17.102` e `AAAA 2a02:4780:14:ddb2::1`.
+`www.airia.pro` → `CNAME airia.pro`, herdando as duas famílias.
 Nameservers `ns1/ns2.dns-parking.com` (Hostinger). Certificado Let's Encrypt
 cobre os dois hosts. `http://` de cada um faz 301 para o próprio `https://`.
 TLS 1.2 e 1.3 aceitos, HTTP/2 nos dois.
+
+O `AAAA` foi publicado em 2026-08-12 depois de quatro gates: o endereço foi
+confirmado pela API da própria VPS `1382120`; SNI/TLS e `/api/health` deram 200
+diretamente nesse IPv6 antes da publicação; a Hostinger aceitou o payload em
+`/validate`; Google DNS e Cloudflare DoH passaram a resolver o `www` pelo
+`CNAME` até o mesmo IPv6. A página respondeu 200 em IPv4 e IPv6 e abriu no
+viewport 390×844 sem erro de console. Não criar `AAAA` separado no `www`.
 
 **Os dois hosts servem 200 de propósito** — o PWA está instalado no `www` e
 redirecionar já quebrou a produção uma vez. A consolidação é por `rel=canonical`.
@@ -107,7 +118,6 @@ Faltando, e por quê:
 | Pendência | Onde | Efeito |
 |---|---|---|
 | Propriedade de **domínio** no Search Console | TXT no DNS | hoje a propriedade é `https://airia.pro/` (prefixo de URL); tudo que o Google resolver atribuir ao `www` fica invisível no relatório e sem como pedir indexação |
-| Registro **AAAA** | DNS | sem IPv6, aparelho em rede IPv6-only depende de NAT64/DNS64 da operadora |
 
 O token de verificação do Search Console nasce dentro da conta Google no momento
 em que a propriedade é criada — não há como gerá-lo por fora.
