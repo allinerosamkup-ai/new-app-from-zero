@@ -51,6 +51,31 @@ falta, em vez de morrer com `Permission denied (publickey)`:
 | `VPS_HOST` | IP ou host da VPS |
 | `VPS_USER` | opcional, padrão `root` |
 
+Estado do cofre em 2026-08-16: `VPS_HOST` e os cinco IDs da Cakto cadastrados.
+Faltam `VPS_SSH_KEY`, `CAKTO_CLIENT_ID`, `CAKTO_CLIENT_SECRET` e
+`CAKTO_WEBHOOK_SECRET` — todos credenciais, só a titular cadastra.
+
+A chave privada que abre a VPS está no Windows da Alline em
+`C:\Users\allin\.ssh\id_ed25519`; autentica como root em `srv1382120`.
+
+## O `.env.backend` de produção não fica na raiz do projeto
+
+Fica em `/opt/airia/app/deploy/airia/.env.backend`, ao lado do `compose.yml`
+que o declara em `env_file`. Procurar em `/opt/airia/app/` acha só o
+`.env.example` e dá a impressão errada de que não há configuração.
+
+Inventário de 2026-08-16 (27 variáveis): Stripe **completo**
+(`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, os três price IDs), mais
+Supabase, OpenAI, Google, Hotmart, Meta CAPI e VAPID. **Nenhuma variável
+`CAKTO_*` e nenhum `BILLING_PROVIDER`.** Como
+`billing-provider.ts` usa `'cakto'` como padrão quando a variável não existe,
+publicar o código atual nesse estado desliga a compra. O passo de sincronizar
+segredos não salva a situação: faltando qualquer chave da Cakto ele não escreve
+nada, nem o `BILLING_PROVIDER`.
+
+Produção estava no commit `1014696` em 2026-08-16, **27 commits atrás** do
+`master`.
+
 `deploy.sh` cancela sozinho se o checkout da VPS divergir de `origin/master` —
 o script é a autoridade sobre isso, o workflow não duplica a regra.
 
