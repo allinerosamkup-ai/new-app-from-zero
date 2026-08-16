@@ -327,6 +327,28 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
    produtos, e **E2E autenticado** de compra ponta a ponta. Os dois dependem
    de 1 e 2 e só valem contra a Cakto real — nenhum deles foi executado.
 
+### Atualização 2026-08-16 — cofre do GitHub e o botão que nunca rodou
+
+Item 1: a titular relatou ter preenchido os dados na Cakto. **Não verificado por
+agente** — validar exige a API autenticada, que depende do item 2.
+
+Item 2, parcial: os cinco IDs não-secretos foram cadastrados em
+`Settings → Secrets and variables → Actions` a partir da tabela conferida em
+2026-08-14 (`CAKTO_SUBSCRIPTION_PRODUCT_ID`, `CAKTO_LIFETIME_PRODUCT_ID`,
+`CAKTO_MONTHLY_OFFER_ID`, `CAKTO_ANNUAL_OFFER_ID`, `CAKTO_LIFETIME_OFFER_ID`).
+As três páginas `pay.cakto.com.br` responderam 200 na conferência. Faltam os
+três que são credencial e só a titular pode colar: `CAKTO_CLIENT_ID`,
+`CAKTO_CLIENT_SECRET` e `CAKTO_WEBHOOK_SECRET` — este último fica em
+`fields.secret` do webhook `61100`, não em campo de topo.
+
+**Achado novo e independente da Cakto:** o cofre do repositório estava
+inteiramente vazio, e `VPS_SSH_KEY`/`VPS_HOST` também não existem. O workflow
+`Deploy VPS` está ativo e **nunca foi executado** — `gh run list` não retorna
+nenhuma execução. O passo "Conferir segredos" aborta antes de qualquer SSH, ou
+seja, o botão do Actions falharia hoje mesmo com a Cakto pronta. Deploy até aqui
+sempre saiu de terminal com acesso à porta 22. Chave privada é credencial: só a
+titular cadastra.
+
 ## Próxima melhor ação
 
 Quando 1 e 2 existirem: aplicar as duas migrações pendentes na ordem do
