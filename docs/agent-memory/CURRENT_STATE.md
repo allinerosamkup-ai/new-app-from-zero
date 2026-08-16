@@ -311,6 +311,36 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
   não pode ser usado até uma reconciliação própria. A migração desta feature foi
   validada por transação revertida e schema isolado, sem reparar histórico.
 
+## Publicado em 2026-08-16 — cobrança Cakto no ar
+
+`DEPLOY OK` pelo botão do Actions, primeira execução do workflow na vida do
+projeto. Produção saiu do `1014696` (27 commits atrás) para o `778435a`.
+
+Cofre completo: as dez chaves cadastradas, incluindo `VPS_SSH_KEY` e as três da
+Cakto. O `CAKTO_WEBHOOK_SECRET` foi lido da própria API em `fields.secret` do
+webhook `61100`, sem ninguém procurar na tela.
+
+**O primeiro deploy falhou e vale registrar**: a migration
+`20260813133000` chamava `public.update_updated_at_column()` em dois triggers e
+**nenhuma migration do repositório cria essa função** — existia só no banco de
+desenvolvimento, feita à mão. A transação reverteu inteira e o passo `Deploy`
+nem chegou a rodar, porque a migração vem antes dele no `deploy.sh`: produção
+seguiu servindo a versão antiga sem um segundo de interrupção. O gate fez
+exatamente o que devia. Corrigido em `778435a`, a migration agora cria a função.
+
+Verificado depois da publicação: `airia_readings` e `airia_decisions` existem
+com RLS; containers reiniciados no SHA certo; `/` e `/api/health` em 200;
+`BILLING_PROVIDER=cakto` e as oito variáveis da Cakto presentes no
+`.env.backend`; log do backend sem erro de billing.
+
+**Continua pendente:** o E2E de compra de ponta a ponta. Exige pagamento real e
+não pode ser feito por agente. Enquanto não rodar, a cobrança está publicada e
+configurada, não comprovada.
+
+**Higiene:** o `CAKTO_CLIENT_SECRET` trafegou por chat antes de ir para o cofre.
+Vale girar a credencial no painel da Cakto quando houver folga; o cofre aceita a
+nova sem mudar mais nada.
+
 ## Falha atual
 
 `BLOQUEADO` — não é falha técnica do código. Faltam, nesta ordem:
