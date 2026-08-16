@@ -61,6 +61,22 @@ drop policy if exists "airia_decisions_user_isolation" on public.airia_decisions
 create policy "airia_decisions_user_isolation" on public.airia_decisions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- A migration assumia que `update_updated_at_column()` já existia. Existia no
+-- banco de desenvolvimento, criada à mão e nunca capturada em migration
+-- nenhuma — o banco de produção não tem, e o deploy de 2026-08-16 quebrou aqui
+-- com "function public.update_updated_at_column() does not exist". Criar aqui
+-- deixa a migration autossuficiente; `create or replace` não altera quem já a
+-- tem.
+create or replace function public.update_updated_at_column()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
 drop trigger if exists set_airia_readings_updated_at on public.airia_readings;
 create trigger set_airia_readings_updated_at
   before update on public.airia_readings
