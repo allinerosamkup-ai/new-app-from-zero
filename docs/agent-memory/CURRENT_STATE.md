@@ -321,8 +321,15 @@ prioridades diárias produzidas pela IA sem Planner, Hábitos ou Google Agenda.
    `CAKTO_WEBHOOK_SECRET`, IDs de produto e oferta) no `.env.backend` da VPS.
    `BILLING_PROVIDER` já tem `cakto` como padrão: **subir este código sem os
    segredos desliga a compra**, porque `isConfigured()` fica falso e
-   `checkoutAvailable` vira `false`. O contorno explícito é
-   `BILLING_PROVIDER=stripe`.
+   `checkoutAvailable` vira `false`. O contorno técnico é
+   `BILLING_PROVIDER=stripe` — **mas ele não existe na prática**, ver abaixo.
+
+   **Correção 2026-08-16 — `BILLING_PROVIDER=stripe` não é contorno.** A conta
+   Stripe da titular está **em análise desde 10/06**, sem resposta apesar de
+   várias reclamações. Foi por isso que a cobrança migrou para a Cakto. As
+   variáveis `STRIPE_*` continuam preenchidas em produção e o código aceita o
+   provedor, então o contorno *parece* disponível em qualquer inspeção técnica —
+   e não está. Não recomendar essa saída: a Cakto é o único caminho de venda.
 3. **Webhook real** apontando para `POST /api/billing/webhook/cakto` nos dois
    produtos, e **E2E autenticado** de compra ponta a ponta. Os dois dependem
    de 1 e 2 e só valem contra a Cakto real — nenhum deles foi executado.
