@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronDown, ChevronLeft, Loader, Mic, MicOff } from "lucide-react";
@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronLeft, Loader, Mic, MicOff } from "lucide-rea
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { useAuraStore } from "../features/aura/store";
 import { tracksMenstrualCycle } from "../features/aura/onboarding";
+import { averageCycleLength, cycleFlowStarts, daysSinceISO } from "../utils/cycle-history";
 import type { MoodOption } from "../features/aura/types";
 import {
   createTranscriptResultHandler,
@@ -296,6 +297,31 @@ export function CheckinPage() {
    * viu seria perder dado em silêncio.
    */
   const showMedicationQuestion = state.medicationCurrentlyUsing !== false;
+
+  /**
+   * Quando perguntar sobre o ciclo.
+   *
+   * A regra espelha `shouldAskFlowStart` do backend: perto da janela prevista,
+   * ou depois de muito tempo sem marcação. Fora disso o app já sabe onde a
+   * pessoa está no ciclo e não tem por que perguntar de novo — era isso que
+   * transformava um fato por mês em pergunta diária.
+   */
+  const { showCycleQuestion, cycleQuestionLegend } = useMemo(() => {
+    const flowStarts = cycleFlowStarts(state.checkinHistory ?? []);
+    const last = flowStarts.length > 0 ? flowStarts[flowStarts.length - 1] : null;
+    if (!last) {
+      return { showCycleQuestion: true, cycleQuestionLegend: l("Sua menstruação começou hoje?", "Did your period start today?") };
+    }
+    const elapsed = daysSinceISO(last);
+    const average = averageCycleLength(flowStarts);
+    // Já registrou o começo há poucos dias: pergunta só a intensidade.
+    if (elapsed <= 6) {
+      return { showCycleQuestion: true, cycleQuestionLegend: l("Ainda está menstruada?", "Are you still menstruating?") };
+    }
+    if (elapsed < 21) return { showCycleQuestion: false, cycleQuestionLegend: "" };
+    if (average !== null && elapsed < average - 3) return { showCycleQuestion: false, cycleQuestionLegend: "" };
+    return { showCycleQuestion: true, cycleQuestionLegend: l("Sua menstruação começou hoje?", "Did your period start today?") };
+  }, [state.checkinHistory, l]);
   // Português flexiona adjetivo por gênero: "cansada" e "cansado" são a mesma
   // emoção. O app já sabe a resposta do onboarding, então escreve a palavra
   // certa em vez de recorrer a "cansado(a)".
@@ -643,24 +669,36 @@ export function CheckinPage() {
             <ScoreSlider label={l("Estado físico", "Physical state")} value={fisico} onChange={setFisico} emptyHint={l("arraste", "drag")} />
             <ScoreSlider label={l("Carga social", "Social load")} value={social} onChange={setSocial} emptyHint={l("arraste", "drag")} />
 
-            {showMenstrualBlock && (
+            {/* ── Ciclo: uma marcação por mês, não uma pergunta por dia ──
+                A pergunta anterior era sobre estar menstruada no dia, repetida
+                em todo check-in — inclusive no dia seguinte ao que a pessoa já
+                tinha dito que sim, e ao lado dos fatores "Sintomas de TPM" e
+                "Ciclo intenso hoje", que perguntam quase a mesma coisa.
+
+                O único fato que o app não consegue deduzir é QUANDO o fluxo
+                começou. Dado esse, dia do ciclo, fase, próxima menstruação e
+                janela fértil são conta — `lib/menstrual-cycle.ts` faz. Por isso
+                a pergunta virou "começou hoje?" e só aparece perto da janela
+                prevista ou quando faz tempo demais sem registro.
+
+                A intensidade continua sendo perguntada enquanto há fluxo: é o
+                único detalhe que nenhum cálculo deduz. O dia do fluxo saiu —
+                era pedir para a pessoa contar o que o app sabe somar. ── */}
+            {showMenstrualBlock && showCycleQuestion && (
             <div>
               <BooleanChoice value={isFlowing} onChange={(value) => {
                 setIsFlowing(value);
-                if (value !== true) {
+                if (value === true) {
+                  // Marcou o começo: dia 1 por definição, sem perguntar.
+                  setFlowDay(1);
+                } else {
                   setFlowDay(null);
                   setFlowIntensity(null);
                   setSymptomLevels({});
                 }
-              }} legend={l("Está menstruada hoje?", "Are you menstruating today?")} group="menstrual-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
+              }} legend={cycleQuestionLegend} group="menstrual-status" yes={l("Sim", "Yes")} no={l("Ainda não", "Not yet")} />
               {isFlowing === true && (
                 <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-                  <fieldset data-choice-group="flow-day" style={{ margin: 0, padding: 0, border: 0 }}>
-                    <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 700 }}>{l("Dia do fluxo", "Flow day")}</legend>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 }}>
-                      {[1, 2, 3, 4, 5, 6, 7].map((day) => <ChoiceButton key={day} active={flowDay === day} onClick={() => setFlowDay(flowDay === day ? null : day)}>{day}</ChoiceButton>)}
-                    </div>
-                  </fieldset>
                   <fieldset data-choice-group="flow-intensity" style={{ margin: 0, padding: 0, border: 0 }}>
                     <legend style={{ margin: "0 0 8px", padding: 0, fontSize: 12, fontWeight: 700 }}>{l("Intensidade do fluxo", "Flow intensity")}</legend>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>

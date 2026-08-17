@@ -4,6 +4,7 @@ import { AiActionFeedbackService, type AiActionFeedbackItem } from './ai-action-
 import { DecisionEngine, type DecisionSurface } from './decision-engine.service';
 import type { AdaptiveAgendaPlan } from './adaptive-agenda-engine.service';
 import { PRODUCT_CAPABILITIES } from '../contracts/product-capabilities';
+import { computeMenstrualCycle } from '../lib/menstrual-cycle';
 import {
   resolveTimelineAdaptability,
   type AdaptationPermission,
@@ -311,38 +312,33 @@ export class ContextGroundingService {
     };
   }
 
-  /** Detecta a fase do ciclo menstrual a partir do histórico de checkins recentes.
-   *  Retorna label e dia do ciclo estimado, ou null se não houver dados. */
+  /**
+   * Fase do ciclo menstrual, agora **calculada** em vez de rotulada.
+   *
+   * A versão anterior olhava só para o episódio mais recente e devolvia um nome
+   * de fase por faixa fixa de dias, assumindo ciclo de 28 para todo mundo. Não
+   * havia duração média, variabilidade, previsão nem confiança — e nada disso
+   * voltava para a pessoa, então a única forma de o app saber onde ela estava
+   * era perguntar de novo no dia seguinte.
+   *
+   * `lib/menstrual-cycle.ts` faz a conta a partir dos inícios de fluxo: duração
+   * pessoal, dia do ciclo, fase, próxima menstruação e janela fértil. O que
+   * aparece na tela é uma decisão de produto separada — aqui a leitura entra
+   * como modulador biológico, que é o papel dela no grounding.
+   */
   private detectMenstrualPhase(checkins: Array<{ localDate: Date; isFlowing: boolean | null }>): { label: string; cycleDay: number } | null {
-    // Ordena do mais antigo ao mais recente
-    const sorted = [...checkins].sort((a, b) => a.localDate.getTime() - b.localDate.getTime());
+    const flowingDays = checkins
+      .filter((entry) => entry.isFlowing === true)
+      .map((entry) => entry.localDate.toISOString().slice(0, 10));
+    if (flowingDays.length === 0) return null;
 
-    // Encontra a entrada mais recente com isFlowing = true
-    const lastFlowing = [...sorted].reverse().find(c => c.isFlowing === true);
-    if (!lastFlowing) return null;
+    const reading = computeMenstrualCycle({
+      flowingDays,
+      today: new Date().toISOString().slice(0, 10),
+    });
+    if (reading.cycleDay === null || reading.phase === 'desconhecida') return null;
 
-    // Encontra o início do episódio (primeiro dia consecutivo de fluxo)
-    const lastFlowingIdx = sorted.findIndex(c => c.localDate.getTime() === lastFlowing.localDate.getTime());
-    let flowStartIdx = lastFlowingIdx;
-    for (let i = lastFlowingIdx - 1; i >= 0; i--) {
-      if (sorted[i].isFlowing === true) flowStartIdx = i;
-      else break;
-    }
-    const flowStartDate = sorted[flowStartIdx].localDate;
-
-    const msPerDay = 86_400_000;
-    const daysSince = Math.round((Date.now() - flowStartDate.getTime()) / msPerDay);
-    if (daysSince < 0 || daysSince > 34) return null;
-
-    const cycleDay = daysSince + 1;
-    let label: string;
-    if (cycleDay <= 5)       label = 'Menstruação';
-    else if (cycleDay <= 13) label = 'Pós-menstruação';
-    else if (cycleDay <= 16) label = 'Ovulação';
-    else if (cycleDay <= 22) label = 'Pós-ovulação';
-    else                     label = 'TPM';
-
-    return { label, cycleDay };
+    return { label: reading.phaseLabel, cycleDay: reading.cycleDay };
   }
 
   async buildDailyContext(input: GroundingInput): Promise<DailyContext> {

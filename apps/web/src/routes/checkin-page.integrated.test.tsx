@@ -68,7 +68,21 @@ describe("CheckinPage integrated flow", () => {
   it("keeps conditional flow controls semantically grouped and never navigates a queued receipt", () => {
     const source = readFileSync(resolve(process.cwd(), "src/routes/checkin-page.tsx"), "utf8");
 
-    expect(source).toContain('data-choice-group="flow-day"');
+    /**
+     * O ciclo é calculado, não re-perguntado.
+     *
+     * "Dia do fluxo" saiu: pedir para a pessoa contar em que dia da menstruação
+     * ela está é pedir que ela faça a soma que o app tem os dados para fazer —
+     * e a pergunta "está menstruada hoje?" voltava todo dia, inclusive na
+     * véspera de ela já ter respondido. O único fato que nenhum cálculo deduz é
+     * QUANDO começou; daí sai dia do ciclo, fase, próxima menstruação e janela
+     * fértil (`apps/backend/src/lib/menstrual-cycle.ts`).
+     *
+     * A intensidade fica, porque é o outro dado que não se deduz.
+     */
+    expect(source).not.toContain('data-choice-group="flow-day"');
+    expect(source).not.toContain('Está menstruada hoje?');
+    expect(source).toContain('Sua menstruação começou hoje?');
     expect(source).toContain('data-choice-group="flow-intensity"');
     expect(source).toContain('section="airia-interpretation"');
     expect(source).toContain('A Airia cuida da próxima decisão');
