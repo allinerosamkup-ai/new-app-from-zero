@@ -456,3 +456,46 @@ bloquear apenas o gesto horizontal de borda.
 Conserta a validação e quebra o contrato de saída de outra superfície. Por isso
 existe `npm run ai:smoke` — ele manda um prompt representativo de **todas** as
 superfícies.
+
+### [FATO] A capacidade do dia tem uma implementação só: `lib/capacity.ts`
+
+Era calculada em cinco pontos com fórmulas diferentes. Hoje `inferCapacity()`
+decide e os antigos viram adaptadores (`toGoalCapacity`, `toDecisionFlags`).
+Escala: `protecao | baixa | media | alta`. Antes de escrever qualquer regra de
+"quanto cabe hoje", use esta função — uma sexta fórmula é o bug, não a solução.
+
+`phase-capacity.ts` fica de fora **de propósito**: decide a semana do Routine
+Builder (feature desligada), não o momento. Não é esquecimento.
+
+### [FATO] O `DecisionEngine` já ligou `lowCapacity` e `highCapacity` juntos
+
+Fase alta com sono medido ruim satisfazia as duas condições, que são lidas em
+pontos diferentes do motor: o dia saía protegido num trecho e ampliado no outro.
+Corrigido ao passar a um nível único. `capacity.test.ts` exercita o estado
+contraditório e exige que ele resolva protegendo.
+
+### [DECISÃO] Unificar escalas nunca pode aumentar o que o app pede
+
+Ao juntar as cinco fórmulas, três energias divergiam (4, 5 e 7) e em todas o
+código antigo era o que pedia mais. A regra virou asserção em `capacity.test.ts`:
+para energia 1..10, o canônico jamais pede mais que o legado. Qualquer mudança
+futura de corte passa por essa trava.
+
+### [FATO] Prompt que afirma origem falsa é tão grave quanto pergunta na tela
+
+`goal-intelligence.service.ts` dizia ao modelo "CAPACIDADE DE HOJE (dita por ela
+agora)" sobre um valor derivado de `energyScore`. O modelo respondia "como você
+pediu" sobre algo que ninguém perguntou. Guardrail novo em
+`product-guardrails.test.ts` (`falseCapacityProvenancePatterns`) reprova a frase.
+
+### [FATO] `npm run build -w apps/backend` falha com 6 erros de `billingProvider` se o Prisma Client estiver velho
+
+Parecem bug de cobrança e não são. Rode `npx prisma generate` antes de
+investigar. O `generate` falha com `EPERM` se o servidor de dev estiver rodando —
+pare o backend antes.
+
+### [FATO] `.catch()` não pega método de stub inexistente
+
+`prisma.x.findMany(...)` quando `findMany` é `undefined` estoura de forma
+síncrona; o `.catch()` encadeado nunca roda. Em caminho best-effort sobre Prisma,
+use `try/catch`.

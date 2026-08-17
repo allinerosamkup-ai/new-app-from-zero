@@ -430,3 +430,50 @@ automaticamente e não publicar a partir desta worktree.
 - **Próxima ação:** commit isolado criado em 2026-08-15 com `CURRENT_STATE.md` e
   `INFRA_ACCESS.md`; falta a meta-verificação deste fechamento. Monitorar o
   timeout IPv4 transitório; não alterar proxy nem redirecionar host.
+
+---
+
+## 2026-08-17 — Capacidade canônica + correções de demo (`cc024ed`)
+
+**Estado: FEITO no código, NÃO PUBLICADO.** Commitado em `master` local, ainda
+não empurrado nem deployado.
+
+A tela que perguntava capacidade já não existia (saiu em `fb3d7e5`, produção
+serve a versão nova desde 16/08 16:32 UTC — conferido baixando o bundle vivo).
+O que faltava era a inteligência ocupar o lugar: cinco fórmulas divergentes,
+capacidade nunca gravada, nunca dita, e um prompt afirmando que a pessoa
+escolheu. Ver `LEARNINGS.md`.
+
+Entregue: `lib/capacity.ts` como implementação única; frase no envelope
+canônico (as 12 telas que consomem `useAiriaReading` herdam); correção em dois
+toques; `signalMetadata.dayPlan` finalmente preenchido, com `provenance`.
+Zero migração.
+
+Junto, da varredura de rotas: rota curinga (URL inexistente renderizava tela
+branca), `/dev` eliminado do build de produção (ia sem auth, com botão que
+abria o Planner desligado), `/api` duplicado na Jornada (404 silencioso no
+cartão da Home e no botão "Pratiquei"), e CTA da Jornada que caía na Home.
+
+**Verificação:** backend 113/113 suítes sem linha de erro nova (base 112);
+web 56 arquivos / 432 testes + `CapacityNote` 6/6; `typecheck` do web e `build`
+do backend limpos; build de produção sem `DevLayout`; rota curinga conferida
+no navegador.
+
+**Não verificado, e por quê:** o fluxo autenticado ponta a ponta (check-in real
+→ resultado → Home mostrando a mesma frase) exige sessão. O backend de dev
+aponta para o Supabase **de produção**, então não criei usuário de teste. Falta
+a titular abrir o app logada para essa conferência.
+
+### Pendências da varredura de rotas, ainda abertas
+
+- `billing-page.tsx:271-317` — sem oferta configurada a tela mostra só "Plano
+  gratuito", sem explicação. Precisa de estado "compra indisponível".
+- `billing-page.tsx:300-302` — o paywall ainda vende Planner e Hábitos, ambos
+  desligados.
+- `aura-chat-page.tsx:672` — pedido de organizar rotina navega para
+  `/routine-builder`, que redireciona para a Home. `FEATURES.routineBuilder`
+  não é lido em lugar nenhum.
+- `preferences-page.tsx:1104` — toggle de notificação de Hábitos sem gate.
+- Português cru em tela inglesa: painel de alertas da Home (fallback local),
+  `insights-page` (fallback do insight semanal), `journal-page.helpers`.
+- `/contexto` é rota órfã sem nenhum link de entrada e sem estado de erro.
