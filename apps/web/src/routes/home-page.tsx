@@ -48,7 +48,6 @@ import {
   rememberHomeAutonomyActionFeedback,
 } from "./home-page.helpers";
 import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
-import { CapacityNote } from "../components/aura/CapacityNote";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import {
   MessageSquareText,
@@ -1020,17 +1019,31 @@ export function HomePage() {
     if (stagnantGoals.length > 0) {
       alerts.push({
         key: "stagnant-goals",
-        title: stagnantGoals.length === 1 ? "Uma meta está parada" : `${stagnantGoals.length} metas estão paradas`,
+        title: stagnantGoals.length === 1
+          ? l("Uma meta está parada", "One goal is stuck")
+          : l(`${stagnantGoals.length} metas estão paradas`, `${stagnantGoals.length} goals are stuck`),
         description:
           stagnantGoals.length === 1
-            ? `"${stagnantGoals[0].title}" ainda não saiu do lugar, mesmo já tendo próximos passos definidos.`
-            : "Há metas com próximos passos definidos, mas sem avanço real. Talvez seja hora de reduzir o escopo ou destravar a primeira ação.",
+            ? l(
+              `"${stagnantGoals[0].title}" ainda não saiu do lugar, mesmo já tendo próximos passos definidos.`,
+              `"${stagnantGoals[0].title}" has not moved yet, even though its next steps are already defined.`,
+            )
+            : l(
+              "Há metas com próximos passos definidos, mas sem avanço real. Talvez seja hora de reduzir o escopo ou destravar a primeira ação.",
+              "Some goals have next steps defined but no real progress. It may be time to shrink the scope or unblock the first action.",
+            ),
         evidence:
           stagnantGoals.length === 1
-            ? `Base: a meta "${stagnantGoals[0].title}" tem ${stagnantGoals[0].subtasks.length} próxima(s) ação(ões) e progresso 0%.`
-            : `Base: ${stagnantGoals.length} metas ativas têm próximas ações e progresso 0%.`,
+            ? l(
+              `Base: a meta "${stagnantGoals[0].title}" tem ${stagnantGoals[0].subtasks.length} próxima(s) ação(ões) e progresso 0%.`,
+              `Basis: the goal "${stagnantGoals[0].title}" has ${stagnantGoals[0].subtasks.length} next action(s) and 0% progress.`,
+            )
+            : l(
+              `Base: ${stagnantGoals.length} metas ativas têm próximas ações e progresso 0%.`,
+              `Basis: ${stagnantGoals.length} active goals have next actions and 0% progress.`,
+            ),
         tone: "warning",
-        actionLabel: "Ver metas",
+        actionLabel: l("Ver metas", "See goals"),
         actionPath: "/goals",
       });
     }
@@ -1042,18 +1055,39 @@ export function HomePage() {
       alerts.push({
         key: "mood-risk",
         title: sustainedLow
-          ? `Seu padrão pessoal entrou em ${currentPhaseLabel.toLowerCase()} há ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "dias" : "dia"}`
+          ? l(
+            `Seu padrão pessoal entrou em ${currentPhaseLabel.toLowerCase()} há ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "dias" : "dia"}`,
+            `Your personal pattern has been in ${currentPhaseLabel.toLowerCase()} for ${cycleReport.daysInPhase} ${cycleReport.daysInPhase !== 1 ? "days" : "day"}`,
+          )
           : rapidDrop
-            ? `Desvio brusco do seu padrão pessoal — fase ${currentPhaseLabel}`
-            : `Estabilidade baixa — fase ${currentPhaseLabel}`,
+            ? l(
+              `Desvio brusco do seu padrão pessoal — fase ${currentPhaseLabel}`,
+              `Sharp deviation from your personal pattern — ${currentPhaseLabel} phase`,
+            )
+            : l(
+              `Estabilidade baixa — fase ${currentPhaseLabel}`,
+              `Low stability — ${currentPhaseLabel} phase`,
+            ),
         description: sustainedLow
-          ? "O EWMA individual ficou abaixo do baseline pessoal por vários registros. Vale registrar isso no diário e diminuir a carga de hoje."
+          ? l(
+            "O EWMA individual ficou abaixo do baseline pessoal por vários registros. Vale registrar isso no diário e diminuir a carga de hoje.",
+            "Your individual EWMA stayed below your personal baseline across several entries. Worth writing it down in the journal and lightening today's load.",
+          )
           : rapidDrop
-            ? "A mudança nas últimas 48h saiu da sua linha de base. Proteja energia e leia com mais cuidado o que está pesando agora."
-            : "Seu padrão entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
-        evidence: `Base: baseline pessoal ${cycleReport.baselineComposite.toFixed(1)}/10, EWMA atual ${cycleReport.currentComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}/100 e sinal(is): ${cycleReport.warningFlags.join(", ") || "estabilidade baixa"}.`,
+            ? l(
+              "A mudança nas últimas 48h saiu da sua linha de base. Proteja energia e leia com mais cuidado o que está pesando agora.",
+              "The change over the last 48h left your baseline. Protect your energy and look more closely at what is weighing on you now.",
+            )
+            : l(
+              "Seu padrão entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
+              "Your pattern entered a watch zone. The sooner you reduce friction, the smaller the chance it drags down the rest of the week.",
+            ),
+        evidence: l(
+          `Base: baseline pessoal ${cycleReport.baselineComposite.toFixed(1)}/10, EWMA atual ${cycleReport.currentComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}/100 e sinal(is): ${cycleReport.warningFlags.join(", ") || "estabilidade baixa"}.`,
+          `Basis: personal baseline ${cycleReport.baselineComposite.toFixed(1)}/10, current EWMA ${cycleReport.currentComposite.toFixed(1)}/10, stability ${cycleReport.stabilityScore}/100, and signal(s): ${cycleReport.warningFlags.join(", ") || "low stability"}.`,
+        ),
         tone: sustainedLow || cycleReport.stabilityScore <= 30 ? "critical" : "warning",
-        actionLabel: "Abrir meu diário",
+        actionLabel: l("Abrir meu diário", "Open my journal"),
         actionPath: "/journal",
       });
     }
@@ -1068,6 +1102,10 @@ export function HomePage() {
     cycleReport.stabilityScore,
     cycleReport.trend7d,
     cycleReport.warningFlags,
+    // `l` muda de identidade a cada render, então entra aqui de propósito: sem
+    // ele o painel ficava preso no idioma que estava valendo quando o memo
+    // rodou pela primeira vez, mesmo depois de trocar o idioma em Preferências.
+    l,
     state.goals,
     state.tasks,
   ]);
@@ -1139,15 +1177,11 @@ export function HomePage() {
       <div className="screen-content" style={{ position: "relative", zIndex: 1 }}>
         <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="home" />
 
-        {/* Mesma frase de capacidade do resultado do check-in, vinda do mesmo
-            envelope. Duas telas escrevendo a própria versão de "quanto cabe
-            hoje" é como a decisão volta para o colo de quem usa o app. */}
-        <CapacityNote
-          capacity={canonicalReading?.capacity}
-          decisionId={canonicalReading?.decision?.id ?? null}
-          surface="home"
-          onCorrected={() => { void reloadCanonicalReading(); }}
-        />
+        {/* A caixa "O que cabe hoje" mora só no resultado do check-in.
+            Aqui ela errava o lugar: a Home responde "o que eu faço agora", e uma
+            caixa de explicação acima da ação empurra a ação para baixo e compete
+            com ela. A coerência entre as telas continua garantida pelo envelope
+            — quem calcula é o mesmo servidor —, só deixa de ser dita duas vezes. */}
 
         {/* Header com relógio */}
         <div className="home-header" style={{ position: "relative", paddingBottom: "18px" }}>

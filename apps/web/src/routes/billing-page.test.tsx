@@ -128,6 +128,41 @@ describe("BillingPage", () => {
     await act(async () => root.unmount());
   });
 
+  it("explains that purchase is unavailable instead of showing an empty screen", async () => {
+    mocks.get.mockResolvedValue({ ...freeSummary, offers: [] });
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    expect(host.textContent).toContain("A compra da Airia Pro está indisponível agora");
+    expect(host.textContent).toContain("Seu acesso atual continua valendo");
+    expect(host.textContent).toContain("Verificar de novo");
+    await act(async () => root.unmount());
+  });
+
+  it("never renders a disabled purchase button when checkout is not configured", async () => {
+    mocks.get.mockResolvedValue({ ...freeSummary, checkoutAvailable: false });
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    expect([...host.querySelectorAll("button")].filter((button) => button.disabled)).toHaveLength(0);
+    expect(host.textContent).not.toContain("Escolher este plano");
+    expect(host.textContent).toContain("A compra da Airia Pro está indisponível agora");
+    await act(async () => root.unmount());
+  });
+
+  it("does not promise Planner or Habits, which are switched off", async () => {
+    mocks.get.mockResolvedValue(freeSummary);
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<MemoryRouter><BillingPage /></MemoryRouter>));
+    await act(async () => { await Promise.resolve(); });
+    expect(host.textContent).toContain("Escolher este plano");
+    expect(host.textContent).not.toMatch(/Planner|Hábitos/);
+    await act(async () => root.unmount());
+  });
+
   it("keeps checkout pending until server verification confirms ownership and payment", async () => {
     window.history.replaceState({}, "", "/billing?session_id=cs_paid");
     let resolveVerification!: (value: any) => void;

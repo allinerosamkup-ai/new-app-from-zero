@@ -410,12 +410,24 @@ export function InsightsPage() {
     } catch (error) {
       console.warn("[insights] weekly AI failed, using local fallback.", error);
       const localAction = cycleReport.phase === "depleted" || cycleReport.phase === "low"
-        ? "Escolha uma tarefa leve e proteja o sono hoje."
+        ? l(
+          "Escolha uma tarefa leve e proteja o sono hoje.",
+          "Pick one light task and protect your sleep today.",
+        )
         : cycleReport.phase === "elevated" || cycleReport.phase === "mixed"
-          ? "Reduza estímulos e escolha uma decisão antes de abrir outra frente."
-          : "Escolha uma ação concreta que mantenha o ritmo sem esticar o dia.";
+          ? l(
+            "Reduza estímulos e escolha uma decisão antes de abrir outra frente.",
+            "Lower the stimulation and settle one decision before opening another front.",
+          )
+          : l(
+            "Escolha uma ação concreta que mantenha o ritmo sem esticar o dia.",
+            "Pick one concrete action that keeps the pace without stretching the day.",
+          );
       const fallbackInsight: AiInsight = {
-        insight: `Pelo histórico de ${periodDays} dias, sua leitura atual combina fase ${currentPhaseLabel.toLowerCase()}, baseline pessoal de ${cycleReport.baselineComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
+        insight: l(
+          `Pelo histórico de ${periodDays} dias, sua leitura atual combina fase ${currentPhaseLabel.toLowerCase()}, baseline pessoal de ${cycleReport.baselineComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
+          `Across ${periodDays} days of history, your current reading combines the ${currentPhaseLabel.toLowerCase()} phase, a personal baseline of ${cycleReport.baselineComposite.toFixed(1)}/10, ${cycleReport.stabilityScore}% stability, and an average mood of ${avgHumor}.`,
+        ),
         action: localAction,
         category: "rotina",
         actionTitle: localAction.slice(0, 40),
@@ -426,11 +438,23 @@ export function InsightsPage() {
         checkins: history.length,
         source: "local_fallback",
       }));
-      setWeeklyQuestion("Qual pequeno ajuste de hoje impediria que esse padrão se repetisse amanhã?");
+      setWeeklyQuestion(l(
+        "Qual pequeno ajuste de hoje impediria que esse padrão se repetisse amanhã?",
+        "Which small adjustment today would keep this pattern from repeating tomorrow?",
+      ));
       setHighlights([
-        `${history.length} registros no período selecionado`,
-        `Humor médio ${avgHumor} · energia média ${avgEnergia}`,
-        `Fase atual: ${currentPhaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
+        l(
+          `${history.length} registros no período selecionado`,
+          `${history.length} entries in the selected period`,
+        ),
+        l(
+          `Humor médio ${avgHumor} · energia média ${avgEnergia}`,
+          `Average mood ${avgHumor} · average energy ${avgEnergia}`,
+        ),
+        l(
+          `Fase atual: ${currentPhaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
+          `Current phase: ${currentPhaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
+        ),
       ]);
       setInsightPhase("done");
       trackEvent("weekly_report_generated", {
@@ -669,14 +693,26 @@ export function InsightsPage() {
           <div style={{ marginBottom: 16 }}>
             <SmartEmptyState
               icon={BarChart3}
-              title="Seus padroes aparecem com repeticao"
-              description={`Voce tem ${history.length} check-in${history.length === 1 ? "" : "s"}. Com 3 check-ins, a Airia ja começa a mostrar leitura mais util de humor e energia.`}
-              ctaLabel="Fazer check-in"
+              title={l("Seus padrões aparecem com repetição", "Your patterns show up through repetition")}
+              description={l(
+                `Você tem ${history.length} check-in${history.length === 1 ? "" : "s"}. Com 3 check-ins, a Airia já começa a mostrar leitura mais útil de humor e energia.`,
+                `You have ${history.length} check-in${history.length === 1 ? "" : "s"}. At 3 check-ins, Airia already starts showing a more useful reading of mood and energy.`,
+              )}
+              ctaLabel={l("Fazer check-in", "Do a check-in")}
               route="/checkin"
               examples={[
-                { title: "Depois de 3 check-ins", description: "Aparecem medias simples e comparacao inicial." },
-                { title: "Depois de 7 check-ins", description: "A leitura de fase fica mais confiavel." },
-                { title: "Depois de 30 dias", description: "Insights semanais ficam bem mais precisos." },
+                {
+                  title: l("Depois de 3 check-ins", "After 3 check-ins"),
+                  description: l("Aparecem médias simples e comparação inicial.", "Simple averages and a first comparison appear."),
+                },
+                {
+                  title: l("Depois de 7 check-ins", "After 7 check-ins"),
+                  description: l("A leitura de fase fica mais confiável.", "The phase reading becomes more reliable."),
+                },
+                {
+                  title: l("Depois de 30 dias", "After 30 days"),
+                  description: l("Insights semanais ficam bem mais precisos.", "Weekly insights get considerably more precise."),
+                },
               ]}
             />
           </div>

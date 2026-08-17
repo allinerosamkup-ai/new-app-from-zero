@@ -2800,8 +2800,33 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
  * A animação estava declarada aqui desde sempre e nunca teve efeito: com
  * `display: contents` o elemento não gera caixa, e sem caixa não há onde aplicar
  * `opacity` nem `transform`. Trocando por um item flex que repassa o layout do
- * `.app-viewport` (também flex-column), a caixa existe e a transição roda — sem
- * mexer na rolagem das páginas nem na barra inferior.
+ * `.app-viewport` (também flex-column), a caixa existe e a transição roda.
+ *
+ * ATENÇÃO — NÃO reintroduza `transform` (nem `translate`, `scale`, `rotate`,
+ * `perspective`, `filter`, `backdrop-filter`, `will-change: transform` ou
+ * `contain: paint`) aqui. Quando a caixa passou a existir, ela levou junto um
+ * efeito colateral que ninguém procurou: elemento com `transform` diferente de
+ * `none` vira **containing block de todo `position: fixed` descendente**. E
+ * `animation-fill-mode: both` mantinha o `translateY(0)` do último keyframe
+ * aplicado para sempre — `translateY(0)` continua sendo um transform.
+ *
+ * O preço foi a barra de navegação inferior (`.airia-bottom-nav`, `position:
+ * fixed; bottom: calc(16px + ...)`), que é descendente daqui pela cadeia
+ * `App.tsx` → `.page-transition` → `Routes` → `AuraLayout`. Em vez de ancorar na
+ * viewport, ela ancorava no fim do container: medido em 375x812 com `scrollY`
+ * em 0, o rodapé da barra caía **977px abaixo do fim da tela** — só aparecia
+ * para quem rolasse a página inteira até o fim. Vale para qualquer `fixed`
+ * renderizado dentro de uma página (folha, modal, toast), não só para a barra.
+ *
+ * Por isso a entrada é **só opacidade**. As alternativas foram consideradas e
+ * rejeitadas:
+ * - mover o `translateY` para um wrapper interno: o único container que exclui a
+ *   barra é o `.aura-layout-content`, que é justamente onde as folhas e modais
+ *   `fixed` das páginas renderizam — trocaria o bug de vítima;
+ * - trocar `both` por `forwards`/nada: conserta o estado final, mas durante os
+ *   0.26s o transform existe, e como `.page-transition` remonta a cada navegação
+ *   (`key={location.pathname}`), a barra saltaria a cada troca de tela.
+ * Fade puro roda no compositor, não custa layout e fecha a classe inteira do bug.
  */
 .page-transition {
   animation: page-enter 0.26s cubic-bezier(.16, 1, .3, 1) both;
@@ -2811,8 +2836,8 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   min-height: 0;
 }
 @keyframes page-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes auraFadeIn {

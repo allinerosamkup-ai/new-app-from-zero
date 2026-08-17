@@ -30,7 +30,7 @@ import { LearningContextService } from './services/learning-context.service';
 import { HabitCreateSchema, HabitPatchSchema } from './contracts/habit.contract';
 import { JournalExternalMessageSchema, JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
 import { EventLogCreateSchema } from './contracts/event-log.contract';
-import { OnboardingProcessSchema, tracksMenstrualCycle, type BiologicalSex } from './contracts/onboarding.contract';
+import { BiologicalSexSchema, OnboardingProcessSchema, PriorDiagnosisSchema, tracksMenstrualCycle, type BiologicalSex } from './contracts/onboarding.contract';
 import {
   ProfessionalApplicationSchema,
   ProfessionalVerificationSchema,
@@ -153,6 +153,8 @@ import {
 import { DailyPrioritiesService } from './services/daily-priorities.service';
 import { ObjectiveRevisionRelevanceService } from './services/objective-revision-relevance.service';
 import { capacityBasisSummary, inferCapacity, toGoalCapacity } from './lib/capacity';
+import { splitFactors } from './lib/checkin-factors';
+import { filterStatementsForGoal } from './lib/context-domain';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
   AuraCommandMessageStreamSchema,
@@ -2022,8 +2024,20 @@ export function buildGoalIntelligenceInput(input: {
     ?? '',
   ).trim();
 
-  // Só fala da pessoa. Nota de check-in, diário e o que ela pediu à Airia.
-  const userStatements = [
+  /**
+   * Só fala da pessoa — e só a que tem relação com ESTE objetivo.
+   *
+   * Antes, tudo entrava: nota do check-in, trecho do diário e conversa com a
+   * Airia iam juntos para o prompt, e o modelo era convidado a achar sentido em
+   * qualquer par. Foi assim que um desabafo sobre uma conversa com a tia virou
+   * explicação para um objetivo de desenvolver um aplicativo — dois assuntos
+   * sem nada em comum além de terem acontecido no mesmo dia.
+   *
+   * `filterStatementsForGoal` exige evidência de mesmo contexto antes de
+   * deixar passar. O que não tem evidência fica de fora — porque a pessoa é uma
+   * pessoa, não um único assunto.
+   */
+  const rawStatements = [
     typeof context.note === 'string' ? context.note : '',
     typeof context.checkinNote === 'string' ? context.checkinNote : '',
     typeof context.nota === 'string' ? context.nota : '',
@@ -2031,6 +2045,16 @@ export function buildGoalIntelligenceInput(input: {
     typeof context.message === 'string' ? context.message : '',
     ...stringList(context.userStatements, 6),
   ].map((line) => line.trim()).filter(Boolean).slice(0, 8);
+
+  const { relevant: userStatements, excluded: excludedStatements } = goalTitle
+    ? filterStatementsForGoal(rawStatements, goalTitle)
+    : { relevant: rawStatements, excluded: [] as Array<{ statement: string; reason: string }> };
+
+  if (excludedStatements.length > 0) {
+    // Registro, não silêncio: "a Airia ignorou meu diário" precisa ser uma
+    // decisão consultável, não um mistério.
+    console.info('[goal-intelligence] contexto separado por domínio:', excludedStatements.map((item) => item.reason));
+  }
 
   return {
     goalTitle,
@@ -2932,6 +2956,55 @@ export function createApp(dependencies: AppDependencies = {}) {
       }
       console.error('[onboarding/operational-profile] Error:', error);
       return res.status(500).json({ error: 'Failed to save operational profile' });
+    }
+  });
+
+  /**
+   * POST /api/onboarding/profile-traits
+   *
+   * Grava os três traços permanentes que decidem QUAIS perguntas o app faz
+   * depois: sexo biológico, uso de medicação contínua e diagnósticos prévios.
+   *
+   * As três colunas existem desde sempre em `OnboardingResponse` — e eram
+   * `NULL` em 100% das contas, porque a única tela que as coletava
+   * (`onboarding-preferences-page`) ficou atrás de um redirect para `/comecar`,
+   * e `/comecar` não perguntava. O efeito era visível: como a regra é
+   * "`null` = mostra", o bloco de ciclo menstrual aparecia para homens, a
+   * pergunta de medicação era feita a quem não toma remédio, e o modo TDAH que
+   * o prompt sabe ativar nunca ligava.
+   *
+   * Endpoint irmão de `/operational-profile` de propósito: mesmo dono, mesma
+   * tabela, mesmo upsert. Zero migração.
+   */
+  const ProfileTraitsSchema = z.object({
+    biologicalSex: BiologicalSexSchema.nullable().optional(),
+    medicationCurrentlyUsing: z.boolean().nullable().optional(),
+    priorDiagnoses: z.array(PriorDiagnosisSchema).max(5).optional(),
+  });
+
+  app.post('/api/onboarding/profile-traits', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const traits = ProfileTraitsSchema.parse(req.body);
+      // Campo ausente não apaga o que já existe: o fluxo pode gravar em partes,
+      // e sobrescrever com `null` perderia resposta que a pessoa já deu.
+      const data: Record<string, unknown> = {};
+      if (traits.biologicalSex !== undefined) data.biologicalSex = traits.biologicalSex;
+      if (traits.medicationCurrentlyUsing !== undefined) data.medicationCurrentlyUsing = traits.medicationCurrentlyUsing;
+      if (traits.priorDiagnoses !== undefined) data.priorDiagnoses = traits.priorDiagnoses;
+
+      await prisma.onboardingResponse.upsert({
+        where: { userId },
+        update: data as any,
+        create: { userId, ...(data as any) },
+      });
+      return res.json({ saved: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      console.error('[onboarding/profile-traits] Error:', error);
+      return res.status(500).json({ error: 'Failed to save profile traits' });
     }
   });
 
@@ -5179,7 +5252,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         // para um campo somaria uma requisição em cada tela.
         prisma.onboardingResponse.findUnique({
           where: { userId },
-          select: { biologicalSex: true },
+          select: { biologicalSex: true, medicationCurrentlyUsing: true },
         }).catch(() => null),
       ]);
       const biologicalSex = (onboarding?.biologicalSex as BiologicalSex | null | undefined) ?? null;
@@ -5193,6 +5266,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         fullName: profile?.fullName ?? null,
         biologicalSex,
         tracksMenstrualCycle: tracksMenstrualCycle(biologicalSex),
+        // Mesma lógica do gate menstrual: quem nunca respondeu (`null`) continua
+        // vendo a pergunta diária de medicação, porque esconder um campo por
+        // causa de uma pergunta que a pessoa nunca viu é sumir com dado sem avisar.
+        medicationCurrentlyUsing: onboarding?.medicationCurrentlyUsing ?? null,
       });
     } catch (error: any) {
       console.error('[preferences/get] Error:', error);
@@ -6730,43 +6807,29 @@ JSON APENAS:
         const dtLocalDate = context.localDate ? ` (${context.localDate})` : '';
 
         // Fatores e emoções do check-in de hoje
-        const FACTOR_LABELS: Record<string, string> = {
-          good_sleep: 'Sono bom', exercise: 'Exercício', healthy_meal: 'Alimentação saudável',
-          fresh_air: 'Ar fresco', good_talk: 'Boa conversa', kind_words: 'Palavras gentis',
-          support: 'Apoio recebido', small_win: 'Pequena vitória', finished_task: 'Tarefa concluída',
-          feeling_valued: 'Me senti valorizada', music: 'Música', time_outside: 'Tempo ao ar livre',
-          hobby: 'Hobby', self_trust: 'Confiança em mim', rest: 'Descanso',
-          stuck: 'Travada/o', relationship_conflict: 'Briga no relacionamento',
-          overwhelmed: 'Sobrecarga mental', loneliness: 'Solidão', bad_sleep: 'Sono ruim',
-          work_pressure: 'Pressão no trabalho', financial_stress: 'Estresse financeiro', bad_news: 'Má notícia',
-        };
-        const NEGATIVE_IDS = new Set(['stuck','relationship_conflict','overwhelmed','loneliness','bad_sleep','work_pressure','financial_stress','bad_news']);
         const EMOTION_LABELS: Record<string, string> = {
           radiant: 'Radiante', calm: 'Calma', happy: 'Feliz', anxious: 'Ansiosa',
           tired: 'Cansada', focused: 'Focada', sad: 'Triste', angry: 'Irritada',
           stressed: 'Estressada', sensitive: 'Sensível', exhausted: 'Exausta', agitated: 'Agitada',
         };
 
-        const allFactors = (context.factors as string[] | undefined) || [];
-        const negFactors = allFactors.filter(id => NEGATIVE_IDS.has(id));
-        const posFactors = allFactors.filter(id => !NEGATIVE_IDS.has(id));
+        // Rótulo e valência vêm de `lib/checkin-factors.ts`. O mapa que vivia
+        // aqui não conhecia 13 dos fatores da tela e os classificava como
+        // positivos — "Esqueci a medicação" virava FATOR QUE AJUDOU.
+        const { helped: posFactors, weighed: negFactors } = splitFactors((context.factors as string[] | undefined) || []);
         const emotions = (context.emotions as string[] | undefined) || [];
 
         const emotionCtx = emotions.length > 0
           ? `\nEMOÇÕES RELATADAS: ${emotions.map(id => EMOTION_LABELS[id] ?? id).join(', ')}`
           : '';
-        const negCtx = negFactors.length > 0
-          ? `\nFATORES QUE PESARAM HOJE: ${negFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}`
-          : '';
-        const posCtx = posFactors.length > 0
-          ? `\nFATORES QUE AJUDARAM HOJE: ${posFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}`
-          : '';
+        const negCtx = negFactors.length > 0 ? `\nFATORES QUE PESARAM HOJE: ${negFactors.join(', ')}` : '';
+        const posCtx = posFactors.length > 0 ? `\nFATORES QUE AJUDARAM HOJE: ${posFactors.join(', ')}` : '';
 
         const negRule = negFactors.length > 0
-          ? `\n8. FATORES NEGATIVOS presentes (${negFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}): pelo menos 1 tarefa deve endereçar diretamente um desses fatores com ação específica de alívio (ex: "Briga no relacionamento" → "Escrever como você se sente sobre a situação, 10 min"; "Sobrecarga mental" → "Listar no papel as 3 coisas que mais pesam agora, 5 min"; "Sono ruim" → "Deitar sem tela por 20 min às [hora]").`
+          ? `\n8. FATORES NEGATIVOS presentes (${negFactors.join(', ')}): pelo menos 1 tarefa deve endereçar diretamente um desses fatores com ação específica de alívio (ex: "Conflito no relacionamento" → "Escrever como você se sente sobre a situação, 10 min"; "Sobrecarga mental" → "Listar no papel as 3 coisas que mais pesam agora, 5 min"; "Dormi pouco (<6h)" → "Deitar sem tela por 20 min às [hora]").`
           : '';
         const posRule = posFactors.length > 0
-          ? `\n${negFactors.length > 0 ? '9' : '8'}. FATORES POSITIVOS presentes (${posFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}): potencialize ao menos um desses elementos em uma tarefa.`
+          ? `\n${negFactors.length > 0 ? '9' : '8'}. FATORES POSITIVOS presentes (${posFactors.join(', ')}): potencialize ao menos um desses elementos em uma tarefa.`
           : '';
 
         prompt = `Gere 3 tarefas para HOJE — TOTALMENTE personalizadas para ${userName}.
@@ -6978,16 +7041,6 @@ Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta
           tired: 'Cansada', focused: 'Focada', sad: 'Triste', angry: 'Irritada',
           stressed: 'Estressada', sensitive: 'Sensível', exhausted: 'Exausta', agitated: 'Agitada',
         };
-        const FACTOR_LABELS: Record<string, string> = {
-          good_sleep: 'Sono bom', exercise: 'Exercício', healthy_meal: 'Alimentação saudável',
-          fresh_air: 'Ar fresco', good_talk: 'Boa conversa', kind_words: 'Palavras gentis',
-          support: 'Apoio recebido', small_win: 'Pequena vitória', finished_task: 'Tarefa concluída',
-          feeling_valued: 'Me senti valorizada', music: 'Música', time_outside: 'Tempo ao ar livre',
-          hobby: 'Hobby', self_trust: 'Confiança em mim', rest: 'Descanso',
-          stuck: 'Travada/o', relationship_conflict: 'Briga no relacionamento',
-          overwhelmed: 'Sobrecarga mental', loneliness: 'Solidão', bad_sleep: 'Sono ruim',
-          work_pressure: 'Pressão no trabalho', financial_stress: 'Estresse financeiro', bad_news: 'Má notícia',
-        };
         const emotions = (context.emotions as string[] | undefined) || [];
         const factors = (context.factors as string[] | undefined) || [];
         const currentEnergy = Number.isFinite(Number(context.energia)) ? Number(context.energia) : null;
@@ -6999,9 +7052,14 @@ Retorne SOMENTE um array JSON de strings: ["Meta específica 1", "Meta 2", "Meta
         const emotionsCtx = emotions.length > 0
           ? `- Emoções do check-in atual: ${emotions.map((id) => EMOTION_LABELS[id] ?? id).join(', ')}`
           : '';
-        const factorsCtx = factors.length > 0
-          ? `- Fatores do check-in atual: ${factors.map((id) => FACTOR_LABELS[id] ?? id).join(', ')}`
-          : '';
+        // Fatores separados por valência, não numa lista plana: "Esqueci a
+        // medicação" e "Dormi bem" no mesmo enunciado fazem o modelo tratar os
+        // dois como contexto neutro.
+        const { helped: helpedFactors, weighed: weighedFactors } = splitFactors(factors);
+        const factorsCtx = [
+          weighedFactors.length > 0 ? `- Pesou no check-in atual: ${weighedFactors.join(', ')}` : '',
+          helpedFactors.length > 0 ? `- Ajudou no check-in atual: ${helpedFactors.join(', ')}` : '',
+        ].filter(Boolean).join('\n');
         const checkinScoresCtx = checkinHumor != null || checkinEnergy != null || sleepScore != null || bodyScore != null
           ? `- Check-in atual em números: ${[
               checkinHumor != null ? `humor ${checkinHumor}/10` : null,

@@ -662,12 +662,27 @@ export function AuraChatPage() {
     });
   }
 
-  function handleNavigationAction(response: AuraCommandResponse) {
-    if (response.action !== "start_routine_builder") return;
+  /**
+   * Devolve a mensagem que a Airia responde no chat, ou `null` quando navegou.
+   *
+   * Enquanto `FEATURES.routineBuilder` estiver desligado, o pedido de montar
+   * rotina não pode virar navegação: `/routine-builder` redireciona para a home
+   * e `/comecar` joga a pessoa num onboarding de 22 telas. Nos dois casos o
+   * pedido evapora sem resposta. Mesmo tratamento de `planner` e `habits`
+   * acima: responder na conversa, sem sair do lugar.
+   */
+  function handleNavigationAction(response: AuraCommandResponse): string | null {
+    if (response.action !== "start_routine_builder") return null;
+    if (!FEATURES.routineBuilder) {
+      return l(
+        "Montar rotina está desativado nesta versão. Me conte o que precisa acontecer que eu transformo em Objetivo com o próximo passo já definido, sem te mandar para outra tela.",
+        "The routine builder is disabled in this version. Tell me what needs to happen and I will turn it into a Goal with the next step already defined, without sending you to another screen.",
+      );
+    }
     const sourceText = typeof response.payload.sourceText === "string" ? response.payload.sourceText : "";
     if (!hasSubstantiveRoutineSource(sourceText)) {
       navigate("/comecar");
-      return;
+      return null;
     }
     navigate("/routine-builder", {
       state: {
@@ -677,6 +692,7 @@ export function AuraChatPage() {
           : t("routineBuilder.defaultFocus", { defaultValue: "Organizar minha rotina" }),
       },
     });
+    return null;
   }
 
   async function send(text: string) {
@@ -821,7 +837,8 @@ export function AuraChatPage() {
       ]);
       let executionFollowUp: string | null = null;
       for (const step of steps) {
-        handleNavigationAction(step);
+        const navigationFollowUp = handleNavigationAction(step);
+        if (navigationFollowUp && !executionFollowUp) executionFollowUp = navigationFollowUp;
         if (completedPlan && planManagedActions.has(step.action)) continue;
         const followUp = await executeAuraAction(step);
         if (followUp && !executionFollowUp) executionFollowUp = followUp;

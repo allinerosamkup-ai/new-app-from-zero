@@ -286,6 +286,16 @@ export function CheckinPage() {
   const navigate = useNavigate();
   const { state, setMood, addCheckin } = useAuraStore();
   const showMenstrualBlock = tracksMenstrualCycle(state.biologicalSex);
+  /**
+   * Pergunta de medicação só para quem declarou usar.
+   *
+   * Antes ela era feita a todo mundo, todo dia, e o campo não tinha nenhum
+   * leitor no backend — pergunta cara para quem não toma remédio e inútil para
+   * quem toma. `null` (nunca respondeu) mantém visível, mesma regra do bloco
+   * menstrual: sumir com um campo por causa de uma pergunta que a pessoa nunca
+   * viu seria perder dado em silêncio.
+   */
+  const showMedicationQuestion = state.medicationCurrentlyUsing !== false;
   // Português flexiona adjetivo por gênero: "cansada" e "cansado" são a mesma
   // emoção. O app já sabe a resposta do onboarding, então escreve a palavra
   // certa em vez de recorrer a "cansado(a)".
@@ -674,9 +684,11 @@ export function CheckinPage() {
             </div>
             )}
 
-            <div>
-              <BooleanChoice value={medicationTakenToday} onChange={setMedicationTakenToday} legend={l("Tomou a medicação hoje?", "Did you take medication today?")} group="medication-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
-            </div>
+            {showMedicationQuestion && (
+              <div>
+                <BooleanChoice value={medicationTakenToday} onChange={setMedicationTakenToday} legend={l("Tomou a medicação hoje?", "Did you take medication today?")} group="medication-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
+              </div>
+            )}
             <ScoreSlider label={l("Foco", "Focus")} value={focusScore} onChange={setFocusScore} emptyHint={l("arraste", "drag")} />
             <div>
               <BooleanChoice value={hyperfocusOccurred} onChange={setHyperfocusOccurred} legend={l("Teve hiperfoco?", "Did hyperfocus occur?")} group="hyperfocus-status" yes={l("Sim", "Yes")} no={l("Não", "No")} />
@@ -692,13 +704,34 @@ export function CheckinPage() {
               </div>
               {dayType === "mixed" && <input value={mixedEpisodeNote} onChange={(event) => setMixedEpisodeNote(event.target.value)} maxLength={500} placeholder={t("checkin.mixedPlaceholder")} style={{ width: "100%", boxSizing: "border-box", marginTop: 8, padding: 11, borderRadius: 10, border: "1.5px solid var(--warm-border-2)" }} />}
             </fieldset>
-            <div>
-              <label htmlFor="checkin-note" style={{ display: "block", margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>
-                {l("Nota livre", "Free note")}
-              </label>
-              <textarea id="checkin-note" value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={5000} placeholder={t("checkin.notePlaceholder")} style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12, border: "1.5px solid var(--warm-border-2)", resize: "vertical" }} />
-            </div>
           </div>
+        </Section>
+
+        {/* ── A nota sai de dentro dos detalhes recolhidos ──
+            De todos os campos da tela, este é o que o servidor trata com mais
+            peso: `checkin.service.ts` o injeta no prompt marcado como SINAL
+            PRIORITÁRIO — "dê mais peso a isto do que a inferências genéricas dos
+            números" — e é ele que alimenta a busca de memória e a avaliação de
+            risco. Estava enterrado atrás de um toggle fechado por padrão, junto
+            com onze campos opcionais, o que é o oposto do peso que ele tem.
+            Números dizem o tamanho do dia; a frase diz o que aconteceu nele. ── */}
+        <Section
+          section="note"
+          title={l("Quer contar o que aconteceu?", "Want to say what happened?")}
+          subtitle={l("Opcional, e é o que mais me ajuda a entender o seu dia.", "Optional, and it's what helps me understand your day the most.")}
+        >
+          <label htmlFor="checkin-note" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" }}>
+            {l("Nota livre", "Free note")}
+          </label>
+          <textarea
+            id="checkin-note"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={3}
+            maxLength={5000}
+            placeholder={t("checkin.notePlaceholder")}
+            style={{ width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12, border: "1.5px solid var(--warm-border-2)", resize: "vertical" }}
+          />
         </Section>
 
         {submitError && <p role="alert" aria-live="assertive" style={{ color: "#A24B43", fontSize: 13, lineHeight: 1.5 }}>{submitError}</p>}

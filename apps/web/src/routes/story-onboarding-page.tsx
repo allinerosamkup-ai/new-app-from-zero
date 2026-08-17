@@ -17,10 +17,13 @@ import {
   BLOCKERS,
   COMMITMENT,
   COMMITMENT_REPLY,
+  BIOLOGICAL_SEX_CHOICES,
+  DIAGNOSIS_CHOICES,
   DRAINS,
   FEELINGS,
   GOAL_SHORTCUTS,
   LIST_PREFERENCE,
+  MEDICATION_CHOICES,
   OPEN_FRONTS,
   READ_ONLY_STEPS,
   RESTORERS,
@@ -49,6 +52,9 @@ const EMPTY: StoryAnswers = {
   drains: [],
   restorers: [],
   listPreference: null,
+  biologicalSex: null,
+  medication: null,
+  diagnoses: [],
 };
 
 /** Teto de objetivos. Ver o comentário em `goalTitles`. */
@@ -350,6 +356,20 @@ export default function StoryOnboardingPage() {
           listPreference: answers.listPreference,
         }));
       } catch { /* perfil é personalização; sem ele o app funciona sem calibragem */ }
+
+      // Os traços permanentes vão numa chamada própria porque respondem outra
+      // pergunta: o perfil operacional diz COMO entregar, estes decidem O QUE
+      // perguntar. "Prefiro não dizer" grava `null` de propósito — é diferente
+      // de "não", e a regra de `null` é manter a pergunta diária visível.
+      try {
+        await comPrazo(api.post("/onboarding/profile-traits", {
+          biologicalSex: answers.biologicalSex === "female" || answers.biologicalSex === "male"
+            ? answers.biologicalSex
+            : null,
+          medicationCurrentlyUsing: answers.medication === "yes" ? true : answers.medication === "no" ? false : null,
+          priorDiagnoses: answers.diagnoses,
+        }));
+      } catch { /* mesma política: sem os traços o app pergunta mais, não quebra */ }
       marcar(1);
 
       // Todos os objetivos escolhidos, cada um já com as ações interpretadas: ela
@@ -492,6 +512,71 @@ export default function StoryOnboardingPage() {
             maxLength={40}
             aria-label={l("Seu nome", "Your name")}
           />
+        </>)}
+
+        {/* ── Os dois passos que decidem o que o app pergunta daqui pra frente ──
+            Sexo biológico liga ou desliga o acompanhamento de ciclo; medicação
+            liga ou desliga a pergunta diária de remédio. Sem eles, o app
+            perguntava as duas coisas para todo mundo, todo dia. Três toques
+            aqui apagam centenas de perguntas erradas depois. ── */}
+        {step === "traits" && (<>
+          <p className="story-eyebrow">{l("Pra começar", "To start")}</p>
+          <h1 className="story-title">{l("Duas coisas que mudam o que eu te pergunto", "Two things that change what I ask you")}</h1>
+          <p className="story-body">{l("Respondendo agora, eu paro de perguntar depois.", "Answer now and I stop asking later.")}</p>
+
+          <p className="story-label">{l("Sexo biológico", "Biological sex")}</p>
+          <div className="story-choices cols-2">
+            {BIOLOGICAL_SEX_CHOICES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className="story-choice"
+                aria-pressed={answers.biologicalSex === option.id}
+                onClick={() => { tapHaptic(); setAnswers((c) => ({ ...c, biologicalSex: c.biologicalSex === option.id ? null : option.id })); }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="story-label">{l("Você usa medicação contínua?", "Do you take ongoing medication?")}</p>
+          <div className="story-choices">
+            {MEDICATION_CHOICES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className="story-choice"
+                aria-pressed={answers.medication === option.id}
+                onClick={() => { tapHaptic(); setAnswers((c) => ({ ...c, medication: c.medication === option.id ? null : option.id })); }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </>)}
+
+        {step === "diagnoses" && (<>
+          <p className="story-eyebrow">{l("Só se você quiser", "Only if you want")}</p>
+          <h1 className="story-title">{l("Já recebeu algum destes diagnósticos?", "Have you received any of these diagnoses?")}</h1>
+          <p className="story-body">
+            {l(
+              "Isso muda como eu leio seus dias, não como eu falo com você. Nunca vira rótulo na tela, e dá pra pular.",
+              "This changes how I read your days, not how I talk to you. It never becomes a label on screen, and you can skip it.",
+            )}
+          </p>
+          <div className="story-choices">
+            {DIAGNOSIS_CHOICES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className="story-choice"
+                aria-pressed={answers.diagnoses.includes(option.id)}
+                onClick={() => { tapHaptic(); setAnswers((c) => ({ ...c, diagnoses: toggle(c.diagnoses, option.id) })); }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         </>)}
 
         {step === "feeling" && (<>

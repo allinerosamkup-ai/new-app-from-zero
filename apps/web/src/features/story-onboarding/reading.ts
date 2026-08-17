@@ -31,6 +31,15 @@ export type StoryAnswers = {
   drains: string[];
   restorers: string[];
   listPreference: 'one_at_a_time' | 'whole_picture' | null;
+  /**
+   * Traços permanentes. Não entram na conta nem no espelho — eles não descrevem
+   * como a pessoa chegou, decidem quais perguntas o app faz de amanhã em diante.
+   * `null` significa "não respondeu", e a regra em toda leitura é que não
+   * responder mantém a pergunta visível, nunca esconde dado sem avisar.
+   */
+  biologicalSex: string | null;
+  medication: string | null;
+  diagnoses: string[];
 };
 
 export const BLOCKER_LABEL: Record<BlockerId, string> = {

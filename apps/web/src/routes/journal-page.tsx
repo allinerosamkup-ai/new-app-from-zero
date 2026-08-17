@@ -562,6 +562,7 @@ export function JournalPage() {
     hasSummary: Boolean(finalizationResult?.summary?.text),
     suggestedTaskCount: finalizationResult?.suggestedTasks.length ?? 0,
     commitmentCount: commitmentSuggestions.length,
+    l,
   });
 
   const finalizationModal = showFinalizationModal && finalizationResult ? (

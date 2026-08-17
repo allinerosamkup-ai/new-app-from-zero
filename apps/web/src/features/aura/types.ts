@@ -173,6 +173,13 @@ export type AuraState = {
   lutealLength?: number;
   /** Autorrelato do onboarding. null = ainda não perguntado. */
   biologicalSex: BiologicalSex | null;
+  /**
+   * `true` usa medicação contínua, `false` não usa, `null` nunca respondeu.
+   * Os três estados importam: `null` mantém a pergunta diária visível, pela
+   * mesma regra do gate menstrual — esconder campo por causa de uma pergunta
+   * que a pessoa nunca viu é sumir com dado sem avisar.
+   */
+  medicationCurrentlyUsing: boolean | null;
   habits: Habit[];
   onboardingDone: boolean;
   accountCreatedAt?: string | null;

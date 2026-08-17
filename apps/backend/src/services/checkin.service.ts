@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { buildAuraSystemPrompt, humanizeScore } from '../lib/aura-prompt';
+import { splitFactors } from '../lib/checkin-factors';
 import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './airia-operational-reasoning.service';
 
@@ -229,37 +230,20 @@ export class CheckinService {
     const checkinMoment = data.checkinSlot?.split('-')[0] || 'não informado';
     const currentLocalTime = extractClockFromCheckinSlot(data.checkinSlot);
 
-    const FACTOR_LABELS: Record<string, string> = {
-      good_sleep: 'Sono bom', exercise: 'Exercício', healthy_meal: 'Alimentação saudável',
-      fresh_air: 'Ar fresco', good_talk: 'Boa conversa', kind_words: 'Palavras gentis',
-      support: 'Apoio recebido', small_win: 'Pequena vitória', finished_task: 'Tarefa concluída',
-      feeling_valued: 'Me senti valorizada', music: 'Música', time_outside: 'Tempo ao ar livre',
-      hobby: 'Hobby', self_trust: 'Confiança em mim', rest: 'Descanso',
-      stuck: 'Travada/o', relationship_conflict: 'Briga no relacionamento',
-      overwhelmed: 'Sobrecarga mental', loneliness: 'Solidão', bad_sleep: 'Sono ruim',
-      work_pressure: 'Pressão no trabalho', financial_stress: 'Estresse financeiro', bad_news: 'Má notícia',
-    };
-    const NEGATIVE_IDS = new Set(['stuck','relationship_conflict','overwhelmed','loneliness','bad_sleep','work_pressure','financial_stress','bad_news']);
     const EMOTION_LABELS: Record<string, string> = {
       radiant: 'Radiante', calm: 'Calma', happy: 'Feliz', anxious: 'Ansiosa',
       tired: 'Cansada', focused: 'Focada', sad: 'Triste', angry: 'Irritada',
       stressed: 'Estressada', sensitive: 'Sensível', exhausted: 'Exausta', agitated: 'Agitada',
     };
 
-    const allFactors = data.factors ?? [];
-    const negFactors = allFactors.filter(id => NEGATIVE_IDS.has(id));
-    const posFactors = allFactors.filter(id => !NEGATIVE_IDS.has(id));
+    const { helped, weighed } = splitFactors(data.factors ?? []);
     const emotions = data.emotions ?? [];
 
     const emotionLine = emotions.length > 0
       ? `- Emoções relatadas: ${emotions.map(id => EMOTION_LABELS[id] ?? id).join(', ')}`
       : '';
-    const negLine = negFactors.length > 0
-      ? `- Fatores que pesaram: ${negFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}`
-      : '';
-    const posLine = posFactors.length > 0
-      ? `- Fatores que ajudaram: ${posFactors.map(id => FACTOR_LABELS[id] ?? id).join(', ')}`
-      : '';
+    const negLine = weighed.length > 0 ? `- Fatores que pesaram: ${weighed.join(', ')}` : '';
+    const posLine = helped.length > 0 ? `- Fatores que ajudaram: ${helped.join(', ')}` : '';
     const contextLines = [emotionLine, negLine, posLine].filter(Boolean).join('\n');
     const trimmedNote = data.note?.trim() ?? '';
     const noteLine = trimmedNote

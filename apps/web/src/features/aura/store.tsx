@@ -425,6 +425,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           cycleLength: profile?.cycle_length ?? current.cycleLength,
           lutealLength: profile?.luteal_length ?? current.lutealLength,
           biologicalSex: ((preferences as any)?.biologicalSex ?? current.biologicalSex) as AuraState['biologicalSex'],
+          medicationCurrentlyUsing: ((preferences as any)?.medicationCurrentlyUsing ?? current.medicationCurrentlyUsing) as AuraState['medicationCurrentlyUsing'],
           onboardingDone: profile?.onboarding_done ?? current.onboardingDone,
           ...normalizeReminderPreferences(preferences, {
             morningCheckinTime: current.morningCheckinTime,

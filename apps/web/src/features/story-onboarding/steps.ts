@@ -40,6 +40,41 @@ export const BLOCKERS: Array<Choice & { id: BlockerId }> = [
   { id: 'remember', label: 'Lembrar', hint: 'só volta na cabeça quando já passou' },
 ];
 
+/**
+ * Os três traços permanentes que decidem quais perguntas o app faz depois.
+ *
+ * Eles existiam no banco e eram `NULL` para todo mundo: a tela que os coletava
+ * ficou atrás de um redirect quando o `/comecar` virou o onboarding único. O
+ * preço foi visível — bloco de ciclo menstrual aparecendo para homens, pergunta
+ * de medicação feita a quem não toma remédio, e o modo TDAH nunca ligando.
+ *
+ * Perguntar aqui, uma vez, é o que evita perguntar todo dia para sempre.
+ */
+export const BIOLOGICAL_SEX_CHOICES: Choice[] = [
+  { id: 'female', label: 'Feminino' },
+  { id: 'male', label: 'Masculino' },
+];
+
+export const MEDICATION_CHOICES: Choice[] = [
+  { id: 'yes', label: 'Sim, uso' },
+  { id: 'no', label: 'Não uso' },
+  { id: 'prefer_not', label: 'Prefiro não dizer' },
+];
+
+/**
+ * Autorrelato, não diagnóstico — e a Airia nunca devolve isso como rótulo.
+ * O que muda é a conduta: TDAH declarado liga a leitura de hiperfoco, e as
+ * demais calibram o tom. "Prefiro não dizer" é resposta legítima e não penaliza
+ * nada; por isso a etapa inteira também pode ser pulada.
+ */
+export const DIAGNOSIS_CHOICES: Choice[] = [
+  { id: 'adhd', label: 'TDAH' },
+  { id: 'bipolar_ii', label: 'Bipolaridade tipo II' },
+  { id: 'cyclothymia', label: 'Ciclotimia' },
+  { id: 'cyclical_depression', label: 'Depressão cíclica ou sazonal' },
+  { id: 'prefer_not_to_say', label: 'Prefiro não dizer' },
+];
+
 /** Quantas frentes abertas. Faixas, não número exato — ninguém conta. */
 export const OPEN_FRONTS: Array<Choice & { value: number }> = [
   { id: '1-2', label: '1 ou 2', value: 2 },
@@ -110,6 +145,11 @@ export const STORY_STEPS = [
   'problem',
   'solution',
   'name',
+  // Os três traços vêm logo depois do nome, ainda em "Pra começar": é o que
+  // decide quais perguntas o app faz de hoje em diante, e perguntar depois
+  // significaria já ter perguntado errado por dias.
+  'traits',
+  'diagnoses',
   'feeling',
   'blockers',
   'fronts',

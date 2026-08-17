@@ -205,6 +205,18 @@ export default function BillingPage() {
 
   const paid = subscription.source === "paid";
   const showOffers = subscription.source === "free" || subscription.source === "trial";
+  /**
+   * Comprar depende de duas coisas independentes: existir oferta ligada e o
+   * provedor de pagamento estar configurado no servidor (`checkoutAvailable`).
+   *
+   * Faltando qualquer uma delas, a seção não pode sumir nem virar um botão que
+   * existe e não faz nada. Quem chega aqui vindo do "Ver planos" do onboarding
+   * leria as duas coisas como o mesmo defeito: "o botão não funcionou". O
+   * estado explícito abaixo diz o que houve e que o acesso atual não mudou.
+   */
+  const checkoutReady = enabledOffers.length > 0 && subscription.checkoutAvailable;
+  const showCheckoutUnavailable = showOffers && !checkoutReady
+    && !subscription.loading && !subscription.error;
 
   return (
     <main style={{ minHeight: "100dvh", background: "var(--warm-bg)", paddingBottom: 32 }}>
@@ -268,7 +280,7 @@ export default function BillingPage() {
           </section>
         )}
 
-        {showOffers && enabledOffers.length > 0 && (
+        {showOffers && checkoutReady && (
           <section style={{ padding: 20, borderRadius: 20, background: "rgba(255,253,249,.98)", border: "1.5px solid rgba(134,183,154,.28)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
               <Sparkles size={17} />
@@ -296,15 +308,20 @@ export default function BillingPage() {
               })}
             </div>
 
+            {/*
+              Benefício é o que existe hoje. Planner e Hábitos estão desligados
+              em `config/features.ts`, então anunciá-los aqui seria vender tela
+              que ninguém consegue abrir.
+            */}
             <div style={{ display: "grid", gap: 7, margin: "18px 0" }}>
               {[
-                l("Airia, Planner e Check-in com IA", "AI across Airia, Planner, and Check-in"),
+                l("Airia com IA no check-in, no diário e na conversa", "Airia's AI across check-in, journal, and chat"),
                 l("Memória e padrões de longo prazo", "Long-term memory and patterns"),
-                l("Hábitos e insights avançados", "Advanced habits and insights"),
+                l("Objetivos quebrados em próximos passos concluíveis", "Goals broken into next steps you can finish"),
               ].map((feature) => <span key={feature}><Check size={13} /> {feature}</span>)}
             </div>
 
-            <button type="button" onClick={handleCheckout} disabled={checkoutLoading || !subscription.checkoutAvailable} style={{ width: "100%", minHeight: 50, borderRadius: 999, border: 0, background: "var(--accent-peach)", color: "#fff", fontWeight: 900, cursor: "pointer" }}>
+            <button type="button" onClick={handleCheckout} disabled={checkoutLoading} style={{ width: "100%", minHeight: 50, borderRadius: 999, border: 0, background: "var(--accent-peach)", color: "#fff", fontWeight: 900, cursor: "pointer" }}>
               {checkoutLoading ? l("Abrindo pagamento...", "Opening checkout...") : l("Escolher este plano", "Choose this plan")}
             </button>
             {checkoutError && <p role="alert">{l("Não consegui abrir o pagamento. Tente novamente.", "Checkout could not be opened. Try again.")}</p>}
@@ -313,6 +330,35 @@ export default function BillingPage() {
                 ? l("Uma única cobrança. Sem renovação.", "One charge. No renewal.")
                 : l("Você pode cancelar a renovação quando quiser.", "You can cancel renewal at any time.")}
             </p>
+          </section>
+        )}
+
+        {showCheckoutUnavailable && (
+          <section role="status" style={{ padding: 20, borderRadius: 20, background: "rgba(255,253,249,.98)", border: "1.5px solid rgba(134,183,154,.28)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <Sparkles size={17} />
+              <strong>{l("A compra da Airia Pro está indisponível agora", "Buying Airia Pro is unavailable right now")}</strong>
+            </div>
+            <p style={{ margin: "0 0 8px", color: "var(--text-2)" }}>
+              {l(
+                "Não é o seu cadastro: os planos não estão abertos neste momento, do nosso lado.",
+                "This is not about your account: plans are not open at the moment, on our side.",
+              )}
+            </p>
+            <p style={{ margin: "0 0 14px", color: "var(--text-2)" }}>
+              {subscription.source === "trial" && subscription.trialEndsAt
+                ? l(
+                  `Seu acesso Pro continua valendo até ${new Date(subscription.trialEndsAt).toLocaleDateString("pt-BR")} e nada muda até lá.`,
+                  `Your Pro access remains valid until ${new Date(subscription.trialEndsAt).toLocaleDateString("en-US")} and nothing changes until then.`,
+                )
+                : l(
+                  "Seu acesso atual continua valendo do mesmo jeito — check-in, objetivos, padrões e diário seguem abertos.",
+                  "Your current access keeps working exactly as it is — check-in, goals, patterns, and journal stay open.",
+                )}
+            </p>
+            <button type="button" onClick={subscription.refresh} style={{ width: "100%", minHeight: 48, borderRadius: 999, border: "1px solid var(--warm-border)", background: "#fff", fontWeight: 800, cursor: "pointer" }}>
+              {l("Verificar de novo", "Check again")}
+            </button>
           </section>
         )}
 

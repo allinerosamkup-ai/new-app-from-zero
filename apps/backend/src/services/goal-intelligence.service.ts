@@ -386,8 +386,24 @@ export function buildGoalDecompositionPrompt(input: GoalIntelligenceInput): stri
 
   const said = (input.userStatements ?? []).filter(Boolean);
   const saidBlock = said.length > 0
-    ? `\nO QUE ELA REALMENTE DISSE (fonte atual de maior autoridade):\n${said.map((line) => `- "${line}"`).join('\n')}`
-    : '\nO QUE ELA REALMENTE DISSE: nada além do título do objetivo.';
+    ? `\nO QUE ELA REALMENTE DISSE (fonte atual de maior autoridade; já filtrado para o contexto DESTE objetivo):\n${said.map((line) => `- "${line}"`).join('\n')}`
+    : '\nO QUE ELA REALMENTE DISSE sobre este objetivo: nada além do título.';
+
+  /**
+   * Contenção de alucinação de relação.
+   *
+   * O filtro de domínio já tira do prompt o que não pertence a este objetivo,
+   * mas o modelo ainda pode inventar a ponte a partir do que sobrou. Esta regra
+   * existe porque o caso real foi exatamente esse: um relato familiar virou
+   * causa de um objetivo de trabalho, e a resposta soava plausível.
+   */
+  const separationRule = `
+SEPARAÇÃO DE CONTEXTO (obrigatória):
+- Esta pessoa vive vários assuntos ao mesmo tempo — família, trabalho, saúde, dinheiro, casa, relacionamento. Eles coexistem e NÃO são intercambiáveis.
+- Só relacione duas informações se houver evidência de que pertencem ao mesmo contexto. Acontecer no mesmo dia NÃO é evidência.
+- É PROIBIDO explicar este objetivo por um acontecimento de outro assunto, ou transformar um problema pessoal em objetivo profissional (e vice-versa).
+- É PROIBIDO reescrever o significado do objetivo dela. Você pode decompor, priorizar e propor ações; não pode mudar o que ele é.
+- Você NÃO precisa achar conexão. "Isso não está relacionado a este objetivo" é uma conclusão correta e esperada.`;
 
   const existing = (input.existingActions ?? []).filter(Boolean);
   const existingBlock = existing.length > 0
@@ -431,6 +447,7 @@ export function buildGoalDecompositionPrompt(input: GoalIntelligenceInput): stri
 ${language}
 
 OBJETIVO: "${input.goalTitle}"${saidBlock}${existingBlock}${completedBlock}${blockedBlock}${canonicalBlock}${todayBlock}${capacityBlock}${patternBlock}${profileLines(input.operationalProfile)}
+${separationRule}
 
 RACIOCÍNIO OBRIGATÓRIO, NESTA ORDEM:
 1. O que este objetivo significa? Qual é o resultado final esperado?

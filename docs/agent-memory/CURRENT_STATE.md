@@ -466,14 +466,27 @@ a titular abrir o app logada para essa conferência.
 
 ### Pendências da varredura de rotas, ainda abertas
 
-- `billing-page.tsx:271-317` — sem oferta configurada a tela mostra só "Plano
-  gratuito", sem explicação. Precisa de estado "compra indisponível".
-- `billing-page.tsx:300-302` — o paywall ainda vende Planner e Hábitos, ambos
-  desligados.
-- `aura-chat-page.tsx:672` — pedido de organizar rotina navega para
-  `/routine-builder`, que redireciona para a Home. `FEATURES.routineBuilder`
-  não é lido em lugar nenhum.
 - `preferences-page.tsx:1104` — toggle de notificação de Hábitos sem gate.
-- Português cru em tela inglesa: painel de alertas da Home (fallback local),
-  `insights-page` (fallback do insight semanal), `journal-page.helpers`.
 - `/contexto` é rota órfã sem nenhum link de entrada e sem estado de erro.
+
+### Fechadas em 2026-08-17 (não commitadas)
+
+- **Beco sem saída da tela de planos.** `billing-page.tsx` agora separa
+  `checkoutReady` (oferta ligada **e** `checkoutAvailable`) do resto: sem isso,
+  entra uma seção que diz que a compra está indisponível, que o problema é do
+  nosso lado e que o acesso atual continua valendo. O botão de comprar deixou de
+  nascer desabilitado — ou existe funcionando, ou não existe.
+- **Paywall vendendo o que está desligado.** As três linhas de benefício falam
+  de check-in, diário, Airia, memória/padrões e Objetivos. Planner e Hábitos
+  saíram. Trava: teste que reprova `/Planner|Hábitos/` na tela.
+- **Aura mandando para rota desligada.** `handleNavigationAction` passou a
+  devolver `string | null` e, com `FEATURES.routineBuilder` desligado, responde
+  no próprio chat sem navegar — mesmo padrão de `planner` e `habits`. Era a
+  primeira leitura da chave: ela existia desde a redução de escopo e nunca era
+  consultada.
+- **Português cru em tela inglesa:** painel de alertas da Home (ramo local),
+  fallback do insight semanal e estado vazio de Padrões em `insights-page`, e a
+  copy de fechamento em `journal-page.helpers` (que recebe o localizador por
+  parâmetro para continuar pura). Os acentos quebrados de `insights-page` e do
+  helper foram restaurados: eles passavam pelo audit de i18n **porque** estavam
+  sem acento — a regex do audit procura acento e uma lista curta de palavras.

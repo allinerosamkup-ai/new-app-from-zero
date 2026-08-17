@@ -79,6 +79,16 @@
   color: var(--text-2);
 }
 
+/* Rótulo de subgrupo, para o passo que junta duas perguntas curtas numa tela
+   só. Existe porque dividir "sexo biológico" e "usa medicação" em dois passos
+   separados alongaria o fluxo sem ganhar nada: as duas são de um toque. */
+.story-label {
+  margin: 22px 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-1);
+}
+
 /* ── Entrada de cada tela ──
    O palco inteiro desliza para dentro e os elementos sobem em cascata: sem o
    movimento do palco, trocar de passo parecia troca de texto no mesmo lugar, e

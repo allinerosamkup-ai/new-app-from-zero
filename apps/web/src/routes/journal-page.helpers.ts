@@ -36,34 +36,58 @@ export function buildJournalPlannerSlot(input: {
   };
 }
 
+/**
+ * Copy de fechamento da sessão de diário.
+ *
+ * O localizador chega por parâmetro de propósito: a função é pura e testada
+ * fora do React, e importar a instância do i18n aqui traria o bootstrap inteiro
+ * (detector, catálogos, `localStorage`) para dentro de um cálculo de texto.
+ */
 export function buildJournalClosePrompt(input: {
   hasSummary: boolean;
   suggestedTaskCount: number;
   commitmentCount: number;
+  l: (portuguese: string, english: string) => string;
 }): { label: string; description: string } {
+  const { l } = input;
   const taskCount = Math.max(0, input.suggestedTaskCount);
   const commitmentCount = Math.max(0, input.commitmentCount);
   const hasAction = taskCount > 0 || commitmentCount > 0;
 
   if (!input.hasSummary && !hasAction) {
     return {
-      label: "Fechar",
-      description: "Sessao salva. Sem acao nova extraida deste diario.",
+      label: l("Fechar", "Close"),
+      description: l(
+        "Sessão salva. Sem ação nova extraída deste diário.",
+        "Session saved. No new action extracted from this journal entry.",
+      ),
     };
   }
 
   if (!hasAction) {
     return {
-      label: "Revisar o dia",
-      description: "Use o resumo salvo para fechar o dia sem criar tarefa solta.",
+      label: l("Revisar o dia", "Review the day"),
+      description: l(
+        "Use o resumo salvo para fechar o dia sem criar tarefa solta.",
+        "Use the saved summary to close the day without creating a loose task.",
+      ),
     };
   }
 
-  const taskText = taskCount === 1 ? "1 tarefa" : `${taskCount} tarefas`;
-  const commitmentText = commitmentCount === 1 ? "1 compromisso" : `${commitmentCount} compromissos`;
+  const taskText = l(
+    taskCount === 1 ? "1 tarefa" : `${taskCount} tarefas`,
+    taskCount === 1 ? "1 task" : `${taskCount} tasks`,
+  );
+  const commitmentText = l(
+    commitmentCount === 1 ? "1 compromisso" : `${commitmentCount} compromissos`,
+    commitmentCount === 1 ? "1 commitment" : `${commitmentCount} commitments`,
+  );
 
   return {
-    label: "Revisar o dia",
-    description: `Use o resumo, ${taskText} e ${commitmentText} para escolher a proxima acao.`,
+    label: l("Revisar o dia", "Review the day"),
+    description: l(
+      `Use o resumo, ${taskText} e ${commitmentText} para escolher a próxima ação.`,
+      `Use the summary, ${taskText}, and ${commitmentText} to pick the next action.`,
+    ),
   };
 }
