@@ -7,9 +7,28 @@ export type AiriaRiskSafety = {
   signals: string[];
 };
 
+/**
+ * Quanto cabe hoje — inferido pela Airia, nunca perguntado.
+ *
+ * Vem pronto do servidor, frase inclusive: a Home e o resultado do check-in não
+ * podem escrever versões diferentes disso sobre o mesmo dia. Opcional porque
+ * leitura gravada antes desta versão não tem o campo.
+ */
+export type AiriaCapacity = {
+  level: "protecao" | "baixa" | "media" | "alta";
+  size: "quick" | "moderate" | "heavy";
+  stepMinutes: number;
+  reason: string;
+  basis: string[];
+  confidence: "alta" | "media" | "baixa";
+  assumed: boolean;
+  corrected: boolean;
+};
+
 export type AiriaReadingEnvelope = {
   version: "v1";
   generatedAt: string;
+  capacity?: AiriaCapacity | null;
   currentState: {
     phase?: string;
     confidence?: number;
@@ -108,5 +127,28 @@ export async function sendAiriaDecisionFeedback(
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Corrigir o tamanho do dia — um toque, sem campo de texto.
+ *
+ * O servidor recalcula a leitura e devolve o envelope já corrigido, então a
+ * tela mostra o novo tamanho na hora em vez de esperar o próximo check-in.
+ */
+export async function correctAiriaCapacity(
+  decisionId: string,
+  direction: "mais" | "menos",
+  surface: "home" | "checkin_result" | "daily_summary",
+): Promise<AiriaReadingEnvelope | null> {
+  try {
+    const response = await api.post(`/airia/decisions/${decisionId}/feedback`, {
+      status: "corrected",
+      surface,
+      capacityCorrection: direction,
+    });
+    return isReading(response) ? response : null;
+  } catch {
+    return null;
   }
 }

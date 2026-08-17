@@ -5,6 +5,7 @@ import { computeMoodCycle, getPhaseColor } from "../utils/mood-cycle-engine";
 import { useLocalizedCopy } from "../i18n";
 import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
+import { CapacityNote } from "../components/aura/CapacityNote";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
 import { successHaptic } from "../utils/haptics";
@@ -70,6 +71,18 @@ export function CheckinResultPage() {
         </section>
 
         <SafetyProtocolCard riskSafety={reading?.riskSafety} surface="checkin_result" />
+
+        {/* A capacidade vem antes da proposta porque explica o tamanho dela.
+            Ler "propus algo de 10 minutos porque você dormiu 5h" depois de já
+            ter visto a proposta é justificativa; antes, é raciocínio. */}
+        {showDecision && (
+          <CapacityNote
+            capacity={reading?.capacity}
+            decisionId={decision?.id ?? null}
+            surface="checkin_result"
+            onCorrected={() => { void reload(); }}
+          />
+        )}
 
         {loading && <div className="aura-panel-soft" style={{ padding: 16, textAlign: "center", marginBottom: 12 }}><p style={{ margin: 0, color: "var(--text-3)", fontSize: 12 }}>{l("Cruzando este registro com seu contexto…", "Connecting this record with your context…")}</p></div>}
         {showDecision && decision && (

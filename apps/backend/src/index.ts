@@ -152,6 +152,7 @@ import {
 } from './services/objective-path.service';
 import { DailyPrioritiesService } from './services/daily-priorities.service';
 import { ObjectiveRevisionRelevanceService } from './services/objective-revision-relevance.service';
+import { capacityBasisSummary, inferCapacity, toGoalCapacity } from './lib/capacity';
 import { assessRiskSafety, riskSafetyPromptPolicy } from './lib/risk-safety';
 import {
   AuraCommandMessageStreamSchema,
@@ -2053,6 +2054,9 @@ export function buildGoalIntelligenceInput(input: {
     capacity: context.capacity === 'quick' || context.capacity === 'moderate' || context.capacity === 'heavy'
       ? context.capacity
       : null,
+    capacityBasis: typeof context.capacityBasis === 'string' && context.capacityBasis.trim()
+      ? context.capacityBasis
+      : null,
     operationalProfile: (context.operationalProfile ?? null) as GoalIntelligenceInput['operationalProfile'],
     patternContext: [context.verifiedPatternContext, context.moodCycleContext]
       .filter((part) => typeof part === 'string' && part.trim())
@@ -2213,6 +2217,24 @@ async function loadObjectiveIntelligenceContext(prisma: any, userId: string, obj
     ...(aura as any[]).filter((row) => isCurrentObjectiveContext(row.createdAt, now)).map((row) => String(row.content ?? '')),
   ].map((value) => value.trim()).filter(Boolean).slice(0, 18);
   const energyScore = typeof currentCheckin?.energyScore === 'number' ? currentCheckin.energyScore : null;
+  const moodScore = typeof currentCheckin?.moodScore === 'number' ? currentCheckin.moodScore : null;
+  /**
+   * Capacidade vem de `lib/capacity.ts`. Aqui existia um ternário sobre energia
+   * que era o único ponto do app a chamar energia 7 de "dia grande" (o corte é
+   * 8 em todo o resto) e a tratar energia 4 e 5 como dia comum (o resto já
+   * tratava como capacidade baixa). Nas três energias em que ele divergia, era
+   * ele quem pedia mais — a unificação corrige para o lado que protege.
+   */
+  const capacityReading = currentCheckin
+    ? inferCapacity({
+        energyScore,
+        moodScore,
+        phaseLabel: currentCheckin.stateLabel ?? null,
+        declaredSleepScore: typeof currentCheckin.sleepScore === 'number' ? currentCheckin.sleepScore : null,
+        observedAt: currentCheckin.recordedAt ?? null,
+        localDate: todayKey,
+      })
+    : null;
   return {
     userStatements,
     blockedActions,
@@ -2221,8 +2243,9 @@ async function loadObjectiveIntelligenceContext(prisma: any, userId: string, obj
     patternEvidenceRefs,
     patternBasis,
     energyScore,
-    moodLabel: typeof currentCheckin?.moodScore === 'number' ? `humor ${currentCheckin.moodScore}/10` : null,
-    capacity: energyScore === null ? null : energyScore <= 3 ? 'quick' as const : energyScore >= 7 ? 'heavy' as const : 'moderate' as const,
+    moodLabel: moodScore !== null ? `humor ${moodScore}/10` : null,
+    capacity: capacityReading ? toGoalCapacity(capacityReading.level) : null,
+    capacityBasis: capacityReading ? capacityBasisSummary(capacityReading) : null,
     operationalProfile,
   };
 }
@@ -3237,6 +3260,15 @@ export function createApp(dependencies: AppDependencies = {}) {
       correction: z.string().trim().max(1_000).optional(),
       note: z.string().trim().max(1_000).optional(),
       surface: z.string().trim().max(80).optional(),
+      /**
+       * "Coube mais" / "coube menos" que a Airia propôs.
+       *
+       * Enum em vez de texto livre porque isto calibra a inferência de
+       * `lib/capacity.ts` deterministicamente — e porque corrigir o tamanho do
+       * dia tem que caber em um toque. Campo opcional: cliente antigo que não
+       * envia continua válido.
+       */
+      capacityCorrection: z.enum(['mais', 'menos']).optional(),
     });
     try {
       const payload = payloadSchema.parse(req.body);
@@ -3250,6 +3282,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         surface: payload.surface ?? 'unknown',
         correction: payload.correction,
         note: payload.note,
+        capacityCorrection: payload.capacityCorrection === 'mais' ? 'up' : payload.capacityCorrection === 'menos' ? 'down' : undefined,
       }));
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });

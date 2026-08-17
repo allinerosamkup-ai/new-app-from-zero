@@ -2,6 +2,13 @@ import { createHash } from 'crypto';
 
 import type { PrismaClient } from '@app/database';
 
+import {
+  inferCapacity,
+  toGoalCapacity,
+  toStepMinutes,
+  type CapacityCorrection,
+  type CapacityReading,
+} from '../lib/capacity';
 import { assessRiskSafety, type RiskSafety } from '../lib/risk-safety';
 
 const READING_VERSION = 1;
@@ -13,6 +20,8 @@ export type AiriaDecisionStatus = 'proposta' | 'aceita' | 'corrigida' | 'rejeita
 export type AiriaReadingEnvelope = {
   version: 'v1';
   generatedAt: string;
+  /** Quanto cabe hoje, inferido. `null` em leitura gravada antes desta versão. */
+  capacity: Record<string, unknown> | null;
   currentState: Record<string, unknown>;
   period: Record<string, unknown>;
   alerts: Array<Record<string, unknown>>;
@@ -203,6 +212,28 @@ export class AiriaReadingService {
     });
     const objective = (objectives as AnyRow[])[0] ?? null;
     const action = pendingObjectiveAction(objective);
+
+    /**
+     * Capacidade do dia — inferida, nunca perguntada.
+     *
+     * As correções anteriores entram aqui: elas calibram a inferência sem
+     * virar preferência gravada. Ver `correctionBias` em `lib/capacity.ts`
+     * para o contrato de quantas correções viram padrão.
+     */
+    const corrections = await this.recentCorrections(input.userId, input.localDate);
+    const capacity = inferCapacity({
+      moodScore: numberOrNull(latest?.moodScore),
+      energyScore: numberOrNull(latest?.energyScore),
+      phaseLabel: latest?.stateLabel ?? null,
+      declaredSleepScore: numberOrNull(latest?.sleepScore),
+      declaredSleepHours: numberOrNull(latest?.sleepHours),
+      intradayDirection: direction,
+      riskRoute: riskSafety.route,
+      correction: corrections.today,
+      correctionHistory: corrections.history,
+      observedAt: latest?.recordedAt ?? null,
+      localDate: input.localDate,
+    });
     const fingerprint = stableFingerprint({
       version: READING_VERSION,
       checkins: checkins.map((entry: AnyRow) => [entry.id, entry.updatedAt?.toISOString?.() ?? String(entry.updatedAt)]),
@@ -226,7 +257,8 @@ export class AiriaReadingService {
       energyScore: latest.energyScore,
       stateLabel: latest.stateLabel ?? null,
       stateSummary: latest.stateSummary ?? null,
-    } : { observedAt: null, moodScore: null, energyScore: null, stateLabel: null, stateSummary: 'Ainda não há observação para este dia.' };
+      capacity,
+    } : { observedAt: null, moodScore: null, energyScore: null, stateLabel: null, stateSummary: 'Ainda não há observação para este dia.', capacity };
     const intraday = {
       sampleCount: today.length,
       windowCoverage: slotCoverage,
@@ -258,8 +290,91 @@ export class AiriaReadingService {
       create: { userId: input.userId, localDate: targetDate, version: READING_VERSION, fingerprint, currentState, intraday, historical, riskSafety, sourceSnapshot, sourceCheckinId: input.sourceCheckinId ?? latest?.id ?? null },
       update: { version: READING_VERSION, fingerprint, currentState, intraday, historical, riskSafety, sourceSnapshot, sourceCheckinId: input.sourceCheckinId ?? latest?.id ?? null },
     });
-    const decision = await this.upsertDecision({ reading: saved, objective, action, riskSafety, intraday, historical, sourceSnapshot, surface: input.surface ?? 'system' });
+    const decision = await this.upsertDecision({ reading: saved, objective, action, riskSafety, capacity, intraday, historical, sourceSnapshot, surface: input.surface ?? 'system' });
+
+    /**
+     * A capacidade inferida volta para o check-in que a originou.
+     *
+     * `signalMetadata.dayPlan` existia no contrato desde sempre e nunca era
+     * preenchido: era o campo que a tela removida em `fb3d7e5` alimentava
+     * perguntando. Agora quem preenche é a inferência, com `provenance`
+     * dizendo isso na cara — o dado passa a existir sem a pergunta existir.
+     *
+     * Escrita best-effort de propósito: gravar leitura é barato, mas nenhum
+     * `UPDATE` aqui pode derrubar um check-in que já foi aceito.
+     */
+    const targetCheckinId = input.sourceCheckinId ?? latest?.id ?? null;
+    if (targetCheckinId) {
+      await this.persistInferredDayPlan(targetCheckinId, capacity, objective?.id ?? null).catch(() => {});
+    }
+
     return this.serialize(saved, decision);
+  }
+
+  /**
+   * Correções que a pessoa fez sobre a capacidade proposta.
+   *
+   * A de hoje desloca a inferência de hoje; as anteriores só viram viés sob o
+   * contrato de `correctionBias`. Falha de leitura devolve vazio: sem correção
+   * a inferência continua válida, então isto nunca pode quebrar a leitura.
+   */
+  private async recentCorrections(userId: string, localDate: string): Promise<{ today: CapacityCorrection | null; history: CapacityCorrection[] }> {
+    const prisma = this.prisma as any;
+    const since = dateOnly(localDate);
+    since.setUTCDate(since.getUTCDate() - 13);
+
+    // `try/catch` em vez de `.catch()`: se o método nem existir no cliente, a
+    // chamada estoura de forma síncrona e um `.catch` encadeado nunca roda.
+    // Correção é calibração — sem ela a inferência continua válida, então
+    // nada aqui pode derrubar a leitura do dia.
+    let rows: AnyRow[] = [];
+    try {
+      rows = await prisma.airiaDecision.findMany({
+        where: { userId, createdAt: { gte: since } },
+        select: { feedback: true, reading: { select: { localDate: true } } },
+        orderBy: { createdAt: 'asc' },
+        take: 60,
+      }) ?? [];
+    } catch {
+      return { today: null, history: [] };
+    }
+
+    const history: CapacityCorrection[] = [];
+    let today: CapacityCorrection | null = null;
+    for (const row of rows) {
+      const feedback = row.feedback && typeof row.feedback === 'object' ? row.feedback as Record<string, unknown> : null;
+      const direction = feedback?.capacityCorrection;
+      if (direction !== 'up' && direction !== 'down') continue;
+      const day = row.reading?.localDate ? dateKey(row.reading.localDate) : null;
+      if (!day) continue;
+      if (day === localDate) today = { direction, localDate: day };
+      else history.push({ direction, localDate: day });
+    }
+    return { today, history };
+  }
+
+  private async persistInferredDayPlan(checkinId: string, capacity: CapacityReading, objectiveId: string | null): Promise<void> {
+    const prisma = this.prisma as any;
+    const checkin = await prisma.dailyCheckin.findUnique({ where: { id: checkinId }, select: { signalMetadata: true } });
+    if (!checkin) return;
+    const metadata = checkin.signalMetadata && typeof checkin.signalMetadata === 'object'
+      ? { ...(checkin.signalMetadata as Record<string, unknown>) }
+      : {};
+    const existing = metadata.dayPlan && typeof metadata.dayPlan === 'object' ? metadata.dayPlan as Record<string, unknown> : {};
+
+    // Capacidade dita numa superfície explícita ganha da inferida. Sobrescrever
+    // o que a pessoa afirmou seria a Airia discordando de um fato.
+    if (existing.provenance === 'reported') return;
+
+    metadata.dayPlan = {
+      ...existing,
+      capacity: toGoalCapacity(capacity.level),
+      capacityLevel: capacity.level,
+      capacityReason: capacity.reason.slice(0, 240),
+      provenance: 'inferred',
+      ...(objectiveId ? { priorityGoalId: objectiveId } : {}),
+    };
+    await prisma.dailyCheckin.update({ where: { id: checkinId }, data: { signalMetadata: metadata } });
   }
 
   async get(userId: string, localDate: string): Promise<AiriaReadingEnvelope> {
@@ -267,20 +382,55 @@ export class AiriaReadingService {
     return reading ? this.serialize(reading, reading.decision) : this.rebuild({ userId, localDate });
   }
 
-  async feedback(input: { userId: string; decisionId: string; status: AiriaDecisionStatus; surface: string; correction?: string | null; note?: string | null }): Promise<AiriaReadingEnvelope> {
+  async feedback(input: { userId: string; decisionId: string; status: AiriaDecisionStatus; surface: string; correction?: string | null; note?: string | null; capacityCorrection?: 'up' | 'down' }): Promise<AiriaReadingEnvelope> {
     const prisma = this.prisma as any;
     const decision = await prisma.airiaDecision.findFirst({ where: { id: input.decisionId, userId: input.userId }, include: { reading: true } });
     if (!decision) throw new Error('AIRIA_DECISION_NOT_FOUND');
-    const feedback = { ...(decision.feedback && typeof decision.feedback === 'object' ? decision.feedback : {}), status: input.status, correction: input.correction ?? null, note: input.note ?? null, surface: input.surface, recordedAt: new Date().toISOString() };
+    const previousCapacity = (decision.reading?.currentState as Record<string, any> | null)?.capacity as CapacityReading | undefined;
+    const feedback = {
+      ...(decision.feedback && typeof decision.feedback === 'object' ? decision.feedback : {}),
+      status: input.status,
+      correction: input.correction ?? null,
+      note: input.note ?? null,
+      surface: input.surface,
+      recordedAt: new Date().toISOString(),
+      ...(input.capacityCorrection ? {
+        capacityCorrection: input.capacityCorrection,
+        capacityLevelBefore: previousCapacity?.level ?? null,
+      } : {}),
+    };
     const updated = await prisma.airiaDecision.update({
       where: { id: decision.id },
       data: { status: input.status, feedback, surface: input.surface, resolvedAt: input.status === 'proposta' ? null : new Date() },
     });
-    await prisma.eventLog.create({ data: { userId: input.userId, eventName: 'airia.decision_feedback', properties: { decisionId: decision.id, readingId: decision.readingId, status: input.status, surface: input.surface } } }).catch(() => {});
+    await prisma.eventLog.create({ data: { userId: input.userId, eventName: 'airia.decision_feedback', properties: { decisionId: decision.id, readingId: decision.readingId, status: input.status, surface: input.surface, capacityCorrection: input.capacityCorrection ?? null } } }).catch(() => {});
+
+    /**
+     * Corrigir o tamanho do dia recalcula a leitura na hora e **reabre a
+     * proposta** com o novo tamanho.
+     *
+     * A decisão volta a `proposta` de propósito: `upsertDecision` só recalcula
+     * enquanto a decisão está aberta, e sem isso a pessoa apertaria "coube
+     * menos" e continuaria vendo a mesma proposta do mesmo tamanho — que é a
+     * definição de botão que não faz nada. O feedback fica gravado; o que
+     * muda é que a Airia tem uma segunda chance de acertar o tamanho.
+     */
+    if (input.capacityCorrection) {
+      await prisma.airiaDecision.update({
+        where: { id: decision.id },
+        data: { status: 'proposta', resolvedAt: null },
+      }).catch(() => {});
+      return this.rebuild({
+        userId: input.userId,
+        localDate: dateKey(decision.reading.localDate),
+        surface: input.surface,
+      });
+    }
+
     return this.serialize(decision.reading, updated);
   }
 
-  private async upsertDecision(input: { reading: AnyRow; objective: AnyRow | null; action: { id: string | null; title: string } | null; riskSafety: RiskSafety; intraday: Record<string, any>; historical: Record<string, any>; sourceSnapshot: Record<string, unknown>; surface: string }): Promise<AnyRow> {
+  private async upsertDecision(input: { reading: AnyRow; objective: AnyRow | null; action: { id: string | null; title: string } | null; riskSafety: RiskSafety; capacity: CapacityReading; intraday: Record<string, any>; historical: Record<string, any>; sourceSnapshot: Record<string, unknown>; surface: string }): Promise<AnyRow> {
     const prisma = this.prisma as any;
     const existing = await prisma.airiaDecision.findUnique({ where: { readingId: input.reading.id } });
     const evidence = [
@@ -288,7 +438,15 @@ export class AiriaReadingService {
       ...(Array.isArray(input.sourceSnapshot.patternIds) ? input.sourceSnapshot.patternIds.map((id) => ({ type: 'pattern', id })) : []),
     ];
     const safetyFirst = input.riskSafety.route === 'crisis_protocol' || input.riskSafety.route === 'human_support';
-    const lowCapacity = input.riskSafety.route === 'adapt_day' || input.intraday.direction === 'falling';
+    /**
+     * Aqui existia a quinta fórmula de capacidade do app — risco e trajetória
+     * apenas, sem olhar energia, humor ou sono. Agora é a mesma inferência de
+     * `lib/capacity.ts` que todas as outras superfícies usam, então a proposta
+     * do dia não pode mais discordar do que a Home e o Diário dizem sobre o
+     * mesmo dia.
+     */
+    const capacity = input.capacity;
+    const lowCapacity = capacity.level === 'protecao' || capacity.level === 'baixa';
     const decision = safetyFirst
       ? { type: 'protect', title: 'Priorizar apoio humano agora', explanation: input.riskSafety.message, action: null, destination: null, anchored: true }
       : input.action
@@ -319,9 +477,35 @@ export class AiriaReadingService {
       proposta: 'proposed', aceita: 'accepted', corrigida: 'corrected', rejeitada: 'rejected', concluída: 'done', substituída: 'substituted',
     };
     const decisionData = decision?.decision && typeof decision.decision === 'object' ? decision.decision as Record<string, any> : {};
+
+    /**
+     * A capacidade sai no envelope, não em cada tela.
+     *
+     * Toda superfície que já consome `useAiriaReading` herda a mesma frase sem
+     * código novo — que é o ponto: a Home e o resultado do check-in não podem
+     * dizer coisas diferentes sobre quanto cabe no mesmo dia.
+     *
+     * Leituras gravadas antes desta versão não têm o campo; `null` é resposta
+     * honesta e a tela sabe não mostrar nada.
+     */
+    const storedCapacity = current?.capacity && typeof current.capacity === 'object'
+      ? current.capacity as CapacityReading
+      : null;
+    const capacity = storedCapacity ? {
+      level: storedCapacity.level,
+      size: toGoalCapacity(storedCapacity.level),
+      stepMinutes: toStepMinutes(storedCapacity.level),
+      reason: storedCapacity.reason,
+      basis: (storedCapacity.basis ?? []).map((item) => item.value),
+      confidence: storedCapacity.confidence,
+      assumed: storedCapacity.assumed,
+      corrected: storedCapacity.corrected,
+    } : null;
+
     return {
       version: 'v1',
       generatedAt: new Date(reading.updatedAt).toISOString(),
+      capacity,
       currentState: {
         phase: current.stateLabel ?? null,
         confidence,

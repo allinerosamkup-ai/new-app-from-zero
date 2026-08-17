@@ -1,3 +1,5 @@
+import { inferCapacity } from '../lib/capacity';
+
 import type { DailyContext } from './context-grounding.service';
 import { DecisionEngine, type DecisionCandidate, type DecisionResult, type DecisionSurface } from './decision-engine.service';
 
@@ -58,30 +60,25 @@ function phaseText(context: Record<string, unknown>): string {
   return cleanText(context.phase ?? context.phaseLabel ?? context.moodPhase);
 }
 
-function isLowPhase(context: Record<string, unknown>): boolean {
-  return /turbulencia|pausa|recolhimento|desacelerando/i.test(phaseText(context));
-}
-
-function isHighPhase(context: Record<string, unknown>): boolean {
-  return /voo alto|fluindo/i.test(phaseText(context));
-}
-
-function hasPoorSleep(context: DailyContext, requestContext: Record<string, unknown>): boolean {
-  const sleepScore = numberValue(requestContext.sleepScore ?? context.healthSignals?.sleepScore);
-  if (sleepScore !== null && sleepScore <= 4) return true;
-  const sleepMinutes = numberValue(context.healthSignals?.sleepMinutes);
-  return sleepMinutes !== null && sleepMinutes > 0 && sleepMinutes < 360;
-}
-
-function inferCapacity(context: DailyContext, requestContext: Record<string, unknown>): ReasoningCapacity {
-  const energy = numberValue(requestContext.energyScore ?? requestContext.energy);
-  const mood = numberValue(requestContext.moodScore ?? requestContext.mood);
-  if (hasPoorSleep(context, requestContext) || isLowPhase(requestContext) || (energy !== null && energy <= 3) || (mood !== null && mood <= 3)) {
-    return 'protecao';
-  }
-  if (energy !== null && energy <= 5) return 'baixa';
-  if (isHighPhase(requestContext) || (energy !== null && energy >= 8 && (mood ?? 8) >= 6)) return 'alta';
-  return 'media';
+/**
+ * A inferência de capacidade agora mora em `lib/capacity.ts`, uma implementação
+ * só para o app inteiro. Esta função ficou como adaptador: traduz o formato
+ * desta superfície para o contrato canônico.
+ *
+ * Uma conflação do código original é preservada de propósito: `sleepScore` do
+ * check-in (declarado) entra como sinal decisivo, junto com o do Health Connect
+ * (medido). Separar os dois aqui deixaria o app *menos* protetor com quem
+ * relata ter dormido mal, e reduzir proteção não é efeito colateral aceitável
+ * de uma unificação.
+ */
+function inferReasoningCapacity(context: DailyContext, requestContext: Record<string, unknown>): ReasoningCapacity {
+  return inferCapacity({
+    energyScore: numberValue(requestContext.energyScore ?? requestContext.energy),
+    moodScore: numberValue(requestContext.moodScore ?? requestContext.mood),
+    phaseLabel: phaseText(requestContext) || null,
+    measuredSleepScore: numberValue(requestContext.sleepScore ?? context.healthSignals?.sleepScore),
+    measuredSleepMinutes: numberValue(context.healthSignals?.sleepMinutes),
+  }).level;
 }
 
 function confidenceFromDecision(decisionBrain: DecisionResult, action: DecisionCandidate | null, hasCurrentFact: boolean): ReasoningConfidence {
@@ -173,7 +170,7 @@ export class ReasoningContextService {
       surface: input.surface,
       requestContext,
     });
-    const capacity = inferCapacity(input.dailyContext, requestContext);
+    const capacity = inferReasoningCapacity(input.dailyContext, requestContext);
     const action = chooseAction(decisionBrain, capacity, input.dailyContext);
     const hasCurrentFact = Boolean(cleanText(input.currentMessage) || cleanText(input.situationSummary));
     const hasAnchor = Boolean(action && hasOperationalAnchor(action, input.dailyContext));

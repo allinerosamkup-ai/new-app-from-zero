@@ -21,7 +21,10 @@ export function JornadaHomeCard() {
 
   useEffect(() => {
     let alive = true;
-    (api.get("/api/jornada") as Promise<JornadaData>)
+    // `api` já prefixa `/api` (lib/api.ts). Com o prefixo escrito de novo aqui
+    // a chamada virava `/api/api/jornada` e voltava 404 — e o `.catch` mudo
+    // abaixo transformava isso em "o cartão simplesmente não existe na Home".
+    (api.get("/jornada") as Promise<JornadaData>)
       .then((d) => { if (alive) setData(d); })
       .catch(() => {});
     return () => { alive = false; };

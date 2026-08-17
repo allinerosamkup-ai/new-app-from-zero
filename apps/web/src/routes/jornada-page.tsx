@@ -25,30 +25,44 @@ type JornadaData = {
   completed: number[];
 };
 
+/**
+ * Para onde cada passo da Jornada leva.
+ *
+ * `habits` aponta para Objetivos, não para `/habits`: Hábitos está desligado
+ * (`config/features.ts`) e a rota redireciona para a Home — o passo tinha um
+ * botão grande e preenchido escrito "Ir para hábitos" que jogava a pessoa fora
+ * da Jornada, sem explicação. Objetivos é o destino vivo mais próximo do que o
+ * passo pede.
+ */
 const FEATURE_ROUTE: Record<JornadaFeature, string> = {
   journal: "/journal",
-  habits: "/habits",
+  habits: "/goals",
   checkin: "/checkin",
   insights: "/insights",
   goals: "/goals",
 };
 
-const FEATURE_LABEL: Record<JornadaFeature, string> = {
-  journal: "Abrir o diário",
-  habits: "Ir para hábitos",
-  checkin: "Fazer check-in",
-  insights: "Ver meus padrões",
-  goals: "Abrir meus objetivos",
-};
-
 export default function JornadaPage() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
+
+  // Os rótulos eram um mapa em escopo de módulo, fora do alcance de `l()` e do
+  // audit de i18n: quem usa o app em inglês lia "Ir para hábitos" no meio de
+  // uma tela em inglês.
+  const featureLabel = (feature: JornadaFeature): string => ({
+    journal: l("Abrir o diário", "Open the journal"),
+    habits: l("Abrir meus objetivos", "Open my objectives"),
+    checkin: l("Fazer check-in", "Check in"),
+    insights: l("Ver meus padrões", "See my patterns"),
+    goals: l("Abrir meus objetivos", "Open my objectives"),
+  }[feature]);
+
   const { reading: canonicalReading } = useAiriaReading();
   const [data, setData] = useState<JornadaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   // A Jornada não recalcula capacidade. Ela só adapta a apresentação ao
   // mesmo estado seguro e persistido que Home, Diário e Aura recebem.
@@ -65,9 +79,15 @@ export default function JornadaPage() {
   async function markPracticed(n: number) {
     setSaving(true);
     try {
-      const res = await api.post(`/api/jornada/${n}/complete`, {}) as { currentStep: number; completed: number[] };
+      // Sem `/api` duplicado: `api` já prefixa. Antes esta chamada ia para
+      // `/api/api/jornada/:n/complete`, dava 404, e o `try/finally` sem `catch`
+      // engolia a rejeição — o botão "Pratiquei" não fazia nada e não dizia nada.
+      const res = await api.post(`/jornada/${n}/complete`, {}) as { currentStep: number; completed: number[] };
       setData((cur) => cur ? { ...cur, currentStep: res.currentStep, completed: res.completed } : cur);
       setSelected(res.currentStep <= 13 ? res.currentStep : n);
+      setSaveFailed(false);
+    } catch {
+      setSaveFailed(true);
     } finally {
       setSaving(false);
     }
@@ -181,7 +201,7 @@ export default function JornadaPage() {
                           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                         }}
                       >
-                        {FEATURE_LABEL[step.feature]} <ArrowRight size={15} />
+                        {featureLabel(step.feature)} <ArrowRight size={15} />
                       </button>
                       {!isDone && (
                         <button
@@ -194,10 +214,15 @@ export default function JornadaPage() {
                             cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1, whiteSpace: "nowrap",
                           }}
                         >
-                          Pratiquei
+                          {l("Pratiquei", "I practiced")}
                         </button>
                       )}
                     </div>
+                    {saveFailed && (
+                      <p role="alert" style={{ margin: "8px 0 0", fontSize: 11.5, color: "#A24B43" }}>
+                        {l("Não consegui registrar agora. Tente de novo em instantes.", "I couldn't save that right now. Try again in a moment.")}
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

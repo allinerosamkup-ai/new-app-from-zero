@@ -260,24 +260,30 @@ export default function App() {
             Hábitos: anúncio já veiculado e link salvo não podem cair em 404. */}
         <Route path="/livro" element={<Navigate to="/" replace />} />
 
-        {/* Rotas de preview sem auth — só desenvolvimento */}
-        <Route path="/dev" element={<DevLayout />}>
-          <Route path="home" element={<HomePage />} />
-          <Route path="checkin" element={<CheckinPage />} />
-          <Route path="checkin-result" element={<CheckinResultPage />} />
-          <Route path="habits" element={<HabitsPage />} />
-          <Route path="planner" element={<PlannerPage />} />
-          <Route path="journal" element={<JournalPage />} />
-          <Route path="harmony" element={<HarmonyPage />} />
-          <Route path="goals" element={<GoalsPage />} />
-          <Route path="insights" element={<InsightsPage />} />
-          <Route path="daily-summary" element={<DailySummaryPage />} />
-          <Route path="preferences" element={<PreferencesPage />} />
-          <Route path="pomodoro" element={<PomodoroPage />} />
-          <Route path="aura" element={<AuraChatPage />} />
-          <Route path="captures" element={<CapturesPage />} />
-          <Route path="ui-kit" element={<UIKitPage />} />
-        </Route>
+        {/* Rotas de preview sem auth — só desenvolvimento.
+            `import.meta.env.DEV` é o portão, e ele não existia: a barra de
+            depuração ia inteira para produção, sem autenticação, e o botão
+            "Planner" dela abria o Planner desligado funcionando. Vite elimina
+            este bloco do bundle de produção em tempo de build. */}
+        {import.meta.env.DEV && (
+          <Route path="/dev" element={<DevLayout />}>
+            <Route path="home" element={<HomePage />} />
+            <Route path="checkin" element={<CheckinPage />} />
+            <Route path="checkin-result" element={<CheckinResultPage />} />
+            <Route path="habits" element={<HabitsPage />} />
+            <Route path="planner" element={<PlannerPage />} />
+            <Route path="journal" element={<JournalPage />} />
+            <Route path="harmony" element={<HarmonyPage />} />
+            <Route path="goals" element={<GoalsPage />} />
+            <Route path="insights" element={<InsightsPage />} />
+            <Route path="daily-summary" element={<DailySummaryPage />} />
+            <Route path="preferences" element={<PreferencesPage />} />
+            <Route path="pomodoro" element={<PomodoroPage />} />
+            <Route path="aura" element={<AuraChatPage />} />
+            <Route path="captures" element={<CapturesPage />} />
+            <Route path="ui-kit" element={<UIKitPage />} />
+          </Route>
+        )}
 
         <Route element={<AuraLayout />}>
           <Route path="/home" element={<HomePage />} />
@@ -303,6 +309,13 @@ export default function App() {
           <Route path="/contexto" element={<ContextoPage />} />
           <Route path="/routine-builder" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
         </Route>
+
+        {/* URL que não existe cai na Home, não em tela branca.
+            Sem esta rota, qualquer erro de digitação, link antigo ou caminho
+            removido renderizava nada: sem navegação, sem mensagem e sem volta
+            a não ser pelo botão do navegador. É a mesma regra que já vale para
+            Planner e Hábitos — cair na Home é sempre melhor que cair no vazio. */}
+        <Route path="*" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
       </Routes>
       </div>
       <InstallPWA />

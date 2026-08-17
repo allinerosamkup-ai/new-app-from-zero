@@ -70,13 +70,22 @@ export type GoalIntelligenceInput = {
   /** Base que a UI deve devolver junto da ação: janela, força, limites e impacto. */
   patternBasis?: PatternBasis[];
   /**
-   * O que cabe hoje, respondido no check-in.
+   * O que cabe hoje — **inferido** pela Airia em `lib/capacity.ts`, a partir de
+   * energia, humor, sono, fase, trajetória do dia e risco.
    *
    * Não é preferência abstrata: é o teto do dia. Devolver cinco passos de
-   * quinze minutos para quem acabou de dizer "só algo rápido" é o mesmo que não
-   * quebrar nada — a lista continua grande demais para acontecer.
+   * quinze minutos para quem mal tem combustível é o mesmo que não quebrar
+   * nada — a lista continua grande demais para acontecer.
+   *
+   * **A tela não pergunta isso.** Perguntar seria `PRODUCT FAIL`
+   * (`docs/product/PRODUCT_CONSTITUTION.md` §3). Este JSDoc já disse
+   * "respondido no check-in" enquanto o valor vinha de um ternário sobre
+   * energia — comentário errado vira prompt errado, e prompt errado vira a
+   * Airia dizendo "você me disse" sobre algo que ninguém disse.
    */
   capacity?: 'quick' | 'moderate' | 'heavy' | null;
+  /** Sinais que sustentaram a inferência, para o modelo não inventar a justificativa. */
+  capacityBasis?: string | null;
 };
 
 /**
@@ -404,11 +413,11 @@ export function buildGoalDecompositionPrompt(input: GoalIntelligenceInput): stri
   ].filter(Boolean);
   const todayBlock = today.length > 0 ? `\nHOJE: ${today.join(' · ')}` : '';
   const capacityBlock = input.capacity
-    ? `\nCAPACIDADE DE HOJE (dita por ela agora): ${{
+    ? `\nCAPACIDADE DE HOJE (INFERIDA por você${input.capacityBasis ? ` a partir de: ${input.capacityBasis}` : ''}; ela NÃO escolheu isto e pode corrigir depois): ${{
         quick: 'só algo rápido — no máximo 2 passos, o primeiro em menos de 5 minutos',
         moderate: 'moderado — até 4 passos curtos',
         heavy: 'aguenta algo mais trabalhoso — pode incluir o passo mais pesado do caminho',
-      }[input.capacity]}`
+      }[input.capacity]}\nTrate como teto do dia. NUNCA escreva "você disse que", "como você pediu" ou "você escolheu" sobre a capacidade — ninguém perguntou isso a ela.`
     : '';
   const patternBlock = input.patternContext
     ? `\nPADRÃO OBSERVADO (explica comportamento e pode calibrar a ação quando for relevante; NÃO cria fato novo nem destino operacional):\n${input.patternContext}`

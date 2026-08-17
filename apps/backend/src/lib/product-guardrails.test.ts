@@ -72,6 +72,21 @@ const nagginRewardCopyPatterns = [
   /sentimos\s+sua\s+falta/i,
 ];
 
+/**
+ * Capacidade é inferida, nunca declarada pela pessoa.
+ *
+ * A tela que pedia "Rápido / Moderado / Mais trabalhoso" saiu em `fb3d7e5`, mas
+ * o prompt continuou dizendo ao modelo que a capacidade tinha sido "dita por
+ * ela agora" — e o modelo, acreditando, respondia "como você pediu" sobre algo
+ * que ninguém perguntou. Prompt que afirma origem falsa é tão grave quanto a
+ * pergunta na tela: os dois transferem para a pessoa uma decisão que é da
+ * Airia. Ver `PRODUCT_CONSTITUTION.md` §3.
+ */
+const falseCapacityProvenancePatterns = [
+  /capacidade[^\n]{0,80}\((?:dita|dito|escolhida|respondida|informada|declarada)\s+(?:por\s+ela|no\s+check-?in)/i,
+  /(?:capacidade|o que cabe hoje)[^\n]{0,60}(?:respondid[ao]|dit[ao]|escolhid[ao])\s+(?:no\s+check-?in|por\s+ela)/i,
+];
+
 const pseudoTherapeuticInferencePatterns = [
   /serve de escudo/i,
   /moeda de troca/i,
@@ -166,6 +181,12 @@ function run() {
       for (const pattern of unsafeClinicalClaimPatterns) {
         if (pattern.test(content)) {
           unsafeClinicalMatches.push(`${relative} matches ${pattern}`);
+        }
+      }
+
+      for (const pattern of falseCapacityProvenancePatterns) {
+        if (pattern.test(content)) {
+          groundingGuardrailMatches.push(`${relative} matches ${pattern} — capacidade é inferida, não dita pela usuária`);
         }
       }
 

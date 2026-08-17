@@ -48,6 +48,7 @@ import {
   rememberHomeAutonomyActionFeedback,
 } from "./home-page.helpers";
 import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import { CapacityNote } from "../components/aura/CapacityNote";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import {
   MessageSquareText,
@@ -1137,6 +1138,16 @@ export function HomePage() {
       )}
       <div className="screen-content" style={{ position: "relative", zIndex: 1 }}>
         <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="home" />
+
+        {/* Mesma frase de capacidade do resultado do check-in, vinda do mesmo
+            envelope. Duas telas escrevendo a própria versão de "quanto cabe
+            hoje" é como a decisão volta para o colo de quem usa o app. */}
+        <CapacityNote
+          capacity={canonicalReading?.capacity}
+          decisionId={canonicalReading?.decision?.id ?? null}
+          surface="home"
+          onCorrected={() => { void reloadCanonicalReading(); }}
+        />
 
         {/* Header com relógio */}
         <div className="home-header" style={{ position: "relative", paddingBottom: "18px" }}>

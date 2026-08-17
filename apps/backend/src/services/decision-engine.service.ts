@@ -1,4 +1,5 @@
 import type { DailyContext, GroundedTask } from './context-grounding.service';
+import { inferCapacity, toDecisionFlags } from '../lib/capacity';
 import { getPhaseWindow, slotTier, bestAvailableStart, phaseHasPeakOrFlow, normalizePhaseWindowKey } from '../lib/phase-time-windows';
 import { isTimelineBlockProtected } from './planner.service';
 
@@ -254,20 +255,9 @@ function phaseKey(context: Record<string, unknown>): string {
   return normalizePhaseWindowKey(normalize(context.phase ?? context.phaseLabel ?? context.moodPhase));
 }
 
-function isLowCapacityPhase(context: Record<string, unknown>): boolean {
-  return /\b(turbulencia|pausa|recolhimento|desacelerando)\b/.test(phaseKey(context));
-}
-
-function healthSleepScore(context: DailyContext): number | null {
-  const score = Number(context.healthSignals?.sleepScore);
-  return Number.isFinite(score) ? score : null;
-}
-
-function hasPoorMeasuredSleep(context: DailyContext): boolean {
-  const score = healthSleepScore(context);
-  if (score !== null) return score <= 4;
-  const minutes = Number(context.healthSignals?.sleepMinutes);
-  return Number.isFinite(minutes) && minutes > 0 && minutes < 360;
+function numberOrNullValue(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function healthReasonSuffix(context: DailyContext): string {
@@ -282,10 +272,6 @@ function healthReasonSuffix(context: DailyContext): string {
   if (signals.avgHeartRate != null) parts.push(`batimento medio ${Math.round(signals.avgHeartRate)} bpm`);
   if (signals.exerciseMinutes != null && signals.exerciseMinutes > 0) parts.push(`${Math.round(signals.exerciseMinutes)} min de exercicio`);
   return parts.length ? ` Sinal do Health Connect: ${parts.join(', ')}.` : '';
-}
-
-function isHighCapacityPhase(context: Record<string, unknown>): boolean {
-  return /\b(voo alto|fluindo)\b/.test(phaseKey(context));
 }
 
 /**
@@ -436,8 +422,28 @@ export class DecisionEngine {
       requestContext.adhdProfile === true && requestContext.hyperfocusOccurred === true;
     const structureHyperfocus = recalibSignal === 'hyperfocus' || adhdHyperfocusActive;
 
-    const lowCapacity = forceHard || (!forceGreat && (isLowCapacityPhase(requestContext) || hasPoorMeasuredSleep(input.dailyContext)));
-    const highCapacity = forceGreat || (!forceHard && isHighCapacityPhase(requestContext));
+    /**
+     * Capacidade vem de `lib/capacity.ts`, a implementação única do app.
+     *
+     * O cálculo anterior era feito aqui com dois booleanos independentes, e
+     * eles podiam ser verdadeiros ao mesmo tempo: quem estivesse em fase alta
+     * com sono medido ruim ligava `lowCapacity` **e** `highCapacity` na mesma
+     * avaliação, e como os dois são lidos em pontos diferentes deste motor, o
+     * dia saía protegido num trecho e ampliado no outro. Com um nível só isso
+     * deixa de ser representável, e o empate resolve protegendo.
+     *
+     * Os sinais passados são exatamente os que este motor sempre enxergou —
+     * fase, sono medido e recalibração. Energia e humor entram por outras
+     * superfícies; incluí-los aqui seria mudança de comportamento, não
+     * unificação.
+     */
+    const capacity = inferCapacity({
+      phaseLabel: String(requestContext.phase ?? requestContext.phaseLabel ?? requestContext.moodPhase ?? ''),
+      measuredSleepScore: numberOrNullValue(input.dailyContext.healthSignals?.sleepScore),
+      measuredSleepMinutes: numberOrNullValue(input.dailyContext.healthSignals?.sleepMinutes),
+      recalibrationSignal: recalibSignal,
+    });
+    const { lowCapacity, highCapacity } = toDecisionFlags(capacity.level);
 
     const allowed: DecisionCandidate[] = [];
     const blocked: DecisionCandidate[] = [];
