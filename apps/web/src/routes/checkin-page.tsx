@@ -306,21 +306,33 @@ export function CheckinPage() {
    * pessoa está no ciclo e não tem por que perguntar de novo — era isso que
    * transformava um fato por mês em pergunta diária.
    */
-  const { showCycleQuestion, cycleQuestionLegend } = useMemo(() => {
+  const { showCycleQuestion, cycleQuestionLegend, cycleQuestionLabel } = useMemo(() => {
+    const inicio = {
+      legend: l("Ciclo", "Cycle"),
+      label: l("Minha menstruação começou hoje", "My period started today"),
+    };
+    const emFluxo = {
+      legend: l("Ciclo", "Cycle"),
+      label: l("Ainda estou menstruada", "I'm still menstruating"),
+    };
+    const oculto = { showCycleQuestion: false, cycleQuestionLegend: "", cycleQuestionLabel: "" };
+
     const flowStarts = cycleFlowStarts(state.checkinHistory ?? []);
     const last = flowStarts.length > 0 ? flowStarts[flowStarts.length - 1] : null;
-    if (!last) {
-      return { showCycleQuestion: true, cycleQuestionLegend: l("Sua menstruação começou hoje?", "Did your period start today?") };
-    }
+    if (!last) return { showCycleQuestion: true, cycleQuestionLegend: inicio.legend, cycleQuestionLabel: inicio.label };
+
     const elapsed = daysSinceISO(last);
     const average = averageCycleLength(flowStarts);
-    // Já registrou o começo há poucos dias: pergunta só a intensidade.
+    // Registrou o começo há poucos dias: o marcador serve para dizer que o
+    // fluxo continua, e a intensidade é o que muda de um dia para o outro.
     if (elapsed <= 6) {
-      return { showCycleQuestion: true, cycleQuestionLegend: l("Ainda está menstruada?", "Are you still menstruating?") };
+      return { showCycleQuestion: true, cycleQuestionLegend: emFluxo.legend, cycleQuestionLabel: emFluxo.label };
     }
-    if (elapsed < 21) return { showCycleQuestion: false, cycleQuestionLegend: "" };
-    if (average !== null && elapsed < average - 3) return { showCycleQuestion: false, cycleQuestionLegend: "" };
-    return { showCycleQuestion: true, cycleQuestionLegend: l("Sua menstruação começou hoje?", "Did your period start today?") };
+    // No meio do ciclo o app já sabe onde ela está. Perguntar seria pedir que
+    // ela confirmasse um cálculo que ele acabou de fazer.
+    if (elapsed < 21) return oculto;
+    if (average !== null && elapsed < average - 3) return oculto;
+    return { showCycleQuestion: true, cycleQuestionLegend: inicio.legend, cycleQuestionLabel: inicio.label };
   }, [state.checkinHistory, l]);
   // Português flexiona adjetivo por gênero: "cansada" e "cansado" são a mesma
   // emoção. O app já sabe a resposta do onboarding, então escreve a palavra
@@ -683,20 +695,33 @@ export function CheckinPage() {
 
                 A intensidade continua sendo perguntada enquanto há fluxo: é o
                 único detalhe que nenhum cálculo deduz. O dia do fluxo saiu —
-                era pedir para a pessoa contar o que o app sabe somar. ── */}
+                era pedir para a pessoa contar o que o app sabe somar.
+
+                E não é um par "Sim / Ainda não": isso é falso par. Se começou,
+                ela toca; se não começou, ela não toca em nada, e a ausência do
+                toque já é a resposta. Pedir um segundo toque para dizer "não"
+                é cobrar trabalho para registrar um não-evento. ── */}
             {showMenstrualBlock && showCycleQuestion && (
-            <div>
-              <BooleanChoice value={isFlowing} onChange={(value) => {
-                setIsFlowing(value);
-                if (value === true) {
-                  // Marcou o começo: dia 1 por definição, sem perguntar.
-                  setFlowDay(1);
-                } else {
-                  setFlowDay(null);
-                  setFlowIntensity(null);
-                  setSymptomLevels({});
-                }
-              }} legend={cycleQuestionLegend} group="menstrual-status" yes={l("Sim", "Yes")} no={l("Ainda não", "Not yet")} />
+            <div data-choice-group="menstrual-status">
+              <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 800 }}>{cycleQuestionLegend}</p>
+              <ChoiceButton
+                active={isFlowing === true}
+                ariaLabel={cycleQuestionLabel}
+                onClick={() => {
+                  const next = isFlowing === true ? null : true;
+                  setIsFlowing(next);
+                  if (next === true) {
+                    // Marcou o começo: dia 1 por definição, sem perguntar.
+                    setFlowDay(1);
+                  } else {
+                    setFlowDay(null);
+                    setFlowIntensity(null);
+                    setSymptomLevels({});
+                  }
+                }}
+              >
+                {isFlowing === true ? `✓ ${cycleQuestionLabel}` : cycleQuestionLabel}
+              </ChoiceButton>
               {isFlowing === true && (
                 <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
                   <fieldset data-choice-group="flow-intensity" style={{ margin: 0, padding: 0, border: 0 }}>

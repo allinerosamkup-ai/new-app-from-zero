@@ -570,6 +570,34 @@ export function aggregateCheckinsByDay(history: CheckinEntry[]): CheckinEntry[] 
 
 // ── Detecção de fase do ciclo menstrual ────────────────────
 
+/**
+ * Duração média do ciclo dela, a partir dos inícios de fluxo registrados.
+ *
+ * `null` até existir um ciclo fechado — e nesse caso o modulador cai em 28,
+ * que é média populacional, não leitura dela. Intervalo fora de 21 a 45 dias é
+ * lacuna de registro, não ciclo, e contaminaria a média.
+ */
+function personalCycleLength(sorted: CheckinEntry[]): number | null {
+  const flowing = sorted.filter((entry) => entry.isFlowing === true).map((entry) => entry.date).sort();
+  const starts: string[] = [];
+  let previous: string | null = null;
+  for (const day of flowing) {
+    const gap = previous ? (new Date(day).getTime() - new Date(previous).getTime()) / 86_400_000 : Infinity;
+    if (gap > 3) starts.push(day);
+    previous = day;
+  }
+
+  const lengths: number[] = [];
+  for (let index = 1; index < starts.length; index += 1) {
+    const length = Math.round(
+      (new Date(starts[index]).getTime() - new Date(starts[index - 1]).getTime()) / 86_400_000,
+    );
+    if (length >= 21 && length <= 45) lengths.push(length);
+  }
+  if (lengths.length === 0) return null;
+  return Math.round(lengths.reduce((total, value) => total + value, 0) / lengths.length);
+}
+
 function computeMenstrualModulator(sorted: CheckinEntry[]): MenstrualModulator {
   const UNKNOWN: MenstrualModulator = {
     detected: false,
@@ -610,6 +638,22 @@ function computeMenstrualModulator(sorted: CheckinEntry[]): MenstrualModulator {
 
   const cycleDay = daysSince + 1; // D1 = primeiro dia de fluxo
 
+  /**
+   * Fronteiras derivadas da duração REAL do ciclo dela.
+   *
+   * Antes os cortes eram fixos — menstruação até 5, pós-menstruação até 13,
+   * ovulação 14 a 16, pós-ovulação até 22 —, o que só está certo em quem tem
+   * exatamente 28 dias. Num ciclo de 35 a ovulação cai por volta do dia 21, e
+   * essas faixas a chamavam de pós-ovulação (modificador 0) e o dia 23 de TPM
+   * (negativo): o sinal invertido bem no pico de energia dela. Em ciclo curto
+   * acontece o espelho — entra em TPM e o app ainda acha que está estável.
+   *
+   * A âncora é a ovulação em `duração - 14`, porque a segunda metade do ciclo
+   * tem duração estável e a primeira é a que varia.
+   */
+  const cycleLength = personalCycleLength(sorted) ?? 28;
+  const ovulationDay = cycleLength - 14;
+
   let cyclePhase: MenstrualCyclePhase;
   let cyclePhaseLabel: string;
   let energyModifier: number;
@@ -622,19 +666,19 @@ function computeMenstrualModulator(sorted: CheckinEntry[]): MenstrualModulator {
     energyModifier = -0.5;
     moodModifier = -0.3;
     contextNote = `Fase da menstruação (D${cycleDay}) — energia tipicamente reduzida e sensibilidade aumentada. Respeitar o ritmo natural é estratégico.`;
-  } else if (cycleDay <= 13) {
+  } else if (cycleDay < ovulationDay - 2) {
     cyclePhase = 'follicular';
     cyclePhaseLabel = 'Pós-menstruação';
     energyModifier = 0.3;
     moodModifier = 0.2;
     contextNote = `Fase pós-menstruação (D${cycleDay}) — energia e clareza mental tendem a subir.`;
-  } else if (cycleDay <= 16) {
+  } else if (Math.abs(cycleDay - ovulationDay) <= 2) {
     cyclePhase = 'ovulatory';
     cyclePhaseLabel = 'Ovulação';
     energyModifier = 0.5;
     moodModifier = 0.3;
     contextNote = `Fase da ovulação (D${cycleDay}) — pico de energia, foco e disposição social.`;
-  } else if (cycleDay <= 22) {
+  } else if (cycleDay <= cycleLength - 5) {
     cyclePhase = 'luteal_early';
     cyclePhaseLabel = 'Pós-ovulação';
     energyModifier = 0;

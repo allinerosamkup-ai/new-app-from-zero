@@ -30,13 +30,19 @@ const DEFAULT_CYCLE_LENGTH = 28;
 const MIN_PLAUSIBLE_CYCLE = 21;
 const MAX_PLAUSIBLE_CYCLE = 45;
 
+/**
+ * Vocabulário único de fases — o mesmo que o produto já usava em
+ * `computeMenstrualModulator`. Não é jargão clínico de propósito: "fase lútea"
+ * não diz nada para quem lê, e o que importa não é o nome da fase, é o que ela
+ * faz com humor e energia.
+ */
 export type CyclePhase =
-  | 'menstruacao'
-  | 'folicular'
-  | 'ovulacao'
-  | 'lutea'
-  | 'pre_menstrual'
-  | 'desconhecida';
+  | 'menstrual'
+  | 'follicular'
+  | 'ovulatory'
+  | 'luteal_early'
+  | 'luteal_late'
+  | 'unknown';
 
 export type CycleConfidence = 'nenhuma' | 'provisoria' | 'estimada' | 'boa';
 
@@ -63,6 +69,12 @@ export type MenstrualCycleReading = {
   } | null;
   /** Se hoje é dia de perguntar "começou?" — ver `shouldAskFlowStart`. */
   askFlowStart: boolean;
+  /**
+   * Desvio esperado sobre o baseline pessoal. É tendência da fase, nunca
+   * afirmação sobre como ela está — o registro dela sempre ganha.
+   */
+  energyModifier: number;
+  moodModifier: number;
   /** Frase pronta em pt-BR sobre o momento do ciclo. */
   summary: string;
 };
@@ -85,12 +97,49 @@ function daysBetween(from: string, to: string): number {
 }
 
 const PHASE_LABEL: Record<CyclePhase, string> = {
-  menstruacao: 'Menstruação',
-  folicular: 'Fase folicular',
-  ovulacao: 'Ovulação',
-  lutea: 'Fase lútea',
-  pre_menstrual: 'Pré-menstrual',
-  desconhecida: 'Ciclo sem leitura',
+  menstrual: 'Menstruação',
+  follicular: 'Pós-menstruação',
+  ovulatory: 'Ovulação',
+  luteal_early: 'Pós-ovulação',
+  luteal_late: 'TPM',
+  unknown: 'Ciclo sem leitura',
+};
+
+/**
+ * O que cada fase faz com humor e energia — a razão de calcular o ciclo.
+ *
+ * Saber que hoje é "dia 22" não muda nada; saber que a irritabilidade tende a
+ * subir muda o tamanho do dia que a Airia propõe. Os valores vêm do modulador
+ * que o produto já usava, e o desvio é aplicado sobre o baseline pessoal, nunca
+ * como afirmação sobre como ela está — é tendência, e ela pode contrariar.
+ */
+const PHASE_EFFECT: Record<CyclePhase, { energy: number; mood: number; effect: string }> = {
+  menstrual: {
+    energy: -0.5,
+    mood: -0.3,
+    effect: 'a energia costuma ficar mais baixa e a sensibilidade mais alta',
+  },
+  follicular: {
+    energy: 0.3,
+    mood: 0.2,
+    effect: 'a energia e a clareza tendem a subir',
+  },
+  ovulatory: {
+    energy: 0.5,
+    mood: 0.3,
+    effect: 'costuma ser o pico de energia e disposição do seu ciclo',
+  },
+  luteal_early: {
+    energy: 0,
+    mood: 0,
+    effect: 'é a parte mais estável do seu ciclo',
+  },
+  luteal_late: {
+    energy: -0.3,
+    mood: -0.4,
+    effect: 'a irritabilidade tende a subir e a paciência a encurtar',
+  },
+  unknown: { energy: 0, mood: 0, effect: '' },
 };
 
 /**
@@ -121,13 +170,30 @@ function cycleLengths(starts: readonly string[]): number[] {
   return lengths;
 }
 
-function phaseFor(cycleDay: number, cycleLength: number): CyclePhase {
-  if (cycleDay <= 5) return 'menstruacao';
+/**
+ * Fronteiras derivadas da duração REAL do ciclo dela.
+ *
+ * O modulador anterior cortava em dias fixos — menstruação até 5,
+ * pós-menstruação até 13, ovulação 14 a 16, pós-ovulação até 22, TPM depois —
+ * o que só está certo para quem tem exatamente 28 dias.
+ *
+ * Num ciclo de 35 dias a ovulação cai por volta do dia 21. As fronteiras fixas
+ * chamavam esse dia de "pós-ovulação" (modificador `0`) e o dia 23 de "TPM"
+ * (modificador negativo) — **o sinal invertido bem no pico de energia dela**.
+ * Em ciclo curto acontece o espelho: a pessoa entra em TPM e o app ainda acha
+ * que está na fase estável.
+ *
+ * A âncora é a ovulação em `duração − 14`, pelo mesmo motivo da previsão: a
+ * fase lútea tem duração estável e a folicular é a que estica ou encolhe.
+ */
+export function phaseFor(cycleDay: number, cycleLength: number): CyclePhase {
   const ovulationDay = cycleLength - LUTEAL_DAYS;
-  if (cycleDay >= ovulationDay - 1 && cycleDay <= ovulationDay + 1) return 'ovulacao';
-  if (cycleDay < ovulationDay) return 'folicular';
-  if (cycleDay >= cycleLength - 4) return 'pre_menstrual';
-  return 'lutea';
+
+  if (cycleDay <= 5) return 'menstrual';
+  if (Math.abs(cycleDay - ovulationDay) <= 2) return 'ovulatory';
+  if (cycleDay < ovulationDay) return 'follicular';
+  if (cycleDay > cycleLength - 5) return 'luteal_late';
+  return 'luteal_early';
 }
 
 /**
@@ -177,14 +243,16 @@ export function computeMenstrualCycle(input: {
   if (!lastStart) {
     return {
       cycleDay: null,
-      phase: 'desconhecida',
-      phaseLabel: PHASE_LABEL.desconhecida,
+      phase: 'unknown',
+      phaseLabel: PHASE_LABEL.unknown,
       averageCycleLength: null,
       variability: null,
       observedCycles: 0,
       confidence: 'nenhuma',
       prediction: null,
       askFlowStart: true,
+      energyModifier: 0,
+      moodModifier: 0,
       summary: 'Ainda não sei onde você está no ciclo. Me diga quando a menstruação começar e eu acompanho daqui.',
     };
   }
@@ -192,7 +260,7 @@ export function computeMenstrualCycle(input: {
   const elapsed = daysBetween(lastStart, input.today);
   const cycleDay = elapsed + 1;
   const workingLength = averageCycleLength ?? DEFAULT_CYCLE_LENGTH;
-  const phase = cycleDay > MAX_PLAUSIBLE_CYCLE ? 'desconhecida' : phaseFor(cycleDay, workingLength);
+  const phase: CyclePhase = cycleDay > MAX_PLAUSIBLE_CYCLE ? 'unknown' : phaseFor(cycleDay, workingLength);
 
   /**
    * A faixa da previsão cresce com a irregularidade observada — e com a falta
@@ -215,9 +283,19 @@ export function computeMenstrualCycle(input: {
     };
   })();
 
-  const summary = phase === 'desconhecida'
+  /**
+   * A frase diz o EFEITO, não o rótulo. "Fase lútea" não informa nada; "a
+   * irritabilidade tende a subir" muda o que ela espera do próprio dia — e é
+   * exatamente para isso que o ciclo é calculado.
+   *
+   * Sem duração medida, o texto declara que a leitura é estimada em vez de
+   * apresentar 28 dias como se fosse o ciclo dela.
+   */
+  const effect = PHASE_EFFECT[phase];
+  const estimated = averageCycleLength === null ? ' Ainda é estimativa: preciso de mais um ciclo pra acertar o seu ritmo.' : '';
+  const summary = phase === 'unknown'
     ? `Faz ${elapsed} dias desde o último registro de fluxo — perdi o fio do ciclo. Quando a menstruação vier, me avise.`
-    : `Dia ${cycleDay} do seu ciclo, em ${PHASE_LABEL[phase].toLowerCase()}.`;
+    : `Dia ${cycleDay} do seu ciclo: ${effect.effect}.${estimated}`;
 
   return {
     cycleDay,
@@ -229,6 +307,8 @@ export function computeMenstrualCycle(input: {
     confidence,
     prediction,
     askFlowStart: shouldAskFlowStart({ lastFlowStart: lastStart, averageCycleLength, today: input.today }),
+    energyModifier: effect.energy,
+    moodModifier: effect.mood,
     summary,
   };
 }

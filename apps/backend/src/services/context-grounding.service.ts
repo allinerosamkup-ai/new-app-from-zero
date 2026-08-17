@@ -336,7 +336,7 @@ export class ContextGroundingService {
       flowingDays,
       today: new Date().toISOString().slice(0, 10),
     });
-    if (reading.cycleDay === null || reading.phase === 'desconhecida') return null;
+    if (reading.cycleDay === null || reading.phase === 'unknown') return null;
 
     return { label: reading.phaseLabel, cycleDay: reading.cycleDay };
   }

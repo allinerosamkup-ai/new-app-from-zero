@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { computeMenstrualCycle, extractFlowStarts, shouldAskFlowStart } from './menstrual-cycle';
+import { computeMenstrualCycle, extractFlowStarts, phaseFor, shouldAskFlowStart } from './menstrual-cycle';
 
 function run() {
   // ── 1. Dias seguidos de fluxo são UMA menstruação, não cinco ──────────────
@@ -20,7 +20,7 @@ function run() {
   // ── 2. Sem nenhum registro: nada é inventado ──────────────────────────────
   const vazio = computeMenstrualCycle({ flowingDays: [], today: '2026-08-17' });
   assert.equal(vazio.cycleDay, null);
-  assert.equal(vazio.phase, 'desconhecida');
+  assert.equal(vazio.phase, 'unknown');
   assert.equal(vazio.prediction, null, 'sem histórico não existe previsão');
   assert.equal(vazio.confidence, 'nenhuma');
   assert.equal(vazio.askFlowStart, true);
@@ -65,8 +65,12 @@ function run() {
 
   // ── 6. Ovulação é contada para trás, da próxima menstruação ───────────────
   //
-  // A fase lútea é a estável (~14 dias); a folicular é a que varia. Contar para
-  // frente a partir da última menstruação erra em quem tem ciclo longo.
+  // A segunda metade do ciclo tem DURAÇÃO estável (~14 dias) e a primeira é a
+  // que estica ou encolhe — por isso a âncora é a próxima menstruação, não a
+  // última. Contar para frente erra em quem tem ciclo longo.
+  //
+  // Atenção à palavra: duração estável não é humor estável. A fase de humor
+  // estável é a pós-ovulação; a reta final é a TPM, que puxa para baixo.
   const longo = computeMenstrualCycle({
     flowingDays: ['2026-06-01', '2026-07-06', '2026-08-10'],
     today: '2026-08-17',
@@ -97,7 +101,7 @@ function run() {
 
   // ── 8. Ausência longa: o app admite que perdeu o fio ──────────────────────
   const perdido = computeMenstrualCycle({ flowingDays: ['2026-06-01'], today: '2026-08-17' });
-  assert.equal(perdido.phase, 'desconhecida');
+  assert.equal(perdido.phase, 'unknown');
   assert.match(perdido.summary, /perdi o fio/);
   assert.equal(perdido.askFlowStart, true);
 
@@ -132,7 +136,7 @@ function run() {
   });
   assert.equal(viradaDeAno.averageCycleLength, 28);
   assert.equal(viradaDeAno.cycleDay, 4);
-  assert.equal(viradaDeAno.phase, 'menstruacao');
+  assert.equal(viradaDeAno.phase, 'menstrual');
 
   // ── 11. Nenhuma frase sugere método contraceptivo ─────────────────────────
   //
@@ -144,6 +148,81 @@ function run() {
     assert.doesNotMatch(leitura.summary, proibido, `frase com leitura contraceptiva: ${leitura.summary}`);
     assert.ok(leitura.summary.length > 0);
   }
+
+  // ── 12. As fronteiras seguem a duração dela, não um ciclo de 28 ───────────
+  //
+  // Este é o bug que o modulador antigo tinha: cortes fixos (menstruação até 5,
+  // ovulação 14-16, TPM a partir de 23) só valem para quem tem exatamente 28
+  // dias. Num ciclo de 35, o dia 21 é ovulação — e as fronteiras fixas o
+  // chamavam de pós-ovulação, e o dia 23 de TPM, invertendo o sinal do
+  // modificador bem no pico de energia.
+  assert.equal(phaseFor(21, 35), 'ovulatory', 'ciclo de 35: ovulação por volta do dia 21');
+  assert.equal(phaseFor(15, 35), 'follicular', 'ciclo de 35: dia 15 ainda é pós-menstruação');
+  assert.equal(phaseFor(10, 24), 'ovulatory', 'ciclo de 24: ovulação por volta do dia 10');
+  assert.equal(phaseFor(15, 28), 'ovulatory', 'ciclo de 28 continua correto');
+
+  // TPM é sempre a reta final, seja qual for a duração.
+  assert.equal(phaseFor(25, 28), 'luteal_late');
+  assert.equal(phaseFor(32, 35), 'luteal_late');
+  assert.equal(phaseFor(21, 24), 'luteal_late');
+  // ...e o mesmo dia 25 é a fase estável em quem tem ciclo longo.
+  assert.equal(phaseFor(25, 35), 'luteal_early');
+
+  // O mesmo dia do ciclo produz efeitos diferentes conforme a duração — é a
+  // prova de que o cálculo é dela, e não de um ciclo de manual.
+  const dia21 = [24, 28, 35].map((length) => phaseFor(21, length));
+  assert.deepEqual(dia21, ['luteal_late', 'luteal_early', 'ovulatory']);
+
+  // ── 13. Vocabulário único, sem jargão clínico ─────────────────────────────
+  //
+  // "Fase lútea" não diz nada para quem lê. O produto já tinha nomes humanos e
+  // agora existe um conjunto só, aqui e no motor da web.
+  const rotulos = new Set<string>();
+  for (const length of [24, 28, 35]) {
+    for (let day = 1; day <= length; day += 1) {
+      rotulos.add(computeMenstrualCycle({
+        flowingDays: ['2026-07-01', '2026-08-01'],
+        today: '2026-08-01',
+      }).phaseLabel);
+      void phaseFor(day, length);
+    }
+  }
+  for (const proibido of [/l[úu]tea/i, /folicular/i, /fase\s+lut/i]) {
+    for (const rotulo of rotulos) assert.doesNotMatch(rotulo, proibido);
+  }
+
+  // ── 14. A frase entrega o efeito, não o nome da fase ──────────────────────
+  const tpm = computeMenstrualCycle({
+    flowingDays: ['2026-06-08', '2026-07-06', '2026-08-03'],
+    today: '2026-08-28', // dia 26 de um ciclo de 28
+  });
+  assert.equal(tpm.phase, 'luteal_late');
+  assert.match(tpm.summary, /irritabilidade/, 'a frase diz o que a fase faz');
+  assert.doesNotMatch(tpm.summary, /l[úu]tea/i);
+  assert.ok(tpm.moodModifier < 0, 'TPM puxa o humor para baixo');
+
+  const fertil = computeMenstrualCycle({
+    flowingDays: ['2026-06-08', '2026-07-06', '2026-08-03'],
+    today: '2026-08-17', // dia 15 de um ciclo de 28
+  });
+  assert.equal(fertil.phase, 'ovulatory');
+  assert.ok(fertil.energyModifier > 0, 'a janela fértil é o pico de energia');
+  assert.match(fertil.summary, /pico de energia/);
+
+  // A fase estável de humor é a pós-ovulação, e ela não empurra nada.
+  const estavel = computeMenstrualCycle({
+    flowingDays: ['2026-06-08', '2026-07-06', '2026-08-03'],
+    today: '2026-08-22', // dia 20 de um ciclo de 28
+  });
+  assert.equal(estavel.phase, 'luteal_early');
+  assert.equal(estavel.energyModifier, 0);
+  assert.equal(estavel.moodModifier, 0);
+  assert.match(estavel.summary, /est[áa]vel/);
+
+  // ── 15. Sem duração medida, o app declara que é estimativa ────────────────
+  const semHistorico = computeMenstrualCycle({ flowingDays: ['2026-08-10'], today: '2026-08-17' });
+  assert.equal(semHistorico.averageCycleLength, null);
+  assert.match(semHistorico.summary, /estimativa/, 'não apresenta 28 dias como se fosse o ciclo dela');
 
   console.log('menstrual-cycle.test.ts OK');
 }

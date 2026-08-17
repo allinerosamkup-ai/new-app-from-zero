@@ -82,7 +82,17 @@ describe("CheckinPage integrated flow", () => {
      */
     expect(source).not.toContain('data-choice-group="flow-day"');
     expect(source).not.toContain('Está menstruada hoje?');
-    expect(source).toContain('Sua menstruação começou hoje?');
+    expect(source).toContain('Minha menstruação começou hoje');
+
+    /**
+     * Marcar o início é UM toque, não um par.
+     *
+     * "Sim / Ainda não" é falso par: se a menstruação não começou, a pessoa não
+     * toca em nada, e a ausência do toque já é a resposta. Pedir um segundo
+     * toque para registrar um não-evento é cobrar trabalho por nada.
+     */
+    expect(source).not.toMatch(/group="menstrual-status"[\s\S]{0,400}\bno=\{/);
+    expect(source).not.toContain('Ainda não", "Not yet"');
     expect(source).toContain('data-choice-group="flow-intensity"');
     expect(source).toContain('section="airia-interpretation"');
     expect(source).toContain('A Airia cuida da próxima decisão');
