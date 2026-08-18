@@ -189,6 +189,7 @@ type AuraStoreContextValue = {
   prepareJournalFromMood: () => void;
   addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<QueuedCheckinReceipt | {
     status: "persisted";
+    checkinId: string;
     stateLabel: string | null;
     analysis: string | null;
     recommendations: string[];
@@ -493,7 +494,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       if (storedQuietMode === "true" || storedQuietMode === "false") {
         setState((current) => ({ ...current, quietMode: storedQuietMode === "true" }));
       }
-    } catch {}
+    } catch {
+      // A preferência é opcional quando o armazenamento local não está disponível.
+    }
 
     refreshData();
   }, []);
@@ -540,7 +543,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           const quietMode = !current.quietMode;
           try {
             window.localStorage.setItem("airia.quietMode", String(quietMode));
-          } catch {}
+          } catch {
+            // A interação continua mesmo se o armazenamento local estiver indisponível.
+          }
           return { ...current, quietMode };
         }),
       toggleCheckinReminder: async () => {
@@ -729,6 +734,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         // Retorna dados ricos da IA para uso na tela de resultado
         return {
           status: "persisted" as const,
+          checkinId: String(checkinResponse?.checkinId ?? checkinResponse?.id),
           stateLabel: checkinResponse?.stateLabel ?? null,
           analysis: checkinResponse?.stateSummary ?? checkinResponse?.aiState?.analysis ?? null,
           recommendations: checkinResponse?.aiState?.recommendations ?? [],

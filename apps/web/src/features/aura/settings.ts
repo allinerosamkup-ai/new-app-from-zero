@@ -33,8 +33,10 @@ export function normalizeNotificationPreferences(
   return {
     checkin: typeof payload.checkin === "boolean" ? payload.checkin : current?.checkin ?? DEFAULT_NOTIFICATION_PREFERENCES.checkin,
     journal: typeof payload.journal === "boolean" ? payload.journal : current?.journal ?? DEFAULT_NOTIFICATION_PREFERENCES.journal,
-    planner: typeof payload.planner === "boolean" ? payload.planner : current?.planner ?? DEFAULT_NOTIFICATION_PREFERENCES.planner,
-    habits: typeof payload.habits === "boolean" ? payload.habits : current?.habits ?? DEFAULT_NOTIFICATION_PREFERENCES.habits,
+    // Mantidos no tipo para ler perfis antigos, mas deliberadamente inativos
+    // enquanto esses módulos estiverem fora do produto.
+    planner: false,
+    habits: false,
     persistent: typeof payload.persistent === "boolean" ? payload.persistent : current?.persistent ?? DEFAULT_NOTIFICATION_PREFERENCES.persistent,
     aiSuggestions: typeof payload.aiSuggestions === "boolean" ? payload.aiSuggestions : current?.aiSuggestions ?? DEFAULT_NOTIFICATION_PREFERENCES.aiSuggestions,
     journalMorningTime: normalizeTimeInput(

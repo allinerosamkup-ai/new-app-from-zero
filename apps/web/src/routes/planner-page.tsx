@@ -2091,7 +2091,7 @@ export function PlannerPage() {
           });
           setGapSuggestions(newSuggestions);
         }
-      } catch (e) {
+      } catch {
         // Falha silenciosa conforme lei do sistema
         console.warn("[Aura/AI] Gap suggestion failed - keeping silent");
       }
@@ -2403,7 +2403,7 @@ export function PlannerPage() {
     agendaAdaptationLocationHandledRef.current = true;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     void openAgendaAdaptationPreview("home");
-  }, [location.state, adaptationOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state, adaptationOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]);  
 
   // Sprint Frente 3 — abre proactive-replan vindo da Home
   const proactiveReplanLocationHandledRef = useRef(false);
@@ -2413,7 +2413,7 @@ export function PlannerPage() {
     proactiveReplanLocationHandledRef.current = true;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
     void openPlannerAISuggestions("proactive-replan");
-  }, [location.state, aiSuggestionSheetOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.state, aiSuggestionSheetOpen, plannerLoading, selectedDateKey, navigate, location.pathname, location.search]);  
 
   // ─── Notification actions via SW postMessage ────────────────────────────
   useEffect(() => {
@@ -2439,7 +2439,7 @@ export function PlannerPage() {
     };
     navigator.serviceWorker.addEventListener('message', handler);
     return () => navigator.serviceWorker.removeEventListener('message', handler);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   async function reloadPlannerTasks() {
     try {

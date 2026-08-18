@@ -17,9 +17,9 @@ import {
 } from "../features/voice/transcript-session";
 import { resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
-import { trackEvent } from "../lib/track";
+import { trackEvent, trackProductEvent } from "../lib/track";
 import { successHaptic, tapHaptic } from "../utils/haptics";
-import { getClientDayContext } from "../utils/day-context";
+import { getClientDayContext, normalizeDateKey } from "../utils/day-context";
 import { mergeVoiceFactors } from "./checkin-page.helpers";
 import {
   buildContextualCheckinEntry,
@@ -372,6 +372,16 @@ export function CheckinPage() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const voiceSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const checkinOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (checkinOpenedRef.current) return;
+    checkinOpenedRef.current = true;
+    trackProductEvent("checkin.opened.v1", "checkin", {
+      entryPoint: "unknown",
+      hasPreviousCheckinToday: (state.checkinHistory ?? []).some((item) => normalizeDateKey(item.date) === dayContext.localDate),
+    });
+  }, [dayContext.localDate, state.checkinHistory]);
 
   function clearVoiceSilenceTimer() {
     if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
@@ -389,6 +399,8 @@ export function CheckinPage() {
   function startVoiceCheckin() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
+      trackProductEvent("checkin.voice_requested.v1", "checkin", {});
+      trackProductEvent("checkin.voice_failed.v1", "checkin", { failureCode: "recognition_failed" });
       setVoiceError(t("checkin.voiceRecognitionUnsupported"));
       return;
     }
@@ -400,6 +412,7 @@ export function CheckinPage() {
 
     setVoiceError(null);
     setVoiceTranscript("");
+    trackProductEvent("checkin.voice_requested.v1", "checkin", {});
     const recognition = new SpeechRecognition();
     const transcriptSession = new TranscriptSession();
     recognition.lang = resolveIntlLocale(i18n.language);
@@ -412,6 +425,7 @@ export function CheckinPage() {
       transcriptSession.reset();
       if (!releaseRecognition(recognitionRef, recognition)) return;
       setIsListening(false);
+      trackProductEvent("checkin.voice_failed.v1", "checkin", { failureCode: "recognition_failed" });
       setVoiceError(t("checkin.voiceHearRetry"));
     };
     recognition.onresult = createTranscriptResultHandler(transcriptSession, (snapshot) => {
@@ -445,6 +459,7 @@ export function CheckinPage() {
         }
         if (result.note) setNote(result.note);
       } catch {
+        trackProductEvent("checkin.voice_failed.v1", "checkin", { failureCode: "server" });
         setVoiceError(t("checkin.voiceEmotionRetry"));
       } finally {
         setVoiceLoading(false);
@@ -462,10 +477,23 @@ export function CheckinPage() {
   const canSubmit = missing.length === 0;
 
   async function handleSubmit() {
-    if (!canSubmit || isSaving) return;
+    if (isSaving) return;
+    if (!canSubmit) {
+      trackProductEvent("checkin.validation_blocked.v1", "checkin", {
+        missingFieldCodes: missing.map((field) => field === "humor" ? "mood" : field === "energia" ? "energy" : "factors"),
+      });
+      return;
+    }
     setSubmitError(null);
     setIsSaving(true);
     try {
+      const inputMode = voiceTranscript.trim() ? "voice_assisted" : "manual";
+      const optionalFieldsCount = [sono, sleepHours, clareza, irritabilidade, fisico, social, isFlowing, medicationTakenToday, focusScore, hyperfocusOccurred, dayType].filter((value) => value !== null).length;
+      trackProductEvent("checkin.submit_attempted.v1", "checkin", {
+        requiredFieldsComplete: true,
+        optionalFieldsCount,
+        inputMode,
+      });
       const entry = buildContextualCheckinEntry({
         humor,
         energia,
@@ -491,6 +519,11 @@ export function CheckinPage() {
       });
       const outcome = await addCheckin(entry);
       if (outcome.status === "queued") {
+        trackProductEvent("checkin.queued.v1", "checkin", {
+          idempotencyKey: outcome.idempotencyKey,
+          retryCount: 0,
+          inputMode,
+        });
         trackEvent("checkin_queued", {
           flow: "contextual",
           idempotency_key: outcome.idempotencyKey,
@@ -509,6 +542,11 @@ export function CheckinPage() {
           // Vibrar no toque do botão comemoraria algo que ainda pode falhar.
           successHaptic();
           if (entry.emotion) setMood(EMOTION_TO_MOOD[entry.emotion] ?? "equilibrada");
+          trackProductEvent("checkin.completed.v1", "checkin", {
+            checkinId: outcome.checkinId,
+            hasOptionalContext: optionalFieldsCount > 0,
+            inputMode,
+          });
           trackEvent("checkin_completed", {
             flow: "contextual",
             factors_count: factors.length,
@@ -521,6 +559,11 @@ export function CheckinPage() {
         },
       });
     } catch (error) {
+      trackProductEvent("checkin.save_failed.v1", "checkin", {
+        failureCode: navigator.onLine ? "server" : "offline",
+        retryable: true,
+        networkState: navigator.onLine ? "online" : "offline",
+      });
       console.error("Erro ao registrar check-in contextual:", error);
       setSubmitError(l(
         "Não foi possível salvar o check-in. Seus dados continuam nesta tela para você tentar novamente.",
@@ -637,7 +680,14 @@ export function CheckinPage() {
             type="button"
             aria-expanded={contextOpen}
             aria-controls="checkin-context-details"
-            onClick={() => { tapHaptic(); setContextOpen((open) => !open); }}
+            onClick={() => {
+              tapHaptic();
+              setContextOpen((open) => {
+                const isOpen = !open;
+                trackProductEvent("checkin.optional_context_toggled.v1", "checkin", { isOpen, section: "context" });
+                return isOpen;
+              });
+            }}
             style={{
               width: "100%",
               minHeight: 46,

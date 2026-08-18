@@ -1,20 +1,25 @@
-import assert from 'node:assert/strict';
+import { describe, expect, it } from "@jest/globals";
 
-import { parseSseChunk } from './ai_service';
+import { parseSseChunk } from "./ai_service";
 
-const input =
-  'event: assistant.delta\n' +
-  'data: {"chunk":"Olá, "}\n\n' +
-  'event: assistant.completed\n' +
-  'data: {"message":{"content":"Olá, estou com você."}}\n\n';
+describe("parseSseChunk", () => {
+  it("separa eventos SSE consecutivos e preserva o conteúdo", () => {
+    const input =
+      "event: assistant.delta\n" +
+      'data: {"chunk":"Olá, "}\n\n' +
+      "event: assistant.completed\n" +
+      'data: {"message":{"content":"Olá, estou com você."}}\n\n';
+    const parsed = parseSseChunk(input);
 
-const parsed = parseSseChunk(input);
-
-assert.equal(parsed.events.length, 2);
-assert.equal(parsed.events[0].event, 'assistant.delta');
-assert.equal(parsed.events[0].data.chunk, 'Olá, ');
-assert.equal(parsed.events[1].event, 'assistant.completed');
-assert.equal(parsed.events[1].data.message.content, 'Olá, estou com você.');
-assert.equal(parsed.remainder, '');
-
-console.log('mobile ai_service tests passed');
+    expect(parsed.events).toHaveLength(2);
+    expect(parsed.events[0]).toMatchObject({
+      event: "assistant.delta",
+      data: { chunk: "Olá, " },
+    });
+    expect(parsed.events[1]).toMatchObject({
+      event: "assistant.completed",
+      data: { message: { content: "Olá, estou com você." } },
+    });
+    expect(parsed.remainder).toBe("");
+  });
+});

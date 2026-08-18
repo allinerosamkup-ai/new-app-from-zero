@@ -16,7 +16,7 @@ export type BillingAccessSummary = {
   access: "pro" | "free";
   source: "paid" | "professional" | "trial" | "free";
   subscriptionStatus: string | null;
-  provider: "cakto" | "stripe" | null;
+  provider: "cakto" | null;
   plan: BillingPlan | null;
   periodEnd: string | null;
   trialEndsAt: string | null;

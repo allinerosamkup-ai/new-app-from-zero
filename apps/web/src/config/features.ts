@@ -22,6 +22,7 @@
 export const FEATURES = {
   planner: false,
   habits: false,
+  pomodoro: false,
   connectedCalendar: false,
   routineBuilder: false,
 } as const;

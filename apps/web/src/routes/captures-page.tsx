@@ -37,7 +37,7 @@ export function CapturesPage() {
 
   useEffect(() => {
     void load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   const updateCapture = async (capture: Capture, patch: Partial<Capture>) => {

@@ -1104,40 +1104,6 @@ export function PreferencesPage() {
           )}
           <div className="config-row">
             <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(143,192,164,.14)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-peach)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v20" /><path d="M5 9c4 0 7-3 7-7 0 4 3 7 7 7" /><path d="M5 15c4 0 7 3 7 7 0-4 3-7 7-7" />
-                </svg>
-              </div>
-              <div>
-                <p className="config-row-text">{t("config.habitNotifications")}</p>
-                <p className="config-row-sub">{t("config.habitNotificationsDescription")}</p>
-              </div>
-            </div>
-            <Toggle
-              on={notificationPrefs.habits}
-              onToggle={() => handleNotificationPatch({ habits: !notificationPrefs.habits })}
-            />
-          </div>
-          <div className="config-row">
-            <div className="config-row-label">
-              <div className="icon-bg" style={{ background: "rgba(176,180,196,.12)" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sky)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4v6h6" /><path d="M20 20v-6h-6" /><path d="M20 9a8 8 0 0 0-13.5-3.5L4 8" /><path d="M4 15a8 8 0 0 0 13.5 3.5L20 16" />
-                </svg>
-              </div>
-              <div>
-                <p className="config-row-text">{t("config.persistentNotifications")}</p>
-                <p className="config-row-sub">{t("config.persistentNotificationsDescription")}</p>
-              </div>
-            </div>
-            <Toggle
-              on={notificationPrefs.persistent}
-              onToggle={() => handleNotificationPatch({ persistent: !notificationPrefs.persistent })}
-            />
-          </div>
-          <div className="config-row">
-            <div className="config-row-label">
               <div className="icon-bg" style={{ background: "rgba(184,217,200,.16)" }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-sage)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z" /><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8Z" />
@@ -1289,10 +1255,18 @@ export function PreferencesPage() {
           <PrivacyDataSection onStatusChange={setAccountStatus} />
           <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
           <PrivacyDeleteSection onStatusChange={setAccountStatus} />
-          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
-          {FEATURES.connectedCalendar && <GCalSettingsSection onStatusChange={setAccountStatus} />}
-          <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
-          <HealthConnectSettingsSection onStatusChange={setAccountStatus} />
+          {FEATURES.connectedCalendar && (
+            <>
+              <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
+              <GCalSettingsSection onStatusChange={setAccountStatus} />
+            </>
+          )}
+          {isNativeShell() && (
+            <>
+              <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
+              <HealthConnectSettingsSection onStatusChange={setAccountStatus} />
+            </>
+          )}
           <div style={{ height: 1, background: "var(--warm-border)", opacity: 0.65, margin: "2px 0" }} />
           <div
             className="config-row"

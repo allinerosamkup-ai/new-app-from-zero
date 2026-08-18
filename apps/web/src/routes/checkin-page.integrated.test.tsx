@@ -100,4 +100,25 @@ describe("CheckinPage integrated flow", () => {
     expect(source).not.toContain('O que mais precisa da sua atenção hoje?');
     expect(source).toMatch(/outcome\.status === "queued"[\s\S]{0,900}return;[\s\S]{0,180}finalizeContextualCheckin/);
   });
+
+  it("instruments every semantic check-in outcome without sending health values or free text", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/routes/checkin-page.tsx"), "utf8");
+    for (const eventName of [
+      "checkin.opened.v1",
+      "checkin.optional_context_toggled.v1",
+      "checkin.voice_requested.v1",
+      "checkin.voice_failed.v1",
+      "checkin.submit_attempted.v1",
+      "checkin.validation_blocked.v1",
+      "checkin.completed.v1",
+      "checkin.queued.v1",
+      "checkin.save_failed.v1",
+    ]) {
+      expect(source).toContain(eventName);
+    }
+    expect(source).toContain("missingFieldCodes");
+    expect(source).toContain("optionalFieldsCount");
+    expect(source).toContain("hasOptionalContext");
+    expect(source).toContain("failureCode");
+  });
 });

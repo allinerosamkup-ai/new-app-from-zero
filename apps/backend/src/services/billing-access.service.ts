@@ -9,7 +9,7 @@ export type BillingAccessSummary = {
   access: 'pro' | 'free';
   source: 'paid' | 'professional' | 'trial' | 'free';
   subscriptionStatus: string | null;
-  provider: 'cakto' | 'stripe' | null;
+  provider: 'cakto' | null;
   plan: 'monthly' | 'annual' | 'lifetime' | null;
   periodEnd: string | null;
   trialEndsAt: string | null;
@@ -67,9 +67,7 @@ export function resolveAccess(
     access: source === 'free' ? 'free' : 'pro',
     source,
     subscriptionStatus,
-    provider: state.billingProvider === 'cakto' || state.billingProvider === 'stripe'
-      ? state.billingProvider
-      : null,
+    provider: state.billingProvider === 'cakto' ? 'cakto' : null,
     plan,
     periodEnd: toIso(currentPeriodEnd),
     trialEndsAt: toIso(trialEndsAt),

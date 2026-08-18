@@ -1175,6 +1175,7 @@ export function computeConsistencyScore(
 
   // 40 pts: hábitos diários completados esta semana
   const dailyHabits = habits.filter(h => h.frequency === "daily");
+  let habitScore = 20;
   if (dailyHabits.length > 0) {
     let totalSlots = 0, completedSlots = 0;
     for (const d of weekDates) {
@@ -1183,9 +1184,7 @@ export function computeConsistencyScore(
         h.completions?.some(c => c.date?.startsWith(d))
       ).length;
     }
-    var habitScore = totalSlots > 0 ? Math.round((completedSlots / totalSlots) * 40) : 20;
-  } else {
-    var habitScore = 20; // sem hábitos = neutro
+    habitScore = totalSlots > 0 ? Math.round((completedSlots / totalSlots) * 40) : 20;
   }
 
   // 20 pts: journals esta semana (1+ = 10, 3+ = 20)

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { trackProductEvent } from "./track";
 
 export type AiriaRiskSafety = {
   riskLevel: "none" | "low" | "moderate" | "high" | "crisis";
@@ -98,6 +99,7 @@ export function useAiriaReading(range?: { from?: string; to?: string }) {
   const [reading, setReading] = useState<AiriaReadingEnvelope | null>(null);
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(false);
+  const presentedDecisionIds = useRef(new Set<string>());
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -109,7 +111,32 @@ export function useAiriaReading(range?: { from?: string; to?: string }) {
   }, [range?.from, range?.to]);
 
   useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    const decision = reading?.decision;
+    if (!decision || decision.status !== "proposed" || presentedDecisionIds.current.has(decision.id)) return;
+    presentedDecisionIds.current.add(decision.id);
+    const pathname = typeof window === "undefined" ? "/" : window.location.pathname;
+    const surface = pathname.startsWith("/insights") ? "patterns"
+      : pathname.startsWith("/journal") ? "journal"
+        : pathname.startsWith("/goals") ? "goals"
+          : pathname.startsWith("/checkin-result") ? "checkin_result"
+            : pathname.startsWith("/checkin") ? "checkin"
+              : "home";
+    const confidence = Number(reading?.period?.confidence ?? 0);
+    trackProductEvent("decision.presented.v1", surface, {
+      decisionId: decision.id,
+      evidenceBand: confidence >= 0.7 ? "supported" : confidence >= 0.35 ? "limited" : "insufficient",
+    });
+  }, [reading]);
   return { reading, loading, available, reload };
+}
+
+function productSurfaceForDecision(surface: "home" | "insights" | "journal" | "goals" | "checkin_result" | "daily_summary" | "aura") {
+  if (surface === "insights") return "patterns" as const;
+  if (surface === "journal") return "journal" as const;
+  if (surface === "goals") return "goals" as const;
+  if (surface === "checkin_result" || surface === "daily_summary") return "checkin_result" as const;
+  return "home" as const;
 }
 
 export async function sendAiriaDecisionFeedback(
@@ -123,6 +150,10 @@ export async function sendAiriaDecisionFeedback(
       status,
       surface,
       ...(correction?.trim() ? { correction: correction.trim() } : {}),
+    });
+    trackProductEvent("decision.feedback_submitted.v1", productSurfaceForDecision(surface), {
+      decisionId,
+      feedback: status,
     });
     return true;
   } catch {
@@ -146,6 +177,10 @@ export async function correctAiriaCapacity(
       status: "corrected",
       surface,
       capacityCorrection: direction,
+    });
+    trackProductEvent("decision.feedback_submitted.v1", productSurfaceForDecision(surface), {
+      decisionId,
+      feedback: "corrected",
     });
     return isReading(response) ? response : null;
   } catch {

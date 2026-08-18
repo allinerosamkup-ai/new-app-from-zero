@@ -1,12 +1,12 @@
 // Insights Page v4 — Analytics profundo + Line chart + Correlações + Export + Relatório mensal
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { api } from "../lib/api";
-import { trackEvent } from "../lib/track";
+import { trackProductEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
@@ -166,7 +166,7 @@ export function InsightsPage() {
     const onFocus = () => { void refreshData(); };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
 
@@ -214,6 +214,15 @@ export function InsightsPage() {
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
   const reportEvidence = useMemo(() => buildMoodReportEvidence(history, periodDays), [history, periodDays]);
+  const insightsOpenedRef = useRef(false);
+  useEffect(() => {
+    if (insightsOpenedRef.current) return;
+    insightsOpenedRef.current = true;
+    trackProductEvent("patterns.opened.v1", "patterns", {
+      evidenceBand: reportEvidence.confidence === "high" ? "supported" : reportEvidence.confidence === "medium" ? "limited" : "insufficient",
+      observedDays: reportEvidence.observedDays,
+    });
+  }, [reportEvidence.confidence, reportEvidence.observedDays]);
   const stabilityReading = useMemo(() => classifyStability(history), [history]);
   const factorAssociations = useMemo(() => buildFactorAssociations(history), [history]);
   const consistencyScore = useMemo(
@@ -378,6 +387,9 @@ export function InsightsPage() {
   }
 
   async function fetchInsight() {
+    trackProductEvent("patterns.report_requested.v1", "patterns", {
+      windowDays: Math.min(90, Math.max(7, periodDays)),
+    });
     setInsightPhase("loading");
     try {
       const res = await api.get(`/insights/weekly?weekStart=${getWeekStartIso()}`) as WeeklyInsightsResponse;
@@ -402,11 +414,7 @@ export function InsightsPage() {
       setWeeklyQuestion(res.insights.weeklyQuestion ?? null);
       setHighlights(res.insights.highlights ?? []);
       setInsightPhase("done");
-      trackEvent("weekly_report_generated", {
-        source: "weekly_insights_endpoint",
-        period,
-        checkins: history.length,
-      });
+      trackProductEvent("patterns.report_resolved.v1", "patterns", { outcome: "ready" });
     } catch (error) {
       console.warn("[insights] weekly AI failed, using local fallback.", error);
       const localAction = cycleReport.phase === "depleted" || cycleReport.phase === "low"
@@ -457,11 +465,7 @@ export function InsightsPage() {
         ),
       ]);
       setInsightPhase("done");
-      trackEvent("weekly_report_generated", {
-        source: "local_fallback",
-        period,
-        checkins: history.length,
-      });
+      trackProductEvent("patterns.report_resolved.v1", "patterns", { outcome: "ready" });
     }
   }
 

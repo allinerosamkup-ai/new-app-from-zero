@@ -13,7 +13,7 @@ import type { AuraCommandPlan } from "../features/aura/command-types";
 import { SmartEmptyState } from "../components/activation/SmartEmptyState";
 import { useAuraStore } from "../features/aura/store";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
-import { trackEvent } from "../lib/track";
+import { trackEvent, trackProductEvent } from "../lib/track";
 import { tapHaptic } from "../utils/haptics";
 import { supabase } from "../lib/supabase";
 import { buildJournalClosePrompt } from "./journal-page.helpers";
@@ -233,9 +233,9 @@ export function JournalPage() {
   useEffect(() => {
     if (journalOpenedRef.current || isSessionsLoading) return;
     journalOpenedRef.current = true;
-    trackEvent("journal_opened", {
-      view: "chat",
-      has_active_session: Boolean(sessions.some((session) => session.status === "active")),
+    const today = new Date().toLocaleDateString("en-CA");
+    trackProductEvent("journal.opened.v1", "journal", {
+      hasEntryToday: sessions.some((session) => session.status === "completed" && session.localDate === today),
     });
   }, [isSessionsLoading, sessions]);
 
@@ -262,7 +262,7 @@ export function JournalPage() {
     return () => {
       if (liveReplyTimerRef.current) clearTimeout(liveReplyTimerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [input]);
 
   async function loadSessions() {
@@ -373,7 +373,7 @@ export function JournalPage() {
       let assistantMessage = "";
       setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -456,6 +456,10 @@ export function JournalPage() {
       });
       setShowFinalizationModal(true);
       window.localStorage.setItem("airia.journal.hasEntry", "true");
+      trackProductEvent("journal.entry_saved.v1", "journal", {
+        sessionId,
+        hasGoalLink: false,
+      });
       setSessionId(null);
       setMessages([]);
       setExpandedSessionId(null);
@@ -538,7 +542,7 @@ export function JournalPage() {
       void finalizeSession();
     }, msUntilMidnight);
     return () => clearTimeout(midnightTimer);
-  }, [sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionId]);  
 
   /**
    * Sugestão do diário entra nas Próximas ações, sem hora.

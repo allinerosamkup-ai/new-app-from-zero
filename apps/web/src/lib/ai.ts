@@ -5,7 +5,7 @@ function extractJsonCandidate(raw: string): string | null {
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
   if (fenced?.[1]) return fenced[1].trim();
 
-  const firstBrace = trimmed.search(/[\[{]/);
+  const firstBrace = trimmed.search(/[[{]/);
   if (firstBrace < 0) return null;
 
   const candidate = trimmed.slice(firstBrace).trim();

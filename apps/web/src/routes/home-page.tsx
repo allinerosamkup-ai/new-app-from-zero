@@ -1,5 +1,4 @@
-// Home Page v4 — babá digital IA + mensagens personalizadas + agenda por blocos
-import { FEATURES } from "../config/features";
+// Home Page v5 — leitura diária, check-ins, objetivos e padrões
 import { DailyPrioritiesCards } from "../components/DailyPrioritiesCards";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,14 +7,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { supabase } from "../lib/supabase";
-import { HabitIdeasModal, type HabitModalPayload } from "../features/aura/HabitIdeasModal";
 import { api, setAdaptiveSnapshot } from "../lib/api";
-import { trackEvent } from "../lib/track";
+import { trackProductEvent } from "../lib/track";
 import { tryParseAiSuggestion } from "../lib/ai";
 import { AiriaLogoBg } from "../components/AuraIcon";
 import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-import { useToast } from "../components/Toast";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { JornadaHomeCard } from "../components/JornadaHomeCard";
 import { ProgressStrip } from "../components/ProgressStrip";
@@ -37,7 +34,6 @@ import { createNativeTodayWidgetPayload, postNativeWidgetSync } from "../utils/n
 import { dismissProactiveNudgeForToday } from "../utils/proactive-nudge-dismissal";
 import {
   type HomeAiMsg,
-  buildHomeAgendaPreview,
   buildHomeAiRequestKey,
   buildQuarterHourRefreshBucket,
   deriveHomePrimaryAction,
@@ -53,14 +49,10 @@ import {
   MessageSquareText,
   Activity,
   Target,
-  Timer,
   TrendingUp,
-  Sparkles,
   ChevronRight,
 } from "lucide-react";
-import { FirstRunGuide } from "../components/activation/FirstRunGuide";
 import { getActivationState } from "../features/aura/activation";
-import { isHabitDueOnDate } from "../features/aura/habit-helpers";
 import { NotificationPromptBanner } from "../components/NotificationPromptBanner";
 import { PresenceCard } from "../components/PresenceCard";
 // import { ReferralCard } from "../components/ReferralCard"; // reserved for referral section
@@ -101,6 +93,8 @@ const HOME_CHART_TABS: Array<{ id: HomeChartMode; label: string }> = [
   { id: "day", label: "Hoje" },
   { id: "forecast", label: "7 dias" },
 ];
+
+const EMPTY_HOME_TASK_TITLES: string[] = [];
 
 function polishHomeMicroAction(value: string): string {
   const trimmed = value.trim().replace(/\s+/g, " ");
@@ -362,7 +356,7 @@ function LiveClock() {
 export function HomePage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
-  const { state, addHabit, refreshData, setProactiveNudge, hydrated } = useAuraStore();
+  const { state, refreshData, setProactiveNudge, hydrated } = useAuraStore();
   const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
   const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
@@ -392,17 +386,15 @@ export function HomePage() {
   }, []);
 
   // Refresh on mount to pick up any check-ins done since the app loaded
-  useEffect(() => { refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refreshData(); }, []);  
   const homeOpenedRef = useRef(false);
   const navigate = useNavigate();
-  const { showError } = useToast();
   const [addedActionTitles, setAddedActionTitles] = useState<Set<string>>(new Set());
   const [skippedActionTitles, setSkippedActionTitles] = useState<Set<string>>(new Set());
   const [homeChartMode, setHomeChartMode] = useState<HomeChartMode>("week");
   // Gráfico tátil (design emocional P3): dedo/cursor sobre o gráfico acende o ponto.
   const [chartFocusIdx, setChartFocusIdx] = useState<number | null>(null);
   useEffect(() => { setChartFocusIdx(null); }, [homeChartMode]);
-  const [showHabitIdeasModal, setShowHabitIdeasModal] = useState(false);
 
   // Relógio e Contexto de Tempo (necessários para IDs e filtros)
   const [clockTime, setClockTime] = useState(() => new Date());
@@ -434,10 +426,6 @@ export function HomePage() {
     equilibrada: "Balanced", focada: "Focused", tensa: "Tense", cansada: "Tired", sensivel: "Sensitive", sobrecarregada: "Overloaded",
   };
   const mood = { ...rawMood, label: l(rawMood.label, moodLabelsEn[state.mood] ?? "Balanced") };
-  const habits = useMemo(
-    () => (state.habits || []).filter((habit) => isHabitDueOnDate(habit, clockTime)),
-    [clockTime, state.habits],
-  );
   const activationState = useMemo(
     () => getActivationState(state, { hasLocalJournalEntry }),
     [hasLocalJournalEntry, state],
@@ -505,7 +493,7 @@ export function HomePage() {
       firstHalfAvg - secondHalfAvg > 0.5 ? "down" : "stable";
 
     return { weekKey, avgMood, avgEnergy, avgSleep, dominantPhase, topFactor, moodTrend, count: weekEntries.length };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [state.checkinHistory, weeklyReportDismissed]);
 
   // ── Motor de Ciclagem de Humor ────────────────────────────
@@ -580,13 +568,16 @@ export function HomePage() {
     () => (state.goals || []).filter((goal) => goal.completedPct < 100).map((goal) => goal.title),
     [state.goals],
   );
-  const pendingTaskTitles = useMemo(
-    () => (state.tasks || []).filter((task) => !task.done).slice(0, 6).map((task) => task.title),
-    [state.tasks],
+  const activeGoalCount = useMemo(
+    () => (state.goals || []).filter((goal) => goal.completedPct < 100).length,
+    [state.goals],
   );
-  const homeAgendaPreview = useMemo(
-    () => buildHomeAgendaPreview({ tasks: state.tasks || [], habits, referenceDate: clockTime }),
-    [clockTime, habits, state.tasks],
+  const pendingGoalActionCount = useMemo(
+    () => (state.goals || [])
+      .flatMap((goal) => goal.subtasks || [])
+      .filter((action) => !action.done)
+      .length,
+    [state.goals],
   );
 
   // ── Gráfico semanal — média diária dos últimos 7 dias ─────────────────────
@@ -658,11 +649,9 @@ export function HomePage() {
       // Sem Planner não existe "próximo bloco com horário": a Home só conhece
       // objetivo em foco e próximas ações, e nenhum dos dois tem relógio.
       nextTask: null,
-      dueHabit: FEATURES.habits && homeAgendaPreview.habit
-        ? { title: homeAgendaPreview.habit.title, icon: homeAgendaPreview.habit.icon }
-        : null,
+      dueHabit: null,
     }),
-    [clockTime, hasEveningCheckinToday, homeAgendaPreview, isCheckinReentry, todayCheckinData.length],
+    [clockTime, hasEveningCheckinToday, isCheckinReentry, todayCheckinData.length],
   );
 
   // ── UI adaptativa por fase (Onda 3) ─────────────────────────────────────────
@@ -744,13 +733,16 @@ export function HomePage() {
   const hasActiveChartData = activeChartData.some(
     (point) => point.humorY !== null || point.energiaY !== null,
   );
+  const hasCheckinHistoryForChart = weeklyCheckinData.some(
+    (point) => point.humorY !== null || point.energiaY !== null,
+  );
   const homeChartSubtitle = (() => {
-    if (homeChartMode === "monthly") return "Histórico — últimos 30 dias";
-    if (homeChartMode === "forecast") return "Previsão — próximos 7 dias";
+    if (homeChartMode === "monthly") return l("Histórico — últimos 30 dias", "History — last 30 days");
+    if (homeChartMode === "forecast") return l("Previsão — próximos 7 dias", "Forecast — next 7 days");
     if (homeChartMode === "day") {
       return todayCheckinData.length > 0
-        ? `${todayCheckinData.length} check-in${todayCheckinData.length > 1 ? "s" : ""} hoje`
-        : "Hoje ainda não há check-ins registrados";
+        ? l(`${todayCheckinData.length} check-in${todayCheckinData.length > 1 ? "s" : ""} hoje`, `${todayCheckinData.length} check-in${todayCheckinData.length > 1 ? "s" : ""} today`)
+        : l("Hoje ainda não há check-ins registrados", "There are no check-ins logged today");
     }
     return t("home.moodEnergyAvg");
   })();
@@ -776,12 +768,10 @@ export function HomePage() {
     const feedback = readHomeAutonomyFeedback();
     return [
       ...extractBlockedHomeAutonomyTitles(feedback),
-      ...(state.tasks || []).filter((task) => task.done).map((task) => task.title),
-      ...(state.habits || []).filter((habit) => (habit.completions || []).length > 0).map((habit) => habit.title),
       ...(state.goals || []).filter((goal) => goal.completedPct >= 100).map((goal) => goal.title),
       ...(state.goals || []).flatMap((goal) => goal.subtasks || []).filter((subgoal) => subgoal.done).map((subgoal) => subgoal.title),
     ].filter(Boolean);
-  }, [homeAutonomyFeedbackTick, state.goals, state.habits, state.tasks]);
+  }, [homeAutonomyFeedbackTick, state.goals]);
   const isHomeAutonomyActionBlocked = useCallback(
     (title: string) => isHomeAutonomyTitleBlocked(title, homeAutonomyBlockedTitles),
     [homeAutonomyBlockedTitles],
@@ -799,6 +789,23 @@ export function HomePage() {
       setHomeAutonomyFeedbackTick((value) => value + 1);
     },
     [dayContext.localDate],
+  );
+  const hasCanonicalDecision = Boolean(canonicalReading?.decision);
+  const hasProactiveNudge = Boolean(state.proactiveNudge?.action);
+  const visibleAutonomyActions = useMemo(
+    () => (state.autonomousInsight?.actions ?? []).filter(
+      (action) => !skippedActionTitles.has(action.title)
+        && !addedActionTitles.has(action.title)
+        && !isHomeAutonomyActionBlocked(action.title),
+    ),
+    [addedActionTitles, isHomeAutonomyActionBlocked, skippedActionTitles, state.autonomousInsight?.actions],
+  );
+  // A Home pode gerar recomendações de fontes diferentes, mas só uma recebe
+  // destaque por vez: leitura canônica > nudge contextual > autonomia > ação
+  // de momento. Assim o próximo passo não disputa espaço nem se contradiz.
+  const showMomentPrimaryAction = Boolean(
+    primaryAction && !showActivationHome && !hasCanonicalDecision
+      && !hasProactiveNudge && visibleAutonomyActions.length === 0,
   );
   const latestCheckinKey = useMemo(() => {
     const history = state.checkinHistory || [];
@@ -829,9 +836,9 @@ export function HomePage() {
         localDate: dayContext.localDate,
         partOfDay: dayContext.partOfDay,
         mood: state.mood,
-        taskCount: state.tasks.length,
+        taskCount: 0,
         goalTitles,
-        pendingTaskTitles,
+        pendingTaskTitles: EMPTY_HOME_TASK_TITLES,
         latestCheckinKey,
         refreshBucket,
       }),
@@ -840,10 +847,8 @@ export function HomePage() {
       dayContext.partOfDay,
       goalTitles,
       latestCheckinKey,
-      pendingTaskTitles,
       refreshBucket,
       state.mood,
-      state.tasks.length,
     ],
   );
 
@@ -857,17 +862,10 @@ export function HomePage() {
         moodScore: latestTodayCheckin?.humor,
         energyScore: latestTodayCheckin?.energia,
         updatedAt: latestTodayCheckin?.recordedAt ?? new Date().toISOString(),
-        planner: (state.tasks || [])
-          .filter((task) => !task.done)
-          .sort((a, b) => a.time.localeCompare(b.time))
-          .slice(0, 3)
-          .map((task) => ({
-            time: task.time,
-            title: task.title,
-          })),
+        planner: [],
       }),
     );
-  }, [hydrated, latestTodayCheckin, state.tasks]);
+  }, [hydrated, latestTodayCheckin]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -887,8 +885,8 @@ export function HomePage() {
             mood: state.mood,
             moodLabel: mood.label,
             energia: state.energia,
-            taskCount: state.tasks.length,
-            pendingTaskTitles,
+            taskCount: 0,
+            pendingTaskTitles: EMPTY_HOME_TASK_TITLES,
             goals: goalTitles,
             hour: dayContext.hour,
             partOfDay: dayContext.partOfDay,
@@ -937,46 +935,28 @@ export function HomePage() {
     hydrated,
     latestTodayCheckin,
     mood.label,
-    pendingTaskTitles,
     refreshBucket,
     state.energia,
     state.mood,
-    state.tasks.length,
   ]);
 
   useEffect(() => {
     if (!hydrated || homeOpenedRef.current) return;
     homeOpenedRef.current = true;
-    trackEvent("home_opened", {
-      tasks_count: state.tasks.length,
-      habits_count: (state.habits || []).length,
-      checkins_count: (state.checkinHistory || []).length,
+    const observedDays = new Set((state.checkinHistory || []).map((entry) => normalizeDateKey(entry.date))).size;
+    trackProductEvent("home.opened.v1", "home", {
+      hasCheckinToday: (state.checkinHistory || []).some((entry) => normalizeDateKey(entry.date) === getLocalDateKey()),
+      evidenceBand: observedDays >= 7 ? "supported" : observedDays >= 3 ? "limited" : "insufficient",
     });
-  }, [hydrated, state.checkinHistory, state.habits, state.tasks.length]);
+  }, [hydrated, state.checkinHistory]);
+
+  function selectNextStep(destination: "checkin" | "journal" | "goals" | "patterns", sourceCard: "reading" | "empty_state" | "quick_action" | "unknown", path: string) {
+    trackProductEvent("home.next_step_selected.v1", "home", { destination, sourceCard });
+    navigate(path);
+  }
 
   // Mensagem motivacional — apenas IA
   const motivacionalFinal = homeAiMsg?.motivacional ?? null;
-  // Task stats
-  const totalTasks = state.tasks.length;
-  const doneTasks = state.tasks.filter(t => t.done).length;
-  const pendingTasks = state.tasks.filter(t => !t.done).length;
-
-
-  async function handleHabitSave(payload: HabitModalPayload) {
-    try {
-      await addHabit(payload);
-      return true;
-    } catch (error) {
-      showError(error instanceof Error ? error.message : "Nao foi possivel adicionar o habito.");
-      return false;
-    }
-  }
-
-
-
-
-
-
   /**
    * Aceitar uma sugestão da Home = registrar nas Próximas ações.
    *
@@ -989,6 +969,7 @@ export function HomePage() {
     // segue para o objetivo que já contém as ações persistidas.
     recordHomeAutonomyFeedback(action.title, "accepted");
     setAddedActionTitles((prev) => new Set([...prev, action.title]));
+    trackProductEvent("home.next_step_selected.v1", "home", { destination: "goals", sourceCard: "reading" });
     navigate("/goals", { state: buildGoalSuggestionRouteState(`${action.title} ${action.category}`, state.goals || []) });
   }
 
@@ -1116,50 +1097,33 @@ export function HomePage() {
     <>
             <p className="aura-section-kicker">{t("home.quickAccess")}</p>
       <div className="shortcut-grid">
-        <button className="shortcut-card" onClick={() => navigate("/journal")}>
+        <button className="shortcut-card" onClick={() => selectNextStep("journal", "quick_action", "/journal")}>
           <div className="icon-badge shortcut-icon shortcut-icon-journal">
             <MessageSquareText size={18} color="var(--terracotta)" />
           </div>
           <span className="shortcut-label">{t("nav.journal")}</span>
           <span className="shortcut-sub">{t("home.talkToAi")}</span>
         </button>
-        <button className="shortcut-card" onClick={() => navigate("/insights")}>
+        <button className="shortcut-card" onClick={() => selectNextStep("patterns", "quick_action", "/insights")}>
           <div className="icon-badge shortcut-icon shortcut-icon-insights">
             <Activity size={18} color="var(--atomic-tangerine)" />
           </div>
                     <span className="shortcut-label">{t("nav.insights")}</span>
           <span className="shortcut-sub">{t("home.harmony")}</span>
         </button>
-        <button className="shortcut-card" onClick={() => navigate("/goals")}>
+        <button className="shortcut-card" onClick={() => selectNextStep("goals", "quick_action", "/goals")}>
           <div className="icon-badge shortcut-icon shortcut-icon-goals">
             <Target size={18} color="var(--sweet-mint)" />
           </div>
           <span className="shortcut-label">{t("home.objectives")}</span>
                     <span className="shortcut-sub">{t("home.yourGoals")}</span>
         </button>
-        <button className="shortcut-card" onClick={() => navigate("/pomodoro")}>
-          <div className="icon-badge shortcut-icon shortcut-icon-pomodoro">
-            <Timer size={18} color="var(--terracotta)" />
-          </div>
-          <span className="shortcut-label">Pomodoro</span>
-          <span className="shortcut-sub">{t("home.focus")}</span>
-        </button>
-        {FEATURES.habits && (
-          <button className="shortcut-card" onClick={() => navigate("/habits")}>
-            <div className="icon-badge" style={{ background: "rgba(150,199,179,.18)" }}>
-              <Sparkles size={18} color="var(--accent-sage)" />
-            </div>
-            <span className="shortcut-label">{t("home.habits")}</span>
-            <span className="shortcut-sub">{t("home.rituals")}</span>
-          </button>
-        )}
       </div>
     </>
   );
 
   return (
     <>
-    <FirstRunGuide activation={activationState} userId={pushUserId} />
     <div ref={containerRef as React.RefObject<HTMLDivElement>} style={{ flex: 1, overflowY: "auto", background: "var(--warm-bg)", position: "relative", WebkitOverflowScrolling: "touch" }}>
       {/* Watermark híbrida — logo da Airia quase transparente */}
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", pointerEvents: "none", zIndex: 0 }}>
@@ -1346,7 +1310,7 @@ export function HomePage() {
         <JornadaHomeCard />
 
         {/* Ação principal do momento — 1 só, conforme hora do dia e estado real */}
-        {primaryAction && !showActivationHome && (
+        {showMomentPrimaryAction && primaryAction && (
           <>
             <button
               type="button"
@@ -1452,7 +1416,7 @@ export function HomePage() {
 
 
         {/* ── Ver meu dia — detalhes colapsados (today view) ── */}
-        <button
+        {hasCheckinHistoryForChart && <button
           type="button"
           onClick={toggleDayDetails}
           aria-expanded={dayDetailsOpen}
@@ -1474,13 +1438,13 @@ export function HomePage() {
             fontFamily: "'Plus Jakarta Sans', sans-serif",
           }}
         >
-          {dayDetailsOpen ? "Recolher" : "Ver meu dia"}
+          {dayDetailsOpen ? l("Recolher", "Collapse") : l("Ver meu dia", "View my day")}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: dayDetailsOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }} aria-hidden="true">
             <polyline points="6 9 12 15 18 9" />
           </svg>
-        </button>
+        </button>}
 
-        {dayDetailsOpen && (<>
+        {dayDetailsOpen && hasCheckinHistoryForChart && (<>
 
         {/* ── Gráfico de check-ins ── */}
         <div className="mini-chart-area" style={showActivationHome && activationState.checkinCount === 0 ? { padding: 12 } : undefined}>
@@ -1489,7 +1453,7 @@ export function HomePage() {
               <TrendingUp size={13} color="var(--horizon)" />
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  <span className="chart-title">Humor e energia</span>
+                  <span className="chart-title">{l("Humor e energia", "Mood and energy")}</span>
                   {homeChartMode === "forecast" && (
                     <span style={{
                       fontSize: 10,
@@ -1565,7 +1529,7 @@ export function HomePage() {
                       display: "inline-block",
                     }}
                   />
-                  Humor
+                  {l("Humor", "Mood")}
                 </div>
                 <div className="legend-item">
                   <span
@@ -1577,7 +1541,7 @@ export function HomePage() {
                       display: "inline-block",
                     }}
                   />
-                  Energia
+                  {l("Energia", "Energy")}
                 </div>
               </div>
             </div>
@@ -2010,7 +1974,7 @@ export function HomePage() {
             <AuraButtonV2
               variant="primary"
               size="md"
-              onClick={() => navigate("/checkin")}
+              onClick={() => selectNextStep("checkin", "reading", "/checkin")}
               leftIcon={
                 <span style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
@@ -2056,10 +2020,8 @@ export function HomePage() {
           const cfg = hasInsight ? (STATE_CONFIG[ins!.state] ?? STATE_CONFIG.stable) : STATE_CONFIG.stable;
           const score = hasInsight ? ins!.stabilityScore : cycleReport.stabilityScore;
           const isUrgent = hasInsight && score < 40;
-          const visibleActions = !usesCanonicalDecision && hasInsight
-            ? ins!.actions.filter(
-                a => !skippedActionTitles.has(a.title) && !addedActionTitles.has(a.title) && !isHomeAutonomyActionBlocked(a.title)
-              )
+          const visibleActions = !usesCanonicalDecision && !hasProactiveNudge && hasInsight
+            ? visibleAutonomyActions
             : [];
           const primaryAction = visibleActions[0] ?? null;
           const hasCycleData = cycleReport.phase !== "insufficient_data";
@@ -2375,7 +2337,7 @@ export function HomePage() {
         })()}
 
         {/* ── Nudge proativo da Airia ──────────────────────────── */}
-        {state.proactiveNudge && (() => {
+        {state.proactiveNudge && !hasCanonicalDecision && (() => {
           const nudge = state.proactiveNudge!;
           const colorMap = {
             checkin_missing: "#F3B08C",
@@ -2442,11 +2404,11 @@ export function HomePage() {
               <p style={{ fontSize: 13, fontWeight: 800, color: "var(--accent-peach-ink)", margin: 0 }}>{t("home.howIsYourDay")}</p>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                <Stat label={t("home.todayTasks")} value={t("home.planned", { count: totalTasks })} accent="sky" />
+                <Stat label={t("home.checkinsToday")} value={todayCheckinData.length} accent="sky" />
             <div style={{ height: 1, background: "var(--warm-border)" }} />
-                <Stat label={t("home.completed")} value={`${doneTasks} ✓`} accent="sage" />
+                <Stat label={t("home.activeGoals")} value={activeGoalCount} accent="sage" />
             <div style={{ height: 1, background: "var(--warm-border)" }} />
-            <Stat label="Em andamento" value={pendingTasks} accent="peach" />
+            <Stat label={t("home.nextActions")} value={pendingGoalActionCount} accent="peach" />
           </div>
           <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(197,165,147,.06)", borderRadius: 10, border: "1px solid var(--accent-peach-a5)" }}>
             {homeAiLoading ? (
@@ -2554,16 +2516,6 @@ export function HomePage() {
         </>)}
 
       </div>
-      {showHabitIdeasModal && (
-        <HabitIdeasModal
-          onClose={() => setShowHabitIdeasModal(false)}
-          onSave={handleHabitSave}
-          onViewAll={() => {
-            setShowHabitIdeasModal(false);
-            navigate("/habits");
-          }}
-        />
-      )}
       <PhaseLegendSheet
         open={phaseLegendOpen}
         onClose={() => setPhaseLegendOpen(false)}

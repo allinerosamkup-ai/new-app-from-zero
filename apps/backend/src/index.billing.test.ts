@@ -15,21 +15,6 @@ async function run() {
     { plan: 'annual', amountCents: 24900, currency: 'BRL', billingPeriod: 'year', enabled: true },
     { plan: 'lifetime', amountCents: 9900, currency: 'BRL', billingPeriod: 'once', enabled: true },
   ];
-  const stripeService = {
-    createCheckoutSession: async (userId: string, email: string | undefined, plan: string, attemptKey: string) => {
-      checkoutCalls.push({ userId, email, plan, attemptKey });
-      return `https://checkout/${plan}`;
-    },
-    createPortalSession: async () => 'https://portal/session',
-    verifyCheckoutSession: async (userId: string, sessionId: string) => ({
-      confirmed: true,
-      plan: 'lifetime',
-      userId,
-      sessionId,
-    }),
-    getOfferCatalog: () => offers,
-    handleWebhook: async () => ({ duplicate: false }),
-  };
   const billingProvider = {
     name: 'cakto' as const,
     isConfigured: () => true,
@@ -63,7 +48,6 @@ async function run() {
       $queryRaw: async () => [], $executeRaw: async () => ({}),
       billingAccount: { findUnique: async () => ({ billingProvider: 'cakto' }) },
     } as any,
-    stripeService: stripeService as any,
     billingProvider,
     caktoService: {
       handleWebhook: async (payload: any) => {
@@ -130,11 +114,11 @@ async function run() {
     const status = await (await fetch(`${baseUrl}/api/billing/status`)).json();
     assert.deepEqual(status, { ...summary, offers });
 
-    const verification = await fetch(`${baseUrl}/api/billing/checkout-session/cs_test`);
+    const verification = await fetch(`${baseUrl}/api/billing/checkout-session/attempt-lifetime`);
     assert.equal(verification.status, 200);
     const verificationBody = await verification.json();
     assert.equal(verificationBody.confirmed, true);
-    assert.equal(verificationBody.userId, USER_ID);
+    assert.equal(verificationBody.status, 'paid');
 
     const missingConfirmation = await fetch(`${baseUrl}/api/billing/cancel`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
@@ -162,14 +146,14 @@ async function run() {
     assert.equal(caktoTransient.status, 503, 'transient Cakto failures must remain retryable');
     assert.equal(caktoWebhookCalls.length, 3, 'Cakto webhook is public and bypasses app auth');
 
-    const noSignature = await fetch(`${baseUrl}/api/billing/webhook`, {
+    const legacyWebhook = await fetch(`${baseUrl}/api/billing/webhook`, {
       method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' },
     });
-    assert.equal(noSignature.status, 400);
-    const noSignatureAlias = await fetch(`${baseUrl}/api/billing/webhook/stripe`, {
+    assert.equal(legacyWebhook.status, 404);
+    const legacyStripeWebhook = await fetch(`${baseUrl}/api/billing/webhook/stripe`, {
       method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' },
     });
-    assert.equal(noSignatureAlias.status, 400);
+    assert.equal(legacyStripeWebhook.status, 404);
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }

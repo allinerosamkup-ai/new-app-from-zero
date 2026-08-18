@@ -1,0 +1,28 @@
+# PWA TODO
+
+- [ ] Corrigir riscos residuais de telemetria, RLS, retenção e entrega offline.
+- [ ] Validar todos os caminhos, redirecionamentos e páginas órfãs da PWA.
+- [ ] Unificar linguagem, nomenclatura e mensagens de interface em português brasileiro.
+- [x] Revisar o fluxo de onboarding inicial e suas transições para o aplicativo principal.
+- [x] Auditar configurações, preferências e seus efeitos visíveis no produto.
+- [x] Identificar e remover duplicidades ou redundâncias de código, conteúdo e layout na Home, Check-in e demais jornadas.
+- [x] Corrigir inconsistências encontradas e validar a PWA contra um padrão de qualidade 9/10.
+- [x] Produzir relatório final de verificação da PWA.
+- [x] Remover destinos de Hábitos e Planner do núcleo ativo, incluindo a ação principal da Home e preferências herdadas.
+- [x] Reduzir a tela Configurações ao conjunto de opções coerente com o núcleo ativo e com capacidades da PWA.
+- [ ] Centralizar a linguagem exposta do onboarding e dos banners no sistema de tradução.
+- [x] Criar teste de integridade entre rotas declaradas, caminhos canônicos e CTAs do núcleo.
+- [x] Tornar a fila offline de telemetria resiliente a erros não recuperáveis e a tentativas repetidas.
+- [x] Alinhar o manifesto PWA, atalhos de instalação e imagens de apresentação às jornadas ativas.
+- [x] Remover do roteador e dos chunks de produção as telas desativadas de Hábitos, Planner e Pomodoro.
+- [x] Consolidar o estado inicial da Home em uma única orientação de check-in e corrigir chaves de idioma exibidas literalmente.
+- [x] Fixar search_path e revogar execução pública das funções Supabase não usadas diretamente pela PWA.
+- [x] Mover a extensão vector para o esquema extensions recomendado pelo Supabase e validar o acesso das roles da PWA.
+- [x] Documentar como exceção aprovada o alerta de proteção contra senhas vazadas, que não será ativada por decisão do usuário.
+- [x] Manter a proteção contra senhas vazadas como limitação conhecida do plano Supabase Free, sem propor upgrade nesta etapa.
+- [ ] Validar o projeto de ponta a ponta, incluindo PWA, backend, contrato de dados, rotas, build e riscos operacionais remanescentes.
+- [x] Corrigir os erros de lint da PWA e reduzir avisos diretamente relacionados às jornadas ativas.
+- [x] Corrigir a configuração de testes móveis que não resolve o plugin react-native-reanimated do Babel.
+- [ ] Inventariar e corrigir os 44 erros de lint legados do aplicativo móvel, fora do núcleo prioritário da PWA.
+- [x] Auditar referências a Stripe e alinhar o código, as dependências e os testes de pagamento exclusivamente à integração Cakto.
+- [ ] Publicar no GitHub as correções validadas da PWA e a documentação de verificação, mediante autorização da titular.

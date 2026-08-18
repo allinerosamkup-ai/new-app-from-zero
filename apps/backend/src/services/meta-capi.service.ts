@@ -99,7 +99,7 @@ export function sendPurchaseEvent(input: CapiEventInput): Promise<CapiResult> {
   return sendConversionEvent('Purchase', input);
 }
 
-/** Subscribe (assinatura Airia Pro via Stripe). */
+/** Subscribe (assinatura Airia Pro confirmada pela Cakto). */
 export function sendSubscribeEvent(input: CapiEventInput): Promise<CapiResult> {
   return sendConversionEvent('Subscribe', input);
 }

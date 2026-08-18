@@ -24,7 +24,7 @@ export function CheckinResultPage() {
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correction, setCorrection] = useState("");
 
-  useEffect(() => { successHaptic(); void refreshData(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { successHaptic(); void refreshData(); }, []);  
 
   const cycle = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
   const phaseColor = getPhaseColor(cycle.phase);

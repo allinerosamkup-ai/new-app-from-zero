@@ -149,7 +149,13 @@ export function AuraLayout() {
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [showOnboardingPrompt, setShowOnboardingPrompt] = useState(false);
 
-  useHabitReminders(state.habits ?? [], state.tasks ?? [], state.notificationPreferences);
+  // Hábitos e Planner não fazem parte do núcleo atual. Dados legados podem
+  // existir no perfil, mas não devem reviver lembretes locais invisíveis.
+  useHabitReminders(
+    FEATURES.habits ? state.habits ?? [] : [],
+    FEATURES.planner ? state.tasks ?? [] : [],
+    state.notificationPreferences,
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

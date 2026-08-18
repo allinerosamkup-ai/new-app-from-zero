@@ -3,6 +3,16 @@ import { getCurrentLanguage } from '../i18n';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api');
 
+export class ApiRequestError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 /**
  * Retorna {currentHour, currentMinute} do relógio LOCAL do dispositivo.
  * Usado pra calibrar sugestões da Aura sem depender do relógio do servidor (pode estar em UTC).
@@ -188,7 +198,7 @@ async function requestWithAuth(
 
   const recovered = await recoverSession();
   if (!recovered) {
-    throw new Error('Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
+    throw new ApiRequestError(401, 'Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
   }
 
   // Token novo em mãos: refaz a chamada que falhou.
@@ -202,7 +212,7 @@ async function handleResponse(response: Response) {
     // Chegou aqui já tendo passado por requestWithAuth: o token foi renovado e
     // a chamada refeita, e ainda assim voltou 401. Não é mais problema de token.
     await recoverSession();
-    throw new Error('Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
+    throw new ApiRequestError(401, 'Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
   }
 
   let message = `Erro ${response.status}`;
@@ -217,7 +227,7 @@ async function handleResponse(response: Response) {
   } catch {
     message = `Erro ${response.status}: ${response.statusText}`;
   }
-  throw new Error(message);
+  throw new ApiRequestError(response.status, message);
 }
 
 function uploadContentType(file: File): string {

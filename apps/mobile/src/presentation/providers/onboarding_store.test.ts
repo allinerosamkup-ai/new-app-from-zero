@@ -1,75 +1,65 @@
-import assert from 'node:assert/strict';
+import { describe, expect, it, jest } from "@jest/globals";
 
-import api from '../../services/api_service';
-import { supabase } from '../../lib/supabase';
-import { useAuthStore } from './auth_store';
-import { ONBOARDING_QUESTIONS, useOnboardingStore } from './onboarding_store';
+jest.mock("./auth_store", () => ({
+  useAuthStore: {
+    getState: () => ({ refresh: jest.fn<() => Promise<void>>() }),
+  },
+}));
 
-async function run() {
-  let refreshCalls = 0;
+jest.mock("../../lib/supabase", () => ({
+  supabase: {
+    from: jest.fn(),
+  },
+}));
 
-  (useAuthStore.getState() as any).refresh = async () => {
-    refreshCalls += 1;
-  };
+import api from "../../services/api_service";
+import { supabase } from "../../lib/supabase";
+import { useAuthStore } from "./auth_store";
+import { ONBOARDING_QUESTIONS, useOnboardingStore } from "./onboarding_store";
 
-  (api.post as any) = async (url: string) => {
-    assert.equal(url, '/api/onboarding/process');
-    return {
+describe("useOnboardingStore", () => {
+  it("persiste a narrativa inicial e conclui o onboarding após as respostas essenciais", async () => {
+    const refresh = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    jest.spyOn(useAuthStore, "getState").mockReturnValue({
+      refresh,
+    } as unknown as ReturnType<typeof useAuthStore.getState>);
+    jest.spyOn(api, "post").mockResolvedValue({
       data: {
-        profileSummary: 'Você está começando o app com vontade de reorganizar a rotina com mais gentileza.',
-        routineSummaryNormalized: 'Acorda às 07:00, dorme às 23:00 e sente mais peso no fim da tarde.',
-        initialStateSummary: 'Chega cansada e buscando mais estabilidade para os próximos dias.',
-        topThemes: ['sono', 'rotina', 'trabalho'],
-        initialSuggestions: [
-          'Comece com blocos leves nas primeiras horas.',
-          'Observe o impacto do sono nas tardes mais pesadas.',
-          'Deixe pausas curtas entre demandas importantes.',
-        ],
+        profileSummary: "Você está começando o app com vontade de reorganizar a rotina com mais gentileza.",
+        routineSummaryNormalized: "Acorda às 07:00, dorme às 23:00 e sente mais peso no fim da tarde.",
+        initialStateSummary: "Chega cansada e buscando mais estabilidade para os próximos dias.",
+        topThemes: ["sono", "rotina", "trabalho"],
+        initialSuggestions: ["Comece com blocos leves nas primeiras horas."],
       },
-    };
-  };
+    });
+    const fromMock = supabase.from as unknown as jest.MockedFunction<typeof supabase.from>;
+    fromMock.mockReturnValue({
+      upsert: async () => ({ data: null, error: null }),
+      update: () => ({ eq: async () => ({ data: null, error: null }) }),
+    } as never);
 
-  (supabase as any).from = (table: string) => ({
-    upsert: async () => ({ data: null, error: null, table }),
-    update: () => ({
-      eq: async () => ({ data: null, error: null, table }),
-    }),
+    useOnboardingStore.getState().reset();
+    expect(ONBOARDING_QUESTIONS).toHaveLength(8);
+
+    [
+      "Ana",
+      "33",
+      "Estou cansada e sobrecarregada.",
+      "Tenho dormido mal nos últimos dias.",
+      { wakeTime: "07:00", sleepTime: "23:00" },
+      "Trabalho o dia todo e no fim da tarde fico esgotada.",
+      "Excesso de demandas e pouco descanso.",
+      "Quero organizar melhor minha energia.",
+    ].forEach((answer) => useOnboardingStore.getState().submitAnswer(answer));
+    useOnboardingStore.getState().toggleSupportGoal("routine");
+    useOnboardingStore.getState().setConsent("healthData", true);
+    useOnboardingStore.getState().setConsent("aiProcessing", true);
+
+    await useOnboardingStore.getState().completeOnboarding("550e8400-e29b-41d4-a716-446655440000");
+    expect(useOnboardingStore.getState().stage).toBe("summary");
+    expect(useOnboardingStore.getState().aiProfile?.profileSummary).toMatch(/reorganizar a rotina/i);
+
+    await useOnboardingStore.getState().finalizeOnboarding();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
-
-  useOnboardingStore.getState().reset();
-
-  assert.equal(ONBOARDING_QUESTIONS.length, 8);
-  assert.equal(useOnboardingStore.getState().currentQuestionIndex, 0);
-
-  useOnboardingStore.getState().submitAnswer('Ana');
-  useOnboardingStore.getState().submitAnswer('33');
-  useOnboardingStore.getState().submitAnswer('Estou cansada e sobrecarregada.');
-  useOnboardingStore.getState().submitAnswer('Tenho dormido mal nos últimos dias.');
-  useOnboardingStore.getState().submitAnswer({ wakeTime: '07:00', sleepTime: '23:00' });
-  useOnboardingStore.getState().submitAnswer('Trabalho o dia todo e no fim da tarde fico esgotada.');
-  useOnboardingStore.getState().submitAnswer('Excesso de demandas e pouco descanso.');
-  useOnboardingStore.getState().submitAnswer('Quero organizar melhor minha energia.');
-
-  useOnboardingStore.getState().toggleSupportGoal('routine');
-  useOnboardingStore.getState().setConsent('healthData', true);
-  useOnboardingStore.getState().setConsent('aiProcessing', true);
-
-  await useOnboardingStore.getState().completeOnboarding('550e8400-e29b-41d4-a716-446655440000');
-
-  assert.equal(useOnboardingStore.getState().stage, 'summary');
-  assert.match(useOnboardingStore.getState().aiProfile?.profileSummary ?? '', /reorganizar a rotina/i);
-  assert.equal(refreshCalls, 0);
-
-  await useOnboardingStore.getState().finalizeOnboarding();
-
-  assert.equal(refreshCalls, 1);
-}
-
-run()
-  .then(() => {
-    console.log('onboarding_store tests passed');
-  })
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+});

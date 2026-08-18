@@ -16,59 +16,9 @@ const releaseMetadataPlugin = (): Plugin => ({
   },
 });
 
-const addComponentDataPlugin = () => {
-  return {
-    name: 'previewbridge-component-data',
-    transformIndexHtml(html) {
-      return html.replace('</body>', `
-        <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-        <script>
-          window.previewErrors = [];
-          window.addEventListener('error', (e) => window.previewErrors.push(e.message));
-          window.addEventListener('message', async (event) => {
-            if (event.data && event.data.command === 'focusComponent') {
-              const el = document.querySelector('[data-component="' + event.data.componentName + '"]');
-              if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                const oldOutline = el.style.outline;
-                el.style.outline = '3px solid #ff00ff';
-                setTimeout(() => el.style.outline = oldOutline, 2000);
-              }
-            }
-            if (event.data && event.data.command === 'takeScreenshot') {
-              try {
-                // Wait for any animations to finish
-                setTimeout(async () => {
-                  const canvas = await window.html2canvas(document.body, { useCORS: true, allowTaint: true });
-                  window.parent.postMessage({ command: 'screenshotResult', data: canvas.toDataURL('image/jpeg', 0.8) }, '*');
-                }, 500);
-              } catch(e) {
-                window.parent.postMessage({ command: 'screenshotResult', data: '' }, '*');
-              }
-            }
-            if (event.data && event.data.command === 'getErrors') {
-              window.parent.postMessage({ command: 'errorsResult', errors: window.previewErrors }, '*');
-            }
-          });
-        </script>
-      </body>`);
-    },
-    transform(code: string, id: string) {
-      // Basic heuristic: inject data-component attribute into JSX/TSX
-      if (id.endsWith('.jsx') || id.endsWith('.tsx')) {
-        return code.replace(/(function\s+([A-Z][a-zA-Z0-9]*)\s*\([^)]*\)\s*\{\s*(?:return\s+)?<([a-zA-Z0-9]+)(\s|>))/g, (match, p1, p2, p3, p4) => {
-            return match.replace('<' + p3, `<${p3} data-component="${p2}"`);
-        });
-      }
-      return null;
-    }
-  };
-};
-
 export default defineConfig({
   plugins: [
     react(),
-    addComponentDataPlugin(),
     releaseMetadataPlugin(),
     VitePWA({
       strategies: 'injectManifest',
@@ -85,7 +35,7 @@ export default defineConfig({
         short_name: 'Airia',
         lang: 'pt-BR',
         dir: 'ltr',
-        description: 'PWA cliente da Airia para check-ins, planner e leitura do estado do dia.',
+        description: 'PWA da Airia para check-ins, objetivos, diário e leitura de padrões.',
         theme_color: '#FDF9F5',
         background_color: '#FDF9F5',
         display: 'standalone',
@@ -117,10 +67,10 @@ export default defineConfig({
         ],
         shortcuts: [
           {
-            name: 'Abrir Airia',
-            short_name: 'Chat Airia',
-            description: 'Conversar com a inteligência central da Airia',
-            url: '/aura',
+            name: 'Hoje',
+            short_name: 'Hoje',
+            description: 'Ver o retrato e o próximo passo do seu dia',
+            url: '/home',
             icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
           },
           {
@@ -138,10 +88,10 @@ export default defineConfig({
             icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
           },
           {
-            name: 'Planner',
-            short_name: 'Planner',
-            description: 'Ver meu planner de energia',
-            url: '/planner',
+            name: 'Padrões',
+            short_name: 'Padrões',
+            description: 'Explorar padrões a partir dos seus check-ins',
+            url: '/insights',
             icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
           }
         ],
@@ -149,7 +99,7 @@ export default defineConfig({
           { src: '/screenshots/home-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Home — Ciclagem de Humor' },
           { src: '/screenshots/checkin-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Check-in Diário' },
           { src: '/screenshots/insights-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Analytics & Insights' },
-          { src: '/screenshots/planner-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Planner de Energia' },
+          { src: '/screenshots/aura-page.png', sizes: '390x844', type: 'image/png', form_factor: 'narrow', label: 'Airia — próximo passo' },
         ],
       },
       workbox: {
@@ -157,37 +107,6 @@ export default defineConfig({
         // Impede que o SW sirva index.html (SPA fallback) para rotas /api/
         // Isso é CRÍTICO para o OAuth callback do Google Calendar funcionar
         navigateFallbackDenylist: [/^\/api\//],
-        /**
-         * ATENÇÃO: com `strategies: 'injectManifest'` (linha 74), este bloco é
-         * ignorado. O service worker é `src/sw.ts`, e só o que está escrito lá
-         * roda — estas regras de fonte nunca chegaram a valer. Ficam porque
-         * voltariam a valer se a estratégia mudasse para `generateSW`; regra
-         * nova de cache vai em `src/sw.ts`, não aqui.
-         */
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'gstatic-fonts-cache',
-              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
-      },
-      devOptions: {
-        enabled: true,
-        type: 'module',
       },
     }),
   ],
@@ -240,5 +159,6 @@ export default defineConfig({
   server: {
     port: Number(process.env.PORT) || 5051,
     strictPort: false,
+    allowedHosts: [".manus.computer"],
   }
 });

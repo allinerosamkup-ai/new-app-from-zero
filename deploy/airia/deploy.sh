@@ -13,6 +13,10 @@ $PROJECT_DIR/supabase/migrations/20260810130000_add_billing_trials_and_professio
 $PROJECT_DIR/supabase/migrations/20260811120000_add_objective_intelligence.sql
 $PROJECT_DIR/supabase/migrations/20260813133000_add_airia_readings_and_decisions.sql
 $PROJECT_DIR/supabase/migrations/20260813143000_add_provider_neutral_billing.sql
+$PROJECT_DIR/supabase/migrations/20260817233000_add_product_event_governance.sql
+$PROJECT_DIR/supabase/migrations/20260817234500_harden_internal_tables_and_views.sql
+$PROJECT_DIR/supabase/migrations/20260818004000_harden_function_search_path_and_execution.sql
+$PROJECT_DIR/supabase/migrations/20260818005000_move_vector_extension_to_extensions.sql
 "
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"

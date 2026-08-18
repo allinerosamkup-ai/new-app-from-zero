@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, CheckCircle2, ChevronLeft, ExternalLink, Sparkles } from "lucide-react";
+import { Check, CheckCircle2, ChevronLeft, Sparkles } from "lucide-react";
 
 import { useLocalizedCopy, useLanguage } from "../i18n";
 import { api } from "../lib/api";
@@ -115,7 +115,6 @@ export default function BillingPage() {
   const [selectedPlan, setSelectedPlan] = useState<BillingPlan>("annual");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [portalLoading, setPortalLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
@@ -190,16 +189,6 @@ export default function BillingPage() {
       setCancelMessage("error");
     } finally {
       setCancelLoading(false);
-    }
-  }
-
-  async function handlePortal() {
-    setPortalLoading(true);
-    try {
-      const result = await api.post("/billing/portal", {}) as { url: string };
-      window.location.assign(result.url);
-    } finally {
-      setPortalLoading(false);
     }
   }
 
@@ -360,12 +349,6 @@ export default function BillingPage() {
               {l("Verificar de novo", "Check again")}
             </button>
           </section>
-        )}
-
-        {paid && subscription.provider === "stripe" && (
-          <button type="button" onClick={handlePortal} disabled={portalLoading} style={{ minHeight: 48, borderRadius: 999, border: "1px solid var(--warm-border)", background: "#fff", fontWeight: 800 }}>
-            <ExternalLink size={15} /> {portalLoading ? l("Abrindo...", "Opening...") : l("Gerenciar pagamento", "Manage payment")}
-          </button>
         )}
 
         {paid && subscription.provider === "cakto" && subscription.plan !== "lifetime" && (

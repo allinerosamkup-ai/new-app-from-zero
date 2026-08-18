@@ -65,7 +65,8 @@ export const MEDICATION_CHOICES: Choice[] = [
  * Autorrelato, não diagnóstico — e a Airia nunca devolve isso como rótulo.
  * O que muda é a conduta: TDAH declarado liga a leitura de hiperfoco, e as
  * demais calibram o tom. "Prefiro não dizer" é resposta legítima e não penaliza
- * nada; por isso a etapa inteira também pode ser pulada.
+ * nada; por isso aparece como escolha opcional dentro de `traits`, sem abrir
+ * uma etapa extra no onboarding canônico.
  */
 export const DIAGNOSIS_CHOICES: Choice[] = [
   { id: 'adhd', label: 'TDAH' },
@@ -139,8 +140,11 @@ export const COMMITMENT_REPLY: Record<string, string> = {
   low: 'Olhar já é alguma coisa. Fica à vontade — quando quiser começar, o caminho vai estar montado do jeito que você deixou.',
 };
 
-/** Ordem das telas. Cada id vira um passo na tela do fluxo. */
-export const STORY_STEPS = [
+/**
+ * Vocabulário legado que o renderer ainda reconhece para respostas retomadas.
+ * `STORY_STEPS` abaixo é a única sequência apresentada em novos onboardings.
+ */
+export const STORY_STEP_IDS = [
   'welcome',
   'problem',
   'solution',
@@ -171,7 +175,25 @@ export const STORY_STEPS = [
   'offer',
 ] as const;
 
-export type StoryStepId = (typeof STORY_STEPS)[number];
+export type StoryStepId = (typeof STORY_STEP_IDS)[number];
+
+/**
+ * Caminho ativo: apresentação breve, duas preferências que realmente mudam as
+ * perguntas futuras, estado atual, um objetivo e entrada no produto. As demais
+ * telas de narrativa e diagnóstico continuariam ampliando o funil sem melhorar
+ * o primeiro check-in, os padrões, o diário ou os objetivos.
+ */
+export const STORY_STEPS: StoryStepId[] = [
+  'welcome',
+  'name',
+  'traits',
+  'feeling',
+  'goal',
+  'understanding',
+  'nextAction',
+  'building',
+  'offer',
+];
 
 /** Telas que só mostram — sem entrada, avançam num toque. */
 export const READ_ONLY_STEPS = new Set<StoryStepId>([

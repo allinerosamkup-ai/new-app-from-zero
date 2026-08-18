@@ -10,6 +10,7 @@ import {
   finalizeStoryOnboarding,
   type BillingAccessSummary,
 } from "./story-onboarding-page";
+import { STORY_STEPS } from "../features/story-onboarding/steps";
 
 const trial14: BillingAccessSummary = {
   access: "pro",
@@ -26,6 +27,20 @@ const trial14: BillingAccessSummary = {
 describe("story onboarding completion", () => {
   beforeEach(async () => {
     await setLanguage("pt");
+  });
+
+  it("keeps the active onboarding focused on core calibration and first goal", () => {
+    expect(STORY_STEPS).toEqual([
+      "welcome",
+      "name",
+      "traits",
+      "feeling",
+      "goal",
+      "understanding",
+      "nextAction",
+      "building",
+      "offer",
+    ]);
   });
 
   it("completes only after core persistence and refreshes the store afterward", async () => {

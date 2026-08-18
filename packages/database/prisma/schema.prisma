@@ -765,12 +765,19 @@ model EventLog {
   properties Json     @default("{}")
   path       String?  @db.Text
   userAgent  String?  @map("user_agent") @db.Text
+  eventId    String?  @map("event_id") @db.Uuid
+  eventVersion Int?   @map("event_version") @db.SmallInt
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  surface    String?
+  expiresAt  DateTime @default(dbgenerated("(timezone('utc'::text, now()) + '180 days'::interval)")) @map("expires_at") @db.Timestamptz(6)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt(sort: Desc)], name: "idx_event_logs_user_created")
   @@index([userId, eventName], name: "idx_event_logs_user_event")
+  @@unique([userId, eventId], map: "event_logs_user_id_event_id_unique")
+  @@index([expiresAt], map: "event_logs_expires_at_idx")
   @@map("event_logs")
 }
 

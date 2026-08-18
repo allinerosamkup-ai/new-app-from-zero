@@ -154,7 +154,7 @@ export function GuidedOnboardingPage() {
 
       await routineBuilderApi.submitGuided(sessionId, answers, localDate);
       navigate('/routine-builder');
-    } catch (error) {
+    } catch {
       showError(g('submitError'));
       setSubmitting(false);
     }

@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useRef } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { InstallPWA } from "./components/InstallPWA";
 import { trackInstallConversionOnce, trackMetaPixelPageView } from "./lib/meta-pixel";
-import { FEATURES, FEATURE_FALLBACK_ROUTE } from "./config/features";
+import { FEATURE_FALLBACK_ROUTE } from "./config/features";
 
 const loadAuraLayout = () => import("./routes/aura-layout");
 const loadLoginPage = () => import("./routes/login-page");
@@ -13,14 +13,11 @@ const loadPreferencesPage = () => import("./routes/preferences-page");
 const loadEditorialShowcase = () => import("./routes/editorial-showcase");
 const loadAuthV2Page = () => import("./routes/auth-v2-page");
 const loadCheckinPage = () => import("./routes/checkin-page");
-const loadPlannerPage = () => import("./routes/planner-page");
 const loadInsightsPage = () => import("./routes/insights-page");
-const loadPomodoroPage = () => import("./routes/pomodoro-page");
 const loadDailySummaryPage = () => import("./routes/daily-summary-page");
 const loadHarmonyPage = () => import("./routes/harmony-page");
 const loadUIKitPage = () => import("./routes/ui-kit-page");
 const loadCheckinResultPage = () => import("./routes/checkin-result-page");
-const loadHabitsPage = () => import("./routes/habits-page");
 const loadAuraChatPage = () => import("./routes/aura-chat-page");
 const loadSplashPage = () => import("./routes/splash-page");
 const loadForgotPasswordPage = () => import("./routes/forgot-password-page");
@@ -44,14 +41,11 @@ const PreferencesPage = lazy(() => loadPreferencesPage().then((module) => ({ def
 const EditorialShowcase = lazy(() => loadEditorialShowcase().then((module) => ({ default: module.EditorialShowcase })));
 const AuthV2Page = lazy(() => loadAuthV2Page().then((module) => ({ default: module.AuthV2Page })));
 const CheckinPage = lazy(() => loadCheckinPage().then((module) => ({ default: module.CheckinPage })));
-const PlannerPage = lazy(() => loadPlannerPage().then((module) => ({ default: module.PlannerPage })));
 const InsightsPage = lazy(() => loadInsightsPage().then((module) => ({ default: module.InsightsPage })));
-const PomodoroPage = lazy(() => loadPomodoroPage().then((module) => ({ default: module.PomodoroPage })));
 const DailySummaryPage = lazy(() => loadDailySummaryPage().then((module) => ({ default: module.DailySummaryPage })));
 const HarmonyPage = lazy(() => loadHarmonyPage().then((module) => ({ default: module.HarmonyPage })));
 const UIKitPage = lazy(() => loadUIKitPage().then((module) => ({ default: module.UIKitPage })));
 const CheckinResultPage = lazy(() => loadCheckinResultPage().then((module) => ({ default: module.CheckinResultPage })));
-const HabitsPage = lazy(() => loadHabitsPage().then((module) => ({ default: module.HabitsPage })));
 const AuraChatPage = lazy(() => loadAuraChatPage().then((module) => ({ default: module.AuraChatPage })));
 const SplashPage = lazy(() => loadSplashPage().then((module) => ({ default: module.SplashPage })));
 const ForgotPasswordPage = lazy(() => loadForgotPasswordPage().then((module) => ({ default: module.ForgotPasswordPage })));
@@ -102,7 +96,6 @@ const DEV_SCREENS = [
   { path: "home", label: "Home" },
   { path: "checkin", label: "Checkin" },
   { path: "checkin-result", label: "Result" },
-  { path: "planner", label: "Planner" },
   { path: "journal", label: "Diário" },
   { path: "goals", label: "Metas" },
   { path: "insights", label: "Insights" },
@@ -270,15 +263,12 @@ export default function App() {
             <Route path="home" element={<HomePage />} />
             <Route path="checkin" element={<CheckinPage />} />
             <Route path="checkin-result" element={<CheckinResultPage />} />
-            <Route path="habits" element={<HabitsPage />} />
-            <Route path="planner" element={<PlannerPage />} />
             <Route path="journal" element={<JournalPage />} />
             <Route path="harmony" element={<HarmonyPage />} />
             <Route path="goals" element={<GoalsPage />} />
             <Route path="insights" element={<InsightsPage />} />
             <Route path="daily-summary" element={<DailySummaryPage />} />
             <Route path="preferences" element={<PreferencesPage />} />
-            <Route path="pomodoro" element={<PomodoroPage />} />
             <Route path="aura" element={<AuraChatPage />} />
             <Route path="captures" element={<CapturesPage />} />
             <Route path="ui-kit" element={<UIKitPage />} />
@@ -292,13 +282,13 @@ export default function App() {
           {/* Desligadas no produto, mas ainda registradas: notificação push já
               entregue no celular de alguém e link salvo apontam para cá, e cair
               em 404 é pior que cair na Home. */}
-          <Route path="/habits" element={FEATURES.habits ? <HabitsPage /> : <Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
+          <Route path="/habits" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/profile" element={<Navigate to="/insights" replace />} />
           <Route path="/preferences" element={<PreferencesPage />} />
           <Route path="/checkin" element={<CheckinPage />} />
-          <Route path="/planner" element={FEATURES.planner ? <PlannerPage /> : <Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
+          <Route path="/planner" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/insights" element={<InsightsPage />} />
-          <Route path="/pomodoro" element={<PomodoroPage />} />
+          <Route path="/pomodoro" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/daily-summary" element={<DailySummaryPage />} />
           <Route path="/harmony" element={<HarmonyPage />} />
           <Route path="/jornada" element={<JornadaPage />} />

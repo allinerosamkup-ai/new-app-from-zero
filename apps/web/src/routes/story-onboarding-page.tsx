@@ -436,7 +436,7 @@ export default function StoryOnboardingPage() {
     if (step === "done" || step === "offer") {
       successHaptic();
     }
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step]);  
 
   async function finish() {
     trackEvent("story_onboarding_completed", {
@@ -487,7 +487,7 @@ export default function StoryOnboardingPage() {
         {step === "welcome" && (<>
           <p className="story-eyebrow">Airia</p>
           <h1 className="story-title">{l("Oi. Antes de qualquer coisa, quero entender como sua vida está funcionando hoje.", "Hi. Before anything else, I want to understand how your life is working today.")}</h1>
-          <p className="story-body">{l("São cinco minutos, quase tudo em toque. No fim você sai daqui com uma coisa já encaminhada.", "Five minutes, almost all of it tapping. You leave here with one thing already under way.")}</p>
+          <p className="story-body">{l("Leva cerca de dois minutos e quase tudo é por toque. No fim você entra com um objetivo já encaminhado.", "It takes about two minutes and is mostly taps. You enter with one goal already under way.")}</p>
         </>)}
 
         {step === "problem" && (<>
@@ -548,6 +548,22 @@ export default function StoryOnboardingPage() {
                 className="story-choice"
                 aria-pressed={answers.medication === option.id}
                 onClick={() => { tapHaptic(); setAnswers((c) => ({ ...c, medication: c.medication === option.id ? null : option.id })); }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="story-label">{l("Se fizer sentido para você", "If this feels relevant to you")}</p>
+          <p className="story-body">{l("Alguma dessas experiências ajuda a Airia a ler seu ritmo? É opcional e nunca aparece como rótulo.", "Do any of these experiences help Airia read your rhythm? This is optional and never appears as a label.")}</p>
+          <div className="story-choices">
+            {DIAGNOSIS_CHOICES.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className="story-choice"
+                aria-pressed={answers.diagnoses.includes(option.id)}
+                onClick={() => { tapHaptic(); setAnswers((current) => ({ ...current, diagnoses: toggle(current.diagnoses, option.id) })); }}
               >
                 {option.label}
               </button>

@@ -109,7 +109,7 @@ export function ContextoPage() {
     try {
       await api.delete(`/me/knowledge-graph/entity/${id}`);
       setEntities((prev) => prev.filter((e) => e.id !== id));
-    } catch (error) {
+    } catch {
       showError("Falha ao apagar entidade.");
     }
   }
@@ -119,7 +119,7 @@ export function ContextoPage() {
     try {
       await api.delete(`/me/knowledge-graph/fact/${id}`);
       setFacts((prev) => prev.filter((f) => f.id !== id));
-    } catch (error) {
+    } catch {
       showError("Falha ao apagar fato.");
     }
   }
@@ -129,7 +129,7 @@ export function ContextoPage() {
     try {
       await api.delete(`/me/knowledge-graph/pattern/${id}`);
       setPatterns((prev) => prev.filter((p) => p.id !== id));
-    } catch (error) {
+    } catch {
       showError(l("Falha ao apagar padrão.", "Failed to delete pattern."));
     }
   }
@@ -140,7 +140,7 @@ export function ContextoPage() {
       await api.post(`/me/knowledge-graph/decision/${id}/resolve`, { resolution });
       setDecisions((prev) => prev.map((d) => (d.id === id ? { ...d, resolvedAt: new Date().toISOString(), resolution: resolution ?? null } : d)));
       showSuccess(l("Decisão marcada como resolvida.", "Decision marked as resolved."));
-    } catch (error) {
+    } catch {
       showError(l("Falha ao marcar decisão.", "Failed to resolve decision."));
     }
   }

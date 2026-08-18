@@ -311,7 +311,7 @@ export function AuraChatPage() {
     return () => {
       isMounted = false;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [sessionId]);
 
   // Auto-send quando a rotina automática é acionada da Home
@@ -320,7 +320,7 @@ export function AuraChatPage() {
     if (!autoSend || !initialPrompt || !sessionId || isTyping || autoSendFiredRef.current) return;
     autoSendFiredRef.current = true;
     send(initialPrompt);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [autoSend, initialPrompt, sessionId]);
 
   useEffect(() => {
@@ -754,7 +754,7 @@ export function AuraChatPage() {
       let completedExecution: AuraCommandExecution | null = null;
       let buffered = "";
 
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
 

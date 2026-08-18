@@ -63,9 +63,8 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'biologicalSex',
       'medicationCurrentlyUsing',
       'medicationNotes',
-      // Stripe billing: the user's own subscription metadata. No payment
-      // instrument data here (that lives in Stripe), so it is safe to include
-      // verbatim in the user's own data export.
+      // Metadados de assinatura da própria pessoa. Nenhum instrumento de
+      // pagamento entra neste export, então estes dados podem ser incluídos.
       'subscriptionStatus',
       'subscriptionPlan',
       'subscriptionPeriodEnd',
@@ -74,9 +73,8 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'updatedAt',
     ],
     redact: [
-      // Internal Stripe customer identifier (cus_…). Maps to the payment
-      // processor, is not user-facing data, and never leaves the database —
-      // same stance as the redacted OAuth tokens.
+      // Identificador legado do processador de pagamento. Não é dado visível
+      // à pessoa e nunca sai do banco, como os tokens OAuth redigidos.
       'stripeCustomerId',
     ],
   },
@@ -533,10 +531,15 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
     include: [
       'id',
       'userId',
+      'eventId',
       'eventName',
+      'eventVersion',
+      'occurredAt',
+      'surface',
       'properties',
       'path',
       'userAgent',
+      'expiresAt',
       'createdAt',
     ],
     redact: [],
@@ -625,8 +628,8 @@ export const PRIVACY_EXPORT_EXCLUDED_MODELS = new Set<string>([
   // content the user wrote — only lock tokens, attempt counters and the last
   // internal error. The objective itself is exported via Objective.
   'ObjectiveActionRecoveryClaim',
-  // Stripe delivery ledger is internal payment infrastructure. It is not
-  // user-scoped and raw processor events never belong in a privacy export.
+  // Registro legado do processador de pagamento. Não é vinculado à pessoa e
+  // eventos brutos de pagamento nunca pertencem ao export de privacidade.
   'StripeWebhookEvent',
   'BillingCheckoutAttempt',
   'BillingWebhookEvent',

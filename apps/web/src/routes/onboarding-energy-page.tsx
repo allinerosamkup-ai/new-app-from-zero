@@ -23,7 +23,11 @@ export function OnboardingEnergyPage() {
 
   function toggle(set: Set<string>, setSet: (s: Set<string>) => void, item: string) {
     const next = new Set(set);
-    next.has(item) ? next.delete(item) : next.add(item);
+    if (next.has(item)) {
+      next.delete(item);
+    } else {
+      next.add(item);
+    }
     setSet(next);
   }
 
@@ -170,4 +174,3 @@ export function OnboardingEnergyPage() {
     </div>
   );
 }
-

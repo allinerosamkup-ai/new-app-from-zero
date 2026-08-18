@@ -29,7 +29,8 @@ import { PlannerAIService } from './services/planner-ai.service';
 import { LearningContextService } from './services/learning-context.service';
 import { HabitCreateSchema, HabitPatchSchema } from './contracts/habit.contract';
 import { JournalExternalMessageSchema, JournalMessageStreamSchema, JournalStartSchema } from './contracts/journal.contract';
-import { EventLogCreateSchema } from './contracts/event-log.contract';
+import { EventLogCreateSchema, ProductEventCreateSchema } from './contracts/event-log.contract';
+import { recordProductEvent } from './services/product-event.service';
 import { BiologicalSexSchema, OnboardingProcessSchema, PriorDiagnosisSchema, tracksMenstrualCycle, type BiologicalSex } from './contracts/onboarding.contract';
 import {
   ProfessionalApplicationSchema,
@@ -71,10 +72,8 @@ import { AiriaCognitiveInterpreterService } from './services/airia-cognitive-int
 import { AgendaAdaptationService } from './services/agenda-adaptation.service';
 import { AiActionFeedbackService } from './services/ai-action-feedback.service';
 import { BillingAccessService } from './services/billing-access.service';
-import { createStripeServiceFromEnv, StripeService } from './services/stripe.service';
 import {
   createBillingProviderFromEnv,
-  stripeBillingProvider,
   type BillingProvider,
 } from './services/billing-provider';
 import { CaktoService, createCaktoServiceFromEnv } from './services/cakto.service';
@@ -534,8 +533,6 @@ type AppDependencies = {
   checkinApplicationService?: Pick<CheckinApplicationService, 'record'>;
   airiaReadingService?: Pick<AiriaReadingService, 'rebuild' | 'get' | 'feedback'>;
   billingAccessService?: Pick<BillingAccessService, 'grantInitialTrial' | 'getSummary'>;
-  stripeService?: Pick<StripeService,
-    'createCheckoutSession' | 'createPortalSession' | 'verifyCheckoutSession' | 'handleWebhook' | 'getOfferCatalog'>;
   billingProvider?: BillingProvider;
   caktoService?: Pick<CaktoService, 'handleWebhook' | 'cancelSubscription'>;
   professionalPartnerService?: Pick<ProfessionalPartnerService, 'apply' | 'getMe' | 'verify'>;
@@ -2296,15 +2293,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
   const prisma = dependencies.prisma ?? defaultPrisma;
   const capabilities = dependencies.capabilities ?? PRODUCT_CAPABILITIES;
-  const stripeService = (dependencies.stripeService ?? createStripeServiceFromEnv(prisma)) as StripeService;
   const caktoService = dependencies.caktoService ?? createCaktoServiceFromEnv(prisma);
   const billingProvider = dependencies.billingProvider
-    ?? (dependencies.stripeService
-      ? stripeBillingProvider(stripeService)
-      : createBillingProviderFromEnv(prisma, process.env, {
-        stripe: stripeService,
-        cakto: caktoService as CaktoService,
-      }));
+    ?? createBillingProviderFromEnv(prisma, process.env, {
+      cakto: caktoService as CaktoService,
+    });
   const billingAccessService = dependencies.billingAccessService ?? new BillingAccessService(prisma, {
     checkoutAvailable: billingProvider.isConfigured(),
   });
@@ -2718,20 +2711,6 @@ export function createApp(dependencies: AppDependencies = {}) {
   }));
   app.set('trust proxy', true);
 
-  // Stripe webhook — PRECISA do corpo cru (raw) e fica fora do express.json()
-  // e do requireAuth. Registrado aqui de propósito, antes de tudo.
-  const handleStripeWebhook = async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string;
-    if (!sig) return res.status(400).json({ error: 'no_signature' });
-    try {
-      await stripeService.handleWebhook(req.body as Buffer, sig);
-      return res.json({ received: true });
-    } catch (err: any) {
-      return res.status(400).json({ error: err.message });
-    }
-  };
-  app.post('/api/billing/webhook', express.raw({ type: '*/*' }), handleStripeWebhook);
-  app.post('/api/billing/webhook/stripe', express.raw({ type: '*/*' }), handleStripeWebhook);
   app.post('/api/billing/webhook/cakto', express.json({ limit: '128kb' }), async (req: Request, res: Response) => {
     try {
       const result = await caktoService.handleWebhook(req.body);
@@ -3218,6 +3197,37 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       console.error('[events/create] Error:', error);
       return res.status(500).json({ error: 'Failed to create event log' });
+    }
+  });
+
+  /**
+   * POST /api/events/product
+   * Telemetria do núcleo ativo. Diferente da rota legada, aceita somente um
+   * catálogo versionado e propriedades minimizadas, e é idempotente por evento.
+   */
+  app.post('/api/events/product', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = ProductEventCreateSchema.parse(req.body);
+      const result = await recordProductEvent({
+        findByEventId: (eventUserId, eventId) => prisma.eventLog.findFirst({ where: { userId: eventUserId, eventId } }),
+        countRecent: (eventUserId, since) => prisma.eventLog.count({
+          where: { userId: eventUserId, createdAt: { gte: since }, eventId: { not: null } },
+        }),
+        // ProductEventCreateSchema já restringiu a entrada a JSON seguro antes
+        // desta fronteira; o cliente Prisma representa JSON de escrita com um
+        // tipo nominal mais estreito que `unknown`.
+        create: (event) => prisma.eventLog.create({ data: { ...event, properties: event.properties as any } }),
+      }, userId, data);
+      if (result.status === 'rate_limited') return res.status(429).json({ error: 'Product event rate limit exceeded' });
+      return res.status(result.status === 'created' ? 201 : 200).json({
+        event: result.event,
+        duplicate: result.status === 'duplicate',
+      });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[events/product] Error:', error);
+      return res.status(500).json({ error: 'Failed to create product event' });
     }
   });
 
@@ -8713,22 +8723,6 @@ JSON APENAS: {"profileSummary":"..."}`,
     }
   });
 
-  app.post('/api/billing/portal', async (req: Request, res: Response) => {
-    try {
-      const userId = (req as AuthRequest).userId;
-      const account = await prisma.billingAccount.findUnique({ where: { userId } });
-      if (account?.billingProvider !== 'stripe') {
-        return res.status(404).json({ error: 'management_unavailable' });
-      }
-      const url = await stripeService.createPortalSession(userId);
-      return res.json({ url });
-    } catch (err: any) {
-      if (err.message === 'no_stripe_customer') return res.status(404).json({ error: 'no_subscription' });
-      if (err.message === 'billing_unavailable') return res.status(503).json({ error: err.message });
-      return res.status(500).json({ error: 'portal_failed' });
-    }
-  });
-
   app.post('/api/billing/cancel', async (req: Request, res: Response) => {
     try {
       const userId = (req as AuthRequest).userId;
@@ -8768,9 +8762,7 @@ JSON APENAS: {"profileSummary":"..."}`,
     try {
       const userId = (req as AuthRequest).userId;
       const sessionId = z.string().trim().min(1).max(255).parse(req.params.sessionId);
-      const result = sessionId.startsWith('cs_')
-        ? await stripeService.verifyCheckoutSession(userId, sessionId)
-        : await billingProvider.verifyCheckoutSession(userId, sessionId);
+      const result = await billingProvider.verifyCheckoutSession(userId, sessionId);
       return res.json(result);
     } catch (error: any) {
       if (error?.message === 'checkout_session_forbidden') {

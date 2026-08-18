@@ -26,6 +26,7 @@ import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
+import { trackProductEvent } from "../lib/track";
 import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import {
@@ -960,6 +961,15 @@ export function GoalsPage() {
 
   const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
   const goals = state.goals as unknown as GoalLike[];
+  const goalsOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (goalsOpenedRef.current) return;
+    goalsOpenedRef.current = true;
+    trackProductEvent("goals.opened.v1", "goals", {
+      activeGoalsCount: goals.filter((goal) => goal.completedPct < 100 && !goal.pausedAt).length,
+    });
+  }, [goals]);
 
   async function feedbackCanonicalDecision(status: "accepted" | "rejected") {
     const decision = canonicalReading?.decision;
@@ -1027,7 +1037,7 @@ export function GoalsPage() {
     void executeGoalRecovery().catch(() => {});
     // Uma tentativa automática por montagem. Falha volta o guard para idle e
     // fica sob controle explícito do botão de retry, sem loop de custo de IA.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   useEffect(() => {
@@ -1058,6 +1068,11 @@ export function GoalsPage() {
       }) as GoalLike;
       await refreshData();
       setCreationOpen(false);
+      trackProductEvent("goal.created.v1", "goals", {
+        goalId: String(objective.id),
+        creationMode: "manual",
+        hasDeadline: Boolean(deadline),
+      });
       if (objective.pathQuestion) {
         setPendingQuestion({ goalId: objective.id, goalTitle: objective.title, question: objective.pathQuestion });
       } else if (objective.pathStatus === 'retrying') {
@@ -1123,8 +1138,13 @@ export function GoalsPage() {
     try {
       const goal = goals.find((item) => String(item.id) === String(goalId));
       if (!goal) return;
-      await api.post(`/objectives/${goalId}/actions`, { title, expectedVersion: goal.pathVersion ?? 1 });
+      const response = await api.post(`/objectives/${goalId}/actions`, { title, expectedVersion: goal.pathVersion ?? 1 }) as { action: { id: string } };
       await refreshData();
+      trackProductEvent("goal.action_changed.v1", "goals", {
+        goalId: String(goalId),
+        actionId: response.action.id,
+        changeType: "created",
+      });
       setSuggestionDrafts((current) => ({ ...current, [String(goalId)]: [] }));
       showSuccess(l("Próxima ação adicionada.", "Next action added."));
     } catch (error) {
@@ -1170,6 +1190,11 @@ export function GoalsPage() {
         setCompletingActionId(actionId);
         try {
           const outcome = await toggleSubGoal(goal.id, actionId);
+          trackProductEvent("goal.action_changed.v1", "goals", {
+            goalId: String(goal.id),
+            actionId: String(actionId),
+            changeType: "completed",
+          });
           // Agora CADA micro-ação paga, não só o objetivo inteiro. O texto vem
           // do backend para ser igual em toda superfície; o fallback existe só
           // para o caso de uma resposta antiga sem `reward`.
@@ -1198,6 +1223,11 @@ export function GoalsPage() {
         try {
           await api.patch(`/objectives/${goal.id}/actions/${actionId}`, { expectedVersion: goal.pathVersion ?? 1, scheduledFor: date });
           await refreshData();
+          trackProductEvent("goal.action_changed.v1", "goals", {
+            goalId: String(goal.id),
+            actionId: String(actionId),
+            changeType: "edited",
+          });
           showSuccess(l('Data da ação atualizada.', 'Action date updated.'));
         } catch (error) {
           showError(error instanceof Error ? error.message : l('Não foi possível atualizar a data.', 'Could not update the date.'));
@@ -1210,6 +1240,13 @@ export function GoalsPage() {
             ...patch,
           });
           await refreshData();
+          trackProductEvent("goal.action_changed.v1", "goals", {
+            goalId: String(goal.id),
+            actionId: String(actionId),
+            changeType: patch.state === "deferred" ? "deferred"
+              : patch.state === "pending" ? "restored"
+                : "edited",
+          });
           showSuccess(patch.state === 'deferred'
             ? l('A ação ficou para depois.', 'The action was left for later.')
             : patch.state === 'rejected'
