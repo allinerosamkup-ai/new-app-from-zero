@@ -25,4 +25,4 @@
 - [x] Corrigir a configuração de testes móveis que não resolve o plugin react-native-reanimated do Babel.
 - [ ] Inventariar e corrigir os 44 erros de lint legados do aplicativo móvel, fora do núcleo prioritário da PWA.
 - [x] Auditar referências a Stripe e alinhar o código, as dependências e os testes de pagamento exclusivamente à integração Cakto.
-- [ ] Publicar no GitHub as correções validadas da PWA e a documentação de verificação, mediante autorização da titular.
+- [x] Publicar no GitHub as correções validadas da PWA e a documentação de verificação, mediante autorização da titular.
