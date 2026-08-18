@@ -44,7 +44,7 @@ export function PhaseLegendSheet({ open, onClose, currentPhase }: PhaseLegendShe
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="As 8 fases de humor e energia"
+      aria-label={t("phases.title")}
       style={{
         position: "fixed",
         inset: 0,

@@ -2340,6 +2340,64 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   margin-bottom: 12px;
 }
 
+.insights-phase-history {
+  margin-bottom: calc(var(--a) * 1.25);
+}
+
+.insights-phase-history__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.insights-phase-history__kicker {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.insights-phase-history__title {
+  margin: 4px 0 0;
+  color: var(--text-1);
+  font-family: var(--font-serif, 'Fraunces', serif);
+  font-size: clamp(20px, 5vw, 24px);
+  font-weight: 700;
+  line-height: 1.12;
+}
+
+.insights-phase-history__legend-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--warm-border-2);
+  border-radius: 999px;
+  background: var(--warm-surface);
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: var(--font-sans, sans-serif);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.insights-phase-history__legend-button:hover {
+  border-color: var(--accent-peach);
+  color: var(--accent-peach-ink);
+}
+
+.insights-phase-history__description {
+  margin: 0 0 14px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .insights-chart-heading {
   display: flex;
   align-items: center;

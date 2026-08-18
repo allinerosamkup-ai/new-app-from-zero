@@ -10,7 +10,7 @@ import { trackProductEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
-import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, getStabilityLabel, PHASE_CONFIG } from "../utils/mood-cycle-engine";
+import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { buildPeriodReportData, resolvePeriodRange, type PeriodPreset } from "../utils/period-report";
@@ -93,7 +93,8 @@ function polygonPoints(r: number): string {
 
 // ── SVG Line Chart ─────────────────────────────────────────────────
 function MoodLineChart({ data }: { data: Array<{ date: string; humor: number; energia: number }> }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const shortDate = new Intl.DateTimeFormat(resolveIntlLocale(i18n.language), { day: "numeric", month: "numeric" });
   if (data.length < 3) {
     return (
       <div style={{ padding: "24px", textAlign: "center", color: "var(--text-3)", fontSize: 12 }}>
@@ -130,7 +131,7 @@ function MoodLineChart({ data }: { data: Array<{ date: string; humor: number; en
         const dt = new Date(sorted[i].date + 'T12:00:00');
         return (
           <text key={i} x={toX(i)} y={H - 1} textAnchor="middle" fontSize={7.5} fill="var(--text-3)" fontFamily="Plus Jakarta Sans, sans-serif">
-            {dt.getDate()}/{dt.getMonth() + 1}
+            {shortDate.format(dt)}
           </text>
         );
       })}
@@ -169,6 +170,16 @@ export function InsightsPage() {
   }, []);  
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
+  const locale = resolveIntlLocale(i18n.language);
+  const phaseLabel = (phase: string, fallback: string) => t(`phases.${phase}.label`, { defaultValue: fallback });
+  const weekdayLabels = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
+    return Array.from({ length: 7 }, (_, index) => formatter.format(new Date(Date.UTC(2023, 0, 1 + index))).replace(".", ""));
+  }, [locale]);
+  const weekdayNarrow = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "narrow" }),
+    [locale],
+  );
 
   const [insightPhase, setInsightPhase] = useState<InsightPhase>("idle");
   const [aiInsight, setAiInsight] = useState<AiInsight | null>(null);
@@ -232,11 +243,17 @@ export function InsightsPage() {
   const phaseHistory = useMemo(() => computePhaseHistory(allHistory, 30), [allHistory]);
   const phaseColor = getPhaseColor(cycleReport.phase);
   // O seletor muda o relatório histórico, nunca a leitura atual da Airia.
-  const currentPhaseLabel = canonicalReading?.currentState.phase ?? (cycleReport.phase !== "insufficient_data"
-    ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)
-    : cycleReport.phaseLabel);
+  const currentPhaseLabel = phaseLabel(cycleReport.phase, cycleReport.phaseLabel);
+  const stabilityScoreLabel = cycleReport.stabilityScore >= 80
+    ? l("muito alta", "very high")
+    : cycleReport.stabilityScore >= 60
+      ? l("moderada", "moderate")
+      : cycleReport.stabilityScore >= 40
+        ? l("baixa", "low")
+        : cycleReport.stabilityScore >= 20
+          ? l("muito baixa", "very low")
+          : l("crítica", "critical");
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
-  const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
   // Sparkline: últimos 7 dias ordenados por data
   const sparklineData = useMemo(() => {
@@ -247,7 +264,7 @@ export function InsightsPage() {
   }, [allHistory]);
 
   // Map history to chart data (last 7 entries, pad with zeros)
-  const chartData = DAYS.map((_, dayIndex) => {
+  const chartData = weekdayLabels.map((_, dayIndex) => {
     const entry = history.find(h => {
       const d = toLocalNoon(h.date);
       return d.getDay() === dayIndex;
@@ -262,7 +279,6 @@ export function InsightsPage() {
   // ── Padrões Preditivos — computação frontend ─────────────────
   const patterns = useMemo(() => {
     if (history.length < 3) return null;
-    const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
     const groups: Record<number, { humor: number[]; energia: number[] }> = {};
     history.forEach(h => {
       const d = new Date(h.date + "T12:00:00").getDay();
@@ -272,7 +288,7 @@ export function InsightsPage() {
     });
     const dayAvgs = Object.entries(groups)
       .map(([d, v]) => ({
-        day: DAYS[Number(d)], idx: Number(d),
+        day: weekdayLabels[Number(d)], idx: Number(d),
         mood: v.humor.reduce((a, b) => a + b) / v.humor.length,
         energy: v.energia.reduce((a, b) => a + b) / v.energia.length,
         n: v.humor.length,
@@ -303,7 +319,7 @@ export function InsightsPage() {
       : 0;
 
     return { dayAvgs, bestDay, worstDay, streak, lowDays, highDays, stableDays, total, checkinDaysAvg };
-  }, [history]);
+  }, [history, weekdayLabels]);
   const moodDayHighlights = useMemo(
     () => resolveMoodDayHighlights(patterns?.bestDay ?? null, patterns?.worstDay ?? null),
     [patterns],
@@ -325,12 +341,12 @@ export function InsightsPage() {
   const harmonyValues = [avgHarmonyMood, avgHarmonyEnergy, avgGoalPct, avgHarmonySocial, avgHarmonyFisico, avgHarmonySono].filter((value): value is number => value !== null);
   const overallHarmonyPct = harmonyValues.length > 0 ? Math.round((harmonyValues.reduce((sum, value) => sum + value, 0) / harmonyValues.length) * 100) : 0;
   const harmonyDimensions = [
-    { emoji: "😊", label: "Humor", cor: "var(--sweet-mint)", valor: avgHarmonyMood ?? 0, noData: avgHarmonyMood === null },
-    { emoji: "⚡", label: "Energia", cor: "var(--atomic-tangerine)", valor: avgHarmonyEnergy ?? 0, noData: avgHarmonyEnergy === null },
-    { emoji: "🎯", label: "Metas", cor: "var(--accent-sky)", valor: avgGoalPct ?? 0, noData: avgGoalPct === null },
-    { emoji: "👥", label: "Social", cor: "var(--horizon)", valor: avgHarmonySocial ?? 0, noData: avgHarmonySocial === null },
-    { emoji: "💪", label: "Força", cor: "var(--terracotta)", valor: avgHarmonyFisico ?? 0, noData: avgHarmonyFisico === null },
-    { emoji: "🌙", label: "Sono", cor: "var(--aquamarine)", valor: avgHarmonySono ?? 0, noData: avgHarmonySono === null },
+    { emoji: "😊", label: l("Humor", "Mood"), cor: "var(--sweet-mint)", valor: avgHarmonyMood ?? 0, noData: avgHarmonyMood === null },
+    { emoji: "⚡", label: l("Energia", "Energy"), cor: "var(--atomic-tangerine)", valor: avgHarmonyEnergy ?? 0, noData: avgHarmonyEnergy === null },
+    { emoji: "🎯", label: l("Metas", "Goals"), cor: "var(--accent-sky)", valor: avgGoalPct ?? 0, noData: avgGoalPct === null },
+    { emoji: "👥", label: l("Social", "Social"), cor: "var(--horizon)", valor: avgHarmonySocial ?? 0, noData: avgHarmonySocial === null },
+    { emoji: "💪", label: l("Força", "Strength"), cor: "var(--terracotta)", valor: avgHarmonyFisico ?? 0, noData: avgHarmonyFisico === null },
+    { emoji: "🌙", label: l("Sono", "Sleep"), cor: "var(--aquamarine)", valor: avgHarmonySono ?? 0, noData: avgHarmonySono === null },
   ];
 
   // ── Comparativo semana a semana (7.3) ────────────────────────
@@ -476,7 +492,7 @@ export function InsightsPage() {
     }
     if (!aiInsight) return;
     if (!insightDecision?.canSaveToPlanner) {
-      showError(insightDecision?.reason ?? "Ainda falta base para transformar isso em tarefa.");
+      showError(insightDecision?.reason ?? l("Ainda falta base para transformar isso em tarefa.", "There is not enough evidence to turn this into an action yet."));
       return;
     }
     // Padrões explicam e calibram; não criam tarefa por fora do contrato.
@@ -511,7 +527,7 @@ export function InsightsPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showSuccess("CSV exportado!");
+    showSuccess(l("CSV exportado!", "CSV exported!"));
   }
 
   async function fetchMonthlyReport() {
@@ -580,7 +596,7 @@ export function InsightsPage() {
             <AiriaMascot phase={cycleReport.phase} motion="understand" size={64} decorative />
           </div>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--text-3)", lineHeight: 1.4 }}>
-            Como suas fases se distribuem ao longo do tempo.
+            {l("Como suas fases se distribuem ao longo do tempo.", "How your phases unfold over time.")}
           </p>
           {/* Seletor de período + Export */}
           <div style={{ display: "flex", gap: "6px", marginTop: "10px", alignItems: "center", flexWrap: "wrap" }}>
@@ -728,10 +744,13 @@ export function InsightsPage() {
             padding: "11px 12px", marginBottom: "calc(var(--a))",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 5px" }}>
-              Base da leitura
+              {l("Base da leitura", "Reading basis")}
             </p>
             <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.45, margin: 0 }}>
-              Janela de {reportEvidence.windowDays} dias · {reportEvidence.observedDays} dias com registro · {reportEvidence.missingDays} sem registro · {reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}.
+              {l(
+                `Janela de ${reportEvidence.windowDays} dias · ${reportEvidence.observedDays} dias com registro · ${reportEvidence.missingDays} sem registro · ${reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}.`,
+                `${reportEvidence.windowDays}-day window · ${reportEvidence.observedDays} days with entries · ${reportEvidence.missingDays} without entries · ${reportEvidence.confidence === "high" ? "solid evidence" : reportEvidence.confidence === "medium" ? "early evidence" : "insufficient data"}.`,
+              )}
             </p>
             <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.45, margin: "5px 0 0" }}>
               {stabilityReading.description}
@@ -744,7 +763,7 @@ export function InsightsPage() {
         <div className="aura-card aura-card--chart insights-chart-card">
           <div className="insights-chart-heading">
             <span className="insights-chart-bullet" />
-            <p className="insights-chart-label">Humor &amp; Energia</p>
+            <p className="insights-chart-label">{l("Humor e energia", "Mood and energy")}</p>
           </div>
 
           {period !== '7d' ? (
@@ -758,7 +777,7 @@ export function InsightsPage() {
           ) : (
           <>
           <div className="insights-barchart">
-            {DAYS.map((day, i) => {
+            {weekdayLabels.map((day, i) => {
               const active = todayIndex === i;
               const opacity = active ? 1.0 : (chartData[i].hasData ? 0.55 : 0.2);
               return (
@@ -856,63 +875,26 @@ export function InsightsPage() {
 
         {/* ── HISTÓRICO DE FASES (timeline 30 dias) ── */}
         {insightTab === "padroes" && phaseHistory.length > 0 && (
-          <div
-            className="aura-card"
-            style={{
-              marginBottom: 24,
-              padding: "16px",
-              borderRadius: 18,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
+          <section className="aura-card insights-phase-history">
+            <div className="insights-phase-history__header">
               <div>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: "0.14em",
-                    textTransform: "uppercase",
-                    color: "var(--accent-peach-ink)",
-                  }}
-                >
+                <p className="insights-phase-history__kicker">
                   {t("insights.phaseHistory.kicker")}
                 </p>
-                <h3
-                  style={{
-                    margin: "4px 0 0",
-                    fontSize: 20,
-                    fontWeight: 700,
-                    color: "var(--text-1)",
-                    fontFamily: "var(--font-serif, 'Fraunces', serif)",
-                  }}
-                >
+                <h2 className="insights-phase-history__title">
                   {t("insights.phaseHistory.title")}
-                </h3>
+                </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setPhaseLegendOpen(true)}
-                style={{
-                  border: "none",
-                  background: "var(--accent-peach-a3)",
-                  color: "var(--accent-peach-ink)",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  padding: "5px 10px",
-                  borderRadius: 999,
-                  cursor: "pointer",
-                  fontFamily: "var(--font-sans, sans-serif)",
-                  whiteSpace: "nowrap",
-                }}
+                className="insights-phase-history__legend-button"
               >
-                ver as 8 fases
+                {t("phases.viewAllShort")}
               </button>
             </div>
 
-            <p style={{ fontSize: 12.5, color: "var(--text-2)", margin: "0 0 14px", lineHeight: 1.45 }}>
+            <p className="insights-phase-history__description">
               {t("insights.phaseHistory.description")}
             </p>
 
@@ -929,13 +911,17 @@ export function InsightsPage() {
             >
               {phaseHistory.map((seg, idx) => {
                 const cfg = PHASE_CONFIG[seg.phase];
+                const label = phaseLabel(seg.phase, cfg.label);
                 const totalDays = phaseHistory.reduce((sum, s) => sum + s.daysCount, 0);
                 const widthPct = (seg.daysCount / totalDays) * 100;
-                const dateRange = formatPhaseHistoryRange(seg.startDate, seg.endDate, resolveIntlLocale(i18n.language));
+                const dateRange = formatPhaseHistoryRange(seg.startDate, seg.endDate, locale);
                 return (
                   <div
                     key={`${seg.phase}-${idx}`}
-                    title={`${cfg.label} - ${dateRange} - ${seg.daysCount} dia${seg.daysCount !== 1 ? "s" : ""}`}
+                    title={l(
+                      `${label} · ${dateRange} · ${seg.daysCount} dia${seg.daysCount !== 1 ? "s" : ""}`,
+                      `${label} · ${dateRange} · ${seg.daysCount} day${seg.daysCount !== 1 ? "s" : ""}`,
+                    )}
                     style={{
                       width: `${widthPct}%`,
                       background: cfg.color,
@@ -963,7 +949,8 @@ export function InsightsPage() {
             >
               {phaseHistory.map((seg, idx) => {
                 const cfg = PHASE_CONFIG[seg.phase];
-                const dateRange = formatPhaseHistoryRange(seg.startDate, seg.endDate, resolveIntlLocale(i18n.language));
+                const label = phaseLabel(seg.phase, cfg.label);
+                const dateRange = formatPhaseHistoryRange(seg.startDate, seg.endDate, locale);
                 return (
                   <span
                     key={`leg-${seg.phase}-${idx}`}
@@ -981,14 +968,14 @@ export function InsightsPage() {
                     }}
                   >
                     <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
-                    <span style={{ fontWeight: 600 }}>{cfg.label}</span>
+                    <span style={{ fontWeight: 700 }}>{label}</span>
                     <span style={{ color: "var(--text-3)" }}>· {dateRange}</span>
-                    <span style={{ color: "var(--text-3)" }}>· {seg.daysCount}d</span>
+                    <span style={{ color: "var(--text-3)" }}>· {l(`${seg.daysCount} dia${seg.daysCount !== 1 ? "s" : ""}`, `${seg.daysCount} day${seg.daysCount !== 1 ? "s" : ""}`)}</span>
                   </span>
                 );
               })}
             </div>
-          </div>
+          </section>
         )}
 
         {insightTab === "padroes" && (<>
@@ -1102,11 +1089,11 @@ export function InsightsPage() {
           <div className="harmony-legend">
             <span className="harmony-legend-item">
               <span className="harmony-legend-line" />
-              Atual
+              {l("Atual", "Current")}
             </span>
             <span className="harmony-legend-item">
               <span className="harmony-legend-line dashed" />
-              Base (50%)
+              {l("Base (50%)", "Baseline (50%)")}
             </span>
           </div>
           <button
@@ -1115,7 +1102,7 @@ export function InsightsPage() {
             className="harmony-goals-link"
             style={{ background: "none", border: "none", padding: "6px 0", width: "100%", fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            Ver detalhes das metas →
+            {l("Ver detalhes das metas →", "See goal details →")}
           </button>
         </div>
 
@@ -1340,7 +1327,7 @@ export function InsightsPage() {
                 <span style={{ fontSize: 18 }}>{cycleReport.phaseEmoji}</span>
                 <div>
                   <p style={{ fontSize: 10, fontWeight: 800, color: phaseColor, textTransform: "uppercase", letterSpacing: ".1em", margin: 0 }}>
-                    CICLO DE HUMOR
+                    {l("Ciclo de humor", "Mood cycle")}
                   </p>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
                     {currentPhaseLabel}
@@ -1356,7 +1343,7 @@ export function InsightsPage() {
                   {cycleReport.stabilityScore}
                   <span style={{ fontSize: 11, fontWeight: 400 }}>/100</span>
                 </p>
-                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>Estabilidade {getStabilityLabel(cycleReport.stabilityScore)}</p>
+                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{l("Estabilidade", "Stability")} · {stabilityScoreLabel}</p>
               </div>
             </div>
 
@@ -1414,14 +1401,11 @@ export function InsightsPage() {
                 };
                 const lastI = n - 1;
                 // dia da semana abreviado
-                const dayLabel = (dateStr: string) => {
-                  const d = new Date(`${dateStr}T12:00:00Z`);
-                  return ["D","S","T","Q","Q","S","S"][d.getUTCDay()];
-                };
+                const dayLabel = (dateStr: string) => weekdayNarrow.format(new Date(`${dateStr}T12:00:00Z`));
                 return (
                   <div style={{ marginBottom: 12, padding: "8px 10px", borderRadius: 12, background: `${phaseColor}08`, border: `1px solid ${phaseColor}18` }}>
                     <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 6px" }}>
-                      Curva da semana
+                      {l("Curva da semana", "Weekly curve")}
                     </p>
                     <svg viewBox={`0 0 ${W} ${H + 16}`} width="100%" style={{ display: "block", overflow: "visible" }}>
                       {/* linhas de grade sutis */}
@@ -1482,7 +1466,10 @@ export function InsightsPage() {
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                     <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: 0 }}>
-                      Dia {cycleReport.cycleEstimate.currentDayInCycle} do ciclo estimado
+                      {l(
+                        `Dia ${cycleReport.cycleEstimate.currentDayInCycle} do ciclo estimado`,
+                        `Day ${cycleReport.cycleEstimate.currentDayInCycle} of the estimated cycle`,
+                      )}
                     </p>
                     <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>
                       ~{cycleReport.cycleEstimate.estimatedLengthDays} dias
@@ -1527,9 +1514,9 @@ export function InsightsPage() {
               {/* Métricas 7d */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 {[
-                  { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
-                  { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
-                  ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
+                  { label: l("Humor · 7 dias", "Mood · 7 days"), val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
+                  { label: l("Energia · 7 dias", "Energy · 7 days"), val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
+                  ...(cycleReport.avgSleep7d ? [{ label: l("Sono · 7 dias", "Sleep · 7 days"), val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
                 ].map(m => (
                   <div key={m.label} style={{ flex: 1, padding: "8px 10px", borderRadius: 10, background: `${m.color}15`, border: `1px solid ${m.color}30`, textAlign: "center" }}>
                     <p style={{ fontSize: 10, color: "var(--text-3)", margin: "0 0 2px" }}>{m.label}</p>
@@ -1599,7 +1586,7 @@ export function InsightsPage() {
                   <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
                     {phaseHistory.slice(-6).map((item) => {
                       const color = getPhaseColor(item.phase);
-                      const label = PHASE_CONFIG[item.phase]?.label ?? item.phase;
+                      const label = phaseLabel(item.phase, PHASE_CONFIG[item.phase]?.label ?? item.phase);
                       return (
                         <span
                           key={`${item.phase}-${item.startDate}-${item.endDate}`}
@@ -1617,7 +1604,7 @@ export function InsightsPage() {
                         >
                           <span style={{ fontSize: 14 }}>{PHASE_CONFIG[item.phase]?.emoji ?? "•"}</span>
                           <span style={{ color, fontWeight: 600, fontSize: 9, letterSpacing: ".02em" }}>{label}</span>
-                          <span style={{ color: "var(--text-3)", fontSize: 9, fontWeight: 400 }}>{formatPhaseHistoryRange(item.startDate, item.endDate, resolveIntlLocale(i18n.language))}</span>
+                          <span style={{ color: "var(--text-3)", fontSize: 9, fontWeight: 400 }}>{formatPhaseHistoryRange(item.startDate, item.endDate, locale)}</span>
                         </span>
                       );
                     })}
@@ -1831,7 +1818,7 @@ export function InsightsPage() {
             marginBottom: "calc(var(--a))",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-peach)", margin: "0 0 10px" }}>
-              💭 Pergunta da semana
+              {l("💭 Pergunta da semana", "💭 Weekly question")}
             </p>
             <p style={{ fontSize: 17, fontWeight: 700, color: "var(--text-1)", margin: "0 0 14px", lineHeight: 1.45 }}>
               {weeklyQuestion}
@@ -1971,7 +1958,7 @@ export function InsightsPage() {
                   fontSize: 11, color: "var(--text-3)", fontWeight: 600,
                 }}
               >
-                Gerar novamente
+                {l("Gerar novamente", "Generate again")}
               </button>
             </div>
           )}

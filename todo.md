@@ -26,5 +26,8 @@
 - [ ] Inventariar e corrigir os 44 erros de lint legados do aplicativo móvel, fora do núcleo prioritário da PWA.
 - [x] Auditar referências a Stripe e alinhar o código, as dependências e os testes de pagamento exclusivamente à integração Cakto.
 - [x] Publicar no GitHub as correções validadas da PWA e a documentação de verificação, mediante autorização da titular.
-- [ ] Executar o deploy de produção autorizado da PWA Airia e validar a disponibilidade pública.
+- [x] Executar o deploy de produção autorizado da PWA Airia e validar a disponibilidade pública.
 - [x] Corrigir o pre-check de deploy que bloqueia a função controlada de retenção de eventos sem permitir migrações destrutivas.
+- [x] Garantir que a página de Padrões use somente português em `pt` e somente inglês em `en`, inclusive estados vazios, ferramentas e dados derivados.
+- [x] Padronizar o card Histórico de fases na página de Padrões, alinhando tipografia, espaçamento e hierarquia visual ao sistema do app.
+- [ ] Publicar no GitHub e em produção a correção validada de idioma e layout da página de Padrões, mediante autorização da titular.
