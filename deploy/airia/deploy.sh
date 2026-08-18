@@ -68,7 +68,24 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
   fi
   # Rollback só é seguro porque estas migrations mantêm o contrato do backend
   # anterior: adições são opcionais/idempotentes e nenhuma operação destrói dados.
-  if grep -Eiq "$DESTRUCTIVE_MIGRATION_PATTERN" "$MIGRATION_FILE"; then
+  # O corpo de uma função é instalado, mas não é executado durante a migração.
+  # Filtrá-lo evita confundir uma rotina de retenção futura com `DELETE` rodando
+  # agora, sem deixar de bloquear comandos destrutivos no nível da migração.
+  MIGRATION_STATEMENTS="$(awk '
+    {
+      line = tolower($0)
+      if (line ~ /^[[:space:]]*create[[:space:]]+(or[[:space:]]+replace[[:space:]]+)?function[[:space:]]/) {
+        in_function = 1
+        next
+      }
+      if (in_function && $0 ~ /^[[:space:]]*\$[[:alnum:]_]*\$;[[:space:]]*$/) {
+        in_function = 0
+        next
+      }
+      if (!in_function) print
+    }
+  ' "$MIGRATION_FILE")"
+  if printf '%s\n' "$MIGRATION_STATEMENTS" | grep -Eiq "$DESTRUCTIVE_MIGRATION_PATTERN"; then
     echo "ERRO: migration incompatível com rollback automático em $MIGRATION_FILE"
     exit 1
   fi

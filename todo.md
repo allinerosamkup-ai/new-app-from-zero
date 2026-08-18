@@ -26,3 +26,5 @@
 - [ ] Inventariar e corrigir os 44 erros de lint legados do aplicativo móvel, fora do núcleo prioritário da PWA.
 - [x] Auditar referências a Stripe e alinhar o código, as dependências e os testes de pagamento exclusivamente à integração Cakto.
 - [x] Publicar no GitHub as correções validadas da PWA e a documentação de verificação, mediante autorização da titular.
+- [ ] Executar o deploy de produção autorizado da PWA Airia e validar a disponibilidade pública.
+- [x] Corrigir o pre-check de deploy que bloqueia a função controlada de retenção de eventos sem permitir migrações destrutivas.
