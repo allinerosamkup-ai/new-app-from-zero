@@ -30,4 +30,4 @@
 - [x] Corrigir o pre-check de deploy que bloqueia a função controlada de retenção de eventos sem permitir migrações destrutivas.
 - [x] Garantir que a página de Padrões use somente português em `pt` e somente inglês em `en`, inclusive estados vazios, ferramentas e dados derivados.
 - [x] Padronizar o card Histórico de fases na página de Padrões, alinhando tipografia, espaçamento e hierarquia visual ao sistema do app.
-- [ ] Publicar no GitHub e em produção a correção validada de idioma e layout da página de Padrões, mediante autorização da titular.
+- [x] Publicar no GitHub e em produção a correção validada de idioma e layout da página de Padrões, mediante autorização da titular.
