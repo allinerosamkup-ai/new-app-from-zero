@@ -31,3 +31,5 @@
 - [x] Garantir que a página de Padrões use somente português em `pt` e somente inglês em `en`, inclusive estados vazios, ferramentas e dados derivados.
 - [x] Padronizar o card Histórico de fases na página de Padrões, alinhando tipografia, espaçamento e hierarquia visual ao sistema do app.
 - [x] Publicar no GitHub e em produção a correção validada de idioma e layout da página de Padrões, mediante autorização da titular.
+- [ ] Corrigir no PWA principal o card Histórico de fases que ainda exibe tipografia e composição visual antigas, validando a aparência renderizada antes do redeploy.
+- [ ] Publicar no GitHub e em produção a correção visual dos dois cards de Histórico de fases, mediante autorização da titular.

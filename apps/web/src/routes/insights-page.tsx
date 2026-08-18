@@ -875,7 +875,7 @@ export function InsightsPage() {
 
         {/* ── HISTÓRICO DE FASES (timeline 30 dias) ── */}
         {insightTab === "padroes" && phaseHistory.length > 0 && (
-          <section className="aura-card insights-phase-history">
+          <section className="insights-phase-history">
             <div className="insights-phase-history__header">
               <div>
                 <p className="insights-phase-history__kicker">
@@ -1579,32 +1579,23 @@ export function InsightsPage() {
               )}
 
               {phaseHistory.length > 0 && (
-                <div style={{ marginTop: 10 }}>
-                  <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 6px" }}>
+                <div className="insights-recent-phase-history">
+                  <p className="insights-recent-phase-history__title">
                     {t("insights.recentPhases")}
                   </p>
-                  <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+                  <div className="insights-recent-phase-history__list">
                     {phaseHistory.slice(-6).map((item) => {
                       const color = getPhaseColor(item.phase);
                       const label = phaseLabel(item.phase, PHASE_CONFIG[item.phase]?.label ?? item.phase);
                       return (
                         <span
                           key={`${item.phase}-${item.startDate}-${item.endDate}`}
-                          style={{
-                            flexShrink: 0,
-                            display: "inline-flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            gap: 2,
-                            borderRadius: 12,
-                            border: `1px solid ${color}25`,
-                            background: `${color}0e`,
-                            padding: "6px 10px",
-                          }}
+                          className="insights-recent-phase-history__item"
+                          style={{ "--phase-color": color } as React.CSSProperties}
                         >
-                          <span style={{ fontSize: 14 }}>{PHASE_CONFIG[item.phase]?.emoji ?? "•"}</span>
-                          <span style={{ color, fontWeight: 600, fontSize: 9, letterSpacing: ".02em" }}>{label}</span>
-                          <span style={{ color: "var(--text-3)", fontSize: 9, fontWeight: 400 }}>{formatPhaseHistoryRange(item.startDate, item.endDate, locale)}</span>
+                          <span className="insights-recent-phase-history__emoji">{PHASE_CONFIG[item.phase]?.emoji ?? "•"}</span>
+                          <span className="insights-recent-phase-history__label">{label}</span>
+                          <span className="insights-recent-phase-history__date">{formatPhaseHistoryRange(item.startDate, item.endDate, locale)}</span>
                         </span>
                       );
                     })}
