@@ -490,3 +490,32 @@ a titular abrir o app logada para essa conferência.
   parâmetro para continuar pura). Os acentos quebrados de `insights-page` e do
   helper foram restaurados: eles passavam pelo audit de i18n **porque** estavam
   sem acento — a regex do audit procura acento e uma lista curta de palavras.
+
+---
+
+## 2026-08-18 — Publicado na VPS (`a10e053`)
+
+Deploy `32084888874` verde. Produção serve `a10e053`, conferido por inspeção do
+bundle vivo, não pelo log do deploy:
+
+- `@keyframes page-enter` sem `transform` nenhum (só opacidade) e
+  `.page-transition{overflow-x:hidden}` — a causa da barra de navegação ficar
+  961px abaixo da viewport deixou de existir.
+- Chunk do check-in com "Minha menstruação começou hoje" e **sem** "Dia do
+  fluxo" nem a pergunta diária antiga; `checkin-note` presente como seção
+  própria.
+- Home sem "O que cabe hoje"; a caixa vive só no resultado do check-in.
+- `DevLayout` ausente do bundle de produção.
+- URL inexistente responde 200 (SPA) e cai na Home pela rota curinga.
+
+**Não verificado, e continua pendente:** o fluxo autenticado ponta a ponta. Tudo
+acima é inspeção de bundle e rota pública. Falta alguém logado percorrer
+`/comecar` até o fim e confirmar que sexo biológico, medicação e diagnósticos
+chegam a `OnboardingResponse`, e que o bloco de ciclo some para quem declara
+sexo masculino. O backend de dev aponta para o Supabase de produção, então não
+criei usuário de teste.
+
+**Dívida aberta:** as 1.973 linhas de onboarding morto
+(`onboarding-*.tsx`, `guided-onboarding-page.tsx`, `features/guided-onboarding/`)
+continuam no repositório atrás dos redirects. As perguntas já migraram para
+`/comecar`; os arquivos é que não saíram.
