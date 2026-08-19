@@ -201,3 +201,8 @@ echo "Deploy concluído: release $AIRIA_RELEASE"
 
 echo "== Cleanup =="
 rm -rf "$PROJECT_DIR/deploy/airia/.build-src"
+
+# Atualiza o próprio script no repo da VPS para que execuções futuras
+# (inclusive o workflow antigo) achem a versão correta.
+cp /tmp/deploy-from-github.sh "$PROJECT_DIR/deploy/airia/deploy-from-github.sh" 2>/dev/null || true
+echo "deploy-from-github.sh atualizado no repo local da VPS"
