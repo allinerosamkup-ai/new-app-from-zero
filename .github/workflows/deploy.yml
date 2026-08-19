@@ -170,7 +170,13 @@ jobs:
           AUTH_URL="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           # Transfere o script de deploy NOVO para a VPS (o repositório local
           # dela pode estar desatualizado e não conter o arquivo).
+          echo "SHA do checkout no runner: $(git rev-parse HEAD)"
+          echo "SHA do script no runner:  $(git hash-object deploy/airia/deploy-from-github.sh)"
           scp -i ~/.ssh/id_deploy -o ConnectTimeout=30 deploy/airia/deploy-from-github.sh "${USER_FINAL}@${VPS_HOST}":/tmp/deploy-from-github.sh
+          # Na VPS, confirma qual script chegou (hash) e se o /tmp é o que
+          # esperamos antes de executar.
+          ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 "${USER_FINAL}@${VPS_HOST}" \
+            "echo 'SHA do arquivo recebido na VPS:' \"\$(git hash-object /tmp/deploy-from-github.sh 2>/dev/null || sha256sum /tmp/deploy-from-github.sh | cut -d' ' -f1)\"; echo 'SHA local da VPS (script operacional):' \"\$(git -C /opt/airia/app hash-object deploy/airia/deploy-from-github.sh 2>/dev/null || echo indisponivel)\""
           # Executa o deploy clonando o código limpo do GitHub. Ao final, o
           # script copia a si mesmo para o repo da VPS para execuções futuras.
           ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 "${USER_FINAL}@${VPS_HOST}" \
