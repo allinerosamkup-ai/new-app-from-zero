@@ -13,12 +13,10 @@ import {
   Card,
   ProgressBar, 
   Surface, 
-  Avatar, 
   Chip, 
   Checkbox,
   ActivityIndicator,
-  MD3Colors,
-  IconButton
+  MD3Colors
 } from 'react-native-paper';
 import { useAuthStore } from '../providers/auth_store';
 import {

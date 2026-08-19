@@ -136,7 +136,12 @@ export class CheckinApplicationService {
       stateSummary: evaluation.stateSummary,
       aiState: { ...evaluation.aiState, riskSafety: evaluation.riskSafety },
     });
-    await this.dependencies.afterPersist?.({ data, checkin: updated, evaluation, applicationContext });
+    const afterPersistInput = { data, checkin: updated, evaluation, applicationContext };
+    setImmediate(() => {
+      void Promise.resolve(this.dependencies.afterPersist?.(afterPersistInput)).catch((error) => {
+        console.warn('[checkin] atualização derivada após persistência falhou:', error);
+      });
+    });
     return receipt(updated, evaluation.riskSafety);
   }
 }

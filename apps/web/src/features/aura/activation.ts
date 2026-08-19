@@ -64,6 +64,50 @@ export const ACTIVATION_ACTIONS: Record<ActivationActionId, ActivationAction> = 
   },
 };
 
+/** A regra de ativação não depende de idioma; a apresentação, sim. */
+export function getLocalizedActivationAction(
+  id: ActivationActionId,
+  l: (portuguese: string, english: string) => string,
+): ActivationAction {
+  const action = ACTIVATION_ACTIONS[id];
+  const copy: Record<ActivationActionId, Pick<ActivationAction, "label" | "title" | "description">> = {
+    checkin: {
+      label: l("Fazer meu check-in", "Do my check-in"),
+      title: l("Comece pelo check-in", "Start with a check-in"),
+      description: l(
+        "A Airia começa entendendo como estão seu humor e sua energia hoje.",
+        "Airia starts by understanding your mood and energy today.",
+      ),
+    },
+    goal: {
+      label: l("Definir meu objetivo", "Set my goal"),
+      title: l("Escolha o que quer destravar", "Choose what you want to move forward"),
+      description: l(
+        "Transforme uma intenção em próximos passos pequenos e possíveis.",
+        "Turn an intention into small, doable next steps.",
+      ),
+    },
+    journal: {
+      label: l("Abrir meu diário", "Open my journal"),
+      title: l("Dê contexto para a Airia", "Give Airia some context"),
+      description: l(
+        "Registre o que pesou, ajudou ou merece ser lembrado hoje.",
+        "Write down what felt heavy, helped, or is worth remembering today.",
+      ),
+    },
+    explore: {
+      label: l("Ver minha Home", "Go to my Home"),
+      title: l("Airia já tem um começo", "Airia has a starting point"),
+      description: l(
+        "Agora você pode explorar seus registros, objetivos e o ritmo do dia.",
+        "You can now explore your records, goals, and today’s rhythm.",
+      ),
+    },
+  };
+
+  return { ...action, ...copy[id] };
+}
+
 function isRecentAccount(accountCreatedAt: string | null | undefined, now: Date) {
   if (!accountCreatedAt) return false;
   const createdAt = new Date(accountCreatedAt).getTime();

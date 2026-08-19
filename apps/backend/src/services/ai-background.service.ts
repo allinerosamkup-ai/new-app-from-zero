@@ -1,6 +1,6 @@
 import { PrismaClient } from '@app/database';
 import { MemoryService } from './memory.service';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
+import { getOpenAiModel, getOpenAiOutputLimit, openAiTemperature } from '../lib/openai-config';
 import { prisma } from '../lib/prisma';
 
 const INTERVALS = {
@@ -156,7 +156,7 @@ Retorne JSON:
         { role: 'user', content: JSON.stringify(checkinsData) },
       ],
       ...openAiTemperature(getOpenAiModel(), 0.3),
-      max_completion_tokens: getOpenAiMaxCompletionTokens(4000),
+      ...getOpenAiOutputLimit(getOpenAiModel(), 4000),
     });
 
     const content = completion.choices[0]?.message?.content;

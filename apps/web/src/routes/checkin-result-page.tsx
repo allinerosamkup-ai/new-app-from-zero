@@ -5,9 +5,9 @@ import { computeMoodCycle, getPhaseColor } from "../utils/mood-cycle-engine";
 import { useLocalizedCopy } from "../i18n";
 import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
-import { CapacityNote } from "../components/aura/CapacityNote";
+import { TodayGoalActionsCard } from "../components/aura/TodayGoalActionsCard";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
-import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import { canShowContextualDecision, localizeAiriaCapacityReason, localizeAiriaPhase, localizeVisibleConcreteAction, sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
 import { successHaptic } from "../utils/haptics";
 import "../styles/aura.css";
 
@@ -31,10 +31,14 @@ export function CheckinResultPage() {
   const latest = state.checkinHistory?.[0];
   const observedAt = reading?.currentState.observedAt ?? latest?.recordedAt;
   const decision = reading?.decision;
-  const safeRoute = reading?.riskSafety?.route;
-  const showDecision = Boolean(decision) && safeRoute !== "crisis_protocol" && safeRoute !== "human_support";
+  const showDecision = canShowContextualDecision(reading, "checkin_result");
+  const observedDays = Number(reading?.period.observedDays ?? 0);
+  const readingConfidence = Number(reading?.period.confidence ?? 0);
+  const isStillLearning = observedDays < 2 || readingConfidence < 0.35;
+  const localizedPhase = localizeAiriaPhase(reading?.currentState.phase ?? cycle.phaseLabel, l);
+  const localizedCapacityReason = localizeAiriaCapacityReason(reading?.capacity, reading?.currentState.energyScore, l);
 
-  async function feedback(status: "accepted" | "rejected" | "corrected" | "done") {
+  async function feedback(status: "accepted" | "rejected" | "corrected" | "done" | "substituted") {
     if (!decision || feedbackPending) return;
     setFeedbackPending(true);
     const persisted = await sendAiriaDecisionFeedback(decision.id, status, "checkin_result", correction);
@@ -60,43 +64,52 @@ export function CheckinResultPage() {
 
         <section style={{ marginBottom: 14, padding: "16px", borderRadius: 18, background: "rgba(255,255,255,.78)", border: `1.5px solid ${phaseColor}40` }}>
           <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: phaseColor, textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Estado agora", "Current state")}</p>
-          <p style={{ margin: "5px 0 0", fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>{reading?.currentState.phase ?? cycle.phaseLabel}</p>
-          {observedAt && <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--text-3)" }}>{l("Baseado no último registro confirmado.", "Based on the latest confirmed record.")}</p>}
+          <p style={{ margin: "5px 0 0", fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>
+            {isStillLearning
+              ? l("Ainda conhecendo seu ritmo", "Still learning your rhythm")
+              : localizedPhase}
+          </p>
+          {observedAt && <p style={{ margin: "5px 0 0", fontSize: 12, color: "var(--text-3)" }}>
+            {isStillLearning
+              ? l("Este registro entra no seu histórico. Com mais momentos, eu comparo o que muda no seu dia.", "This record joins your history. With more moments, I can compare what changes through your day.")
+              : l("Baseado nos seus registros confirmados neste período.", "Based on your confirmed records from this period.")}
+          </p>}
           {reading?.currentState.intraday && (
             <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text-2)", lineHeight: 1.45 }}>
-              {reading.currentState.intraday.observations ?? 0} {l("registro(s) hoje", "record(s) today")} · {reading.currentState.intraday.direction ?? l("sem trajetória suficiente", "not enough trajectory yet")}
-              {typeof reading.currentState.intraday.range === "number" ? ` · ${l("amplitude", "range")} ${reading.currentState.intraday.range.toFixed(1)}` : ""}
+              {(reading.currentState.intraday.observations ?? 0) === 1
+                ? l("1 registro confirmado hoje", "1 confirmed record today")
+                : l(`${reading.currentState.intraday.observations ?? 0} registros confirmados hoje`, `${reading.currentState.intraday.observations ?? 0} confirmed records today`)}
             </p>
           )}
         </section>
 
         <SafetyProtocolCard riskSafety={reading?.riskSafety} surface="checkin_result" />
 
-        {/* A capacidade vem antes da proposta porque explica o tamanho dela.
-            Ler "propus algo de 10 minutos porque você dormiu 5h" depois de já
-            ter visto a proposta é justificativa; antes, é raciocínio. */}
-        {showDecision && (
-          <CapacityNote
-            capacity={reading?.capacity}
-            decisionId={decision?.id ?? null}
-            surface="checkin_result"
-            onCorrected={() => { void reload(); }}
-          />
-        )}
+        <TodayGoalActionsCard capacity={reading?.capacity} />
 
         {loading && <div className="aura-panel-soft" style={{ padding: 16, textAlign: "center", marginBottom: 12 }}><p style={{ margin: 0, color: "var(--text-3)", fontSize: 12 }}>{l("Cruzando este registro com seu contexto…", "Connecting this record with your context…")}</p></div>}
         {showDecision && decision && (
           <section style={{ padding: 16, borderRadius: 16, marginTop: 12, marginBottom: 12, background: "rgba(255,253,250,.95)", border: "1.5px solid rgba(143,192,164,.36)" }}>
-            <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".12em" }}>{l("Proposta da Airia", "Airia's proposal")}</p>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "var(--text-1)" }}>{decision.title}</p>
-            <p style={{ margin: "7px 0 12px", fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>{decision.reason}</p>
+            <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".12em" }}>{l("Próximo passo que cabe hoje", "A next step that fits today")}</p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "var(--text-1)" }}>{localizeVisibleConcreteAction(decision.title, l)}</p>
+            <p style={{ margin: "7px 0 12px", fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>{localizedCapacityReason}</p>
             {correctionOpen ? <>
               <textarea value={correction} onChange={(event) => setCorrection(event.target.value)} rows={3} maxLength={500} placeholder={l("O que a Airia precisa ajustar?", "What should Airia adjust?")} style={{ width: "100%", boxSizing: "border-box", padding: 10, borderRadius: 10, border: "1px solid var(--warm-border)" }} />
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}><AuraButtonV2 className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setCorrectionOpen(false)}>{l("Voltar", "Back")}</AuraButtonV2><AuraButtonV2 className="btn btn-primary" style={{ flex: 1 }} disabled={!correction.trim() || feedbackPending} onClick={() => void feedback("corrected")}>{l("Corrigir", "Correct")}</AuraButtonV2></div>
-            </> : decision.requiresConfirmation && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <AuraButtonV2 className="btn btn-ghost" disabled={feedbackPending} onClick={() => void feedback("rejected")}>{l("Não agora", "Not now")}</AuraButtonV2>
-              <AuraButtonV2 className="btn btn-primary" disabled={feedbackPending} onClick={() => void feedback("accepted")}>{l("Faz sentido", "That fits")}</AuraButtonV2>
-              <AuraButtonV2 className="btn btn-ghost" style={{ gridColumn: "1 / -1" }} onClick={() => setCorrectionOpen(true)}>{l("Corrigir a Airia", "Correct Airia")}</AuraButtonV2>
+            </> : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <AuraButtonV2
+                className="btn btn-primary"
+                disabled={feedbackPending}
+                onClick={() => {
+                  void feedback("accepted");
+                  navigate("/goals", { state: { objectiveId: decision.objectiveId, actionId: decision.actionId } });
+                }}
+              >
+                {l("Fazer agora", "Do it now")}
+              </AuraButtonV2>
+              <AuraButtonV2 className="btn btn-ghost" disabled={feedbackPending} onClick={() => void feedback("substituted")}>{l("Trocar ação", "Swap action")}</AuraButtonV2>
+              <AuraButtonV2 className="btn btn-ghost" disabled={feedbackPending} onClick={() => void feedback("rejected")}>{l("Não para hoje", "Not for today")}</AuraButtonV2>
+              <AuraButtonV2 className="btn btn-ghost" disabled={feedbackPending} onClick={() => setCorrectionOpen(true)}>{l("Corrigir a Airia", "Correct Airia")}</AuraButtonV2>
             </div>}
           </section>
         )}

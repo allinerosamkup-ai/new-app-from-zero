@@ -4,8 +4,9 @@ import type { DailyContext } from './context-grounding.service';
 import type { DecisionSurface } from './decision-engine.service';
 import type { AiriaActionPlan } from './airia-operational-reasoning.service';
 import type { AuraCommandAction } from '../contracts/aura-command.contract';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
+import { getOpenAiModel, getOpenAiOutputLimit, openAiTemperature } from '../lib/openai-config';
 import { isExplicitRoutineBuilderRequest } from '../lib/routine-request';
+import { extractJsonValue } from '../lib/extract-json';
 import { CheckinUnderstandingService } from './checkin-understanding.service';
 
 let _openai: OpenAI | null = null;
@@ -933,13 +934,13 @@ export class AiriaCognitiveInterpreterService {
           { role: 'user', content: buildPrompt(input) },
         ],
         response_format: { type: 'json_object' },
-        max_completion_tokens: getOpenAiMaxCompletionTokens(5000),
+        ...getOpenAiOutputLimit(this.MODEL, 5000),
         ...openAiTemperature(this.MODEL, 0.2),
       } as any);
 
       const content = response.choices?.[0]?.message?.content;
       if (!content) return heuristicBuild(input);
-      const parsed = CognitiveModelSchema.parse(JSON.parse(content));
+      const parsed = CognitiveModelSchema.parse(extractJsonValue(content));
       return normalizeParsed(input, parsed);
     } catch (error) {
       console.warn('[airia-cognitive] Falling back to heuristic frame:', error);

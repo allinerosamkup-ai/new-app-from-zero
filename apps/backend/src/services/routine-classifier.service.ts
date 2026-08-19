@@ -7,8 +7,8 @@ import {
 } from '../contracts/routine-builder.contract';
 import { extractJsonValue } from '../lib/extract-json';
 import {
-  getOpenAiMaxCompletionTokens,
   getOpenAiModel,
+  getOpenAiOutputLimit,
   openAiTemperature,
 } from '../lib/openai-config';
 import { SuggestionMemoryService } from './suggestion-memory.service';
@@ -113,7 +113,7 @@ export class RoutineClassifierService {
           { role: 'user', content: input.text },
         ],
         response_format: { type: 'json_object' },
-        max_completion_tokens: getOpenAiMaxCompletionTokens(8_000),
+        ...getOpenAiOutputLimit(model, 8_000),
         ...openAiTemperature(model, 0.1),
       } as any);
       content = completion.choices[0]?.message?.content;

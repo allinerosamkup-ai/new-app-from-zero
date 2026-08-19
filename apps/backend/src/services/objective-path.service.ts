@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { normalizeObjectiveSubgoals, type ObjectiveSubgoal } from '../lib/objective-subgoals';
+import {
+  activeConcreteObjectiveSubgoals,
+  isConcreteObjectiveSubgoal,
+  normalizeObjectiveSubgoals,
+  type ObjectiveSubgoal,
+} from '../lib/objective-subgoals';
 import {
   GoalIntelligenceService,
   type GoalDecomposition,
@@ -154,14 +159,15 @@ export class ObjectivePathService {
   }): Promise<{ status: 'ready' | 'needs_answer' | 'retrying'; objectiveId: string; pathVersion: number; question: string | null }> {
     const objective = await this.objective(input.userId, input.objectiveId);
     const existing = normalizeObjectiveSubgoals(objective.subgoals);
-    if (objective.pathStatus === 'ready' && existing.some((action) => action.done || action.userEdited)) {
+    const concreteExisting = existing.filter(isConcreteObjectiveSubgoal);
+    if (objective.pathStatus === 'ready' && existing.some((action) => action.userEdited || (action.done && isConcreteObjectiveSubgoal(action)))) {
       throw new ObjectivePathConflictError('revision_requires_proposal');
     }
     const decomposition = await this.decompose({
       goalTitle: objective.title,
-      existingActions: existing.filter((action) => !action.done).map((action) => action.title),
+      existingActions: concreteExisting.filter((action) => !action.done).map((action) => action.title),
       completedActions: [
-        ...existing.filter((action) => action.done).map((action) => action.title),
+        ...concreteExisting.filter((action) => action.done).map((action) => action.title),
         ...(input.completedActions ?? []),
       ],
       blockedActions: input.blockedActions,
@@ -289,7 +295,7 @@ export class ObjectivePathService {
     const objective = await this.objective(input.userId, input.objectiveId);
     if (objective.pathVersion !== input.expectedVersion) throw new ObjectivePathConflictError('objective_path_changed');
     const existing = normalizeObjectiveSubgoals(objective.subgoals);
-    if (existing.some((action) => !action.done && action.status !== 'rejected')) {
+    if (activeConcreteObjectiveSubgoals(existing).length > 0) {
       throw new ObjectivePathConflictError('current_milestone_still_has_action');
     }
     const milestones = milestonesOf(objective.milestones);

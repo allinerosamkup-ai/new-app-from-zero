@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, ScrollView, Dimensions,
+  SafeAreaView, ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
-
-const { width: SCREEN_W } = Dimensions.get('window');
-const CHART_W = SCREEN_W - appSpacing.lg * 2 - 32; // padding do card
 
 type Metric = 'humor' | 'energia' | 'hrv' | 'sono';
 
@@ -37,14 +34,6 @@ const AI_INSIGHTS = [
 
 function MiniChart({ data, color, max }: { data: number[]; color: string; max: number }) {
   const H = 60;
-  const W = CHART_W;
-  const points = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * W,
-    y: H - (v / max) * H,
-  }));
-
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  const areaD = pathD + ` L ${points[points.length - 1].x.toFixed(1)} ${H} L 0 ${H} Z`;
 
   // SVG via View components (sem dependência externa)
   return (

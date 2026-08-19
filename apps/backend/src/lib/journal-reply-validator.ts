@@ -13,6 +13,8 @@
  *  - echo_only: resposta é apenas reformulação da última fala da usuária
  */
 
+import { validateVisibleConcreteAction } from './action-quality';
+
 export type JournalValidationContext = {
   /** Últimas respostas DA AIRIA na sessão atual (mais antiga → mais recente). */
   lastAssistantReplies: string[];
@@ -30,7 +32,7 @@ export type JournalValidationResult =
   | { ok: true }
   | {
       ok: false;
-      reason: 'question_loop' | 'no_concrete_anchor' | 'echo_only' | 'analysis_missing';
+      reason: 'question_loop' | 'no_concrete_anchor' | 'echo_only' | 'analysis_missing' | 'visible_action_invalid';
       details: string;
     };
 
@@ -70,6 +72,24 @@ function endsWithQuestion(value: string): boolean {
 }
 
 const QUESTION_LOOP_THRESHOLD = 3;
+const VISIBLE_ACTION_LINE = /(?:^|\n)\s*(?:pr[oó]ximo passo|next step)\s*:\s*(.+)$/gim;
+const IMPERATIVE_ACTION_START = /(?:^|[.!?]\s+)(?:abra|abre|anote|liste|envie|ligue|separe|fa[çc]a|escreva|marque|responda|organize|confira|pague)\b/i;
+
+function visibleActionError(reply: string): string | null {
+  const actionLines = [...reply.matchAll(VISIBLE_ACTION_LINE)]
+    .map((match) => match[1]?.trim() ?? '')
+    .filter(Boolean);
+  if (actionLines.length > 0) {
+    const invalid = actionLines.find((line) => !validateVisibleConcreteAction(line).ok);
+    return invalid
+      ? `Ação visível sem objeto específico ou término observável: "${invalid}".`
+      : null;
+  }
+  if (IMPERATIVE_ACTION_START.test(reply)) {
+    return 'A resposta contém uma sugestão imperativa, mas não a apresenta como “Próximo passo: … Pronto quando: …”.';
+  }
+  return null;
+}
 
 export function validateJournalReply(
   reply: string,
@@ -78,6 +98,11 @@ export function validateJournalReply(
   const trimmed = reply.trim();
   if (!trimmed) {
     return { ok: true };
+  }
+
+  const actionError = visibleActionError(trimmed);
+  if (actionError) {
+    return { ok: false, reason: 'visible_action_invalid', details: actionError };
   }
 
   // 1. Anti-loop de pergunta: se as últimas N-1 respostas terminaram em "?"
@@ -164,7 +189,8 @@ export type JournalValidationFailureReason =
   | 'question_loop'
   | 'no_concrete_anchor'
   | 'echo_only'
-  | 'analysis_missing';
+  | 'analysis_missing'
+  | 'visible_action_invalid';
 
 /**
  * Constrói a mensagem de reforço pra reescrita quando a validação falha.
@@ -180,6 +206,8 @@ export function buildRevisionInstruction(reason: JournalValidationFailureReason,
       return `REESCREVA a resposta — você só reformulou o que a usuária disse com sinônimos. ${details} Acrescente leitura nova: cruze fato do dia anterior, identifique o que está se repetindo, ou proponha ação concreta.`;
     case 'analysis_missing':
       return `REESCREVA a resposta — ${details} A pessoa NÃO conhece a metodologia. Quem precisa ver primeiro é VOCÊ, e mostrar pronto. Estrutura obrigatória: (1) 1-3 frases DECLARATIVAS dizendo o que você está lendo no contexto cruzando fatos; (2) 1-2 frases direcionando o próximo passo concreto com objeto que ela citou + tamanho; (3) opcional, UMA pergunta curta de até 12 palavras no fim. NUNCA devolva só perguntas — entregue a análise pronta.`;
+    case 'visible_action_invalid':
+      return `REESCREVA a resposta — ${details} Preserve a análise e, se houver ação, termine com UMA linha no formato exato: "Próximo passo: <verbo + objeto específico>. Pronto quando: <evidência observável>." Não invente objeto, não use Planner ou Hábitos e não deixe outra ação imperativa solta no texto.`;
     default:
       return 'REESCREVA a resposta seguindo as regras do diário.';
   }

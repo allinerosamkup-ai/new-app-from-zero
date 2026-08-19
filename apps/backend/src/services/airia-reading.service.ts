@@ -10,6 +10,8 @@ import {
   type CapacityReading,
 } from '../lib/capacity';
 import { assessRiskSafety, type RiskSafety } from '../lib/risk-safety';
+import { normalizeObjectiveSubgoals } from '../lib/objective-subgoals';
+import { validateConcreteAction } from '../lib/action-quality';
 
 const READING_VERSION = 1;
 const SLOT_ORDER = ['morning', 'midday', 'evening'] as const;
@@ -76,26 +78,18 @@ function stableFingerprint(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function pendingObjectiveAction(objective: AnyRow | null): { id: string | null; title: string } | null {
-  if (!objective) return null;
-  const candidates = [objective.subgoals, objective.milestones];
-  for (const collection of candidates) {
-    if (!Array.isArray(collection)) continue;
-    for (const item of collection) {
-      if (!item || typeof item !== 'object') continue;
-      const record = item as Record<string, unknown>;
-      if (record.done === true || record.completed === true) continue;
-      const title = typeof record.title === 'string' ? record.title.trim() : typeof record.text === 'string' ? record.text.trim() : '';
-      if (title) return { id: typeof record.id === 'string' ? record.id : null, title };
-      const actions = Array.isArray(record.actions) ? record.actions : [];
-      const action = actions.find((entry) => entry && typeof entry === 'object' && (entry as Record<string, unknown>).done !== true && (entry as Record<string, unknown>).completed !== true) as Record<string, unknown> | undefined;
-      if (action) {
-        const actionTitle = typeof action.title === 'string' ? action.title.trim() : typeof action.text === 'string' ? action.text.trim() : '';
-        if (actionTitle) return { id: typeof action.id === 'string' ? action.id : null, title: actionTitle };
-      }
-    }
-  }
-  return null;
+function pendingObjectiveActions(objective: AnyRow | null): Array<{ id: string | null; title: string; doneWhen: string }> {
+  if (!objective) return [];
+  return normalizeObjectiveSubgoals(objective.subgoals)
+    .filter((action) => !action.done && action.status !== 'rejected' && action.status !== 'deferred')
+    .filter((action) => validateConcreteAction(action).ok)
+    .map((action) => ({ id: action.id, title: action.title, doneWhen: action.doneWhen?.trim() ?? '' }))
+    .filter((action) => action.doneWhen.length > 0);
+}
+
+function pendingObjectiveAction(objective: AnyRow | null, excludedActionId?: string | null): { id: string | null; title: string; doneWhen: string } | null {
+  const candidates = pendingObjectiveActions(objective);
+  return candidates.find((candidate) => candidate.id !== excludedActionId) ?? null;
 }
 
 /**
@@ -210,7 +204,7 @@ export class AiriaReadingService {
       sleepScore: latest?.sleepScore,
       irritabilityScore: latest?.irritabilityScore,
     });
-    const objective = (objectives as AnyRow[])[0] ?? null;
+    const objective = (objectives as AnyRow[]).find((candidate) => pendingObjectiveAction(candidate)) ?? (objectives as AnyRow[])[0] ?? null;
     const action = pendingObjectiveAction(objective);
 
     /**
@@ -415,11 +409,13 @@ export class AiriaReadingService {
      * definição de botão que não faz nada. O feedback fica gravado; o que
      * muda é que a Airia tem uma segunda chance de acertar o tamanho.
      */
-    if (input.capacityCorrection) {
-      await prisma.airiaDecision.update({
-        where: { id: decision.id },
-        data: { status: 'proposta', resolvedAt: null },
-      }).catch(() => {});
+    if (input.capacityCorrection || input.status === 'substituída') {
+      if (input.capacityCorrection) {
+        await prisma.airiaDecision.update({
+          where: { id: decision.id },
+          data: { status: 'proposta', resolvedAt: null },
+        }).catch(() => {});
+      }
       return this.rebuild({
         userId: input.userId,
         localDate: dateKey(decision.reading.localDate),
@@ -430,7 +426,7 @@ export class AiriaReadingService {
     return this.serialize(decision.reading, updated);
   }
 
-  private async upsertDecision(input: { reading: AnyRow; objective: AnyRow | null; action: { id: string | null; title: string } | null; riskSafety: RiskSafety; capacity: CapacityReading; intraday: Record<string, any>; historical: Record<string, any>; sourceSnapshot: Record<string, unknown>; surface: string }): Promise<AnyRow> {
+  private async upsertDecision(input: { reading: AnyRow; objective: AnyRow | null; action: { id: string | null; title: string; doneWhen: string } | null; riskSafety: RiskSafety; capacity: CapacityReading; intraday: Record<string, any>; historical: Record<string, any>; sourceSnapshot: Record<string, unknown>; surface: string }): Promise<AnyRow> {
     const prisma = this.prisma as any;
     const existing = await prisma.airiaDecision.findUnique({ where: { readingId: input.reading.id } });
     const evidence = [
@@ -446,13 +442,19 @@ export class AiriaReadingService {
      * mesmo dia.
      */
     const capacity = input.capacity;
+    const previousActionId = existing?.decision && typeof existing.decision === 'object'
+      ? ((existing.decision as Record<string, any>).action?.id ?? null)
+      : null;
+    const action = existing?.status === 'substituída'
+      ? pendingObjectiveAction(input.objective, previousActionId) ?? input.action
+      : input.action;
     const lowCapacity = capacity.level === 'protecao' || capacity.level === 'baixa';
     const decision = safetyFirst
       ? { type: 'protect', title: 'Priorizar apoio humano agora', explanation: input.riskSafety.message, action: null, destination: null, anchored: true }
-      : input.action
-        ? { type: lowCapacity ? 'reduce' : 'act', title: input.action.title, explanation: lowCapacity ? 'A leitura atual pede reduzir o próximo avanço já vinculado ao seu objetivo.' : 'Este é o próximo avanço já vinculado ao seu objetivo.', action: { id: input.action.id, title: input.action.title }, destination: { objectiveId: input.objective?.id ?? null, route: '/goals' }, anchored: true }
+      : action
+        ? { type: lowCapacity ? 'reduce' : 'act', title: `${action.title.replace(/[.]$/, '')}. Pronto quando: ${action.doneWhen.replace(/[.]$/, '')}.`, explanation: lowCapacity ? 'Escolhi o próximo passo concreto do seu objetivo em um tamanho menor para hoje.' : 'Este é o próximo avanço concreto já vinculado ao seu objetivo.', action: { id: action.id, title: action.title, doneWhen: action.doneWhen }, destination: { objectiveId: input.objective?.id ?? null, route: '/goals' }, anchored: true }
         : { type: 'explain', title: 'Leitura atual sem ação nova', explanation: 'A Airia ainda não tem uma ação ativa ancorada em objetivo ou intenção para propor.', action: null, destination: null, anchored: false };
-    if (existing && existing.status !== 'proposta') return existing;
+    if (existing && existing.status !== 'proposta' && existing.status !== 'substituída') return existing;
     const values = { userId: input.reading.userId, objectiveId: input.objective?.id ?? null, surface: input.surface, decision, evidence, validUntil: new Date(`${dateKey(input.reading.localDate)}T23:59:59.999Z`) };
     return prisma.airiaDecision.upsert({ where: { readingId: input.reading.id }, create: { readingId: input.reading.id, status: 'proposta', feedback: {}, ...values }, update: values });
   }

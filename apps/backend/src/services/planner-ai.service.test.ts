@@ -81,7 +81,7 @@ async function run() {
   assert.equal(result.schedule[0].title, 'Pintar uma parede da sala');
   assert.equal(result.adjustedExisting.length, 1);
   assert.equal(result.adjustedExisting[0].action, 'KEEP');
-  assert.match(capturedSystem, /PLANEJAMENTO/i);
+  assert.match(capturedSystem, /ORGANIZAÇÃO DO DIA/i);
   assert.match(capturedSystem, /Você gera SUGESTÕES \(não comandos\)/);
   assert.match(capturedSystem, /pintura da sala/);
   assert.match(capturedUser, /AGENDA ATUAL DO DIA/);

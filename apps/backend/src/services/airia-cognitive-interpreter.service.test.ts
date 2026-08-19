@@ -105,6 +105,36 @@ async function run() {
   assert.doesNotMatch(AiriaCognitiveInterpreterService.formatForPrompt(result), /Aliança Divergente|Pense Comigo|Efeito Paralelo/);
   assert.match(AiriaCognitiveInterpreterService.formatForPrompt(result), /FRAME COGNITIVO DA AIRIA/i);
 
+  const fencedModelResult = await AiriaCognitiveInterpreterService.interpret({
+    surface: 'aura-chat',
+    dailyContext: context,
+    currentMessage: 'Quero fazer um check-in agora.',
+  }, {
+    chat: {
+      completions: {
+        create: async () => ({
+          choices: [{
+            message: {
+              content: `\`\`\`json\n${JSON.stringify({
+                frame: {
+                  currentFact: 'Ela quer iniciar um check-in.', userInterpretation: 'Quer registrar o estado de agora.',
+                  emotionalSignal: '', intent: 'execution', decisionInPlay: '', moodCycleReading: '',
+                  relevantEvidence: ['pedido explícito'], memoryJudgments: [], riskOfBadResponse: [], confidence: 'alta',
+                },
+                responsePlan: {
+                  responseMode: 'executar', tone: 'direto', oneSentenceReading: 'Vamos registrar como você está agora.',
+                  finalMove: 'Perguntar o humor atual.', mustMention: [], mustAvoid: [], allowedActionSource: 'user_report',
+                },
+              })}\n\`\`\``,
+            },
+          }],
+        }),
+      },
+    },
+  } as any);
+  assert.equal(fencedModelResult.frame.currentFact, 'Quero fazer um check-in agora.');
+  assert.equal(fencedModelResult.captureJudgment.allowTaskCreation, true);
+
   const fallback = await AiriaCognitiveInterpreterService.interpret({
     surface: 'journal',
     dailyContext: baseContext({ patternMemoryContext: 'Memória antiga sem fato de hoje.' }),

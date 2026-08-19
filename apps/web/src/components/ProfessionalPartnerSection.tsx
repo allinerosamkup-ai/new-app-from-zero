@@ -70,8 +70,9 @@ export function ProfessionalPartnerSection({ load, apply }: Props) {
       const response = await applyPartner(form);
       setPartner(response.partner);
       setEditing(false);
-    } catch (caught: any) {
-      setError(caught?.message === "professional_crp_already_registered" ? "duplicate" : "submit_failed");
+    } catch (caught: unknown) {
+      const message = caught instanceof Error ? caught.message : null;
+      setError(message === "professional_crp_already_registered" ? "duplicate" : "submit_failed");
     } finally {
       setSubmitting(false);
     }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "vitest";
 
 import {
+  buildTemporalRhythmSignal,
   buildInsightActionDecision,
   formatEstimatedMenstrualPhase,
   resolveMoodDayHighlights,
@@ -56,6 +57,35 @@ describe("insights page helpers", () => {
         worstDay: null,
       },
     );
+  });
+
+  it("does not infer a temporal signal from fewer than seven observed days", () => {
+    const signal = buildTemporalRhythmSignal([
+      { date: "2026-08-01", humor: 7, energia: 7 },
+      { date: "2026-08-02", humor: 5, energia: 5 },
+      { date: "2026-08-03", humor: 8, energia: 8 },
+    ]);
+
+    assert.equal(signal.confidence, "insufficient");
+    assert.equal(signal.moodChange, null);
+    assert.equal(signal.lowerRhythmStreak, 0);
+  });
+
+  it("describes a recent change from ordered personal records without using calendar days", () => {
+    const signal = buildTemporalRhythmSignal([
+      { date: "2026-08-01", humor: 8, energia: 8 },
+      { date: "2026-08-03", humor: 8, energia: 7 },
+      { date: "2026-08-05", humor: 7, energia: 7 },
+      { date: "2026-08-06", humor: 5, energia: 5 },
+      { date: "2026-08-08", humor: 4, energia: 4 },
+      { date: "2026-08-09", humor: 4, energia: 3 },
+      { date: "2026-08-10", humor: 4, energia: 3 },
+    ]);
+
+    assert.equal(signal.confidence, "early");
+    assert.equal(signal.moodChange, -0.5);
+    assert.equal(signal.energyChange, -1.5);
+    assert.equal(signal.lowerRhythmStreak, 4);
   });
 
   it("labels menstrual phase and cycle day as estimates", () => {

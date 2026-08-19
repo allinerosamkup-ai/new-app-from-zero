@@ -48,7 +48,7 @@ interface CheckinState {
  * Zustand Store: O equivalente ao StateNotifierProvider do Riverpod.
  * Gerencia o estado global do Check-in no Mobile.
  */
-export const useCheckinStore = create<CheckinState>((set, get) => ({
+export const useCheckinStore = create<CheckinState>((set) => ({
   isLoading: false,
   todayCheckin: null,
   recentCheckins: [],

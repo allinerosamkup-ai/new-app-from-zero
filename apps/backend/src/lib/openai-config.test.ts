@@ -5,6 +5,8 @@ import {
   DEFAULT_OPENAI_MODEL,
   isJudgingCapableModel,
   getOpenAiMaxCompletionTokens,
+  getOpenAiOutputLimit,
+  getOpenAiStructuredResponseOptions,
   getOpenAiModel,
 } from './openai-config';
 
@@ -33,6 +35,14 @@ async function run() {
     assert.equal(getOpenAiMaxCompletionTokens(2200), 2200);
     assert.equal(getOpenAiMaxCompletionTokens(5000), 5000);
     assert.equal(getOpenAiMaxCompletionTokens(8000), DEFAULT_OPENAI_MAX_COMPLETION_TOKENS);
+    assert.deepEqual(getOpenAiOutputLimit('claude-sonnet-4-6', 1200), { max_tokens: 1200 });
+    assert.deepEqual(getOpenAiOutputLimit('gemini-3-flash-preview', 1200), { max_tokens: 1200 });
+    assert.deepEqual(getOpenAiOutputLimit('gpt-5-mini', 1200), { max_completion_tokens: 1200 });
+    assert.deepEqual(getOpenAiStructuredResponseOptions('claude-sonnet-4-6', 700), {
+      max_tokens: 1536,
+      thinking: { type: 'enabled', budget_tokens: 1024 },
+    });
+    assert.deepEqual(getOpenAiStructuredResponseOptions('gpt-5-mini', 700), { max_completion_tokens: 700 });
 
     process.env.OPENAI_MAX_COMPLETION_TOKENS = '900';
     assert.equal(getOpenAiMaxCompletionTokens(), 900);

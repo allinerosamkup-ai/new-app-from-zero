@@ -319,9 +319,12 @@ export function inferCapacity(signals: CapacitySignals = {}): CapacityReading {
     // 5. Sono declarado é mais ruidoso que medida: rebaixa, nunca decide.
     if (!hasPoorMeasuredSleep(signals) && hasPoorDeclaredSleep(signals)) {
       const hours = numberOrNull(signals.declaredSleepHours);
+      const score = numberOrNull(signals.declaredSleepScore);
       applyCeiling(shift(level, -1), {
         signal: 'sono',
-        value: hours !== null && hours > 0 ? `você contou que dormiu ${hours}h` : 'você contou que o sono foi ruim',
+        value: score !== null
+          ? `você avaliou a qualidade do sono em ${score} de 10`
+          : hours !== null && hours > 0 ? `você contou que dormiu ${hours}h` : 'você contou que o sono foi ruim',
         weight: 'supporting',
       });
     }

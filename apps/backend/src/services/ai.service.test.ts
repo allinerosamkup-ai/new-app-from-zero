@@ -25,15 +25,10 @@ async function run() {
           }
           streamCallCount += 1;
           return {
-            async *[Symbol.asyncIterator]() {
+            choices: [{
               // Resposta menciona "audiência" (âncora do journalContext) → passa validador.
-              yield {
-                choices: [{ delta: { content: 'A audiência ' } }],
-              };
-              yield {
-                choices: [{ delta: { content: 'de ontem ainda pesa hoje.' } }],
-              };
-            },
+              message: { content: 'A audiência de ontem ainda pesa hoje.' },
+            }],
           };
         },
       },
@@ -77,7 +72,7 @@ async function run() {
   );
 
   assert.equal(result, 'A audiência de ontem ainda pesa hoje.');
-  assert.deepEqual(deltas, ['A audiência ', 'de ontem ainda pesa hoje.']);
+  assert.deepEqual(deltas, ['A audiência de ontem ainda pesa hoje.']);
   assert.equal(capturedMessages[0]?.role, 'system');
   assert.match(capturedMessages[0]?.content || '', /DIARIO AO VIVO/i);
   assert.match(capturedMessages[0]?.content || '', /Nao diagnostique/i);
@@ -105,13 +100,14 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /RESPOSTA EXCELENTE/i);
   assert.match(capturedMessages[0]?.content || '', /POLITICA DE SUGESTAO CONCRETA/i);
   assert.match(capturedMessages[0]?.content || '', /acao concreta/i);
+  assert.match(capturedMessages[0]?.content || '', /Pr[oó]ximo passo: <a[cç][aã]o>\. Pronto quando: <evid[eê]ncia observ[aá]vel>/i);
   // Garante que jargão proibido NÃO aparece como ordem visível
   assert.doesNotMatch(capturedMessages[0]?.content || '', /Acrescente leitura, decisao, manobra/i);
   assert.doesNotMatch(capturedMessages[0]?.content || '', /feche com uma manobra/i);
   // Auto-bloqueio + anti-eco + UM problema por vez precisam estar presentes
   assert.match(capturedMessages[0]?.content || '', /PROIBIDO COSTURAR DOIS PROBLEMAS/i);
   assert.match(capturedMessages[0]?.content || '', /PROIBIDO MULTIPLA ESCOLHA/i);
-  assert.match(capturedMessages[0]?.content || '', /mensagem pronta/i);
+  assert.match(capturedMessages[0]?.content || '', /objeto identificável/i);
   assert.match(capturedMessages[0]?.content || '', /MEMÓRIA ANTES DE PADRÃO/i);
   assert.match(capturedMessages[0]?.content || '', /SINAIS ANTES DA QUEDA/i);
   assert.match(capturedMessages[0]?.content || '', /evidência concreta/i);

@@ -649,6 +649,7 @@
     "title": "Airia",
     "ready": "pronta",
     "starting": "iniciando",
+    "processing": "Organizando seu pedido...",
     "kicker": "Comando central",
     "placeholder": "O que vamos organizar agora?",
     "initialIdle": "Me diga o que precisa sair da cabeça e virar próximo passo.",
@@ -878,11 +879,14 @@
   "safety": {
     "crisisProtocol": "Protocolo de crise",
     "safetyLayer": "Camada de segurança",
+    "adaptLayer": "Ajuste de ritmo",
     "crisisBody": "A Airia não vai tratar isso como produtividade. Agora a prioridade é segurança humana e apoio imediato.",
     "humanBody": "A Airia percebeu sinais que pedem menos carga e mais apoio humano se isso estiver pesado demais.",
+    "adaptBody": "Hoje vale reduzir o ritmo e escolher um passo menor. Você continua no controle do seu dia.",
     "emergency": "Se houver risco imediato para você ou outra pessoa, procure emergência local agora. A Airia não substitui psicóloga, psiquiatra, atendimento médico ou rede de apoio.",
     "adaptDay": "Adaptar meu dia",
     "registerProtocol": "Registrar protocolo",
+    "continueDay": "Seguir com um passo menor",
     "understood": "Entendi o alerta",
     "resources": {
       "cvv": "apoio emocional 24h no Brasil",

@@ -5,28 +5,24 @@
  * conhecido (uma decomposição correta que precisa ser aprovada e uma cheia de
  * fato inventado que precisa ser reprovada):
  *
- *   modelo          aprova-a-boa  reprova-a-ruim   US$/1M in-out
- *   gpt-5.4-nano        1/5            5/5           0,20 / 1,25
- *   gpt-4o-mini         0/5            5/5           0,15 / 0,60
- *   gpt-5.4-mini        5/5            5/5           0,75 / 4,50   ← em uso
- *   gpt-4.1-mini        5/5            5/5           0,40 / 1,60
- *   gpt-4.1             5/5            5/5           2,00 / 8,00
- *   gpt-4o              5/5            5/5           2,50 / 10,00
- *   gpt-5.4             5/5            5/5
+ *   modelo                 papel no catálogo ativo
+ *   gpt-5-nano             volume alto com tolerância menor de qualidade
+ *   gpt-5-mini             raciocínio de trabalho, com latência variável
+ *   claude-haiku-4-5       respostas rápidas, porém menos criteriosas
+ *   claude-sonnet-4-6      qualidade e latência adequadas ao uso interativo ← em uso
  *
- * O nano GERA bem e JULGA mal: reprovava "retire da sala o que não deveria
- * estar ali" alegando que o passo inventa a existência de itens. Como toda
- * revisão reprovava, a camada de validação virou enfeite e a Airia caía em
- * "não tenho informação suficiente" com a informação toda na mão.
+ * O nano gera bem, mas falhou em julgamentos de equivalência e revisão de
+ * passos concretos. O modelo padrão precisa sustentar o julgamento e entregar
+ * resposta interativa em tempo adequado; por isso não usa um ID histórico que
+ * o provedor não aceita nem o modelo de maior latência observado na candidata.
  *
- * Qualquer modelo escolhido aqui precisa julgar, não só escrever. Os dois mais
- * baratos da tabela — gpt-4o-mini e gpt-5.4-nano — são justamente os que falham,
- * então economizar por aqui reintroduz o bug. Se o custo apertar, gpt-4.1-mini é
- * a troca segura: passa 5/5 e custa metade do atual.
+ * Qualquer modelo escolhido aqui precisa julgar, não só escrever. Se for
+ * necessário alterar esta escolha, primeiro consulte o catálogo vivo do
+ * provedor e depois execute o benchmark de julgamento.
  *
  * Reproduza com `npm run ai:judge-bench` antes de trocar qualquer coisa aqui.
  */
-export const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
+export const DEFAULT_OPENAI_MODEL = 'claude-sonnet-4-6';
 export const DEFAULT_OPENAI_MAX_COMPLETION_TOKENS = 6000;
 
 /**
@@ -54,6 +50,40 @@ export function getOpenAiMaxCompletionTokens(
     : DEFAULT_OPENAI_MAX_COMPLETION_TOKENS;
 
   return Math.min(preferred, cap);
+}
+
+/**
+ * O proxy aceita famílias diferentes de parâmetros para o teto de saída.
+ * Claude e Gemini usam `max_tokens`; GPT usa `max_completion_tokens`.
+ */
+export function getOpenAiOutputLimit(
+  model: string,
+  preferred = DEFAULT_OPENAI_MAX_COMPLETION_TOKENS,
+): { max_tokens: number } | { max_completion_tokens: number } {
+  const limit = getOpenAiMaxCompletionTokens(preferred);
+  const normalized = model.trim().toLowerCase();
+  return normalized.startsWith('claude') || normalized.startsWith('gemini')
+    ? { max_tokens: limit }
+    : { max_completion_tokens: limit };
+}
+
+/**
+ * Opções para uma resposta JSON que precisa de raciocínio antes da saída.
+ * Claude exige um orçamento explícito e um `max_tokens` estritamente maior;
+ * o piso preserva espaço para o JSON final, mesmo em chamadas originalmente curtas.
+ */
+export function getOpenAiStructuredResponseOptions(
+  model: string,
+  preferred = DEFAULT_OPENAI_MAX_COMPLETION_TOKENS,
+): Record<string, unknown> {
+  const normalized = model.trim().toLowerCase();
+  if (!normalized.startsWith('claude')) return getOpenAiOutputLimit(model, preferred);
+
+  const maxTokens = Math.max(getOpenAiMaxCompletionTokens(preferred), 1536);
+  return {
+    max_tokens: maxTokens,
+    thinking: { type: 'enabled', budget_tokens: 1024 },
+  };
 }
 
 /**

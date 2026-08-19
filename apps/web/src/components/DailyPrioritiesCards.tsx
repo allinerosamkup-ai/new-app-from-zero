@@ -3,6 +3,7 @@ import { ArrowRight, Check, Clock3, Sparkles, Star, Target } from 'lucide-react'
 import { useNavigate } from 'react-router-dom';
 
 import { useAuraStore } from '../features/aura/store';
+import type { Goal } from '../features/aura/types';
 import { useLocalizedCopy } from '../i18n';
 import { api } from '../lib/api';
 import { tapHaptic } from '../utils/haptics';
@@ -44,7 +45,7 @@ export function DailyPrioritiesCards() {
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<string | null>(null);
   const goalVersionKey = useMemo(
-    () => (state.goals ?? []).map((goal: any) => `${goal.id}:${goal.pathVersion ?? 1}:${goal.completedPct}`).join('|'),
+    () => (state.goals ?? []).map((goal: Goal) => `${goal.id}:${goal.pathVersion ?? 1}:${goal.completedPct}`).join('|'),
     [state.goals],
   );
 

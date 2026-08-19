@@ -21,6 +21,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
 
   const isCrisis = riskSafety.route === "crisis_protocol";
   const needsHuman = isCrisis || riskSafety.route === "human_support";
+  const isAdaptation = riskSafety.route === "adapt_day";
   const supportResources = [
     { label: "CVV 188", detail: t("safety.resources.cvv") },
     { label: "SAMU 192", detail: t("safety.resources.samu") },
@@ -48,12 +49,14 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
       }}
     >
       <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: isCrisis ? "#3F6E56" : "#4B7A62" }}>
-        {isCrisis ? t("safety.crisisProtocol") : t("safety.safetyLayer")}
+        {isCrisis ? t("safety.crisisProtocol") : isAdaptation ? t("safety.adaptLayer") : t("safety.safetyLayer")}
       </p>
       <p style={{ margin: "0 0 9px", fontSize: 13, lineHeight: 1.55, color: "#36584A", fontWeight: 750 }}>
         {isCrisis
           ? t("safety.crisisBody")
-          : t("safety.humanBody")}
+          : isAdaptation
+            ? t("safety.adaptBody")
+            : t("safety.humanBody")}
       </p>
 
       {riskSafety.signals.length > 0 && (
@@ -77,9 +80,9 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
         </div>
       )}
 
-      <p style={{ margin: "0 0 10px", fontSize: 11.5, lineHeight: 1.55, color: "#3E6B54" }}>
+      {needsHuman && <p style={{ margin: "0 0 10px", fontSize: 11.5, lineHeight: 1.55, color: "#3E6B54" }}>
         {t("safety.emergency")}
-      </p>
+      </p>}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {onAdaptDay && riskSafety.route !== "crisis_protocol" && (
@@ -98,10 +101,10 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
         <AuraButtonV2
           variant={isCrisis ? "primary" : "glass"}
           size="sm"
-          onClick={() => trackProtocol(isCrisis ? "crisis_resources_viewed" : "human_support_viewed")}
+          onClick={() => trackProtocol(isCrisis ? "crisis_resources_viewed" : isAdaptation ? "adaptation_acknowledged" : "human_support_viewed")}
           style={{ flex: "1 1 150px" }}
         >
-          {isCrisis ? t("safety.registerProtocol") : t("safety.understood")}
+          {isCrisis ? t("safety.registerProtocol") : isAdaptation ? t("safety.continueDay") : t("safety.understood")}
         </AuraButtonV2>
       </div>
     </div>

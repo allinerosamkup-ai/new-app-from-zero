@@ -165,8 +165,8 @@ describe("BillingPage", () => {
 
   it("keeps checkout pending until server verification confirms ownership and payment", async () => {
     window.history.replaceState({}, "", "/billing?session_id=cs_paid");
-    let resolveVerification!: (value: any) => void;
-    const verification = new Promise((resolve) => { resolveVerification = resolve; });
+    let resolveVerification!: (value: unknown) => void;
+    const verification = new Promise<unknown>((resolve) => { resolveVerification = resolve; });
     mocks.get.mockImplementation((path: string) => (
       path === "/billing/status" ? Promise.resolve(freeSummary) : verification
     ));

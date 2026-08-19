@@ -169,6 +169,16 @@ function run() {
   assert.equal(declaredPoor.level, 'media', 'declarado desce um nível a partir de alta');
   assert.match(declaredPoor.reason, /4h/);
 
+  const poorQualityLongSleep = inferCapacity({
+    energyScore: 8,
+    moodScore: 7,
+    declaredSleepScore: 3,
+    declaredSleepHours: 9,
+  });
+  assert.equal(poorQualityLongSleep.level, 'media');
+  assert.match(poorQualityLongSleep.reason, /qualidade do sono em 3 de 10/);
+  assert.doesNotMatch(poorQualityLongSleep.reason, /dormiu 9h/);
+
   // Mesma noite ruim, contada versus medida: a medida protege mais, porque
   // erra menos que a memória de quem acabou de acordar.
   const onlyDeclared = inferCapacity({ declaredSleepHours: 4 });

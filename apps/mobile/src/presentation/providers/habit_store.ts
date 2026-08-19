@@ -33,7 +33,7 @@ interface HabitState {
   addHabit: (userId: string, habit: Partial<Habit>) => Promise<void>;
 }
 
-export const useHabitStore = create<HabitState>((set, get) => ({
+export const useHabitStore = create<HabitState>((set) => ({
   habits: [],
   isLoading: false,
   error: null,

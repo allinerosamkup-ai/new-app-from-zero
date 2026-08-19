@@ -92,7 +92,7 @@ function confidenceFromDecision(decisionBrain: DecisionResult, action: DecisionC
 function hasOperationalAnchor(candidate: DecisionCandidate, context: DailyContext): boolean {
   if (candidate.kind === 'insight_only') return false;
   if (candidate.source === 'request') return Boolean(cleanText(candidate.anchor));
-  if (!['timeline', 'habit', 'goal'].includes(candidate.source)) return false;
+  if (candidate.source !== 'goal') return false;
   if (!candidate.targetId && !cleanText(candidate.anchor)) return false;
   return context.todayAnchorTitles.some((title) => cleanText(candidate.anchor) === title || candidate.title.includes(title));
 }
@@ -101,9 +101,7 @@ function chooseAction(decisionBrain: DecisionResult, capacity: ReasoningCapacity
   const actionable = decisionBrain.allowedActions.filter((item) => hasOperationalAnchor(item, context));
   const changing = actionable.find((item) => item.action !== 'keep');
   if (changing) return changing;
-  if (capacity === 'protecao') {
-    return actionable.find((item) => item.targetType === 'timeline' || item.targetType === 'habit') ?? null;
-  }
+  if (capacity === 'protecao') return actionable.find((item) => item.targetType === 'goal') ?? null;
   return actionable[0] ?? null;
 }
 
@@ -129,12 +127,8 @@ function buildEvidence(input: ReasoningContextInput, decisionBrain: DecisionResu
     ].filter(Boolean);
     if (parts.length) evidence.push(`Sinais corporais: ${parts.join(', ')}`);
   }
-  if (input.dailyContext.pendingTaskTitles.length) evidence.push(`Agenda pendente: ${listPreview(input.dailyContext.pendingTaskTitles)}`);
-  if (input.dailyContext.pendingHabitTitles.length) evidence.push(`Habitos devidos: ${listPreview(input.dailyContext.pendingHabitTitles)}`);
   if (input.dailyContext.activeGoalTitles.length) evidence.push(`Metas ativas: ${listPreview(input.dailyContext.activeGoalTitles)}`);
-  if (input.dailyContext.completedTaskTitles.length || input.dailyContext.completedHabitTitles.length) {
-    evidence.push(`Ja feito hoje: ${listPreview([...input.dailyContext.completedTaskTitles, ...input.dailyContext.completedHabitTitles])}`);
-  }
+  if (input.dailyContext.completedSubgoalTitles.length) evidence.push(`Ações de Objetivo já concluídas: ${listPreview(input.dailyContext.completedSubgoalTitles)}`);
   if (input.dailyContext.blockedActionTitles.length || decisionBrain.blockedActions.length) {
     evidence.push(`Bloqueios/repeticoes: ${listPreview([...input.dailyContext.blockedActionTitles, ...decisionBrain.blockedActions.map((item) => item.title)])}`);
   }
@@ -146,18 +140,15 @@ function buildEvidence(input: ReasoningContextInput, decisionBrain: DecisionResu
 }
 
 function buildHypothesis(input: ReasoningContextInput, capacity: ReasoningCapacity, action: DecisionCandidate | null): string {
-  if (action?.action === 'move') return `Ha um compromisso real fora da melhor janela; o dia precisa ser reajustado antes de receber novas tarefas.`;
-  if (action?.action === 'shrink' || action?.action === 'pause') return `O estado atual pede reduzir carga para preservar continuidade sem transformar o dia em cobranca.`;
-  if (action?.targetType === 'goal') return `Existe meta ativa e uma janela possivel para avancar sem inventar frente nova.`;
-  if (action?.targetType === 'habit') return `Existe habito devido que pode virar bloco leve se couber no ritmo de hoje.`;
+  if (action?.action === 'shrink' || action?.action === 'pause') return `O estado atual pede reduzir a ação concreta de Objetivo para preservar continuidade sem transformar o dia em cobrança.`;
+  if (action?.targetType === 'goal') return `Existe Objetivo ativo com uma ação concreta que permite avançar sem inventar frente nova.`;
   if (capacity === 'protecao') return `A leitura sugere capacidade baixa; melhor proteger energia e fazer pergunta curta se faltar ancora.`;
   if (input.dailyContext.todayAnchorTitles.length === 0) return `Ha memoria ou conversa, mas pouca ancora operacional atual para criar tarefa com seguranca.`;
   return `O melhor caminho e conectar o relato atual ao que ja existe no dia e escolher uma unica proxima decisao.`;
 }
 
-function decisionType(surface: DecisionSurface, action: DecisionCandidate | null, hasAnchor: boolean, confidence: ReasoningConfidence): ReasoningDecisionType {
+function decisionType(_surface: DecisionSurface, action: DecisionCandidate | null, hasAnchor: boolean, confidence: ReasoningConfidence): ReasoningDecisionType {
   if (!action || !hasAnchor || confidence === 'baixa') return 'pergunta';
-  if (surface === 'planner' || surface === 'agenda') return 'adaptar_agenda';
   if (action.kind === 'insight_only') return 'acolhimento';
   return 'acao';
 }
@@ -176,11 +167,8 @@ export class ReasoningContextService {
     const hasAnchor = Boolean(action && hasOperationalAnchor(action, input.dailyContext));
     const confidence = confidenceFromDecision(decisionBrain, action, hasCurrentFact || hasAnchor);
     const type = decisionType(input.surface, action, hasAnchor, confidence);
-    const protectedHabit = capacity === 'protecao' && action?.targetType === 'habit';
-    const decisionAction = protectedHabit && action?.action === 'convert' ? 'pause' : action?.action ?? null;
-    const why = protectedHabit
-      ? 'Hábito real devido hoje, mas energia baixa pede versão reduzida ou pausa consciente antes de virar bloco.'
-      : action?.bioReason || action?.reason || decisionBrain.reasoning;
+    const decisionAction = action?.action ?? null;
+    const why = action?.bioReason || action?.reason || decisionBrain.reasoning;
 
     return {
       surface: input.surface,

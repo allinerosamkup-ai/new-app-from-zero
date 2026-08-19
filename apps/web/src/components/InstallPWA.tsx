@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import { useLocation } from "react-router-dom";
 import { trackInstallConversion } from "../lib/meta-pixel";
 import { useLocalizedCopy } from "../i18n";
 import { trackEvent } from "../lib/track";
@@ -10,7 +11,8 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISS_KEY = "pwa-install-dismissed-at";
-const DISMISS_TTL_DAYS = 7;
+const DISMISS_TTL_DAYS = 21;
+const AUTO_HIDE_MS = 12000;
 
 type Platform = "ios" | "android" | "desktop";
 
@@ -24,11 +26,13 @@ function detectPlatform(): Platform {
   return "desktop";
 }
 
+type StandaloneNavigator = Navigator & { standalone?: boolean };
+
 function isStandalonePwa(): boolean {
   if (typeof window === "undefined") return false;
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
-    (window.navigator as any).standalone === true
+    (window.navigator as StandaloneNavigator).standalone === true
   );
 }
 
@@ -42,13 +46,13 @@ function isFreshDismiss(): boolean {
 }
 
 /**
- * Banner flutuante de instalação PWA.
- * Aparece SEMPRE que o app não está em modo standalone, em qualquer plataforma.
- * Não depende do evento beforeinstallprompt — quando o Chrome dispara, a gente usa o prompt nativo;
- * quando não dispara (caso comum em iOS e Android com heurística não atendida), abre instruções.
+ * Convite de instalação pontual. Android só oferece o diálogo nativo do navegador;
+ * iOS explica a ação nativa "Adicionar à Tela de Início". Nunca aparece na Splash,
+ * nem volta a cada sessão depois de ser visto ou dispensado.
  */
 export function InstallPWA() {
   const l = useLocalizedCopy();
+  const location = useLocation();
   const [show, setShow] = useState(false);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [sheet, setSheet] = useState<Platform | null>(null);
@@ -56,25 +60,49 @@ export function InstallPWA() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (isStandalonePwa()) return;
-    // Onboarding: tela cheia, uma pergunta por vez. Um banner cobrindo o topo
-    // rouba a única coisa que deveria estar na tela e atrapalha justamente o
-    // fluxo que decide se a pessoa fica. O convite de instalar espera a Home.
-    if (window.location.pathname.startsWith("/comecar")) return;
-
-    const isSplash = window.location.pathname === "/";
-    // Na splash, ignora dismiss anterior (queremos máxima exposição na entrada)
-    // Em outras páginas, respeita TTL de 7 dias
-    if (!isSplash && isFreshDismiss()) return;
-
-    setShow(true);
+    const platform = detectPlatform();
+    const isProductRoute = ["/home", "/goals", "/journal", "/insights", "/aura", "/preferences", "/jornada", "/captures"]
+      .some((route) => location.pathname === route || location.pathname.startsWith(`${route}/`));
+    if (!isProductRoute || platform === "desktop" || isFreshDismiss()) return;
 
     const handler = (e: Event) => {
       e.preventDefault();
-      setInstallEvent(e as BeforeInstallPromptEvent);
+      // Em Android, a única ação principal é o próprio prompt do navegador.
+      // Se ele não estiver disponível, não simulamos um botão de instalação.
+      if (platform === "android") {
+        setInstallEvent(e as BeforeInstallPromptEvent);
+        setShow(true);
+      }
+    };
+    const installedHandler = () => {
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+      setInstallEvent(null);
+      setShow(false);
+      setSheet(null);
+      trackInstallConversion("standalone_open");
+      trackEvent("app_installed_pwa", { platform });
     };
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
+    window.addEventListener("appinstalled", installedHandler);
+
+    // A Apple não expõe um prompt programável: uma explicação curta e dispensável
+    // aponta para o controle nativo do Safari, uma vez a cada intervalo.
+    if (platform === "ios") setShow(true);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
+    };
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!show || typeof window === "undefined") return;
+    const autoHideTimer = window.setTimeout(() => {
+      setShow(false);
+      localStorage.setItem(DISMISS_KEY, String(Date.now()));
+    }, AUTO_HIDE_MS);
+    return () => window.clearTimeout(autoHideTimer);
+  }, [show]);
 
   if (!show) return null;
 
@@ -97,7 +125,7 @@ export function InstallPWA() {
         // Se o prompt nativo falhar, cai pra instruções
       }
     }
-    // Sem evento (iOS sempre; Android quando Chrome não dispara): instruções por plataforma
+    // iOS não oferece prompt programável; abre somente a explicação do gesto nativo.
     trackInstallConversion("manual_instructions");
     setSheet(platform);
   };
@@ -122,11 +150,11 @@ export function InstallPWA() {
           style={{ width: 38, height: 38, borderRadius: 9, flexShrink: 0 }}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={titleStyle}>{l("Instalar Airia no celular", "Install Airia on your phone")}</div>
-          <div style={subtitleStyle}>{l("Acesse direto da tela inicial", "Open it directly from your Home Screen")}</div>
+          <div style={titleStyle}>{platform === "ios" ? l("Adicionar à Tela de Início", "Add to Home Screen") : l("Instalar Airia", "Install Airia")}</div>
+          <div style={subtitleStyle}>{l("Convite exibido só de vez em quando", "Shown only occasionally")}</div>
         </div>
         <button onClick={handleInstall} style={installButtonStyle}>
-          {l("Instalar", "Install")}
+          {platform === "ios" ? l("Ver como", "How to") : l("Instalar", "Install")}
         </button>
         <button onClick={handleDismiss} style={dismissButtonStyle} aria-label={l("Fechar", "Close")}>
           ✕

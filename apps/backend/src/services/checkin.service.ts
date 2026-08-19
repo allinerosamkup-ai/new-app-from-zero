@@ -2,7 +2,9 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { buildAuraSystemPrompt, humanizeScore } from '../lib/aura-prompt';
 import { splitFactors } from '../lib/checkin-factors';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { getOpenAiModel, getOpenAiOutputLimit } from '../lib/openai-config';
+import { isGroundingQuestion, validateVisibleConcreteAction } from '../lib/action-quality';
+import { extractJsonValue } from '../lib/extract-json';
 import { AiriaOperationalReasoningService, type AiriaActionPlan } from './airia-operational-reasoning.service';
 
 let _openai: OpenAI | null = null;
@@ -187,9 +189,41 @@ function sanitizeRecommendations(
       seen.add(key);
       if (isGenericRecommendation(item, blockedTitles)) return false;
       if (blockedTitles.some((title) => isSimilarRecommendation(item, title))) return false;
+      if (!isGroundingQuestion(item) && !validateVisibleConcreteAction(item).ok) return false;
       return true;
     })
     .slice(0, 3);
+}
+
+function fallbackCheckinState(input: {
+  moodScore: number;
+  energyScore: number;
+  operationalRecommendation?: string | null;
+  currentLocalTime: string | null;
+  avoidRecommendationTitles?: string[] | null;
+}): CheckinState {
+  const sensitive = input.moodScore <= 3 || input.energyScore <= 3;
+  const steady = input.moodScore >= 7 && input.energyScore >= 7;
+  const suggestedIntensity = input.energyScore <= 3 ? 'L' : input.energyScore >= 8 ? 'P' : 'M';
+  const stateLabel = sensitive ? 'ritmo mais baixo' : steady ? 'bom fôlego hoje' : 'ritmo possível';
+  const analysis = sensitive
+    ? 'Hoje pede um ritmo menor. Vale proteger sua energia e escolher apenas o que realmente cabe.'
+    : steady
+      ? 'Seu humor e sua energia dão espaço para seguir com uma frente de cada vez, sem acelerar além do necessário.'
+      : 'O dia parece pedir um passo de cada vez, ajustando o tamanho das ações ao que você consegue sustentar agora.';
+
+  return {
+    stateLabel,
+    stateLabelType: sensitive ? 'sensível' : steady ? 'leve' : 'moderado',
+    analysis,
+    recommendations: sanitizeRecommendations(
+      input.operationalRecommendation ? [input.operationalRecommendation] : [],
+      input.currentLocalTime,
+      input.avoidRecommendationTitles ?? [],
+    ).slice(0, 1),
+    suggestedIntensity,
+    rationale: 'Leitura proporcional gerada sem resposta estruturada do provedor.',
+  };
 }
 
 export class CheckinService {
@@ -256,52 +290,43 @@ export class CheckinService {
     const operationalRecommendation = data.operationalRecommendation?.trim()
       || (data.airiaActionPlan ? AiriaOperationalReasoningService.visibleSuggestion(data.airiaActionPlan) : '');
 
-    const prompt = `
-Analise os dados de check-in e retorne uma leitura humanizada, específica e útil.
+    const prompt = `Você lê o check-in e devolve uma leitura humana, precisa e proporcional ao que foi relatado.
 
-DADOS:
+DADOS DE HOJE:
 - Momento: ${checkinMoment}
 - Humor ${humanizeScore(data.moodScore, 'mood')}, energia ${humanizeScore(data.energyScore, 'energy')} e clareza ${humanizeScore(data.clarityScore, 'generic')}
 - Irritabilidade ${humanizeScore(data.irritabilityScore, 'generic')}, estado físico ${humanizeScore(data.physicalScore, 'generic')}
 - Social ${humanizeScore(data.socialScore, 'generic')} e sono ${humanizeScore(data.sleepScore, 'sleep')}
 ${noteLine}${contextLines ? `\n${contextLines}` : ''}
 
-${data.plannerContext ? `${data.plannerContext}\n` : ''}
-${data.activeGoalsContext ? `METAS ATIVAS:\n${data.activeGoalsContext}\n` : ''}
+${data.activeGoalsContext ? `OBJETIVOS E AÇÕES ATIVAS:\n${data.activeGoalsContext}\n` : ''}
 ${data.contextualMemory ? `MEMÓRIAS RELEVANTES:\n${data.contextualMemory}\n` : ''}
 ${data.recentSuggestionMemory ? `${data.recentSuggestionMemory}\n` : ''}
 ${data.completionContext ? `JÁ FEITO / NÃO SUGERIR DE NOVO:\n${data.completionContext}\n` : ''}
 ${operationalPlanContext ? `${operationalPlanContext}\n` : ''}
-DIRETRIZES:
-- Nunca diagnósticos médicos. Linguagem acolhedora, não clínica. Português do Brasil.
-- Antes de escrever, faça a leitura total: fato atual do check-in + nota escrita + emoções/fatores + humor atual + histórico de humor + RAG/memória + planner/metas/hábitos + ações recentes.
-- Trate RAG e histórico de humor como lente obrigatória quando vierem no contexto; eles explicam padrão, mas a recomendação precisa nascer de âncora atual.
-- Se houver agenda hoje, leve em conta o peso e tipo de compromissos ao calibrar as recomendações e suggestedIntensity.
-- Se houver memória, metas ou padrões anteriores no contexto, use-os para reconhecer repetição e decisões pendentes; se não houver evidência, não finja memória.
-- Sempre cruze padrões, decisões e ciclos de humor: o que se repete, qual decisão está em jogo e que manobra o estado atual permite.
-- stateLabel: nome curto, humano e sóbrio do estado; evite rótulos dramáticos.
-- Antes de sugerir, separe internamente fato vs interpretação, movimento em curso, obstáculo, utilidade do obstáculo, custo oculto e menor ação útil.
-- Se houver nota escrita, ela é o sinal de maior contexto: use a nota para reinterpretar humor, energia e sugestões antes de concluir qualquer padrão.
-- Se a nota explicar uma causa física ou situacional concreta, como doença, dor, gripe, febre, menstruação, noite ruim ou crise externa, não trate energia baixa como piora emocional; diferencie capacidade baixa de humor ruim.
-- analysis: 1-2 frases que leiam o momento sem repetir os números; se há nota, emoções ou fatores específicos, mencione a nuance concreta.
-- recommendations: retorne 1 ação principal. Se houver PLANO OPERACIONAL DA AIRIA, use a ação validada por ele e não invente outra. Se não houver âncora suficiente, faça recomendação em forma de pergunta curta para localizar o fato atual.
-- Fora do Diário ou de mensagem pronta, não use "escreva", "anote" ou "registre" como sugestão. Ação real é compromisso, adaptação de agenda, hábito devido, meta ativa ou pergunta de ancoragem.
-- Se uma recomendação recente já cobriu a mesma ideia, escolha uma alternativa real. Se a repetição for a melhor opção, escreva como retomada explícita da sugestão anterior e acrescente um ajuste concreto.
-- Não sugira treino, kit de treino, hábito, tarefa, meta ou subtarefa que já aparece como concluída hoje. Use concluídos como evidência de movimento, não como próxima ação.
-- Se citar horário explícito, ele deve ser posterior a ${currentLocalTime ?? 'agora'} e caber nas próximas 2 horas; nunca use madrugada ou horário já passado.
-- Se não houver um horário óbvio e válido, prefira escrever a ação sem relógio.
-- suggestedIntensity: 'L' (energia baixa/sensível), 'M' (equilibrada), 'P' (energia alta/focada).
-- rationale: explicação interna curta e técnica, sem linguagem clínica pesada.
-- Evite frases genéricas como "vá com calma", "um passo de cada vez" ou "você consegue" sem contexto.
-- Evite transformar tudo em somática. Respiração, corpo e água só entram se fizerem sentido com um sinal concreto; priorize ativação, exposição gradual, reorganização prática ou contenção conforme o estado.
-- Se sono, corpo e energia estiverem baixos juntos, puxe para proteção e redução de carga.
-- Se clareza estiver alta com energia boa, puxe para foco e estrutura.
+
+POLÍTICA DE LEITURA:
+- Não diagnostique. Responda em português do Brasil, com linguagem direta e não clínica.
+- Leia nesta ordem: check-in e nota atual; emoções e fatores; histórico e memória quando existirem; Objetivos e ações pendentes; sugestões bloqueadas ou já concluídas.
+- Histórico explica contexto, mas nunca autoriza criar uma tarefa. O Check-in calibra tamanho e urgência; não inventa destino operacional.
+- A nota escrita tem prioridade. Se ela explica causa física ou situacional, diferencie capacidade baixa de piora emocional.
+- "analysis" tem uma ou duas frases e cita uma nuance real, sem repetir números ou ecoar a nota.
+- "stateLabel" é curto, humano e sóbrio. "rationale" é uma explicação interna curta, sem linguagem clínica pesada.
+
+POLÍTICA DA RECOMENDAÇÃO:
+- Retorne no máximo uma recomendação. Use somente uma ação pendente e concreta de Objetivo, uma ação explicitamente narrada na nota ou a ação validada no plano operacional. Planner, agenda e Hábitos estão desativados e nunca são fonte, destino ou sugestão.
+- A recomendação não pode ser decidir o que fazer, organizar melhor, revisar uma pendência, escolher uma tarefa, separar uma decisão, respirar, beber água ou outra fórmula genérica.
+- Quando houver ação, use EXATAMENTE este formato: "<verbo + objeto específico>. Pronto quando: <evidência observável>."
+- Exemplo válido, somente se banco e saldo foram citados: "Abrir o app do banco e anotar o saldo atual. Pronto quando: o saldo estiver anotado."
+- Nunca copie esse exemplo para contexto que não citou banco, app ou saldo.
+- Se não existir objeto seguro para uma ação, a única recomendação é UMA pergunta curta para obter a âncora; não preencha o card com conselho vago.
+- Não repita ação já concluída, rejeitada, adiada ou sugerida recentemente. Se houver horário explícito, ele deve ser posterior a ${currentLocalTime ?? 'agora'} e caber nas próximas duas horas; sem horário seguro, não use relógio.
+- suggestedIntensity: 'L' para energia baixa/sensível, 'M' para equilibrada e 'P' para energia alta/focada.
 
 JSON APENAS:
-{"stateLabel":"...","stateLabelType":"leve|moderado|sensível|crítico","analysis":"...","recommendations":["..."],"suggestedIntensity":"L|M|P","rationale":"..."}
-    `;
+{"stateLabel":"...","stateLabelType":"leve|moderado|sensível|crítico","analysis":"...","recommendations":["Ação. Pronto quando: evidência."],"suggestedIntensity":"L|M|P","rationale":"..."}`;
 
-    const response = await client.chat.completions.create({
+    const request = {
       model: this.MODEL,
       messages: [
         {
@@ -328,20 +353,36 @@ JSON APENAS:
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenAiMaxCompletionTokens(1200),
+      ...getOpenAiOutputLimit(this.MODEL, 1200),
+    } as const;
+    const fallback = () => fallbackCheckinState({
+      moodScore: data.moodScore,
+      energyScore: data.energyScore,
+      operationalRecommendation,
+      currentLocalTime,
+      avoidRecommendationTitles: data.avoidRecommendationTitles,
     });
 
-    const content = response.choices[0].message.content;
-    if (!content) throw new Error('Falha ao gerar estado da IA');
+    try {
+      const response = await client.chat.completions.create(request as any);
+      const content = response.choices?.[0]?.message?.content;
+      if (!content) {
+        console.warn('[checkin] provedor não devolveu estado estruturado; usando leitura proporcional');
+        return fallback();
+      }
 
-    const parsed = CheckinStateSchema.parse(JSON.parse(content));
-    return {
-      ...parsed,
-      recommendations: sanitizeRecommendations(
-        operationalRecommendation ? [operationalRecommendation] : parsed.recommendations,
-        currentLocalTime,
-        data.avoidRecommendationTitles ?? [],
-      ).slice(0, 1),
-    };
+      const parsed = CheckinStateSchema.parse(extractJsonValue(content));
+      return {
+        ...parsed,
+        recommendations: sanitizeRecommendations(
+          operationalRecommendation ? [operationalRecommendation] : parsed.recommendations,
+          currentLocalTime,
+          data.avoidRecommendationTitles ?? [],
+        ).slice(0, 1),
+      };
+    } catch {
+      console.warn('[checkin] falha ao gerar estado estruturado; usando leitura proporcional');
+      return fallback();
+    }
   }
 }

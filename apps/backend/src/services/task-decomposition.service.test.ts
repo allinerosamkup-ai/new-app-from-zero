@@ -64,12 +64,12 @@ import {
             message: {
               content: JSON.stringify({
                 steps: [
-                  { title: 'Jogar o lixo fora', durationMinutes: 2, starter: 'Pegue o saco' },
-                  { title: 'Enxaguar a louça', durationMinutes: 90, starter: 'Abra a torneira' },
-                  { title: 'Passar pano no balcão', durationMinutes: 10, starter: 'Molhe o pano' },
-                  { title: 'Guardar as panelas', durationMinutes: 10, starter: 'Pegue a primeira' },
-                  { title: 'Varrer o chão', durationMinutes: 10, starter: 'Pegue a vassoura' },
-                  { title: 'Passo demais', durationMinutes: 10, starter: 'Não deveria aparecer' },
+                  { title: 'Levar o saco de lixo até a lixeira', durationMinutes: 2, starter: 'Pegue o saco', doneWhen: 'o saco estiver na lixeira' },
+                  { title: 'Enxaguar os pratos da pia', durationMinutes: 90, starter: 'Abra a torneira', doneWhen: 'os pratos estiverem sem resíduos' },
+                  { title: 'Passar o pano no balcão', durationMinutes: 10, starter: 'Molhe o pano', doneWhen: 'o balcão estiver sem migalhas' },
+                  { title: 'Guardar as panelas no armário', durationMinutes: 10, starter: 'Pegue a primeira', doneWhen: 'as panelas estiverem no armário' },
+                  { title: 'Varrer o chão da cozinha', durationMinutes: 10, starter: 'Pegue a vassoura', doneWhen: 'o chão estiver sem resíduos visíveis' },
+                  { title: 'Limpar a porta da geladeira', durationMinutes: 10, starter: 'Pegue o pano', doneWhen: 'a porta estiver sem marcas visíveis' },
                 ],
               }),
             },
@@ -115,10 +115,11 @@ import {
   assert.match(promptComContexto, /preciso achar os informes/);
 
   // Regras que fazem o passo ser executável, não uma reescrita da tarefa.
-  assert.match(promptComContexto, /Verbos proibidos/);
+  assert.match(promptComContexto, /CONTRATO DE CADA PASSO/);
+  assert.match(promptComContexto, /doneWhen/);
   assert.match(promptComContexto, /menos de 2 minutos/, 'o passo 1 tem que ser a porta de entrada');
-  assert.match(promptComContexto, /palavras DELA/, 'o objeto tem que manter as palavras da usuária');
-  assert.match(promptComContexto, /RUIM \(não faça assim\)/, 'exemplo contrastivo é o que mais segura o modelo');
+  assert.match(promptComContexto, /objeto específico/, 'o objeto precisa continuar identificado');
+  assert.match(promptComContexto, /RUIM:/, 'exemplo contrastivo é o que mais segura o modelo');
   assert.match(promptComContexto, /Por que é ruim/);
 
   // Fase de baixa capacidade encolhe a quebra: 5 passos de 15 min num dia ruim é
@@ -139,7 +140,7 @@ import {
   // O corte respeita a forma: em fase baixa, o excedente do modelo é descartado.
   const generoso = {
     chat: { completions: { create: async () => ({ choices: [{ message: { content: JSON.stringify({
-      steps: Array.from({ length: 5 }, (_, i) => ({ title: `Passo ${i + 1}`, durationMinutes: 15, starter: 'x' })),
+      steps: Array.from({ length: 5 }, (_, i) => ({ title: `Abrir a caixa ${i + 1}`, durationMinutes: 15, starter: 'Segure a caixa', doneWhen: `a caixa ${i + 1} estiver aberta` })),
     }) } }] }) } },
   } as any;
   const emFaseBaixa = await TaskDecompositionService.decompose(

@@ -31,8 +31,8 @@ export function ForgotPasswordPage() {
       if (err) throw err;
       setSent(true);
       setTimer(60);
-    } catch (err: any) {
-      setError(err?.message || t("auth.recovery.sendError"));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t("auth.recovery.sendError"));
     } finally {
       setLoading(false);
     }
@@ -163,4 +163,3 @@ export function ForgotPasswordPage() {
     </div>
   );
 }
-

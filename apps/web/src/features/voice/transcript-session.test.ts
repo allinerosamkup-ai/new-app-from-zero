@@ -336,10 +336,9 @@ describe("voice consumer wiring", () => {
     "aura-chat-page.tsx",
     "checkin-page.tsx",
     "journal-page.tsx",
-    "planner-page.tsx",
   ];
 
-  it("uses the shared resultIndex-aware handler on all four voice surfaces", () => {
+  it("uses the shared resultIndex-aware handler on all active voice surfaces", () => {
     voiceRoutes.forEach((route) => {
       const source = readFileSync(resolve(webSourceRoot, "routes", route), "utf8");
       assert.match(source, /recognition\.onresult\s*=\s*createTranscriptResultHandler\(/, route);
@@ -351,7 +350,7 @@ describe("voice consumer wiring", () => {
     assert.doesNotMatch(source, /\.at\(/);
   });
 
-  it("stops active recognition on unmount in all four voice surfaces", () => {
+  it("stops active recognition on unmount in all active voice surfaces", () => {
     voiceRoutes.forEach((route) => {
       const source = readFileSync(resolve(webSourceRoot, "routes", route), "utf8");
       const cleanup = /useEffect\(\(\) => \{\s*return \(\) => \{[\s\S]{0,500}?stopActiveRecognition\(recognitionRef\);[\s\S]{0,300}?\};\s*\}, \[\]\);/;

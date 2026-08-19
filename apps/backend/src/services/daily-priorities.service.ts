@@ -3,7 +3,8 @@ import { z } from 'zod';
 
 import { extractJsonValue } from '../lib/extract-json';
 import { normalizeObjectiveSubgoals } from '../lib/objective-subgoals';
-import { getOpenAiMaxCompletionTokens, openAiTemperature } from '../lib/openai-config';
+import { validateConcreteAction } from '../lib/action-quality';
+import { getOpenAiOutputLimit, openAiTemperature } from '../lib/openai-config';
 
 type ChatClient = Pick<OpenAI, 'chat'>;
 
@@ -78,6 +79,7 @@ function candidates(input: DailyPrioritiesInput): CurrentCandidate[] {
   return input.objectives.flatMap((objective) => {
     const current = normalizeObjectiveSubgoals(objective.subgoals).find((action) => (
       !action.done && action.status !== 'rejected' && action.status !== 'deferred'
+      && validateConcreteAction(action).ok
     ));
     if (!current || (current.scheduledFor && current.scheduledFor > input.localDate)) return [];
     return [{
@@ -158,8 +160,8 @@ export class DailyPrioritiesService {
     if (current.length === 0 || (!client && !process.env.OPENAI_API_KEY)) return retrying();
     const chat = client ?? defaultClient();
     const models = [
-      process.env.OPENAI_PRIORITIES_MODEL?.trim() || 'gpt-5.4-mini',
-      process.env.OPENAI_PRIORITIES_FALLBACK_MODEL?.trim() || 'gpt-4.1-mini',
+      process.env.OPENAI_PRIORITIES_MODEL?.trim() || 'claude-sonnet-4-6',
+      process.env.OPENAI_PRIORITIES_FALLBACK_MODEL?.trim() || 'gpt-5-mini',
     ];
 
     for (const model of models) {
@@ -171,7 +173,7 @@ export class DailyPrioritiesService {
             { role: 'user', content: buildDailyPrioritiesPrompt(input) },
           ],
           response_format: { type: 'json_object' },
-          max_completion_tokens: getOpenAiMaxCompletionTokens(900),
+          ...getOpenAiOutputLimit(model, 900),
           ...openAiTemperature(model, 0.2),
         } as any);
         const content = response.choices?.[0]?.message?.content;

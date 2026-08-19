@@ -189,6 +189,22 @@ function run() {
   assert.equal(naturalCheckin.payload.clarityScore, null);
   assert.equal(naturalCheckin.payload.source, 'aura_text');
 
+  const checkinFollowUp = recoverAuraCommandResponse({
+    response: { ...baseResponse, intent: 'conversation', action: 'respond' },
+    message: '5, cansada.',
+    localDate: '2026-07-31',
+    history: [{ role: 'assistant', content: 'Como está seu humor agora, de 1 a 10 ou em uma palavra?' }],
+    captureJudgment: {
+      captureAs: 'checkin',
+      captureMode: 'auto',
+      explicitness: 'explicit',
+      allowedMutationActions: ['record_checkin'],
+    },
+  });
+  assert.equal(checkinFollowUp.action, 'record_checkin');
+  assert.equal(checkinFollowUp.payload.moodScore, 5);
+  assert.equal(checkinFollowUp.payload.energyScore, 3);
+
   const listenOnly = recoverAuraCommandResponse({
     response: { ...baseResponse, intent: 'conversation', action: 'respond' },
     message: 'Só estou desabafando. Não crie nada.',

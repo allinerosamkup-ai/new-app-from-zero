@@ -10,6 +10,26 @@ type JornadaData = {
   completed: number[];
 };
 
+function localizedJourneyTitle(step: number, l: (portuguese: string, english: string) => string, fallback: string) {
+  const titles: Record<number, [string, string]> = {
+    1: ["Conexão consigo mesma", "Connection with yourself"],
+    2: ["Autoconfiança e autoestima", "Self-confidence and self-esteem"],
+    3: ["Aceitação e bem-estar", "Acceptance and wellbeing"],
+    4: ["Comunicação assertiva", "Assertive communication"],
+    5: ["Padrões de relacionamento", "Relationship patterns"],
+    6: ["Redes que fortalecem", "Supportive connections"],
+    7: ["Força na vulnerabilidade", "Strength in vulnerability"],
+    8: ["Limites saudáveis", "Healthy boundaries"],
+    9: ["Empatia nas relações", "Empathy in relationships"],
+    10: ["Construindo pontes", "Building bridges"],
+    11: ["Relacionamentos autênticos", "Authentic relationships"],
+    12: ["Celebrando a individualidade", "Celebrating individuality"],
+    13: ["Um novo começo", "A new beginning"],
+  };
+  const title = titles[step];
+  return title ? l(...title) : fallback;
+}
+
 /**
  * Cartão compacto da Jornada Interior na Home.
  * Auto-busca o progresso; some silenciosamente se a chamada falhar.
@@ -34,6 +54,7 @@ export function JornadaHomeCard() {
 
   const current = data.steps.find((s) => s.n === data.currentStep) ?? data.steps[0];
   const doneCount = data.completed?.length ?? 0;
+  const currentTitle = localizedJourneyTitle(current.n, l, current.titulo);
 
   return (
     <button
@@ -57,7 +78,7 @@ export function JornadaHomeCard() {
           {l("Sua Jornada", "Your Journey")} · {doneCount}/13
         </p>
         <p style={{ margin: "2px 0 0", fontSize: 13.5, fontWeight: 800, color: "var(--text-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {l("Passo", "Step")} {current.n}: {current.titulo}
+          {l("Passo", "Step")} {current.n}: {currentTitle}
         </p>
       </div>
       <ArrowRight size={18} color="var(--accent-sage)" style={{ flexShrink: 0 }} />

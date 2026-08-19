@@ -30,21 +30,22 @@ const OK_CHECKIN = '{"journalSignals":{"checkin":{"moodScore":3,"energyScore":7,
 // ── Meta ────────────────────────────────────────────────────────────────────
 {
   const { goal } = extractJournalSignals(
-    '{"journalSignals":{"goal":{"title":"Vender as camas","subgoals":["Tirar foto nova","Revisar o preço","Reativar o anúncio"]}}}',
+    '{"journalSignals":{"goal":{"title":"Vender as camas","subgoals":[{"title":"Fotografar as camas perto da janela","doneWhen":"três fotos novas estiverem salvas"},{"title":"Abrir o anúncio e listar o preço atual","doneWhen":"o preço estiver anotado"},{"title":"Publicar as três fotos no anúncio","doneWhen":"as três fotos estiverem visíveis no anúncio"}]}}}',
   );
   assert.ok(goal);
   assert.equal(goal.title, 'Vender as camas');
   assert.equal(goal.subgoals.length, 3);
+  assert.equal(goal.subgoals[0]?.doneWhen, 'três fotos novas estiverem salvas');
 }
 
 // Meta de um passo só é tarefa, não objetivo — e vira ruído na tela.
 {
   assert.equal(
-    extractJournalSignals('{"journalSignals":{"goal":{"title":"Ligar","subgoals":["Ligar"]}}}').goal,
+    extractJournalSignals('{"journalSignals":{"goal":{"title":"Ligar","subgoals":[{"title":"Ligar para a escola","doneWhen":"a ligação terminar"}]}}}').goal,
     null,
   );
   assert.equal(
-    extractJournalSignals('{"journalSignals":{"goal":{"title":"","subgoals":["a","b","c"]}}}').goal,
+    extractJournalSignals('{"journalSignals":{"goal":{"title":"","subgoals":[{"title":"Ligar para a escola","doneWhen":"a ligação terminar"},{"title":"Abrir a agenda da escola","doneWhen":"a agenda estiver aberta"}]}}}').goal,
     null,
   );
 }

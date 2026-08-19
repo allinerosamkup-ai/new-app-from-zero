@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { initialAuraState, labelMood } from "./data";
-import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, Goal, MoodOption, NotificationPreferences, PhaseTransitionAlert, ProactiveNudge } from "./types";
+import type { AuraState, AutonomousInsight, CheckinEntry, FollowUpPending, Goal, Habit, MoodOption, NotificationPreferences, PhaseTransitionAlert, ProactiveNudge, SubGoal, Task } from "./types";
 import { createEmptyOnboardingDraft, type OnboardingDraft } from "./onboarding";
 import { normalizeReminderPreferences } from "./settings";
 import { api } from "../../lib/api";
@@ -27,6 +27,83 @@ import { buildCheckinSubmission, type CheckinSubmission } from "./checkin-submis
 import { resolveMoodFromCheckin } from "./checkin-mood";
 import { hydrateCheckinEntry } from "./checkin-hydration";
 import { FEATURES } from "../../config/features";
+
+type ApiGoalAction = Partial<SubGoal> & Pick<SubGoal, 'id' | 'title'>;
+type ApiGoal = {
+  id: Goal['id'];
+  title: string;
+  progress: number;
+  description?: string | null;
+  resultDefinition?: string | null;
+  currentReality?: string | null;
+  subgoals?: unknown[];
+  milestones?: Goal['milestones'];
+  pathVersion?: number;
+  pathStatus?: Goal['pathStatus'];
+  pathQuestion?: string | null;
+  needsActionReview?: boolean;
+  deadline?: string | null;
+  pausedAt?: string | null;
+  isPrimary?: boolean;
+  pathProposal?: unknown;
+};
+type ApiTimelineTask = Partial<Task> & Pick<Task, 'id' | 'title'> & {
+  startTime?: string;
+  status?: string;
+};
+type ApiHabitCompletion = Habit['completions'] extends Array<infer Completion> | undefined ? Completion : never;
+type ApiHabit = Partial<Habit> & Pick<Habit, 'id' | 'title' | 'category' | 'frequency' | 'targetDays' | 'streakCount' | 'bestStreak' | 'totalCompletions' | 'reminderEnabled'> & {
+  completions?: ApiHabitCompletion[];
+};
+type ApiPreferences = {
+  fullName?: string;
+  biologicalSex?: AuraState['biologicalSex'];
+  medicationCurrentlyUsing?: AuraState['medicationCurrentlyUsing'];
+};
+type ApiCheckinResponse = {
+  checkinId?: string | number;
+  id?: string | number;
+  stateLabel?: string | null;
+  stateSummary?: string | null;
+  riskSafety?: unknown;
+  aiState?: {
+    analysis?: string | null;
+    recommendations?: string[];
+    suggestedIntensity?: string | null;
+    riskSafety?: unknown;
+  };
+};
+type ApiSavedTimelineBlock = Pick<Task, 'id'> & Partial<Pick<Task, 'note' | 'persistentReminderEnabled' | 'persistentReminderIntervalMinutes'>>;
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null;
+}
+
+/**
+ * Proteção de leitura para uma versão de API ainda anterior ao contrato atual.
+ * O backend permanece a fonte canônica de qualidade; aqui apenas recusamos
+ * renderizar como ação operacional qualquer registro sem evidência de término.
+ */
+function isVisibleGoalAction(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const action = value as Record<string, unknown>;
+  return typeof action.title === "string"
+    && action.title.trim().length > 0
+    && typeof action.doneWhen === "string"
+    && action.doneWhen.trim().length > 0;
+}
+
+function needsGoalActionReview(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.some((item) => {
+    if (!item || typeof item !== "object") return false;
+    const action = item as Record<string, unknown>;
+    return action.done !== true
+      && action.status !== "rejected"
+      && action.status !== "deferred"
+      && !isVisibleGoalAction(action);
+  });
+}
 
 function normalizeTaskCategory(category?: string): 'trabalho' | 'pessoal' | 'autocuidado' | 'social' | 'casa' | 'outro' {
   const value = (category ?? 'pessoal').trim().toLowerCase();
@@ -118,15 +195,21 @@ function parseGoalActionRecoveryResult(value: unknown): GoalActionRecoveryResult
 
 function mapCanonicalObjectives(value: unknown): Goal[] {
   if (!Array.isArray(value)) throw new Error('Não foi possível carregar os objetivos atualizados.');
-  return value.map((objective: any) => ({
+  return value.map((rawObjective) => {
+    const objective = rawObjective as ApiGoal;
+    return {
     id: objective.id,
     title: objective.title,
     progress: objective.description || 'Em andamento',
     completedPct: objective.progress,
-    subtasks: Array.isArray(objective.subgoals) ? objective.subgoals.map((subgoal: any, index: number) => ({
+    subtasks: Array.isArray(objective.subgoals) ? objective.subgoals
+      .filter(isVisibleGoalAction)
+      .map((rawSubgoal, index: number) => {
+      const subgoal = rawSubgoal as ApiGoalAction;
+      return {
       id: subgoal.id,
       title: subgoal.title,
-      done: subgoal.done ?? subgoal.completed ?? false,
+      done: subgoal.done ?? ('completed' in subgoal && subgoal.completed === true),
       order: subgoal.order ?? index,
       plannerBlockId: subgoal.plannerBlockId ?? null,
       milestoneId: subgoal.milestoneId ?? null,
@@ -137,7 +220,8 @@ function mapCanonicalObjectives(value: unknown): Goal[] {
       aiGenerated: subgoal.aiGenerated ?? false,
       userEdited: subgoal.userEdited ?? false,
       status: subgoal.status,
-    })) : [],
+      };
+    }) : [],
     description: objective.description ?? null,
     resultDefinition: objective.resultDefinition ?? null,
     currentReality: objective.currentReality ?? null,
@@ -145,11 +229,13 @@ function mapCanonicalObjectives(value: unknown): Goal[] {
     pathVersion: objective.pathVersion ?? 1,
     pathStatus: objective.pathStatus ?? 'not_started',
     pathQuestion: objective.pathQuestion ?? null,
+    needsActionReview: objective.needsActionReview === true || needsGoalActionReview(objective.subgoals),
     deadline: objective.deadline ?? null,
     pausedAt: objective.pausedAt ?? null,
     isPrimary: objective.isPrimary ?? false,
     pathProposal: objective.pathProposal ?? null,
-  }));
+    };
+  });
 }
 
 export async function recoverGoalActionsWithCanonicalHydration(input: {
@@ -262,7 +348,7 @@ type AuraStoreContextValue = {
   setLastProfileUpdate: (isoDate: string) => void;
   setProactiveNudge: (nudge: ProactiveNudge | null) => void;
   recoverGoalActions: () => Promise<GoalActionRecoveryResult>;
-  refreshData: () => Promise<void>;
+  refreshData: (historyDays?: number) => Promise<void>;
 };
 
 export type GoalActionCompletion = {
@@ -323,7 +409,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
     resolvers.forEach((resolve) => resolve());
   }, [state.goals]);
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (historyDays = 90) => {
     if (refreshInFlightRef.current) {
       return refreshInFlightRef.current;
     }
@@ -337,8 +423,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         const today = getLocalDateKey();
+        const requestedHistoryDays = Math.min(Math.max(Math.ceil(historyDays), 1), 180);
         const [checkinsRaw, timelineRaw, objectivesRaw, preferencesRaw, habitsRaw, profileRaw] = await Promise.all([
-          api.get('/checkins?days=90').catch(e => { console.error(e); return null; }),
+          api.get(`/checkins?days=${requestedHistoryDays}`).catch(e => { console.error(e); return null; }),
           FEATURES.planner
             ? api.get(`/timeline/${today}`).catch(e => { console.error(e); return null; })
             : Promise.resolve([]),
@@ -357,18 +444,18 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
 
         const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : null;
         const mappedCheckins = checkins
-          ? checkins.map((c: any) => hydrateCheckinEntry(c)).filter((entry) => Boolean(entry.date))
+          ? checkins.map((checkin) => hydrateCheckinEntry(checkin as Record<string, unknown>)).filter((entry) => Boolean(entry.date))
           : null;
 
         const timeline = Array.isArray(timelineRaw) ? timelineRaw : null;
         const objectives = Array.isArray(objectivesRaw) ? objectivesRaw : null;
-        const preferences = (preferencesRaw && typeof preferencesRaw === 'object') ? preferencesRaw : null;
+        const preferences = asRecord(preferencesRaw) as ApiPreferences | null;
         const habits = Array.isArray(habitsRaw) ? habitsRaw : null;
         const profile = (profileRaw && typeof profileRaw === 'object') ? profileRaw as { cycle_start: string | null; cycle_length: number | null; luteal_length: number | null; onboarding_done: boolean | null; created_at?: string | null } : null;
 
         setState(current => ({
           ...current,
-          name: (preferences as any)?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
+          name: preferences?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
           email: session.user.email ?? current.email,
           accountCreatedAt: profile?.created_at ?? session.user.created_at ?? current.accountCreatedAt ?? null,
           checkinHistory: mappedCheckins && mappedCheckins.length > 0
@@ -378,55 +465,61 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
             ? resolveMoodFromCheckin(mappedCheckins[0], current.mood)
             : current.mood,
           tasks: timeline
-            ? timeline.map((t: any) => ({
-              id: t.id,
-              title: t.title,
-              time: t.startTime,
-              endTime: t.endTime,
-              done: t.status === 'completed',
-              category: t.category,
-              intensity: t.intensity,
-              persistentReminderEnabled: t.persistentReminderEnabled ?? false,
-              persistentReminderIntervalMinutes: t.persistentReminderIntervalMinutes ?? null,
-              isAiSuggested: t.isAiSuggested ?? false,
-              aiReasoning: t.aiReasoning ?? null,
-              note: t.note ?? null,
-            }))
+            ? timeline.map((rawTask) => {
+              const task = rawTask as ApiTimelineTask;
+              return {
+              id: task.id,
+              title: task.title,
+              time: task.startTime ?? '',
+              endTime: task.endTime,
+              done: task.status === 'completed',
+              category: task.category,
+              intensity: task.intensity,
+              persistentReminderEnabled: task.persistentReminderEnabled ?? false,
+              persistentReminderIntervalMinutes: task.persistentReminderIntervalMinutes ?? null,
+              isAiSuggested: task.isAiSuggested ?? false,
+              aiReasoning: task.aiReasoning ?? null,
+              note: task.note ?? undefined,
+              };
+            })
             : current.tasks,
           goals: objectives ? mapCanonicalObjectives(objectives) : current.goals,
           habits: habits
-            ? habits.map((h: any) => ({
-              id: h.id,
-              title: h.title,
-              description: h.description,
-              category: h.category,
-              icon: h.icon,
-              frequency: h.frequency,
-              targetDays: h.targetDays,
-              targetCount: h.targetCount ?? 1,
-              timeOfDay: h.timeOfDay ?? null,
-              durationMinutes: h.durationMinutes ?? null,
-              streakCount: h.streakCount,
-              bestStreak: h.bestStreak,
-              totalCompletions: h.totalCompletions,
-              completions: Array.isArray(h.completions)
-                ? h.completions.map((completion: any) => ({
+            ? habits.map((rawHabit) => {
+              const habit = rawHabit as ApiHabit;
+              return {
+              id: habit.id,
+              title: habit.title,
+              description: habit.description,
+              category: habit.category,
+              icon: habit.icon,
+              frequency: habit.frequency,
+              targetDays: habit.targetDays,
+              targetCount: habit.targetCount ?? 1,
+              timeOfDay: habit.timeOfDay ?? null,
+              durationMinutes: habit.durationMinutes ?? null,
+              streakCount: habit.streakCount,
+              bestStreak: habit.bestStreak,
+              totalCompletions: habit.totalCompletions,
+              completions: Array.isArray(habit.completions)
+                ? habit.completions.map((completion) => ({
                   ...completion,
                   completionCount: completion.completionCount ?? 1,
                 }))
                 : [],
-              reminderEnabled: h.reminderEnabled ?? false,
-              reminderTime: h.reminderTime ?? null,
-              persistentReminderEnabled: h.persistentReminderEnabled ?? false,
-              persistentReminderIntervalMinutes: h.persistentReminderIntervalMinutes ?? null,
-            }))
+              reminderEnabled: habit.reminderEnabled ?? false,
+              reminderTime: habit.reminderTime ?? null,
+              persistentReminderEnabled: habit.persistentReminderEnabled ?? false,
+              persistentReminderIntervalMinutes: habit.persistentReminderIntervalMinutes ?? null,
+              };
+            })
             : current.habits,
           theme: current.theme,
           cycleStart: profile?.cycle_start ? profile.cycle_start.slice(0, 10) : current.cycleStart,
           cycleLength: profile?.cycle_length ?? current.cycleLength,
           lutealLength: profile?.luteal_length ?? current.lutealLength,
-          biologicalSex: ((preferences as any)?.biologicalSex ?? current.biologicalSex) as AuraState['biologicalSex'],
-          medicationCurrentlyUsing: ((preferences as any)?.medicationCurrentlyUsing ?? current.medicationCurrentlyUsing) as AuraState['medicationCurrentlyUsing'],
+          biologicalSex: preferences?.biologicalSex ?? current.biologicalSex,
+          medicationCurrentlyUsing: preferences?.medicationCurrentlyUsing ?? current.medicationCurrentlyUsing,
           onboardingDone: profile?.onboarding_done ?? current.onboardingDone,
           ...normalizeReminderPreferences(preferences, {
             morningCheckinTime: current.morningCheckinTime,
@@ -699,9 +792,9 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Sessão necessária para salvar o check-in.");
 
-        let checkinResponse: any;
+        let checkinResponse: ApiCheckinResponse;
         try {
-          checkinResponse = await api.post('/checkins', payload);
+          checkinResponse = await api.post('/checkins', payload) as ApiCheckinResponse;
         } catch (err) {
           console.error("Failed to persist checkin.", err);
           // Preserve o payload canônico completo, sem anunciar persistência remota.
@@ -837,7 +930,11 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         if (today === getLocalDateKey()) {
           await refreshData();
         }
-        const savedBlock = Array.isArray((result as any)?.savedBlocks) ? (result as any).savedBlocks[0] : null;
+        const resultRecord = asRecord(result);
+        const savedBlocks = resultRecord && Array.isArray(resultRecord.savedBlocks)
+          ? resultRecord.savedBlocks as ApiSavedTimelineBlock[]
+          : [];
+        const savedBlock = savedBlocks[0] ?? null;
         return savedBlock
           ? {
               id: savedBlock.id,

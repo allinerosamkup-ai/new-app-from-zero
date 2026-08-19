@@ -13,7 +13,7 @@ import type { AuraCommandExecution, AuraCommandPlan } from "../features/aura/com
 import { checkinReceiptFromExecution, shouldRenderCommandPlan } from "../features/aura/command-checkin-receipt";
 import i18n from "../i18n";
 import { api, getClientTimeContext, getAdaptiveSnapshot } from "../lib/api";
-import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import { useAiriaReading } from "../lib/airia-reading";
 import { getCurrentLanguage, resolveIntlLocale, useLocalizedCopy } from "../i18n";
 import { supabase } from "../lib/supabase";
 import { trackEvent } from "../lib/track";
@@ -28,6 +28,8 @@ import {
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import {
+  type BrowserRecognitionLike,
+  type BrowserSpeechWindow,
   createTranscriptResultHandler,
   releaseRecognition,
   stopActiveRecognition,
@@ -129,6 +131,13 @@ type AuraRouteState = {
   autoSend?: boolean;
 };
 
+type AuraSessionStartResponse = {
+  sessionId: string;
+};
+
+function isAbortedAuraRequest(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -192,7 +201,7 @@ export function AuraChatPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { state, refreshData } = useAuraStore();
-  const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
+  const { reading: canonicalReading } = useAiriaReading();
   const { showError, showSuccess } = useToast();
   const cycleReport = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
   const routeState = location.state as AuraRouteState | null;
@@ -258,29 +267,13 @@ export function AuraChatPage() {
   const [commandPlan, setCommandPlan] = useState<AuraCommandPlan | null>(null);
   const [isApplyingPlan, setIsApplyingPlan] = useState(false);
   const applyKeyRef = useRef<Record<string, string>>({});
+  const activeRequestControllerRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<BrowserRecognitionLike | null>(null);
   const voiceInputBaseRef = useRef("");
   const [isRecording, setIsRecording] = useState(false);
-  const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
-  const [canonicalCorrection, setCanonicalCorrection] = useState("");
-  const [canonicalCorrectionOpen, setCanonicalCorrectionOpen] = useState(false);
-
   const sharedRiskSafety = canonicalReading?.riskSafety ?? lastRiskSafety;
-
-  async function feedbackCanonicalDecision(status: "accepted" | "rejected" | "corrected") {
-    const decision = canonicalReading?.decision;
-    if (!decision || canonicalFeedbackPending) return;
-    setCanonicalFeedbackPending(true);
-    const saved = await sendAiriaDecisionFeedback(decision.id, status, "aura", canonicalCorrection);
-    if (saved) {
-      setCanonicalCorrection("");
-      setCanonicalCorrectionOpen(false);
-      await reloadCanonicalReading();
-    }
-    setCanonicalFeedbackPending(false);
-  }
 
   useEffect(() => {
     return () => {
@@ -299,9 +292,13 @@ export function AuraChatPage() {
       locale: resolveIntlLocale(i18n.language),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Sao_Paulo",
     })
-      .then((res: any) => {
+      .then((response: unknown) => {
         if (!isMounted) return;
-        setSessionId(res.sessionId);
+        if (!isRecord(response) || typeof response.sessionId !== "string" || !response.sessionId.trim()) {
+          throw new Error(t("aura.errors.start"));
+        }
+        const { sessionId: startedSessionId } = response as AuraSessionStartResponse;
+        setSessionId(startedSessionId);
       })
       .catch((error) => {
         if (!isMounted) return;
@@ -336,6 +333,11 @@ export function AuraChatPage() {
       operations: current.operations.map((operation) =>
         operation.id === operationId ? { ...operation, ...patch } : operation),
     } : current);
+  }
+
+  function cancelActiveRequest() {
+    if (!isTyping) return;
+    activeRequestControllerRef.current?.abort();
   }
 
   async function syncTimelineBlocks(blocks: TimelineBlock[]) {
@@ -373,9 +375,6 @@ export function AuraChatPage() {
 
   async function executeAuraAction(response: AuraCommandResponse): Promise<string | null> {
     try {
-      if (canonicalReading?.decision) {
-        return l("Já existe uma proposta da Airia baseada no seu contexto atual. Você pode confirmar, corrigir ou vetar abaixo antes de abrir outra frente.", "Airia already has a proposal based on your current context. You can confirm, correct, or veto it below before opening another front.");
-      }
       if (response.action === "create_task" || response.action === "create_agenda") {
         if (!FEATURES.planner) {
           return l("O Planner está desativado. Vou manter a orientação ligada aos seus Objetivos, sem criar um bloco paralelo.", "Planner is disabled. I will keep this guidance attached to your Goals instead of creating a parallel block.");
@@ -712,6 +711,8 @@ export function AuraChatPage() {
     setCommandPlan(null);
     setLastRiskSafety(null);
     setPendingTaskConfirmation(null);
+    const controller = new AbortController();
+    activeRequestControllerRef.current = controller;
 
     try {
       const { data: { session: auth } } = await supabase.auth.getSession();
@@ -719,6 +720,7 @@ export function AuraChatPage() {
       const locale = resolveIntlLocale(language);
       const response = await fetch(`${API_URL}/aura/command/stream`, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           Authorization: `Bearer ${auth?.access_token}`,
           "Content-Type": "application/json",
@@ -847,12 +849,28 @@ export function AuraChatPage() {
         setMessages((prev) => [...prev, { role: "assistant", content: executionFollowUp }]);
       }
     } catch (error) {
+      if (isAbortedAuraRequest(error)) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: l(
+              "Tudo bem, parei antes de aplicar qualquer decisão. Quando quiser, me diga o que prefere organizar.",
+              "All right, I stopped before applying any decision. When you are ready, tell me what you would like to organize.",
+            ),
+          },
+        ]);
+        return;
+      }
       showError(error instanceof Error ? error.message : t("aura.errors.chat"));
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: t("aura.retry") },
       ]);
     } finally {
+      if (activeRequestControllerRef.current === controller) {
+        activeRequestControllerRef.current = null;
+      }
       setIsTyping(false);
     }
   }
@@ -900,7 +918,8 @@ export function AuraChatPage() {
   }
 
   function toggleVoice() {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as BrowserSpeechWindow;
+    const SR = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!SR) return;
     if (recognitionRef.current) {
       stopActiveRecognition(recognitionRef);
@@ -1072,7 +1091,17 @@ export function AuraChatPage() {
                 fontStyle: "italic",
               }}
             >
-              processando pedido...
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span>{t("aura.processing", "Organizing your request...")}</span>
+                <AuraButtonV2
+                  onClick={cancelActiveRequest}
+                  variant="glass"
+                  size="sm"
+                  aria-label={l("Parar solicitação em andamento", "Stop request in progress")}
+                >
+                  {l("Parar", "Stop")}
+                </AuraButtonV2>
+              </div>
             </div>
           </div>
         )}
@@ -1344,22 +1373,6 @@ export function AuraChatPage() {
               </AuraButtonV2>
             </div>
           </div>
-        )}
-
-        {canonicalReading?.decision && sharedRiskSafety?.route !== "crisis_protocol" && sharedRiskSafety?.route !== "human_support" && (
-          <section style={{ margin: "6px 0 10px 33px", padding: 12, borderRadius: 14, border: "1px solid rgba(143,192,164,.34)", background: "rgba(255,255,255,.82)" }}>
-            <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Proposta atual da Airia", "Airia's current proposal")}</p>
-            <p style={{ margin: 0, color: "var(--text-1)", fontWeight: 800, fontSize: 13 }}>{canonicalReading.decision.title}</p>
-            <p style={{ margin: "5px 0 9px", color: "var(--text-2)", fontSize: 11.5, lineHeight: 1.45 }}>{canonicalReading.decision.reason}</p>
-            {canonicalCorrectionOpen ? <>
-              <textarea value={canonicalCorrection} onChange={(event) => setCanonicalCorrection(event.target.value)} rows={2} maxLength={500} placeholder={l("O que precisa mudar?", "What needs to change?")} style={{ width: "100%", boxSizing: "border-box", padding: 8, borderRadius: 9, border: "1px solid var(--warm-border)" }} />
-              <AuraButtonV2 className="btn btn-primary btn-full" size="sm" disabled={!canonicalCorrection.trim() || canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("corrected")}>{l("Corrigir leitura", "Correct reading")}</AuraButtonV2>
-            </> : canonicalReading.decision.requiresConfirmation && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-              <AuraButtonV2 className="btn btn-ghost" size="sm" disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("rejected")}>{l("Não agora", "Not now")}</AuraButtonV2>
-              <AuraButtonV2 className="btn btn-primary" size="sm" disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("accepted")}>{l("Faz sentido", "That fits")}</AuraButtonV2>
-              <AuraButtonV2 className="btn btn-ghost" size="sm" style={{ gridColumn: "1 / -1" }} onClick={() => setCanonicalCorrectionOpen(true)}>{l("Corrigir a Airia", "Correct Airia")}</AuraButtonV2>
-            </div>}
-          </section>
         )}
 
         <div style={{ margin: sharedRiskSafety && sharedRiskSafety.route !== "self_support" ? "6px 0 10px 33px" : 0 }}>

@@ -7,14 +7,11 @@ import {
   ActivityIndicator, 
   IconButton, 
   Avatar, 
-  ProgressBar, 
   Surface,
-  Divider,
   MD3Colors
 } from 'react-native-paper';
 import { useInsightStore } from '../providers/insight_store';
 import { useAuthStore } from '../providers/auth_store';
-import { LucideLineChart, LucideZap, LucideSmile, LucideCheckCircle2, LucideBrainCircuit, LucideArrowRight } from 'lucide-react-native';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
 
 /**

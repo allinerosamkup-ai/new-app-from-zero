@@ -85,9 +85,7 @@ function methodPatternFor(input: {
   requestContext: Record<string, unknown>;
   dailyContext: DailyContext;
 }): string {
-  if (input.action?.targetType === 'timeline') return 'Há um compromisso real em jogo; a decisão útil é adaptar a agenda antes de abrir uma frente nova.';
-  if (input.action?.targetType === 'habit') return 'Há um hábito real devido; a decisão é manter continuidade sem transformar o hábito em cobrança.';
-  if (input.action?.targetType === 'goal') return 'Há uma meta ativa; a decisão é criar um avanço mínimo em vez de uma ideia solta.';
+  if (input.action?.targetType === 'goal') return 'Há uma ação concreta de Objetivo em jogo; a decisão é executá-la sem abrir uma frente nova.';
   if (input.dailyContext.patternMemoryContext || input.dailyContext.recentSuggestionTitles.length) {
     return 'O histórico explica padrão, mas ainda falta uma âncora atual para transformar isso em ação.';
   }
@@ -106,16 +104,15 @@ function blockerFor(trace: ReasoningTrace, requestContext: Record<string, unknow
 
 function actionRoute(candidate: DecisionCandidate | null, surface: DecisionSurface): NonNullable<AiriaActionPlan['action']>['route'] {
   if (!candidate) return null;
-  if (candidate.targetType === 'timeline') return '/planner';
-  if (candidate.targetType === 'habit') return '/planner';
   if (candidate.targetType === 'goal') return '/goals';
   if (surface === 'journal') return '/journal';
-  return '/planner';
+  return null;
 }
 
 function canUseWritingSuggestion(surface: DecisionSurface, message: string, candidate: DecisionCandidate | null): boolean {
   if (surface === 'journal') return true;
   if (surface === 'aura-chat' && /\b(mensagem|responder|texto|escrever para|mandar)\b/i.test(message)) return true;
+  if (candidate?.targetType === 'goal' && Boolean(candidate.doneWhen?.trim())) return true;
   if (candidate?.action === 'suggest' && /\bmensagem|resposta|email|e-mail|whatsapp\b/i.test(candidate.title)) return true;
   return false;
 }
@@ -155,8 +152,10 @@ function displayFor(candidate: DecisionCandidate, trace: ReasoningTrace): string
   }
 
   if (candidate.targetType === 'goal') {
-    if (start && end) return `Abrir um bloco de ${start} a ${end} para avançar em "${title}".`;
-    return `Separar ${durationFor(candidate, trace)} para avançar só uma parte de "${title}".`;
+    const doneWhen = candidate.doneWhen?.trim();
+    return doneWhen
+      ? `${title}. Pronto quando: ${doneWhen.replace(/[.]$/, '')}.`
+      : title;
   }
 
   return title;
@@ -165,10 +164,10 @@ function displayFor(candidate: DecisionCandidate, trace: ReasoningTrace): string
 function selectOperationalCandidate(decisionBrain: DecisionResult, trace: ReasoningTrace): DecisionCandidate | null {
   const actionable = decisionBrain.allowedActions
     .filter((item) => item.kind !== 'insight_only' && item.action !== 'block')
-    .filter((item) => item.targetType === 'timeline' || item.targetType === 'habit' || item.targetType === 'goal');
+    .filter((item) => item.targetType === 'goal');
 
   const priority = (candidate: DecisionCandidate) => {
-    const target = candidate.targetType === 'timeline' ? 300 : candidate.targetType === 'habit' ? 200 : 100;
+    const target = candidate.targetType === 'goal' ? 300 : 0;
     const action = candidate.action !== 'keep' ? 40 : 0;
     const protection = trace.capacity === 'protecao' && candidate.targetType === 'goal' ? -80 : 0;
     return target + action + candidate.score + protection;
@@ -246,7 +245,7 @@ export class AiriaOperationalReasoningService {
         targetId: candidate?.targetId ?? null,
         targetType: candidate?.targetType ?? 'system',
         route: actionRoute(candidate, input.surface),
-        canBecomeTask: Boolean(candidate && (candidate.targetType === 'timeline' || candidate.targetType === 'habit' || candidate.targetType === 'goal')),
+        canBecomeTask: Boolean(candidate && candidate.targetType === 'goal'),
         displayText: finalDisplayText,
       },
       visibleReason: visibleReasonFor(candidate, trace, requestContext),

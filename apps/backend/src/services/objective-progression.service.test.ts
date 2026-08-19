@@ -35,8 +35,8 @@ function createRepository(subgoals: unknown[], milestones: unknown[] = []) {
 async function run() {
   {
     const { repository, objective } = createRepository([
-      { id: 'one', title: 'Separar fotos', done: false, order: 0 },
-      { id: 'two', title: 'Escolher capa', done: false, order: 1 },
+      { id: 'one', title: 'Separar três fotos para o portfólio', done: false, order: 0, doneWhen: 'três fotos estiverem em uma pasta do portfólio' },
+      { id: 'two', title: 'Selecionar a foto de capa do portfólio', done: false, order: 1, doneWhen: 'uma foto estiver marcada como capa' },
     ]);
     const service = new ObjectiveProgressionService(repository);
 
@@ -50,15 +50,15 @@ async function run() {
     assert.equal(result.objectiveCompletedNow, false);
     assert.equal(result.nextAction?.id, 'two');
     assert.deepEqual(objective.subgoals, [
-      { id: 'one', title: 'Separar fotos', done: true, order: 0, aiGenerated: false, status: 'done' },
-      { id: 'two', title: 'Escolher capa', done: false, order: 1, aiGenerated: false },
+      { id: 'one', title: 'Separar três fotos para o portfólio', done: true, order: 0, aiGenerated: false, doneWhen: 'três fotos estiverem em uma pasta do portfólio', status: 'done' },
+      { id: 'two', title: 'Selecionar a foto de capa do portfólio', done: false, order: 1, aiGenerated: false, doneWhen: 'uma foto estiver marcada como capa' },
     ]);
     assert.equal(objective.pathVersion, 2);
   }
 
   {
     const { repository, objective } = createRepository([
-      { id: 'only', title: 'Enviar versão final', completed: false },
+      { id: 'only', title: 'Enviar a versão final do portfólio para Ana', completed: false, doneWhen: 'o e-mail enviado aparecer na pasta Enviados' },
     ]);
     const service = new ObjectiveProgressionService(repository);
 
@@ -70,13 +70,13 @@ async function run() {
     assert.equal(duplicate.objectiveCompletedNow, false);
     assert.equal(objective.progress, 100);
     assert.deepEqual(objective.subgoals, [
-      { id: 'only', title: 'Enviar versão final', done: true, order: 0, aiGenerated: false, status: 'done' },
+      { id: 'only', title: 'Enviar a versão final do portfólio para Ana', done: true, order: 0, aiGenerated: false, doneWhen: 'o e-mail enviado aparecer na pasta Enviados', status: 'done' },
     ]);
   }
 
   {
     const { repository, objective } = createRepository(
-      [{ id: 'stage-action', title: 'Concluir etapa atual', done: false, order: 0, milestoneId: 'm-1' }],
+      [{ id: 'stage-action', title: 'Enviar o arquivo da etapa atual para Ana', done: false, order: 0, milestoneId: 'm-1', doneWhen: 'o e-mail enviado aparecer na pasta Enviados' }],
       [
         { id: 'm-1', title: 'Etapa atual', order: 0, doneWhen: 'Atual concluída', actions: [] },
         { id: 'm-2', title: 'Etapa futura', order: 1, doneWhen: 'Futura concluída', actions: [] },

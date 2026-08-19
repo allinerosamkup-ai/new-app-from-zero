@@ -6,6 +6,12 @@ import {
 } from '../features/aura/settings';
 import { getLocalDateKey } from '../utils/day-context';
 
+type AiriaNotificationOptions = NotificationOptions & {
+  renotify?: boolean;
+  timestamp?: number;
+  vibrate?: number[];
+};
+
 function timeToMinutes(time: string | null | undefined): number | null {
   if (!time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return null;
   const [hours, minutes] = time.split(':').map(Number);
@@ -85,13 +91,14 @@ export function useHabitReminders(
 
           const count = getHabitCompletionCount(h, todayKey);
           const target = getHabitTargetCount(h);
-          new Notification(`${h.icon ?? '⭐'} ${h.title}`, {
+          const notificationOptions: AiriaNotificationOptions = {
             body: target > 1 ? `Faltam ${Math.max(0, target - count)} de ${target} hoje.` : 'Hora do seu hábito!',
             icon: '/favicon.ico',
             tag: `habit-${h.id}`,
             renotify: true,
             timestamp: Date.now(),
-          } as any);
+          };
+          new Notification(`${h.icon ?? '⭐'} ${h.title}`, notificationOptions);
         });
 
       tasksWithReminders
@@ -107,15 +114,16 @@ export function useHabitReminders(
           if (firedRef.current.has(firedKey)) return;
           firedRef.current.add(firedKey);
 
-          new Notification(`Agenda: ${task.title}`, {
+          const notificationOptions: AiriaNotificationOptions = {
             body: 'Ainda está pendente. Marque como feito quando concluir.',
             icon: '/favicon.ico',
             tag: `task-${task.id}`,
             renotify: true,
             timestamp: Date.now(),
             // vibration pattern if enabled
-            ...(task.vibrateEnabled && { vibrate: [200, 100, 200] })
-          } as any);
+            ...(task.vibrateEnabled ? { vibrate: [200, 100, 200] } : {}),
+          };
+          new Notification(`Agenda: ${task.title}`, notificationOptions);
 
           // Handle sound/alarm if enabled
           if (task.alarmEnabled) {

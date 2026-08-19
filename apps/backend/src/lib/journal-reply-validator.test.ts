@@ -5,7 +5,7 @@ import { validateJournalReply, buildRevisionInstruction } from './journal-reply-
 function run() {
   // 1. ok — resposta cita âncora real e não está em loop
   const okResult = validateJournalReply(
-    'Você anunciou as camas em três canais e nada moveu. Abre o anúncio do Olx agora e troca a primeira foto.',
+    'Você anunciou as camas em três canais e nada moveu. Próximo passo: Abrir o anúncio do Olx e trocar a primeira foto. Pronto quando: a nova primeira foto estiver salva.',
     {
       lastAssistantReplies: ['Como você se sentiu hoje?'],
       lastUserMessages: ['Anunciei em Olx, Facebook e Instagram'],
@@ -14,7 +14,15 @@ function run() {
   );
   assert.equal(okResult.ok, true, 'resposta com âncora deve passar');
 
-  // 2. question_loop — 3 perguntas seguidas é proibido
+  // 2. Uma ação imperativa sem término observável não pode escapar no texto visível.
+  const missingCompletion = validateJournalReply(
+    'Você já tem o movimento certo. Abre o app do banco agora e olha só as três primeiras contas da semana.',
+    { lastAssistantReplies: [], lastUserMessages: ['Quero organizar as contas desta semana'], anchorTitles: [] },
+  );
+  assert.equal(missingCompletion.ok, false);
+  if (!missingCompletion.ok) assert.equal(missingCompletion.reason, 'visible_action_invalid');
+
+  // 3. question_loop — 3 perguntas seguidas é proibido
   const loopResult = validateJournalReply(
     'E os anúncios estão ativos ou parados?',
     {
@@ -31,7 +39,7 @@ function run() {
     assert.equal(loopResult.reason, 'question_loop');
   }
 
-  // 3. no_concrete_anchor — havia âncoras mas resposta não cita nenhuma
+  // 4. no_concrete_anchor — havia âncoras mas resposta não cita nenhuma
   const noAnchorResult = validateJournalReply(
     'Você está em um momento de pausa, talvez seja bom respirar fundo.',
     {
@@ -45,7 +53,7 @@ function run() {
     assert.equal(noAnchorResult.reason, 'no_concrete_anchor');
   }
 
-  // 4. echo_only — resposta é eco da última fala da usuária
+  // 5. echo_only — resposta é eco da última fala da usuária
   const echoResult = validateJournalReply(
     'Você está cansada do frio e do dinheiro apertado, parada no meio do caminho.',
     {
@@ -59,7 +67,7 @@ function run() {
     assert.equal(echoResult.reason, 'echo_only');
   }
 
-  // 5. ok mesmo sem âncoras quando lista vazia
+  // 6. ok mesmo sem âncoras quando lista vazia
   const okEmptyAnchors = validateJournalReply(
     'O que você está tentando fazer com essa pausa?',
     {
@@ -70,13 +78,14 @@ function run() {
   );
   assert.equal(okEmptyAnchors.ok, true);
 
-  // 6. buildRevisionInstruction tem texto certo pra cada motivo
+  // 7. buildRevisionInstruction tem texto certo pra cada motivo
   assert.match(buildRevisionInstruction('question_loop', 'detalhes'), /loop de perguntas/i);
   assert.match(buildRevisionInstruction('no_concrete_anchor', 'detalhes'), /elemento concreto/i);
   assert.match(buildRevisionInstruction('echo_only', 'detalhes'), /sin[oô]nimos|reformulou/i);
   assert.match(buildRevisionInstruction('analysis_missing', 'detalhes'), /1-3 frases DECLARATIVAS|an[aá]lise pronta/i);
+  assert.match(buildRevisionInstruction('visible_action_invalid', 'detalhes'), /Pr[oó]ximo passo|Pronto quando/i);
 
-  // 7. analysis_missing — resposta com SÓ perguntas, nenhuma frase declarativa, é reprovada.
+  // 8. analysis_missing — resposta com SÓ perguntas, nenhuma frase declarativa, é reprovada.
   // Inclui "pintura" e "camas" (âncoras) pra não cair em no_concrete_anchor antes.
   const onlyQuestionsResult = validateJournalReply(
     'O que você está tentando fazer com a pintura agora? E sobre as camas, o pintor já respondeu? Qual seria a primeira coisa pra hoje?',
@@ -91,7 +100,7 @@ function run() {
     assert.equal(onlyQuestionsResult.reason, 'analysis_missing');
   }
 
-  // 8. analysis_missing — resposta com 2 frases declarativas + 1 pergunta no fim → ok
+  // 9. analysis_missing — resposta com 2 frases declarativas + 1 pergunta no fim → ok
   const balancedResult = validateJournalReply(
     'Você anunciou as camas em três canais e ninguém chamou. Isso indica que o gargalo é preço, não divulgação. Qual valor você colocou?',
     {
@@ -102,7 +111,7 @@ function run() {
   );
   assert.equal(balancedResult.ok, true, 'resposta balanceada (declarativas + 1 pergunta no fim) deve passar');
 
-  // 9. resposta curta sem ponto final mas com pergunta — não é considerada analysis_missing
+  // 10. resposta curta sem ponto final mas com pergunta — não é considerada analysis_missing
   //    (heurística só dispara em respostas >= 30 chars com sentenças quebráveis)
   const shortQuestion = validateJournalReply(
     'O que tá pesando agora?',

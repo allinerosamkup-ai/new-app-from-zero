@@ -72,6 +72,82 @@ export type AiriaReadingEnvelope = {
   };
 };
 
+export type AiriaDecisionSurface = "journal" | "checkin_result";
+
+type LocalizeCopy = (pt: string, en: string) => string;
+
+/** Mantém os valores canônicos em português no backend, traduzindo só a apresentação. */
+export function localizeAiriaPhase(phase: string | null | undefined, l: LocalizeCopy): string {
+  const normalized = phase?.trim().toLocaleLowerCase("pt-BR");
+  const translations: Record<string, string> = {
+    "ritmo mais baixo": "lower pace",
+    "bom fôlego hoje": "good momentum today",
+    "ritmo possível": "a workable pace",
+  };
+  return normalized && translations[normalized] ? l(phase ?? "", translations[normalized]) : phase ?? "";
+}
+
+/** Explicação curta e fundamentada para a interface; não traduz notas nem fatos da pessoa. */
+export function localizeAiriaCapacityReason(
+  capacity: AiriaCapacity | null | undefined,
+  energyScore: number | null | undefined,
+  l: LocalizeCopy,
+): string {
+  if (!capacity) return "";
+  if (capacity.level === "protecao" && /prioridade é apoio/i.test(capacity.reason)) {
+    return l("Hoje a prioridade é apoio, não tarefa.", "Today, support—not a task—is the priority.");
+  }
+  if (!Number.isFinite(energyScore)) return capacity.reason;
+
+  const energy = Math.round(Number(energyScore));
+  const prefix = capacity.level === "protecao"
+    ? l("Deixei hoje no menor tamanho possível", "I kept today's scope as small as possible")
+    : capacity.level === "baixa"
+    ? l("Reduzi o tamanho de hoje", "I reduced today's scope")
+    : capacity.level === "alta"
+      ? l("Hoje cabe um passo maior", "A bigger step can fit today")
+      : l("Mantive um tamanho intermediário", "I kept a moderate scope");
+
+  return `${prefix}: ${l(`sua energia está em ${energy} de 10`, `your energy is ${energy} out of 10`)}.`;
+}
+
+/** Localiza somente o conector estrutural de término, sem traduzir a ação da pessoa. */
+export function localizeVisibleConcreteAction(text: string, l: LocalizeCopy): string {
+  return text.replace(/\bPronto quando\s*:/gi, l("Pronto quando:", "Done when:"));
+}
+
+/**
+ * Uma proposta é operacional, não uma frase solta para repetir em toda tela.
+ * O Diário usa apenas a conversa e seus planos explícitos; o resultado de
+ * Check-in pode oferecer uma ação de Objetivo quando há base suficiente para
+ * explicar por que ela cabe agora.
+ */
+export function canShowContextualDecision(
+  reading: AiriaReadingEnvelope | null | undefined,
+  surface: AiriaDecisionSurface,
+): boolean {
+  if (surface === "journal") return false;
+
+  const decision = reading?.decision;
+  const riskRoute = reading?.riskSafety?.route;
+  const observedDays = Number(reading?.period.observedDays ?? 0);
+  const confidence = Number(reading?.period.confidence ?? 0);
+  const capacityReason = reading?.capacity?.reason?.trim();
+
+  return Boolean(
+    decision
+      && decision.status === "proposed"
+      && decision.requiresConfirmation
+      && decision.objectiveId
+      && decision.actionId
+      && capacityReason
+      && observedDays >= 2
+      && confidence >= 0.35
+      && riskRoute !== "crisis_protocol"
+      && riskRoute !== "human_support",
+  );
+}
+
 function isReading(value: unknown): value is AiriaReadingEnvelope {
   if (!value || typeof value !== "object") return false;
   const reading = value as Partial<AiriaReadingEnvelope>;

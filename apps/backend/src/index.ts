@@ -129,8 +129,13 @@ import {
   shouldSendPersistentReminder,
 } from './lib/notification-filters';
 import { resolveAdaptiveCheckinWindows, shouldSendCheckinSlotNudge } from './lib/checkin-windows';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from './lib/openai-config';
-import { normalizeObjectiveSubgoals } from './lib/objective-subgoals';
+import { getOpenAiModel, getOpenAiOutputLimit, openAiTemperature } from './lib/openai-config';
+import {
+  hasLegacyOpenObjectiveSubgoals,
+  isConcreteObjectiveSubgoal,
+  normalizeObjectiveSubgoals,
+} from './lib/objective-subgoals';
+import { validateConcreteAction } from './lib/action-quality';
 import { PRODUCT_CAPABILITIES, type ProductCapabilities } from './contracts/product-capabilities';
 import {
   ObjectiveActionRecoveryService,
@@ -1232,7 +1237,7 @@ REGRAS:
     ],
     ...openAiTemperature(getOpenAiModel(), 0.4),
     response_format: { type: 'json_object' },
-    max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
+    ...getOpenAiOutputLimit(getOpenAiModel(), 1500),
   });
 
   const content = completion.choices[0]?.message?.content?.trim() || '';
@@ -1681,7 +1686,7 @@ JSON APENAS: {"goals":["string"],"people":["string"],"patterns":["string"],"insi
       },
     ],
     response_format: { type: 'json_object' },
-    max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
+    ...getOpenAiOutputLimit(getOpenAiModel(), 1500),
     ...openAiTemperature(getOpenAiModel(), 0.2),
   });
 
@@ -2096,7 +2101,12 @@ function objectiveDate(value: Date | string | null | undefined): string | null {
 }
 
 function serializeObjective(objective: any, primaryObjectiveId: string | null = null) {
-  const subgoals = normalizeObjectiveSubgoals(Array.isArray(objective.subgoals) ? objective.subgoals : []);
+  const storedSubgoals = normalizeObjectiveSubgoals(Array.isArray(objective.subgoals) ? objective.subgoals : []);
+  // Mantém conclusões como histórico, mas não publica como opção ativa um passo
+  // antigo que não informa como terminar. Assim nada vago ocupa o card, a Home
+  // ou o raciocínio da Airia — e o registro original continua preservado.
+  const subgoals = storedSubgoals.filter((action) => action.done || isConcreteObjectiveSubgoal(action));
+  const needsActionReview = hasLegacyOpenObjectiveSubgoals(storedSubgoals);
   const storedMilestones = Array.isArray(objective.milestones) ? objective.milestones : [];
   // Objetivos antigos entram numa etapa canônica, sem regenerar nem perder ações.
   const milestones = storedMilestones.length > 0
@@ -2111,6 +2121,7 @@ function serializeObjective(objective: any, primaryObjectiveId: string | null = 
     category: objective.category,
     progress: objective.progress,
     subgoals,
+    needsActionReview,
     aiInsight: objective.aiInsight ?? null,
     deadline: objectiveDate(objective.deadline),
     pausedAt: objective.pausedAt instanceof Date ? objective.pausedAt.toISOString() : objective.pausedAt ?? null,
@@ -2434,6 +2445,7 @@ export function createApp(dependencies: AppDependencies = {}) {
     const actions = normalizeObjectiveSubgoals(objective.subgoals);
     const currentActions = actions.filter((action) => (
       !action.done && action.status !== 'rejected' && action.status !== 'deferred'
+      && isConcreteObjectiveSubgoal(action)
     ));
     await canonicalMemoryService.write({
       userId: objective.userId,
@@ -3259,14 +3271,14 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   /**
    * GET /api/checkins
-   * Retorna os check-ins recentes de um usuário (padrão: últimos 7 dias).
+   * Retorna os check-ins recentes de um usuário (padrão: últimos 7 dias; até um semestre).
    */
   app.get('/api/checkins', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     const { days } = req.query;
 
     try {
-      const daysNum = Math.min(Math.max(Number(days ?? 7), 1), 90);
+      const daysNum = Math.min(Math.max(Number(days ?? 7), 1), 180);
       // Usa corte em UTC para evitar exclusão acidental de check-ins do dia
       // por deslocamento de fuso ao comparar com coluna DATE.
       const now = new Date();
@@ -3387,10 +3399,16 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
       const reading = await airiaReadingService.rebuild({ userId: data.userId, localDate: data.localDate, sourceCheckinId: result.checkinId, surface: 'checkin' });
       const checkinStatement = data.note?.trim() ?? '';
-      const objectivePathProposals = checkinStatement
-        ? await reviewObjectivePathsAfterContext(data.userId, checkinStatement, 'checkin').catch(() => [])
-        : [];
-      return res.json({ ...result, reading, objectivePathProposals });
+      if (checkinStatement) {
+        void reviewObjectivePathsAfterContext(data.userId, checkinStatement, 'checkin')
+          .then((proposals) => {
+            console.info(`[checkins/create] ${proposals.length} revisão(ões) de caminho concluída(s) em segundo plano.`);
+          })
+          .catch(() => {
+            console.warn('[checkins/create] revisão derivada de caminhos não concluída; Check-in já respondido.');
+          });
+      }
+      return res.json({ ...result, reading, objectivePathProposals: [] });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: 'Validation failed', details: error.errors });
@@ -4130,6 +4148,17 @@ export function createApp(dependencies: AppDependencies = {}) {
    * Processa um comando operacional da Airia via SSE.
    */
   app.post('/api/aura/command/stream', async (req: Request, res: Response) => {
+    let clientDisconnected = false;
+    const markClientDisconnected = () => {
+      clientDisconnected = true;
+    };
+    const shouldStopForClient = () => clientDisconnected || req.aborted || res.destroyed;
+
+    req.once('aborted', markClientDisconnected);
+    res.once('close', () => {
+      if (!res.writableEnded) markClientDisconnected();
+    });
+
     try {
       const data = AuraCommandMessageStreamSchema.parse({ ...req.body, userId: (req as AuthRequest).userId });
       const commandSession = await prisma.auraCommandSession.findFirst({
@@ -4150,6 +4179,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         data.message,
         'aura',
       ).catch(() => []);
+      if (shouldStopForClient()) return;
       const [runtimeContext, recentSuggestionItems] = await Promise.all([
         resolveAiRuntimeContext(prisma, data.userId, { moodCycleContext: data.moodCycleContext }),
         SuggestionMemoryService.getRecent(prisma, data.userId),
@@ -4251,6 +4281,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         ragContext: commandRagContext,
         plannerContext: [plannerContext, commandGroundingText].filter(Boolean).join('\n'),
         interactionMode: data.mode,
+        locale: data.locale,
         localDate: data.localDate,
         priorDiagnoses: runtimeContext.priorDiagnoses,
         ...extractAdaptiveFromRequest(req.body),
@@ -4259,8 +4290,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         response: rawCommandResponse,
         message: data.message,
         localDate: data.localDate ?? getSaoPauloDateContext(new Date()).dateKey,
+        history: data.history,
         captureJudgment: commandCognitive.captureJudgment,
       });
+      if (shouldStopForClient()) return;
       const rawTaskId = typeof recoveredCommandResponse.payload?.taskId === 'string'
         ? recoveredCommandResponse.payload.taskId.trim()
         : '';
@@ -4473,6 +4506,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         missingFields: combinedMissingFields,
         operations: combinedOperations,
       };
+      if (shouldStopForClient()) return;
       // Conversa, leitura de estado e recusa protegida não são um plano. Persistir
       // um card vazio faz a UI mostrar "0 ações" como se algo tivesse dado errado.
       const persistedPlan = commandPlan.operations.length > 0
@@ -4489,6 +4523,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         role: 'assistant',
         content: commandResponse.assistantMessage,
       });
+      if (shouldStopForClient()) return;
 
       const execution = data.mode === 'executor'
         && commandPlan.executionPolicy === 'auto_apply'
@@ -4505,6 +4540,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           adaptAgenda: applyAuraAgendaAdaptation,
         })
         : null;
+      if (shouldStopForClient()) return;
       const freshPlan = execution
         ? await prisma.auraCommandPlan.findFirst({
           where: { id: commandPlan.id, userId: data.userId },
@@ -4536,12 +4572,12 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       return res.end();
     } catch (error: any) {
+      console.error('[aura/command/stream] Error:', error);
       if (!res.headersSent) {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: 'Validation failed', details: error.errors });
         }
 
-        console.error('[aura/command/stream] Error:', error);
         return res.status(500).json({ error: 'Failed to process Airia command' });
       }
 
@@ -4791,7 +4827,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       const evalResponse = await openai.chat.completions.create({
         model: getOpenAiModel(),
         messages: [{ role: 'user', content: evaluationPrompt }],
-        max_completion_tokens: getOpenAiMaxCompletionTokens(300),
+        ...getOpenAiOutputLimit(getOpenAiModel(), 300),
       } as any);
 
       const evaluation = evalResponse.choices?.[0]?.message?.content?.trim() ?? '';
@@ -5157,7 +5193,7 @@ export function createApp(dependencies: AppDependencies = {}) {
             const microStepModel = getOpenAiModel();
             const completion = await openai.chat.completions.create({
               model: microStepModel,
-              max_completion_tokens: getOpenAiMaxCompletionTokens(60),
+              ...getOpenAiOutputLimit(microStepModel, 60),
               ...openAiTemperature(microStepModel, 0.7),
               messages: [
                 {
@@ -5776,8 +5812,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       const data = z.object({
         expectedVersion: z.number().int().positive(),
         title: z.string().trim().min(1).max(300),
+        doneWhen: z.string().trim().min(1).max(500),
         scheduledFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       }).parse(req.body);
+      const actionQuality = validateConcreteAction(data);
+      if (!actionQuality.ok) return res.status(422).json({ error: actionQuality.reason });
       const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId, archived: false } });
       if (!objective) return res.status(404).json({ error: 'objective_not_found' });
       if (objective.pathVersion !== data.expectedVersion) return res.status(409).json({ error: 'objective_path_changed' });
@@ -5788,7 +5827,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       ))?.milestoneId ?? milestones[0]?.id ?? 'manual-current';
       const action = {
         id: randomUUID(), title: data.title, done: false, order: actions.length, aiGenerated: false, userEdited: true,
-        milestoneId: currentMilestoneId, scheduledFor: data.scheduledFor ?? null, status: 'pending' as const,
+        milestoneId: currentMilestoneId, scheduledFor: data.scheduledFor ?? null, doneWhen: data.doneWhen, status: 'pending' as const,
       };
       const committed = await prisma.$transaction(async (transaction) => {
         const write = await transaction.objective.updateMany({
@@ -5820,9 +5859,10 @@ export function createApp(dependencies: AppDependencies = {}) {
       const data = z.object({
         expectedVersion: z.number().int().positive(),
         title: z.string().trim().min(1).max(300).optional(),
+        doneWhen: z.string().trim().min(1).max(500).optional(),
         scheduledFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
         state: z.enum(['pending', 'done', 'rejected', 'deferred']).optional(),
-      }).refine((value) => value.title !== undefined || value.scheduledFor !== undefined || value.state !== undefined, 'empty action patch').parse(req.body);
+      }).refine((value) => value.title !== undefined || value.doneWhen !== undefined || value.scheduledFor !== undefined || value.state !== undefined, 'empty action patch').parse(req.body);
       const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId, archived: false } });
       if (!objective) return res.status(404).json({ error: 'objective_not_found' });
       if (objective.pathVersion !== data.expectedVersion) return res.status(409).json({ error: 'objective_path_changed' });
@@ -5832,10 +5872,18 @@ export function createApp(dependencies: AppDependencies = {}) {
       if (current.done && (data.title !== undefined || data.scheduledFor !== undefined || (data.state && data.state !== 'done'))) {
         return res.status(409).json({ error: 'completed_action_is_protected' });
       }
+      if (data.title !== undefined || data.doneWhen !== undefined) {
+        const actionQuality = validateConcreteAction({
+          title: data.title ?? current.title,
+          doneWhen: data.doneWhen ?? current.doneWhen,
+        });
+        if (!actionQuality.ok) return res.status(422).json({ error: actionQuality.reason });
+      }
       const now = new Date().toISOString();
       const updatedActions = actions.map((action) => action.id !== current.id ? action : {
         ...action,
         ...(data.title !== undefined ? { title: data.title, userEdited: true } : {}),
+        ...(data.doneWhen !== undefined ? { doneWhen: data.doneWhen, userEdited: true } : {}),
         ...(data.scheduledFor !== undefined ? { scheduledFor: data.scheduledFor, userEdited: true } : {}),
         ...(data.state ? {
           status: data.state,
@@ -7504,7 +7552,7 @@ COMO ESCREVER:
           },
           { role: 'user' as const, content: prompt },
         ],
-        max_completion_tokens: getOpenAiMaxCompletionTokens(generationConfig.maxTokens),
+        ...getOpenAiOutputLimit(getOpenAiModel(), generationConfig.maxTokens),
         ...openAiTemperature(getOpenAiModel(), generationConfig.temperature),
         ...(generationConfig.useJsonResponse && usesJsonObjectResponse(type)
           ? { response_format: { type: 'json_object' as const } }
@@ -7619,7 +7667,7 @@ JSON APENAS: {"profileSummary":"..."}`,
         ],
         model: getOpenAiModel(),
         response_format: { type: 'json_object' },
-        max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
+        ...getOpenAiOutputLimit(getOpenAiModel(), 1500),
         ...openAiTemperature(getOpenAiModel(), 0.4),
       } as any);
 
@@ -8850,7 +8898,7 @@ JSON APENAS: {"profileSummary":"..."}`,
               { role: 'user', content: `Relato: "${transcript.slice(0, 1200)}"` },
             ],
             response_format: { type: 'json_object' },
-            max_completion_tokens: getOpenAiMaxCompletionTokens(500),
+            ...getOpenAiOutputLimit(getOpenAiModel(), 500),
             ...openAiTemperature(getOpenAiModel(), 0.2),
           } as any);
           const content = completion.choices[0]?.message?.content?.trim();

@@ -9,6 +9,16 @@ import { buildGoalDecompositionPrompt } from './goal-intelligence.service';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 
+function validSuggestion(first: string, second: string) {
+  return {
+    items: [first, second],
+    steps: [
+      { title: first, doneWhen: `${first} estiver concluída` },
+      { title: second, doneWhen: `${second} estiver concluída` },
+    ],
+  };
+}
+
 type ObjectiveFixture = {
   id: string;
   userId: string;
@@ -135,7 +145,7 @@ async function run() {
       },
       {
         id: 'active-valid', userId: USER_ID, title: 'Reformar a sala', progress: 20, archived: false,
-        subgoals: [{ id: 'keep', title: 'Medir a parede', done: false }],
+        subgoals: [{ id: 'keep', title: 'Anotar a largura e a altura da parede principal da sala', done: false, doneWhen: 'a largura e a altura estiverem anotadas' }],
       },
       {
         id: 'completed', userId: USER_ID, title: 'Curso concluído', progress: 100, archived: false,
@@ -149,7 +159,13 @@ async function run() {
     const requests: unknown[] = [];
     const service = new ObjectiveActionRecoveryService(repository, async (request) => {
       requests.push(request);
-      return { items: ['Abrir a pasta de fotos', 'Escolher três fotos'] };
+      return {
+        items: ['Abrir a pasta de fotos no computador', 'Selecionar três fotos para o portfólio'],
+        steps: [
+          { title: 'Abrir a pasta de fotos no computador', doneWhen: 'a pasta com as fotos estiver aberta na tela' },
+          { title: 'Selecionar três fotos para o portfólio', doneWhen: 'três fotos estiverem marcadas como favoritas' },
+        ],
+      };
     });
 
     const result = await service.recover({ userId: USER_ID });
@@ -164,15 +180,15 @@ async function run() {
     assert.equal(getWrites(), 1);
     assert.deepEqual(objectives[0].subgoals, [
       {
-        id: 'recovered-active-empty-1', title: 'Abrir a pasta de fotos', done: false,
-        order: 0, aiGenerated: true,
+        id: 'recovered-active-empty-1', title: 'Abrir a pasta de fotos no computador', done: false,
+        order: 0, aiGenerated: true, doneWhen: 'a pasta com as fotos estiver aberta na tela',
       },
       {
-        id: 'recovered-active-empty-2', title: 'Escolher três fotos', done: false,
-        order: 1, aiGenerated: true,
+        id: 'recovered-active-empty-2', title: 'Selecionar três fotos para o portfólio', done: false,
+        order: 1, aiGenerated: true, doneWhen: 'três fotos estiverem marcadas como favoritas',
       },
     ]);
-    assert.deepEqual(objectives[1].subgoals, [{ id: 'keep', title: 'Medir a parede', done: false }]);
+    assert.deepEqual(objectives[1].subgoals, [{ id: 'keep', title: 'Anotar a largura e a altura da parede principal da sala', done: false, doneWhen: 'a largura e a altura estiverem anotadas' }]);
     assert.equal(objectives[2].progress, 100, 'objetivo concluído não pode ser reativado');
     assert.equal(objectives[3].archived, true, 'objetivo arquivado não pode ser reativado');
 
@@ -221,7 +237,7 @@ async function run() {
       },
       generateGoalSubtasks: async (suggestionRequest) => {
         endpointRequest = suggestionRequest;
-        return { items: ['Abrir o editor', 'Escolher o primeiro arquivo'] };
+        return validSuggestion('Abrir o editor do site', 'Selecionar o primeiro arquivo da página');
       },
     });
 
@@ -250,8 +266,8 @@ async function run() {
       id: 'single-flight', userId: USER_ID, title: 'Lançar projeto', progress: 0, archived: false,
       subgoals: [], updatedAt: new Date('2026-08-01T12:00:00.000Z'),
     }]);
-    let releaseGeneration!: (items: { items: string[] }) => void;
-    const generated = new Promise<{ items: string[] }>((resolve) => { releaseGeneration = resolve; });
+    let releaseGeneration!: (items: ReturnType<typeof validSuggestion>) => void;
+    const generated = new Promise<ReturnType<typeof validSuggestion>>((resolve) => { releaseGeneration = resolve; });
     let aiCalls = 0;
     const generator = async () => {
       aiCalls += 1;
@@ -264,7 +280,7 @@ async function run() {
     const second = secondReplica.recover({ userId: USER_ID, locale: 'pt-BR' });
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(aiCalls, 1, 'duas requisições concorrentes devem compartilhar a mesma geração');
-    releaseGeneration({ items: ['Abrir o arquivo do projeto', 'Escrever o título do projeto'] });
+    releaseGeneration(validSuggestion('Abrir o arquivo do projeto', 'Escrever o título do projeto'));
     const replicaResults = await Promise.all([first, second]);
     assert.equal(aiCalls, 1);
     assert.equal(getWrites(), 1);
@@ -278,10 +294,10 @@ async function run() {
       id: 'fenced-worker', userId: USER_ID, title: 'Publicar relatório', progress: 0, archived: false,
       subgoals: [], updatedAt: new Date('2026-08-01T12:00:00.000Z'),
     }]);
-    let releaseWorkerA!: (items: { items: string[] }) => void;
-    let releaseWorkerB!: (items: { items: string[] }) => void;
-    const workerAResult = new Promise<{ items: string[] }>((resolve) => { releaseWorkerA = resolve; });
-    const workerBResult = new Promise<{ items: string[] }>((resolve) => { releaseWorkerB = resolve; });
+    let releaseWorkerA!: (items: ReturnType<typeof validSuggestion>) => void;
+    let releaseWorkerB!: (items: ReturnType<typeof validSuggestion>) => void;
+    const workerAResult = new Promise<ReturnType<typeof validSuggestion>>((resolve) => { releaseWorkerA = resolve; });
+    const workerBResult = new Promise<ReturnType<typeof validSuggestion>>((resolve) => { releaseWorkerB = resolve; });
     const workerA = new ObjectiveActionRecoveryService(repository, async () => workerAResult, {
       now: () => now,
       leaseMs: 100,
@@ -299,12 +315,12 @@ async function run() {
     const second = workerB.recover({ userId: USER_ID });
     await new Promise((resolve) => setImmediate(resolve));
 
-    releaseWorkerA({ items: ['Abrir o relatório antigo', 'Copiar o primeiro indicador'] });
+    releaseWorkerA(validSuggestion('Abrir o relatório antigo', 'Copiar o primeiro indicador'));
     const staleWorker = await first;
     assert.equal(staleWorker.deferred, 1, 'worker com token vencido não pode gravar depois que outro assumiu');
     assert.equal(getWrites(), 0, 'fencing deve ocorrer antes do CAS do objetivo');
 
-    releaseWorkerB({ items: ['Abrir o relatório atual', 'Escrever o primeiro indicador'] });
+    releaseWorkerB(validSuggestion('Abrir o relatório atual', 'Escrever o primeiro indicador'));
     const currentWorker = await second;
     assert.equal(currentWorker.recovered, 1);
     assert.equal(getWrites(), 1, 'somente o worker dono da lease renovada pode persistir');
@@ -317,7 +333,7 @@ async function run() {
     }]);
     const service = new ObjectiveActionRecoveryService(repository, async () => {
       await new Promise((resolve) => setTimeout(resolve, 80));
-      return { items: ['Abrir o arquivo', 'Escrever uma linha'] };
+      return validSuggestion('Abrir o arquivo', 'Escrever uma linha');
     }, { leaseMs: 60, generationTimeoutMs: 20 } as any);
 
     const originalWarn = console.warn;
@@ -340,7 +356,7 @@ async function run() {
     const service = new ObjectiveActionRecoveryService(repository, async () => {
       objectives[0].title = 'Nome novo';
       objectives[0].updatedAt = new Date('2026-08-01T12:01:00.000Z');
-      return { items: ['Abrir o arquivo referente ao nome antigo', 'Escrever o nome antigo no arquivo'] };
+      return validSuggestion('Abrir o arquivo referente ao nome antigo', 'Escrever o nome antigo no arquivo');
     });
 
     const result = await service.recover({ userId: USER_ID });
@@ -361,7 +377,7 @@ async function run() {
     let aiCalls = 0;
     const service = new ObjectiveActionRecoveryService(repository, async () => {
       aiCalls += 1;
-      return { items: ['Abrir o material', 'Separar a primeira página'] };
+      return validSuggestion('Abrir o material', 'Separar a primeira página');
     });
 
     const first = await service.recover({ userId: USER_ID });
@@ -426,7 +442,7 @@ async function run() {
     let aiCalls = 0;
     const generator = async () => {
       aiCalls += 1;
-      return { items: ['Abrir o documento', 'Escrever a primeira linha'] };
+      return validSuggestion('Abrir o documento', 'Escrever a primeira linha');
     };
 
     const beforeExpiry = await new ObjectiveActionRecoveryService(repository, generator, { now: () => now })

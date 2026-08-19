@@ -7,12 +7,12 @@ const objectives = [
   {
     id: 'central', title: 'Construir meu trabalho com noivas', description: null, resultDefinition: 'Ter clientes recorrentes',
     currentReality: 'Já existe portfólio', deadline: null, progress: 20, pathVersion: 3,
-    subgoals: [{ id: 'central-action', title: 'Selecionar três trabalhos do portfólio', done: false, order: 0, milestoneId: 'm-1', scheduledFor: null }],
+    subgoals: [{ id: 'central-action', title: 'Selecionar três trabalhos do portfólio', doneWhen: 'três trabalhos estiverem marcados no portfólio', done: false, order: 0, milestoneId: 'm-1', scheduledFor: null }],
   },
   {
     id: 'urgent', title: 'Enviar documento', description: null, resultDefinition: 'Documento recebido',
     currentReality: null, deadline: '2026-08-11', progress: 0, pathVersion: 1,
-    subgoals: [{ id: 'urgent-action', title: 'Enviar o documento solicitado', done: false, order: 0, milestoneId: 'u-1', scheduledFor: '2026-08-11' }],
+    subgoals: [{ id: 'urgent-action', title: 'Enviar o documento solicitado', doneWhen: 'o envio do documento estiver confirmado', done: false, order: 0, milestoneId: 'u-1', scheduledFor: '2026-08-11' }],
   },
 ];
 
@@ -58,7 +58,7 @@ describe('DailyPrioritiesService', () => {
       ...objectives[0],
       subgoals: [
         { ...objectives[0].subgoals[0], scheduledFor: '2026-08-12' },
-        { id: 'later-action', title: 'Ação posterior sem data', done: false, order: 1, milestoneId: 'm-1', scheduledFor: null },
+        { id: 'later-action', title: 'Abrir o portfólio e marcar um trabalho', doneWhen: 'um trabalho estiver marcado no portfólio', done: false, order: 1, milestoneId: 'm-1', scheduledFor: null },
       ],
     }];
     const result = await DailyPrioritiesService.prioritize({

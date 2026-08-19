@@ -2,6 +2,8 @@ import type { DailyContext, GroundedTask } from './context-grounding.service';
 import { inferCapacity, toDecisionFlags } from '../lib/capacity';
 import { getPhaseWindow, slotTier, bestAvailableStart, phaseHasPeakOrFlow, normalizePhaseWindowKey } from '../lib/phase-time-windows';
 import { isTimelineBlockProtected } from './planner.service';
+import { normalizeObjectiveSubgoals } from '../lib/objective-subgoals';
+import { validateConcreteAction } from '../lib/action-quality';
 
 export type DecisionSurface = 'home' | 'planner' | 'checkin' | 'journal' | 'aura-chat' | 'insights' | 'notification' | 'agenda';
 
@@ -46,6 +48,7 @@ export type DecisionCandidate = {
   notificationAllowed: boolean;
   requiresConfirmation: boolean;
   travaType?: TravaType;
+  doneWhen?: string | null;
 };
 
 export type DecisionResult = {
@@ -624,68 +627,52 @@ export class DecisionEngine {
       });
     }
 
-    const hasRealAgenda = input.dailyContext.pendingTaskTitles.length > 0;
-    // structureHyperfocus: use existing agenda items instead of opening new goal fronts
+    // structureHyperfocus: use existing goal actions instead of opening new fronts.
     const maxSuggestionSlots = forceHard ? 1 : structureHyperfocus ? 1 : (highCapacity ? 5 : 3);
-    const openSuggestionSlots = allowed.filter((item) => item.kind !== 'blocked').length < maxSuggestionSlots;
+    const openSuggestionSlots = allowed.some((item) => item.targetType === 'goal')
+      || allowed.filter((item) => item.kind !== 'blocked').length < maxSuggestionSlots;
 
-    for (const goalTitle of input.dailyContext.activeGoalTitles) {
+    for (const goal of input.dailyContext.goals.filter((item) => item.progress < 100)) {
       if (!openSuggestionSlots) break;
-      const goalId = input.dailyContext.goals.find((goal) => goal.title === goalTitle)?.id ?? null;
-      if (isBlockedByExactTarget(goalId, 'goal', input.dailyContext) || isBlockedByHistory(goalTitle, input.dailyContext)) {
-        blocked.push(makeBlocked({ id: `goal:${normalize(goalTitle)}`, title: goalTitle, source: 'goal', reason: 'Meta ou ação parecida já foi bloqueada recentemente.' }));
+      const goalId = goal.id ?? null;
+      const nextAction = normalizeObjectiveSubgoals(goal.subgoals).find((action) => (
+        !action.done
+        && action.status !== 'rejected'
+        && action.status !== 'deferred'
+        && validateConcreteAction(action).ok
+      ));
+      if (!nextAction) continue;
+      const actionTitle = nextAction.title;
+      if (isBlockedByExactTarget(goalId, 'goal', input.dailyContext) || isBlockedByHistory(actionTitle, input.dailyContext)) {
+        blocked.push(makeBlocked({ id: `goal:${normalize(actionTitle)}`, title: actionTitle, source: 'goal', reason: 'Ação de Objetivo já foi bloqueada, concluída ou sugerida recentemente.' }));
         continue;
       }
 
-      const trava = classifyTrava(goalTitle, input.dailyContext, lowCapacity);
-      const isMicroQuebra = trava === 'permissao';
-      // Micro-quebra: goal rejected 3+ times → suggest the smallest possible version (15 min)
-      const microTitle = isMicroQuebra ? `10 min em: ${goalTitle}` : goalTitle;
-      const duration = isMicroQuebra ? 15 : (lowCapacity ? 25 : highCapacity ? 60 : 40);
-
-      const slot = findAvailableSlot({
-        dateKey: input.dailyContext.date,
-        tasks: input.dailyContext.tasks,
-        now,
-        duration,
-        lowCapacity,
-        highCapacity,
-        targetType: 'goal',
-        phaseKey: currentPhaseKey || undefined,
-        heavy: !isMicroQuebra && !lowCapacity,
-      });
-
-      const score = (hasRealAgenda ? 52 : 62) + (highCapacity ? 12 : 0) - (lowCapacity ? 10 : 0)
-        + (isMicroQuebra ? 6 : 0); // slight boost: micro-quebra is realistic
+      const trava = classifyTrava(actionTitle, input.dailyContext, lowCapacity);
+      const score = 62 + (highCapacity ? 12 : 0) - (lowCapacity ? 10 : 0);
 
       allowed.push({
-        id: `goal:${normalize(microTitle)}`,
-        title: microTitle,
+        id: `goal:${nextAction.id}`,
+        title: actionTitle,
         kind: 'suggested_commitment',
         source: 'goal',
         targetId: goalId,
         targetType: 'goal',
         action: 'suggest',
         score,
-        confidence: isMicroQuebra ? 0.72 : 0.68,
-        reason: isMicroQuebra
-          ? 'Meta evitada 3+ vezes — sugerindo versão mínima de 15 minutos para baixar a barreira de entrada.'
-          : hasRealAgenda
-            ? 'Meta ativa pode gerar bloco opcional se couber depois dos compromissos reais.'
-            : 'Agenda sem pendências reais pode receber uma sugestão opcional ligada à meta ativa.',
-        anchor: goalTitle,
-        suggestedDate: slot.date,
-        suggestedStartTime: slot.start,
-        suggestedEndTime: slot.end,
+        confidence: 0.76,
+        reason: 'Próxima ação concreta já vinculada ao Objetivo ativo.',
+        anchor: actionTitle,
+        doneWhen: nextAction.doneWhen,
         bioReason: buildTravaReason(
-          goalTitle,
+          actionTitle,
           trava,
           input.dailyContext,
           lowCapacity
-            ? 'A meta continua ativa, mas o bloco precisa ser mínimo para respeitar a energia de hoje.'
+            ? 'A ação continua ativa, mas o tamanho de hoje precisa ser mínimo para respeitar a energia.'
             : highCapacity
-              ? 'A fase atual abre uma janela boa para avanço concreto sem criar uma frente nova.'
-              : 'Há meta ativa e espaço para um avanço pequeno conectado ao dia real.',
+              ? 'A fase atual abre espaço para esta ação concreta sem criar uma frente nova.'
+              : 'Há uma ação concreta de Objetivo conectada ao dia real.',
           healthReasonSuffix(input.dailyContext),
         ),
         impactLabel: lowCapacity ? 'reduz carga' : highCapacity ? 'aproveita janela' : 'mantém ritmo',
@@ -768,7 +755,7 @@ export class DecisionEngine {
       blockedActions,
       dayPriorities,
       reasoning: actionable.length
-        ? `Decisão baseada em compromissos reais, hábitos/metas ativos, fase, horário local${input.dailyContext.healthSignals ? ', sinais corporais do Health Connect' : ''} e bloqueios de repetição.`
+        ? `Decisão baseada em ações concretas de Objetivos, fase, horário local${input.dailyContext.healthSignals ? ', sinais corporais do Health Connect' : ''} e bloqueios de repetição.`
         : 'Nenhuma ação passou pelos critérios de âncora, horário e repetição.',
       confidence: actionable.length ? Math.round((actionable.reduce((sum, item) => sum + item.confidence, 0) / actionable.length) * 100) / 100 : 0.7,
       emptyReason: actionable.length ? null : 'Sem candidato operacional confiável; manter como insight.',

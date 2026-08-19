@@ -59,6 +59,6 @@ describe('ObjectiveRevisionRelevanceService', () => {
     const fake = client(['inválido', { relevant: true, reason: null }]);
     const result = await ObjectiveRevisionRelevanceService.evaluate(input, fake);
     assert.deepEqual(result, { relevant: false, reason: null });
-    assert.deepEqual(fake.calls, ['gpt-5.4-mini', 'gpt-4.1-mini']);
+    assert.deepEqual(fake.calls, ['claude-sonnet-4-6', 'gpt-5-mini']);
   });
 });

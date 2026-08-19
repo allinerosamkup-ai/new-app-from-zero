@@ -530,9 +530,9 @@ async function runProfileUpdate(
 // ── Follow-up Generation (#7) ───────────────────────────────────────────────
 
 async function runFollowUpGeneration(
-  followUp: Pick<FollowUpPending, "suggestionTitle" | "suggestionCategory" | "source">,
+  followUp: FollowUpPending,
   moodCycleContext: string,
-  setPendingFollowUp: (f: any) => void
+  setPendingFollowUp: (next: FollowUpPending | null) => void,
 ) {
   try {
     const res = await api.post("/ai/suggest", {
@@ -547,9 +547,7 @@ async function runFollowUpGeneration(
     const raw = tryParseAiSuggestion<{ message: string }>(res.suggestion);
     if (!raw?.message) return;
 
-    setPendingFollowUp((current: FollowUpPending | null) =>
-      current ? { ...current, followUpMessage: raw.message } : null
-    );
+    setPendingFollowUp({ ...followUp, followUpMessage: raw.message });
   } catch (error) {
     console.warn("[AutonomousAIEngine] follow-up generation failed", error);
   }

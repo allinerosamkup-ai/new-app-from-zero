@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, ScrollView, Linking,
+  SafeAreaView, ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';
@@ -97,7 +97,6 @@ export default function PlansScreen() {
 
   const currentPlan = PLANS.find(p => p.id === selected)!;
   const price = billing === 'annual' ? currentPlan.priceAnnual : currentPlan.priceMonthly;
-  const annualTotal = (currentPlan.priceAnnual * 12).toFixed(2);
 
   return (
     <SafeAreaView style={styles.safe}>

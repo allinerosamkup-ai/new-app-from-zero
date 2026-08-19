@@ -12,10 +12,8 @@ import {
   Text, 
   Divider, 
   Button, 
-  ActivityIndicator,
   MD3Colors
 } from 'react-native-paper';
-import { LucideUser, LucideLogOut, LucideShield, LucideChevronRight } from 'lucide-react-native';
 import { useAuthStore } from '../providers/auth_store';
 import { supabase } from '../../lib/supabase';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';

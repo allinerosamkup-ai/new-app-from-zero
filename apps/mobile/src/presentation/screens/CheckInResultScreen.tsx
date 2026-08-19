@@ -7,12 +7,11 @@ import {
   Button, 
   Surface, 
   Avatar, 
-  Chip,
-  MD3Colors 
+  Chip
 } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useCheckinStore } from '../providers/checkin_store';
-import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { appRadius, appSpacing } from '../theme/appTheme';
 import { resolveAdaptiveGuidance } from '../../domain/adaptive-guidance';
 
 type StateType = 'leve' | 'moderado' | 'sensível' | 'crítico';

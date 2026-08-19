@@ -1,8 +1,9 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 
-import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
+import { getOpenAiModel, getOpenAiOutputLimit, openAiTemperature } from '../lib/openai-config';
 import { extractJsonValue } from '../lib/extract-json';
+import { validateConcreteAction } from '../lib/action-quality';
 
 /**
  * Decomposição automática de tarefa.
@@ -50,6 +51,8 @@ export type DecompositionStep = {
   durationMinutes: number;
   /** Primeira ação física, do tamanho de "abra a gaveta". Tira o custo de iniciar. */
   starter: string;
+  /** Evidência observável de que o passo acabou. */
+  doneWhen: string;
 };
 
 export type DecompositionInput = {
@@ -108,6 +111,7 @@ const StepsSchema = z.object({
     title: z.string().trim().min(1).max(80),
     durationMinutes: z.coerce.number().int().min(1).max(120),
     starter: z.string().trim().min(1).max(120).optional().default(''),
+    doneWhen: z.string().trim().min(1).max(160).optional().default(''),
   })).min(1),
 });
 
@@ -127,22 +131,22 @@ function buildPrompt(input: DecompositionInput): string {
 
 ${contexto}
 
-RULES
-1. Every step is a PHYSICAL, VISIBLE action. Banned verbs: think, decide, reflect, plan, organize, review, prepare, handle, deal with.
-2. Step 1 must take under 2 minutes. Inertia breaks on the smallest possible movement, not on the most logical one.
-3. Keep her own words for the object. If she wrote "client report", the step says "client report" — not "the document".
-4. Order so that stopping after step 1 still leaves something real done.
-5. "starter" is the physical gesture that begins the step: which hand, which object, which button.
+CONTRACT FOR EVERY STEP
+1. "title" starts with an executable verb and names a specific object from the task or her note.
+2. "doneWhen" names observable evidence that the step is complete. Do not write "when it is done" or repeat the title.
+3. "starter" is the smallest physical gesture that starts the title.
+4. Never use think, decide, reflect, plan, organize, review, prepare, handle, deal with, or a circular phrase such as "choose a reviewable pending item".
+5. Do not invent an app, person, document, item, number or location that she did not mention. If there is no safe object, return {"steps":[]}.
+6. Step 1 takes under 2 minutes. Stopping after it still leaves observable progress.
 
-BAD (do not do this):
-{"steps":[{"title":"Plan the report","starter":"Think about the structure"},{"title":"Write the report","starter":"Start writing"}]}
-Why it is bad: "plan" and "write the report" are the original task again, in smaller words. No visible movement, no entry point.
+BAD:
+{"steps":[{"title":"Choose a reviewable financial pending item","durationMinutes":5,"starter":"Think about options","doneWhen":"The item is chosen"}]}
+Why: it asks for a decision about an unnamed thing and merely repeats itself as completion.
 
-GOOD:
+GOOD, when the task names a client report:
 {"steps":[
- {"title":"Open the client report file","durationMinutes":2,"starter":"Click the file in recent documents"},
- {"title":"Reread the last paragraph you wrote","durationMinutes":5,"starter":"Scroll to the end"},
- {"title":"Write 3 bullets for the next section","durationMinutes":10,"starter":"Type a dash and one word"}
+ {"title":"Open the client report file","durationMinutes":2,"starter":"Click the file in recent documents","doneWhen":"the file is open"},
+ {"title":"Write 3 bullets for the next section","durationMinutes":10,"starter":"Type a dash and one word","doneWhen":"three bullets are visible in the file"}
 ]}
 
 Task: ${input.title}
@@ -155,23 +159,23 @@ JSON only.`;
 
 ${contexto}
 
-REGRAS
-1. Todo passo é uma AÇÃO FÍSICA E VISÍVEL. Verbos proibidos: pensar, decidir, refletir, planejar, organizar, revisar, preparar, resolver, tratar, lidar, ver.
-2. O passo 1 tem que levar menos de 2 minutos. A inércia quebra no menor movimento possível, não no mais lógico.
-3. Use as palavras DELA para o objeto. Se ela escreveu "relatório do cliente", o passo diz "relatório do cliente" — não "o documento".
-4. Ordene de modo que parar depois do passo 1 já deixe alguma coisa real feita.
-5. "starter" é o gesto físico que começa o passo: qual mão, qual objeto, qual botão.
-6. Se a fase de hoje for de baixa capacidade, prefira 2 passos curtos a 5 passos completos. Menos é mais honesto que uma lista que não vai acontecer.
+CONTRATO DE CADA PASSO
+1. "title" começa com verbo executável e nomeia o objeto específico da tarefa ou da nota dela.
+2. "doneWhen" diz qual evidência observável encerra o passo. Não escreva "quando terminar" nem repita o título.
+3. "starter" é o menor gesto físico que inicia o título.
+4. São proibidos pensar, decidir, refletir, planejar, organizar, revisar, preparar, resolver, tratar, lidar, ver e frases circulares como "escolher revisar uma pendência financeira revisável".
+5. Não invente app, pessoa, documento, item, número ou local que ela não mencionou. Sem objeto seguro, devolva {"steps":[]}.
+6. O passo 1 leva menos de 2 minutos e deixa algo observável feito mesmo que ela pare ali.
+7. Em baixa capacidade, prefira 2 passos curtos a 5 passos completos.
 
-RUIM (não faça assim):
-{"steps":[{"title":"Planejar o relatório","starter":"Pensar na estrutura"},{"title":"Escrever o relatório","starter":"Começar a escrever"}]}
-Por que é ruim: "planejar" e "escrever o relatório" são a tarefa original de novo, com menos palavras. Não tem movimento visível nem porta de entrada.
+RUIM:
+{"steps":[{"title":"Escolher revisar uma pendência financeira revisável","durationMinutes":5,"starter":"Pensar nas opções","doneWhen":"A pendência estiver escolhida"}]}
+Por que é ruim: pede uma decisão sobre algo sem nome e repete a própria frase como término.
 
-BOM:
+BOM, quando a tarefa cita um relatório do cliente:
 {"steps":[
- {"title":"Abrir o arquivo do relatório do cliente","durationMinutes":2,"starter":"Clicar no arquivo em documentos recentes"},
- {"title":"Reler o último parágrafo que você escreveu","durationMinutes":5,"starter":"Rolar até o fim"},
- {"title":"Escrever 3 bullets do próximo tópico","durationMinutes":10,"starter":"Digitar um traço e uma palavra"}
+ {"title":"Abrir o arquivo do relatório do cliente","durationMinutes":2,"starter":"Clicar no arquivo em documentos recentes","doneWhen":"o arquivo estiver aberto"},
+ {"title":"Escrever 3 bullets do próximo tópico","durationMinutes":10,"starter":"Digitar um traço e uma palavra","doneWhen":"três bullets estiverem visíveis no arquivo"}
 ]}
 
 Tarefa: ${input.title}
@@ -209,7 +213,7 @@ export class TaskDecompositionService {
           { role: 'user', content: buildPrompt(input) },
         ],
         response_format: { type: 'json_object' },
-        max_completion_tokens: getOpenAiMaxCompletionTokens(700),
+        ...getOpenAiOutputLimit(this.MODEL, 700),
         ...openAiTemperature(this.MODEL, 0.3),
       } as any);
 
@@ -221,6 +225,7 @@ export class TaskDecompositionService {
       const shape = decompositionShape(input);
       return parsed.data.steps
         .slice(0, shape.maxSteps)
+        .filter((step) => validateConcreteAction(step).ok)
         .map((step) => ({
           title: step.title,
           durationMinutes: Math.min(
@@ -228,6 +233,7 @@ export class TaskDecompositionService {
             Math.max(DECOMPOSITION_RULES.stepMinMinutes, step.durationMinutes),
           ),
           starter: step.starter,
+          doneWhen: step.doneWhen,
         }));
     } catch (error) {
       console.warn('[task-decomposition] falhou, seguindo sem quebrar:', error);

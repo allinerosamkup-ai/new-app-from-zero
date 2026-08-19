@@ -75,13 +75,14 @@ async function run() {
     ragContext: 'MEMÓRIA: em semanas anteriores, treino ajudou quando a energia subiu.',
   });
 
-  assert.deepEqual(context.pendingTaskTitles, ['Mandar mensagem para Matteo', 'Responder cliente da agenda']);
-  assert.deepEqual(context.pendingHabitTitles, ['Diário']);
-  assert.deepEqual(context.completedHabitTitles, ['Treino']);
-  assert.deepEqual(context.completedTaskTitles, ['Treino na Polônia']);
+  assert.deepEqual(context.pendingTaskTitles, ['Mandar mensagem para Matteo']);
+  assert.equal(context.pendingHabitTitles, undefined);
+  assert.equal(context.completedHabitTitles, undefined);
+  assert.equal(context.completedTaskTitles, undefined);
   assert.deepEqual(context.completedSubgoalTitles, ['Separar prints']);
-  assert.deepEqual(context.todayAnchorTitles, ['Mandar mensagem para Matteo', 'Responder cliente da agenda', 'Diário', 'Preparar proposta da Airia']);
-  assert.match(String(context.groundingContext), /Memórias RAG entram como padrão\/contexto/);
+  assert.deepEqual(context.todayAnchorTitles, ['Preparar proposta da Airia']);
+  assert.match(String(context.groundingContext), /Regra de grounding/i);
+  assert.doesNotMatch(String(context.groundingContext), /Agenda|Hábitos/i);
   assert.doesNotMatch((context.todayAnchorTitles as string[]).join(' | '), /treino/i);
   assert.ok((context.blockedActionTitles as string[]).includes('Arrumar kit do treino'));
   assert.ok((context.blockedActionTitles as string[]).includes('Separar roupa de treino'));

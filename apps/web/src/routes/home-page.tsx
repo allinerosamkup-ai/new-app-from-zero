@@ -70,7 +70,7 @@ type ImportantAlert = {
   key: string;
   title: string;
   description: string;
-  evidence: string;
+  context?: string;
   tone: "info" | "warning" | "critical";
   actionLabel?: string;
   actionPath?: string;
@@ -461,24 +461,24 @@ export function HomePage() {
 
     const avgMood = weekEntries.reduce((s, h) => s + h.humor, 0) / weekEntries.length;
     const avgEnergy = weekEntries.reduce((s, h) => s + h.energia, 0) / weekEntries.length;
-    const sleepEntries = weekEntries.filter(h => (h as any).horasSono > 0);
+    const sleepEntries = weekEntries.filter((checkin) => (checkin.sleepHours ?? 0) > 0);
     const avgSleep = sleepEntries.length > 0
-      ? sleepEntries.reduce((s, h) => s + (h as any).horasSono, 0) / sleepEntries.length
+      ? sleepEntries.reduce((sum, checkin) => sum + (checkin.sleepHours ?? 0), 0) / sleepEntries.length
       : null;
 
     // Fase dominante
     const phaseCounts: Record<string, number> = {};
     weekEntries.forEach(h => {
-      const hp = (h as any).phase as string | undefined;
-      if (hp) phaseCounts[hp] = (phaseCounts[hp] ?? 0) + 1;
+      const phase = h.cyclePhase;
+      if (phase) phaseCounts[phase] = (phaseCounts[phase] ?? 0) + 1;
     });
     const dominantPhase = Object.entries(phaseCounts).sort(([,a],[,b]) => b-a)[0]?.[0] ?? null;
 
     // Fator mais frequente
     const factorCounts: Record<string, number> = {};
     weekEntries.forEach(h => {
-      ((h as any).factors ?? []).forEach((f: string) => {
-        factorCounts[f] = (factorCounts[f] ?? 0) + 1;
+      (h.factors ?? []).forEach((factor) => {
+        factorCounts[factor] = (factorCounts[factor] ?? 0) + 1;
       });
     });
     const topFactor = Object.entries(factorCounts).sort(([,a],[,b]) => b-a)[0]?.[0] ?? null;
@@ -521,9 +521,7 @@ export function HomePage() {
   );
   const isCheckinReentry = (daysSinceLastCheckin ?? 0) >= REENTRY_GAP_DAYS;
   const phaseColor = getPhaseColor(cycleReport.phase);
-  const currentPhaseLabel = canonicalReading?.currentState.phase ?? (cycleReport.phase !== "insufficient_data"
-    ? t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel)
-    : cycleReport.phaseLabel);
+  const currentPhaseLabel = t(`phases.${cycleReport.phase}.label`, cycleReport.phaseLabel);
   const moodForecast = useMemo(() => forecastMood7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
   const energyForecast = useMemo(() => forecastEnergy7d(aggregatedCheckinHistory), [aggregatedCheckinHistory]);
 
@@ -879,7 +877,7 @@ export function HomePage() {
 
     const timer = setTimeout(async () => {
       try {
-        const res: any = await api.post("/ai/suggest", {
+        const res = await api.post("/ai/suggest", {
           type: "home-messages",
           context: {
             mood: state.mood,
@@ -905,7 +903,10 @@ export function HomePage() {
             refreshBucket,
           },
         });
-        const parsed = tryParseAiSuggestion<unknown>(res.suggestion);
+        const suggestion = res && typeof res === 'object' && 'suggestion' in res
+          ? (res as { suggestion?: unknown }).suggestion
+          : undefined;
+        const parsed = tryParseAiSuggestion<unknown>(suggestion);
         const normalizedMessage = normalizeHomeAiMessage(parsed);
         if (!cancelled && normalizedMessage) {
           previousHomeAiMsgRef.current = normalizedMessage;
@@ -983,17 +984,6 @@ export function HomePage() {
   }
 
   const importantAlerts = useMemo(() => {
-    if (canonicalReading) {
-      return canonicalReading.alerts.map((alert) => ({
-        key: alert.id,
-        title: alert.title,
-        description: alert.detail,
-        evidence: alert.evidenceIds?.length ? `Base: ${alert.evidenceIds.join(", ")}` : l("Leitura canônica da Airia.", "Airia's canonical reading."),
-        tone: alert.severity,
-        actionPath: alert.route,
-        actionLabel: alert.route ? l("Abrir", "Open") : undefined,
-      }));
-    }
     const alerts: ImportantAlert[] = [];
     const stagnantGoals = state.goals.filter((goal) => goal.completedPct === 0 && goal.subtasks.length > 0);
 
@@ -1013,15 +1003,15 @@ export function HomePage() {
               "Há metas com próximos passos definidos, mas sem avanço real. Talvez seja hora de reduzir o escopo ou destravar a primeira ação.",
               "Some goals have next steps defined but no real progress. It may be time to shrink the scope or unblock the first action.",
             ),
-        evidence:
+        context:
           stagnantGoals.length === 1
             ? l(
-              `Base: a meta "${stagnantGoals[0].title}" tem ${stagnantGoals[0].subtasks.length} próxima(s) ação(ões) e progresso 0%.`,
-              `Basis: the goal "${stagnantGoals[0].title}" has ${stagnantGoals[0].subtasks.length} next action(s) and 0% progress.`,
+              "O primeiro passo já está definido. Você pode fazê-lo, ajustá-lo ou deixá-lo para depois.",
+              "The first step is already defined. You can do it, adjust it, or leave it for later.",
             )
             : l(
-              `Base: ${stagnantGoals.length} metas ativas têm próximas ações e progresso 0%.`,
-              `Basis: ${stagnantGoals.length} active goals have next actions and 0% progress.`,
+              "Comece por apenas uma. O restante pode esperar sem perder seu lugar.",
+              "Start with just one. The rest can wait without losing their place.",
             ),
         tone: "warning",
         actionLabel: l("Ver metas", "See goals"),
@@ -1051,21 +1041,21 @@ export function HomePage() {
             ),
         description: sustainedLow
           ? l(
-            "O EWMA individual ficou abaixo do baseline pessoal por vários registros. Vale registrar isso no diário e diminuir a carga de hoje.",
-            "Your individual EWMA stayed below your personal baseline across several entries. Worth writing it down in the journal and lightening today's load.",
+            "Se isso conversa com o que você está sentindo, vale aliviar a carga de hoje e registrar o que está pesando.",
+            "If this matches how you are feeling, it may help to lighten today’s load and note what feels heavy.",
           )
           : rapidDrop
             ? l(
-              "A mudança nas últimas 48h saiu da sua linha de base. Proteja energia e leia com mais cuidado o que está pesando agora.",
-              "The change over the last 48h left your baseline. Protect your energy and look more closely at what is weighing on you now.",
+            "Houve uma mudança nos seus registros recentes. Antes de decidir algo exigente, faça uma pausa e perceba o que está pesando agora.",
+            "There has been a change in your recent records. Before taking on something demanding, pause and notice what feels heavy now.",
             )
             : l(
-              "Seu padrão entrou em zona de atenção. Quanto antes você reduzir atrito, menor a chance de afundar o resto da semana.",
-              "Your pattern entered a watch zone. The sooner you reduce friction, the smaller the chance it drags down the rest of the week.",
-            ),
-        evidence: l(
-          `Base: baseline pessoal ${cycleReport.baselineComposite.toFixed(1)}/10, EWMA atual ${cycleReport.currentComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}/100 e sinal(is): ${cycleReport.warningFlags.join(", ") || "estabilidade baixa"}.`,
-          `Basis: personal baseline ${cycleReport.baselineComposite.toFixed(1)}/10, current EWMA ${cycleReport.currentComposite.toFixed(1)}/10, stability ${cycleReport.stabilityScore}/100, and signal(s): ${cycleReport.warningFlags.join(", ") || "low stability"}.`,
+            "Seus registros estão menos consistentes do que o habitual. Escolha menos coisas para hoje e observe como seu ritmo responde.",
+            "Your records are less consistent than usual. Choose fewer things for today and notice how your rhythm responds.",
+          ),
+        context: l(
+          "É uma leitura dos seus registros recentes, não uma previsão ou diagnóstico.",
+          "This is a reading of your recent records, not a prediction or diagnosis.",
         ),
         tone: sustainedLow || cycleReport.stabilityScore <= 30 ? "critical" : "warning",
         actionLabel: l("Abrir meu diário", "Open my journal"),
@@ -1075,7 +1065,6 @@ export function HomePage() {
 
     return alerts.slice(0, 4);
   }, [
-    canonicalReading,
     clockTime,
     currentPhaseLabel,
     cycleReport.daysInPhase,
@@ -1092,7 +1081,7 @@ export function HomePage() {
   ]);
   const displayName = state.name
     ? state.name.split(/\s+/)[0].charAt(0).toUpperCase() + state.name.split(/\s+/)[0].slice(1).toLowerCase()
-    : "você";
+    : l("você", "you");
   const quickAccessSection = (
     <>
             <p className="aura-section-kicker">{t("home.quickAccess")}</p>
@@ -1293,8 +1282,8 @@ export function HomePage() {
               </div>
               <p style={{ margin: "6px 0 0", fontSize: 10.5, color: "var(--text-3)", fontWeight: 600, letterSpacing: ".02em" }}>
                 {l(
-                  `Seu ritmo se construindo — ${count} ${count === 1 ? "registro" : "registros"} em 14 dias`,
-                  `Your rhythm taking shape — ${count} ${count === 1 ? "entry" : "entries"} in 14 days`,
+                  `Seu ritmo se construindo — ${count} ${count === 1 ? "dia com registro" : "dias com registro"} nos últimos 14 dias`,
+                  `Your rhythm taking shape — ${count} ${count === 1 ? "day with an entry" : "days with entries"} in the last 14 days`,
                 )}
               </p>
             </div>
@@ -2463,9 +2452,11 @@ export function HomePage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 12, fontWeight: 700, color: cfg.accent, margin: "0 0 4px" }}>{alert.title}</p>
                       <p style={{ fontSize: 12, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>{alert.description}</p>
-                      <p style={{ fontSize: 10.5, color: "var(--text-3)", margin: "5px 0 0", lineHeight: 1.45, fontWeight: 650 }}>
-                        {alert.evidence}
-                      </p>
+                      {alert.context && (
+                        <p style={{ fontSize: 10.5, color: "var(--text-3)", margin: "7px 0 0", lineHeight: 1.45 }}>
+                          {alert.context}
+                        </p>
+                      )}
                       {alert.actionPath && alert.actionLabel && (
                         <button
                           onClick={() => navigate(alert.actionPath!)}
@@ -2490,7 +2481,8 @@ export function HomePage() {
                       onClick={() => {
                         setDismissedAlerts(prev => new Set([...prev, alert.key]));
                       }}
-                      title="Dismissar alerta"
+                      title={l("Dispensar alerta", "Dismiss alert")}
+                      aria-label={l("Dispensar alerta", "Dismiss alert")}
                       style={{
                         width: 18, height: 18, borderRadius: "50%",
                         border: "none",

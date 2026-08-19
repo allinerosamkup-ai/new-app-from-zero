@@ -60,13 +60,13 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /ritmo atual/i);
   assert.equal(capturedModel, getOpenAiModel());
   assert.equal(capturedMessages[1]?.role, 'user');
-  assert.match(capturedMessages[1]?.content || '', /Analise os dados de check-in/i);
+  assert.match(capturedMessages[1]?.content || '', /Você lê o check-in/i);
   assert.match(capturedMessages[1]?.content || '', /SINAL PRIORITÁRIO/i);
   assert.match(capturedMessages[1]?.content || '', /Acordei mais arrastada hoje\./i);
-  assert.match(capturedMessages[1]?.content || '', /não trate energia baixa como piora emocional/i);
+  assert.match(capturedMessages[1]?.content || '', /diferencie capacidade baixa de piora emocional/i);
   assert.match(capturedMessages[1]?.content || '', /Respirar por 1 minuto antes de responder/i);
   assert.match(capturedMessages[0]?.content || '', /POLITICA DE SUGESTAO CONCRETA/i);
-  assert.match(capturedMessages[1]?.content || '', /fato vs interpretação/i);
+  assert.match(capturedMessages[1]?.content || '', /Pronto quando: <evidência observável>/i);
 
   const completedFakeClient = {
     chat: {
@@ -114,10 +114,18 @@ async function run() {
     completedFakeClient as any,
   );
 
-  assert.deepEqual(completedResult.recommendations, ['Responder uma pendência real da agenda amanhã às 09:00.']);
+  assert.deepEqual(completedResult.recommendations, []);
   assert.match(capturedMessages[1]?.content || '', /JÁ FEITO \/ NÃO SUGERIR DE NOVO/i);
   assert.match(capturedMessages[1]?.content || '', /Hábitos feitos hoje: "Treino"/i);
-  assert.match(capturedMessages[1]?.content || '', /não sugira treino/i);
+  assert.match(capturedMessages[1]?.content || '', /Não repita ação já concluída/i);
+
+  const fallback = await CheckinService.evaluateDayState(
+    { checkinSlot: 'morning', moodScore: 5, energyScore: 3 },
+    { chat: { completions: { create: async () => ({ choices: [] }) } } } as any,
+  );
+  assert.equal(fallback.stateLabel, 'ritmo mais baixo');
+  assert.equal(fallback.suggestedIntensity, 'L');
+  assert.deepEqual(fallback.recommendations, []);
 }
 
 run()

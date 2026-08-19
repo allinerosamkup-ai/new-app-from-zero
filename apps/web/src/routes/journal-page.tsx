@@ -19,6 +19,8 @@ import { supabase } from "../lib/supabase";
 import { buildJournalClosePrompt } from "./journal-page.helpers";
 import { isSpeechRecognitionSupported, VOICE_MAX_DURATION_MS } from "./journal-voice.helpers";
 import {
+  type BrowserRecognitionLike,
+  type BrowserSpeechWindow,
   createTranscriptResultHandler,
   releaseRecognition,
   stopActiveRecognition,
@@ -27,7 +29,7 @@ import {
 import "../styles/aura.css";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { MessageSquareText } from "lucide-react";
-import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import { useAiriaReading } from "../lib/airia-reading";
 
 type Message = {
   id?: string;
@@ -115,8 +117,7 @@ export function JournalPage() {
   const l = useLocalizedCopy();
   const { state, refreshData } = useAuraStore();
   const { showError, showSuccess } = useToast();
-  const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
-  const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
+  const { reading: canonicalReading } = useAiriaReading();
   const location = useLocation();
   const navigate = useNavigate();
   const routeState = location.state as { initialDraft?: string; contextLabel?: string } | null;
@@ -198,16 +199,8 @@ export function JournalPage() {
 
   const sharedRiskSafety = canonicalReading?.riskSafety ?? lastRiskSafety;
 
-  async function feedbackCanonicalDecision(status: "accepted" | "rejected") {
-    const decision = canonicalReading?.decision;
-    if (!decision || canonicalFeedbackPending) return;
-    setCanonicalFeedbackPending(true);
-    const saved = await sendAiriaDecisionFeedback(decision.id, status, "journal");
-    if (saved) await reloadCanonicalReading();
-    setCanonicalFeedbackPending(false);
-  }
   const liveReplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<BrowserRecognitionLike | null>(null);
   const voiceInputBaseRef = useRef("");
   const transcriptSessionRef = useRef<TranscriptSession | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -486,7 +479,8 @@ export function JournalPage() {
   }
 
   function toggleVoice() {
-    const SpeechRecognitionApi = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as BrowserSpeechWindow;
+    const SpeechRecognitionApi = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognitionApi) return;
 
     if (isRecording && recognitionRef.current) {
@@ -1244,18 +1238,6 @@ export function JournalPage() {
               onChange={updatePlanOperation}
               onApply={applyJournalPlan}
             />
-          )}
-
-          {canonicalReading?.decision && sharedRiskSafety?.route !== "crisis_protocol" && sharedRiskSafety?.route !== "human_support" && (
-            <section style={{ margin: "2px 0 0 33px", padding: 12, borderRadius: 14, border: "1px solid rgba(143,192,164,.34)", background: "rgba(255,255,255,.82)" }}>
-              <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Leitura que estou usando", "Reading I am using")}</p>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "var(--text-1)" }}>{canonicalReading.decision.title}</p>
-              <p style={{ margin: "5px 0 9px", fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45 }}>{canonicalReading.decision.reason}</p>
-              {canonicalReading.decision.requiresConfirmation && <div style={{ display: "flex", gap: 7 }}>
-                <AuraButtonV2 className="btn btn-ghost" size="sm" style={{ flex: 1 }} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("rejected")}>{l("Não agora", "Not now")}</AuraButtonV2>
-                <AuraButtonV2 className="btn btn-primary" size="sm" style={{ flex: 1 }} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("accepted")}>{l("Faz sentido", "That fits")}</AuraButtonV2>
-              </div>}
-            </section>
           )}
 
           <SafetyProtocolCard

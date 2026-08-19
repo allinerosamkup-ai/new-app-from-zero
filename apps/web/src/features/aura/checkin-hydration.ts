@@ -14,7 +14,20 @@ function symptom(value: unknown): 1 | 2 | 3 | undefined {
   return value === 1 || value === 2 || value === 3 ? value : undefined;
 }
 
-export function hydrateCheckinEntry(raw: Record<string, any>): CheckinEntry {
+function stringList(value: unknown): string[] | undefined {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function hydrateCheckinEntry(raw: Record<string, unknown>): CheckinEntry {
+  const aiState = asRecord(raw.aiState);
   const colica = symptom(raw.symptomColica);
   const dorCabeca = symptom(raw.symptomDorCabeca);
   const symptomLevels = colica || dorCabeca ? { ...(colica ? { colica } : {}), ...(dorCabeca ? { dorCabeca } : {}) } : undefined;
@@ -28,21 +41,17 @@ export function hydrateCheckinEntry(raw: Record<string, any>): CheckinEntry {
     emotion: typeof raw.stateLabelType === "string" ? raw.stateLabelType : "calm",
     stateLabel: typeof raw.stateLabel === "string" ? raw.stateLabel : null,
     stateLabelType: typeof raw.stateLabelType === "string" ? raw.stateLabelType : null,
-    emotions: Array.isArray(raw.emotions)
-      ? raw.emotions.filter((value: unknown): value is string => typeof value === "string")
-      : (Array.isArray(raw.aiState?.emotions) ? raw.aiState.emotions : undefined),
+    emotions: stringList(raw.emotions) ?? stringList(aiState?.emotions),
     clareza: score(raw.clarityScore),
     irritabilidade: score(raw.irritabilityScore),
     fisico: score(raw.physicalScore),
     social: score(raw.socialScore),
     sono: score(raw.sleepScore),
     sleepHours: typeof raw.sleepHours === "number" && Number.isFinite(raw.sleepHours) ? raw.sleepHours : undefined,
-    factors: Array.isArray(raw.factors)
-      ? raw.factors.filter((value: unknown): value is string => typeof value === "string")
-      : undefined,
+    factors: stringList(raw.factors),
     note: typeof raw.note === "string" ? raw.note : undefined,
     source: typeof raw.source === "string" ? raw.source : undefined,
-    signalMetadata: raw.signalMetadata && typeof raw.signalMetadata === "object" ? raw.signalMetadata : undefined,
+    signalMetadata: asRecord(raw.signalMetadata) ?? undefined,
     isFlowing: typeof raw.isFlowing === "boolean" ? raw.isFlowing : undefined,
     flowDay: typeof raw.flowDay === "number" ? raw.flowDay : undefined,
     flowIntensity: raw.flowIntensity === "leve" || raw.flowIntensity === "moderado" || raw.flowIntensity === "intenso"

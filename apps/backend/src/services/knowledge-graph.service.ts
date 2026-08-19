@@ -2,6 +2,7 @@ import { PrismaClient } from '@app/database';
 import OpenAI from 'openai';
 
 import { getOpenAiModel } from '../lib/openai-config';
+import { extractJsonValue } from '../lib/extract-json';
 import { CanonicalMemoryService } from './canonical-memory.service';
 import {
   KnowledgeGraphExtractionSchema,
@@ -86,7 +87,7 @@ export class KnowledgeGraphService {
       const raw = response.choices?.[0]?.message?.content ?? '{}';
       let parsed: KnowledgeGraphExtraction;
       try {
-        const json = JSON.parse(raw);
+        const json = extractJsonValue(raw);
         parsed = KnowledgeGraphExtractionSchema.parse(json);
       } catch (parseErr) {
         console.warn('[knowledge-graph] extracted JSON inválido, ignorando:', parseErr);

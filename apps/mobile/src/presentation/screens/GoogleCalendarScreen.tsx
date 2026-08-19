@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  SafeAreaView, ScrollView, Switch, Linking, Alert,
+  SafeAreaView, ScrollView, Switch,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { appColors, appRadius, appSpacing } from '../theme/appTheme';

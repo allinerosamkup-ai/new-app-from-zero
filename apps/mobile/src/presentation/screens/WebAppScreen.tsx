@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Linking, Platform, StyleSheet, View, StatusBar } from 'react-native';
+import { BackHandler, Linking, StyleSheet, View, StatusBar } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';

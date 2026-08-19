@@ -27,7 +27,7 @@ import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
 import { api } from "../lib/api";
 import { trackProductEvent } from "../lib/track";
-import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import { useAiriaReading } from "../lib/airia-reading";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
 import {
   buildGoalCardModel,
@@ -58,6 +58,7 @@ type GoalLike = {
   pathVersion?: number;
   pathStatus?: 'not_started' | 'retrying' | 'needs_answer' | 'ready';
   pathQuestion?: string | null;
+  needsActionReview?: boolean;
   deadline?: string | null;
   pausedAt?: string | null;
   isPrimary?: boolean;
@@ -69,6 +70,31 @@ type GoalTemplate = {
   result: string;
   nextAction: string;
 };
+
+type GoalPathProposal = {
+  reason?: string;
+  resultDefinition?: string;
+  currentReality?: string;
+  milestones?: Array<{ id?: string | number; title?: string }>;
+};
+
+function normalizeGoalPathProposal(value: unknown): GoalPathProposal | null {
+  if (!value || typeof value !== 'object') return null;
+  const proposal = value as Record<string, unknown>;
+  return {
+    reason: typeof proposal.reason === 'string' ? proposal.reason : undefined,
+    resultDefinition: typeof proposal.resultDefinition === 'string' ? proposal.resultDefinition : undefined,
+    currentReality: typeof proposal.currentReality === 'string' ? proposal.currentReality : undefined,
+    milestones: Array.isArray(proposal.milestones)
+      ? proposal.milestones
+        .filter((milestone): milestone is Record<string, unknown> => Boolean(milestone) && typeof milestone === 'object')
+        .map((milestone) => ({
+          id: typeof milestone.id === 'string' || typeof milestone.id === 'number' ? milestone.id : undefined,
+          title: typeof milestone.title === 'string' ? milestone.title : undefined,
+        }))
+      : undefined,
+  };
+}
 
 
 export async function recoverGoalActionsOnce(
@@ -133,38 +159,40 @@ export function GoalRecoveryNotice({
   );
 }
 
-export const GOAL_STARTER_TEMPLATES: GoalTemplate[] = [
-  {
-    direction: "Minha rotina",
-    result: "Ter uma manhã que caiba na minha energia",
-    nextAction: "Definir o horário possível de acordar amanhã",
-  },
-  {
-    direction: "Casa",
-    result: "Deixar a sala pronta para uso",
-    nextAction: "Separar por 15 minutos o que não pertence à sala",
-  },
-  {
-    direction: "Projeto",
-    result: "Publicar a primeira versão do meu projeto",
-    nextAction: "Listar as três entregas da primeira versão",
-  },
-  {
-    direction: "Saúde",
-    result: "Retomar meu acompanhamento de saúde",
-    nextAction: "Localizar o contato do profissional ou serviço",
-  },
-  {
-    direction: "Dinheiro",
-    result: "Organizar as contas deste mês",
-    nextAction: "Reunir as contas que vencem neste mês",
-  },
-  {
-    direction: "Trabalho ou estudo",
-    result: "Concluir minha próxima apresentação",
-    nextAction: "Escrever os títulos dos três primeiros slides",
-  },
-];
+function getGoalStarterTemplates(l: (portuguese: string, english: string) => string): GoalTemplate[] {
+  return [
+    {
+      direction: l("Minha rotina", "My routine"),
+      result: l("Ter uma manhã que caiba na minha energia", "Have a morning that fits my energy"),
+      nextAction: l("Definir o horário possível de acordar amanhã", "Choose a realistic wake-up time for tomorrow"),
+    },
+    {
+      direction: l("Casa", "Home"),
+      result: l("Deixar a sala pronta para uso", "Make the living room ready to use"),
+      nextAction: l("Separar por 15 minutos o que não pertence à sala", "Set aside what does not belong in the living room for 15 minutes"),
+    },
+    {
+      direction: l("Projeto", "Project"),
+      result: l("Publicar a primeira versão do meu projeto", "Publish the first version of my project"),
+      nextAction: l("Listar as três entregas da primeira versão", "List the first version’s three deliverables"),
+    },
+    {
+      direction: l("Saúde", "Health"),
+      result: l("Retomar meu acompanhamento de saúde", "Resume my health follow-up"),
+      nextAction: l("Localizar o contato do profissional ou serviço", "Find the professional or service contact"),
+    },
+    {
+      direction: l("Dinheiro", "Money"),
+      result: l("Organizar as contas deste mês", "Organize this month’s bills"),
+      nextAction: l("Reunir as contas que vencem neste mês", "Gather the bills due this month"),
+    },
+    {
+      direction: l("Trabalho ou estudo", "Work or study"),
+      result: l("Concluir minha próxima apresentação", "Finish my next presentation"),
+      nextAction: l("Escrever os títulos dos três primeiros slides", "Write the titles of the first three slides"),
+    },
+  ];
+}
 
 const cardStyle: CSSProperties = {
   background: "rgba(255,255,255,.86)",
@@ -204,6 +232,7 @@ function CreationSheet({
   const [result, setResult] = useState("");
   const [selectedDirection, setSelectedDirection] = useState("");
   const [deadline, setDeadline] = useState("");
+  const starterTemplates = getGoalStarterTemplates(l);
 
   useEffect(() => {
     if (!open) {
@@ -257,7 +286,7 @@ function CreationSheet({
               {l("Novo objetivo", "New goal")}
             </p>
             <h2 style={{ margin: 0, color: "var(--text-1)", fontSize: 22, lineHeight: 1.2 }}>
-              {l("O que você quer tornar real?", "What do you want to make real?")}
+              {l("O que você quer fazer avançar?", "What would you like to move forward?")}
             </h2>
           </div>
           <button aria-label={l("Fechar", "Close")} onClick={onClose} style={{ ...quietButtonStyle, width: 40, padding: 0 }}>
@@ -266,10 +295,10 @@ function CreationSheet({
         </div>
 
         <p style={{ margin: "0 0 9px", color: "var(--text-2)", fontSize: 13, fontWeight: 700 }}>
-          {l("Comece por uma direção", "Start with a direction")}
+          {l("Escolha uma área ou escreva do seu jeito", "Choose an area or write it in your own way")}
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginBottom: 18 }}>
-          {GOAL_STARTER_TEMPLATES.map((template) => {
+          {starterTemplates.map((template) => {
             const selected = selectedDirection === template.direction;
             return (
               <button
@@ -345,7 +374,7 @@ function CreationSheet({
         </label>
 
         <p style={{ margin: "0 0 18px", color: "var(--text-3)", fontSize: 12, lineHeight: 1.45 }}>
-          {l("A Airia organiza o caminho em microações e deixa só o primeiro movimento em foco.", "Airia turns this into micro-actions and keeps only the first move in focus.")}
+          {l("A Airia pode ajudar a organizar os próximos passos. Você continua decidindo o que entra e o que espera.", "Airia can help organize the next steps. You still decide what belongs and what can wait.")}
         </p>
 
         <button
@@ -363,7 +392,7 @@ function CreationSheet({
             cursor: ready && !saving ? "pointer" : "default",
           }}
         >
-          {saving ? l("Organizando ações…", "Organizing actions…") : l("Criar caminho com a Airia", "Create path with Airia")}
+          {saving ? l("Preparando seu primeiro passo…", "Preparing your first step…") : l("Criar objetivo", "Create goal")}
         </button>
       </div>
     </div>
@@ -381,7 +410,6 @@ function GoalCard({
   onAddAction,
   onRequestSuggestion,
   onAcceptSuggestion,
-  onScheduleAction,
   onUpdateAction,
   onAdvance,
   onConfirmRevision,
@@ -397,11 +425,10 @@ function GoalCard({
   suggestionDraft: string[];
   completingActionId: string | number | null;
   onToggleAction: (actionId: string | number) => Promise<void>;
-  onAddAction: (title: string) => Promise<void>;
+  onAddAction: (action: { title: string; doneWhen: string }) => Promise<void>;
   onRequestSuggestion: () => Promise<void>;
   onAcceptSuggestion: (title: string) => Promise<void>;
-  onScheduleAction: (actionId: string | number, date: string | null) => Promise<void>;
-  onUpdateAction: (actionId: string | number, patch: { title?: string; state?: 'pending' | 'rejected' | 'deferred' }) => Promise<void>;
+  onUpdateAction: (actionId: string | number, patch: { title?: string; doneWhen?: string; state?: 'pending' | 'rejected' | 'deferred' }) => Promise<void>;
   onAdvance: () => Promise<void>;
   onConfirmRevision: () => Promise<void>;
   onEditResult: (title: string) => Promise<void>;
@@ -411,6 +438,7 @@ function GoalCard({
 }) {
   const l = useLocalizedCopy();
   const model = buildGoalCardModel(goal);
+  const pathProposal = normalizeGoalPathProposal(goal.pathProposal);
   const [open, setOpen] = useState(focused || !paused);
   const [addingAction, setAddingAction] = useState(false);
   const [actionTitle, setActionTitle] = useState("");
@@ -419,6 +447,8 @@ function GoalCard({
   const [showManagement, setShowManagement] = useState(false);
   const [editingAction, setEditingAction] = useState(false);
   const [actionEditTitle, setActionEditTitle] = useState("");
+  const [actionEditDoneWhen, setActionEditDoneWhen] = useState("");
+  const [actionDoneWhen, setActionDoneWhen] = useState("");
 
   useEffect(() => {
     if (focused) setOpen(true);
@@ -432,6 +462,7 @@ function GoalCard({
     ? orderedActions.find((action) => action.id === model.nextAction?.id) ?? null
     : null;
   const deferredAction = orderedActions.find((action) => !action.done && action.status === 'deferred') ?? null;
+  const rejectedAction = orderedActions.find((action) => !action.done && action.status === 'rejected') ?? null;
   const milestones = [...(goal.milestones ?? [])].sort((left, right) => left.order - right.order);
   const currentMilestoneId = currentAction?.milestoneId
     ?? deferredAction?.milestoneId
@@ -439,9 +470,22 @@ function GoalCard({
     ?? milestones[0]?.id
     ?? null;
   const currentMilestone = milestones.find((milestone) => milestone.id === currentMilestoneId) ?? milestones[0] ?? null;
+  const currentMilestoneLabel = currentMilestone?.title.trim().toLocaleLowerCase('pt-BR') === 'caminho atual'
+    ? l('Caminho atual', 'Current step')
+    : currentMilestone?.title ?? null;
   const futureMilestones = currentMilestone
     ? milestones.filter((milestone) => milestone.order > currentMilestone.order)
     : milestones.slice(1);
+  const progressLabel = model.completed
+    ? l("Resultado alcançado", "Result achieved")
+    : model.totalActions === 0
+      ? l("Pronto para escolher o primeiro passo", "Ready to choose the first step")
+      : model.completedActions === 0
+        ? l("Primeiro passo pronto", "First step ready")
+        : l(
+            `${model.completedActions} ${model.completedActions === 1 ? "passo concluído" : "passos concluídos"}`,
+            `${model.completedActions} ${model.completedActions === 1 ? "step completed" : "steps completed"}`,
+          );
 
   return (
     <article
@@ -480,13 +524,13 @@ function GoalCard({
         </span>
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "block", marginBottom: 4, color: "var(--text-3)", fontSize: 10, fontWeight: 850, letterSpacing: ".09em", textTransform: "uppercase" }}>
-            {l("Resultado desejado", "Desired result")}
+            {l("Seu foco", "Your focus")}
           </span>
           <span style={{ display: "block", color: "var(--text-1)", fontSize: 16, fontWeight: 820, lineHeight: 1.32 }}>
             {goal.title}
           </span>
           <span style={{ display: "block", marginTop: 6, color: model.completed ? "var(--menthe)" : "var(--text-3)", fontSize: 11, fontWeight: 700 }}>
-            {model.progressLabel}
+            {progressLabel}
           </span>
         </span>
         {open ? <ChevronUp size={18} color="var(--text-3)" /> : <ChevronDown size={18} color="var(--text-3)" />}
@@ -501,17 +545,17 @@ function GoalCard({
             padding: "13px",
           }}>
             <p style={{ margin: "0 0 6px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>
-              {currentMilestone ? `${l('Etapa atual', 'Current stage')} · ${currentMilestone.title}` : l("Próxima ação", "Next action")}
+              {currentMilestoneLabel ? `${l('Agora', 'Now')} · ${currentMilestoneLabel}` : l("O que você pode fazer agora", "What you can do now")}
             </p>
 
             {goal.resultDefinition && (
               <p style={{ margin: '0 0 8px', color: 'var(--text-2)', fontSize: 12, lineHeight: 1.45 }}>
-                <strong>{l('Resultado:', 'Outcome:')}</strong> {goal.resultDefinition}
+                <strong>{l('O que você quer ver acontecer:', 'What you want to see happen:')}</strong> {goal.resultDefinition}
               </p>
             )}
             {goal.currentReality && (
               <p style={{ margin: '0 0 11px', color: 'var(--text-3)', fontSize: 11, lineHeight: 1.45 }}>
-                <strong>{l('Ponto de partida:', 'Starting point:')}</strong> {goal.currentReality}
+                <strong>{l('Onde você está hoje:', 'Where you are today:')}</strong> {goal.currentReality}
               </p>
             )}
 
@@ -519,7 +563,7 @@ function GoalCard({
               <div style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--text-2)" }}>
                 <CheckCircle2 size={20} color="var(--menthe)" />
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 720, lineHeight: 1.45 }}>
-                  {l("Os movimentos previstos foram concluídos. Este resultado fica guardado como conquista.", "The planned moves are complete. This result is kept as an achievement.")}
+                  {l("Você concluiu o que tinha escolhido para este objetivo. Esta conquista fica registrada aqui.", "You completed what you chose for this goal. This achievement stays recorded here.")}
                 </p>
               </div>
             ) : model.nextAction ? (
@@ -545,48 +589,25 @@ function GoalCard({
                   >
                     <Check size={15} />
                   </button>
-                  <p style={{ flex: 1, margin: 0, color: "var(--text-1)", fontSize: 14, fontWeight: 750, lineHeight: 1.45 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: "0 0 3px", color: "var(--text-3)", fontSize: 10, fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                      {l("O que cabe agora", "What fits now")}
+                    </p>
+                    <p style={{ margin: 0, color: "var(--text-1)", fontSize: 14, fontWeight: 750, lineHeight: 1.45 }}>
                     {model.nextAction.title}
-                  </p>
+                    </p>
+                    {currentAction?.doneWhen && (
+                      <p style={{ margin: "5px 0 0", color: "var(--text-2)", fontSize: 11, lineHeight: 1.4 }}>
+                        <strong>{l("Pronto quando:", "Done when:")}</strong> {currentAction.doneWhen}
+                      </p>
+                    )}
+                  </div>
                 </div>
-
-                <label
-                  style={{
-                    width: "100%",
-                    minHeight: 43,
-                    marginTop: 12,
-                    border: 0,
-                    borderRadius: 13,
-                    background: "var(--lagune)",
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 7,
-                    fontSize: 12,
-                    fontWeight: 850,
-                    cursor: "default",
-                  }}
-                >
-                  <CalendarPlus size={16} />
-                  <span>{currentAction?.scheduledFor ? l("Planejada para", "Planned for") : l("Escolher uma data", "Choose a date")}</span>
-                  <input
-                    key={currentAction?.scheduledFor ?? 'without-date'}
-                    type="date"
-                    value={currentAction?.scheduledFor ?? ''}
-                    aria-label={l('Data da ação', 'Action date')}
-                    onChange={(event) => {
-                      const nextDate = event.target.value || null;
-                      const previousDate = currentAction?.scheduledFor ?? null;
-                      if (previousDate && nextDate !== previousDate && !window.confirm(l('Confirmar a mudança da data desta ação?', 'Confirm changing this action date?'))) {
-                        event.currentTarget.value = previousDate;
-                        return;
-                      }
-                      void onScheduleAction(model.nextAction!.id, nextDate);
-                    }}
-                    style={{ maxWidth: 132, border: 0, borderRadius: 8, padding: '5px 7px', color: 'var(--text-1)' }}
-                  />
-                </label>
+                <p style={{ margin: "9px 0 0 36px", color: "var(--text-3)", fontSize: 11, lineHeight: 1.4 }}>
+                  {currentAction?.scheduledFor
+                    ? l("Você reservou este passo para uma data. Pode ajustar isso em Gerenciar objetivo.", "You reserved this step for a date. You can adjust it in Manage goal.")
+                    : l("Faça quando houver espaço no seu dia; o importante é que este seja um passo possível.", "Do it when there is room in your day; what matters is that this is a possible step.")}
+                </p>
 
                 {editingAction ? (
                   <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
@@ -597,11 +618,18 @@ function GoalCard({
                       aria-label={l('Editar ação atual', 'Edit current action')}
                       style={{ minHeight: 42, border: '1px solid rgba(99,152,169,.35)', borderRadius: 11, padding: '8px 10px' }}
                     />
+                    <input
+                      value={actionEditDoneWhen}
+                      onChange={(event) => setActionEditDoneWhen(event.target.value)}
+                      aria-label={l('Critério de término da ação atual', 'Completion criterion for the current action')}
+                      placeholder={l('Pronto quando…', 'Done when…')}
+                      style={{ minHeight: 42, border: '1px solid rgba(99,152,169,.35)', borderRadius: 11, padding: '8px 10px' }}
+                    />
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
-                        disabled={actionEditTitle.trim().length < 3}
+                        disabled={actionEditTitle.trim().length < 3 || actionEditDoneWhen.trim().length < 3}
                         onClick={async () => {
-                          await onUpdateAction(model.nextAction!.id, { title: actionEditTitle.trim() });
+                          await onUpdateAction(model.nextAction!.id, { title: actionEditTitle.trim(), doneWhen: actionEditDoneWhen.trim() });
                           setEditingAction(false);
                         }}
                         style={{ ...quietButtonStyle, flex: 1 }}
@@ -614,7 +642,7 @@ function GoalCard({
                 ) : (
                   <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 9 }}>
                     <button
-                      onClick={() => { setActionEditTitle(model.nextAction!.title); setEditingAction(true); }}
+                      onClick={() => { setActionEditTitle(model.nextAction!.title); setActionEditDoneWhen(currentAction?.doneWhen ?? ''); setEditingAction(true); }}
                       style={{ ...quietButtonStyle, flex: 1 }}
                     >
                       <Edit3 size={13} /> {l('Editar', 'Edit')}
@@ -623,7 +651,7 @@ function GoalCard({
                       onClick={() => onUpdateAction(model.nextAction!.id, { state: 'deferred' })}
                       style={{ ...quietButtonStyle, flex: 1 }}
                     >
-                      <CirclePause size={13} /> {l('Pode esperar', 'Can wait')}
+                      <CirclePause size={13} /> {l('Deixar para depois', 'Leave for later')}
                     </button>
                     <button
                       onClick={() => {
@@ -633,7 +661,7 @@ function GoalCard({
                       }}
                       style={{ ...quietButtonStyle, flex: 1, color: 'var(--text-2)' }}
                     >
-                      <X size={13} /> {l('Não faz sentido', 'Not relevant')}
+                      <X size={13} /> {l('Retirar do caminho', 'Remove from path')}
                     </button>
                   </div>
                 )}
@@ -642,24 +670,28 @@ function GoalCard({
               <>
                 <p style={{ margin: "0 0 11px", color: "var(--text-2)", fontSize: 13, lineHeight: 1.45 }}>
                   {deferredAction
-                    ? l('Esta ação ficou para depois. Ela continua protegida no caminho e pode ser retomada aqui.', 'This action was left for later. It stays protected in the path and can be resumed here.')
+                    ? l('Você deixou esta ação para depois. Quando fizer sentido, ela continua disponível aqui.', 'You left this action for later. It remains available here when it makes sense.')
+                    : rejectedAction
+                      ? l('Você retirou esta ação do caminho atual. Ela continua registrada, mas não conta como concluída.', 'You removed this action from the current path. It stays recorded, but does not count as completed.')
                     : futureMilestones.length > 0
-                    ? l('A etapa atual terminou. A próxima só ganha ações quando você confirmar que quer abri-la.', 'The current stage is complete. The next one only gets actions after you confirm opening it.')
+                    ? l('Você concluiu o que estava em foco. Veja o próximo momento apenas quando quiser seguir.', 'You completed what was in focus. See what comes next only when you want to continue.')
                     : goal.pathStatus === 'retrying'
-                      ? l('O objetivo está salvo. A Airia está retomando a interpretação sem preencher com uma lista genérica.', 'The goal is saved. Airia is retrying without filling it with a generic list.')
-                      : l("Este resultado ainda não tem um passo concreto. Você decide o primeiro; a Airia não inventa por você.", "This result has no concrete step yet. You decide the first one; Airia does not invent it for you.")}
+                      ? l('Seu objetivo está salvo. A Airia está retomando a leitura para sugerir algo que faça sentido para ele.', 'Your goal is saved. Airia is revisiting it to suggest something that fits it.')
+                    : goal.needsActionReview
+                      ? l('Alguns passos antigos não dizem como terminam. Eles não entram como ação atual; você pode escrever um passo completo ou pedir um novo caminho.', 'Some older steps do not say how they end. They are not used as the current action; you can write a complete step or ask for a new path.')
+                      : l("Ainda falta escolher uma ação concreta. Você pode escrever a primeira ou pedir ideias à Airia.", "A concrete action still needs to be chosen. You can write the first one or ask Airia for ideas.")}
                 </p>
                 {deferredAction && (
                   <button onClick={() => onUpdateAction(deferredAction.id, { state: 'pending' })} style={{ ...quietButtonStyle, width: '100%' }}>
-                    <Play size={14} /> {l('Retomar esta ação', 'Resume this action')}
+                    <Play size={13} /> {l('Retomar esta ação', 'Resume this action')}
                   </button>
                 )}
                 {!deferredAction && futureMilestones.length > 0 && (
-                  <button onClick={onAdvance} style={{ ...quietButtonStyle, width: '100%', color: 'var(--nectarine-11)', borderColor: 'var(--nectarine-a5)' }}>
-                    <Sparkles size={14} /> {l(`Abrir: ${futureMilestones[0].title}`, `Open: ${futureMilestones[0].title}`)}
+                  <button onClick={onAdvance} style={{ ...quietButtonStyle, width: '100%' }}>
+                    <Sparkles size={13} /> {l(`Abrir: ${futureMilestones[0].title}`, `Open: ${futureMilestones[0].title}`)}
                   </button>
                 )}
-                {!deferredAction && !addingAction && futureMilestones.length === 0 && (
+                {!deferredAction && !rejectedAction && !addingAction && futureMilestones.length === 0 && (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={() => setAddingAction(true)} style={{ ...quietButtonStyle, flex: 1 }}>
                       <Plus size={14} /> {l("Definir próxima ação", "Define next action")}
@@ -692,13 +724,21 @@ function GoalCard({
                     outline: "none",
                   }}
                 />
+                <input
+                  value={actionDoneWhen}
+                  onChange={(event) => setActionDoneWhen(event.target.value)}
+                  placeholder={l("Pronto quando…", "Done when…")}
+                  aria-label={l("Critério de término da nova ação", "Completion criterion for the new action")}
+                  style={{ width: "100%", minHeight: 44, boxSizing: "border-box", marginTop: 8, border: "1.5px solid rgba(150,199,179,.55)", borderRadius: 12, background: "#fff", padding: "10px 12px", color: "var(--text-1)", fontSize: 13, outline: "none" }}
+                />
                 <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
                   <button
-                    disabled={actionTitle.trim().length < 3}
+                    disabled={actionTitle.trim().length < 3 || actionDoneWhen.trim().length < 3}
                     onClick={async () => {
-                      if (actionTitle.trim().length < 3) return;
-                      await onAddAction(actionTitle.trim());
+                      if (actionTitle.trim().length < 3 || actionDoneWhen.trim().length < 3) return;
+                      await onAddAction({ title: actionTitle.trim(), doneWhen: actionDoneWhen.trim() });
                       setActionTitle("");
+                      setActionDoneWhen("");
                       setAddingAction(false);
                     }}
                     style={{
@@ -707,7 +747,7 @@ function GoalCard({
                       background: "var(--menthe)",
                       borderColor: "var(--menthe)",
                       color: "#fff",
-                      opacity: actionTitle.trim().length < 3 ? 0.45 : 1,
+                      opacity: actionTitle.trim().length < 3 || actionDoneWhen.trim().length < 3 ? 0.45 : 1,
                     }}
                   >
                     {l("Salvar ação", "Save action")}
@@ -753,7 +793,7 @@ function GoalCard({
           {goal.subtasks.length > 1 && (
             <details style={{ marginTop: 12 }}>
               <summary style={{ cursor: "pointer", color: "var(--text-3)", fontSize: 11, fontWeight: 750 }}>
-                {l("Ver caminho completo", "View full path")} · {model.completedActions}/{model.totalActions}
+                {l("Ver todas as ações", "View all actions")} · {model.completedActions}/{model.totalActions}
               </summary>
               <div style={{ display: "grid", gap: 7, marginTop: 9 }}>
                 {orderedActions.map((action) => {
@@ -794,6 +834,7 @@ function GoalCard({
                     </span>
                     <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
                       {action.title}
+                      {action.doneWhen && <small style={{ display: "block", marginTop: 3, color: "var(--text-3)", fontWeight: 500, textDecoration: "none" }}>{l("Pronto quando:", "Done when:")} {action.doneWhen}</small>}
                       {active ? <small style={{ display: "block", marginTop: 2, color: "var(--menthe)", fontWeight: 800 }}>{l("Agora", "Now")}</small> : null}
                       {action.patternBasis?.map((basis) => (
                         <small key={`${action.id}-${basis.pattern}`} style={{ display: "block", marginTop: 5, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.45, textDecoration: "none" }}>
@@ -811,7 +852,7 @@ function GoalCard({
           {futureMilestones.length > 0 && (
             <details style={{ marginTop: 12 }}>
               <summary style={{ cursor: 'pointer', color: 'var(--text-3)', fontSize: 11, fontWeight: 750 }}>
-                {l('Próximas etapas', 'Future stages')} · {futureMilestones.length}
+                {l('O que vem depois', 'What comes next')} · {futureMilestones.length}
               </summary>
               <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
                 {futureMilestones.map((milestone) => (
@@ -824,30 +865,30 @@ function GoalCard({
             </details>
           )}
 
-          {Boolean(goal.pathProposal) && (
+          {pathProposal && (
             <div style={{ marginTop: 12, border: '1px solid rgba(225,154,104,.3)', borderRadius: 14, padding: 11, background: 'rgba(225,154,104,.08)' }}>
-              <strong style={{ display: 'block', color: 'var(--text-1)', fontSize: 12 }}>{l('Proposta de revisão', 'Revision proposal')}</strong>
-              <span style={{ display: 'block', margin: '4px 0 9px', color: 'var(--text-3)', fontSize: 11 }}>{String((goal.pathProposal as any).reason ?? l('Novo contexto mudou o caminho futuro.', 'New context changed the future path.'))}</span>
-              {(goal.pathProposal as any)?.resultDefinition && (goal.pathProposal as any).resultDefinition !== goal.resultDefinition && (
+              <strong style={{ display: 'block', color: 'var(--text-1)', fontSize: 12 }}>{l('Uma sugestão de ajuste', 'A suggested adjustment')}</strong>
+              <span style={{ display: 'block', margin: '4px 0 9px', color: 'var(--text-3)', fontSize: 11 }}>{pathProposal.reason ?? l('Novo contexto mudou o caminho futuro.', 'New context changed the future path.')}</span>
+              {pathProposal.resultDefinition && pathProposal.resultDefinition !== goal.resultDefinition && (
                 <span style={{ display: 'block', marginBottom: 6, color: 'var(--text-2)', fontSize: 11 }}>
-                  <strong>{l('Resultado proposto:', 'Proposed outcome:')}</strong> {String((goal.pathProposal as any).resultDefinition)}
+                  <strong>{l('O que poderia mudar:', 'What could change:')}</strong> {pathProposal.resultDefinition}
                 </span>
               )}
-              {(goal.pathProposal as any)?.currentReality && (goal.pathProposal as any).currentReality !== goal.currentReality && (
+              {pathProposal.currentReality && pathProposal.currentReality !== goal.currentReality && (
                 <span style={{ display: 'block', marginBottom: 8, color: 'var(--text-2)', fontSize: 11 }}>
-                  <strong>{l('Nova leitura do ponto de partida:', 'Updated starting point:')}</strong> {String((goal.pathProposal as any).currentReality)}
+                  <strong>{l('Como isso está hoje:', 'How this stands today:')}</strong> {pathProposal.currentReality}
                 </span>
               )}
-              {Array.isArray((goal.pathProposal as any)?.milestones) && (
+              {pathProposal.milestones && (
                 <div style={{ display: 'grid', gap: 5, margin: '0 0 10px' }}>
-                  {(goal.pathProposal as any).milestones.slice(1).map((milestone: any) => (
-                    <span key={String(milestone.id)} style={{ color: 'var(--text-2)', fontSize: 11 }}>
-                      → {String(milestone.title)}
+                  {pathProposal.milestones.slice(1).map((milestone, index) => (
+                    <span key={String(milestone.id ?? index)} style={{ color: 'var(--text-2)', fontSize: 11 }}>
+                      → {milestone.title ?? l('Próxima etapa', 'Next stage')}
                     </span>
                   ))}
                 </div>
               )}
-              <button onClick={onConfirmRevision} style={{ ...quietButtonStyle, width: '100%' }}>{l('Revisar e aceitar mudanças futuras', 'Review and accept future changes')}</button>
+              <button onClick={onConfirmRevision} style={{ ...quietButtonStyle, width: '100%' }}>{l('Ver o ajuste e decidir', 'Review the adjustment and decide')}</button>
             </div>
           )}
 
@@ -942,8 +983,7 @@ export function GoalsPage() {
     recoverGoalActions,
   } = useAuraStore();
   const { showError, showSuccess } = useToast();
-  const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
-  const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
+  const { reading: canonicalReading } = useAiriaReading();
 
   const [creationOpen, setCreationOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -970,15 +1010,6 @@ export function GoalsPage() {
       activeGoalsCount: goals.filter((goal) => goal.completedPct < 100 && !goal.pausedAt).length,
     });
   }, [goals]);
-
-  async function feedbackCanonicalDecision(status: "accepted" | "rejected") {
-    const decision = canonicalReading?.decision;
-    if (!decision || canonicalFeedbackPending) return;
-    setCanonicalFeedbackPending(true);
-    const saved = await sendAiriaDecisionFeedback(decision.id, status, "goals");
-    if (saved) await reloadCanonicalReading();
-    setCanonicalFeedbackPending(false);
-  }
 
   useEffect(() => {
     if (pendingQuestion) return;
@@ -1134,11 +1165,11 @@ export function GoalsPage() {
     }
   }
 
-  async function addAction(goalId: string | number, title: string) {
+  async function addAction(goalId: string | number, action: { title: string; doneWhen: string }) {
     try {
       const goal = goals.find((item) => String(item.id) === String(goalId));
       if (!goal) return;
-      const response = await api.post(`/objectives/${goalId}/actions`, { title, expectedVersion: goal.pathVersion ?? 1 }) as { action: { id: string } };
+      const response = await api.post(`/objectives/${goalId}/actions`, { ...action, expectedVersion: goal.pathVersion ?? 1 }) as { action: { id: string } };
       await refreshData();
       trackProductEvent("goal.action_changed.v1", "goals", {
         goalId: String(goalId),
@@ -1216,23 +1247,9 @@ export function GoalsPage() {
           setCompletingActionId(null);
         }
       }}
-      onAddAction={(title) => addAction(goal.id, title)}
+      onAddAction={(action) => addAction(goal.id, action)}
       onRequestSuggestion={() => requestSuggestion(goal)}
-      onAcceptSuggestion={(title) => addAction(goal.id, title)}
-      onScheduleAction={async (actionId, date) => {
-        try {
-          await api.patch(`/objectives/${goal.id}/actions/${actionId}`, { expectedVersion: goal.pathVersion ?? 1, scheduledFor: date });
-          await refreshData();
-          trackProductEvent("goal.action_changed.v1", "goals", {
-            goalId: String(goal.id),
-            actionId: String(actionId),
-            changeType: "edited",
-          });
-          showSuccess(l('Data da ação atualizada.', 'Action date updated.'));
-        } catch (error) {
-          showError(error instanceof Error ? error.message : l('Não foi possível atualizar a data.', 'Could not update the date.'));
-        }
-      }}
+      onAcceptSuggestion={(title) => addAction(goal.id, { title, doneWhen: l('a evidência combinada estiver registrada', 'the agreed evidence is recorded') })}
       onUpdateAction={async (actionId, patch) => {
         try {
           await api.patch(`/objectives/${goal.id}/actions/${actionId}`, {
@@ -1302,17 +1319,6 @@ export function GoalsPage() {
     <div className="page-shell" style={{ minHeight: "100%", background: "var(--warm-bg)" }}>
       <div className="screen-content" style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 118 }}>
         <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="goals" />
-        {canonicalReading?.decision && canonicalReading.decision.objectiveId && (
-          <section style={{ margin: "14px 2px 0", padding: 12, borderRadius: 14, border: "1px solid rgba(143,192,164,.34)", background: "rgba(255,255,255,.8)" }}>
-            <p style={{ margin: "0 0 4px", color: "var(--accent-primary-ink)", fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Proposta vinculada ao seu objetivo", "Proposal linked to your goal")}</p>
-            <p style={{ margin: 0, color: "var(--text-1)", fontSize: 13, fontWeight: 800 }}>{canonicalReading.decision.title}</p>
-            <p style={{ margin: "5px 0 9px", color: "var(--text-2)", fontSize: 11.5, lineHeight: 1.45 }}>{canonicalReading.decision.reason}</p>
-            {canonicalReading.decision.requiresConfirmation && <div style={{ display: "flex", gap: 7 }}>
-              <button style={quietButtonStyle} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("rejected")}>{l("Não agora", "Not now")}</button>
-              <button style={quietButtonStyle} disabled={canonicalFeedbackPending} onClick={() => void feedbackCanonicalDecision("accepted")}>{l("Faz sentido", "That fits")}</button>
-            </div>}
-          </section>
-        )}
         <header style={{ padding: "18px 2px 16px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
             {/* Aqui a Airia apoia o próximo movimento — órbita firme, discreta,

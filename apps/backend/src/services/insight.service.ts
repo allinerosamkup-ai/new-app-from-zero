@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { PrismaClient } from '@app/database';
 import { buildAuraSystemPrompt, getFirstName, humanizeScore } from '../lib/aura-prompt';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { getOpenAiModel, getOpenAiOutputLimit } from '../lib/openai-config';
+import { extractJsonValue } from '../lib/extract-json';
 import { SuggestionMemoryService } from './suggestion-memory.service';
 import { MemoryService } from './memory.service';
 import { ContextGroundingService } from './context-grounding.service';
@@ -267,10 +268,10 @@ export class InsightService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenAiMaxCompletionTokens(2000),
+      ...getOpenAiOutputLimit(this.MODEL, 2000),
     });
 
-    const aiResult = WeeklyInsightSchema.parse(JSON.parse(response.choices[0].message.content || '{}'));
+    const aiResult = WeeklyInsightSchema.parse(extractJsonValue(response.choices[0].message.content || '{}'));
     void SuggestionMemoryService.append(
       prisma,
       userId,

@@ -1,4 +1,5 @@
 import {
+  isConcreteObjectiveSubgoal,
   normalizeObjectiveSubgoals,
   type ObjectiveSubgoal,
 } from '../lib/objective-subgoals';
@@ -55,7 +56,12 @@ function progressFor(subgoals: ObjectiveSubgoal[]): number {
 }
 
 function nextPending(subgoals: ObjectiveSubgoal[]) {
-  return subgoals.find((subgoal) => !subgoal.done && subgoal.status !== 'rejected' && subgoal.status !== 'deferred') ?? null;
+  return subgoals.find((subgoal) => (
+    !subgoal.done
+    && subgoal.status !== 'rejected'
+    && subgoal.status !== 'deferred'
+    && isConcreteObjectiveSubgoal(subgoal)
+  )) ?? null;
 }
 
 function orderedMilestones(value: unknown): Array<{ id: string; title: string; order: number; doneWhen: string | null }> {
@@ -131,7 +137,7 @@ export class ObjectiveProgressionService {
     ));
     const currentActionsDone = advanced
       .filter((action) => !currentMilestoneId || action.milestoneId === currentMilestoneId || !action.milestoneId)
-      .every((action) => action.done || action.status === 'rejected');
+      .every((action) => !isConcreteObjectiveSubgoal(action) || action.done || action.status === 'rejected');
     const progress = milestones.length > 0 && currentMilestone && currentActionsDone && nextMilestone
       ? Math.max(objective.progress, Math.round(((currentMilestone.order + 1) / milestones.length) * 100))
       : progressFor(advanced);

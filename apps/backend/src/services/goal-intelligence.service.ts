@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 
 import { extractJsonValue } from '../lib/extract-json';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel, openAiTemperature } from '../lib/openai-config';
+import { getOpenAiModel, getOpenAiStructuredResponseOptions, openAiTemperature } from '../lib/openai-config';
+import { validateConcreteAction } from '../lib/action-quality';
 
 /**
  * Interpretação de objetivo: entender → inferir → cruzar → decidir → validar → agir.
@@ -443,79 +444,59 @@ SEPARAÇÃO DE CONTEXTO (obrigatória):
     ? 'Answer in English, keeping the same JSON contract.'
     : 'Responda em português do Brasil, mantendo o mesmo contrato JSON.';
 
-  return `${name} tem o objetivo abaixo. Sua tarefa é INTERPRETAR o objetivo e devolver o caminho real até ele.
+  return `${name} tem o objetivo abaixo. Sua tarefa é interpretar o objetivo e devolver apenas o caminho que pode ser executado de verdade.
 ${language}
 
 OBJETIVO: "${input.goalTitle}"${saidBlock}${existingBlock}${completedBlock}${blockedBlock}${canonicalBlock}${todayBlock}${capacityBlock}${patternBlock}${profileLines(input.operationalProfile)}
 ${separationRule}
 
-RACIOCÍNIO OBRIGATÓRIO, NESTA ORDEM:
-1. O que este objetivo significa? Qual é o resultado final esperado?
-2. O que eu SEI sobre a situação atual (só o que está escrito acima)?
-3. O que eu estou apenas SUPONDO?
-4. Qual é a próxima sequência realmente lógica até o resultado?
+PRINCÍPIO DO CAMINHO:
+Uma meta não vira uma lista de intenções. Cada ação da etapa atual precisa dizer o que a pessoa faz, sobre qual objeto ou assunto identificável e qual evidência encerra aquele passo. Se você não consegue escrever esses três elementos sem inventar um fato, não escreva uma ação: faça a pergunta decisiva.
+
+ORDEM DE LEITURA:
+1. Defina o resultado final sem alterar o sentido da meta.
+2. Separe o que foi dito, o que é inferência geral segura e o que seria invenção.
+3. Modele as etapas causais entre o ponto de partida e o resultado.
+4. Detalhe somente a etapa atual com ações concretas e encerráveis.
 
 ORDEM DE AUTORIDADE:
 1. descrição e respostas específicas deste objetivo;
-2. contexto atual do Diário, Check-in e Aura;
+2. contexto atual do Diário e Check-in;
 3. ações concluídas, editadas, rejeitadas ou adiadas;
 4. fatos canônicos da memória;
-5. padrões históricos, apenas para calibrar;
-6. inferência geral, sempre marcada como inferred.
+5. padrões históricos, somente para calibrar tamanho e ordem;
+6. inferência geral, sempre marcada como "inferred".
 
-REGRA CRÍTICA — NÃO INVENTAR OBSTÁCULO:
-Você NÃO pode assumir problema que ninguém relatou. Se o objetivo é "deixar a sala
-pronta para uso", você NÃO sabe que existe algo solto no chão, algo quebrado, algo
-para pintar, algo para comprar ou móvel faltando. Você sabe apenas que a sala
-precisa ficar funcional para a finalidade dela.
+LIMITES DE VERDADE:
+- Você não pode assumir problema, objeto, app, pessoa, prazo, valor ou circunstância que não apareça acima.
+- "Deixar a sala pronta para uso" autoriza tornar a sala funcional; não autoriza inventar fita crepe, defeito no chão, caixa azul ou compra necessária.
+- Inferência geral segura é permitida quando funciona para qualquer situação coberta pelo objetivo. Detalhe que só funciona se um fato não informado existir é invenção.
 
-USE INTELIGÊNCIA, NÃO INTERROGATÓRIO:
-"Pronta para uso" significa ambiente funcional. Isso é conhecimento geral e você
-DEVE usá-lo — retirar o que não pertence ao lugar, organizar os elementos
-principais, deixar o espaço utilizável, conferir se já dá para usar. Isso é
-inferência legítima. Não pergunte o que dá para inferir com segurança.
+CONTRATO OBRIGATÓRIO DE CADA AÇÃO:
+- "title" começa com verbo executável e nomeia um objeto, assunto ou conjunto identificável no objetivo ou no contexto.
+- "doneWhen" descreve a evidência observável de que a ação acabou. Não use "quando estiver pronto", "quando terminar" ou a própria ação reformulada.
+- Ação não é decidir o que fazer. São proibidas formulações como "Escolher revisar uma pendência financeira revisável", "Separar uma decisão financeira reversível", "Planejar", "Organizar melhor", "Pensar sobre", "Revisar uma pendência" e "Resolver isso".
+- Exemplo de forma válida, quando o contexto cita banco e saldo: title "Abrir o app do banco e anotar o saldo atual"; doneWhen "o saldo estiver anotado".
+- Exemplo de forma válida, quando há contas citadas: title "Listar as três contas que vencem nesta semana"; doneWhen "as três contas estiverem em uma nota".
+- Nunca use esses exemplos para inventar banco, contas, app ou saldo em outro objetivo.
+- Prefira uma pergunta única a uma ação circular ou abstrata.
 
-ESPECIFICIDADE INTELIGENTE:
-- BOM: "Retire da sala tudo o que não deveria estar ali" — concreto e verdadeiro.
-- RUIM: "Pegue um rolo de fita crepe e confira se há área solta no chão" —
-  inventou um problema, um objeto e uma solução que ninguém mencionou.
-- RUIM: "Coloque os objetos pequenos na caixa azul" — a caixa azul não existe.
-Seja concreto ATÉ O LIMITE DO DADO QUE VOCÊ TEM, e nem um passo além.
+PERGUNTA DECISIVA:
+- Use "decisiveQuestion" somente quando uma resposta curta muda materialmente o caminho ou quando falta o objeto seguro necessário para formular a primeira ação.
+- Faça uma pergunta curta e útil; não faça questionário e não pergunte o que já está acima.
+- Quando usar a pergunta, devolva milestones vazias. Caso contrário, "decisiveQuestion" é null.
 
-MARCAÇÃO OBRIGATÓRIA:
-- "basedOn": "stated"   → o passo se apoia em algo que ela escreveu.
-- "basedOn": "inferred" → o passo vem de conhecimento geral sobre esse tipo de
-  objetivo. Permitido, desde que não invente objeto, defeito nem circunstância.
-
-UMA PERGUNTA DECISIVA:
-- Use "decisiveQuestion" somente se a resposta levar a caminhos materialmente diferentes;
-  escolher sem ela criaria ações genéricas ou erradas.
-- Faça UMA pergunta curta. Não faça questionário e não pergunte detalhe que só
-  muda acabamento.
-- Não pergunte o que pode inferir com segurança nem o que ela JÁ CONTOU.
-- Exemplo que exige pergunta: "organizar minhas finanças" sem contexto, porque
-  dívida, gasto mensal e falta de controle exigem caminhos diferentes.
-- Exemplo que não exige: "deixar a sala pronta para uso", porque é seguro começar
-  tornando o ambiente funcional sem inventar defeito ou objeto.
-- Quando usar a pergunta, devolva milestones vazias. Caso contrário,
-  "decisiveQuestion" deve ser null.
-
-FORMATO:
-- "currentReality" resume somente o ponto de partida sustentado pelo contexto.
-- "milestones" contém as etapas causalmente ordenadas entre a realidade e o resultado.
-- "currentMilestoneId" identifica a única etapa vigente.
-- Detalhe de 1 a ${MAX_STEPS} ações somente na etapa vigente. As etapas futuras ficam
-  resumidas com "actions": []; falsa precisão não é planejamento.
-- Cada "doneWhen" descreve a evidência observável de conclusão da etapa ou ação.
-- A ação começa com verbo executável e produz mudança observável. Não use "planejar",
-  "organizar melhor", "pensar sobre" nem reformule o objetivo.
-- Baixa energia reduz apenas a ação atual, nunca o resultado ou as etapas futuras.
-- Não repita nem disfarce ação que já existe ou já foi concluída.
-- "resultDefinition" diz, em uma frase, o que significa concluir isso.
-- "assumptions" lista o que você supôs sem ter dado. Seja honesto.
+FORMATO DO CAMINHO:
+- "currentReality" resume apenas o ponto de partida sustentado pelo contexto.
+- "milestones" organiza etapas causalmente ordenadas; "currentMilestoneId" aponta a única etapa detalhada agora.
+- Detalhe de 1 a ${MAX_STEPS} ações somente na etapa atual. Etapas futuras usam "actions": [].
+- Todo milestone e toda ação têm "doneWhen" observável.
+- Baixa energia reduz somente a ação atual, nunca o resultado nem as etapas futuras.
+- Não repita, disfarce ou reintroduza ação concluída, rejeitada ou adiada.
+- "assumptions" lista inferências honestas que não vieram da pessoa.
 
 JSON APENAS:
-{"resultDefinition":"...","currentReality":"...","assumptions":["..."],"decisiveQuestion":null,"currentMilestoneId":"m-1","milestones":[{"id":"m-1","title":"...","order":0,"doneWhen":"...","actions":[{"title":"...","basedOn":"stated|inferred","rationale":"...","doneWhen":"...","effortSize":"small|medium|large","evidenceRefs":["statement:0"]}]},{"id":"m-2","title":"...","order":1,"doneWhen":"...","actions":[]}]}`;
+{"resultDefinition":"...","currentReality":"...","assumptions":["..."],"decisiveQuestion":null,"currentMilestoneId":"m-1","milestones":[{"id":"m-1","title":"...","order":0,"doneWhen":"...","actions":[{"title":"...","basedOn":"stated|inferred","rationale":"...","doneWhen":"evidência observável de término","effortSize":"small|medium|large","evidenceRefs":["statement:0"]}]},{"id":"m-2","title":"...","order":1,"doneWhen":"...","actions":[]}]}`;
 }
 
 /**
@@ -577,49 +558,24 @@ export function buildActionValidationPrompt(input: {
 ${language}
 
 OBJETIVO: "${input.goalTitle}"
-LEITURA DO RESULTADO: ${input.resultDefinition || '(não declarada)'}
-INFORMAÇÃO QUE A PESSOA FORNECEU:
+RESULTADO PRETENDIDO: ${input.resultDefinition || '(não declarado)'}
+INFORMAÇÃO DISPONÍVEL:
 ${input.contextText || '(apenas o título do objetivo)'}
 
-PASSOS PROPOSTOS:
-${input.steps.map((step, index) => `${index + 1}. ${step.title}`).join('\n')}
+AÇÕES PROPOSTAS:
+${input.steps.map((step, index) => `${index + 1}. title: ${step.title}\n   doneWhen: ${step.doneWhen || '(ausente)'}`).join('\n')}
 
-A DISTINÇÃO QUE VOCÊ PRECISA FAZER — é o erro mais comum nesta revisão:
+APROVE somente uma sequência que cumpra simultaneamente:
+1. Cada ação começa com verbo executável, tem objeto ou assunto identificável e tem uma evidência observável em "doneWhen".
+2. A ação leva causalmente ao resultado e não apenas repete a meta em palavras menores.
+3. A ação não decide, considera, planeja, organiza melhor, revisa uma pendência vaga nem usa objeto, pessoa, app, defeito, medida ou circunstância inventada.
+4. Inferência geral segura é permitida; invenção de fato não é. "Retire da sala o que não pertence ali" pode ser seguro. "Pegue fita crepe para consertar o chão" inventa objeto e defeito.
+5. A sequência não repete ação concluída, rejeitada ou adiada e não detalha artificialmente etapas futuras.
 
-INFERÊNCIA LEGÍTIMA (aprove): usar conhecimento geral sobre o que esse tipo de
-objetivo significa. "Deixar a sala pronta para uso" implica, para qualquer
-pessoa, retirar o que não pertence, organizar, deixar utilizável e conferir.
-Isso NÃO é inventar — é saber o que a palavra significa. Um passo assim vale
-para qualquer sala, e é exatamente por isso que ele é seguro.
-
-INVENÇÃO DE FATO (reprove): afirmar como existente algo específico que ninguém
-mencionou — um objeto ("um rolo de fita crepe", "a caixa azul"), um defeito
-("a área solta do rodapé", "a lâmpada queimada"), uma medida ("40 litros"), uma
-circunstância. O passo só funciona se aquele fato existir, e ninguém disse que
-existe.
-
-TESTE RÁPIDO: o passo funcionaria em QUALQUER situação coberta por esse
-objetivo? Então é inferência — aprove. Ele depende de um detalhe que só existe
-se alguém tiver dito? Então é invenção — reprove.
-
-REPROVE TAMBÉM quando a sequência não tem vínculo causal com o resultado, a
-ação não é executável, não produz mudança observável, repete algo concluído ou
-antecipa com falsa precisão uma etapa futura. Uma regra lexical nunca substitui
-esta revisão semântica.
-
-NÃO SÃO MOTIVOS DE REPROVAÇÃO:
-- "pressupõe que existam itens/elementos a organizar" — isso é o objetivo.
-- "pressupõe um uso pretendido" — está no título, não precisa ser detalhado.
-- "poderia ser mais específico", "falta contexto", "é genérico demais".
-Generalidade honesta quando o dado é escasso é o comportamento CORRETO.
-
-Reprove com motivo concreto, nomeando o passo e o fato inventado. Na dúvida,
-aprove: esta camada existe para barrar ficção, não para exigir perfeição.
-Se faltar informação que mudaria TODO o caminho, escreva em "missingInfo" a
-única pergunta curta que destravaria isso.
+REPROVE explicitamente ações sem "doneWhen", sem objeto específico ou com estrutura circular, mesmo que pareçam produtivas. Quando o contexto não permitir formular a primeira ação concreta sem invenção, use "missingInfo" para escrever uma única pergunta que obtenha a âncora ausente.
 
 JSON APENAS:
-{"approved":true|false,"failures":["passo 2 inventa ..."],"missingInfo":null}`;
+{"approved":true|false,"failures":["passo 2 não tem objeto específico e critério observável de término"],"missingInfo":null}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -627,6 +583,7 @@ JSON APENAS:
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ChatClient = Pick<OpenAI, 'chat'>;
+const STRUCTURED_RESPONSE_TIMEOUT_MS = 25_000;
 
 async function completeJson(
   client: ChatClient,
@@ -642,16 +599,16 @@ async function completeJson(
       { role: 'user', content: user },
     ],
     response_format: { type: 'json_object' },
-    max_completion_tokens: getOpenAiMaxCompletionTokens(maxTokens),
+    ...getOpenAiStructuredResponseOptions(model, maxTokens),
     ...openAiTemperature(model, 0.25),
-  } as any);
+  } as any, { timeout: STRUCTURED_RESPONSE_TIMEOUT_MS });
   const content = response.choices?.[0]?.message?.content;
   return content ? extractJsonValue(content) : null;
 }
 
 const GENERATOR_SYSTEM = 'Você interpreta objetivos e devolve o caminho real até eles. Nunca inventa fato, objeto ou defeito. Responde só JSON.';
 const VALIDATOR_SYSTEM = 'Você revisa recomendações e reprova o que não se sustenta em dado real. Responde só JSON.';
-const FALLBACK_MODEL = 'gpt-4.1-mini';
+const FALLBACK_MODEL = 'gpt-5-mini';
 
 type ParsedPathPayload = z.infer<typeof StepsPayloadSchema>;
 
@@ -751,6 +708,11 @@ export class GoalIntelligenceService {
         rejected.push({ title: step.title, reason: specificity.reason });
         continue;
       }
+      const concreteness = validateConcreteAction(step);
+      if (!concreteness.ok) {
+        rejected.push({ title: step.title, reason: `ação não atende ao contrato de concretude: ${concreteness.reason}` });
+        continue;
+      }
       kept.push(step);
     }
 
@@ -792,7 +754,10 @@ export class GoalIntelligenceService {
       let lastResultDefinition: string | null = null;
       let lastCurrentReality: string | null = null;
       let lastAssumptions: string[] = [];
-      const primaryModel = process.env.OPENAI_DECOMPOSITION_MODEL?.trim() || getOpenAiModel();
+      // Decomposição exige JSON estrito e passos verificáveis. O modelo GPT de
+      // raciocínio entrega esse contrato de forma compatível; Claude permanece
+      // disponível por configuração explícita quando necessário.
+      const primaryModel = process.env.OPENAI_DECOMPOSITION_MODEL?.trim() || 'gpt-5';
       const fallbackModel = process.env.OPENAI_DECOMPOSITION_FALLBACK_MODEL?.trim() || FALLBACK_MODEL;
 
       // Duas tentativas: a segunda recebe o motivo exato da reprovação. Mais que

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@app/database';
+import { Prisma } from '@prisma/client';
 
 import {
   AuraCommandOperationSchema,
@@ -132,7 +133,7 @@ export class AuraCommandPersistenceService {
             selected: validated.selected,
             payload: validated.payload as any,
             status: 'proposed',
-            error: undefined,
+            error: Prisma.DbNull,
           },
         });
       }

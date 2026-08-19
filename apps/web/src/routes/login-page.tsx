@@ -106,8 +106,8 @@ export function LoginPage() {
       }
       if (authenticated) await claimPendingReferral();
       navigate("/home");
-    } catch (err: any) {
-      const msg = err?.message || t("auth.errors.generic");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t("auth.errors.generic");
       if (msg.includes("Invalid login credentials")) setError(t("auth.errors.credentials"));
       else if (msg.includes("already registered")) setError(t("auth.errors.registered"));
       else if (msg.includes("Password should be")) setError(t("auth.errors.shortPassword"));

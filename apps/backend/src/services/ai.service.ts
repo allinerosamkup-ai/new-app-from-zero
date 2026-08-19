@@ -1,8 +1,9 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { OnboardingAiOutputSchema, type OnboardingAiOutput } from '../contracts/onboarding-ai.contract';
-import { getOpenAiMaxCompletionTokens, getOpenAiModel } from '../lib/openai-config';
+import { getOpenAiModel, getOpenAiOutputLimit } from '../lib/openai-config';
 import { buildAuraSystemPrompt } from '../lib/aura-prompt';
+import { extractJsonValue } from '../lib/extract-json';
 import {
   validateJournalReply,
   buildRevisionInstruction,
@@ -171,9 +172,9 @@ export class AIService {
       ];
     }
 
-    const stream = await client.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: this.MODEL,
-      stream: true,
+      ...getOpenAiOutputLimit(this.MODEL, 1200),
       messages: [
         {
           role: 'system',
@@ -209,7 +210,7 @@ export class AIService {
               'BASE DOCUMENTADA, NÃO IMPROVISO: leituras sobre travas, sinais antes de queda, problema útil, efeito indireto ou movimento interrompido precisam estar ancoradas em evidência concreta da conversa, histórico, check-in, planner, metas ou memória. Sem evidência, trate como hipótese leve ou faça uma pergunta curta.',
               'MEMÓRIA OBRIGATÓRIA: use histórico, memórias recuperadas, diários anteriores, metas e planner quando vierem no contexto. Se não houver memória relevante, não diga "lembro"; diga apenas o que dá para ler agora.',
               'LENTE ANALÍTICA INTERNA (nunca explicite ao usuário): Ao ouvir um problema, trave, revés ou padrão repetitivo — pergunte-se internamente: (1) O que estava prestes a acontecer de positivo antes desse obstáculo surgir? (2) Que função esse problema pode estar cumprindo no curto prazo? (3) Que conforto, pertencimento, permissão ou preferência ele pode estar preservando? (4) Como esse mesmo efeito pode ser usado a favor da pessoa agora? Quando tiver hipótese clara, traga como pergunta curiosa suave ou como proposta pequena — nunca como afirmação absoluta.',
-              'RESPOSTA EXCELENTE: quando houver evidência forte, separe o evento real da história criada, nomeie o que está repetindo sem jargão técnico, mostre o custo concreto de continuar nesse caminho e feche com UMA ação concreta (verbo + objeto que a pessoa citou) OU UMA pergunta provocativa curta. Nunca as duas. Não use as palavras manobra, âncora, trava, padrão. Não copie exemplos externos; use o contexto real da pessoa.',
+              'RESPOSTA EXCELENTE: quando houver evidência forte, separe o evento real da história criada, nomeie o que está repetindo sem jargão técnico, mostre o custo concreto de continuar nesse caminho e feche com UMA ação concreta (verbo + objeto que a pessoa citou) OU UMA pergunta provocativa curta. Nunca as duas. Se fechar com ação, use apenas a última linha no formato: "Próximo passo: <ação>. Pronto quando: <evidência observável>." Não use as palavras manobra, âncora, trava, padrão. Não copie exemplos externos; use o contexto real da pessoa.',
               'MEMÓRIA ANTES DE PADRÃO: só diga que algo "é o mesmo ciclo" ou "tem a mesma forma de antes" se o histórico, a conversa atual ou as memórias recuperadas trouxerem evidência. Sem evidência, apresente como hipótese leve.',
               'SINAIS ANTES DA QUEDA: só leia risco de queda ou sobrecarga quando houver pistas como sono ruim, rotina escorregando, irritação crescente, aceleração, isolamento, evitação repetida, excesso de estímulo, perda de plano ou decisão impulsiva. Não invente alerta para parecer profunda.',
               'ORDEM INTERNA DAS LENTES: a leitura funcional profunda vem primeiro; depois TCC prática; depois exposição gradual; depois propósito; por último somática. Nunca cite nomes de teorias ou metodologia na resposta.',
@@ -231,18 +232,11 @@ export class AIService {
       ],
     } as any);
 
-    let finalContent = '';
-
-    for await (const chunk of stream as unknown as AsyncIterable<any>) {
-      const delta = chunk.choices?.[0]?.delta?.content;
-
-      if (!delta) {
-        continue;
-      }
-
-      finalContent += delta;
-      input.onDelta?.(delta);
-    }
+    // O proxy atual entrega Chat Completions completos (não SSE upstream). A rota
+    // continua emitindo SSE para a PWA, agora em um único delta confiável em vez
+    // de abrir uma resposta que nunca recebe conteúdo.
+    const finalContent = completion.choices?.[0]?.message?.content?.trim() ?? '';
+    if (finalContent) input.onDelta?.(finalContent);
 
     if (!finalContent.trim()) {
       throw new Error('Falha ao gerar resposta do diário');
@@ -337,7 +331,7 @@ export class AIService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
+      ...getOpenAiOutputLimit(this.MODEL, 1500),
     } as any);
 
     const content = response.choices?.[0]?.message?.content;
@@ -346,7 +340,7 @@ export class AIService {
       throw new Error('Falha ao gerar perfil inicial do onboarding');
     }
 
-    return OnboardingAiOutputSchema.parse(JSON.parse(content));
+    return OnboardingAiOutputSchema.parse(extractJsonValue(content));
   }
 
   static async summarizeJournalSession(
@@ -428,13 +422,13 @@ export class AIService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
+      ...getOpenAiOutputLimit(this.MODEL, 1500),
     });
 
     const content = response.choices[0].message.content;
     if (!content) throw new Error('Falha ao gerar resumo da IA');
 
-    const parsed = JSON.parse(content);
+    const parsed = extractJsonValue(content);
     return JournalSummarySchema.parse(parsed);
   }
 
@@ -493,13 +487,22 @@ export class AIService {
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      max_completion_tokens: getOpenAiMaxCompletionTokens(1500),
+      ...getOpenAiOutputLimit(this.MODEL, 1500),
     } as any);
 
     const content = response.choices[0].message.content;
     if (!content) return [];
 
-    const parsed = JSON.parse(content);
-    return Array.isArray(parsed) ? parsed : (parsed.suggestions || parsed.habits || []);
+    const parsed = extractJsonValue(content);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object') {
+      const container = parsed as { suggestions?: unknown; habits?: unknown };
+      return Array.isArray(container.suggestions)
+        ? container.suggestions
+        : Array.isArray(container.habits)
+          ? container.habits
+          : [];
+    }
+    return [];
   }
 }

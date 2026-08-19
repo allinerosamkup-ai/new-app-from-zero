@@ -18,6 +18,11 @@ const NOTIFICATION_TARGET = FEATURES.planner ? '/planner' : FEATURE_FALLBACK_ROU
 
 const appRelease = import.meta.env.VITE_APP_RELEASE?.trim() ?? '';
 
+type AiriaNotificationData = {
+  blockId?: string;
+  url?: string;
+};
+
 self.skipWaiting();
 clientsClaim();
 cleanupOutdatedCaches();
@@ -104,29 +109,31 @@ self.addEventListener('push', (event) => {
 });
 
 // Handle notification click (tap no body ou em um botão de ação)
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close();
 
-  const action: string = (event as any).action || '';
-  const blockId: string | undefined = event.notification.data?.blockId;
-  const url: string = event.notification.data?.url || '/';
+  const notificationData = event.notification.data as AiriaNotificationData | undefined;
+  const action = event.action || '';
+  const blockId = notificationData?.blockId;
+  const url = notificationData?.url || '/';
 
   // Para ações done/started/help: postMessage ao cliente ativo (que tem o token de auth)
   // e navega para /planner
   if (blockId && (action === 'done' || action === 'started' || action === 'help')) {
     event.waitUntil(
-      (self.clients as any).matchAll({ type: 'window', includeUncontrolled: true })
-        .then((clients: any[]) => {
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((matchedClients) => {
+          const clients = matchedClients.filter((client): client is WindowClient => client.type === 'window');
           const message = { type: 'NOTIFICATION_ACTION', action, blockId };
 
           // Envia para todos os clientes abertos
-          clients.forEach((c: any) => c.postMessage(message));
+          clients.forEach((client) => client.postMessage(message));
 
           // Navega para dar feedback visual. Com o Planner desligado o destino
           // é a Home — notificação não pode abrir tela que saiu do produto.
-          const target = clients.find((c: any) => c.url.includes(NOTIFICATION_TARGET) || c.focused);
+          const target = clients.find((client) => client.url.includes(NOTIFICATION_TARGET) || client.focused);
           if (target) return target.focus();
-          return (self.clients as any).openWindow(NOTIFICATION_TARGET);
+          return self.clients.openWindow(NOTIFICATION_TARGET);
         }),
     );
     return;
@@ -134,11 +141,12 @@ self.addEventListener('notificationclick', (event) => {
 
   // Clique simples no corpo da notificação: abre/foca a URL
   event.waitUntil(
-    (self.clients as any).matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clients: any[]) => {
-        const existing = clients.find((c: any) => c.url.includes(url) || url === '/');
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((matchedClients) => {
+        const clients = matchedClients.filter((client): client is WindowClient => client.type === 'window');
+        const existing = clients.find((client) => client.url.includes(url) || url === '/');
         if (existing) return existing.focus();
-        return (self.clients as any).openWindow(url);
+        return self.clients.openWindow(url);
       }),
   );
 });

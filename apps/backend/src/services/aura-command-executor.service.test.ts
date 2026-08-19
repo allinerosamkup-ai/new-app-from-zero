@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 
+import { Prisma } from '@prisma/client';
 import {
   AuraCommandExecutorService,
   sanitizeExistingItemChanges,
@@ -87,7 +88,10 @@ function createPrismaFixture(executionPolicy = 'review_required') {
       update: async ({ where, data }: any) => {
         const operation = operations.find((item) => item.id === where.id);
         if (!operation) throw new Error('operation not found');
-        Object.assign(operation, data);
+        Object.assign(operation, {
+          ...data,
+          ...(data.error === Prisma.DbNull ? { error: null } : {}),
+        });
         return operation;
       },
     },
@@ -177,7 +181,7 @@ async function main() {
       },
     },
     result: null,
-    error: null,
+    error: { message: 'falha transitória anterior' },
     idempotencyKey: null,
     appliedAt: null,
   });
@@ -208,6 +212,7 @@ async function main() {
   assert.equal(recorded[0].energyScore, 3);
   assert.equal(recorded[0].clarityScore, null);
   assert.equal(canonicalResult.operations[0]?.result?.checkinId, 'checkin-1');
+  assert.equal(canonicalCheckin.operations[2]?.error, null);
 
   const explicitGoal = createPrismaFixture('auto_apply');
   explicitGoal.operations.push({

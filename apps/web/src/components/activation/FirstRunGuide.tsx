@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import type { ActivationState } from "../../features/aura/activation";
+import { getLocalizedActivationAction, type ActivationState } from "../../features/aura/activation";
 import { ActivationChecklist } from "./ActivationChecklist";
 import { AiriaButton, AiriaIconButton } from "../airia";
 import { useLocalizedCopy } from "../../i18n";
@@ -20,6 +20,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
   const [visible, setVisible] = useState(false);
+  const nextAction = getLocalizedActivationAction(activation.nextAction.id, l);
 
   useEffect(() => {
     if (!activation.isNewUser || activation.activationLevel === "active") {
@@ -42,7 +43,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
 
   function goNext() {
     setVisible(false);
-    navigate(activation.nextAction.route);
+    navigate(nextAction.route);
   }
 
   if (!visible) return null;
@@ -71,7 +72,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
             {l("Primeiro caminho Airia", "Your first Airia path")}
           </p>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.25 }}>
-            {activation.nextAction.title}
+            {nextAction.title}
           </h2>
         </div>
         <AiriaIconButton
@@ -84,7 +85,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
       </div>
 
       <p style={{ margin: "0 0 12px", fontSize: 12.5, lineHeight: 1.55, color: "var(--text-2)" }}>
-        {activation.nextAction.description}
+        {nextAction.description}
       </p>
 
       <ActivationChecklist activation={activation} />
@@ -106,7 +107,7 @@ export function FirstRunGuide({ activation, userId }: Props) {
           rightIcon={<ArrowRight size={14} />}
           style={{ flex: 2 }}
         >
-          {activation.nextAction.label}
+          {nextAction.label}
         </AiriaButton>
       </div>
     </div>

@@ -2268,44 +2268,44 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 
 .harmony-dim-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  padding-bottom: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-bottom: 4px;
 }
 
 .harmony-dim-card {
   background: rgba(255,255,255,.62);
   border: 1px solid rgba(255,255,255,.84);
-  border-radius: 18px;
+  border-radius: 14px;
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  box-shadow: 0 12px 24px rgba(169,210,187,.08);
-  padding: 14px;
+  box-shadow: 0 8px 16px rgba(169,210,187,.06);
+  padding: 10px 11px;
 }
 
 .harmony-dim-top {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .harmony-dim-label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-1);
 }
 
 .harmony-dim-value {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--accent-peach-ink);
 }
 
 .harmony-progress-track {
   width: 100%;
-  height: 8px;
+  height: 5px;
   border-radius: 999px;
   background: rgba(169,210,187,.12);
   overflow: hidden;
@@ -2318,8 +2318,8 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 
 .harmony-dim-note {
   display: inline-block;
-  margin-top: 8px;
-  font-size: 10px;
+  margin-top: 5px;
+  font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .08em;
@@ -2467,6 +2467,148 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   line-height: 1.2;
 }
 
+.today-goal-actions {
+  margin-bottom: 12px;
+  padding: 15px;
+  border: 1.5px solid rgba(143,192,164,.36);
+  border-radius: 18px;
+  background: rgba(255,253,250,.94);
+  box-shadow: 0 8px 24px rgba(64,100,78,.05);
+  font-family: var(--font-sans, 'Plus Jakarta Sans', sans-serif);
+}
+
+.today-goal-actions__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.today-goal-actions__eyebrow,
+.today-goal-actions__goal {
+  margin: 0;
+  color: var(--accent-primary-ink);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.today-goal-actions__title {
+  margin: 4px 0 0;
+  color: var(--text-1);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.today-goal-actions__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid rgba(143,192,164,.36);
+  border-radius: 10px;
+  background: rgba(143,192,164,.1);
+  color: var(--accent-primary-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.today-goal-actions__context,
+.today-goal-actions__loading {
+  margin: 9px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.today-goal-actions__list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.today-goal-actions__item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(17,24,39,.07);
+  border-radius: 14px;
+  background: rgba(255,255,255,.72);
+}
+
+.today-goal-actions__open {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-1);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.today-goal-actions__open strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.today-goal-actions__reason {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.today-goal-actions__complete {
+  width: 36px;
+  min-height: 36px;
+  align-self: center;
+  border: 1.5px solid var(--accent-primary-strong, #8FC0A4);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--accent-primary-ink);
+  cursor: pointer;
+}
+
+.today-goal-actions__complete:disabled { opacity: .55; cursor: wait; }
+
+.today-goal-actions__empty {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  margin-top: 12px;
+  color: var(--text-2);
+}
+
+.today-goal-actions__empty p { margin: 0; font-size: 12px; line-height: 1.45; }
+
+.today-goal-actions__empty button {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 1px solid var(--warm-border-2);
+  border-radius: 12px;
+  background: rgba(255,255,255,.72);
+  color: var(--text-1);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .insights-chart-heading {
   display: flex;
   align-items: center;
@@ -2478,7 +2620,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   width: 12px;
   height: 12px;
   border-radius: 4px;
-  background: linear-gradient(180deg, rgba(150,199,179,.92) 0%, rgba(169,210,187,.86) 100%);
+  background: linear-gradient(135deg, var(--insights-mood-series) 0 48%, var(--insights-energy-series) 52% 100%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.58);
   flex-shrink: 0;
 }
@@ -2528,12 +2670,12 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 }
 
 .insights-bar-humor {
-  background: var(--accent-sage);
+  background: var(--insights-mood-series);
   border-radius: 4px 4px 2px 2px;
 }
 
 .insights-bar-energia {
-  background: var(--accent-peach);
+  background: var(--insights-energy-series);
   border-radius: 4px 4px 2px 2px;
 }
 
@@ -2542,7 +2684,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 }
 
 .insights-bar-energia.insights-bar--active {
-  border: 2px solid rgba(169,210,187,.25);
+  border: 2px solid rgba(62,132,178,.34);
 }
 
 .insights-bar-day {
@@ -2579,13 +2721,25 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 }
 
 .insights-legend-dot--humor {
-  background: var(--accent-sage);
-  opacity: .6;
+  background: var(--insights-mood-series);
+  opacity: .92;
 }
 
 .insights-legend-dot--energia {
-  background: var(--accent-peach);
-  opacity: .5;
+  background: var(--insights-energy-series);
+  opacity: .92;
+}
+
+:root {
+  /* Série fixa: o estado/fase não muda a cor de Humor ou Energia. */
+  --insights-mood-series: #5E876F;
+  --insights-energy-series: #3E84B2;
+}
+
+@media (min-width: 640px) {
+  .harmony-dim-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .insights-legend-text {

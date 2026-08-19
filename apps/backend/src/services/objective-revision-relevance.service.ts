@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 
 import { extractJsonValue } from '../lib/extract-json';
-import { getOpenAiMaxCompletionTokens, openAiTemperature } from '../lib/openai-config';
+import { getOpenAiOutputLimit, openAiTemperature } from '../lib/openai-config';
 
 type ChatClient = Pick<OpenAI, 'chat'>;
 
@@ -77,8 +77,8 @@ export class ObjectiveRevisionRelevanceService {
     }
     const chat = client ?? defaultClient();
     const models = [
-      process.env.OPENAI_OBJECTIVE_MODEL?.trim() || 'gpt-5.4-mini',
-      process.env.OPENAI_OBJECTIVE_FALLBACK_MODEL?.trim() || 'gpt-4.1-mini',
+      process.env.OPENAI_OBJECTIVE_MODEL?.trim() || 'claude-sonnet-4-6',
+      process.env.OPENAI_OBJECTIVE_FALLBACK_MODEL?.trim() || 'gpt-5-mini',
     ];
     for (const model of models) {
       try {
@@ -89,7 +89,7 @@ export class ObjectiveRevisionRelevanceService {
             { role: 'user', content: buildObjectiveRevisionRelevancePrompt(input) },
           ],
           response_format: { type: 'json_object' },
-          max_completion_tokens: getOpenAiMaxCompletionTokens(420),
+          ...getOpenAiOutputLimit(model, 420),
           ...openAiTemperature(model, 0.1),
         } as any);
         const content = response.choices?.[0]?.message?.content;

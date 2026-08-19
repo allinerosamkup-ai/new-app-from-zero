@@ -44,7 +44,6 @@ describe("canonical onboarding routing", () => {
     for (const file of [
       "src/routes/aura-layout.tsx",
       "src/routes/aura-chat-page.tsx",
-      "src/routes/planner-page.tsx",
       "src/routes/routine-builder-page.tsx",
     ]) {
       const fileSource = source(file);

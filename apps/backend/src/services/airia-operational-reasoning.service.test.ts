@@ -30,7 +30,7 @@ function baseContext(overrides: Partial<DailyContext> = {}): DailyContext {
 }
 
 async function run() {
-  const lowHabitPlan = AiriaOperationalReasoningService.build({
+  const noInactiveSourcePlan = AiriaOperationalReasoningService.build({
     dailyContext: baseContext({
       pendingHabitTitles: ['Revisar rotina do sono'],
       todayAnchorTitles: ['Revisar rotina do sono'],
@@ -40,10 +40,9 @@ async function run() {
     requestContext: { energyScore: 2, moodScore: 4, currentHour: 14, currentMinute: 20 },
     currentMessage: 'Estou sem energia.',
   });
-  assert.equal(lowHabitPlan.reading.capacity, 'protecao');
-  assert.equal(lowHabitPlan.decision.type, 'act');
-  assert.match(AiriaOperationalReasoningService.visibleSuggestion(lowHabitPlan), /versão mínima|pausar/i);
-  assert.doesNotMatch(AiriaOperationalReasoningService.visibleSuggestion(lowHabitPlan), /anot|escrev|registr/i);
+  assert.equal(noInactiveSourcePlan.reading.capacity, 'protecao');
+  assert.equal(noInactiveSourcePlan.decision.type, 'ask_anchor');
+  assert.match(AiriaOperationalReasoningService.visibleSuggestion(noInactiveSourcePlan), /coisa real de hoje/i);
 
   const oldMemoryPlan = AiriaOperationalReasoningService.build({
     dailyContext: baseContext({
@@ -60,7 +59,7 @@ async function run() {
     dailyContext: baseContext({
       activeGoalTitles: ['Finalizar proposta comercial'],
       todayAnchorTitles: ['Finalizar proposta comercial'],
-      goals: [{ id: 'goal-1', title: 'Finalizar proposta comercial', progress: 40, subgoals: [] }],
+      goals: [{ id: 'goal-1', title: 'Finalizar proposta comercial', progress: 40, subgoals: [{ id: 'action-1', title: 'Abrir a proposta comercial e escrever o primeiro tópico', doneWhen: 'o primeiro tópico estiver visível na proposta', done: false }] }],
     }),
     surface: 'home',
     requestContext: { energyScore: 8, moodScore: 7, phase: 'voo alto', currentHour: 9, currentMinute: 30 },
@@ -68,14 +67,15 @@ async function run() {
   });
   assert.equal(goalPlan.decision.type, 'act');
   assert.equal(goalPlan.action?.targetId, 'goal-1');
-  assert.match(goalPlan.action?.displayText ?? '', /Finalizar proposta comercial/i);
-  assert.match(goalPlan.reading.pattern, /meta ativa/i);
+  assert.match(goalPlan.action?.displayText ?? '', /Abrir a proposta comercial/i);
+  assert.match(goalPlan.action?.displayText ?? '', /Pronto quando/i);
+  assert.match(goalPlan.reading.pattern, /ação concreta de Objetivo/i);
 
   const lateGoalPlan = AiriaOperationalReasoningService.build({
     dailyContext: baseContext({
       activeGoalTitles: ['Estudar documentação técnica'],
       todayAnchorTitles: ['Estudar documentação técnica'],
-      goals: [{ id: 'goal-2', title: 'Estudar documentação técnica', progress: 10, subgoals: [] }],
+      goals: [{ id: 'goal-2', title: 'Estudar documentação técnica', progress: 10, subgoals: [{ id: 'action-2', title: 'Abrir a documentação técnica e listar três tópicos', doneWhen: 'três tópicos estiverem listados', done: false }] }],
     }),
     surface: 'checkin',
     requestContext: { energyScore: 4, currentHour: 22, currentMinute: 30 },

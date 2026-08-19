@@ -1,8 +1,9 @@
-import { Suspense, lazy, useEffect, useRef } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { InstallPWA } from "./components/InstallPWA";
 import { trackInstallConversionOnce, trackMetaPixelPageView } from "./lib/meta-pixel";
 import { FEATURE_FALLBACK_ROUTE } from "./config/features";
+import { supabase } from "./lib/supabase";
 
 const loadAuraLayout = () => import("./routes/aura-layout");
 const loadLoginPage = () => import("./routes/login-page");
@@ -134,12 +135,53 @@ function RouteLoader() {
   );
 }
 
+const LAST_PRODUCT_ROUTE_KEY = "airia-last-product-route";
+const RESTORABLE_PRODUCT_ROUTES = new Set([
+  "/home", "/goals", "/journal", "/insights", "/aura", "/preferences", "/jornada", "/captures",
+]);
+
+function isRestorableProductRoute(pathname: string) {
+  return RESTORABLE_PRODUCT_ROUTES.has(pathname);
+}
+
+/** A Splash apresenta o produto a visitantes; uma sessão válida retoma o produto. */
+function SplashEntry() {
+  const [sessionState, setSessionState] = useState<"checking" | "authenticated" | "anonymous">("checking");
+
+  useEffect(() => {
+    let active = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) setSessionState(data.session ? "authenticated" : "anonymous");
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setSessionState(session ? "authenticated" : "anonymous");
+    });
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  if (sessionState === "checking") return <RouteLoader />;
+  if (sessionState === "authenticated") {
+    const savedRoute = typeof window === "undefined" ? null : sessionStorage.getItem(LAST_PRODUCT_ROUTE_KEY);
+    return <Navigate to={savedRoute && isRestorableProductRoute(savedRoute) ? savedRoute : "/home"} replace />;
+  }
+  return <SplashPage />;
+}
+
 export default function App() {
   const location = useLocation();
   const firstPixelPageView = useRef(true);
 
   useEffect(() => {
     preloadNextRoutes(location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && isRestorableProductRoute(location.pathname)) {
+      sessionStorage.setItem(LAST_PRODUCT_ROUTE_KEY, location.pathname);
+    }
   }, [location.pathname]);
 
   useEffect(() => {
@@ -212,16 +254,11 @@ export default function App() {
       <div className="app-viewport">
       <div key={location.pathname} className="page-transition">
       <Routes>
-        {/* A raiz RENDERIZA a splash; não redireciona para ela.
-            Era o contrário, e custava a indexação inteira: o Googlebot executa
-            JS, via `/` redirecionar para `/splash`, e o Search Console
-            classificava a home como "Página com redirecionamento" — nunca
-            indexada. Com a canônica apontando para `/`, o buscador tinha uma
-            URL canônica que se recusava a servir conteúdo.
-            `/splash` continua existindo e agora manda para a raiz, porque link
-            antigo não pode cair em 404 e duas URLs servindo a mesma página é
-            conteúdo duplicado. */}
-        <Route path="/" element={<SplashPage />} />
+        {/* A raiz pública mantém a Splash para visitantes e indexação. O portão
+            verifica primeiro uma sessão válida e só então retoma a área do
+            produto, evitando que quem já conhece a Airia volte à apresentação.
+            `/splash` continua existindo como compatibilidade de links antigos. */}
+        <Route path="/" element={<SplashEntry />} />
         <Route path="/splash" element={<Navigate to="/" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />

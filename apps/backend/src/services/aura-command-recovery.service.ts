@@ -13,6 +13,7 @@ type RecoveryInput = {
   response: AuraCommandResponse;
   message: string;
   localDate: string;
+  history?: Array<{ role: string; content: string }>;
   captureJudgment: CaptureJudgment;
 };
 
@@ -101,6 +102,31 @@ function extractScore(message: string, labels: string[]): number | null {
   return match ? Number(match[1]) : null;
 }
 
+function requestedCheckinField(history: RecoveryInput['history']): 'moodScore' | 'energyScore' | null {
+  for (const entry of [...(history ?? [])].reverse()) {
+    if (entry.role !== 'assistant') continue;
+    const text = normalized(entry.content);
+    if (/como esta seu humor agora/.test(text)) return 'moodScore';
+    if (/como esta sua energia agora/.test(text)) return 'energyScore';
+  }
+  return null;
+}
+
+function explicitReplyScore(message: string): number | null {
+  const match = /^\s*(10|[1-9])(?:\s*(?:[,.;:!?-].*)?)?$/u.exec(message);
+  return match ? Number(match[1]) : null;
+}
+
+function candidateFromCheckinTurn(input: RecoveryInput): Record<string, unknown> {
+  const candidate = { ...input.response.payload } as Record<string, unknown>;
+  const field = requestedCheckinField(input.history);
+  const score = explicitReplyScore(input.message);
+  if (field && score !== null && candidate[field] == null) {
+    candidate[field] = score;
+  }
+  return candidate;
+}
+
 function recoverTask(input: RecoveryInput): AuraCommandResponse | null {
   const title = extractTaskTitle(input.message);
   if (!title) return null;
@@ -171,15 +197,18 @@ function recoverCheckin(input: RecoveryInput): AuraCommandResponse | null {
     message: input.message,
     localDate: input.localDate,
     source: 'aura_text',
-    candidate: input.response.payload,
+    candidate: candidateFromCheckinTurn(input),
   });
   if (draft.status === 'unsupported') return null;
   if (draft.status === 'needs_clarification') {
     const missingMood = draft.mood.value === null;
+    const missingEnergy = draft.energy.value === null;
     return {
-      assistantMessage: missingMood
+      assistantMessage: missingMood && !missingEnergy
         ? 'Entendi sua energia. Como está seu humor agora, de 1 a 10 ou em uma palavra?'
-        : 'Entendi seu humor. Como está sua energia agora, de 1 a 10 ou em uma palavra?',
+        : !missingMood && missingEnergy
+          ? 'Entendi seu humor. Como está sua energia agora, de 1 a 10 ou em uma palavra?'
+          : 'Como está seu humor agora, de 1 a 10 ou em uma palavra?',
       intent: 'clarify',
       action: 'ask_clarification',
       payload: {

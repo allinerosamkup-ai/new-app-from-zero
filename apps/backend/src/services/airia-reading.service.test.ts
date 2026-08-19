@@ -21,7 +21,7 @@ const prisma: any = {
     update: async ({ where, data }: any) => { checkinMetadata.set(where.id, data.signalMetadata); return {}; },
   },
   journalSession: { findMany: async () => [] },
-  objective: { findMany: async () => [{ id: 'objective-1', title: 'Sala pronta', progress: 20, subgoals: [{ id: 'action-1', title: 'Separar os itens da sala', done: false }], milestones: [], updatedAt: new Date(`${date}T09:00:00.000Z`) }] },
+  objective: { findMany: async () => [{ id: 'objective-1', title: 'Sala pronta', progress: 20, subgoals: [{ id: 'action-1', title: 'Separar os itens da sala por uso', doneWhen: 'os itens estiverem em três grupos de uso', done: false }], milestones: [], updatedAt: new Date(`${date}T09:00:00.000Z`) }] },
   userPattern: { findMany: async () => [] },
   userFact: { findMany: async () => [] },
   airiaReading: {
@@ -49,7 +49,7 @@ void (async () => {
   assert.equal((reading.currentState.intraday as any).direction, 'oscillating');
   assert.equal((reading.currentState.intraday as any).range, 5);
   assert.equal(reading.period.observedDays, 1);
-  assert.equal(reading.decision?.title, 'Separar os itens da sala');
+  assert.equal(reading.decision?.title, 'Separar os itens da sala por uso. Pronto quando: os itens estiverem em três grupos de uso.');
   assert.equal(reading.decision?.requiresConfirmation, true);
   const historical = await new AiriaReadingService(prisma).rebuild({ userId, localDate: date, periodFrom: '2026-08-10', periodTo: '2026-08-12', surface: 'insights' });
   assert.equal(historical.currentState.phase, 'Retomada', 'custom period never replaces the latest state');

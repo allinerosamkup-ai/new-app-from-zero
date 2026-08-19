@@ -407,7 +407,7 @@ export function buildTimelineBlockInput(
     aiReasoning?: string | null;
   },
 ) {
-  const payload: any = {
+  const payload = {
     ...(options?.id ? { id: options.id } : {}),
     title: form.title.trim(),
     startTime: form.time,

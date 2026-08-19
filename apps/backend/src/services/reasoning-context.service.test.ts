@@ -30,7 +30,7 @@ function baseContext(overrides: Partial<DailyContext> = {}): DailyContext {
 }
 
 async function run() {
-  const lowHabitTrace = ReasoningContextService.build({
+  const noAnchorTrace = ReasoningContextService.build({
     dailyContext: baseContext({
       pendingHabitTitles: ['Revisar rotina do sono'],
       todayAnchorTitles: ['Revisar rotina do sono'],
@@ -40,9 +40,9 @@ async function run() {
     requestContext: { energyScore: 2, moodScore: 4, currentHour: 14, currentMinute: 20 },
     currentMessage: 'Estou bem sem energia hoje.',
   });
-  assert.equal(lowHabitTrace.capacity, 'protecao');
-  assert.equal(lowHabitTrace.decision.title, 'Revisar rotina do sono');
-  assert.match(lowHabitTrace.why, /versão reduzida|reduzida|pausa|ritmo/i);
+  assert.equal(noAnchorTrace.capacity, 'protecao');
+  assert.equal(noAnchorTrace.decision.type, 'pergunta');
+  assert.match(noAnchorTrace.why, /ações concretas de Objetivos/i);
 
   const oldMemoryTrace = ReasoningContextService.build({
     dailyContext: baseContext({
@@ -90,15 +90,15 @@ async function run() {
   const goalTrace = ReasoningContextService.build({
     dailyContext: baseContext({
       activeGoalTitles: ['Finalizar proposta comercial'],
-      todayAnchorTitles: ['Finalizar proposta comercial'],
-      goals: [{ id: 'goal-1', title: 'Finalizar proposta comercial', progress: 40, subgoals: [] }],
+      todayAnchorTitles: ['Abrir a proposta comercial e escrever o primeiro tópico'],
+      goals: [{ id: 'goal-1', title: 'Finalizar proposta comercial', progress: 40, subgoals: [{ id: 'action-1', title: 'Abrir a proposta comercial e escrever o primeiro tópico', doneWhen: 'o primeiro tópico estiver visível na proposta', done: false }] }],
     }),
     surface: 'home',
     requestContext: { energyScore: 8, moodScore: 7, phase: 'voo alto', currentHour: 9, currentMinute: 30 },
     currentMessage: 'Hoje acordei com mais clareza.',
   });
   assert.equal(goalTrace.capacity, 'alta');
-  assert.equal(goalTrace.decision.title, 'Finalizar proposta comercial');
+  assert.equal(goalTrace.decision.title, 'Abrir a proposta comercial e escrever o primeiro tópico');
   assert.equal(goalTrace.decision.targetId, 'goal-1');
   assert.equal(goalTrace.decision.action, 'suggest');
 
@@ -121,7 +121,7 @@ async function run() {
     dailyContext: baseContext({
       activeGoalTitles: ['Estudar documentação técnica'],
       todayAnchorTitles: ['Estudar documentação técnica'],
-      goals: [{ id: 'goal-2', title: 'Estudar documentação técnica', progress: 10, subgoals: [] }],
+      goals: [{ id: 'goal-2', title: 'Estudar documentação técnica', progress: 10, subgoals: [{ id: 'action-2', title: 'Abrir a documentação técnica e listar três tópicos', doneWhen: 'três tópicos estiverem listados', done: false }] }],
     }),
     surface: 'planner',
     requestContext: { energyScore: 4, currentHour: 22, currentMinute: 30 },

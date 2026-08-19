@@ -14,6 +14,7 @@ import { getActivationState } from "../features/aura/activation";
 import { resolveActiveBanner } from "./aura-layout.helpers";
 import { resolveUnlockedNav, type NavKey } from "./nav-access.helpers";
 import { FEATURES } from "../config/features";
+import { useLocalizedCopy } from "../i18n";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -141,6 +142,7 @@ function isWithinOnboardingPromptWindow(accountCreatedAt?: string | null) {
 
 export function AuraLayout() {
   const { t } = useTranslation();
+  const l = useLocalizedCopy();
   const { hydrated, refreshData, state, dismissPhaseTransitionAlert, resolveFollowUp } = useAuraStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -334,7 +336,7 @@ export function AuraLayout() {
                   onClick={() => dismissOnboardingPrompt(false)}
                   style={{ flex: 1, height: 32, border: "1px solid var(--warm-border-2)", borderRadius: 10, background: "transparent", color: "var(--text-2)", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
                 >
-                  Depois
+                  {l("Depois", "Later")}
                 </button>
                 <button
                   onClick={() => dismissOnboardingPrompt(true)}
@@ -413,7 +415,7 @@ export function AuraLayout() {
                   "{followUp.followUpMessage}"
                 </p>
                 <p style={{ fontSize: 10, color: "var(--text-3)", margin: "3px 0 0" }}>
-                  Sobre: {followUp.suggestionTitle}
+                  {l("Sobre", "About")}: {followUp.suggestionTitle}
                 </p>
               </div>
             </div>

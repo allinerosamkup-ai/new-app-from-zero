@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ subscription: {} as any }));
+const mocks = vi.hoisted(() => ({ subscription: {} as Record<string, never> }));
 vi.mock("../hooks/useSubscription", () => ({ useSubscription: () => mocks.subscription }));
 
 import { setLanguage } from "../i18n";

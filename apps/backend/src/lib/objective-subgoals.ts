@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validateConcreteAction } from './action-quality';
 
 const ObjectiveSubgoalInputSchema = z.object({
   id: z.string(),
@@ -61,6 +62,33 @@ export const ObjectiveSubgoalSchema = z.object({
 
 export type ObjectiveSubgoalInput = z.input<typeof ObjectiveSubgoalInputSchema>;
 export type ObjectiveSubgoal = z.output<typeof ObjectiveSubgoalSchema>;
+
+/**
+ * Um registro antigo pode continuar guardado para preservar o histórico, mas
+ * só um passo que descreve movimento, objeto e evidência de término pode guiar
+ * a pessoa, bloquear o caminho ou entrar no contexto operacional da Airia.
+ */
+export function isConcreteObjectiveSubgoal(subgoal: Pick<ObjectiveSubgoal, 'title' | 'doneWhen'>): boolean {
+  return validateConcreteAction({ title: subgoal.title, doneWhen: subgoal.doneWhen }).ok;
+}
+
+export function activeConcreteObjectiveSubgoals(subgoals: unknown): ObjectiveSubgoal[] {
+  return normalizeObjectiveSubgoals(subgoals).filter((subgoal) => (
+    !subgoal.done
+    && subgoal.status !== 'rejected'
+    && subgoal.status !== 'deferred'
+    && isConcreteObjectiveSubgoal(subgoal)
+  ));
+}
+
+export function hasLegacyOpenObjectiveSubgoals(subgoals: unknown): boolean {
+  return normalizeObjectiveSubgoals(subgoals).some((subgoal) => (
+    !subgoal.done
+    && subgoal.status !== 'rejected'
+    && subgoal.status !== 'deferred'
+    && !isConcreteObjectiveSubgoal(subgoal)
+  ));
+}
 
 export function normalizeObjectiveSubgoals(subgoals: unknown): ObjectiveSubgoal[] {
   if (!Array.isArray(subgoals)) return [];

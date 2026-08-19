@@ -22,9 +22,9 @@ async function run() {
   assert.equal(incomplete.isConfigured(), false);
   await assert.rejects(() => incomplete.createCheckoutSession('u', undefined, 'monthly', 'attempt-key'), /billing_unavailable/);
 
-  const stripe = createBillingProviderFromEnv(prisma, { BILLING_PROVIDER: 'stripe' } as NodeJS.ProcessEnv);
-  assert.equal(stripe.name, 'stripe');
-  assert.equal(stripe.isConfigured(), false);
+  const unsupportedProvider = createBillingProviderFromEnv(prisma, { BILLING_PROVIDER: 'stripe' } as NodeJS.ProcessEnv);
+  assert.equal(unsupportedProvider.name, 'cakto');
+  assert.equal(unsupportedProvider.isConfigured(), false);
 }
 
 run().then(() => console.log('billing-provider tests passed'));

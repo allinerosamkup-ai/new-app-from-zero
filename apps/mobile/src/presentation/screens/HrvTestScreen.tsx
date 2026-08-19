@@ -4,7 +4,7 @@ import {
   SafeAreaView, ScrollView, TextInput, Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { appColors, appRadius, appSpacing, appTypography } from '../theme/appTheme';
+import { appColors, appRadius, appSpacing } from '../theme/appTheme';
 
 // Estimativa de HRV (RMSSD) a partir da FC de repouso
 // Baseado na relação inversa FC × HRV em adultos saudáveis

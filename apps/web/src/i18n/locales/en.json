@@ -649,6 +649,7 @@
     "title": "Airia",
     "ready": "ready",
     "starting": "starting",
+    "processing": "Organizing your request...",
     "kicker": "Command center",
     "placeholder": "What shall we organize now?",
     "initialIdle": "Tell me what needs to leave your head and become a next step.",
@@ -878,11 +879,14 @@
   "safety": {
     "crisisProtocol": "Crisis protocol",
     "safetyLayer": "Safety layer",
+    "adaptLayer": "Pace adjustment",
     "crisisBody": "Airia will not treat this as productivity. Human safety and immediate support are the priority now.",
     "humanBody": "Airia noticed signs that call for a lighter load and human support if this feels too heavy.",
+    "adaptBody": "Today may call for a slower pace and one smaller step. You remain in control of your day.",
     "emergency": "If there is an immediate risk to you or someone else, contact local emergency services now. Airia does not replace a psychologist, psychiatrist, medical care, or your support network.",
     "adaptDay": "Adapt my day",
     "registerProtocol": "Register protocol",
+    "continueDay": "Continue with one smaller step",
     "understood": "I understand the alert",
     "resources": {
       "cvv": "24/7 emotional support in Brazil",

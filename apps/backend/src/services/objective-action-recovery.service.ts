@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { normalizeObjectiveSubgoals, type ObjectiveSubgoal } from '../lib/objective-subgoals';
+import {
+  activeConcreteObjectiveSubgoals,
+  isConcreteObjectiveSubgoal,
+  normalizeObjectiveSubgoals,
+  type ObjectiveSubgoal,
+} from '../lib/objective-subgoals';
 
 type ObjectiveRecoveryRow = {
   id: string;
@@ -121,7 +126,7 @@ function recoveredActions(objectiveId: string, items: Array<{ title: string; met
     effortSize: item.metadata?.effortSize,
     basedOn: item.metadata?.basedOn,
     evidenceRefs: Array.isArray(item.metadata?.evidenceRefs) ? item.metadata.evidenceRefs : undefined,
-  })));
+  }))).filter(isConcreteObjectiveSubgoal);
 }
 
 function recoveredPath(value: unknown) {
@@ -177,7 +182,7 @@ export class ObjectiveActionRecoveryService {
       objective.userId === input.userId
       && objective.archived === false
       && objective.progress < 100
-      && normalizeObjectiveSubgoals(objective.subgoals).length === 0
+      && activeConcreteObjectiveSubgoals(objective.subgoals).length === 0
     ));
 
     let recovered = 0;
@@ -258,7 +263,7 @@ export class ObjectiveActionRecoveryService {
       await this.releaseClaim(input.userId, input.objective.id, claim.token);
       return { status: 'deferred', attempted: false, retryAfterMs: 0 };
     }
-    if (normalizeObjectiveSubgoals(fresh.subgoals).length > 0) {
+    if (activeConcreteObjectiveSubgoals(fresh.subgoals).length > 0) {
       await this.releaseClaim(input.userId, input.objective.id, claim.token);
       return { status: 'recovered', attempted: false, retryAfterMs: null };
     }
@@ -275,7 +280,7 @@ export class ObjectiveActionRecoveryService {
             userId: input.userId,
             objectiveId: input.objective.id,
             goalTitle: titleSnapshot,
-            existingSubtasks: [],
+            existingSubtasks: activeConcreteObjectiveSubgoals(fresh.subgoals).map((action) => action.title),
             locale: input.locale,
           },
         },

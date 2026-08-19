@@ -68,6 +68,16 @@ function run() {
   assert.equal(lowSleepWithoutCrisis.riskLevel, 'low');
   assert.equal(lowSleepWithoutCrisis.route, 'adapt_day');
 
+  const isolatedIrritability = assessRiskSafety({
+    text: '',
+    moodScore: 6,
+    energyScore: 6,
+    sleepScore: 8,
+    irritabilityScore: 9,
+  });
+  assert.equal(isolatedIrritability.riskLevel, 'low');
+  assert.equal(isolatedIrritability.route, 'self_support');
+
   const moderateDistress = assessRiskSafety({
     text: 'estou em panico e preciso diminuir o dia',
     moodScore: 5,

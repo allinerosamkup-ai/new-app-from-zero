@@ -154,6 +154,24 @@ async function run() {
   assert.equal(edited.body.pathVersion, 4);
   assert.equal(state.memories.some((memory) => memory.canonicalKey.endsWith('.edited')), true);
 
+  const manualAction = await request(app).post(`/api/objectives/${OBJECTIVE_ID}/actions`).send({
+    expectedVersion: 4,
+    title: 'Abrir o app do banco e anotar o saldo atual',
+    doneWhen: 'o saldo estiver anotado em uma nota',
+  });
+  assert.equal(manualAction.status, 201);
+  assert.equal(manualAction.body.action.title, 'Abrir o app do banco e anotar o saldo atual');
+  assert.equal(manualAction.body.action.doneWhen, 'o saldo estiver anotado em uma nota');
+  assert.equal(state.getObjective().subgoals.at(-1).doneWhen, 'o saldo estiver anotado em uma nota');
+
+  const abstractAction = await request(app).post(`/api/objectives/${OBJECTIVE_ID}/actions`).send({
+    expectedVersion: 5,
+    title: 'Separar uma decisão financeira reversível para hoje',
+    doneWhen: 'a decisão estiver separada',
+  });
+  assert.equal(abstractAction.status, 422);
+  assert.equal(abstractAction.body.error, 'abstract_or_circular_action');
+
   const beforeUnsafePatch = structuredClone(state.getObjective().subgoals);
   const unsafePatch = await request(app).patch(`/api/objectives/${OBJECTIVE_ID}`).send({ subgoals: [] });
   assert.equal(unsafePatch.status, 400);

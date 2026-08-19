@@ -7,7 +7,6 @@ import {
   IconButton, 
   ActivityIndicator, 
   Surface,
-  Avatar,
   Card,
   MD3Colors,
   Button
@@ -15,7 +14,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { useJournalStore } from '../providers/journal_store';
 import { useAuthStore } from '../providers/auth_store';
-import { appColors, appRadius, appSpacing } from '../theme/appTheme';
+import { appColors, appSpacing } from '../theme/appTheme';
 
 /**
  * JournalChatScreen: Tela de chat de diário com IA e UI do Paper.

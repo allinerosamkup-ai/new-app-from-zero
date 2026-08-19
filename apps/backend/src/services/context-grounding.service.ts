@@ -232,24 +232,16 @@ function formatGroundingBlock(lists: GroundingLists & { postponedActions?: Groun
     });
   const lines = [
     `Data operacional: ${dateKey}.`,
-    lists.pendingTaskTitles.length ? `Agenda pendente hoje: ${lists.pendingTaskTitles.join(' | ')}` : 'Agenda pendente hoje: nenhuma.',
-    lists.completedTaskTitles.length ? `Agenda concluída hoje: ${lists.completedTaskTitles.join(' | ')}` : '',
-    lists.pendingHabitTitles.length ? `Hábitos devidos e pendentes hoje: ${lists.pendingHabitTitles.join(' | ')}` : '',
-    lists.completedHabitTitles.length ? `Hábitos feitos hoje: ${lists.completedHabitTitles.join(' | ')}` : '',
     lists.activeGoalTitles.length ? `Metas ativas: ${lists.activeGoalTitles.join(' | ')}` : '',
     lists.completedSubgoalTitles.length ? `Subtarefas já feitas: ${lists.completedSubgoalTitles.join(' | ')}` : '',
     lists.recentSuggestionTitles.length ? `Sugestões recentes para não reciclar: ${lists.recentSuggestionTitles.join(' | ')}` : '',
     lists.blockedActionTitles.length ? `Ações rejeitadas/concluídas pelo card: ${lists.blockedActionTitles.join(' | ')}` : '',
-    postponementLines.length ? `Adiamentos recentes para análise de padrão: ${postponementLines.join(' | ')}` : '',
-    (lists.repeatedSnoozes ?? []).length > 0
-      ? `Padrão de Deriva detectado (mesma tarefa pausada 3+ vezes): ${(lists.repeatedSnoozes ?? []).map(s => `${s.title} (${s.snoozeCount}x)`).join(' | ')} — Airia pode propor renegociar o horário desta tarefa de forma definitiva.`
-      : '',
     formatCheckinAbsenceLine(lists.daysSinceLastCheckin),
     lists.menstrualPhaseLabel
       ? `Ciclo menstrual: ${lists.menstrualPhaseLabel}${lists.menstrualCycleDay !== null ? ` (D${lists.menstrualCycleDay})` : ''} — usar como modulador biológico ao interpretar energia e humor, não como tema central.`
       : '',
-    'Regra de grounding: memórias e histórico explicam padrões; uma ação nova só pode nascer de Objetivo ativo, Ação pendente, intenção/relato atual ou âncora real de hoje. Um padrão verificado pode calibrar essa ação, nunca inventar destino operacional.',
-    'Regra de compromisso: sugestão opcional pode ser proposta, mas só compromisso real salvo/confirmado pode virar pendência ou notificação.',
+    'Regra de grounding: memórias e histórico explicam padrões; uma ação nova só pode nascer de Objetivo ativo com ação concreta ou intenção/relato atual. Um padrão verificado pode calibrar essa ação, nunca inventar destino operacional.',
+    'Regra de compromisso: sugestão opcional pode ser proposta, mas só ação concreta de Objetivo confirmada pode virar pendência.',
     ragContext ? 'Memórias RAG entram como padrão/contexto, não como autorização para inventar tarefa operacional.' : '',
   ].filter(Boolean);
 
@@ -292,11 +284,10 @@ function serializeAdaptivePlan(plan: AdaptiveAgendaPlan | null | undefined): str
 function surfaceFromType(type: string): DecisionSurface {
   if (type === 'stability-analysis' || type === 'home-messages') return 'home';
   if (type === 'checkin-response' || type === 'day-tasks') return 'checkin';
-  if (type === 'agenda-blocks' || type === 'agenda-adapt') return 'planner';
   if (type === 'journal' || type === 'journal-tasks') return 'journal';
   if (type === 'weekly-insight' || type === 'monthly-report') return 'insights';
   if (type === 'aura-command') return 'aura-chat';
-  return 'agenda';
+  return 'checkin';
 }
 
 export class ContextGroundingService {
@@ -609,17 +600,12 @@ export class ContextGroundingService {
       ...input.context,
       localDate: dateKey,
       goals: mergedGoals,
-      pendingTasks: mergeContextList(input.context.pendingTasks, lists.pendingTaskTitles),
-      pendingTaskTitles: mergeContextList(input.context.pendingTaskTitles, lists.pendingTaskTitles),
-      completedTaskTitles: mergeContextList(input.context.completedTaskTitles, lists.completedTaskTitles),
-      pendingHabitTitles: mergeContextList(input.context.pendingHabitTitles, lists.pendingHabitTitles),
-      completedHabitTitles: mergeContextList(input.context.completedHabitTitles, lists.completedHabitTitles),
       completedGoalTitles: mergeContextList(input.context.completedGoalTitles, lists.completedGoalTitles),
       completedSubgoalTitles: mergeContextList(input.context.completedSubgoalTitles, lists.completedSubgoalTitles),
       blockedActionTitles: mergeContextList(input.context.blockedActionTitles, [...lists.blockedActionTitles, ...lists.recentSuggestionTitles]),
       blockedActionTargetIds: mergeContextList(input.context.blockedActionTargetIds, lists.blockedActionTargetIds ?? []),
       blockedActionCanonicalKeys: mergeContextList(input.context.blockedActionCanonicalKeys, lists.blockedActionCanonicalKeys ?? []),
-      todayAnchorTitles: mergeContextList(input.context.todayAnchorTitles, lists.todayAnchorTitles),
+      todayAnchorTitles: mergeContextList(input.context.todayAnchorTitles, lists.activeGoalTitles),
       daysSinceLastCheckin: lists.daysSinceLastCheckin,
       groundingContext,
       decisionBrain,

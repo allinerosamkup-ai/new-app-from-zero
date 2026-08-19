@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@app/database';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { AuraCommandOperationSchema, type AuraCommandOperation } from '../contracts/aura-command-plan.contract';
@@ -657,7 +658,7 @@ export class AuraCommandExecutorService {
           data: {
             status: 'pending',
             idempotencyKey: operationKey,
-            error: undefined,
+            error: Prisma.DbNull,
           },
         });
         const operation = normalizeOperation({ ...row, status: 'pending' });
@@ -717,7 +718,7 @@ export class AuraCommandExecutorService {
               : await createCalendarMirror(tx, input.userId, row.id, operation, event);
             await tx.auraCommandOperation.update({
               where: { id: row.id },
-              data: { status: 'applied', result: nextResult as any, error: undefined, appliedAt: now },
+              data: { status: 'applied', result: nextResult as any, error: Prisma.DbNull, appliedAt: now },
             });
             return nextResult;
           });
@@ -734,7 +735,7 @@ export class AuraCommandExecutorService {
             const nextResult = await executeInternalOperation(tx, input.userId, row.id, operation, now);
             await tx.auraCommandOperation.update({
               where: { id: row.id },
-              data: { status: 'applied', result: nextResult as any, error: undefined, appliedAt: now },
+              data: { status: 'applied', result: nextResult as any, error: Prisma.DbNull, appliedAt: now },
             });
             return nextResult;
           });
@@ -747,7 +748,7 @@ export class AuraCommandExecutorService {
             data: {
               status: 'applied',
               result: result as any,
-              error: undefined,
+              error: Prisma.DbNull,
               appliedAt: now,
             },
           });

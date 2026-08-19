@@ -12,7 +12,7 @@ import {
 const SALA = 'Deixar a sala pronta para uso';
 
 function step(title: string, basedOn: GoalStep['basedOn'] = 'inferred'): GoalStep {
-  return { title, basedOn };
+  return { title, basedOn, doneWhen: 'a mudança descrita estiver visível' };
 }
 
 describe('detectUnsupportedSpecificity', () => {
@@ -60,6 +60,20 @@ describe('detectUnsupportedSpecificity', () => {
 });
 
 describe('GoalIntelligenceService.screenSteps', () => {
+  it('aceita registrar uma dívida específica quando o critério de término é observável', () => {
+    const result = GoalIntelligenceService.screenSteps(
+      [{
+        title: 'Listar o valor e as condições conhecidas da dívida',
+        basedOn: 'stated',
+        doneWhen: 'o valor e as condições conhecidas da dívida estiverem listados',
+      }],
+      { goalTitle: 'Organizar minhas finanças', userStatements: ['Tenho uma dívida que preciso quitar'] },
+    );
+
+    assert.equal(result.kept.length, 1, JSON.stringify(result));
+    assert.equal(result.rejected.length, 0);
+  });
+
   it('não reprova passo por vocabulário diferente do objetivo', () => {
     // Regressão de produção: "listar as categorias que você quer controlar" foi
     // descartado para "organizar minhas finanças" por não repetir palavra do
@@ -68,7 +82,7 @@ describe('GoalIntelligenceService.screenSteps', () => {
       [
         step('Listar as categorias que você quer controlar'),
         step('Registrar os lançamentos mais recentes'),
-        step('Conferir se está completo o suficiente para usar'),
+        step('Abrir a lista de categorias e marcar as categorias sem lançamento'),
       ],
       { goalTitle: 'Organizar minhas finanças' },
     );
@@ -82,7 +96,7 @@ describe('GoalIntelligenceService.screenSteps', () => {
       [
         step('Retire da sala tudo o que não pertence a ela'),
         step('Pegue fita crepe e prenda o que estiver solto'),
-        step('Organize os elementos principais da sala'),
+        step('Colocar os elementos principais da sala nos lugares de uso'),
       ],
       { goalTitle: SALA },
     );
@@ -94,7 +108,7 @@ describe('GoalIntelligenceService.screenSteps', () => {
 
   it('deduplica passo repetido com outras palavras iguais', () => {
     const result = GoalIntelligenceService.screenSteps(
-      [step('Organize a sala'), step('organize a  sala')],
+      [step('Retire da sala o que não pertence ali'), step('retire da sala o que não pertence ali')],
       { goalTitle: SALA },
     );
 
@@ -106,7 +120,7 @@ describe('buildGoalDecompositionPrompt', () => {
   it('proíbe inventar obstáculo e cita o caso real como exemplo ruim', () => {
     const prompt = buildGoalDecompositionPrompt({ goalTitle: SALA });
 
-    assert.match(prompt, /NÃO INVENTAR OBSTÁCULO/);
+    assert.match(prompt, /LIMITES DE VERDADE/);
     assert.match(prompt, /fita crepe/);
     assert.match(prompt, /basedOn/);
   });
@@ -124,16 +138,16 @@ describe('buildGoalDecompositionPrompt', () => {
       userStatements: ['Falta organizar os móveis'],
     });
 
-    assert.match(prompt, /fonte atual de maior autoridade/);
+    assert.match(prompt, /ORDEM DE AUTORIDADE/);
     assert.match(prompt, /Falta organizar os móveis/);
   });
 
   it('permite uma única pergunta somente quando ela muda materialmente o caminho', () => {
     const prompt = buildGoalDecompositionPrompt({ goalTitle: SALA });
 
-    assert.match(prompt, /UMA PERGUNTA DECISIVA/);
+    assert.match(prompt, /PERGUNTA DECISIVA/);
     assert.match(prompt, /decisiveQuestion/);
-    assert.match(prompt, /caminhos materialmente diferentes/i);
+    assert.match(prompt, /muda materialmente o caminho/i);
   });
 
   it('lembra que ela já contou, quando contou', () => {
@@ -142,7 +156,7 @@ describe('buildGoalDecompositionPrompt', () => {
       userStatements: ['Só falta organizar os móveis e colocar minhas coisas de trabalho'],
     });
 
-    assert.match(prompt, /JÁ CONTOU/);
+    assert.match(prompt, /O QUE ELA REALMENTE DISSE/i);
   });
 
   it('pede um caminho estruturado com realidade, etapas e evidência de avanço', () => {
@@ -176,6 +190,46 @@ describe('GoalIntelligenceService.decompose', () => {
     } as any;
   }
 
+  it('limita cada chamada estruturada para não deixar a interface aguardando indefinidamente', async () => {
+    const options: Array<{ timeout?: number }> = [];
+    const payloads = [
+      {
+        resultDefinition: 'A sala está pronta para uso',
+        currentReality: 'Há itens fora do lugar',
+        milestones: [{
+          id: 'sala-1', title: 'Caminho atual', order: 0,
+          actions: [{
+            title: 'Retire da sala os itens que não pertencem ali', basedOn: 'stated',
+            doneWhen: 'a sala estiver sem itens fora do lugar',
+          }],
+        }],
+      },
+      { approved: true, failures: [], missingInfo: null },
+    ];
+    let call = 0;
+    const client = {
+      chat: {
+        completions: {
+          create: async (_request: unknown, requestOptions?: { timeout?: number }) => {
+            options.push(requestOptions ?? {});
+            const payload = payloads[Math.min(call, payloads.length - 1)];
+            call += 1;
+            return { choices: [{ message: { content: JSON.stringify(payload) } }] };
+          },
+        },
+      },
+    } as any;
+
+    const result = await GoalIntelligenceService.decompose({
+      goalTitle: SALA,
+      userStatements: ['Há itens fora do lugar na sala'],
+    }, client);
+
+    assert.equal(result.mode, 'actions');
+    assert.ok(options.length >= 2);
+    assert.ok(options.every((requestOptions) => requestOptions.timeout === 25_000));
+  });
+
   it('objetivo amplo sem contexto suficiente gera pergunta decisiva, não checklist genérico', async () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: 'Organizar minhas finanças' },
@@ -198,8 +252,8 @@ describe('GoalIntelligenceService.decompose', () => {
           resultDefinition: 'A sala funcional para o uso dela',
           assumptions: [],
           steps: [
-            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' },
-            { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', doneWhen: 'a sala estiver sem itens fora do lugar' },
+            { title: 'Colocar os elementos principais da sala nos lugares de uso', basedOn: 'inferred', doneWhen: 'os elementos principais estiverem nos lugares de uso' },
           ],
           question: null,
         },
@@ -269,15 +323,15 @@ describe('GoalIntelligenceService.decompose', () => {
       clientReturning(
         {
           steps: [
-            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' },
-            { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', doneWhen: 'a sala estiver sem itens fora do lugar' },
+            { title: 'Colocar os elementos principais da sala nos lugares de uso', basedOn: 'inferred', doneWhen: 'os elementos principais estiverem nos lugares de uso' },
           ],
         },
         { approved: false, failures: ['o segundo passo não demonstra avanço causal'], missingInfo: null },
         {
           steps: [
-            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' },
-            { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', doneWhen: 'a sala estiver sem itens fora do lugar' },
+            { title: 'Colocar os elementos principais da sala nos lugares de uso', basedOn: 'inferred', doneWhen: 'os elementos principais estiverem nos lugares de uso' },
           ],
         },
         { approved: false, failures: ['a sequência continua sem vínculo causal suficiente'], missingInfo: null },
@@ -298,11 +352,11 @@ describe('GoalIntelligenceService.decompose', () => {
         models.push(request.model);
         calls += 1;
         const payload = calls === 1
-          ? { steps: [{ title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' }] }
+          ? { steps: [{ title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', doneWhen: 'a sala estiver sem itens fora do lugar' }] }
           : calls === 2
             ? { approved: false, failures: ['sem vínculo causal'], missingInfo: null }
             : calls === 3
-              ? { steps: [{ title: 'Deixe a sala pronta para uso', basedOn: 'inferred' }] }
+              ? { steps: [{ title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', doneWhen: 'a sala estiver sem itens fora do lugar' }] }
               : calls === 4
                 ? { approved: true, failures: [], missingInfo: null }
                 : { question: null };
@@ -313,19 +367,19 @@ describe('GoalIntelligenceService.decompose', () => {
     const result = await GoalIntelligenceService.decompose({ goalTitle: SALA }, client);
 
     assert.equal(result.mode, 'actions');
-    assert.equal(models[2], 'gpt-4.1-mini');
+    assert.equal(models[2], 'gpt-5-mini');
   });
 
   it('corrige caminho de dívida sem introduzir investimento ou contas não mencionadas', async () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: 'Organizar minhas finanças', userStatements: ['Tenho uma dívida que preciso quitar'] },
       clientReturning(
-        { steps: [{ title: 'Abrir uma conta de investimentos', basedOn: 'inferred' }] },
+        { steps: [{ title: 'Abrir uma conta de investimentos', basedOn: 'inferred', doneWhen: 'a conta estiver aberta' }] },
         { approved: false, failures: ['inventou investimento'], missingInfo: null },
         {
           resultDefinition: 'Dívida quitada ou com acordo executável', currentReality: 'Existe uma dívida informada', currentMilestoneId: 'debt-1',
           milestones: [{ id: 'debt-1', title: 'Dimensionar a dívida', order: 0, doneWhen: 'Valor e condições conhecidos', actions: [
-            { title: 'Registrar o valor e as condições conhecidas da dívida', basedOn: 'stated', doneWhen: 'Dados conhecidos registrados' },
+            { title: 'Listar o valor e as condições conhecidas da dívida', basedOn: 'stated', doneWhen: 'o valor e as condições conhecidas da dívida estiverem listados' },
           ] }],
         },
         { approved: true, failures: [], missingInfo: null },
@@ -340,7 +394,7 @@ describe('GoalIntelligenceService.decompose', () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: 'Conquistar clientes de noiva', userStatements: ['Tenho portfólio e uso Instagram; não tenho verba para anúncios'] },
       clientReturning(
-        { steps: [{ title: 'Criar um site e campanha de anúncios pagos', basedOn: 'inferred' }] },
+        { steps: [{ title: 'Criar um site e campanha de anúncios pagos', basedOn: 'inferred', doneWhen: 'o site estiver publicado' }] },
         { approved: false, failures: ['inventou site e anúncios'], missingInfo: null },
         {
           resultDefinition: 'Primeira conversa real com potencial cliente', currentReality: 'Já há portfólio e Instagram', currentMilestoneId: 'organic-1',
@@ -360,7 +414,7 @@ describe('GoalIntelligenceService.decompose', () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: 'Concluir minha mudança de casa', userStatements: ['Já defini a nova casa e preciso concluir a mudança'] },
       clientReturning(
-        { steps: [{ title: 'Compre caixas e reserve uma transportadora com carro', basedOn: 'inferred' }] },
+        { steps: [{ title: 'Compre caixas e reserve uma transportadora com carro', basedOn: 'inferred', doneWhen: 'a reserva estiver confirmada' }] },
         {
           resultDefinition: 'Itens essenciais transferidos para a nova casa', currentReality: 'A nova casa já foi definida', currentMilestoneId: 'move-1',
           milestones: [{ id: 'move-1', title: 'Definir o primeiro conjunto real', order: 0, doneWhen: 'Primeiro conjunto identificado', actions: [
@@ -381,7 +435,7 @@ describe('GoalIntelligenceService.decompose', () => {
         {
           resultDefinition: 'Portfólio publicado e acessível', currentReality: 'Trabalhos já selecionados', currentMilestoneId: 'publish-1',
           milestones: [
-            { id: 'publish-1', title: 'Montar apresentação', order: 0, doneWhen: 'Estrutura iniciada', actions: [{ title: 'Escrever o título da apresentação', basedOn: 'stated', effortSize: 'small', doneWhen: 'Título escrito' }] },
+            { id: 'publish-1', title: 'Montar apresentação', order: 0, doneWhen: 'Estrutura iniciada', actions: [{ title: 'Abrir o portfólio e digitar o título da apresentação', basedOn: 'stated', effortSize: 'small', doneWhen: 'o título estiver visível no portfólio' }] },
             { id: 'publish-2', title: 'Publicar o portfólio', order: 1, doneWhen: 'Link acessível', actions: [] },
           ],
         },
@@ -400,8 +454,8 @@ describe('GoalIntelligenceService.decompose', () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: SALA },
       clientReturning(
-        { steps: [{ title: 'Pegue fita crepe e prenda o rodapé', basedOn: 'inferred' }] },
-        { steps: [{ title: 'Compre uma caixa organizadora', basedOn: 'inferred' }] },
+        { steps: [{ title: 'Pegue fita crepe e prenda o rodapé', basedOn: 'inferred', doneWhen: 'o rodapé estiver preso' }] },
+        { steps: [{ title: 'Compre uma caixa organizadora', basedOn: 'inferred', doneWhen: 'a caixa estiver em casa' }] },
         { question: 'O que ainda falta para você considerar essa sala pronta?' },
       ),
     );
@@ -421,8 +475,8 @@ describe('GoalIntelligenceService.decompose', () => {
             const payload = calls === 1
               ? {
                 steps: [
-                  { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred' },
-                  { title: 'Organize os elementos principais da sala', basedOn: 'inferred' },
+                  { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', doneWhen: 'a sala estiver sem itens fora do lugar' },
+                  { title: 'Colocar os elementos principais da sala nos lugares de uso', basedOn: 'inferred', doneWhen: 'os elementos principais estiverem nos lugares de uso' },
                 ],
               }
               : { approved: true, failures: [], missingInfo: null };
@@ -451,8 +505,8 @@ describe('GoalIntelligenceService.decompose', () => {
           resultDefinition: longo,
           assumptions: [longo, longo],
           steps: [
-            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', rationale: longo },
-            { title: 'Organize os elementos principais da sala', basedOn: 'inferred', rationale: longo },
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'inferred', doneWhen: 'a sala estiver sem itens fora do lugar', rationale: longo },
+            { title: 'Colocar os elementos principais da sala nos lugares de uso', basedOn: 'inferred', doneWhen: 'os elementos principais estiverem nos lugares de uso', rationale: longo },
           ],
           question: null,
         },
@@ -472,8 +526,8 @@ describe('GoalIntelligenceService.decompose', () => {
       clientReturning(
         {
           steps: [
-            { title: 'Retire da sala o que não pertence ali', basedOn: 'chute' },
-            { title: 'Organize os elementos principais da sala' },
+            { title: 'Retire da sala o que não pertence ali', basedOn: 'chute', doneWhen: 'a sala estiver sem itens fora do lugar' },
+            { title: 'Colocar os elementos principais da sala nos lugares de uso', doneWhen: 'os elementos principais estiverem nos lugares de uso' },
           ],
         },
         { approved: true, failures: [], missingInfo: null },

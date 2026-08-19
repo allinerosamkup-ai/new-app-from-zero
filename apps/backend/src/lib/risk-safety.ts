@@ -81,12 +81,21 @@ export function assessRiskSafety(input: {
     };
   }
 
-  if (MODERATE_PATTERNS.some((pattern) => pattern.test(text)) || veryLowMood || highIrritability) {
+  if (MODERATE_PATTERNS.some((pattern) => pattern.test(text)) || veryLowMood || (highIrritability && (veryLowEnergy || poorSleep))) {
     return {
       riskLevel: 'moderate',
       signals: Array.from(new Set(signals)),
       route: 'adapt_day',
       message: 'A Airia deve priorizar ajuste de agenda, protecao de energia e observacao do padrao.',
+    };
+  }
+
+  if (highIrritability) {
+    return {
+      riskLevel: 'low',
+      signals: Array.from(new Set(signals)),
+      route: 'self_support',
+      message: 'A irritabilidade merece contexto antes de qualquer alerta ou redução de agenda.',
     };
   }
 

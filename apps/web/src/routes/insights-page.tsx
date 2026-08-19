@@ -9,7 +9,12 @@ import { api } from "../lib/api";
 import { trackProductEvent } from "../lib/track";
 import { useToast } from "../components/Toast";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
-import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
+import {
+  localizeAiriaCapacityReason,
+  localizeVisibleConcreteAction,
+  sendAiriaDecisionFeedback,
+  useAiriaReading,
+} from "../lib/airia-reading";
 import { computeConsistencyScore, computeMoodCycle, computePhaseHistory, getPhaseColor, PHASE_CONFIG } from "../utils/mood-cycle-engine";
 import { PhaseLegendSheet } from "../components/PhaseLegendSheet";
 import { AiriaMascot } from "../components/airia/AiriaMascot";
@@ -18,8 +23,8 @@ import { getLocalDateKey, normalizeDateKey } from "../utils/day-context";
 import { BarChart3, ClipboardCheck } from "lucide-react";
 import {
   buildInsightActionDecision,
+  buildTemporalRhythmSignal,
   formatEstimatedMenstrualPhase,
-  resolveMoodDayHighlights,
   type InsightActionDecision,
 } from "./insights-page.helpers";
 import {
@@ -161,13 +166,6 @@ export function InsightsPage() {
   const { state, refreshData } = useAuraStore();
   const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
 
-  // Refresh on mount and on page focus (catches returning from check-in)
-  useEffect(() => {
-    void refreshData();
-    const onFocus = () => { void refreshData(); };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, []);  
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const locale = resolveIntlLocale(i18n.language);
@@ -211,6 +209,15 @@ export function InsightsPage() {
         - new Date(`${periodRange.start}T12:00:00.000Z`).getTime()) / 86_400_000,
     ) + 1
   ), [periodRange]);
+  // Atualiza na montagem, ao trocar de janela e ao recuperar o foco. A consulta
+  // nunca pede além do máximo que o backend suporta para o semestre.
+  useEffect(() => {
+    const historyDays = Math.min(Math.max(periodDays, 90), 180);
+    void refreshData(historyDays);
+    const onFocus = () => { void refreshData(historyDays); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [periodDays, refreshData]);
   // Filtra pelos dois extremos do intervalo, não só pelo início: com período
   // personalizado a data final pode ser no passado, e um corte só por início
   // deixaria entrar tudo que veio depois.
@@ -224,6 +231,38 @@ export function InsightsPage() {
   );
   // #4 — CycleEstimate via MoodCycleEngine
   const cycleReport = useMemo(() => computeMoodCycle(history), [history]);
+  const localizedCanonicalDecisionTitle = canonicalReading?.decision
+    ? localizeVisibleConcreteAction(canonicalReading.decision.title, l)
+    : "";
+  const localizedCanonicalDecisionReason = canonicalReading?.decision
+    ? localizeAiriaCapacityReason(
+        canonicalReading.capacity,
+        canonicalReading.currentState.energyScore,
+        l,
+      ) || canonicalReading.decision.reason
+    : "";
+  const localizedPhaseDescription = t(`phases.${cycleReport.phase}.description`, {
+    defaultValue: cycleReport.phaseDescription,
+  });
+  const localizedPhaseTip = t(`phases.${cycleReport.phase}.tip`, {
+    defaultValue: cycleReport.phaseTip,
+  });
+  const localizedEnergyForecast = {
+    high: l("Alta — aproveite o pico", "High — use the momentum"),
+    moderate: l("Moderada — ritmo sustentável", "Moderate — sustainable pace"),
+    low: l("Baixa — preserve energia", "Low — protect your energy"),
+    rest: l("Recuperação — descanse", "Recovery — rest"),
+  }[cycleReport.energyForecast];
+  const localizeWarningFlag = (flag: string) => ({
+    high_volatility: l("Alta volatilidade", "High volatility"),
+    sustained_low: l("Baixo sustentado", "Sustained low"),
+    rapid_drop: l("Queda rápida", "Rapid drop"),
+    sustained_elevated: l("Elevado sustentado", "Sustained elevated"),
+    sleep_impact_high: l("Impacto do sono", "Sleep impact"),
+    low_checkin_frequency: l("Poucos check-ins", "Few check-ins"),
+    mixed_features: l("Sinais mistos", "Mixed signals"),
+    reduced_sleep_need: l("Menor necessidade de sono", "Reduced sleep need"),
+  }[flag] ?? flag);
   const reportEvidence = useMemo(() => buildMoodReportEvidence(history, periodDays), [history, periodDays]);
   const insightsOpenedRef = useRef(false);
   useEffect(() => {
@@ -276,29 +315,9 @@ export function InsightsPage() {
     };
   });
 
-  // ── Padrões Preditivos — computação frontend ─────────────────
+  // ── Distribuição descritiva — sem inferência de calendário ───
   const patterns = useMemo(() => {
     if (history.length < 3) return null;
-    const groups: Record<number, { humor: number[]; energia: number[] }> = {};
-    history.forEach(h => {
-      const d = new Date(h.date + "T12:00:00").getDay();
-      if (!groups[d]) groups[d] = { humor: [], energia: [] };
-      groups[d].humor.push(h.humor);
-      groups[d].energia.push(h.energia);
-    });
-    const dayAvgs = Object.entries(groups)
-      .map(([d, v]) => ({
-        day: weekdayLabels[Number(d)], idx: Number(d),
-        mood: v.humor.reduce((a, b) => a + b) / v.humor.length,
-        energy: v.energia.reduce((a, b) => a + b) / v.energia.length,
-        n: v.humor.length,
-      }))
-      .filter(d => d.n >= 1)
-      .sort((a, b) => a.idx - b.idx);
-
-    const bestDay  = dayAvgs.length > 0 ? [...dayAvgs].sort((a, b) => b.mood - a.mood)[0]  : null;
-    const worstDay = dayAvgs.length > 1 ? [...dayAvgs].sort((a, b) => a.mood - b.mood)[0]  : null;
-
     let streak = 0;
     const today = new Date();
     for (let i = 0; i < 60; i++) {
@@ -318,11 +337,11 @@ export function InsightsPage() {
       ? history.reduce((s, h) => s + h.humor, 0) / history.length
       : 0;
 
-    return { dayAvgs, bestDay, worstDay, streak, lowDays, highDays, stableDays, total, checkinDaysAvg };
-  }, [history, weekdayLabels]);
-  const moodDayHighlights = useMemo(
-    () => resolveMoodDayHighlights(patterns?.bestDay ?? null, patterns?.worstDay ?? null),
-    [patterns],
+    return { streak, lowDays, highDays, stableDays, total, checkinDaysAvg };
+  }, [history]);
+  const temporalRhythm = useMemo(
+    () => buildTemporalRhythmSignal(history.map((entry) => ({ date: entry.date, humor: entry.humor, energia: entry.energia }))),
+    [history],
   );
 
   function avg(values: number[]): number {
@@ -515,7 +534,7 @@ export function InsightsPage() {
     const rows = allHistory.map(h => [
       h.date, h.humor, h.energia,
       h.sono ?? '', h.social ?? '', h.fisico ?? '',
-      ((h as any).factors ?? []).join('|'),
+      (h.factors ?? []).join('|'),
     ].join(','));
     const csv = [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -577,8 +596,8 @@ export function InsightsPage() {
         {canonicalReading?.decision && (
           <section style={{ marginBottom: 12, padding: 14, borderRadius: 16, background: "rgba(255,253,249,.97)", border: "1.5px solid rgba(143,192,164,.32)" }}>
             <p style={{ margin: "0 0 5px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Proposta atual da Airia", "Airia's current proposal")}</p>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--text-1)" }}>{canonicalReading.decision.title}</p>
-            <p style={{ margin: "6px 0 10px", fontSize: 12, lineHeight: 1.45, color: "var(--text-2)" }}>{canonicalReading.decision.reason}</p>
+            <p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "var(--text-1)" }}>{localizedCanonicalDecisionTitle}</p>
+            <p style={{ margin: "6px 0 10px", fontSize: 12, lineHeight: 1.45, color: "var(--text-2)" }}>{localizedCanonicalDecisionReason}</p>
             {canonicalReading.decision.requiresConfirmation && <AuraButtonV2 className="btn btn-primary btn-full" disabled={canonicalFeedbackPending} onClick={() => void applyCanonicalDecision()}>{l("Faz sentido", "That fits")}</AuraButtonV2>}
           </section>
         )}
@@ -850,7 +869,7 @@ export function InsightsPage() {
                 { label: "Humor", twVal: weeklyCompare.thisWeek.humor, lwVal: weeklyCompare.lastWeek.humor, fmt: (v: number | null) => v ? v.toFixed(1) : "—", unit: "/10" },
                 { label: "Energia", twVal: weeklyCompare.thisWeek.energia, lwVal: weeklyCompare.lastWeek.energia, fmt: (v: number | null) => v ? v.toFixed(1) : "—", unit: "/10" },
                 { label: "Check-ins", twVal: weeklyCompare.thisWeek.checkins, lwVal: weeklyCompare.lastWeek.checkins, fmt: (v: number | null) => String(v ?? 0), unit: "" },
-              ] as const).map(row => {
+              ] satisfies Array<{ label: string; twVal: number | null; lwVal: number | null; fmt: (value: number | null) => string; unit: string }>).map(row => {
                 const diff = (row.twVal ?? 0) - (row.lwVal ?? 0);
                 const arrow = Math.abs(diff) < 0.1 ? "→" : diff > 0 ? "↑" : "↓";
                 const arrowColor = Math.abs(diff) < 0.1 ? "var(--text-3)" : diff > 0 ? "var(--accent-sage)" : "var(--accent-peach)";
@@ -859,11 +878,11 @@ export function InsightsPage() {
                     <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)", minWidth: 70 }}>{row.label}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-                        {row.fmt(row.lwVal as any)}{row.unit}
+                        {row.fmt(row.lwVal)}{row.unit}
                       </span>
                       <span style={{ fontSize: 14, fontWeight: 800, color: arrowColor }}>{arrow}</span>
                       <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text-1)" }}>
-                        {row.fmt(row.twVal as any)}{row.unit}
+                        {row.fmt(row.twVal)}{row.unit}
                       </span>
                     </div>
                   </div>
@@ -1332,7 +1351,10 @@ export function InsightsPage() {
                   <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)", margin: 0 }}>
                     {currentPhaseLabel}
                     <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-3)", marginLeft: 6 }}>
-                      {cycleReport.daysInPhase} dia{cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase
+                      {l(
+                        `${cycleReport.daysInPhase} dia${cycleReport.daysInPhase !== 1 ? "s" : ""} nesta fase`,
+                        `${cycleReport.daysInPhase} ${cycleReport.daysInPhase === 1 ? "day" : "days"} in this phase`,
+                      )}
                     </span>
                   </p>
                 </div>
@@ -1350,7 +1372,7 @@ export function InsightsPage() {
             {/* Corpo — métricas + cycleEstimate */}
             <div style={{ padding: "12px 14px" }}>
               <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.55, margin: "0 0 10px" }}>
-                {cycleReport.phaseDescription}
+                {localizedPhaseDescription}
               </p>
 
               {/* ── Chip fase menstrual ── */}
@@ -1418,23 +1440,22 @@ export function InsightsPage() {
                       ))}
                       {/* linha energia */}
                       <path d={smoothPath('energia')} fill="none"
-                        stroke="var(--accent-sky, #5bb8d4)" strokeWidth="1.8"
-                        strokeLinecap="round" strokeLinejoin="round" opacity="0.7"
+                        stroke="var(--insights-energy-series)" strokeWidth="2"
+                        strokeLinecap="round" strokeLinejoin="round" opacity="0.9"
                       />
                       {/* linha humor */}
                       <path d={smoothPath('humor')} fill="none"
-                        stroke={phaseColor} strokeWidth="2.2"
+                        stroke="var(--insights-mood-series)" strokeWidth="2.2"
                         strokeLinecap="round" strokeLinejoin="round"
                       />
                       {/* ponto hoje (último) */}
                       <circle
                         cx={toX(lastI).toFixed(1)} cy={toY(sparklineData[lastI].humor).toFixed(1)}
-                        r="3.5" fill={phaseColor} stroke="#fff" strokeWidth="1.5"
+                        r="3.5" fill="var(--insights-mood-series)" stroke="#fff" strokeWidth="1.5"
                       />
                       <circle
                         cx={toX(lastI).toFixed(1)} cy={toY(sparklineData[lastI].energia).toFixed(1)}
-                        r="2.5" fill="var(--accent-sky, #5bb8d4)" stroke="#fff" strokeWidth="1"
-                        opacity="0.85"
+                        r="2.8" fill="var(--insights-energy-series)" stroke="#fff" strokeWidth="1"
                       />
                       {/* labels de dia */}
                       {sparklineData.map((d, i) => (
@@ -1449,11 +1470,11 @@ export function InsightsPage() {
                     </svg>
                     <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <div style={{ width: 14, height: 2.5, borderRadius: 2, background: phaseColor }} />
+                        <div style={{ width: 14, height: 2.5, borderRadius: 2, background: "var(--insights-mood-series)" }} />
                         <span style={{ fontSize: 9, color: "var(--text-3)" }}>{l("Humor", "Mood")}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <div style={{ width: 14, height: 2.5, borderRadius: 2, background: "var(--accent-sky, #5bb8d4)", opacity: .7 }} />
+                        <div style={{ width: 14, height: 2.5, borderRadius: 2, background: "var(--insights-energy-series)" }} />
                         <span style={{ fontSize: 9, color: "var(--text-3)" }}>{t("insights.energy")}</span>
                       </div>
                     </div>
@@ -1472,7 +1493,10 @@ export function InsightsPage() {
                       )}
                     </p>
                     <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>
-                      ~{cycleReport.cycleEstimate.estimatedLengthDays} dias
+                      {l(
+                        `~${cycleReport.cycleEstimate.estimatedLengthDays} dias`,
+                        `~${cycleReport.cycleEstimate.estimatedLengthDays} days`,
+                      )}
                     </p>
                   </div>
                   <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
@@ -1530,7 +1554,7 @@ export function InsightsPage() {
               {/* Tip da fase */}
               <div style={{ padding: "8px 10px", borderRadius: 10, background: `${phaseColor}10`, border: `1px solid ${phaseColor}20` }}>
                 <p style={{ fontSize: 11, color: phaseColor, margin: 0, lineHeight: 1.5, fontWeight: 600 }}>
-                  💡 {cycleReport.phaseTip}
+                  💡 {localizedPhaseTip}
                 </p>
               </div>
 
@@ -1549,7 +1573,7 @@ export function InsightsPage() {
                   {t("insights.energyForecastToday")}
                 </p>
                 <span style={{ background: `${phaseColor}18`, color: phaseColor, borderRadius: 999, padding: "4px 9px", fontSize: 11, fontWeight: 800 }}>
-                  {cycleReport.energyForecastLabel}
+                  {localizedEnergyForecast}
                 </span>
               </div>
 
@@ -1557,21 +1581,13 @@ export function InsightsPage() {
               {cycleReport.warningFlags.length > 0 && (
                 <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 5 }}>
                   {cycleReport.warningFlags.map(flag => {
-                    const FLAG_LABELS: Record<string, string> = {
-                      high_volatility: "Alta volatilidade",
-                      sustained_low: "Baixo sustentado",
-                      rapid_drop: "Queda rápida",
-                      sustained_elevated: "Elevado sustentado",
-                      sleep_impact_high: "Impacto do sono",
-                      low_checkin_frequency: "Poucos check-ins",
-                    };
                     return (
                       <span key={flag} style={{
                         fontSize: 10, padding: "3px 8px", borderRadius: 999,
                         background: "rgba(134,183,154,.12)", color: "var(--accent-peach)",
                         border: "1px solid rgba(134,183,154,.25)", fontWeight: 600,
                       }}>
-                        ⚠ {FLAG_LABELS[flag] ?? flag}
+                        ⚠ {localizeWarningFlag(flag)}
                       </span>
                     );
                   })}
@@ -1827,7 +1843,7 @@ export function InsightsPage() {
           </div>
         )}
 
-        {/* ── Padrões Preditivos ──────────────────────────────── */}
+        {/* ── Ritmo pessoal entre registros ────────────────────── */}
         {insightTab === "padroes" && patterns && (
           <div style={{
             backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
@@ -1838,31 +1854,56 @@ export function InsightsPage() {
             boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
-              {l("📊 Sinais antes da queda", "📊 Signals before a drop")}
+              {l("📊 Mudanças no seu ritmo", "📊 Changes in your rhythm")}
             </p>
 
-            {/* Melhor / Pior dia */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              {moodDayHighlights.bestDay && (
-                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)", textAlign: "center" }}>
-                  <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-sage)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>{l("Melhor dia", "Best day")}</p>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 1px" }}>{moodDayHighlights.bestDay.day}</p>
-                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{l("humor", "mood")} {moodDayHighlights.bestDay.mood.toFixed(1)}/10</p>
+            <p style={{ margin: "0 0 12px", fontSize: 12, lineHeight: 1.5, color: "var(--text-2)" }}>
+              {temporalRhythm.confidence === "insufficient"
+                ? l(
+                    `Com ${temporalRhythm.observedDays} dias registrados, a Airia ainda está conhecendo seu ritmo. Ela não usa dia da semana para prever como você vai estar.`,
+                    `With ${temporalRhythm.observedDays} recorded days, Airia is still getting to know your rhythm. It does not use weekdays to predict how you will feel.`,
+                  )
+                : temporalRhythm.confidence === "early"
+                  ? l(
+                      `Há uma base inicial de ${temporalRhythm.observedDays} dias. O resumo abaixo descreve mudanças recentes, sem prever o próximo dia.`,
+                      `There is an early base of ${temporalRhythm.observedDays} days. The summary below describes recent changes without predicting the next day.`,
+                    )
+                  : l(
+                      `A leitura considera ${temporalRhythm.observedDays} dias registrados e compara apenas sequências recentes da sua própria história.`,
+                      `This reading considers ${temporalRhythm.observedDays} recorded days and compares only recent sequences from your own history.`,
+                    )}
+            </p>
+
+            {temporalRhythm.confidence !== "insufficient" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
+                <div style={{ padding: "8px 9px", borderRadius: 12, background: "rgba(150,199,179,0.12)", border: "1px solid rgba(150,199,179,0.30)" }}>
+                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-sage)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: ".07em" }}>{l("Humor recente", "Recent mood")}</p>
+                  <p style={{ fontSize: 15, fontWeight: 850, color: "var(--text-1)", margin: 0 }}>
+                    {temporalRhythm.moodChange === null ? "—" : `${temporalRhythm.moodChange > 0 ? "+" : ""}${temporalRhythm.moodChange}`}
+                  </p>
                 </div>
-              )}
-              {moodDayHighlights.worstDay && (
-                <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(134,183,154,0.08)", border: "1px solid rgba(134,183,154,0.25)", textAlign: "center" }}>
-                  <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-peach)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>{t("insights.difficultDay")}</p>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-peach)", margin: "0 0 1px" }}>{moodDayHighlights.worstDay.day}</p>
-                  <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{l("humor", "mood")} {moodDayHighlights.worstDay.mood.toFixed(1)}/10</p>
+                <div style={{ padding: "8px 9px", borderRadius: 12, background: "rgba(99,152,169,0.10)", border: "1px solid rgba(99,152,169,0.25)" }}>
+                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-sky)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: ".07em" }}>{l("Energia recente", "Recent energy")}</p>
+                  <p style={{ fontSize: 15, fontWeight: 850, color: "var(--text-1)", margin: 0 }}>
+                    {temporalRhythm.energyChange === null ? "—" : `${temporalRhythm.energyChange > 0 ? "+" : ""}${temporalRhythm.energyChange}`}
+                  </p>
                 </div>
-              )}
-              <div style={{ flex: 1, padding: "8px 10px", borderRadius: 12, background: "rgba(99,152,169,0.10)", border: "1px solid rgba(99,152,169,0.25)", textAlign: "center" }}>
-                      <p style={{ fontSize: 9, fontWeight: 700, color: "var(--accent-sky)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: ".08em" }}>{t("insights.streak")}</p>
-                <p style={{ fontSize: 18, fontWeight: 800, color: "var(--accent-sky)", margin: "0 0 1px" }}>{patterns.streak}</p>
-                <p style={{ fontSize: 10, color: "var(--text-3)", margin: 0 }}>{l("dias seguidos", "days in a row")}</p>
+                <div style={{ padding: "8px 9px", borderRadius: 12, background: "rgba(225,154,104,0.10)", border: "1px solid rgba(225,154,104,0.25)" }}>
+                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: ".07em" }}>{l("Abaixo do ritmo", "Below your rhythm")}</p>
+                  <p style={{ fontSize: 15, fontWeight: 850, color: "var(--text-1)", margin: 0 }}>
+                    {temporalRhythm.lowerRhythmStreak > 0
+                      ? l(`${temporalRhythm.lowerRhythmStreak} registros`, `${temporalRhythm.lowerRhythmStreak} records`)
+                      : l("Não observado", "Not observed")}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
+
+            {temporalRhythm.recovery !== null && (
+              <p style={{ margin: "0 0 12px", padding: "8px 10px", borderRadius: 10, background: "rgba(150,199,179,0.08)", border: "1px solid rgba(150,199,179,0.20)", fontSize: 11, lineHeight: 1.45, color: "var(--text-2)" }}>
+                {l(`Recuperação observada nos registros recentes: +${temporalRhythm.recovery} pontos após o ponto mais baixo da janela.`, `Recovery observed in recent records: +${temporalRhythm.recovery} points after the lowest point in this window.`)}
+              </p>
+            )}
 
             {/* Distribuição de humor */}
             <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", margin: "0 0 6px" }}>{t("insights.moodDistribution", { count: patterns.total })}</p>
@@ -1883,17 +1924,9 @@ export function InsightsPage() {
               <span>🔴 {t("insights.low")}: {Math.round((patterns.lowDays / patterns.total) * 100)}%</span>
             </div>
 
-            {/* Insight preditivo */}
-            {patterns.bestDay && patterns.worstDay && patterns.worstDay.day !== patterns.bestDay.day && (
-              <div style={{
-                marginTop: 12, padding: "8px 10px", borderRadius: 10,
-                background: "rgba(99,152,169,0.08)", border: "1px solid rgba(99,152,169,0.20)",
-              }}>
-                <p style={{ fontSize: 11, color: "var(--text-2)", margin: 0, lineHeight: 1.5 }}>
-                  {t("insights.bestWorst", { best: patterns.bestDay.day, worst: patterns.worstDay.day })}
-                </p>
-              </div>
-            )}
+            <p style={{ margin: "10px 0 0", color: "var(--text-3)", fontSize: 10.5, lineHeight: 1.4 }}>
+              {l("Estes sinais descrevem seus registros. Eles não determinam como será um dia futuro.", "These signals describe your records. They do not determine what a future day will be like.")}
+            </p>
           </div>
         )}
 

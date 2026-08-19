@@ -1,8 +1,8 @@
 # PWA TODO
 
-- [ ] Corrigir riscos residuais de telemetria, RLS, retenção e entrega offline.
-- [ ] Validar todos os caminhos, redirecionamentos e páginas órfãs da PWA.
-- [ ] Unificar linguagem, nomenclatura e mensagens de interface em português brasileiro.
+- [x] Corrigir riscos residuais de telemetria, RLS, retenção e entrega offline.
+- [x] Validar todos os caminhos, redirecionamentos e páginas órfãs da PWA.
+- [x] Unificar linguagem, nomenclatura e mensagens de interface em português brasileiro.
 - [x] Revisar o fluxo de onboarding inicial e suas transições para o aplicativo principal.
 - [x] Auditar configurações, preferências e seus efeitos visíveis no produto.
 - [x] Identificar e remover duplicidades ou redundâncias de código, conteúdo e layout na Home, Check-in e demais jornadas.
@@ -10,7 +10,7 @@
 - [x] Produzir relatório final de verificação da PWA.
 - [x] Remover destinos de Hábitos e Planner do núcleo ativo, incluindo a ação principal da Home e preferências herdadas.
 - [x] Reduzir a tela Configurações ao conjunto de opções coerente com o núcleo ativo e com capacidades da PWA.
-- [ ] Centralizar a linguagem exposta do onboarding e dos banners no sistema de tradução.
+- [x] Centralizar a linguagem exposta do onboarding e dos banners no sistema de tradução.
 - [x] Criar teste de integridade entre rotas declaradas, caminhos canônicos e CTAs do núcleo.
 - [x] Tornar a fila offline de telemetria resiliente a erros não recuperáveis e a tentativas repetidas.
 - [x] Alinhar o manifesto PWA, atalhos de instalação e imagens de apresentação às jornadas ativas.
@@ -20,10 +20,10 @@
 - [x] Mover a extensão vector para o esquema extensions recomendado pelo Supabase e validar o acesso das roles da PWA.
 - [x] Documentar como exceção aprovada o alerta de proteção contra senhas vazadas, que não será ativada por decisão do usuário.
 - [x] Manter a proteção contra senhas vazadas como limitação conhecida do plano Supabase Free, sem propor upgrade nesta etapa.
-- [ ] Validar o projeto de ponta a ponta, incluindo PWA, backend, contrato de dados, rotas, build e riscos operacionais remanescentes.
+- [x] Validar o projeto de ponta a ponta, incluindo PWA, backend, contrato de dados, rotas, build e riscos operacionais remanescentes.
 - [x] Corrigir os erros de lint da PWA e reduzir avisos diretamente relacionados às jornadas ativas.
 - [x] Corrigir a configuração de testes móveis que não resolve o plugin react-native-reanimated do Babel.
-- [ ] Inventariar e corrigir os 44 erros de lint legados do aplicativo móvel, fora do núcleo prioritário da PWA.
+- [x] Inventariar e corrigir os 44 erros de lint legados do aplicativo móvel, fora do núcleo prioritário da PWA.
 - [x] Auditar referências a Stripe e alinhar o código, as dependências e os testes de pagamento exclusivamente à integração Cakto.
 - [x] Publicar no GitHub as correções validadas da PWA e a documentação de verificação, mediante autorização da titular.
 - [x] Executar o deploy de produção autorizado da PWA Airia e validar a disponibilidade pública.
@@ -33,3 +33,65 @@
 - [x] Publicar no GitHub e em produção a correção validada de idioma e layout da página de Padrões, mediante autorização da titular.
 - [x] Corrigir no PWA principal o card Histórico de fases que ainda exibe tipografia e composição visual antigas, validando a aparência renderizada antes do redeploy.
 - [x] Publicar no GitHub e em produção a correção visual dos dois cards de Histórico de fases, mediante autorização da titular.
+- [x] Testar em viewport de celular a tipografia e o layout atualizados dos cards de Histórico de fases no PWA principal.
+- [x] Remover linguagem técnica e conclusões fortes do resultado do check-in quando a base de evidência for insuficiente.
+- [x] Transformar O que cabe hoje em organizador diário de ações concretas vinculadas aos objetivos ativos, usando check-in apenas para calibrar tamanho e quantidade.
+- [x] Tornar a Proposta da Airia executável, renovável, ajustável, adiável e cancelável sem duplicar ações canônicas.
+- [x] Recalibrar a camada de segurança para distinguir apoio preventivo, alerta de atenção e protocolo de crise com base proporcional.
+- [x] Adicionar cobertura de teste para leitura insuficiente, ações por objetivo, calibragem diária, proposta controlável e segurança proporcional.
+- [x] Validar o fluxo real em sessão autenticada e viewport móvel sem persistir credenciais em arquivos ou telemetria.
+- [x] Corrigir a shell autenticada do PWA para que a escolha de idioma não misture cópia inglesa e portuguesa em Home, Padrões e navegação móvel.
+- [x] Revisar e elevar a UI/UX da página de Objetivos para que criação, caminhos, ações e progresso pareçam guiados e não mecânicos.
+- [x] Reescrever cópia robótica ou técnica nos fluxos ativos, priorizando linguagem direta, situada e não prescritiva.
+- [x] Corrigir as cópias mistas e excessivamente processuais ainda encontradas nos cards de Objetivos, incluindo rótulos de etapa, resultados, ponto de partida e proposta de revisão.
+- [x] Bloquear em Objetivos ações abstratas ou circulares e aceitar apenas passos concretos, observáveis e concluíveis, com objeto e critério claro de término.
+- [x] Aplicar o mesmo contrato de ação concreta às sugestões de Diário e Check-in, rejeitando instruções vagas, circulares ou sem objeto e ponto de término.
+- [x] Ler integralmente e redesenhar de forma coerente os prompts e contratos de saída que geram ações em Objetivos, Diário e Check-in, sem acrescentar remendos isolados.
+- [x] Antes de cada alteração transversal, revisar o todo.md completo e verificar o impacto em todos os fluxos relacionados.
+- [x] Remover Planner e Hábitos das políticas, prompts, contexto e motores de decisão ativos da PWA, mantendo Check-in, Diário, Objetivos e Padrões como únicas fontes operacionais.
+- [x] Criar dados explicitamente identificados como teste na conta autorizada para validar metas, ações e resultado de check-in em viewport móvel; remover os dados ao fim da validação.
+- [x] Reformular Alertas importantes da Home para remover IDs e jargão técnico, explicar a evidência em linguagem humana e oferecer ação concreta ou não interromper a tela.
+- [x] Substituir o card Sinais antes da queda baseado em dia da semana por uma leitura de sequência pessoal entre check-ins, duração de fase, recuperação e confiança proporcional; não recomendar conduta a partir de poucos registros.
+- [x] Compactar Dimensões correlacionadas em uma grade móvel com percentuais e microbarras, deixando os detalhes sob demanda para reduzir a rolagem da página de Padrões.
+- [x] Diferenciar de modo acessível as séries de Humor e Energia no gráfico de Padrões por cor, matiz e luminosidade, sem depender apenas da legenda.
+- [x] Validar ponta a ponta a criação de entrada e sugestões do Diário, incluindo persistência, resposta escrita e efeitos das ações sugeridas.
+- [x] Validar ponta a ponta o Check-in, incluindo notas, devolutiva escrita, proposta, feedback e todos os controles acionáveis.
+- [x] Validar a criação e a divisão de ações dos Objetivos, a coerência das sugestões e o efeito de concluir, editar, adiar ou retirar uma ação.
+- [x] Validar o botão central da Airia: abertura, resposta, comandos em linguagem natural, carregamento, cancelamento e consequência real de cada decisão nas demais superfícies.
+- [x] Remover do botão central da Airia qualquer sugestão, rota ou comando ligado a Planner e Hábitos; ele deve operar somente Check-in, Diário, Objetivos e Padrões.
+- [x] Substituir o convite persistente de instalação por instalação nativa condicional: prompt oficial no Android e orientação correta de Adicionar à Tela de Início no iOS, com banner auxiliar dispensável e de recorrência limitada.
+- [x] Impedir que a Splash reapareça em retornos de sessão válida; preservar a retomada no último contexto útil e enviar à tela de login apenas quando a sessão realmente tiver terminado.
+- [x] Concluir e marcar todos os itens pendentes deste inventário, incluindo PWA, telemetria, validações autenticadas, cópia, rotas e pendências legadas do aplicativo móvel, antes de solicitar publicação.
+- [x] Manter bloqueados commit, push e deploy até que as pendências 36, 42 e 57 a 60 tenham evidência registrada de validação real.
+- [x] Preservar na conta de demonstração autorizada os registros criados durante as validações; não executar limpeza automática desses materiais.
+- [x] Corrigir a mistura de português e inglês observada na Home autenticada da candidata local e validar os dois idiomas em viewport móvel.
+- [x] Impedir que ações legadas sem objeto específico ou critério de término apareçam como próximas ações válidas em Objetivos, Diário, Check-in ou no contexto da Airia.
+- [x] Sincronizar o intervalo escolhido em Padrões com a consulta de check-ins para que Semana, Mês, 90 dias e Semestre nunca anunciem uma janela diferente dos dados carregados.
+- [x] Exigir que toda ação visível sugerida no Diário use o formato concreto com critério de término, rejeitando respostas imperativas sem “Pronto quando:”.
+- [x] Resolver os 80 avisos de lint restantes da PWA sem supressão artificial e manter o comando de validação sem avisos.
+- [x] Desbloquear uma candidata integrada com banco autorizado e validar, em sessão autenticada, Diário, Check-in, Objetivos, Comando central e Padrões sem persistir credenciais.
+- [x] Redefinir de forma autorizada a senha PostgreSQL do Supabase, usar a nova conexão apenas em memória na candidata local e não alterar configurações de produção nesta etapa.
+- [x] Corrigir a resposta vazia do Diário na candidata integrada quando o provedor de IA não entrega chunks de streaming, preservando o contrato de ação concreta e a UX de resposta.
+- [x] Substituir o modelo padrão ausente do catálogo de IA por um modelo ativo compatível, validando Diário, Check-in e Comando central contra o provedor real.
+- [x] Corrigir ou ocultar a leitura compartilhada quando ela não estiver fundamentada no estado atual, não explicar sua utilidade e não levar a uma consequência compreensível no Diário ou Check-in.
+- [x] Impedir que uma proposta global antiga apareça em Objetivos quando sua ação não corresponde ao próximo passo concreto visível daquele objetivo.
+- [x] Remover do Comando central a proposta global sem vínculo com o pedido atual, deixando a resposta contextual do comando como única orientação após a entrada da pessoa.
+- [x] Corrigir o bloqueio do segundo turno do Comando central após o registro de humor, garantindo que a conversa de Check-in continue ou informe erro recuperável.
+- [x] Normalizar respostas JSON envoltas em bloco Markdown em todos os fluxos ativos de IA, incluindo o intérprete cognitivo, Check-in, Diário, Padrões e ingestão de memória, evitando erro visível ou falha silenciosa após a interpretação do Check-in.
+- [x] Diagnosticar e corrigir a falha SSE do primeiro turno do Comando central, garantindo resposta localizada e recuperável quando o provedor ou uma dependência falhar.
+- [x] Limpar erros transitórios de operações do Comando central quando uma reaplicação for concluída, para que um Check-in salvo não continue exibindo uma falha técnica antiga.
+- [x] Alinhar o limite de saída ao parâmetro compatível com o modelo Claude ativo, evitando respostas vazias do provedor nos fluxos estruturados da Airia.
+- [x] Corrigir os rótulos estáticos mistos em Objetivos para que a localidade inglesa não exiba texto de interface em português no caminho e nos estados das ações.
+- [x] Substituir os modelos legados indisponíveis usados nas recuperações de Objetivos e prioridades para que microações possam ser propostas novamente sem o estado “Try again”.
+- [x] Corrigir a configuração da chamada estruturada do modelo Claude, que ainda retorna conteúdo nulo em Objetivos, ou escolher um modelo ativo que devolva JSON válido sem degradar a qualidade das sugestões.
+- [x] Aplicar limite de tempo e recuperação explícita à geração de microações para que Objetivos não permaneça em “Thinking…” quando o provedor não conclui.
+- [x] Impedir que a revisão derivada de caminhos de Objetivos bloqueie a resposta e a devolutiva principal do Check-in autenticado.
+- [x] Corrigir rótulos estáticos mistos no resultado de Check-in para que a localidade inglesa não apresente trechos de interface em português.
+- [x] Preservar o sentido proporcional da razão de capacidade traduzida para que baixa energia não apareça como protocolo de apoio quando uma ação curta ainda cabe.
+- [x] Implementar e validar o cancelamento seguro de uma solicitação em processamento no Comando central, sem persistir uma decisão parcial.
+- [x] Corrigir o indicador de ritmo da Home para nomear dias com registro, em vez de entradas individuais, mantendo a semântica do gráfico de 14 dias.
+- [x] Corrigir o estado de ação retirada em Objetivos para que não seja apresentado como ação concluída ou adiada.
+- [x] Corrigir a regressão de cópia portuguesa no card de proposta e na duração de fase de Padrões quando a localidade é inglesa.
+- [x] Criar commit autorizado com as correções e evidências finais da validação integrada.
+- [ ] Enviar o commit autorizado ao repositório remoto selecionado.
+- [ ] Executar o deploy autorizado da PWA e confirmar a disponibilidade pública.

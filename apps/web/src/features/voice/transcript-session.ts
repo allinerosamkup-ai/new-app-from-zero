@@ -20,6 +20,21 @@ export type SpeechResultEventLike = {
 };
 
 export type RecognitionLike = { stop: () => void };
+export type BrowserRecognitionLike = RecognitionLike & {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start: () => void;
+  onstart: (() => void) | null;
+  onerror: (() => void) | null;
+  onresult: ((event: SpeechResultEventLike) => void) | null;
+  onend: (() => void | Promise<void>) | null;
+};
+export type BrowserRecognitionConstructor = new () => BrowserRecognitionLike;
+export type BrowserSpeechWindow = Window & {
+  SpeechRecognition?: BrowserRecognitionConstructor;
+  webkitSpeechRecognition?: BrowserRecognitionConstructor;
+};
 export type MutableRecognitionRef<T> = { current: T | null };
 
 /** Clears before stopping: browser end events cannot leave a stale recognizer active. */

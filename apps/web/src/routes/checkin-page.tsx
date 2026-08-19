@@ -9,6 +9,8 @@ import { tracksMenstrualCycle } from "../features/aura/onboarding";
 import { averageCycleLength, cycleFlowStarts, daysSinceISO } from "../utils/cycle-history";
 import type { MoodOption } from "../features/aura/types";
 import {
+  type BrowserSpeechWindow,
+  type BrowserRecognitionLike,
   createTranscriptResultHandler,
   releaseRecognition,
   requestRecognitionStop,
@@ -370,7 +372,7 @@ export function CheckinPage() {
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<BrowserRecognitionLike | null>(null);
   const voiceSilenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const checkinOpenedRef = useRef(false);
 
@@ -397,7 +399,8 @@ export function CheckinPage() {
   }, []);
 
   function startVoiceCheckin() {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as BrowserSpeechWindow;
+    const SpeechRecognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       trackProductEvent("checkin.voice_requested.v1", "checkin", {});
       trackProductEvent("checkin.voice_failed.v1", "checkin", { failureCode: "recognition_failed" });

@@ -6,7 +6,6 @@ import {
   Card,
   Button,
   TextInput,
-  Surface,
   TouchableRipple
 } from 'react-native-paper';
 import Animated, {

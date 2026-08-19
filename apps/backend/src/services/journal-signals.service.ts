@@ -1,3 +1,5 @@
+import { validateConcreteAction } from '../lib/action-quality';
+
 /**
  * Sinais estruturados que o diário emite.
  *
@@ -26,7 +28,7 @@ export type JournalCheckinSignal = {
 
 export type JournalGoalSignal = {
   title: string;
-  subgoals: string[];
+  subgoals: Array<{ title: string; doneWhen: string }>;
 };
 
 export type JournalSignals = {
@@ -54,6 +56,17 @@ function asStringList(value: unknown, max: number): string[] {
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
     .map((item) => item.trim().slice(0, 120))
     .slice(0, max);
+}
+
+function asConcreteGoalActions(value: unknown): Array<{ title: string; doneWhen: string }> {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const record = item as Record<string, unknown>;
+    const title = typeof record.title === 'string' ? record.title.trim().slice(0, 160) : '';
+    const doneWhen = typeof record.doneWhen === 'string' ? record.doneWhen.trim().slice(0, 200) : '';
+    return validateConcreteAction({ title, doneWhen }).ok ? [{ title, doneWhen }] : [];
+  }).slice(0, MAX_SUBGOALS);
 }
 
 /**
@@ -118,7 +131,7 @@ export function extractJournalSignals(reply: string): JournalSignals {
   if (raw.goal && typeof raw.goal === 'object') {
     const g = raw.goal as Record<string, unknown>;
     const title = typeof g.title === 'string' ? g.title.trim().slice(0, MAX_TITLE) : '';
-    const subgoals = asStringList(g.subgoals, MAX_SUBGOALS);
+    const subgoals = asConcreteGoalActions(g.subgoals);
     // Meta com um passo só é tarefa, não objetivo — e vira ruído na tela.
     if (title.length >= 3 && subgoals.length >= MIN_SUBGOALS) {
       goal = { title, subgoals };
