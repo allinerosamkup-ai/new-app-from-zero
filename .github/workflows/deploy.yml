@@ -156,7 +156,16 @@ jobs:
         run: |
           set -eu
           USER_FINAL="${VPS_USER:-root}"
-          ENV_WEB="$(ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "${USER_FINAL}@${VPS_HOST}" 'set -eu; if [ -f /opt/airia/app/deploy/airia/.env.web.build ]; then cat /opt/airia/app/deploy/airia/.env.web.build; else echo "FALHA: .env.web.build ausente na VPS"; exit 1; fi')"
+          # Aceita/atualiza a chave de host da VPS (o deploy anterior usa o
+          # mesmo known_hosts; repetir aqui garante que uma chave renovada na
+          # VPS não quebre a conexão com accept-new).
+          ssh-keyscan -T 15 -H "${VPS_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
+          chmod 644 ~/.ssh/known_hosts
+          ENV_WEB="$(ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 -o StrictHostKeyChecking=yes "${USER_FINAL}@${VPS_HOST}" 'set -eu; if [ -f /opt/airia/app/deploy/airia/.env.web.build ]; then cat /opt/airia/app/deploy/airia/.env.web.build; else echo "FALHA: .env.web.build ausente na VPS"; exit 1; fi')" || { echo "FALHA: ssh para a VPS retornou $? (host=${VPS_HOST} user=${USER_FINAL})"; exit 1; }
+          if [ -z "$ENV_WEB" ]; then
+            echo "FALHA: a VPS não devolveu o conteúdo de .env.web.build"
+            exit 1
+          fi
           while IFS='=' read -r CHAVE VALOR; do
             case "$CHAVE" in
               \#*|""|VITE_API_URL) continue ;;
