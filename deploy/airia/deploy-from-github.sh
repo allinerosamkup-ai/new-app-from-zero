@@ -37,7 +37,9 @@ echo "== Checkout do GitHub =="
 # O clone é recriado a cada deploy para garantir o código exato do HEAD remoto,
 # sem risco de repositório local desatualizado ou fetch shallow falho.
 rm -rf "$SRC_DIR"
-git clone --quiet --depth 1 --single-branch -b master "$TOKEN_URL" "$SRC_DIR"
+git clone --depth 1 --single-branch -b master "$TOKEN_URL" "$SRC_DIR"
+echo "remote do clone: $(git -C "$SRC_DIR" remote get-url origin)"
+git -C "$SRC_DIR" log --oneline -3
 if [ -n "$WANTED_SHA" ]; then
   # Se um SHA específico foi pedido, busca o commit exato (depth infalível:
   # fetch por SHA não existe em shallow, então clona a profundidade completa).
