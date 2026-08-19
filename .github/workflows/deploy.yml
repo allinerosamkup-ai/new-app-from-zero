@@ -148,114 +148,22 @@ jobs:
              echo "chaves de cobrança gravadas: $(printf "%s\n" "$CHAVES_ENVIADAS" | wc -l)"' < pares.env
           rm -f pares.env
 
-      - name: Ler vars de build da VPS
-        id: buildvars
+      - name: Publicar na VPS com código do GitHub
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          set -eu
-          USER_FINAL="${VPS_USER:-root}"
-          # Aceita/atualiza a chave de host da VPS (o deploy anterior usa o
-          # mesmo known_hosts; repetir aqui garante que uma chave renovada na
-          # VPS não quebre a conexão com accept-new).
-          ssh-keyscan -T 15 -H "${VPS_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
-          chmod 644 ~/.ssh/known_hosts
-          ENV_WEB="$(ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 -o StrictHostKeyChecking=yes "${USER_FINAL}@${VPS_HOST}" 'set -eu
-            if [ -f /opt/airia/app/deploy/airia/.env.web.build ] && [ -s /opt/airia/app/deploy/airia/.env.web.build ] && grep -q VITE_SUPABASE_URL /opt/airia/app/deploy/airia/.env.web.build; then
-              cat /opt/airia/app/deploy/airia/.env.web.build
-            elif docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" airia_web 2>/dev/null | grep -E "^(VITE_SUPABASE_URL|VITE_SUPABASE_ANON_KEY|VITE_APK_URL|VITE_APP_RELEASE)="; then
-              echo "(vars extraídas de docker inspect airia_web)" >&2
-            else
-              echo "FALHA: não foi possível localizar as vars de build na VPS"
-              exit 1
-            fi')" || { echo "FALHA: ssh para a VPS retornou $? (host=${VPS_HOST} user=${USER_FINAL})"; exit 1; }
-          if [ -z "$ENV_WEB" ]; then
-            echo "FALHA: a VPS não devolveu o conteúdo de .env.web.build"
-            exit 1
-          fi
-          while IFS='=' read -r CHAVE VALOR; do
-            case "$CHAVE" in
-              \#*|""|VITE_API_URL) continue ;;
-              *) printf '%s=%s\n' "$CHAVE" "$VALOR" >> "$GITHUB_OUTPUT" ;;
-            esac
-          done <<< "$ENV_WEB"
-          if [ -n "${{ steps.buildvars.outputs.VITE_SUPABASE_URL }}" ]; then
-            echo "Vars de build importadas da VPS"
-          fi
-
-      - name: Construir imagens no runner
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          VITE_SUPABASE_URL: ${{ steps.buildvars.outputs.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ steps.buildvars.outputs.VITE_SUPABASE_ANON_KEY }}
-          VITE_APK_URL: ${{ steps.buildvars.outputs.VITE_APK_URL }}
           REF: ${{ inputs.ref }}
         run: |
           set -eu
-          if [ -z "$DATABASE_URL" ]; then
-            echo "FALHA: DATABASE_URL ausente; o build não roda sem a conexão de banco sincronizada"
-            exit 1
-          fi
-          cat > deploy/airia/.env.web.build <<EOF
-          VITE_API_URL=/api
-          VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
-          VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-          VITE_APK_URL=
-          VITE_APP_RELEASE=${REF}
-          EOF
-          cat > deploy/airia/.env.backend <<EOF
-          DATABASE_URL=${DATABASE_URL}
-          DIRECT_URL=${DATABASE_URL}
-          BILLING_PROVIDER=cakto
-          EOF
-          export AIRIA_RELEASE="${REF}"
-          export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          # O build acontece no runner do GitHub, onde o código é o que acabou
-          # de ser conferido — nunca o que sobrou na VPS. As imagens ganham a
-          # tag :deploy para não colidir com :current em nenhum dos lados.
-          docker compose -f deploy/airia/compose.yml --env-file deploy/airia/.env.web.build build
-          docker image tag airia-web:current airia-web:deploy
-          docker image tag airia-backend:current airia-backend:deploy
-
-      - name: Validar o bundle construído
-        run: |
-          set -eu
-          docker create --name bundlecheck airia-web:deploy >/dev/null
-          MAIN_NAME="$(docker cp bundlecheck:/usr/share/nginx/html/assets - 2>/dev/null | tar tf - | grep '^assets/main-' | head -1)"
-          if [ -z "$MAIN_NAME" ]; then
-            echo "FALHA: nenhum bundle main-*.js na imagem"
-            docker rm -f bundlecheck >/dev/null
-            exit 1
-          fi
-          docker cp bundlecheck:"$MAIN_NAME" /tmp/main-prod.js >/dev/null
-          if grep -qE 'createBrowserRouter|RouterProvider' /tmp/main-prod.js; then
-            echo "bundle ${MAIN_NAME#assets/} contém o roteador de dados — ok"
-          else
-            echo "FALHA: o bundle não contém o roteador de dados; código construído diverge do versionado. Deploy abortado."
-            docker rm -f bundlecheck >/dev/null
-            exit 1
-          fi
-          docker rm -f bundlecheck >/dev/null
-          rm -f /tmp/main-prod.js
-
-      - name: Transferir imagens e publicar na VPS
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-        run: |
-          set -eu
           USER_FINAL="${VPS_USER:-root}"
-          # Salva as duas imagens num tar único e transfere pela própria
-          # conexão SSH — sem registry, sem credencial extra.
-          docker save airia-web:deploy airia-backend:deploy | gzip -1 > /tmp/airia-images.tar.gz
-          echo "tar pronto: $(du -h /tmp/airia-images.tar.gz | cut -f1)"
-          scp -o ConnectTimeout=30 -C /tmp/airia-images.tar.gz "${USER_FINAL}@${VPS_HOST}":/tmp/airia-images.tar.gz
-          rm -f /tmp/airia-images.tar.gz
-          # Na VPS o script só carrega a imagem e troca os containers — sem
-          # build e sem checkout, eliminando de vez o risco de código stale.
+          # O build agora acontece na VPS a partir de um clone LIMPO do GitHub,
+          # autenticado com o GITHUB_TOKEN do próprio workflow. A causa raiz
+          # do freeze era um repositório local na VPS que buildava um código
+          # diferente do versionado; clonar por https elimina essa classe de
+          # problema e dispensa o checkout/working-tree local por completo.
+          AUTH_URL="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
           ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 "${USER_FINAL}@${VPS_HOST}" \
-            "cat /tmp/airia-images.tar.gz | sh /opt/airia/app/deploy/airia/deploy-from-image.sh /opt/airia/app; rm -f /tmp/airia-images.tar.gz"
+            "sh /opt/airia/app/deploy/airia/deploy-from-github.sh '${AUTH_URL}' '${REF}'"
 
       - name: Conferir o que está no ar
         if: always()
