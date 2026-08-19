@@ -148,18 +148,77 @@ jobs:
              echo "chaves de cobrança gravadas: $(printf "%s\n" "$CHAVES_ENVIADAS" | wc -l)"' < pares.env
           rm -f pares.env
 
-      - name: Publicar
+      - name: Construir imagens no runner
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -eu
+          if [ -z "$DATABASE_URL" ]; then
+            echo "FALHA: DATABASE_URL ausente; o build não roda sem a conexão de banco sincronizada"
+            exit 1
+          fi
+          cat > deploy/airia/.env.web.build <<EOF
+          VITE_API_URL=/api
+          VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+          VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+          VITE_APK_URL=
+          VITE_APP_RELEASE=${REF}
+          EOF
+          cat > deploy/airia/.env.backend <<EOF
+          DATABASE_URL=${DATABASE_URL}
+          DIRECT_URL=${DATABASE_URL}
+          BILLING_PROVIDER=cakto
+          EOF
+          export AIRIA_RELEASE="${REF}"
+          export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          # O build acontece no runner do GitHub, onde o código é o que acabou
+          # de ser conferido — nunca o que sobrou na VPS. As imagens ganham a
+          # tag :deploy para não colidir com :current em nenhum dos lados.
+          docker compose -f deploy/airia/compose.yml --env-file deploy/airia/.env.web.build build
+          docker image tag airia-web:current airia-web:deploy
+          docker image tag airia-backend:current airia-backend:deploy
+
+      - name: Validar o bundle construído
+        run: |
+          set -eu
+          docker create --name bundlecheck airia-web:deploy >/dev/null
+          MAIN_NAME="$(docker cp bundlecheck:/usr/share/nginx/html/assets - 2>/dev/null | tar tf - | grep '^assets/main-' | head -1)"
+          if [ -z "$MAIN_NAME" ]; then
+            echo "FALHA: nenhum bundle main-*.js na imagem"
+            docker rm -f bundlecheck >/dev/null
+            exit 1
+          fi
+          docker cp bundlecheck:"$MAIN_NAME" /tmp/main-prod.js >/dev/null
+          if grep -qE 'createBrowserRouter|RouterProvider' /tmp/main-prod.js; then
+            echo "bundle ${MAIN_NAME#assets/} contém o roteador de dados — ok"
+          else
+            echo "FALHA: o bundle não contém o roteador de dados; código construído diverge do versionado. Deploy abortado."
+            docker rm -f bundlecheck >/dev/null
+            exit 1
+          fi
+          docker rm -f bundlecheck >/dev/null
+          rm -f /tmp/main-prod.js
+
+      - name: Transferir imagens e publicar na VPS
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
-          REF: ${{ inputs.ref }}
         run: |
+          set -eu
           USER_FINAL="${VPS_USER:-root}"
-          # `deploy.sh` já cancela sozinho se o checkout da VPS divergir de
-          # origin/master, então não há o que validar aqui — o script é a
-          # autoridade, e duplicar a regra criaria duas versões dela.
+          # Salva as duas imagens num tar único e transfere pela própria
+          # conexão SSH — sem registry, sem credencial extra.
+          docker save airia-web:deploy airia-backend:deploy | gzip -1 > /tmp/airia-images.tar.gz
+          echo "tar pronto: $(du -h /tmp/airia-images.tar.gz | cut -f1)"
+          scp -o ConnectTimeout=30 -C /tmp/airia-images.tar.gz "${USER_FINAL}@${VPS_HOST}":/tmp/airia-images.tar.gz
+          rm -f /tmp/airia-images.tar.gz
+          # Na VPS o script só carrega a imagem e troca os containers — sem
+          # build e sem checkout, eliminando de vez o risco de código stale.
           ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 "${USER_FINAL}@${VPS_HOST}" \
-            "cd /opt/airia/app && git fetch origin ${REF} && git checkout ${REF} && git pull origin ${REF} && sh ./deploy/airia/deploy.sh"
+            "cat /tmp/airia-images.tar.gz | sh /opt/airia/app/deploy/airia/deploy-from-image.sh /opt/airia/app; rm -f /tmp/airia-images.tar.gz"
 
       - name: Conferir o que está no ar
         if: always()
