@@ -117,8 +117,8 @@ trap rollback_on_error EXIT
 # do docker limpo e sem dependência dos arquivos de runtime da VPS.
 echo "== Build context =="
 rm -rf "$PROJECT_DIR/deploy/airia/.build-src"
-mkdir -p "$PROJECT_DIR/deploy/airia/.build-src/apps/web" "$PROJECT_DIR/deploy/airia/.build-src/apps/backend" "$PROJECT_DIR/deploy/airia/.build-src/supabase" "$PROJECT_DIR/deploy/airia/.build-src/scripts" "$PROJECT_DIR/deploy/airia/.build-src/.github"
-(cd "$SRC_DIR" && tar cf - apps/web apps/backend supabase scripts .github package.json package-lock.json) | tar xf - -C "$PROJECT_DIR/deploy/airia/.build-src"
+mkdir -p "$PROJECT_DIR/deploy/airia/.build-src/apps/web" "$PROJECT_DIR/deploy/airia/.build-src/apps/backend" "$PROJECT_DIR/deploy/airia/.build-src/packages/database" "$PROJECT_DIR/deploy/airia/.build-src/supabase" "$PROJECT_DIR/deploy/airia/.build-src/scripts" "$PROJECT_DIR/deploy/airia/.build-src/.github" "$PROJECT_DIR/deploy/airia/.build-src/deploy/airia"
+(cd "$SRC_DIR" && tar cf - apps/web apps/backend packages/database supabase scripts .github package.json package-lock.json deploy/airia/nginx.conf deploy/airia/Dockerfile.web deploy/airia/Dockerfile.backend deploy/airia/compose.yml) | tar xf - -C "$PROJECT_DIR/deploy/airia/.build-src"
 
 echo "== Build =="
 cd "$PROJECT_DIR/deploy/airia/.build-src"
