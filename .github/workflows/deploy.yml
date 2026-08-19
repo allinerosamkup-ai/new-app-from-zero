@@ -161,7 +161,15 @@ jobs:
           # VPS não quebre a conexão com accept-new).
           ssh-keyscan -T 15 -H "${VPS_HOST}" >> ~/.ssh/known_hosts 2>/dev/null
           chmod 644 ~/.ssh/known_hosts
-          ENV_WEB="$(ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 -o StrictHostKeyChecking=yes "${USER_FINAL}@${VPS_HOST}" 'set -eu; if [ -f /opt/airia/app/deploy/airia/.env.web.build ]; then cat /opt/airia/app/deploy/airia/.env.web.build; else echo "FALHA: .env.web.build ausente na VPS"; exit 1; fi')" || { echo "FALHA: ssh para a VPS retornou $? (host=${VPS_HOST} user=${USER_FINAL})"; exit 1; }
+          ENV_WEB="$(ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 -o StrictHostKeyChecking=yes "${USER_FINAL}@${VPS_HOST}" 'set -eu
+            if [ -f /opt/airia/app/deploy/airia/.env.web.build ] && [ -s /opt/airia/app/deploy/airia/.env.web.build ] && grep -q VITE_SUPABASE_URL /opt/airia/app/deploy/airia/.env.web.build; then
+              cat /opt/airia/app/deploy/airia/.env.web.build
+            elif docker inspect --format "{{range .Config.Env}}{{println .}}{{end}}" airia_web 2>/dev/null | grep -E "^(VITE_SUPABASE_URL|VITE_SUPABASE_ANON_KEY|VITE_APK_URL|VITE_APP_RELEASE)="; then
+              echo "(vars extraídas de docker inspect airia_web)" >&2
+            else
+              echo "FALHA: não foi possível localizar as vars de build na VPS"
+              exit 1
+            fi')" || { echo "FALHA: ssh para a VPS retornou $? (host=${VPS_HOST} user=${USER_FINAL})"; exit 1; }
           if [ -z "$ENV_WEB" ]; then
             echo "FALHA: a VPS não devolveu o conteúdo de .env.web.build"
             exit 1
