@@ -148,11 +148,31 @@ jobs:
              echo "chaves de cobrança gravadas: $(printf "%s\n" "$CHAVES_ENVIADAS" | wc -l)"' < pares.env
           rm -f pares.env
 
+      - name: Ler vars de build da VPS
+        id: buildvars
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -eu
+          USER_FINAL="${VPS_USER:-root}"
+          ENV_WEB="$(ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new "${USER_FINAL}@${VPS_HOST}" 'set -eu; if [ -f /opt/airia/app/deploy/airia/.env.web.build ]; then cat /opt/airia/app/deploy/airia/.env.web.build; else echo "FALHA: .env.web.build ausente na VPS"; exit 1; fi')"
+          while IFS='=' read -r CHAVE VALOR; do
+            case "$CHAVE" in
+              \#*|""|VITE_API_URL) continue ;;
+              *) printf '%s=%s\n' "$CHAVE" "$VALOR" >> "$GITHUB_OUTPUT" ;;
+            esac
+          done <<< "$ENV_WEB"
+          if [ -n "${{ steps.buildvars.outputs.VITE_SUPABASE_URL }}" ]; then
+            echo "Vars de build importadas da VPS"
+          fi
+
       - name: Construir imagens no runner
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ steps.buildvars.outputs.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ steps.buildvars.outputs.VITE_SUPABASE_ANON_KEY }}
+          VITE_APK_URL: ${{ steps.buildvars.outputs.VITE_APK_URL }}
           REF: ${{ inputs.ref }}
         run: |
           set -eu
