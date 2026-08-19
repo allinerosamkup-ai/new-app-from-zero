@@ -93,5 +93,6 @@
 - [x] Corrigir o estado de ação retirada em Objetivos para que não seja apresentado como ação concluída ou adiada.
 - [x] Corrigir a regressão de cópia portuguesa no card de proposta e na duração de fase de Padrões quando a localidade é inglesa.
 - [x] Criar commit autorizado com as correções e evidências finais da validação integrada.
-- [ ] Enviar o commit autorizado ao repositório remoto selecionado.
+- [x] Enviar o commit autorizado ao repositório remoto selecionado.
 - [ ] Executar o deploy autorizado da PWA e confirmar a disponibilidade pública.
+- [ ] Sincronizar com segurança a conexão PostgreSQL redefinida no workflow e no segredo de Actions antes de repetir o deploy.

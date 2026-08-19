@@ -62,17 +62,18 @@ jobs:
           test -s ~/.ssh/known_hosts || { echo "FALHA: não consegui ler a chave de host de $VPS_HOST"; exit 1; }
 
       # A VPS só é alcançável por SSH, e nem toda pessoa que precisa publicar
-      # tem terminal aberto. Este passo sincroniza as chaves de cobrança do
-      # cofre do repositório para o `.env.backend` da VPS, sem imprimir valor
-      # nenhum e sem tocar em nenhuma outra linha do arquivo.
+      # tem terminal aberto. Este passo sincroniza a conexão de banco e as
+      # chaves de cobrança do cofre do repositório para o `.env.backend` da
+      # VPS, sem imprimir valores e sem tocar em outras linhas do arquivo.
       #
       # Faltando qualquer uma das sete, o passo não escreve nada e avisa: meia
       # configuração deixaria `isConfigured()` falso do mesmo jeito, só que com
       # um arquivo remendado no meio.
-      - name: Sincronizar segredos de cobrança
+      - name: Sincronizar segredos operacionais
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BILLING_PROVIDER: ${{ secrets.BILLING_PROVIDER }}
           CAKTO_CLIENT_ID: ${{ secrets.CAKTO_CLIENT_ID }}
           CAKTO_CLIENT_SECRET: ${{ secrets.CAKTO_CLIENT_SECRET }}
@@ -84,6 +85,11 @@ jobs:
           CAKTO_LIFETIME_OFFER_ID: ${{ secrets.CAKTO_LIFETIME_OFFER_ID }}
         run: |
           set -eu
+          if [ -z "$DATABASE_URL" ]; then
+            echo "FALHA: o segredo DATABASE_URL é necessário para aplicar migrações com a conexão atual."
+            echo "Cadastre-o em Settings → Secrets and variables → Actions antes de publicar."
+            exit 1
+          fi
           CHAVES="CAKTO_CLIENT_ID CAKTO_CLIENT_SECRET CAKTO_WEBHOOK_SECRET
             CAKTO_SUBSCRIPTION_PRODUCT_ID CAKTO_LIFETIME_PRODUCT_ID
             CAKTO_MONTHLY_OFFER_ID CAKTO_ANNUAL_OFFER_ID CAKTO_LIFETIME_OFFER_ID"
@@ -92,24 +98,25 @@ jobs:
             eval "VALOR=\${$CHAVE}"
             [ -n "$VALOR" ] || FALTA="$FALTA $CHAVE"
           done
+          {
+            echo "DATABASE_URL=${DATABASE_URL}"
+          } > pares.env
+
           if [ -n "$FALTA" ]; then
             echo "AVISO: segredos de cobrança ausentes:$FALTA"
-            echo "O deploy segue, mas com BILLING_PROVIDER=cakto sem configuração a"
-            echo "tela de plano fica SEM opção de compra (checkoutAvailable=false)."
-            echo "Cadastre em Settings → Secrets and variables → Actions, ou publique"
-            echo "com o segredo BILLING_PROVIDER=stripe para vender pelo provedor antigo."
-            exit 0
-          fi
-
-          # O corpo vai por stdin e é lido pelo shell remoto sem aparecer em
-          # linha de comando — argumento de `ssh` fica visível no `ps` da VPS.
-          {
+            echo "O deploy segue com a conexão de banco sincronizada; o checkout fica"
+            echo "indisponível até os segredos Cakto serem configurados."
+          else
+            # O corpo vai por stdin e é lido pelo shell remoto sem aparecer em
+            # linha de comando — argumento de `ssh` fica visível no `ps` da VPS.
+            {
             echo "BILLING_PROVIDER=${BILLING_PROVIDER:-cakto}"
             for CHAVE in $CHAVES; do
               eval "VALOR=\${$CHAVE}"
               echo "${CHAVE}=${VALOR}"
             done
-          } > pares.env
+            } >> pares.env
+          fi
 
           USER_FINAL="${VPS_USER:-root}"
           ssh -i ~/.ssh/id_deploy -o ConnectTimeout=30 "${USER_FINAL}@${VPS_HOST}" \
