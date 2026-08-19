@@ -195,3 +195,9 @@ No intervalo **Semestre**, Padrões carregou `92` Check-ins e renderizou o **Rec
 A correção de localização foi ampliada para toda a leitura estrutural de Padrões: proposta, motivo de capacidade, duração da fase, descrição, dica, duração estimada, previsão de energia e alertas. Um erro de ordem de inicialização identificado durante a verificação foi corrigido imediatamente. No novo teste autenticado em **Semestre**, a tela exibiu integralmente em inglês **“Done when”**, **“I kept today’s scope as small as possible…”**, **“1 day in this phase”**, descrição e dica da fase, **“~3 days”**, **“Moderate — sustainable pace”** e **“High volatility”**. O Histórico recente de fases permaneceu renderizado e legível em viewport móvel.
 
 Na regressão final posterior a essa correção, a PWA concluiu com **62 arquivos / 462 testes aprovados**, typecheck limpo, lint sem avisos e build de produção aprovado. O build gerou o Service Worker com `57` itens no precache. A suíte final do backend, executada após a barreira de cancelamento do Comando central, terminou com **118 suítes aprovadas**.
+
+## Publicação autorizada — 19 de agosto de 2026
+
+Os commits `fdb8f02` (correções validadas), `c2612a8` (sincronização de conexão de banco) e `a998172` (sincronização de `DIRECT_URL` para migrações Prisma) foram enviados à branch `master` do repositório remoto. A primeira tentativa de publicação revelou a senha antiga na VPS; a segunda confirmou a sincronização, mas evidenciou que a migração usa `DIRECT_URL`. Após armazenar a conexão somente como segredo criptografado `DATABASE_URL` do GitHub Actions e sincronizar `DATABASE_URL` e `DIRECT_URL` para o ambiente remoto, a publicação `32215317640` foi concluída com sucesso.
+
+Após o deploy, `https://airia.pro/`, `https://www.airia.pro/` e `https://airia.pro/api/health` responderam HTTP `200`. O arquivo público `release.json` confirmou a versão `a998172485da4f49ff5627395b641bd17c97a411`.
