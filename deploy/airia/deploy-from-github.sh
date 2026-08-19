@@ -136,6 +136,10 @@ docker build --tag airia-backend:current \
 echo "== Validate build content =="
 # O bundle no ar saiu antigo por um tempo: esta checagem garante que o
 # JavaScript construído é mesmo o código versionado antes de subir.
+# Remove qualquer `bundlecheck` pendente (restos de um rollback anterior) antes
+# de criar — sem isso, "name already in use" mata o script no set -e e o trap
+# executa rollback automático de um deploy que ainda nem subiu.
+docker rm -f bundlecheck >/dev/null 2>&1 || true
 docker create --name bundlecheck airia-web:current >/dev/null
 BUNDLE_MAIN="$(docker cp bundlecheck:/usr/share/nginx/html/assets - 2>/dev/null | tar tf - | grep '^assets/main-' | head -1)"
 if [ -z "$BUNDLE_MAIN" ]; then
