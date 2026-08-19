@@ -122,7 +122,11 @@ mkdir -p "$PROJECT_DIR/deploy/airia/.build-src/apps/web" "$PROJECT_DIR/deploy/ai
 
 echo "== Build =="
 cd "$PROJECT_DIR/deploy/airia/.build-src"
-docker build --tag airia-web:current \
+# O contexto é sempre um clone limpo do GitHub. O `--no-cache` é intencional:
+# a VPS já produziu um bundle antigo a partir de uma camada Docker stale, mesmo
+# quando o SHA do código estava correto. Para este app, publicar código novo
+# exige que o Vite execute novamente dentro de uma camada nova.
+docker build --no-cache --tag airia-web:current \
   --label "org.opencontainers.image.revision=$AIRIA_RELEASE" \
   --build-arg VITE_API_URL=/api \
   --build-arg "VITE_SUPABASE_URL=$(grep -m1 '^VITE_SUPABASE_URL=' "$ENV_FILE" | cut -d= -f2)" \
