@@ -145,32 +145,44 @@ echo "== Validate build content =="
 # executa rollback automático de um deploy que ainda nem subiu.
 docker rm -f bundlecheck >/dev/null 2>&1 || true
 docker create --name bundlecheck airia-web:current >/dev/null
-BUNDLE_MAIN="$(docker cp bundlecheck:/usr/share/nginx/html/assets - 2>/dev/null | tar tf - | grep '^assets/main-' | head -1)"
+BUNDLE_TMP="$(mktemp -d)"
+# Copia o diretório inteiro para um diretório temporário do host. A versão
+# anterior extraía `assets/main-*.js` de um tar e depois passava esse caminho
+# relativo ao `docker cp`; no Docker da VPS isso tentava ler
+# `bundlecheck:assets/main-*.js` em vez de `/usr/share/nginx/html/assets/...`,
+# falhava silenciosamente (stderr redirecionado) e acionava o rollback.
+if ! docker cp bundlecheck:/usr/share/nginx/html/assets/. "$BUNDLE_TMP/" 2>/dev/null; then
+  echo "FALHA: não foi possível extrair os assets da imagem airia-web:current"
+  docker rm -f bundlecheck >/dev/null 2>&1 || true
+  rm -rf "$BUNDLE_TMP"
+  rollback_on_error
+fi
+BUNDLE_MAIN="$(find "$BUNDLE_TMP" -maxdepth 1 -type f -name 'main-*.js' -print -quit)"
 if [ -z "$BUNDLE_MAIN" ]; then
   echo "FALHA: nenhum bundle main-*.js encontrado na imagem"
-  docker rm -f bundlecheck >/dev/null
+  docker rm -f bundlecheck >/dev/null 2>&1 || true
+  rm -rf "$BUNDLE_TMP"
   rollback_on_error
 fi
 # O vite minifica os identificadores importados; o sinal inequívoco do data
 # router é o array de rotas literal '[{path:"*",element' (e, em alguns
-# toolchains, o identificador original "createBrowserRouter"). A extração vai
-# para arquivo primeiro: grep em pipe com `head -c` pode falhar silenciosamente
-# conforme a versão do grep/shell da máquina.
-BUNDLE_TMP="$(mktemp)"
-docker cp bundlecheck:"$BUNDLE_MAIN" "$BUNDLE_TMP" 2>/dev/null
-echo "tamanho do bundle: $(wc -c < "$BUNDLE_TMP") bytes"
+# toolchains, o identificador original "createBrowserRouter"). A validação
+# lê o arquivo diretamente, sem pipe sujeito a diferenças de shell/grep.
+echo "bundle encontrado: $(basename "$BUNDLE_MAIN")"
+echo "tamanho do bundle: $(wc -c < "$BUNDLE_MAIN") bytes"
 BUNDLE_HAS_DATA_ROUTER=0
-grep -qF 'createBrowserRouter' "$BUNDLE_TMP" && BUNDLE_HAS_DATA_ROUTER=1
-grep -qF '[{path:"*",element' "$BUNDLE_TMP" && BUNDLE_HAS_DATA_ROUTER=1
-grep -qF '(\[\{path:"\*",element' "$BUNDLE_TMP" && BUNDLE_HAS_DATA_ROUTER=1
+grep -qF 'createBrowserRouter' "$BUNDLE_MAIN" && BUNDLE_HAS_DATA_ROUTER=1
+grep -qF '[{path:"*",element' "$BUNDLE_MAIN" && BUNDLE_HAS_DATA_ROUTER=1
+grep -qF '(\[\{path:"\*",element' "$BUNDLE_MAIN" && BUNDLE_HAS_DATA_ROUTER=1
 if [ "$BUNDLE_HAS_DATA_ROUTER" != "1" ]; then
-  echo "FALHA: o bundle $BUNDLE_MAIN NÃO contém o roteador de dados (createBrowserRouter/[{path:\"*\",element]). O JavaScript construído não corresponde ao código versionado; deploy abortado."
-  docker rm -f bundlecheck >/dev/null
-  rm -f "$BUNDLE_TMP"
+  echo "FALHA: o bundle $(basename "$BUNDLE_MAIN") NÃO contém o roteador de dados (createBrowserRouter/[{path:\"*\",element]). O JavaScript construído não corresponde ao código versionado; deploy abortado."
+  docker rm -f bundlecheck >/dev/null 2>&1 || true
+  rm -rf "$BUNDLE_TMP"
   rollback_on_error
 fi
 echo "bundle construído contém o roteador de dados — ok"
-docker rm -f bundlecheck >/dev/null
+docker rm -f bundlecheck >/dev/null 2>&1 || true
+rm -rf "$BUNDLE_TMP"
 
 echo "== Stop backend before migration =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" stop airia_backend
