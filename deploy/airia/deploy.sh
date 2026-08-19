@@ -160,6 +160,31 @@ done
 echo "== Deploy =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-build
 
+echo "== Validate build content =="
+# O bundle em produção saiu diferente do que o Git manda: o main.js no ar não
+# contém o roteador de dados que o master exige. Esta checagem garante que o
+# código buildado na imagem é mesmo o código versionado — sem isso o deploy
+# pode subir JavaScript antigo silenciosamente (working tree sujo, cache de
+# build, clone atrasado), e a produção fica travada sem ninguém perceber.
+TMP_WEB_IMG="${PREVIOUS_WEB_IMAGE%%:*}:bundlecheck"
+# Copia a imagem recém-buildada para um nome temporário, inspeciona o bundle
+# por dentro e remove o container auxiliar em seguida.
+docker create --name bundlecheck "$PREVIOUS_WEB_IMAGE" >/dev/null
+docker cp bundlecheck:/usr/share/nginx/html/assets bundlecheck_assets 2>/dev/null
+BUNDLE_MAIN="$(ls bundlecheck_assets/ 2>/dev/null | grep '^main-' | head -1)"
+if [ -z "$BUNDLE_MAIN" ]; then
+  echo "FALHA: nenhum bundle main-*.js encontrado na imagem"
+  docker rm -f bundlecheck >/dev/null 2>&1
+  exit 1
+fi
+MAIN_CONTENT="$(docker cp bundlecheck:/usr/share/nginx/html/assets/$BUNDLE_MAIN - 2>/dev/null | head -c 400000)"
+case "$MAIN_CONTENT" in
+  *createBrowserRouter*|*RouterProvider*) echo "bundle $BUNDLE_MAIN contém o roteador de dados — ok" ;;
+  *) echo "FALHA: o bundle $BUNDLE_MAIN NÃO contém o roteador de dados (createBrowserRouter/RouterProvider). O JavaScript buildado na imagem não corresponde ao código versionado; deploy abortado para não subir código antigo." ; docker rm -f bundlecheck >/dev/null 2>&1 ; rm -rf bundlecheck_assets ; exit 1 ;;
+esac
+docker rm -f bundlecheck >/dev/null
+rm -rf bundlecheck_assets
+
 echo "== Validate =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
 docker logs --tail 20 airia_backend || true
