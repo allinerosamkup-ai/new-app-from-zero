@@ -65,6 +65,15 @@ export function getAdaptiveSnapshot(): AdaptiveSnapshot {
  * O efeito para quem usa é o pior possível: cada chamada do store tem `.catch()`
  * próprio, então o erro some e o app abre como se a conta não tivesse nada.
  */
+async function readCurrentSession(): Promise<any> {
+  if (!_sessionReadInFlight) {
+    _sessionReadInFlight = supabase.auth.getSession()
+      .then(({ data }) => data.session)
+      .finally(() => { _sessionReadInFlight = null; });
+  }
+  return _sessionReadInFlight;
+}
+
 async function getAuthHeaders(insistir = false): Promise<Record<string, string>> {
   const language = getCurrentLanguage();
   const base = {
@@ -73,14 +82,14 @@ async function getAuthHeaders(insistir = false): Promise<Record<string, string>>
     'Content-Language': language,
   };
 
-  let { data: { session } } = await supabase.auth.getSession();
+  let session = await readCurrentSession();
 
   if (!session && insistir) {
     // Pode ser corrida de inicialização: o SDK ainda está restaurando a sessão
     // do armazenamento, ou renovando um token vencido. Espera a renovação real
     // em vez de concluir que não há login.
     const renovada = await recoverSession();
-    if (renovada) ({ data: { session } } = await supabase.auth.getSession());
+    if (renovada) session = await readCurrentSession();
   }
 
   if (!session) return base;
@@ -115,6 +124,8 @@ function getLocaleContext() {
  * resultado é o real, não um palpite sobre quanto a rede demora.
  */
 let _refreshInFlight: Promise<boolean> | null = null;
+let _sessionReadInFlight: Promise<any> | null = null;
+const _getInFlight = new Map<string, Promise<any>>();
 
 /**
  * Renova a sessão e diz se a requisição pode ser refeita.
@@ -256,7 +267,12 @@ function enrichWriteBody(endpoint: string, body: unknown): unknown {
 
 export const api = {
   async get(endpoint: string) {
-    return requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, { headers }));
+    const pending = _getInFlight.get(endpoint);
+    if (pending) return pending;
+    const request = requestWithAuth((headers) => fetch(`${API_URL}${endpoint}`, { headers }))
+      .finally(() => { _getInFlight.delete(endpoint); });
+    _getInFlight.set(endpoint, request);
+    return request;
   },
 
   async post(endpoint: string, body: unknown) {

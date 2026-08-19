@@ -976,7 +976,7 @@ export function GoalsPage() {
   const location = useLocation();
   const {
     state,
-    refreshData,
+    refreshObjectives,
     toggleSubGoal,
     removeGoal,
     updateGoal,
@@ -1065,10 +1065,14 @@ export function GoalsPage() {
   }
 
   useEffect(() => {
-    void executeGoalRecovery().catch(() => {});
+    // A recuperação pode acionar IA em objetivos antigos; não bloqueie o primeiro
+    // paint da tela. A hidratação canônica chega pelo store antes desta tentativa.
+    const timer = window.setTimeout(() => {
+      void executeGoalRecovery().catch(() => {});
+    }, 1200);
+    return () => window.clearTimeout(timer);
     // Uma tentativa automática por montagem. Falha volta o guard para idle e
     // fica sob controle explícito do botão de retry, sem loop de custo de IA.
-     
   }, []);
 
   useEffect(() => {
@@ -1097,7 +1101,7 @@ export function GoalsPage() {
         deadline,
         locale: navigator.language || 'pt-BR',
       }) as GoalLike;
-      await refreshData();
+      await refreshObjectives();
       setCreationOpen(false);
       trackProductEvent("goal.created.v1", "goals", {
         goalId: String(objective.id),
@@ -1125,7 +1129,7 @@ export function GoalsPage() {
         locale: navigator.language || 'pt-BR',
         userStatements: clarifications,
       }) as { status: string; question?: string | null; objective?: GoalLike };
-      await refreshData();
+      await refreshObjectives();
       if (response.question) setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: response.question });
       else if (response.status === 'ready') showSuccess(l('O caminho foi atualizado.', 'The path was updated.'));
       else showError(l('O objetivo continua salvo; a Airia tentará novamente.', 'The goal remains saved; Airia will retry.'));
@@ -1158,7 +1162,7 @@ export function GoalsPage() {
         answer,
         locale: navigator.language || 'pt-BR',
       }) as { status: string; question?: string | null };
-      await refreshData();
+      await refreshObjectives();
       if (response.question) setPendingQuestion({ goalId, goalTitle: target.goalTitle, question: response.question });
     } catch (error) {
       showError(error instanceof Error ? error.message : l('Não foi possível salvar a resposta.', 'Could not save the answer.'));
@@ -1170,7 +1174,7 @@ export function GoalsPage() {
       const goal = goals.find((item) => String(item.id) === String(goalId));
       if (!goal) return;
       const response = await api.post(`/objectives/${goalId}/actions`, { ...action, expectedVersion: goal.pathVersion ?? 1 }) as { action: { id: string } };
-      await refreshData();
+      await refreshObjectives();
       trackProductEvent("goal.action_changed.v1", "goals", {
         goalId: String(goalId),
         actionId: response.action.id,
@@ -1187,7 +1191,7 @@ export function GoalsPage() {
     const goal = goals.find((item) => String(item.id) === String(goalId));
     if (!goal) return;
     await api.patch(`/objectives/${goalId}`, { pausedAt: goal.pausedAt ? null : new Date().toISOString() });
-    await refreshData();
+    await refreshObjectives();
   }
 
   async function archiveGoal(goal: GoalLike) {
@@ -1256,7 +1260,7 @@ export function GoalsPage() {
             expectedVersion: goal.pathVersion ?? 1,
             ...patch,
           });
-          await refreshData();
+          await refreshObjectives();
           trackProductEvent("goal.action_changed.v1", "goals", {
             goalId: String(goal.id),
             actionId: String(actionId),
@@ -1278,7 +1282,7 @@ export function GoalsPage() {
       onAdvance={async () => {
         try {
           const response = await api.post(`/objectives/${goal.id}/path/advance`, { expectedVersion: goal.pathVersion ?? 1, locale: navigator.language || 'pt-BR' }) as { question?: string | null };
-          await refreshData();
+          await refreshObjectives();
           if (response.question) setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: response.question });
         } catch (error) {
           showError(error instanceof Error ? error.message : l('Não foi possível abrir a próxima etapa.', 'Could not open the next stage.'));
@@ -1287,7 +1291,7 @@ export function GoalsPage() {
       onConfirmRevision={async () => {
         try {
           await api.post(`/objectives/${goal.id}/path/confirm-revision`, { expectedVersion: goal.pathVersion ?? 1 });
-          await refreshData();
+          await refreshObjectives();
           showSuccess(l('O caminho futuro foi revisado.', 'The future path was revised.'));
         } catch (error) {
           showError(error instanceof Error ? error.message : l('O objetivo mudou; gere uma nova proposta.', 'The goal changed; generate a new proposal.'));
@@ -1306,7 +1310,7 @@ export function GoalsPage() {
       onEditDeadline={async (deadline) => {
         try {
           await api.patch(`/objectives/${goal.id}`, { deadline });
-          await refreshData();
+          await refreshObjectives();
           showSuccess(deadline ? l('Prazo atualizado.', 'Deadline updated.') : l('Objetivo deixado sem prazo.', 'Goal left open-ended.'));
         } catch (error) {
           showError(error instanceof Error ? error.message : l('Não foi possível atualizar o prazo.', 'Could not update the deadline.'));

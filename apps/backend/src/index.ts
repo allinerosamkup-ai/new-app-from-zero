@@ -1016,7 +1016,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
     ? context.moodCycleContext.trim()
     : null;
 
-  const [profile, onboarding, latestCheckin, routineContext, activeObjectives] = await Promise.all([
+  const [profile, onboarding, recentCheckins, routineContext, activeObjectives] = await Promise.all([
     prisma.profile.findUnique({
       where: { id: userId },
       select: { fullName: true },
@@ -1025,12 +1025,13 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
       where: { userId },
       select: { aiProfileSummary: true, aiProfilePayload: true, priorDiagnoses: true },
     }).catch(() => null),
-    prisma.dailyCheckin.findFirst({
+    prisma.dailyCheckin.findMany({
       where: { userId },
       orderBy: [
         { localDate: 'desc' },
         { recordedAt: 'desc' },
       ],
+      take: 14,
       select: {
         localDate: true,
         moodScore: true,
@@ -1043,7 +1044,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
         stateLabelType: true,
         stateSummary: true,
       },
-    }).catch(() => null),
+    }).catch(() => []),
     JournalService.buildRoutineContext(prisma, userId).catch(() => null),
     prisma.objective?.findMany
       ? prisma.objective.findMany({
@@ -1056,14 +1057,29 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
   ]);
 
   const derivedUserName = getFirstName(profile?.fullName);
+  const todayDateKey = routineContext?.localDate ?? getLocalTimeContext(new Date(), null).dateKey;
+  const checkinDateKey = (value: unknown) => value instanceof Date
+    ? value.toISOString().slice(0, 10)
+    : typeof value === 'string'
+      ? value.slice(0, 10)
+      : '';
+  const latestCheckin = (recentCheckins as any[]).find((entry) => checkinDateKey(entry.localDate) === todayDateKey) ?? null;
+  const historicalLatestCheckin = (recentCheckins as any[])[0] ?? null;
+  const todayCheckinStatus = routineContext?.todayCheckinStatus
+    ?? (latestCheckin
+      ? `Check-in de hoje confirmado (${todayDateKey}).`
+      : `Nenhum Check-in de hoje foi confirmado (${todayDateKey}). O último registro disponível é histórico.`);
   const fallbackMoodCycleContext = latestCheckin
     ? [
-        `Último estado registrado: ${latestCheckin.stateLabel ?? 'sem rótulo definido'}.`,
+        `Estado registrado hoje: ${latestCheckin.stateLabel ?? 'sem rótulo definido'}.`,
         `Humor ${humanizeScore(latestCheckin.moodScore, 'mood')} e energia ${humanizeScore(latestCheckin.energyScore, 'energy')}.`,
         latestCheckin.sleepScore != null ? `Sono ${humanizeScore(latestCheckin.sleepScore, 'sleep')}.` : null,
-        latestCheckin.stateSummary ? `Leitura atual: ${sanitizePromptContent(latestCheckin.stateSummary)}` : null,
+        latestCheckin.stateSummary ? `Leitura do Check-in de hoje: ${sanitizePromptContent(latestCheckin.stateSummary)}` : null,
       ].filter(Boolean).join(' ')
-    : null;
+    : [
+        todayCheckinStatus,
+        historicalLatestCheckin ? `Último estado histórico registrado em ${checkinDateKey(historicalLatestCheckin.localDate)}; não use como humor de hoje.` : null,
+      ].filter(Boolean).join(' ');
   const routinePromptSummary = sanitizePromptContent(routineContext?.promptSummary ?? null);
   const sharedMoodCycleContext = [
     explicitMoodCycle,
@@ -1113,7 +1129,10 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
 
   return {
     userName: explicitUserName ?? derivedUserName ?? 'você',
-    moodCycleContext: sharedMoodCycleContext || null,
+    moodCycleContext: [todayCheckinStatus, sharedMoodCycleContext].filter(Boolean).join(' ').trim() || null,
+    todayCheckinStatus,
+    hasCheckinToday: Boolean(latestCheckin),
+    latestCheckinDate: latestCheckin ? todayDateKey : historicalLatestCheckin ? checkinDateKey(historicalLatestCheckin.localDate) : null,
     userProfileSummary: sanitizePromptContent(onboarding?.aiProfileSummary ?? null),
     priorDiagnoses: (onboarding?.priorDiagnoses as string[] | null | undefined) ?? null,
     longTermMemory,
@@ -1434,6 +1453,8 @@ function buildJournalReflectiveContext(args: {
   };
   runtimeContext: {
     moodCycleContext?: string | null;
+    todayCheckinStatus?: string | null;
+    hasCheckinToday?: boolean;
     longTermMemory?: string | null;
     activeGoalsContext?: string | null;
     latestCheckinSignals?: {
@@ -1459,9 +1480,10 @@ function buildJournalReflectiveContext(args: {
 
   return [
     'Entrada atual é prioridade absoluta. Entenda cronologia, fato real e correções antes de usar memória.',
+    args.runtimeContext.todayCheckinStatus ? `STATUS TEMPORAL DO CHECK-IN: ${args.runtimeContext.todayCheckinStatus}` : '',
     `Mensagem atual: ${currentMessage}`,
     args.situationText,
-    'Tarefa interna: responder com análise, não paráfrase; cruzar memória/contexto quando houver conexão real.',
+    'Tarefa interna: responder com presença e especificidade, não paráfrase; cruzar memória/contexto somente quando houver conexão real.',
     args.ragContext
       ? `Memórias recuperadas/fallback:\n${args.ragContext}`
       : 'Memórias recuperadas/fallback: nenhuma útil; seja honesta e trabalhe só com o fato atual.',
@@ -1469,7 +1491,9 @@ function buildJournalReflectiveContext(args: {
     args.routineContext.recentSessionHistory ? `Sessões recentes:\n${args.routineContext.recentSessionHistory}` : '',
     args.runtimeContext.longTermMemory ? `Memória longa estruturada:\n${args.runtimeContext.longTermMemory}` : '',
     args.routineContext.promptSummary ? `Resumo de rotina/check-in:\n${args.routineContext.promptSummary}` : '',
-    checkinParts ? `Check-in mais recente: ${checkinParts}` : '',
+    checkinParts
+      ? `Check-in de hoje: ${checkinParts}`
+      : 'Nenhum Check-in de hoje disponível; não use o último registro histórico como humor atual.',
     args.runtimeContext.activeGoalsContext ? `Metas ativas:\n${args.runtimeContext.activeGoalsContext}` : '',
     args.plannerContext ? `Planner relevante (usar só se conectar ao relato):\n${args.plannerContext}` : '',
     args.groundingText ? `Chão operacional (não transformar em assunto se não conectar):\n${args.groundingText}` : '',
@@ -2178,7 +2202,7 @@ async function loadObjectiveIntelligenceContext(prisma: any, userId: string, obj
     }).catch(() => []) ?? [],
     prisma.dailyCheckin?.findFirst?.({
       where: { userId, localDate: getSaoPauloDateContext(now).dbDate }, orderBy: { recordedAt: 'desc' },
-      select: { energyScore: true, moodScore: true, signalMetadata: true, localDate: true },
+      select: { energyScore: true, moodScore: true, sleepScore: true, stateLabel: true, note: true, signalMetadata: true, localDate: true },
     }).catch(() => null) ?? null,
     OperationalProfileService.get(prisma, userId),
   ]);
@@ -2235,13 +2259,17 @@ async function loadObjectiveIntelligenceContext(prisma: any, userId: string, obj
     ...(Array.isArray(memory.evidence) ? memory.evidence.map((item: any) => item?.id ? `evidence:${item.id}` : '') : []),
   ]).filter(Boolean).slice(0, 24);
   const checkinDateKey = checkin?.localDate
-    ? new Date(checkin.localDate).toISOString().slice(0, 10)
+    ? (typeof checkin.localDate === 'string'
+      ? checkin.localDate.slice(0, 10)
+      : new Date(checkin.localDate).toISOString().slice(0, 10))
     : null;
   const currentCheckin = checkinDateKey === todayKey ? checkin : null;
   const metadata = currentCheckin?.signalMetadata && typeof currentCheckin.signalMetadata === 'object'
     ? currentCheckin.signalMetadata as Record<string, unknown>
     : {};
-  const note = typeof metadata.note === 'string' ? metadata.note : '';
+  const note = typeof currentCheckin?.note === 'string' && currentCheckin.note.trim()
+    ? currentCheckin.note
+    : typeof metadata.note === 'string' ? metadata.note : '';
   const userStatements = [
     ...answers,
     note,
@@ -7481,28 +7509,25 @@ ${samplingWarning}
 REGRA QUE MANDA EM TUDO:
 Este relatório analisa O PERÍODO INTEIRO. É PROIBIDO transformá-lo em leitura do dia atual — para isso existem o check-in e o resumo do dia. Só cite um dia específico quando ele for extremo do período ou parte de um padrão que você está demonstrando, e mesmo assim em uma frase.
 
-ESTRUTURA (use estes títulos, pule seção sem dado em vez de inventar):
-1. Resumo do período
-2. Quantidade e consistência dos registros
-3. Principais padrões identificados
-4. Aspectos positivos
-5. Aspectos negativos ou pontos de atenção
-6. Oscilações de humor e energia
-7. Comportamentos e hábitos recorrentes
-8. Relação entre ações, contexto e resultados
-9. Gatilhos ou fatores associados
-10. Evoluções e regressões
-11. Comparação entre o início e o final do período
-12. Conclusões principais
-13. Próximas ações recomendadas
+ESTRUTURA (use estes títulos e pule uma seção quando não houver dado; nunca preencha lacunas):
+1. O que apareceu neste período
+2. Como foram os registros
+3. Mudanças e repetições que merecem atenção
+4. O que apareceu junto de dias melhores
+5. O que pesou ou merece cuidado
+6. Comparando o começo e o fim
+7. Se fizer sentido, próximos passos
+8. Fechamento
 
 COMO ESCREVER:
-- Documento para consultar, guardar e levar a uma conversa profissional. Pode ser longo.
-- Cada afirmação apoiada num número dos dados acima. Sem número, não afirme.
-- Associação não é causa: escreva "aparece junto de", não "causou".
+- Escreva para a própria pessoa, como uma leitura cuidadosa e honesta — não como laudo, prontuário, avaliação clínica ou documento corporativo.
+- Prefira frases curtas, concretas e naturais. Use "você" quando falar com ela.
+- Apoie cada afirmação nos números e agregados acima. Sem base, diga "não dá para afirmar com estes registros".
+- Associação não é causa: escreva "apareceu junto de" ou "foi mais comum quando", nunca "causou".
 - Linguagem acessível, sem jargão clínico. Nunca nomeie transtorno nem sugira diagnóstico.
-- As próximas ações recomendadas saem do que os dados mostram, sem data e sem horário.
-- Português, markdown com os títulos numerados acima.`;
+- Próximos passos são possibilidades, não ordens. Só inclua um quando houver algo concreto que os dados sustentem.
+- Não transforme o relatório em previsão do futuro nem em instrução para fazer muitas coisas.
+- Português, markdown com os títulos acima.`;
       } else if (type === 'habit-recommendation') {
         const hour = new Date().getHours();
         const timeOfDay = hour < 12 ? 'manhã' : hour < 18 ? 'tarde' : 'noite';

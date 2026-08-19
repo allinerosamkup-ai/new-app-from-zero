@@ -32,8 +32,12 @@ export type AiriaReadingEnvelope = {
 };
 
 function dateKey(value: Date | string): string {
+  if (typeof value === 'string') {
+    const direct = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    if (direct) return direct;
+  }
   const date = value instanceof Date ? value : new Date(value);
-  return date.toISOString().slice(0, 10);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
 }
 
 function dateOnly(value: string): Date {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Share2, Check } from "lucide-react";
+import { useLocalizedCopy } from "../i18n";
 
 interface WeeklyShareCardProps {
   phaseName: string;
@@ -18,6 +19,7 @@ export function WeeklyShareCard({
   insight,
   weekLabel,
 }: WeeklyShareCardProps) {
+  const l = useLocalizedCopy();
   const [shared, setShared] = useState(false);
 
   const moodBar = Math.round((avgMood / 5) * 100);
@@ -26,7 +28,7 @@ export function WeeklyShareCard({
   const shareText = [
     `📊 Minha semana com Airia`,
     weekLabel ? `🗓 ${weekLabel}` : "",
-    `✨ Fase: ${phaseName}`,
+    `✨ Ritmo observado: ${phaseName}`,
     `💛 Humor médio: ${avgMood.toFixed(1)}/5`,
     `⚡ Energia média: ${avgEnergy.toFixed(1)}/5`,
     insight ? `\n"${insight}"` : "",
@@ -61,13 +63,13 @@ export function WeeklyShareCard({
           {weekLabel ?? "Esta semana"}
         </p>
         <p style={{ margin: "0 0 14px", fontSize: 20, fontWeight: 900, color: "var(--text-1)" }}>
-          Fase {phaseName}
+          {l(`Seu ritmo: ${phaseName}`, `Your rhythm: ${phaseName}`)}
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
           {[
-            { label: "Humor", value: avgMood, bar: moodBar, color: "var(--accent-sage)" },
-            { label: "Energia", value: avgEnergy, bar: energyBar, color: "var(--accent-sky)" },
+            { label: l("Humor", "Mood"), value: avgMood, bar: moodBar, color: "var(--accent-sage)" },
+            { label: l("Energia", "Energy"), value: avgEnergy, bar: energyBar, color: "var(--accent-sky)" },
           ].map(({ label, value, bar, color }) => (
             <div key={label}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -109,7 +111,7 @@ export function WeeklyShareCard({
             transition: "all .2s",
           }}
         >
-          {shared ? <><Check size={14} /> Compartilhado!</> : <><Share2 size={14} /> Compartilhar semana</>}
+          {shared ? <><Check size={14} /> {l("Compartilhado!", "Shared!")}</> : <><Share2 size={14} /> {l("Compartilhar semana", "Share week")}</>}
         </button>
       </div>
     </div>

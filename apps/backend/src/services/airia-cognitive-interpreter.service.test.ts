@@ -102,7 +102,7 @@ async function run() {
   assert.equal(result.frame.memoryJudgments[0].status, 'accepted');
   assert.equal(result.frame.memoryJudgments[1].status, 'rejected');
   assert.equal(result.responsePlan.allowedActionSource, 'none');
-  assert.doesNotMatch(AiriaCognitiveInterpreterService.formatForPrompt(result), /Aliança Divergente|Pense Comigo|Efeito Paralelo/);
+  assert.doesNotMatch(AiriaCognitiveInterpreterService.formatForPrompt(result), /metodologia interna|rótulo interno|framework privado/i);
   assert.match(AiriaCognitiveInterpreterService.formatForPrompt(result), /FRAME COGNITIVO DA AIRIA/i);
 
   const fencedModelResult = await AiriaCognitiveInterpreterService.interpret({

@@ -349,6 +349,7 @@ type AuraStoreContextValue = {
   setProactiveNudge: (nudge: ProactiveNudge | null) => void;
   recoverGoalActions: () => Promise<GoalActionRecoveryResult>;
   refreshData: (historyDays?: number) => Promise<void>;
+  refreshObjectives: () => Promise<void>;
 };
 
 export type GoalActionCompletion = {
@@ -542,6 +543,18 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
     } finally {
       refreshInFlightRef.current = null;
     }
+  }, []);
+
+  const refreshObjectives = useCallback(async () => {
+    const raw = await api.get('/objectives').catch((error) => {
+      console.warn('[AuraStore] objetivos não puderam ser atualizados agora.', error);
+      return null;
+    });
+    if (!Array.isArray(raw)) return;
+    setState((current) => ({
+      ...current,
+      goals: mapCanonicalObjectives(raw),
+    }));
   }, []);
 
   useEffect(() => {
@@ -1044,9 +1057,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         setState((current) => ({ ...current, lastProfileUpdate: isoDate })),
       setProactiveNudge: (nudge) =>
         setState((current) => ({ ...current, proactiveNudge: nudge })),
-      refreshData
+      refreshData,
+      refreshObjectives,
     }),
-    [state, hydrated, loading]
+    [state, hydrated, loading, refreshObjectives]
   );
 
   return (

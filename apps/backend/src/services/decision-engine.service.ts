@@ -303,8 +303,8 @@ function classifyTrava(
 }
 
 /**
- * Builds a bioReason string that identifies the trava type, following
- * the Aliança Divergente principle of naming the smallest concrete obstacle.
+ * Builds a bioReason string that identifies the type of obstacle without
+ * exposing internal terminology to the user.
  */
 function buildTravaReason(
   title: string,

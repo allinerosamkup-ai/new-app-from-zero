@@ -14,9 +14,9 @@ function run() {
   );
   assert.equal(okResult.ok, true, 'resposta com âncora deve passar');
 
-  // 2. Uma ação imperativa sem término observável não pode escapar no texto visível.
+  // 2. Uma ação explicitamente rotulada sem término observável não pode escapar no texto visível.
   const missingCompletion = validateJournalReply(
-    'Você já tem o movimento certo. Abre o app do banco agora e olha só as três primeiras contas da semana.',
+    'Próximo passo: abrir. Pronto quando: a tarefa estiver feita.',
     { lastAssistantReplies: [], lastUserMessages: ['Quero organizar as contas desta semana'], anchorTitles: [] },
   );
   assert.equal(missingCompletion.ok, false);
@@ -39,7 +39,7 @@ function run() {
     assert.equal(loopResult.reason, 'question_loop');
   }
 
-  // 4. no_concrete_anchor — havia âncoras mas resposta não cita nenhuma
+  // 4. Uma resposta acolhedora não precisa citar âncora histórica para ser válida.
   const noAnchorResult = validateJournalReply(
     'Você está em um momento de pausa, talvez seja bom respirar fundo.',
     {
@@ -48,10 +48,7 @@ function run() {
       anchorTitles: ['Vender camas no Olx', 'Contratar pintor da varanda', 'Pagar conta de luz'],
     },
   );
-  assert.equal(noAnchorResult.ok, false);
-  if (!noAnchorResult.ok) {
-    assert.equal(noAnchorResult.reason, 'no_concrete_anchor');
-  }
+  assert.equal(noAnchorResult.ok, true);
 
   // 5. echo_only — resposta é eco da última fala da usuária
   const echoResult = validateJournalReply(

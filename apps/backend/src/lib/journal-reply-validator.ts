@@ -73,8 +73,6 @@ function endsWithQuestion(value: string): boolean {
 
 const QUESTION_LOOP_THRESHOLD = 3;
 const VISIBLE_ACTION_LINE = /(?:^|\n)\s*(?:pr[oó]ximo passo|next step)\s*:\s*(.+)$/gim;
-const IMPERATIVE_ACTION_START = /(?:^|[.!?]\s+)(?:abra|abre|anote|liste|envie|ligue|separe|fa[çc]a|escreva|marque|responda|organize|confira|pague)\b/i;
-
 function visibleActionError(reply: string): string | null {
   const actionLines = [...reply.matchAll(VISIBLE_ACTION_LINE)]
     .map((match) => match[1]?.trim() ?? '')
@@ -84,9 +82,6 @@ function visibleActionError(reply: string): string | null {
     return invalid
       ? `Ação visível sem objeto específico ou término observável: "${invalid}".`
       : null;
-  }
-  if (IMPERATIVE_ACTION_START.test(reply)) {
-    return 'A resposta contém uma sugestão imperativa, mas não a apresenta como “Próximo passo: … Pronto quando: …”.';
   }
   return null;
 }
@@ -115,7 +110,7 @@ export function validateJournalReply(
       return {
         ok: false,
         reason: 'question_loop',
-        details: `${QUESTION_LOOP_THRESHOLD} perguntas seguidas no diário. Esta resposta deve trazer leitura+ação, não pergunta.`,
+        details: `${QUESTION_LOOP_THRESHOLD} perguntas seguidas no diário. Esta resposta deve trazer uma leitura ou um fechamento, não outra pergunta.`,
       };
     }
   }
@@ -143,26 +138,12 @@ export function validateJournalReply(
     }
   }
 
-  // 3. Citação obrigatória de âncora concreta quando há contexto.
-  if (context.anchorTitles.length > 0) {
-    const replyNormalized = normalizeText(trimmed);
-    const cited = context.anchorTitles.some((anchor) => {
-      const tokens = significantTokens(anchor);
-      for (const token of tokens) {
-        if (replyNormalized.includes(token)) return true;
-      }
-      return false;
-    });
-    if (!cited) {
-      return {
-        ok: false,
-        reason: 'no_concrete_anchor',
-        details: `Nenhum elemento concreto do histórico/RAG/planner citado. Âncoras disponíveis: ${context.anchorTitles.slice(0, 5).join(' | ')}.`,
-      };
-    }
-  }
+  // 3. Âncoras históricas são opcionais no Diário. Uma resposta pode ser
+  // apenas um feedback humano sobre a mensagem atual; memória não deve virar
+  // obrigação de citação nem deslocar o foco do que acabou de ser contado.
 
-  // 4. ANÁLISE PRONTA OBRIGATÓRIA — resposta longa com 2+ sentenças, mas TODAS
+  // 4. ANÁLISE PRONTA — respostas formadas apenas por perguntas continuam
+  // sendo evitadas quando não entregam nenhuma leitura declarativa.
   //    são perguntas (interrogatório). Caso clássico do print da Alline: 3-5
   //    perguntas seguidas sem nenhuma frase declarativa entregando leitura.
   //    Pergunta única curta NÃO é interrogatório — é coleta de dado essencial.

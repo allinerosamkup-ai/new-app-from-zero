@@ -114,8 +114,8 @@ export function buildInsightActionDecision(input: InsightActionDecisionInput): I
     checkins,
     canSaveToPlanner: hasMinimumEvidence,
     evidence: input.source === "weekly_endpoint"
-      ? `Base: ${checkins} check-ins no período e recomendação semanal.`
-      : `Base: ${checkins} check-ins no período e leitura local de fase.`,
-    reason: hasMinimumEvidence ? null : "Precisa de pelo menos 3 check-ins para virar uma próxima ação.",
+      ? `Usei ${checkins} check-ins para compor esta leitura da semana.`
+      : `Usei ${checkins} check-ins para compor esta leitura do seu ritmo.`,
+    reason: hasMinimumEvidence ? null : "Ainda faltam alguns check-ins para transformar isso em um próximo passo.",
   };
 }

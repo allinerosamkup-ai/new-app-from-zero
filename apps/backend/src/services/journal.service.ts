@@ -33,6 +33,9 @@ type CheckinSnapshot = {
 };
 
 export type RoutineContext = {
+  localDate: string;
+  hasCheckinToday: boolean;
+  todayCheckinStatus: string;
   routineSummary?: string;
   promptSummary: string;
   preferences?: RoutinePreferenceSnapshot;
@@ -44,8 +47,24 @@ export type RoutineContext = {
   recentSessionHistory: string;
 };
 
-function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+function localDateKey(date: Date, timezone?: string | null): string {
+  const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone : 'America/Sao_Paulo';
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: resolvedTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const part = (type: Intl.DateTimeFormatPartTypes, fallback: string) => parts.find((entry) => entry.type === type)?.value ?? fallback;
+    return `${part('year', '1970')}-${part('month', '01')}-${part('day', '01')}`;
+  } catch {
+    return localDateKey(date, 'America/Sao_Paulo');
+  }
+}
+
+function startOfLocalDay(date: Date, timezone?: string | null): Date {
+  return new Date(`${localDateKey(date, timezone)}T00:00:00.000Z`);
 }
 
 function countTopValues(values: string[], limit = 3): string[] {
@@ -86,10 +105,14 @@ function buildPromptSummary(input: {
     );
   }
 
-  if (input.checkinToday?.stateLabel) {
+  if (input.checkinToday) {
     parts.push(
-      `Hoje você habita um estado ${input.checkinToday.stateLabel.toLowerCase()}, com um humor ${humanizeScore(input.checkinToday.moodScore, 'mood')} e uma energia ${humanizeScore(input.checkinToday.energyScore, 'energy')}.`,
+      input.checkinToday.stateLabel
+        ? `Hoje você habita um estado ${input.checkinToday.stateLabel.toLowerCase()}, com um humor ${humanizeScore(input.checkinToday.moodScore, 'mood')} e uma energia ${humanizeScore(input.checkinToday.energyScore, 'energy')}.`
+        : 'Há um Check-in confirmado para hoje; use os dados dele como estado atual.',
     );
+  } else {
+    parts.push('Hoje ainda não há um Check-in confirmado. O humor mais recente pertence ao histórico e não define o estado de hoje.');
   }
 
   if (input.topThemes.length > 0) {
@@ -117,12 +140,18 @@ function buildPromptSummary(input: {
 
 export class JournalService {
   static async startOrResumeSession(prisma: any, userId: string, referenceDate = new Date()) {
-    const localDate = startOfUtcDay(referenceDate);
+    const preferenceQuery = prisma.userPreference?.findUnique?.({
+      where: { userId },
+      select: { timezone: true },
+    });
+    const preferences = preferenceQuery ? await preferenceQuery.catch(() => null) : null;
+    const localDate = startOfLocalDay(referenceDate, preferences?.timezone);
 
     const existingSession = await prisma.journalSession.findFirst({
       where: {
         userId,
         status: 'active',
+        localDate,
       },
       orderBy: {
         startedAt: 'desc',
@@ -158,15 +187,14 @@ export class JournalService {
   }
 
   static async buildRoutineContext(prisma: any, userId: string, referenceDate = new Date()): Promise<RoutineContext> {
-    const today = startOfUtcDay(referenceDate);
+    const preferences = await prisma.userPreference.findUnique({ where: { userId } }).catch(() => null);
+    const localDate = localDateKey(referenceDate, preferences?.timezone);
+    const today = startOfLocalDay(referenceDate, preferences?.timezone);
     const recentWindowStart = new Date(today);
     recentWindowStart.setUTCDate(recentWindowStart.getUTCDate() - 7);
 
-    const [onboarding, preferences, checkinToday, recentSessions, recentBlocks, pastSessionsHistory, activeObjectives] = await Promise.all([
+    const [onboarding, checkinToday, recentSessions, recentBlocks, pastSessionsHistory, activeObjectives] = await Promise.all([
       prisma.onboardingResponse.findUnique({
-        where: { userId },
-      }),
-      prisma.userPreference.findUnique({
         where: { userId },
       }),
       prisma.dailyCheckin.findFirst({
@@ -232,6 +260,10 @@ export class JournalService {
       .filter(Boolean)
       .slice(0, 5);
 
+    const todayCheckinStatus = checkinToday
+      ? `Check-in de hoje confirmado (${localDate}). O humor e a energia deste registro são os dados atuais.`
+      : `Nenhum Check-in de hoje foi confirmado (${localDate}). O último humor disponível é histórico e não deve ser apresentado como o humor de hoje.`;
+
     const recentSessionHistory = pastSessionsHistory.length > 0
       ? pastSessionsHistory
           .map((s: { summary?: string | null; themes?: string[] | null; finalizedAt?: Date | null }) => {
@@ -246,6 +278,9 @@ export class JournalService {
       : '';
 
     const context = {
+      localDate,
+      hasCheckinToday: Boolean(checkinToday),
+      todayCheckinStatus,
       routineSummary,
       preferences: preferences ?? undefined,
       checkinToday: checkinToday ? {
@@ -265,7 +300,7 @@ export class JournalService {
 
     return {
       ...context,
-      promptSummary: buildPromptSummary(context),
+      promptSummary: `${buildPromptSummary(context)} ${todayCheckinStatus}`.trim(),
     };
   }
 

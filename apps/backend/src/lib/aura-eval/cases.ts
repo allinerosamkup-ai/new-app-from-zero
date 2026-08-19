@@ -215,7 +215,7 @@ export const AURA_EVAL_CASES: AuraEvalCase[] = [
         'método',
         'metodologia',
         'vou explicar como funciona',
-        'aliança divergente',
+        'nome de metodologia interna',
       ],
     },
   },

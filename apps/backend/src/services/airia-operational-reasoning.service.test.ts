@@ -87,7 +87,7 @@ async function run() {
   const promptBlock = AiriaOperationalReasoningService.formatForPrompt(goalPlan);
   assert.match(promptBlock, /PLANO OPERACIONAL DA AIRIA/i);
   assert.match(promptBlock, /Acao principal validada/i);
-  assert.doesNotMatch(promptBlock, /Aliança Divergente|Pense Comigo|Efeito Paralelo/i);
+  assert.doesNotMatch(promptBlock, /metodologia interna|rótulo interno|framework privado/i);
 }
 
 run()

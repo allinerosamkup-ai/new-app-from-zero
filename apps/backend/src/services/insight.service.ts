@@ -231,14 +231,14 @@ export class InsightService {
 
       REGRAS:
       0. Faça leitura total: semana atual + humor/energia + histórico longitudinal + diário + metas + RAG/memória + sugestões recentes. Planner e Hábitos estão desligados e não podem entrar na leitura.
-      1. Identifique 2-3 padrões (patterns) reais baseados nos dados: padrões, decisões recorrentes e ciclos de humor.
-      2. Dê 2-3 recomendações práticas (recommendations) para a próxima semana, cada uma ligada a uma decisão concreta.
-      3. Escreva uma análise narrativa (aiAnalysis) empática de 3-5 frases, sem motivação genérica.
-      4. Gere uma pergunta reflexiva semanal (weeklyQuestion) — aberta, gentil, que convide a pessoa a olhar para si. Ex: "O que te surpreendeu positivamente esta semana?"
-      5. Liste até 3 conquistas ou momentos positivos desta semana (highlights) — frases curtas, celebratórias, baseadas nos dados reais. Ex: "Completou 4 hábitos em um único dia", "Manteve sequência de 5 dias de meditação".
+      1. Identifique 2-3 coisas que realmente apareceram nos registros: mudanças, repetições ou relações observadas. Escreva cada descrição em linguagem cotidiana, sem chamar a pessoa de "caso" e sem transformar associação em causa.
+      2. Dê no máximo 2 recomendações práticas e opcionais para a próxima semana, cada uma ligada a algo que apareceu de fato. Escreva como possibilidade: "se fizer sentido, pode..."; nunca como ordem, cobrança ou prescrição.
+      3. Escreva uma análise narrativa (aiAnalysis) de 3-5 frases, direta e pessoal, usando "você". Comece pelo que foi observado, diga por que pode importar e reconheça quando a base ainda for pequena. Não escreva como relatório, laudo, coaching ou texto motivacional.
+      4. Gere uma pergunta reflexiva semanal (weeklyQuestion) apenas quando ela acrescentar algo; ela deve ser aberta, gentil e não obrigar a pessoa a fazer uma tarefa. Ex.: "O que você percebeu sobre seus dias nesta semana?"
+      5. Liste até 3 momentos ou sinais que merecem ser notados nesta semana (highlights), sem chamar tudo de conquista e sem inventar feito. Frases curtas, concretas e baseadas nos dados reais.
       6. Não recicle sugestões recentes. Se a mesma linha de ação for inevitável, escreva como retomada explícita e mude a execução concreta.
-      7. Recomendações precisam virar próximo passo, compromisso, hábito ou ajuste de agenda com âncora real. Se só houver padrão antigo sem fato atual, use pergunta de ancoragem.
-      8. Use o plano operacional validado como direção da recomendação principal: ${AiriaOperationalReasoningService.visibleSuggestion(insightActionPlan)}
+      7. Se os dados forem insuficientes, diga isso de forma simples e não complete as lacunas com uma interpretação genérica.
+      8. Use o plano operacional validado apenas como referência interna para a recomendação principal; nunca copie seu jargão para a resposta: ${AiriaOperationalReasoningService.visibleSuggestion(insightActionPlan)}
 
       Retorne APENAS um JSON puro no formato esperado.
     `;

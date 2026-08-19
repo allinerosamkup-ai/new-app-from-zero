@@ -454,22 +454,22 @@ export function InsightsPage() {
       console.warn("[insights] weekly AI failed, using local fallback.", error);
       const localAction = cycleReport.phase === "depleted" || cycleReport.phase === "low"
         ? l(
-          "Escolha uma tarefa leve e proteja o sono hoje.",
-          "Pick one light task and protect your sleep today.",
+          "Se couber hoje, escolha uma tarefa leve e proteja o sono.",
+          "If it fits today, choose one light task and protect your sleep.",
         )
         : cycleReport.phase === "elevated" || cycleReport.phase === "mixed"
           ? l(
-            "Reduza estímulos e escolha uma decisão antes de abrir outra frente.",
-            "Lower the stimulation and settle one decision before opening another front.",
+            "Se ajudar, reduza os estímulos e escolha uma decisão antes de abrir outra frente.",
+            "If it helps, lower the stimulation and settle one decision before opening another front.",
           )
           : l(
-            "Escolha uma ação concreta que mantenha o ritmo sem esticar o dia.",
-            "Pick one concrete action that keeps the pace without stretching the day.",
+            "Se fizer sentido, escolha uma ação concreta que mantenha o ritmo sem esticar o dia.",
+            "If it feels useful, choose one concrete action that keeps the pace without stretching the day.",
           );
       const fallbackInsight: AiInsight = {
         insight: l(
-          `Pelo histórico de ${periodDays} dias, sua leitura atual combina fase ${currentPhaseLabel.toLowerCase()}, baseline pessoal de ${cycleReport.baselineComposite.toFixed(1)}/10, estabilidade ${cycleReport.stabilityScore}% e média de humor ${avgHumor}.`,
-          `Across ${periodDays} days of history, your current reading combines the ${currentPhaseLabel.toLowerCase()} phase, a personal baseline of ${cycleReport.baselineComposite.toFixed(1)}/10, ${cycleReport.stabilityScore}% stability, and an average mood of ${avgHumor}.`,
+          `Olhando os últimos ${periodDays} dias, aparece uma fase ${currentPhaseLabel.toLowerCase()}, estabilidade de ${cycleReport.stabilityScore}% e humor médio de ${avgHumor}. Isso é uma fotografia dos seus registros, não uma previsão.`,
+          `Looking at the last ${periodDays} days, your records show a ${currentPhaseLabel.toLowerCase()} phase, ${cycleReport.stabilityScore}% stability, and an average mood of ${avgHumor}. This is a snapshot of your records, not a prediction.`,
         ),
         action: localAction,
         category: "rotina",
@@ -495,8 +495,8 @@ export function InsightsPage() {
           `Average mood ${avgHumor} · average energy ${avgEnergia}`,
         ),
         l(
-          `Fase atual: ${currentPhaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
-          `Current phase: ${currentPhaseLabel} · baseline ${cycleReport.baselineComposite.toFixed(1)}/10`,
+          `Fase que aparece hoje: ${currentPhaseLabel}`,
+          `Phase showing up today: ${currentPhaseLabel}`,
         ),
       ]);
       setInsightPhase("done");
@@ -763,12 +763,12 @@ export function InsightsPage() {
             padding: "11px 12px", marginBottom: "calc(var(--a))",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 5px" }}>
-              {l("Base da leitura", "Reading basis")}
+              {l("De onde vem essa leitura", "Where this reading comes from")}
             </p>
             <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.45, margin: 0 }}>
               {l(
-                `Janela de ${reportEvidence.windowDays} dias · ${reportEvidence.observedDays} dias com registro · ${reportEvidence.missingDays} sem registro · ${reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}.`,
-                `${reportEvidence.windowDays}-day window · ${reportEvidence.observedDays} days with entries · ${reportEvidence.missingDays} without entries · ${reportEvidence.confidence === "high" ? "solid evidence" : reportEvidence.confidence === "medium" ? "early evidence" : "insufficient data"}.`,
+                `Usei ${reportEvidence.observedDays} registros em uma janela de ${reportEvidence.windowDays} dias. ${reportEvidence.missingDays} dias ficaram sem registro — ${reportEvidence.confidence === "high" ? "há uma boa base para observar" : reportEvidence.confidence === "medium" ? "é uma base inicial para observar" : "ainda há poucos dados para afirmar"} algo com segurança.`,
+                `I used ${reportEvidence.observedDays} records in a ${reportEvidence.windowDays}-day window. ${reportEvidence.missingDays} days had no record — ${reportEvidence.confidence === "high" ? "there is a solid base to observe" : reportEvidence.confidence === "medium" ? "this is an early base to observe" : "there is not enough data to say much with confidence"}.`,
               )}
             </p>
             <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.45, margin: "5px 0 0" }}>
@@ -1761,7 +1761,7 @@ export function InsightsPage() {
                   onClick={applyAction}
                   disabled={taskAdded || !insightDecision?.canSaveToPlanner}
                 >
-                  {taskAdded ? l("✓ Salvo", "✓ Saved") : insightDecision?.canSaveToPlanner ? l("Colocar nas próximas ações", "Add to next actions") : l("Aguardar base", "Wait for more data")}
+                  {taskAdded ? l("✓ Salvo", "✓ Saved") : insightDecision?.canSaveToPlanner ? l("Guardar como próximo passo", "Save as a next step") : l("Continuar registrando", "Keep recording")}
                 </button>
               </div>
             </div>
@@ -1792,7 +1792,7 @@ export function InsightsPage() {
             marginBottom: "calc(var(--a))",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--accent-sage)", margin: "0 0 12px" }}>
-              {l("🌟 Conquistas desta semana", "🌟 This week's wins")}
+                {l("🌟 O que apareceu nesta semana", "🌟 What showed up this week")}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {highlights.map((h, i) => (
@@ -1854,23 +1854,23 @@ export function InsightsPage() {
             boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
           }}>
             <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 12px" }}>
-              {l("📊 Mudanças no seu ritmo", "📊 Changes in your rhythm")}
+              {l("📊 Como seu ritmo mudou", "📊 How your rhythm changed")}
             </p>
 
             <p style={{ margin: "0 0 12px", fontSize: 12, lineHeight: 1.5, color: "var(--text-2)" }}>
               {temporalRhythm.confidence === "insufficient"
                 ? l(
-                    `Com ${temporalRhythm.observedDays} dias registrados, a Airia ainda está conhecendo seu ritmo. Ela não usa dia da semana para prever como você vai estar.`,
-                    `With ${temporalRhythm.observedDays} recorded days, Airia is still getting to know your rhythm. It does not use weekdays to predict how you will feel.`,
+                    `Com ${temporalRhythm.observedDays} registros, ainda é cedo para tirar conclusões sobre seu ritmo. A Airia não usa o dia da semana para prever como você vai estar.`,
+                    `With ${temporalRhythm.observedDays} records, it is still early to draw conclusions about your rhythm. Airia does not use the weekday to predict how you will feel.`,
                   )
                 : temporalRhythm.confidence === "early"
                   ? l(
-                      `Há uma base inicial de ${temporalRhythm.observedDays} dias. O resumo abaixo descreve mudanças recentes, sem prever o próximo dia.`,
-                      `There is an early base of ${temporalRhythm.observedDays} days. The summary below describes recent changes without predicting the next day.`,
+                      `Há uma base inicial de ${temporalRhythm.observedDays} registros. O resumo abaixo mostra mudanças recentes, sem tentar prever o próximo dia.`,
+                      `There is an early base of ${temporalRhythm.observedDays} records. The summary below shows recent changes without trying to predict the next day.`,
                     )
                   : l(
-                      `A leitura considera ${temporalRhythm.observedDays} dias registrados e compara apenas sequências recentes da sua própria história.`,
-                      `This reading considers ${temporalRhythm.observedDays} recorded days and compares only recent sequences from your own history.`,
+                      `A leitura compara ${temporalRhythm.observedDays} registros recentes da sua própria história — o que apareceu junto, sem afirmar que uma coisa causou a outra.`,
+                      `The reading compares ${temporalRhythm.observedDays} recent records from your own history — what appeared together, without claiming that one thing caused the other.`,
                     )}
             </p>
 
@@ -1889,7 +1889,7 @@ export function InsightsPage() {
                   </p>
                 </div>
                 <div style={{ padding: "8px 9px", borderRadius: 12, background: "rgba(225,154,104,0.10)", border: "1px solid rgba(225,154,104,0.25)" }}>
-                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: ".07em" }}>{l("Abaixo do ritmo", "Below your rhythm")}</p>
+                  <p style={{ fontSize: 9, fontWeight: 800, color: "var(--accent-peach)", margin: "0 0 3px", textTransform: "uppercase", letterSpacing: ".07em" }}>{l("Dias mais pesados", "Heavier days")}</p>
                   <p style={{ fontSize: 15, fontWeight: 850, color: "var(--text-1)", margin: 0 }}>
                     {temporalRhythm.lowerRhythmStreak > 0
                       ? l(`${temporalRhythm.lowerRhythmStreak} registros`, `${temporalRhythm.lowerRhythmStreak} records`)
@@ -1901,7 +1901,7 @@ export function InsightsPage() {
 
             {temporalRhythm.recovery !== null && (
               <p style={{ margin: "0 0 12px", padding: "8px 10px", borderRadius: 10, background: "rgba(150,199,179,0.08)", border: "1px solid rgba(150,199,179,0.20)", fontSize: 11, lineHeight: 1.45, color: "var(--text-2)" }}>
-                {l(`Recuperação observada nos registros recentes: +${temporalRhythm.recovery} pontos após o ponto mais baixo da janela.`, `Recovery observed in recent records: +${temporalRhythm.recovery} points after the lowest point in this window.`)}
+                {l(`Depois do ponto mais baixo, seu humor subiu ${temporalRhythm.recovery} pontos nos registros seguintes.`, `After the lowest point, your mood rose ${temporalRhythm.recovery} points in the following records.`)}
               </p>
             )}
 
@@ -1925,7 +1925,7 @@ export function InsightsPage() {
             </div>
 
             <p style={{ margin: "10px 0 0", color: "var(--text-3)", fontSize: 10.5, lineHeight: 1.4 }}>
-              {l("Estes sinais descrevem seus registros. Eles não determinam como será um dia futuro.", "These signals describe your records. They do not determine what a future day will be like.")}
+              {l("Isso descreve o que apareceu nos seus registros. Não determina como será um dia futuro.", "This describes what showed up in your records. It does not determine what a future day will be like.")}
             </p>
           </div>
         )}
@@ -1942,8 +1942,8 @@ export function InsightsPage() {
           </p>
           <p style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.45, margin: "0 0 12px" }}>
             {l(
-              `Base: ${reportEvidence.observedDays} dias com registro na janela de ${reportEvidence.windowDays}; ${reportEvidence.confidence === "high" ? "boa base" : reportEvidence.confidence === "medium" ? "base inicial" : "dados insuficientes"}. Leituras mostram associações, não causas nem diagnósticos.`,
-              `Base: ${reportEvidence.observedDays} days logged in a ${reportEvidence.windowDays}-day window; ${reportEvidence.confidence === "high" ? "solid base" : reportEvidence.confidence === "medium" ? "early base" : "insufficient data"}. Readings show associations, not causes or diagnoses.`,
+              `Nesta leitura, encontrei ${reportEvidence.observedDays} registros em uma janela de ${reportEvidence.windowDays} dias. ${reportEvidence.confidence === "high" ? "Há uma boa base para observar" : reportEvidence.confidence === "medium" ? "Há uma base inicial para observar" : "Ainda há poucos dados para afirmar"} relações com segurança — isso não é diagnóstico nem previsão.`,
+              `This reading uses ${reportEvidence.observedDays} records in a ${reportEvidence.windowDays}-day window. ${reportEvidence.confidence === "high" ? "There is a solid base to observe" : reportEvidence.confidence === "medium" ? "There is an early base to observe" : "There is not enough data to say much with confidence"} — this is not a diagnosis or a prediction.`,
             )}
           </p>
 

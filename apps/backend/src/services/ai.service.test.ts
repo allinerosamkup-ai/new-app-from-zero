@@ -87,20 +87,20 @@ async function run() {
   assert.match(capturedMessages[0]?.content || '', /CONTEXTO DO DIARIO/i);
   assert.match(capturedMessages[0]?.content || '', /Ontem tive audiência/i);
   assert.match(capturedMessages[0]?.content || '', /Preparar documento da audiência/i);
-  // Fix #3: domain journal-live agora prioriza ANÁLISE PRONTA + DIRECIONAMENTO
-  assert.match(capturedMessages[0]?.content || '', /entregar ANALISE PRONTA/i);
-  assert.match(capturedMessages[0]?.content || '', /ESTRUTURA OBRIGATORIA DE TODA RESPOSTA SUBSTANTIVA/);
+  // Diário ao vivo prioriza escuta, feedback e ação somente quando couber.
+  assert.match(capturedMessages[0]?.content || '', /ouvir, entender, acolher/i);
+  assert.match(capturedMessages[0]?.content || '', /ESTRUTURA FLEXIVEL/i);
   assert.match(capturedMessages[0]?.content || '', /NÃO ECOE/i);
   assert.match(capturedMessages[0]?.content || '', /PROVA DE CONTEXTO/i);
   assert.doesNotMatch(capturedMessages[0]?.content || '', /escolha só um formato/i);
-  assert.match(capturedMessages[0]?.content || '', /máximo 1 pergunta/i);
+  assert.match(capturedMessages[0]?.content || '', /pergunte somente quando faltar/i);
   assert.match(capturedMessages[0]?.content || '', /UM PROBLEMA POR VEZ/i);
   assert.match(capturedMessages[0]?.content || '', /BASE DOCUMENTADA, NÃO IMPROVISO/i);
-  assert.match(capturedMessages[0]?.content || '', /utilidade possível do problema/i);
+  assert.match(capturedMessages[0]?.content || '', /CONTEXTO NA MEDIDA/i);
   assert.match(capturedMessages[0]?.content || '', /RESPOSTA EXCELENTE/i);
   assert.match(capturedMessages[0]?.content || '', /POLITICA DE SUGESTAO CONCRETA/i);
   assert.match(capturedMessages[0]?.content || '', /acao concreta/i);
-  assert.match(capturedMessages[0]?.content || '', /Pr[oó]ximo passo: <a[cç][aã]o>\. Pronto quando: <evid[eê]ncia observ[aá]vel>/i);
+  assert.match(capturedMessages[0]?.content || '', /Só ofereça uma orientação quando houver pedido/i);
   // Garante que jargão proibido NÃO aparece como ordem visível
   assert.doesNotMatch(capturedMessages[0]?.content || '', /Acrescente leitura, decisao, manobra/i);
   assert.doesNotMatch(capturedMessages[0]?.content || '', /feche com uma manobra/i);
@@ -153,9 +153,9 @@ async function run() {
   assert.equal(capturedSummaryMessages[0]?.role, 'system');
   assert.match(capturedSummaryMessages[0]?.content || '', /RESUMO/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /contemplativa e humana/i);
-  assert.match(capturedSummaryMessages[1]?.content || '', /padrão que apareceu, decisão concreta em jogo/i);
+  assert.match(capturedSummaryMessages[1]?.content || '', /padrão que apareceu/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /evento real vs história criada/i);
-  assert.match(capturedSummaryMessages[1]?.content || '', /utilidade do problema/i);
+  assert.match(capturedSummaryMessages[1]?.content || '', /Baseie qualquer leitura|Não invente profundidade/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não invente profundidade/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não faça perguntas no fechamento/i);
   assert.match(capturedSummaryMessages[1]?.content || '', /Não escreva como relatório/i);
