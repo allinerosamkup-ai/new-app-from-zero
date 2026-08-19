@@ -100,6 +100,9 @@ jobs:
           done
           {
             echo "DATABASE_URL=${DATABASE_URL}"
+            # As migrações executam com DIRECT_URL; no pooler de sessão
+            # autorizado a mesma conexão serve aos dois usos.
+            echo "DIRECT_URL=${DATABASE_URL}"
           } > pares.env
 
           if [ -n "$FALTA" ]; then
