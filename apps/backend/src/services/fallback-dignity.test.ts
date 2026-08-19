@@ -7,8 +7,11 @@
  * caminho pronto. Este arquivo garante que o fallback novo nunca mais faça
  * isso: passos centrados na meta, executáveis no mundo real, sem raspar o
  * contexto como texto de ação.
+ *
+ * Usa `node:assert/strict`, o mesmo padrão do restante dos testes do backend
+ * (executados por `node scripts/run-tests.mjs` com ts-node-transpile-only).
  */
-import { describe, expect, test } from 'vitest';
+import assert from 'node:assert/strict';
 import {
   buildFallbackGoalDecomposition,
   isConversationalPhrase,
@@ -19,79 +22,157 @@ import { filterStatementsForGoal } from '../lib/context-domain';
 const cleanStatements = (statements: string[] | undefined): string[] =>
   (statements ?? []).filter((statement) => !isConversationalPhrase(statement));
 
-function titles(input: Parameters<typeof buildFallbackGoalDecomposition>[0]): string[] {
+function titles(
+  input: Parameters<typeof buildFallbackGoalDecomposition>[0],
+): string[] {
   return buildFallbackGoalDecomposition(input).steps.map((step) => step.title);
 }
 
-describe('fallback canônico centrado na meta (nunca finge caminho válido)', () => {
-  test('regressão: "Correr 3 x na semana" não raspa falas do diário nem vira robô', () => {
-    const steps = titles({
-      goalTitle: 'Correr 3 x na semana',
-      locale: 'pt-BR',
-      userStatements: ['Olá tudo bem', 'Obrigada', 'Sim', 'Deixar claro pra mim mesma que terminou', 'Como vc faria isso'],
-    });
-    const joined = steps.join(' ').toLowerCase();
-    expect(steps.some((step) => /^anote\b/i.test(step))).toBe(false);
-    expect(joined).not.toContain('olá tudo bem');
-    expect(joined).not.toContain('obrigada');
-    // Passos físicos efetivos: preparação, logística e a corrida em si.
-    expect(steps.some((step) => /t[eê]nis|rot?a|hor[aá]rio|treino|correr|caminhada|cal[eç]a/i.test(step))).toBe(true);
-    expect(steps.length).toBeGreaterThanOrEqual(3);
-  });
+// ---------------------------------------------------------------
+// Fallback canônico centrado na meta (nunca finge caminho válido)
+// ---------------------------------------------------------------
 
-  test('"Cozinhar mais em casa" abre com passos práticos de verdade', () => {
-    const steps = titles({ goalTitle: 'Cozinhar mais em casa', locale: 'pt-BR' });
-    const joined = steps.join(' ').toLowerCase();
-    expect(steps.some((step) => /^anote\b/i.test(step))).toBe(false);
-    expect(joined).toMatch(/receita|ingredient|despensa|fog[aã]o|mercado|refeiç[aã]o|cozinh/);
-    expect(steps.length).toBeGreaterThanOrEqual(3);
+// Regressão: "Correr 3 x na semana" não raspa falas do diário nem vira robô.
+(() => {
+  const steps = titles({
+    goalTitle: 'Correr 3 x na semana',
+    userStatements: [
+      'Olá tudo bem',
+      'Obrigada',
+      'Sim',
+      'Deixar claro pra mim mesma que terminou',
+      'Como vc faria isso',
+    ],
   });
+  const joined = steps.join(' ').toLowerCase();
+  assert.ok(
+    !steps.some((step) => /^anote\b/i.test(step)),
+    'nenhum passo deveria começar com "anote"',
+  );
+  assert.ok(!joined.includes('olá tudo bem'), 'diário não deve virar ação');
+  assert.ok(!joined.includes('obrigada'), 'diário não deve virar ação');
+  // Passos físicos efetivos: preparação, logística e a corrida em si.
+  assert.ok(
+    steps.some((step) =>
+      /t[eê]nis|rot?a|hor[aá]rio|treino|correr|caminhada|cal[eç]a/i.test(step),
+    ),
+    `esperava passos físicos de corrida, recebi: ${steps.join('; ')}`,
+  );
+  assert.ok(steps.length >= 3, 'pelo menos 3 passos práticos');
+})();
 
-  test('entrada vazia ainda vira caminho mínimo centrado na meta', () => {
-    const steps = titles({ goalTitle: 'Ler mais', locale: 'pt-BR', userStatements: [] });
-    expect(steps.length).toBeGreaterThanOrEqual(2);
-    expect(steps.some((step) => /^anote\b/i.test(step))).toBe(false);
-  });
+// "Cozinhar mais em casa" abre com passos práticos de verdade.
+(() => {
+  const steps = titles({ goalTitle: 'Cozinhar mais em casa' });
+  const joined = steps.join(' ').toLowerCase();
+  assert.ok(
+    !steps.some((step) => /^anote\b/i.test(step)),
+    'nenhum passo deveria começar com "anote"',
+  );
+  assert.match(
+    joined,
+    /receita|ingredient|despensa|fog[aã]o|mercado|refeiç[aã]o|cozinh/,
+    'esperava passos de cozinha',
+  );
+  assert.ok(steps.length >= 3, 'pelo menos 3 passos práticos');
+})();
 
-  test('meta de trabalho sem domínio conhecido também recebe passos executáveis', () => {
-    const steps = titles({ goalTitle: 'Entregar o relatório trimestral', locale: 'pt-BR' });
-    expect(steps.some((step) => /^anote\b/i.test(step))).toBe(false);
-    expect(steps.some((step) => /relat[oó]rio|reuni[aã]o|dados|responder|definir/i.test(step))).toBe(true);
-  });
-});
+// Entrada vazia ainda vira caminho mínimo centrado na meta.
+(() => {
+  const steps = titles({ goalTitle: 'Ler mais', userStatements: [] });
+  assert.ok(steps.length >= 2, 'pelo menos 2 passos');
+  assert.ok(
+    !steps.some((step) => /^anote\b/i.test(step)),
+    'nenhum passo deveria começar com "anote"',
+  );
+})();
 
-describe('higiene de statements (conversa nunca vira ação)', () => {
-  const conversational = ['Olá tudo bem', 'Oi, tudo bem?', 'Obrigada', 'obrigado', 'Sim', 'Não', 'Bom dia', 'haha', 'kkk', 'Como vc faria isso'];
-  const real = ['Estou separando o tênis para correr hoje', 'Preciso escolher a receita da semana', 'Vou viajar para visitar minha família semana que vem'];
+// Meta de trabalho sem domínio conhecido também recebe passos executáveis.
+(() => {
+  const steps = titles({ goalTitle: 'Entregar o relatório trimestral' });
+  assert.ok(
+    !steps.some((step) => /^anote\b/i.test(step)),
+    'nenhum passo deveria começar com "anote"',
+  );
+  assert.ok(
+    steps.some((step) =>
+      /relat[oó]rio|reuni[aã]o|dados|responder|definir/i.test(step),
+    ),
+    'esperava passos práticos de trabalho',
+  );
+})();
 
-  test('frases de conversação são filtradas da higiene', () => {
-    for (const phrase of conversational) {
-      expect(isConversationalPhrase(phrase), `${phrase} deveria ser conversação`).toBe(true);
-    }
-  });
+// ---------------------------------------------------------------
+// Higiene de statements (conversa nunca vira ação)
+// ---------------------------------------------------------------
 
-  test('intenções reais NÃO são confundidas com conversação', () => {
-    for (const phrase of real) {
-      expect(isConversationalPhrase(phrase), `${phrase} NÃO deveria ser conversação`).toBe(false);
-    }
-  });
+const conversational = [
+  'Olá tudo bem',
+  'Oi, tudo bem?',
+  'Obrigada',
+  'obrigado',
+  'Sim',
+  'Não',
+  'Bom dia',
+  'haha',
+  'kkk',
+  'Como vc faria isso',
+];
+const real = [
+  'Estou separando o tênis para correr hoje',
+  'Preciso escolher a receita da semana',
+  'Vou viajar para visitar minha família semana que vem',
+];
 
-  test('cleanStatements remove conversação e preserva intenção', () => {
-    const mixed = ['Olá tudo bem', 'Estou separando o tênis para correr hoje', 'Obrigada', 'Preciso escolher a receita da semana'];
-    const cleaned = cleanStatements(mixed);
-    expect(cleaned).toEqual(['Estou separando o tênis para correr hoje', 'Preciso escolher a receita da semana']);
-  });
-});
+for (const phrase of conversational) {
+  assert.equal(
+    isConversationalPhrase(phrase),
+    true,
+    `${phrase} deveria ser conversação`,
+  );
+}
+for (const phrase of real) {
+  assert.equal(
+    isConversationalPhrase(phrase),
+    false,
+    `${phrase} NÃO deveria ser conversação`,
+  );
+}
 
-describe('pertinência (filterStatementsForGoal)', () => {
-  test('fala de diário fora do contexto da meta fica de fora do material', () => {
-    const statements = ['Fui ao mercado ontem', 'Olá tudo bem', 'Hoje corri na corrida do bairro, 30 minutos de treino', 'Obrigada'];
-    const { relevant, excluded } = filterStatementsForGoal(statements, 'Corrida 3 x na semana');
-    expect(relevant).toContain('Hoje corri na corrida do bairro, 30 minutos de treino');
-    expect(relevant).not.toContain('Olá tudo bem');
-    expect(relevant).not.toContain('Obrigada');
-    // E as falas de conversa ficam registradas como excluídas, com motivo honesto.
-    expect(excluded.map((row) => row.statement)).toContain('Olá tudo bem');
-    expect(excluded.map((row) => row.statement)).toContain('Obrigada');
-  });
-});
+// cleanStatements remove conversação e preserva intenção.
+(() => {
+  const mixed = [
+    'Olá tudo bem',
+    'Estou separando o tênis para correr hoje',
+    'Obrigada',
+    'Preciso escolher a receita da semana',
+  ];
+  const cleaned = cleanStatements(mixed);
+  assert.deepEqual(cleaned, [
+    'Estou separando o tênis para correr hoje',
+    'Preciso escolher a receita da semana',
+  ]);
+})();
+
+// ---------------------------------------------------------------
+// Pertinência (filterStatementsForGoal)
+// ---------------------------------------------------------------
+
+(() => {
+  const statements = [
+    'Fui ao mercado ontem',
+    'Olá tudo bem',
+    'Hoje corri na corrida do bairro, 30 minutos de treino',
+    'Obrigada',
+  ];
+  const { relevant, excluded } = filterStatementsForGoal(
+    statements,
+    'Corrida 3 x na semana',
+  );
+  assert.ok(relevant.includes('Hoje corri na corrida do bairro, 30 minutos de treino'));
+  assert.ok(!relevant.includes('Olá tudo bem'));
+  assert.ok(!relevant.includes('Obrigada'));
+  // E as falas de conversa ficam registradas como excluídas, com motivo honesto.
+  assert.ok(excluded.map((row) => row.statement).includes('Olá tudo bem'));
+  assert.ok(excluded.map((row) => row.statement).includes('Obrigada'));
+})();
