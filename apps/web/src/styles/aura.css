@@ -3183,3 +3183,82 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   line-height: 1.6;
   max-width: 240px;
 }
+
+/* ─── Tema visual da fase atual ───────────────────────────── */
+.aura-layout-root {
+  --airia-surface: color-mix(in srgb, var(--phase-surface) 90%, var(--phase-bg));
+  --airia-surface-strong: var(--phase-surface);
+  --airia-surface-soft: var(--phase-surface-soft);
+  --airia-border: color-mix(in srgb, var(--phase-border) 72%, transparent);
+  --airia-border-strong: var(--phase-border);
+  --airia-action: var(--phase-accent);
+  --airia-action-bg: linear-gradient(135deg, var(--phase-accent) 0%, color-mix(in srgb, var(--phase-accent) 80%, #FFFFFF) 100%);
+  --airia-action-soft: var(--phase-accent-soft);
+  --shadow-primary: 0 12px 28px var(--phase-aura-glow);
+}
+
+.aura-layout-root .airia-button--primary {
+  background: var(--phase-accent);
+  color: var(--phase-accent-ink);
+  border-color: color-mix(in srgb, var(--phase-accent) 72%, #FFFFFF);
+  box-shadow: 0 12px 28px var(--phase-aura-glow), 0 1px 0 rgba(255,255,255,.24) inset;
+}
+
+.aura-layout-root .airia-button--soft,
+.aura-layout-root .airia-card--action {
+  background: var(--phase-surface-soft);
+  border-color: var(--phase-border);
+}
+
+.aura-layout-root .airia-button--soft,
+.aura-layout-root .airia-section-header__eyebrow {
+  color: var(--phase-accent);
+}
+
+.aura-layout-root .bottom-nav.airia-bottom-nav {
+  background: color-mix(in srgb, var(--phase-surface) 88%, var(--phase-bg-subtle));
+  border-color: color-mix(in srgb, var(--phase-border) 70%, #FFFFFF);
+  box-shadow: 0 18px 42px rgba(17,24,39,.12), 0 1px 0 rgba(255,255,255,.90) inset;
+}
+
+.aura-layout-root .airia-nav-item.active {
+  background: var(--phase-accent-soft);
+  color: var(--phase-accent);
+}
+
+.aura-layout-root .airia-nav-center,
+.aura-layout-root .airia-nav-center.active {
+  background: radial-gradient(circle at 50% 40%, var(--phase-surface), var(--phase-accent-soft));
+  border-color: var(--phase-border);
+  box-shadow: 0 16px 34px var(--phase-aura-glow);
+}
+
+.aura-layout-root .home-header {
+  background: linear-gradient(135deg, var(--phase-accent-soft) 0%, var(--phase-bg-subtle) 56%, var(--phase-surface-soft) 100%);
+  border-color: var(--phase-border);
+}
+
+.aura-layout-root .home-header-eyebrow,
+.aura-layout-root .chart-checkin-btn {
+  color: var(--phase-accent);
+}
+
+.aura-layout-root .chart-checkin-btn {
+  background: var(--phase-accent-soft);
+  border-color: var(--phase-border);
+}
+
+.aura-layout-root .home-cycle-card {
+  background: color-mix(in srgb, var(--phase-surface) 93%, var(--phase-bg-subtle));
+  border: 1px solid var(--phase-border);
+  box-shadow: 0 12px 28px var(--phase-aura-glow);
+}
+
+:root[data-theme="dark"] .aura-layout-root {
+  --airia-surface: color-mix(in srgb, var(--phase-accent) 10%, #17201F);
+  --airia-surface-strong: color-mix(in srgb, var(--phase-accent) 13%, #17201F);
+  --airia-surface-soft: color-mix(in srgb, var(--phase-accent) 8%, #17201F);
+  --airia-border: color-mix(in srgb, var(--phase-accent) 34%, rgba(238,244,240,.12));
+  --airia-border-strong: color-mix(in srgb, var(--phase-accent) 54%, rgba(238,244,240,.22));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--phase-accent) 15%, #101716), #101716 48%) !important;
+}

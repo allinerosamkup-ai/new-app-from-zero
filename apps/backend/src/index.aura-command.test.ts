@@ -362,6 +362,7 @@ async function run() {
         stateLabelType: 'sensível',
         stateSummary: 'Emoções à flor da pele.',
       }),
+      findMany: async () => [],
     },
     timelineBlock: {
       findMany: async () => [],

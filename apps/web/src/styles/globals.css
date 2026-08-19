@@ -35,6 +35,18 @@
   --foreground:       var(--text-1);
   --muted:            var(--text-3);
 
+  /* Tema de fase: fallback neutro até o shell autenticado receber uma fase. */
+  --phase-bg: #F5F7F9;
+  --phase-bg-subtle: #E9EDF1;
+  --phase-surface: #FFFFFF;
+  --phase-surface-soft: #FAFBFC;
+  --phase-border: #D0D7DF;
+  --phase-accent: #7C8796;
+  --phase-accent-ink: #060D12;
+  --phase-accent-soft: #E5E9ED;
+  --phase-focus-ring: #5A6572;
+  --phase-aura-glow: rgba(124, 135, 150, 0.18);
+
   /* ──── Glassmorphism V3 (Premium) ──── */
   --glass-bg:         rgba(255, 255, 255, 0.75);
   --glass-border:     rgba(255, 255, 255, 0.6);
@@ -105,6 +117,10 @@ select {
   /* iOS: trava o pan-x dentro do app frame também */
   overscroll-behavior-x: none;
   touch-action: pan-y;
+}
+
+.app-viewport:has(.aura-layout-root) {
+  background: var(--phase-bg);
 }
 
 a {
@@ -626,5 +642,64 @@ html.airia-installed-shell .page-transition {
   .page-transition {
     animation: none !important;
     transform: none !important;
+  }
+}
+
+/* A fase colore a moldura autenticada. Componentes conservam conteúdo e
+   significados próprios; apenas a ambientação e o foco usam estes tokens. */
+.aura-layout-root {
+  min-height: 100dvh;
+  background: linear-gradient(180deg, var(--phase-bg-subtle) 0%, var(--phase-bg) 42%, var(--phase-bg) 100%);
+  transition: background-color 240ms ease, background 240ms ease;
+}
+
+.aura-layout-root .aura-layout-content {
+  background: transparent;
+}
+
+.aura-layout-root :is(button, a, input, textarea, select):focus-visible {
+  outline: 2px solid var(--phase-focus-ring);
+  outline-offset: 2px;
+}
+
+[data-airia-phase="elevated"] {
+  --phase-bg: #EEF5FB; --phase-bg-subtle: #E2EFF9; --phase-surface: #FFFFFF; --phase-surface-soft: #F5FAFE; --phase-border: #B7D3E8; --phase-accent: #3E84B2; --phase-accent-ink: #060D12; --phase-accent-soft: #D9EAF6; --phase-focus-ring: #26688F; --phase-aura-glow: rgba(62, 132, 178, 0.28);
+}
+
+[data-airia-phase="flowing"] {
+  --phase-bg: #FEF3F0; --phase-bg-subtle: #FCE5DE; --phase-surface: #FFFFFF; --phase-surface-soft: #FFF8F6; --phase-border: #EDC5BA; --phase-accent: #D98274; --phase-accent-ink: #1F2A36; --phase-accent-soft: #F7DDD7; --phase-focus-ring: #B65E50; --phase-aura-glow: rgba(217, 130, 116, 0.26);
+}
+
+[data-airia-phase="stable"] {
+  --phase-bg: #F0F6F1; --phase-bg-subtle: #E1EEE4; --phase-surface: #FFFFFF; --phase-surface-soft: #F7FBF7; --phase-border: #BED7C4; --phase-accent: #5E876F; --phase-accent-ink: #060D12; --phase-accent-soft: #DCEBE0; --phase-focus-ring: #3F6A53; --phase-aura-glow: rgba(94, 135, 111, 0.25);
+}
+
+[data-airia-phase="falling"] {
+  --phase-bg: #FBF5EA; --phase-bg-subtle: #F5E7CB; --phase-surface: #FFFFFF; --phase-surface-soft: #FFFAF1; --phase-border: #E3C796; --phase-accent: #BD8748; --phase-accent-ink: #1F2A36; --phase-accent-soft: #F2E0BF; --phase-focus-ring: #946122; --phase-aura-glow: rgba(189, 135, 72, 0.24);
+}
+
+[data-airia-phase="low"] {
+  --phase-bg: #F6F1F8; --phase-bg-subtle: #EADFF0; --phase-surface: #FFFFFF; --phase-surface-soft: #FBF8FC; --phase-border: #D1BDDD; --phase-accent: #9275A6; --phase-accent-ink: #060D12; --phase-accent-soft: #E6D9ED; --phase-focus-ring: #705183; --phase-aura-glow: rgba(146, 117, 166, 0.23);
+}
+
+[data-airia-phase="depleted"] {
+  --phase-bg: #F0F2F7; --phase-bg-subtle: #E0E4EE; --phase-surface: #FFFFFF; --phase-surface-soft: #F7F8FB; --phase-border: #BEC5D8; --phase-accent: #4A4F78; --phase-accent-ink: #FFFFFF; --phase-accent-soft: #D9DCE8; --phase-focus-ring: #343A61; --phase-aura-glow: rgba(74, 79, 120, 0.23);
+}
+
+[data-airia-phase="recovering"] {
+  --phase-bg: #EFF8F8; --phase-bg-subtle: #DCEFEF; --phase-surface: #FFFFFF; --phase-surface-soft: #F7FCFC; --phase-border: #B8DCDD; --phase-accent: #4F9DA6; --phase-accent-ink: #1F2A36; --phase-accent-soft: #D5ECEE; --phase-focus-ring: #317E87; --phase-aura-glow: rgba(79, 157, 166, 0.24);
+}
+
+[data-airia-phase="mixed"] {
+  --phase-bg: #F4F1F8; --phase-bg-subtle: #E6DFF0; --phase-surface: #FFFFFF; --phase-surface-soft: #FAF8FC; --phase-border: #C9BCDA; --phase-accent: #735A99; --phase-accent-ink: #FFFFFF; --phase-accent-soft: #E0D8EB; --phase-focus-ring: #584076; --phase-aura-glow: rgba(115, 90, 153, 0.26);
+}
+
+[data-airia-phase="insufficient_data"] {
+  --phase-bg: #F5F7F9; --phase-bg-subtle: #E9EDF1; --phase-surface: #FFFFFF; --phase-surface-soft: #FAFBFC; --phase-border: #D0D7DF; --phase-accent: #7C8796; --phase-accent-ink: #060D12; --phase-accent-soft: #E5E9ED; --phase-focus-ring: #5A6572; --phase-aura-glow: rgba(124, 135, 150, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-layout-root {
+    transition: none;
   }
 }

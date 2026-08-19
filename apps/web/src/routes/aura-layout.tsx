@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 // Aura Layout v2 — bottom nav (valor + camadas) + Phase Transition Alert + Follow-up Card
 import { Outlet, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuraStore } from "../features/aura/store";
 import { tapHaptic } from "../utils/haptics";
@@ -15,6 +15,7 @@ import { resolveActiveBanner } from "./aura-layout.helpers";
 import { resolveUnlockedNav, type NavKey } from "./nav-access.helpers";
 import { FEATURES } from "../config/features";
 import { useLocalizedCopy } from "../i18n";
+import { getMoodPhaseTheme, toMoodPhaseCssVars } from "../utils/mood-phase-theme";
 import "../styles/aura.css";
 import "../styles/editorial.css";
 
@@ -116,14 +117,14 @@ const SEVERITY_CONFIG = {
 };
 
 const PHASE_ALERT_CONFIG: Record<string, { color: string; bg: string; border: string; emoji: string }> = {
-  elevated: { color: "var(--accent-sky)", bg: "rgba(176,180,196,.14)", border: "rgba(176,180,196,.34)", emoji: "🚀" },
-  flowing: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "✨" },
-  stable: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "💚" },
-  falling: { color: "var(--accent-peach)", bg: "rgba(134,183,154,.12)", border: "rgba(134,183,154,.34)", emoji: "📉" },
-  low: { color: "var(--accent-peach-strong)", bg: "rgba(134,183,154,.14)", border: "rgba(134,183,154,.36)", emoji: "🌙" },
-  depleted: { color: "var(--accent-peach-ink)", bg: "rgba(111,148,128,.12)", border: "rgba(111,148,128,.34)", emoji: "😴" },
-  recovering: { color: "var(--accent-sage)", bg: "rgba(180,185,169,.14)", border: "rgba(180,185,169,.34)", emoji: "🌱" },
-  mixed: { color: "var(--accent-peach)", bg: "rgba(134,183,154,.12)", border: "rgba(134,183,154,.34)", emoji: "⚡" },
+  elevated: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "🚀" },
+  flowing: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "✨" },
+  stable: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "💚" },
+  falling: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "📉" },
+  low: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "🌙" },
+  depleted: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "😴" },
+  recovering: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "🌱" },
+  mixed: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "⚡" },
 };
 
 const ONBOARDING_PROMPT_WINDOW_DAYS = 7;
@@ -143,7 +144,7 @@ function isWithinOnboardingPromptWindow(accountCreatedAt?: string | null) {
 export function AuraLayout() {
   const { t } = useTranslation();
   const l = useLocalizedCopy();
-  const { hydrated, refreshData, state, dismissPhaseTransitionAlert, resolveFollowUp } = useAuraStore();
+  const { hydrated, refreshData, state, moodPhase, dismissPhaseTransitionAlert, resolveFollowUp } = useAuraStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [authChecked, setAuthChecked] = useState(false);
@@ -199,6 +200,10 @@ export function AuraLayout() {
   const visibleNavItems = NAV_ITEMS.filter((item) => (
     item.key === "planner" ? FEATURES.planner : true
   ));
+  const phaseThemeStyle = useMemo(
+    () => toMoodPhaseCssVars(getMoodPhaseTheme(moodPhase)) as CSSProperties,
+    [moodPhase],
+  );
   const leftNavItems = visibleNavItems.filter((item) => item.side === "left" && unlockedNav.has(item.key));
   const rightNavItems = visibleNavItems.filter((item) => item.side === "right" && unlockedNav.has(item.key));
   const centerNavItem = visibleNavItems.find((item) => item.center)!;
@@ -292,7 +297,11 @@ export function AuraLayout() {
   const activeBanner = resolveActiveBanner({ hasPhaseAlert, showOnboarding: showOnboardingPrompt, hasFollowUp });
 
   return (
-    <div className="aura-layout-root min-h-screen overflow-x-hidden" style={{ color: 'var(--on-surface)' }}>
+    <div
+      className="aura-layout-root min-h-screen overflow-x-hidden"
+      data-airia-phase={moodPhase}
+      style={{ ...phaseThemeStyle, color: "var(--on-surface)" }}
+    >
       {/* Daemon IA proativa — invisível, roda após hydration */}
       <AutonomousAIEngine />
 

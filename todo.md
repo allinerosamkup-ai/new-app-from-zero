@@ -96,3 +96,17 @@
 - [x] Enviar o commit autorizado ao repositório remoto selecionado.
 - [x] Executar o deploy autorizado da PWA e confirmar a disponibilidade pública.
 - [x] Sincronizar com segurança a conexão PostgreSQL redefinida no workflow e no segredo de Actions antes de repetir o deploy.
+- [x] Prototipar a Home na hierarquia Agora, Continuar e Entender sem remover Check-in, Diário, Objetivos, Padrões, Jornada ou Comando central.
+- [x] Prototipar Objetivos na hierarquia Resultado, Agora e Caminho sem remover criação, marcos, ações, critérios de término, sugestões, gestão ou histórico.
+- [x] Validar os fluxos do protótipo em desktop e viewport móvel, incluindo ações concretas, revelação progressiva e estados de autonomia.
+- [x] Restaurar e confirmar o acesso temporário aos protótipos de usabilidade para revisão da titular.
+- [x] Entregar o prompt técnico consolidado para futura implementação do quadro de Objetivos e da recuperação de microações, sem alterar código.
+- [x] Criar contrato de tema para as oito fases reais, com oito famílias cromáticas exclusivas e estado neutro de calibração.
+- [x] Aplicar o tema de fase ao shell autenticado e às superfícies prioritárias sem alterar fluxos, dados, gráficos ou componentes não relacionados.
+- [x] Validar contraste, fallback de dados insuficientes, transições reduzidas e responsividade do tema por fase.
+- [x] Confirmar o SHA e o resultado do deploy do outro agente antes de integrar a publicação do tema de fase.
+- [x] Integrar e validar o tema de fase sobre a base remota mais recente, sem sobrescrever alterações concorrentes.
+- [x] Reconciliar as expectativas de cópia dos testes de Padrões com a implementação recém-publicada, sem alterar a lógica funcional.
+- [x] Classificar as falhas de testes do backend integradas da base remota e confirmar se são externas ao tema de fase.
+- [x] Substituir os tipos `any` do cache de sessão e de GET no cliente de API por tipos explícitos, sem alterar o comportamento de rede.
+- [ ] Criar, enviar e publicar um único commit coordenado do tema de fase após a regressão combinada.

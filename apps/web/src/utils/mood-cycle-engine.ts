@@ -19,6 +19,7 @@
 
 import type { CheckinEntry } from "../features/aura/types";
 import { getLocalDateKey, normalizeDateKey } from "./day-context";
+import { MOOD_PHASE_THEME } from "./mood-phase-theme";
 
 // ── Tipos ──────────────────────────────────────────────────
 
@@ -242,7 +243,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "🚀",
     description: "Humor e energia acima do seu padrão pessoal recente. A leitura indica aceleração sem perder o fio da estabilidade.",
     tip: "Aproveite o pico sem exagerar na carga. O ganho agora é usar a energia com intenção.",
-    color: "var(--accent-sky)",
+    color: MOOD_PHASE_THEME.elevated.accent,
     energyForecast: "high",
   },
   flowing: {
@@ -250,7 +251,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "✨",
     description: "Você está acima do seu padrão e com ritmo estável. Clareza, motivação e energia caminham juntas.",
     tip: "Ótimo momento para priorizar o que realmente move a semana.",
-    color: "var(--accent-sage)",
+    color: MOOD_PHASE_THEME.flowing.accent,
     energyForecast: "high",
   },
   stable: {
@@ -258,7 +259,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "💚",
     description: "Você está dentro do seu padrão pessoal. O app entende esse intervalo como seu chão normal.",
     tip: "Bom momento para rotina, previsibilidade e avanço consistente.",
-    color: "var(--accent-sage)",
+    color: MOOD_PHASE_THEME.stable.accent,
     energyForecast: "moderate",
   },
   falling: {
@@ -266,7 +267,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "📉",
     description: "A tendência caiu abaixo do seu padrão pessoal recente. A leitura aponta perda de tração.",
     tip: "Reduza atrito e proteja energia antes que a queda aprofunde.",
-    color: "var(--accent-peach)",
+    color: MOOD_PHASE_THEME.falling.accent,
     energyForecast: "moderate",
   },
   low: {
@@ -274,7 +275,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "🌙",
     description: "Seu padrão pessoal entrou numa faixa abaixo do normal. Aqui a leitura pede cuidado, não cobrança.",
     tip: "Priorize o básico e corte o excesso. Pequenos passos contam mais do que empurrar força.",
-    color: "var(--accent-peach-strong)",
+    color: MOOD_PHASE_THEME.low.accent,
     energyForecast: "low",
   },
   depleted: {
@@ -282,7 +283,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "😴",
     description: "Humor e energia estão bem abaixo do seu padrão pessoal. O sinal é de recuperação, não de cobrança.",
     tip: "Cancele o que puder e trate descanso como parte do plano.",
-    color: "var(--accent-peach-ink)",
+    color: MOOD_PHASE_THEME.depleted.accent,
     energyForecast: "rest",
   },
   recovering: {
@@ -290,7 +291,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "🌱",
     description: "Você está saindo de uma faixa baixa. O padrão já começa a voltar para perto do seu normal.",
     tip: "Retome devagar e consolide cada melhora antes de subir a carga.",
-    color: "var(--accent-sage)",
+    color: MOOD_PHASE_THEME.recovering.accent,
     energyForecast: "low",
   },
   mixed: {
@@ -298,7 +299,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "⚡",
     description: "A leitura variou mais do que o normal. O padrão ainda existe, mas está menos estável agora.",
     tip: "Volte para rotina simples e reduza decisões desnecessárias por enquanto.",
-    color: "var(--accent-peach)",
+    color: MOOD_PHASE_THEME.mixed.accent,
     energyForecast: "moderate",
   },
   insufficient_data: {
@@ -306,7 +307,7 @@ export const PHASE_CONFIG: Record<MoodPhase, PhaseConfigEntry> = {
     emoji: "📊",
     description: "Faça check-ins por pelo menos 3 dias para começar a rastrear seu ciclo.",
     tip: "Quanto mais consistente o check-in, mais precisa a análise do seu ciclo.",
-    color: "var(--text-3)",
+    color: MOOD_PHASE_THEME.insufficient_data.accent,
     energyForecast: "moderate",
   },
 };

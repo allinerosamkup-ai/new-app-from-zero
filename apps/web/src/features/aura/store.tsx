@@ -27,6 +27,7 @@ import { buildCheckinSubmission, type CheckinSubmission } from "./checkin-submis
 import { resolveMoodFromCheckin } from "./checkin-mood";
 import { hydrateCheckinEntry } from "./checkin-hydration";
 import { FEATURES } from "../../config/features";
+import { computeMoodCycle, type MoodPhase } from "../../utils/mood-cycle-engine";
 
 type ApiGoalAction = Partial<SubGoal> & Pick<SubGoal, 'id' | 'title'>;
 type ApiGoal = {
@@ -254,6 +255,7 @@ export async function recoverGoalActionsWithCanonicalHydration(input: {
 
 type AuraStoreContextValue = {
   state: AuraState;
+  moodPhase: MoodPhase;
   hydrated: boolean;
   loading: boolean;
   setName: (value: string) => void;
@@ -394,6 +396,10 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const refreshInFlightRef = useRef<Promise<void> | null>(null);
   const objectiveCommitResolversRef = useRef<Array<() => void>>([]);
+  const moodPhase = useMemo(
+    () => computeMoodCycle(state.checkinHistory).phase,
+    [state.checkinHistory],
+  );
 
   useEffect(() => {
     const isDark = state.theme === "dark" || state.theme === "Tema escuro";
@@ -610,6 +616,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuraStoreContextValue>(
     () => ({
       state,
+      moodPhase,
       hydrated,
       loading,
       setName: (value) => setState((current) => ({ ...current, name: value })),
@@ -1060,7 +1067,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       refreshData,
       refreshObjectives,
     }),
-    [state, hydrated, loading, refreshObjectives]
+    [state, moodPhase, hydrated, loading, refreshObjectives]
   );
 
   return (

@@ -19,7 +19,7 @@ describe("insights page helpers", () => {
     });
 
     assert.equal(decision.canSaveToPlanner, false);
-    assert.equal(decision.reason, "Precisa de pelo menos 3 check-ins para virar uma próxima ação.");
+    assert.equal(decision.reason, "Ainda faltam alguns check-ins para transformar isso em um próximo passo.");
   });
 
   it("allows planner actions when the insight has enough check-ins", () => {
@@ -32,7 +32,7 @@ describe("insights page helpers", () => {
     });
 
     assert.equal(decision.canSaveToPlanner, true);
-    assert.equal(decision.evidence, "Base: 7 check-ins no período e recomendação semanal.");
+    assert.equal(decision.evidence, "Usei 7 check-ins para compor esta leitura da semana.");
   });
 
   it("keeps best and worst day highlights distinct without duplicating a weekday", () => {

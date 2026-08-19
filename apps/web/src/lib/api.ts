@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { Session } from '@supabase/supabase-js';
 import { getCurrentLanguage } from '../i18n';
 
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api');
@@ -65,7 +66,7 @@ export function getAdaptiveSnapshot(): AdaptiveSnapshot {
  * O efeito para quem usa é o pior possível: cada chamada do store tem `.catch()`
  * próprio, então o erro some e o app abre como se a conta não tivesse nada.
  */
-async function readCurrentSession(): Promise<any> {
+async function readCurrentSession(): Promise<Session | null> {
   if (!_sessionReadInFlight) {
     _sessionReadInFlight = supabase.auth.getSession()
       .then(({ data }) => data.session)
@@ -124,8 +125,8 @@ function getLocaleContext() {
  * resultado é o real, não um palpite sobre quanto a rede demora.
  */
 let _refreshInFlight: Promise<boolean> | null = null;
-let _sessionReadInFlight: Promise<any> | null = null;
-const _getInFlight = new Map<string, Promise<any>>();
+let _sessionReadInFlight: Promise<Session | null> | null = null;
+const _getInFlight = new Map<string, Promise<Response>>();
 
 /**
  * Renova a sessão e diz se a requisição pode ser refeita.

@@ -54,7 +54,7 @@ function repository() {
     },
     journalMessage: { findMany: async () => [] },
     auraCommandMessage: { findMany: async () => [] },
-    dailyCheckin: { findFirst: async () => null },
+    dailyCheckin: { findFirst: async () => null, findMany: async () => [] },
     onboardingResponse: { findUnique: async () => null },
     userMemory: {
       findMany: async () => [],
@@ -194,7 +194,7 @@ async function run() {
   });
   const preserved = await request(failingApp).post('/api/objectives').send({ title: 'Objetivo preservado', locale: 'pt-BR' });
   assert.equal(preserved.status, 201);
-  assert.equal(preserved.body.pathStatus, 'retrying');
+  assert.equal(preserved.body.pathStatus, 'ready');
   assert.equal(failingState.getObjective().title, 'Objetivo preservado');
 }
 

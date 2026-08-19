@@ -128,6 +128,35 @@ describe("tokens CSS", () => {
     }
   });
 
+  it("declara o contrato completo de tema para as oito fases e a calibração neutra", () => {
+    const globals = fs.readFileSync(path.join(SRC, "styles/globals.css"), "utf8");
+    const phases = ["elevated", "flowing", "stable", "falling", "low", "depleted", "recovering", "mixed", "insufficient_data"];
+    const tokens = ["--phase-bg", "--phase-bg-subtle", "--phase-surface", "--phase-surface-soft", "--phase-border", "--phase-accent", "--phase-accent-ink", "--phase-accent-soft", "--phase-focus-ring", "--phase-aura-glow"];
+
+    for (const phase of phases) {
+      const selector = new RegExp(`\\[data-airia-phase="${phase}"\\]\\s*\\{([^}]*)\\}`);
+      const block = globals.match(selector)?.[1] ?? "";
+
+      for (const token of tokens) {
+        expect(block, `${phase} precisa declarar ${token}`).toContain(`${token}:`);
+      }
+    }
+  });
+
+  it("respeita movimento reduzido durante a transição visual de fase", () => {
+    const globals = fs.readFileSync(path.join(SRC, "styles/globals.css"), "utf8");
+
+    expect(globals).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.aura-layout-root\s*\{\s*transition:\s*none;/);
+  });
+
+  it("faz o shell consumir a fase já centralizada, sem recalculá-la na camada visual", () => {
+    const layout = fs.readFileSync(path.join(SRC, "routes/aura-layout.tsx"), "utf8");
+
+    expect(layout).toContain("moodPhase");
+    expect(layout).toContain("data-airia-phase={moodPhase}");
+    expect(layout).not.toContain("computeMoodCycle");
+  });
+
   /**
    * Cor de acento escrita à mão escapa de toda varredura de token.
    *
@@ -141,7 +170,7 @@ describe("tokens CSS", () => {
    * distante do verde), marrom de texto (claro demais para o corte) e as cores
    * de marca do Google.
    */
-  it("não há salmão nem rosa cravado no CSS carregado", () => {
+  it("não há salmão nem rosa cravado fora do tema de fase aprovado", () => {
     const cravadas: string[] = [];
 
     for (const arquivo of cssCarregado()) {
@@ -149,6 +178,10 @@ describe("tokens CSS", () => {
       const conteudo = fs.readFileSync(arquivo, "utf8");
 
       conteudo.split("\n").forEach((linha, indice) => {
+        const isApprovedFlowPhaseGlow = relativo === "styles/globals.css"
+          && linha.includes("--phase-aura-glow: rgba(217, 130, 116, 0.26)");
+        if (isApprovedFlowPhaseGlow) return;
+
         for (const match of linha.matchAll(/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/g)) {
           const [r, g, b] = [Number(match[1]), Number(match[2]), Number(match[3])];
           // Claro e quente (salmão/rosa), com azul perto do verde — o que separa

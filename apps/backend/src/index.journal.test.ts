@@ -41,6 +41,7 @@ async function run() {
         stateLabelType: 'sensível',
         stateSummary: 'Energia mais baixa no começo do dia.',
       }),
+      findMany: async () => [],
     },
     timelineBlock: {
       findMany: async () => [],
