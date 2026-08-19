@@ -13,6 +13,10 @@ import "./i18n";
 // navegador como única autoridade de navegação. Componentes que re-montam
 // (transições de página com `key={pathname}`) herdam o mesmo contexto de
 // roteamento, sem risco de o listener de história se desconectar do estado.
+// Marcador de release: a validação na VPS usa este valor para distinguir o
+// Data Router do `BrowserRouter` histórico e das rotas internas de App.tsx.
+const AIRIA_ROUTER_BUILD_MARKER = "airia-data-router-v1";
+document.documentElement.dataset.airiaRouter = AIRIA_ROUTER_BUILD_MARKER;
 const router = createBrowserRouter([
   {
     path: "*",

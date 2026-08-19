@@ -164,23 +164,18 @@ if [ -z "$BUNDLE_MAIN" ]; then
   rm -rf "$BUNDLE_TMP"
   rollback_on_error
 fi
-# O vite minifica os identificadores importados; o sinal inequívoco do data
-# router é o array de rotas literal '[{path:"*",element' (e, em alguns
-# toolchains, o identificador original "createBrowserRouter"). A validação
-# lê o arquivo diretamente, sem pipe sujeito a diferenças de shell/grep.
+# O nome de `createBrowserRouter` pode ser reduzido pelo minificador e as
+# rotas de App.tsx também podem conter `path:"*"`; por isso a barreira exige o
+# marcador exclusivo emitido por apps/web/src/main.tsx.
 echo "bundle encontrado: $(basename "$BUNDLE_MAIN")"
 echo "tamanho do bundle: $(wc -c < "$BUNDLE_MAIN") bytes"
-BUNDLE_HAS_DATA_ROUTER=0
-grep -qF 'createBrowserRouter' "$BUNDLE_MAIN" && BUNDLE_HAS_DATA_ROUTER=1
-grep -qF '[{path:"*",element' "$BUNDLE_MAIN" && BUNDLE_HAS_DATA_ROUTER=1
-grep -qF '(\[\{path:"\*",element' "$BUNDLE_MAIN" && BUNDLE_HAS_DATA_ROUTER=1
-if [ "$BUNDLE_HAS_DATA_ROUTER" != "1" ]; then
-  echo "FALHA: o bundle $(basename "$BUNDLE_MAIN") NÃO contém o roteador de dados (createBrowserRouter/[{path:\"*\",element]). O JavaScript construído não corresponde ao código versionado; deploy abortado."
+if ! grep -qF 'airia-data-router-v1' "$BUNDLE_MAIN"; then
+  echo "FALHA: o bundle $(basename "$BUNDLE_MAIN") NÃO contém o marcador exclusivo airia-data-router-v1; o build pode estar usando um entrypoint antigo. Deploy abortado."
   docker rm -f bundlecheck >/dev/null 2>&1 || true
   rm -rf "$BUNDLE_TMP"
   rollback_on_error
 fi
-echo "bundle construído contém o roteador de dados — ok"
+echo "bundle construído contém o marcador exclusivo do Data Router — ok"
 docker rm -f bundlecheck >/dev/null 2>&1 || true
 rm -rf "$BUNDLE_TMP"
 
