@@ -252,7 +252,7 @@ export default function App() {
   return (
     <Suspense fallback={<RouteLoader />}>
       <div className="app-viewport">
-      <div key={location.pathname} className="page-transition">
+      <div className="page-transition">
       <Routes>
         {/* A raiz pública mantém a Splash para visitantes e indexação. O portão
             verifica primeiro uma sessão válida e só então retoma a área do

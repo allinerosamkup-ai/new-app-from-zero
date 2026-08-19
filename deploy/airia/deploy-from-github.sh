@@ -143,8 +143,11 @@ if [ -z "$BUNDLE_MAIN" ]; then
   docker rm -f bundlecheck >/dev/null
   rollback_on_error
 fi
-if ! docker cp bundlecheck:"$BUNDLE_MAIN" - 2>/dev/null | head -c 400000 | grep -qE 'createBrowserRouter|RouterProvider'; then
-  echo "FALHA: o bundle $BUNDLE_MAIN NÃO contém o roteador de dados (createBrowserRouter/RouterProvider). O JavaScript construído não corresponde ao código versionado; deploy abortado."
+# O vite minifica os identificadores importados, então a validação usa grep fixo:
+# aceita o termo original "createBrowserRouter" OU o array de rotas literal
+# '[{path:"*",element' que só aparece quando o data router está configurado.
+if ! docker cp bundlecheck:"$BUNDLE_MAIN" - 2>/dev/null | head -c 400000 | (grep -qF 'createBrowserRouter' || grep -qF '[{path:"*",element'); then
+  echo "FALHA: o bundle $BUNDLE_MAIN NÃO contém o roteador de dados (createBrowserRouter/[{path:\"*\",element]). O JavaScript construído não corresponde ao código versionado; deploy abortado."
   docker rm -f bundlecheck >/dev/null
   rollback_on_error
 fi
