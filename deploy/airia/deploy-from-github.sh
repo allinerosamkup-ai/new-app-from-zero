@@ -232,6 +232,10 @@ WEB_RELEASE="$(docker inspect --format '{{ index .Config.Labels "org.opencontain
 echo "Web container release: $WEB_RELEASE"
 echo "Deploy concluído: release $AIRIA_RELEASE"
 
+# O trap só deve atuar quando uma etapa falha. Sem removê-lo aqui, o shell
+# executa rollback também no encerramento normal e desfaz um deploy saudável.
+trap - EXIT
+
 echo "== Cleanup =="
 rm -rf "$PROJECT_DIR/deploy/airia/.build-src"
 
