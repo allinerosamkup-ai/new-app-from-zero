@@ -30,17 +30,31 @@ export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
     const el = containerRef.current ?? document.documentElement;
 
     const onTouchStart = (e: TouchEvent) => {
-      if (el.scrollTop === 0) {
-        startY.current = e.touches[0].clientY;
-        startX.current = e.touches[0].clientX;
-        tracking.current = false;
-      }
+      // Touches pode estar vazio (ex.: eventos sintéticos, toque que terminou
+      // durante a transição do gesto). Sem toque real não há nada a rastrear.
+      const touch = e.touches[0];
+      if (!touch || el.scrollTop !== 0) return;
+      startY.current = touch.clientY;
+      startX.current = touch.clientX;
+      tracking.current = false;
     };
 
     const onTouchMove = (e: TouchEvent) => {
       if (startY.current === null || isRefreshingRef.current) return;
-      const delta = e.touches[0].clientY - startY.current;
-      const deltaX = startX.current === null ? 0 : e.touches[0].clientX - startX.current;
+      // BUG CRÍTICO (2026-08-19): sem essa guarda, `e.touches[0]` undefined
+      // derrubava a página com "Cannot read properties of undefined (clientY)"
+      // e quebrava a navegação por clique — a URL mudava mas o conteúdo
+      // ficava preso na Home. Touches pode ser vazio em toques rápidos,
+      // múltiplos dedos ou gestos do sistema.
+      const touch = e.touches[0];
+      if (!touch) {
+        startY.current = null;
+        startX.current = null;
+        tracking.current = false;
+        return;
+      }
+      const delta = touch.clientY - startY.current;
+      const deltaX = startX.current === null ? 0 : touch.clientX - startX.current;
       const isVerticalPull = delta > ACTIVATION_DISTANCE && delta > Math.abs(deltaX) * 1.4;
 
       if (isVerticalPull && el.scrollTop === 0) {
