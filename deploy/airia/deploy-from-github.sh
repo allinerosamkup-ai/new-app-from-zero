@@ -34,12 +34,10 @@ export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
 
 echo "== Checkout do GitHub =="
-if [ -d "$SRC_DIR/.git" ]; then
-  git -C "$SRC_DIR" fetch --quiet origin master
-else
-  rm -rf "$SRC_DIR"
-  git clone --quiet --depth 1 --single-branch -b master "$TOKEN_URL" "$SRC_DIR"
-fi
+# O clone é recriado a cada deploy para garantir o código exato do HEAD remoto,
+# sem risco de repositório local desatualizado ou fetch shallow falho.
+rm -rf "$SRC_DIR"
+git clone --quiet --depth 1 --single-branch -b master "$TOKEN_URL" "$SRC_DIR"
 if [ -n "$WANTED_SHA" ]; then
   # Se um SHA específico foi pedido, busca o commit exato (depth infalível:
   # fetch por SHA não existe em shallow, então clona a profundidade completa).
@@ -146,7 +144,10 @@ fi
 # O vite minifica os identificadores importados, então a validação usa grep fixo:
 # aceita o termo original "createBrowserRouter" OU o array de rotas literal
 # '[{path:"*",element' que só aparece quando o data router está configurado.
-if ! docker cp bundlecheck:"$BUNDLE_MAIN" - 2>/dev/null | head -c 400000 | (grep -qF 'createBrowserRouter' || grep -qF '[{path:"*",element'); then
+# O vite minifica os identificadores importados, então a validação aceita o termo
+# original "createBrowserRouter" OU o array de rotas literal '\[{path:"*",element'
+# que só aparece quando o data router está configurado (uma única leitura do stdin).
+if ! docker cp bundlecheck:"$BUNDLE_MAIN" - 2>/dev/null | head -c 400000 | grep -qE 'createBrowserRouter|\[{path:"\*",element'; then
   echo "FALHA: o bundle $BUNDLE_MAIN NÃO contém o roteador de dados (createBrowserRouter/[{path:\"*\",element]). O JavaScript construído não corresponde ao código versionado; deploy abortado."
   docker rm -f bundlecheck >/dev/null
   rollback_on_error
