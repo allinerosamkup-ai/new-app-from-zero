@@ -1118,7 +1118,7 @@ async function resolveAiRuntimeContext(prisma: PrismaClient, userId: string, con
           ? aiStatePayload.emotions.map((item) => String(item))
           : [],
         factors: Array.isArray(latestCheckin.factors)
-          ? latestCheckin.factors.map((item) => String(item))
+          ? latestCheckin.factors.map((item: unknown) => String(item))
           : [],
         note: typeof latestCheckin.note === 'string' ? latestCheckin.note : undefined,
         moodScore: latestCheckin.moodScore ?? undefined,
