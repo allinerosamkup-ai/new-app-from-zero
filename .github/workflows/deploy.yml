@@ -17,6 +17,10 @@ on:
         description: 'Branch ou commit a publicar (o script exige que seja o mesmo commit de origin/master)'
         required: false
         default: 'master'
+      version:
+        description: 'Rótulo arbitrário que força o runner a executar o job real em vez de reutilizar o cache de um run anterior (qualquer texto serve)'
+        required: false
+        default: 'v1'
 
 concurrency:
   group: deploy-vps
