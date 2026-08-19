@@ -138,8 +138,16 @@ rollback_on_error() {
   exit "$STATUS"
 }
 
+# O backend anterior mantém conexões Prisma abertas. Como a conexão de migração
+# pode passar pelo pooler Supabase em modo de sessão, liberamos essas sessões antes
+# de abrir o primeiro container one-shot. O web continua servindo os arquivos estáticos.
+trap rollback_on_error EXIT
+
 echo "== Build =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build
+
+echo "== Stop backend before migration =="
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" stop airia_backend
 
 echo "== Database migration =="
 for MIGRATION_FILE in $MIGRATION_FILES; do
@@ -150,7 +158,6 @@ for MIGRATION_FILE in $MIGRATION_FILES; do
 done
 
 echo "== Deploy =="
-trap rollback_on_error EXIT
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-build
 
 echo "== Validate =="
