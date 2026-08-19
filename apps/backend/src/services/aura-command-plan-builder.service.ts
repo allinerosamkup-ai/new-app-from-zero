@@ -180,16 +180,18 @@ export class AuraCommandPlanBuilderService {
           break;
         }
         const goalTitle = title ?? 'Meu objetivo';
+        // Fallback digno: quando o item não fecha como ação concreta, abre o
+        // caminho com passos de descoberta reais e executáveis — ninguém “anota”
+        // o primeiro passo de nada, a pessoa vai lá e faz.
         const subgoals = (items.length > 0 ? items : [{ id: 'item-1', title: content || goalTitle, done: false }]).map((item) => {
           const rawTitle = item.title.trim();
           const doneWhen = item.doneWhen ?? `“${rawTitle}” estiver concluído`;
-          const title = validateConcreteAction({ title: rawTitle, doneWhen }).ok
-            ? rawTitle
-            : `Anote a primeira ação para ${rawTitle}`;
+          const verdict = validateConcreteAction({ title: rawTitle, doneWhen });
+          const title = verdict.ok ? rawTitle : `Definir por onde começar ${rawTitle.toLowerCase()}`;
           return {
             ...item,
             title,
-            doneWhen,
+            ...(verdict.ok ? { doneWhen } : {}),
             basedOn: item.basedOn ?? 'stated' as const,
           };
         });

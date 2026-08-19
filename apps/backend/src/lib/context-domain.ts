@@ -43,7 +43,7 @@ export type ContextDomain =
 const LEXICON: Array<{ domain: ContextDomain; terms: RegExp }> = [
   {
     domain: 'family',
-    terms: /\b(m[ãa]e|pai|tia|tio|av[óo]|av[óo]s|irm[ãa]o?|irm[ãa]|filh[oa]s?|prim[oa]s?|sobrinh[oa]s?|madrasta|padrasto|sogr[ao]|cunhad[oa]|fam[íi]lia|parente)\b/i,
+    terms: /\b(m[ãa]e|pai|tia|tio|av[óo]|av[óo]s|irm[ãa]o?|irm[ãa]|filh[oa]s?|prim[oa]s?|sobrinh[oa]s?|madrasta|padrasto|sogr[ao]|cunhad[oa]|fam[íi]lia|parente|mam[ãa]e|mamãe|papai|p[ãa]i|m[ãa]e do [a-z]+)\b/i,
   },
   {
     domain: 'work',
@@ -55,7 +55,7 @@ const LEXICON: Array<{ domain: ContextDomain; terms: RegExp }> = [
   },
   {
     domain: 'health',
-    terms: /\b(m[ée]dic[oa]|consulta|exame|rem[ée]dio|medica[çc][ãa]o|terapia|terapeuta|psic[óo]log[oa]|psiquiatra|dor|doen[çc]a|sintoma|diagn[óo]stico|sono|ins[ôo]nia|corpo|cl[íi]nica|hospital|dentista|nutricionista)\b/i,
+    terms: /\b(m[ée]dic[oa]|consulta|exame|rem[ée]dio|medica[çc][ãa]o|terapia|terapeuta|psic[óo]log[oa]|psiquiatra|dor|doen[çc]a|sintoma|diagn[óo]stico|sono|ins[ôo]nia|corpo|cl[íi]nica|hospital|dentista|nutricionista|corr[ee]|corrida|correndo|corri|caminh[ao]|treino|treinar|academia|exerc[íi]cio|exercitar|alongar|alongamento|bicicleta|pedal|nata[çc][ãa]o|nadar|muscula[çc][ãa]o|yoga|pilates|sa[úu]de|emagrecer|dieta|alimenta[çc][ãa]o|hidrata[çc][ãa]o|energia f[íi]sica|respirar|medita[çc][ãa]o)\b/i,
   },
   {
     domain: 'finance',
@@ -189,10 +189,34 @@ export function assessRelevance(statement: string, goalTitle: string): Relevance
 }
 
 /**
+ * Frases que são conversa pura e não expressam intenção acionável.
+ *
+ * Misturar "Olá tudo bem", "Obrigada", "Sim" com geração de passos foi
+ * exatamente o bug de produção de 19/08/2026: o fallback vestiu diário de
+ * roupa de ação. Conversação não entra em contexto de objetivo — nunca.
+ */
+const CHAT_PHRASES = /^\b(ol[áa]|oi|tudo bem|tudo bom|obrigad[oa]|obrigada aí|valeu|sim|n[aã]o|entendi|ok|certo|hum|hmm|kk\+?|rs|rsrs|haha|hehe|boa|boa noite|bom dia|ol[áa] tudo bem|como vc|pode sim|de boa|show|perfeito|ent[aã]o|s[óe] isso|é isso|isso aí|bjs|beijos|haja vista)\b/i;
+
+function isChatStatement(statement: string): boolean {
+  const clean = statement.trim();
+  if (!clean) return true;
+  if (CHAT_PHRASES.test(clean)) return true;
+  const wordCount = clean.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 5 && /[!?.]$/.test(clean) === false && !/\b(corr|trein|academi|exerc|cozinh|comer|beber|dorm|estud|trabalh|pag|limp|arrum|lig|mand|escrev|anot|l[êe]|verific|separ|escolh|defin|organ|mont|comec|sair|and|fic|sent|dizer)\b/i.test(clean)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Filtra as falas da pessoa antes de virarem contexto de um objetivo.
  *
  * Devolve também o que ficou de fora e por quê — sem isso, "a Airia não usou
  * meu diário" viraria mistério em vez de decisão registrada.
+ *
+ * Primeira peneira (não negociável): conversação pura não vira contexto —
+ * saudação, agradecimento, confirmação e frase curta sem intenção não dizem
+ * nada sobre o objetivo, e foram o vetor do bug de 19/08/2026.
  */
 export function filterStatementsForGoal(
   statements: readonly string[],
@@ -202,6 +226,10 @@ export function filterStatementsForGoal(
   const excluded: Array<{ statement: string; reason: string }> = [];
 
   for (const statement of statements) {
+    if (isChatStatement(statement)) {
+      excluded.push({ statement, reason: 'conversa pura, sem relação com o objetivo' });
+      continue;
+    }
     const verdict = assessRelevance(statement, goalTitle);
     if (verdict.usable) relevant.push(statement);
     else excluded.push({ statement, reason: verdict.reason });

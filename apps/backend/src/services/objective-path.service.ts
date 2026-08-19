@@ -9,6 +9,7 @@ import {
 import {
   GoalIntelligenceService,
   buildFallbackGoalDecomposition,
+  isConversationalPhrase,
   type GoalDecomposition,
   type GoalIntelligenceInput,
   type GoalMilestone,
@@ -56,7 +57,23 @@ export type ObjectivePathProposal = {
 };
 
 type Decompose = (input: GoalIntelligenceInput) => Promise<GoalDecomposition>;
-const DECOMPOSITION_DEADLINE_MS = 9_000;
+
+/**
+ * Janela principal da IA: o modelo precisa de mais de 9s quando o contexto está
+ * cheio (foi o que derrubou o "Correr 3 x na semana" em produção duas vezes).
+ * O fallback digno só assume depois que a cadeia completa falha: primeiro retoma
+ * a IA uma vez (o timeout é transitório na maioria dos casos), depois entrega
+ * os passos canônicos centrados na meta — nunca frases do contexto viradas de
+ * ação.
+ */
+const DECOMPOSITION_DEADLINE_MS = 15_000;
+const AI_RETRY_DELAY_MS = 1_500;
+
+/** Sanitiza as falas da pessoa antes de virarem material de geração: micro-frases
+ *  de conversação ("Olá tudo bem", "Obrigada", "Sim") são diário, não intenção. */
+function cleanStatements(statements: string[] | undefined): string[] {
+  return (statements ?? []).filter((statement) => !isConversationalPhrase(statement));
+}
 
 type PersistConfirmedPath = (
   transaction: TransactionClient,
@@ -185,14 +202,35 @@ export class ObjectivePathService {
       capacity: input.capacity,
       operationalProfile: input.operationalProfile,
     };
-    const fallback = buildFallbackGoalDecomposition(intelligenceInput);
+    const cleanInput: GoalIntelligenceInput = {
+      ...intelligenceInput,
+      userStatements: cleanStatements(intelligenceInput.userStatements),
+    };
+    const fallback = buildFallbackGoalDecomposition(cleanInput);
+    const sourceTier = (decomposition: GoalDecomposition): string =>
+      decomposition.assumptions.some((assumption) => String(assumption).includes('sem consulta completa à IA')) ? 'fallback_canonical' : 'ai';
+
     let decomposition: GoalDecomposition;
     try {
-      const result = await Promise.race([
-        this.decompose(intelligenceInput),
+      // Tentativa 1: IA dentro da janela. Se a IA estourar, o timer entrega o
+      // fallback; mas antes de aceitar o fallback, retomamos a IA uma vez —
+      // timeout é transitório na maioria dos casos, e um caminho de IA vale
+      // mais que qualquer caminho de contingência.
+      const first = await Promise.race([
+        this.decompose(cleanInput),
         new Promise<GoalDecomposition>((resolve) => setTimeout(() => resolve(fallback), DECOMPOSITION_DEADLINE_MS)),
       ]);
-      decomposition = result;
+      if (sourceTier(first) === 'ai' || first.mode === 'question') {
+        decomposition = first;
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, AI_RETRY_DELAY_MS));
+        try {
+          const retry = await this.decompose(cleanInput);
+          decomposition = sourceTier(retry) === 'ai' ? retry : fallback;
+        } catch {
+          decomposition = fallback;
+        }
+      }
     } catch {
       decomposition = fallback;
     }
@@ -243,6 +281,7 @@ export class ObjectivePathService {
             resultDefinition: decomposition.resultDefinition,
             currentReality: decomposition.currentReality,
             assumptions: decomposition.assumptions,
+            sourceTier: sourceTier(decomposition),
           },
         },
       });

@@ -26,6 +26,23 @@ export const DEFAULT_OPENAI_MODEL = 'claude-sonnet-4-6';
 export const DEFAULT_OPENAI_MAX_COMPLETION_TOKENS = 6000;
 
 /**
+ * Um especialista por função: decompor (gerador), revisar (validador),
+ * perguntar (formulador) e verificar conclusão (auditor). Cada função pode ter
+ * API/modelo próprio via variáveis OPENAI_{ROLE}_MODEL — quem opera o .env
+ * decide; sem configuração, todas usam o padrão.
+ */
+export function getModelForRole(role: 'decomposition' | 'validation' | 'question' | 'completion'): string {
+  const mapped: Record<string, string> = {
+    decomposition: 'OPENAI_DECOMPOSITION_MODEL',
+    validation: 'OPENAI_VALIDATION_MODEL',
+    question: 'OPENAI_QUESTION_MODEL',
+    completion: 'OPENAI_COMPLETION_MODEL',
+  };
+  const configured = process.env[mapped[role]]?.trim();
+  return configured || getOpenAiModel();
+}
+
+/**
  * Modelos que não sustentam julgamento adversarial.
  *
  * Não bloqueia — a escolha continua sendo de quem opera o `.env` — mas deixa

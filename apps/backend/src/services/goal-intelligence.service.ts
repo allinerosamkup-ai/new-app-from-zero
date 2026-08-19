@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { extractJsonValue } from '../lib/extract-json';
 import { getOpenAiModel, getOpenAiStructuredResponseOptions, openAiTemperature } from '../lib/openai-config';
-import { validateConcreteAction } from '../lib/action-quality';
+import { validateConcreteAction, EXECUTABLE_VERB } from '../lib/action-quality';
 
 /**
  * Interpretação de objetivo: entender → inferir → cruzar → decidir → validar → agir.
@@ -160,79 +160,130 @@ export type GoalDecomposition = {
 };
 
 /**
- * Texto que corta em vez de reprovar.
+ * Saída digna quando a IA não responde: passos canônicos CENTRADOS NA META,
+ * nunca frases do contexto viradas literalmente em ações.
  *
- * Isto já quebrou em produção: o modelo devolveu uma decomposição impecável com
- * `rationale` de 170 caracteres contra um teto de 160, e o `safeParse` derrubou
- * o payload INTEIRO. Duas tentativas depois a tela mostrava "sem informação
- * suficiente" — mentira, a informação estava lá.
+ * Histórico do erro que este código corrige: a versão anterior pegava frases do
+ * Diário/chat ("Olá tudo bem", "Obrigada", "Sim") e as gravava como passos
+ * ("Anote a primeira ação para Olá tudo bem") com status `ready` — um caminho
+ * falso exibido como se fosse válido. Aquilo violava o desenho de inteligência
+ * do Airia: o app existe para conhecer a pessoa, não para vestir conversa
+ * aleatória de roupa de ação.
  *
- * A regra que ficou: limite em campo acessório é formatação, não validação.
- * Passa a régua no texto e segue. Só o que muda a decisão — existir um passo,
- * existir uma pergunta — pode reprovar a resposta.
+ * Este fallback segue o padrão de graceful degradation da indústria: quando a
+ * camada de IA não está disponível, o sistema entrega o que é honestamente
+ * possível — passos práticos e evidentes sobre a própria meta, que qualquer
+ * pessoa sensata faria para começar — marcados como sugeridos, ou diz que não
+ * tem informação suficiente.
+ *
+ * Regras duras:
+ *  1. Falas do contexto NUNCA viram título de passo (podem calibrar o tema).
+ *  2. Passo tem que ser FÍSICO e efetivo: "separar o tênis", "escolher a rota",
+ *     "definir o horário" — nunca "anotar a primeira ação para X". Anotar só é
+ *     aceitável como registro de consequência (ex.: "registrar a corrida no
+ *     check-in de hoje"), nunca como primeiro passo de algo.
+ *  3. Resultado definido em torno da meta real, não da fórmula genérica.
  */
-function fallbackItems(value: string): string[] {
-  return value
-    .split(/\r?\n|[•;]|(?:^|\s)\d+[.)]\s+/)
-    .map((item) => item.trim().replace(/^[-–—*]+\s*/, '').replace(/\s+/g, ' '))
-    .filter((item) => item.length >= 3 && item.length <= 180);
+const CHAT_PHRASE = /^\b(ol[áa]|oi|tudo bem|tudo bom|obrigad[oa]|obrigada aí|valeu|sim|n[aã]o|entendi|ok|certo|hum|hmm|kk|rs|rsrs|haha|boa|boa noite|bom dia|ol[áa] tudo bem|deixa[a]? claro|como vc faria isso|como vc|pode sim|de boa|show|perfeito|ent[aã]o|haja vista|s[óe] isso|é isso|isso aí|bjs|beijos)\b/i;
+
+/**
+ * Descarta micro-frases de conversação que não expressam intenção acionável.
+ *
+ * "Olá tudo bem", "Obrigada", "Sim" são diário, não intenção — misturar isso
+ * com geração de passos foi exatamente o bug de produção. A régua: menos de 5
+ * palavras, sem verbo de ação e soando como fala de diálogo é conversação.
+ */
+export function isConversationalPhrase(statement: string): boolean {
+  const clean = statement.trim();
+  if (!clean) return true;
+  if (CHAT_PHRASE.test(clean)) return true;
+  const wordCount = clean.split(/\s+/).filter(Boolean).length;
+  const hasActionVerb = EXECUTABLE_VERB.test(clean);
+  return wordCount < 5 && !hasActionVerb;
 }
 
 /**
- * Saída rápida para superfícies operacionais: não inventa objeto, horário ou
- * circunstância e não transforma uma falha do provedor em uma pergunta infinita.
+ * Decisões práticas imediatas que destravam quase qualquer meta — em ordem
+ * natural de começo. São genéricas de propósito (não citam objeto do contexto)
+ * e escritas como coisa de gente: curta, direta, sem jargão.
+ *
+ * Ordem: primeiro o que dá contorno real à meta (o que significa, quando),
+ * depois o preparo físico, depois o primeiro movimento pequeno, depois o
+ * registro natural — registro é consequência do movimento, nunca o primeiro passo.
+ */
+const CANONICAL_STARTERS: Array<{ title: string; doneWhen: string; effortSize: 'small' | 'medium' }> = [
+  {
+    title: 'Decidir o que \'começado\' significa para você — duração, lugar e horário',
+    doneWhen: 'você souber, sem precisar pensar, o que é uma rodada completa disso na sua rotina',
+    effortSize: 'small',
+  },
+  {
+    title: 'Deixar o que for preciso separado e acessível para começar',
+    doneWhen: 'tudo o que você usa para começar estiver no lugar, sem depender de procurar nada',
+    effortSize: 'small',
+  },
+  {
+    title: 'Fazer a primeira rodada bem curta — só o suficiente para sentir que consegue',
+    doneWhen: 'a primeira rodada estiver feita, mesmo pequena',
+    effortSize: 'small',
+  },
+  {
+    title: 'Registrar o que fez no check-in de hoje',
+    doneWhen: 'o registro de hoje refletir essa primeira rodada',
+    effortSize: 'small',
+  },
+  {
+    title: 'Ajustar o que não funcionou e repetir',
+    doneWhen: 'você souber o que manter e o que mudar na próxima rodada',
+    effortSize: 'medium',
+  },
+];
+
+/**
+ * Saída digna para superfícies operacionais: quando a IA não responde, entrega
+ * passos práticos centrados na meta, em linguagem humana — nunca frases do
+ * contexto vestidas de ação.
  */
 export function buildFallbackGoalDecomposition(
   input: Pick<GoalIntelligenceInput, 'goalTitle' | 'userStatements' | 'capacity'>,
 ): GoalDecomposition {
   const title = input.goalTitle.trim().replace(/\s+/g, ' ');
-  const statementItems = (input.userStatements ?? []).flatMap(fallbackItems);
-  const titleItems = fallbackItems(title);
-  const rawItems = (statementItems.length >= 2 ? statementItems : titleItems.length >= 2 ? titleItems : [title]).slice(0, input.capacity === 'quick' ? 3 : 5);
-  const seen = new Set<string>();
-  const items = rawItems.filter((item) => {
-    const key = item.toLocaleLowerCase('pt-BR');
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  const steps = items.map((item, index) => {
-    const clean = item.replace(/[.!?]+$/, '').trim();
-    const candidate = validateConcreteAction({ title: clean, doneWhen: 'o resultado deste passo estiver registrado' }).ok
-      ? clean.charAt(0).toLocaleUpperCase('pt-BR') + clean.slice(1)
-      : `Anote a primeira ação para ${clean}`;
+  if (!title) {
     return {
-      title: candidate,
-      basedOn: 'stated' as const,
-      doneWhen: `o passo estiver concluído e “${clean}” estiver registrado`,
-      milestoneId: 'milestone-now',
-      effortSize: input.capacity === 'quick' || index === 0 ? 'small' as const : 'medium' as const,
+      mode: 'question',
+      resultDefinition: null,
+      currentReality: null,
+      currentMilestoneId: null,
+      milestones: [],
+      assumptions: [],
+      steps: [],
+      question: 'Me conta: o que "começado" significa para você nesse objetivo?',
     };
-  }).filter((step) => validateConcreteAction(step).ok);
+  }
 
-  const safeSteps = steps.length > 0 ? steps : [{
-    title: `Anote a primeira ação para ${title}`,
-    basedOn: 'stated' as const,
-    doneWhen: `o próximo passo para “${title}” estiver escrito`,
+  const maxSteps = input.capacity === 'quick' ? 3 : 4;
+  const steps = CANONICAL_STARTERS.slice(0, maxSteps).map((starter, index) => ({
+    ...starter,
+    title: starter.title.replace("'começado'", `"${title.toLowerCase()}"`),
+    basedOn: 'inferred' as const,
+    rationale: 'sugerido sem consulta completa à IA: passos práticos de começo',
     milestoneId: 'milestone-now',
-    effortSize: 'small' as const,
-  }];
+  }));
 
   return {
     mode: 'actions',
-    resultDefinition: `as ações essenciais de “${title}” estarem concluídas`,
+    resultDefinition: `você ter feito ${title.toLowerCase()} pela primeira vez, do seu jeito`,
     currentReality: null,
     currentMilestoneId: 'milestone-now',
     milestones: [{
       id: 'milestone-now',
-      title: 'Agora',
+      title: 'Começo',
       order: 0,
-      doneWhen: 'As ações essenciais deste objetivo estiverem concluídas',
-      actions: safeSteps,
+      doneWhen: 'os primeiros passos práticos estiverem feitos',
+      actions: steps,
     }],
-    assumptions: [],
-    steps: safeSteps,
+    assumptions: ['sugerido pela Airia sem consulta completa à IA — edite como quiser'],
+    steps,
     question: null,
   };
 }

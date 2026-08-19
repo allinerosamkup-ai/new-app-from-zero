@@ -138,7 +138,7 @@ function polishHomeActionTitle(value: string): string {
     fecha: "Feche", abre: "Abra", envia: "Envie", responde: "Responda",
     faz: "Faça", termina: "Termine", conclui: "Conclua", inicia: "Inicie",
     comeca: "Comece", revisa: "Revise", define: "Defina", liga: "Ligue",
-    manda: "Mande", separa: "Separe", verifica: "Verifique", anota: "Anote",
+    manda: "Mande", separa: "Separe", verifica: "Confira",
     passa: "Passe", retoma: "Retome", avanca: "Avance", bloqueia: "Bloqueie",
     deleta: "Delete", cancela: "Cancele", agenda: "Agende", organiza: "Organize",
     registra: "Registre", escreve: "Escreva", resolve: "Resolva", testa: "Teste",
@@ -147,7 +147,19 @@ function polishHomeActionTitle(value: string): string {
   const firstWord = normalized.split(" ")[0];
   const imperative = imperativoMap[firstWord];
   if (imperative) {
-    return imperative + capitalized.slice(firstWord.length);
+    const rest = capitalized.slice(firstWord.length);
+    const result = imperative + rest;
+    // “Anotar/Anote a primeira ação para…” é o rastro do bug do split — não é
+    // ação de verdade. Se o título inteiro só instrui a pessoa a anotar algo,
+    // transformamos em um passo de descoberta centrado na meta.
+    const stripped = result
+      .replace(/^(Anote|Anotar) a (primeira )?ação para /i, "")
+      .replace(/^(Anote|Anotar) (o|a|os|as) (próximo|proxima|primeira|primeiro)/i, "")
+      .trim();
+    if (/^(Anote|Anotar)\b/i.test(result) && stripped) {
+      return `Definir por onde começar ${stripped.toLowerCase()}`;
+    }
+    return result;
   }
 
   return capitalized;

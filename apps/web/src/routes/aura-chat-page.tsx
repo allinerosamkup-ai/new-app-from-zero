@@ -358,16 +358,25 @@ export function AuraChatPage() {
       .map((key) => payload[key])
       .find((value) => Array.isArray(value) && value.length > 0);
     const sourceItems = Array.isArray(rawItems) ? rawItems : [];
-    const subgoals = (sourceItems.length > 0 ? sourceItems : [{ title: `Escreva o próximo passo para ${parsed.title}` }])
+    // Quando a IA não trouxe passos concretos, o fallback nunca finge um caminho
+    // raspando o contexto: abre o caminho com passos de descoberta reais e
+    // executáveis, centrados na meta — ninguém “anota” o primeiro passo de nada,
+    // a pessoa vai lá e faz.
+    const fallbackSteps = [
+      `Definir por onde começar ${parsed.title.toLowerCase().replace(/^(a|as|o|os)\s/i, "")}`,
+      `Preparar o que é preciso para o primeiro passo`,
+      `Fazer a primeira tentativa de verdade`,
+    ];
+    const subgoals = (sourceItems.length > 0 ? sourceItems : fallbackSteps.map((title) => ({ title })))
       .map((item, index) => {
         const record = isRecord(item) ? item : {};
         const title = typeof item === "string"
           ? item.trim()
           : pickString(record, ["title", "text", "name", "label", "task"]) ?? "";
         if (!title) return null;
-        const actionableTitle = /^(abra|anote|liste|escreva|copie|ligue|mande|envie|selecione|publique|edite|responda|pague|transfira|compare|reúna|separe|retire|coloque|fotografe|telefone|preencha|agende|cancele|confirme|acesse|entre|baixe|anexe|assine|entregue|registre|identifique|monte|crie|marque|leve|enxágue|passe|guarde|varra|abrir|anotar|listar|escrever|copiar|ligar|mandar|enviar|selecionar|publicar|editar|responder|pagar|transferir|comparar|reunir|separar|retirar|colocar|fotografar|telefonar|preencher|agendar|cancelar|confirmar|acessar|entrar|baixar|anexar|assinar|entregar|registrar|identificar|montar|criar|marcar|levar|enxaguar|passar|guardar|varrer)\\b/i.test(title)
+        const actionableTitle = /^(abra|anote|liste|escreva|copie|ligue|mande|envie|selecione|publique|edite|responda|pague|transfira|compare|reúna|separe|retire|coloque|fotografe|telefone|preencha|agende|cancele|confirme|acesse|entre|baixe|anexe|assine|entregue|registre|identifique|monte|crie|marque|leve|enxágue|passe|guarde|varra|abrir|anotar|listar|escrever|copiar|ligar|mandar|enviar|selecionar|publicar|editar|responder|pagar|transferir|comparar|reunir|separar|retirar|colocar|fotografar|telefonar|preencher|agendar|cancelar|confirmar|acessar|entrar|baixar|anexar|assinar|entregar|registrar|identificar|montar|criar|marcar|levar|enxaguar|passar|guardar|varrer)\b/i.test(title)
           ? title.charAt(0).toLocaleUpperCase() + title.slice(1)
-          : `Anote a primeira ação para ${title}`;
+          : title;
         return {
           id: typeof record.id === "string" ? record.id : `aura-${Date.now()}-${index}`,
           title: actionableTitle,
@@ -376,7 +385,9 @@ export function AuraChatPage() {
           milestoneId: typeof record.milestoneId === "string" ? record.milestoneId : "milestone-now",
           doneWhen: typeof record.doneWhen === "string" && record.doneWhen.trim()
             ? record.doneWhen.trim()
-            : `“${title}” estiver concluído`,
+            : typeof item === "string" && fallbackSteps.some((step) => item.trim() === step)
+              ? null
+              : `“${title}” estiver concluído`,
           effortSize: record.effortSize === "small" || record.effortSize === "medium" || record.effortSize === "large"
             ? record.effortSize
             : "small",

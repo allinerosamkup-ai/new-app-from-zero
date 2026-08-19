@@ -8,6 +8,7 @@ export class ApiRequestError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -227,19 +228,21 @@ async function handleResponse(response: Response) {
     throw new ApiRequestError(401, 'Sessão expirada ou inválida. Se o erro persistir, tente sair e entrar novamente.');
   }
 
-  let message = `Erro ${response.status}`;
+  let message: string = `Erro ${response.status}`;
+  let payload: Record<string, unknown> | undefined;
   try {
     const body = await response.json();
-    if (body?.message) {
-      const firstDetail = Array.isArray(body.details) && typeof body.details[0]?.message === 'string'
-        ? ` ${body.details[0].message}`
+    payload = body && typeof body === 'object' && !Array.isArray(body) ? body : undefined;
+    if (typeof payload?.message === 'string') {
+      const firstDetail = Array.isArray(payload.details) && typeof payload.details[0]?.message === 'string'
+        ? ` ${payload.details[0].message}`
         : '';
-      message = `${body.message}${firstDetail}`.trim();
-    } else if (body?.error) message = body.error;
+      message = `${payload.message}${firstDetail}`.trim();
+    } else if (typeof payload?.error === 'string') message = payload.error;
   } catch {
     message = `Erro ${response.status}: ${response.statusText}`;
   }
-  throw new ApiRequestError(response.status, message);
+  throw new ApiRequestError(response.status, message, payload);
 }
 
 function uploadContentType(file: File): string {

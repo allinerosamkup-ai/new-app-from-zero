@@ -149,6 +149,7 @@ import {
 } from './services/goal-intelligence.service';
 import { OperationalProfileService } from './services/operational-profile.service';
 import { ObjectiveProgressionError, ObjectiveProgressionService } from './services/objective-progression.service';
+import { GoalCompletionVerifierService } from './services/goal-completion-verifier.service';
 import {
   ObjectivePathConflictError,
   ObjectivePathInvalidProposalError,
@@ -2360,6 +2361,7 @@ export function createApp(dependencies: AppDependencies = {}) {
   const agendaPatternRecognitionService = new AgendaPatternRecognitionService(prisma, canonicalMemoryService);
   const contextGroundingService = new ContextGroundingService(prisma, capabilities);
   const objectiveProgressionService = new ObjectiveProgressionService(prisma as any);
+  const completionVerifier = new GoalCompletionVerifierService(prisma as any);
   const persistConfirmedObjectivePath = async (transaction: any, objective: any, source: string) => {
     const actions = normalizeObjectiveSubgoals(objective.subgoals);
     const current = actions.find((action) => !action.done && action.status !== 'rejected' && action.status !== 'deferred');
@@ -6026,6 +6028,37 @@ export function createApp(dependencies: AppDependencies = {}) {
         .parse(req.body ?? {});
       const completionDate = localDate ?? new Date().toISOString().slice(0, 10);
 
+      // Barra de qualidade da conclusão (regra do produto): nota >= 8/10 E o
+      // verificador genuinamente impressionado. Aprovado → segue normalmente;
+      // reprovado → a ação NÃO é gravada como concluída e a tela recebe o
+      // feedback do que ainda falta, com a ação no topo esperando o ajuste.
+      // Sem auditor disponível (provedor fora), a conclusão é deferida: o
+      // trabalho da pessoa nunca fica preso pelo provedor.
+      const preRead = await prisma.objective.findFirst({ where: { id: req.params.id, userId, archived: false } });
+      const pendingAction = preRead && Array.isArray(preRead.subgoals)
+        ? (preRead.subgoals as Array<{ id?: string; title?: string; doneWhen?: string; done?: boolean; status?: string }>).find((s) => s?.id === req.params.subgoalId && !s?.done && s?.status !== 'rejected' && s?.status !== 'deferred')
+        : undefined;
+      const verdict = pendingAction
+        ? await completionVerifier.verifyCompletion({
+            userId,
+            objectiveId: req.params.id,
+            goalTitle: preRead!.title,
+            actionTitle: pendingAction.title ?? 'ação',
+            doneWhen: pendingAction.doneWhen ?? null,
+            locale: (req.body as any)?.locale === 'string' ? 'pt-BR' : 'pt-BR',
+          })
+        : null;
+
+      if (verdict && !verdict.approved) {
+        return res.status(422).json({
+          error: 'completion_below_bar',
+          score: verdict.score,
+          feedback: verdict.feedback,
+          encouragement: verdict.encouragement,
+          actionStillPending: true,
+        });
+      }
+
       const result = await objectiveProgressionService.completeActiveAction({
         userId,
         objectiveId: req.params.id,
@@ -6033,7 +6066,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       });
 
       if (!result.completedNow) {
-        return res.status(200).json({ ...result, reward: null });
+        return res.status(200).json({ ...result, reward: null, verdict: verdict ? { score: verdict.score, praise: verdict.praise } : null });
       }
 
       const completedAction = Array.isArray(result.subgoals)

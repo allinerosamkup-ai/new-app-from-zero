@@ -26,7 +26,7 @@ import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { computeMoodCycle } from "../utils/mood-cycle-engine";
 import { GoalActionRecoveryError, useAuraStore } from "../features/aura/store";
 import { useLocalizedCopy } from "../i18n";
-import { api } from "../lib/api";
+import { api, ApiRequestError } from "../lib/api";
 import { trackProductEvent } from "../lib/track";
 import { useAiriaReading } from "../lib/airia-reading";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
@@ -46,6 +46,9 @@ type GoalLike = {
     id: string | number; title: string; done: boolean; order?: number;
     milestoneId?: string | null; scheduledFor?: string | null; doneWhen?: string | null;
     effortSize?: 'small' | 'medium' | 'large' | null; status?: 'pending' | 'done' | 'rejected' | 'deferred';
+    aiGenerated?: boolean;
+    basedOn?: 'stated' | 'inferred';
+    userEdited?: boolean;
     evidenceRefs?: string[];
     patternBasis?: Array<{
       pattern: string; evidenceCount: number; distinctDays: number; windowDays: number;
@@ -684,9 +687,9 @@ function GoalCard({
                     : futureMilestones.length > 0
                     ? l('Você concluiu o que estava em foco. Veja o próximo momento apenas quando quiser seguir.', 'You completed what was in focus. See what comes next only when you want to continue.')
                     : goal.pathStatus === 'retrying'
-                      ? l('Seu objetivo está salvo. A Airia está retomando a leitura para sugerir algo que faça sentido para ele.', 'Your goal is saved. Airia is revisiting it to suggest something that fits it.')
+                      ? l('Seu objetivo está salvo e é sério — a Airia está lendo de novo com mais calma para montar um caminho que faça sentido. Já já aparece algo aqui.', 'Your goal is saved and taken seriously — Airia is re-reading it carefully to build a path that makes sense. Something will appear here shortly.')
                     : goal.needsActionReview
-                      ? l('Alguns passos antigos não dizem como terminam. Eles não entram como ação atual; você pode escrever um passo completo ou pedir um novo caminho.', 'Some older steps do not say how they end. They are not used as the current action; you can write a complete step or ask for a new path.')
+                      ? l('Alguns passos antigos não dizem como terminam, e a Airia prefere não transformar passo pela metade em caminho. Escreva um passo completo ou peça um caminho novo.', 'Some older steps don’t say how they end, and Airia prefers not to turn half-finished steps into a path. Write a complete step or ask for a new path.')
                       : l("Ainda falta escolher uma ação concreta. Você pode escrever a primeira ou pedir ideias à Airia.", "A concrete action still needs to be chosen. You can write the first one or ask Airia for ideas.")}
                 </p>
                 {deferredAction && (
@@ -855,6 +858,11 @@ function GoalCard({
                           <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
                             {action.title}
                             {action.doneWhen && <small style={{ display: "block", marginTop: 3, color: "var(--text-3)", fontWeight: 500, textDecoration: "none" }}>{l("Pronto quando:", "Done when:")} {action.doneWhen}</small>}
+                            {action.aiGenerated && !action.userEdited && !action.done && (
+                              <small style={{ display: "block", marginTop: 2, color: "var(--text-3)", fontWeight: 500, textDecoration: "none" }}>
+                                {l("Sugerido pela Airia — você pode editar", "Suggested by Airia — you can edit it")}
+                              </small>
+                            )}
                             {active ? <small style={{ display: "block", marginTop: 2, color: "var(--menthe)", fontWeight: 800 }}>{l("Agora", "Now")}</small> : null}
                             {action.patternBasis?.map((basis) => (
                               <small key={`${action.id}-${basis.pattern}`} style={{ display: "block", marginTop: 5, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.45, textDecoration: "none" }}>
@@ -1287,7 +1295,18 @@ export function GoalsPage() {
             });
           }
         } catch (error) {
-          showError(error instanceof Error ? error.message : l("Não foi possível atualizar a ação.", "Could not update the action."));
+          if (error instanceof ApiRequestError && error.status === 422 && error.details?.actionStillPending) {
+            // O auditor da Airia não sentiu o trabalho à altura do que a ação
+            // promete — a ação não virou concluída, e a tela recebe o que ainda
+            // falta em vez de um erro técnico.
+            const feedbackText = [
+              typeof error.details.feedback === 'string' ? error.details.feedback : null,
+              typeof error.details.encouragement === 'string' ? error.details.encouragement : null,
+            ].filter(Boolean).join(' ');
+            showSuccess(feedbackText || l('Quase lá — ajusta o que falta e marca de novo.', 'Almost there — adjust what is missing and mark it again.'));
+          } else {
+            showError(error instanceof Error ? error.message : l("Não foi possível atualizar a ação.", "Could not update the action."));
+          }
         } finally {
           setCompletingActionId(null);
         }
