@@ -171,6 +171,72 @@ export type GoalDecomposition = {
  * Passa a régua no texto e segue. Só o que muda a decisão — existir um passo,
  * existir uma pergunta — pode reprovar a resposta.
  */
+function fallbackItems(value: string): string[] {
+  return value
+    .split(/\r?\n|[•;]|(?:^|\s)\d+[.)]\s+/)
+    .map((item) => item.trim().replace(/^[-–—*]+\s*/, '').replace(/\s+/g, ' '))
+    .filter((item) => item.length >= 3 && item.length <= 180);
+}
+
+/**
+ * Saída rápida para superfícies operacionais: não inventa objeto, horário ou
+ * circunstância e não transforma uma falha do provedor em uma pergunta infinita.
+ */
+export function buildFallbackGoalDecomposition(
+  input: Pick<GoalIntelligenceInput, 'goalTitle' | 'userStatements' | 'capacity'>,
+): GoalDecomposition {
+  const title = input.goalTitle.trim().replace(/\s+/g, ' ');
+  const statementItems = (input.userStatements ?? []).flatMap(fallbackItems);
+  const titleItems = fallbackItems(title);
+  const rawItems = (statementItems.length >= 2 ? statementItems : titleItems.length >= 2 ? titleItems : [title]).slice(0, input.capacity === 'quick' ? 3 : 5);
+  const seen = new Set<string>();
+  const items = rawItems.filter((item) => {
+    const key = item.toLocaleLowerCase('pt-BR');
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const steps = items.map((item, index) => {
+    const clean = item.replace(/[.!?]+$/, '').trim();
+    const candidate = validateConcreteAction({ title: clean, doneWhen: 'o resultado deste passo estiver registrado' }).ok
+      ? clean.charAt(0).toLocaleUpperCase('pt-BR') + clean.slice(1)
+      : `Anote a primeira ação para ${clean}`;
+    return {
+      title: candidate,
+      basedOn: 'stated' as const,
+      doneWhen: `o passo estiver concluído e “${clean}” estiver registrado`,
+      milestoneId: 'milestone-now',
+      effortSize: input.capacity === 'quick' || index === 0 ? 'small' as const : 'medium' as const,
+    };
+  }).filter((step) => validateConcreteAction(step).ok);
+
+  const safeSteps = steps.length > 0 ? steps : [{
+    title: `Anote a primeira ação para ${title}`,
+    basedOn: 'stated' as const,
+    doneWhen: `o próximo passo para “${title}” estiver escrito`,
+    milestoneId: 'milestone-now',
+    effortSize: 'small' as const,
+  }];
+
+  return {
+    mode: 'actions',
+    resultDefinition: `as ações essenciais de “${title}” estarem concluídas`,
+    currentReality: null,
+    currentMilestoneId: 'milestone-now',
+    milestones: [{
+      id: 'milestone-now',
+      title: 'Agora',
+      order: 0,
+      doneWhen: 'As ações essenciais deste objetivo estiverem concluídas',
+      actions: safeSteps,
+    }],
+    assumptions: [],
+    steps: safeSteps,
+    question: null,
+  };
+}
+
 const clipped = (max: number) => z.string().transform((value) => value.trim().slice(0, max));
 
 const GoalActionPayloadSchema = z.object({

@@ -63,8 +63,9 @@ export function DailyPrioritiesCards() {
     ? (state.goals ?? []).find((goal) => String(goal.id) === reading.focus!.objectiveId)
     : null;
   const focusAction = focusGoal?.subtasks.find((action) => !action.done && action.status !== 'rejected' && action.status !== 'deferred') ?? null;
-  const focusMilestone = focusGoal?.milestones?.find((milestone) => milestone.id === focusAction?.milestoneId)
-    ?? focusGoal?.milestones?.[0]
+  const focusMilestones = [...(focusGoal?.milestones ?? [])].sort((left, right) => left.order - right.order);
+  const focusMilestone = focusMilestones.find((milestone) => milestone.id === focusAction?.milestoneId)
+    ?? focusMilestones[0]
     ?? null;
 
   async function complete(item: PriorityItem) {
@@ -105,15 +106,42 @@ export function DailyPrioritiesCards() {
         {focusGoal ? (
           <>
             <h2 style={{ ...titleStyle, fontSize: 18 }}>{focusGoal.title}</h2>
-            {focusGoal.resultDefinition && <p style={copyStyle}><strong>{l('Resultado:', 'Outcome:')}</strong> {focusGoal.resultDefinition}</p>}
+            <div style={{ marginBottom: 10 }}>
+              <p style={{ ...eyebrowStyle, margin: '0 0 4px' }}>{l('Resultado', 'Outcome')}</p>
+              <p style={{ ...copyStyle, marginBottom: 0 }}>{focusGoal.resultDefinition || focusGoal.title}</p>
+            </div>
+            {focusGoal.currentReality && <p style={{ ...copyStyle, marginBottom: 10, fontSize: 11 }}><strong>{l('Hoje:', 'Today:')}</strong> {focusGoal.currentReality}</p>}
             <div style={progressTrack}><div style={{ ...progressFill, width: `${Math.max(0, Math.min(100, focusGoal.completedPct))}%` }} /></div>
-            {focusMilestone && <p style={{ ...eyebrowStyle, margin: '14px 0 5px' }}>{l('Etapa atual', 'Current stage')} · {focusMilestone.title}</p>}
-            {focusAction && (
-              <button type="button" onClick={() => complete({ objectiveId: String(focusGoal.id), objectiveTitle: focusGoal.title, actionId: String(focusAction.id), actionTitle: focusAction.title, reason: '' })} disabled={Boolean(completing)} style={actionButtonStyle}>
-                <Check size={16} /> <span>{focusAction.title}</span>
-              </button>
-            )}
+            <div style={{ marginTop: 12 }}>
+              <p style={{ ...eyebrowStyle, margin: '0 0 4px', color: 'var(--menthe)' }}>{l('Agora', 'Now')}</p>
+              {focusMilestone && <p style={{ ...copyStyle, marginBottom: 6, fontSize: 11 }}>{l('Etapa atual', 'Current stage')} · {focusMilestone.title}</p>}
+              {focusAction ? (
+                <button type="button" onClick={() => complete({ objectiveId: String(focusGoal.id), objectiveTitle: focusGoal.title, actionId: String(focusAction.id), actionTitle: focusAction.title, reason: '' })} disabled={Boolean(completing)} style={actionButtonStyle}>
+                  <Check size={16} />
+                  <span>
+                    <strong style={{ display: 'block', fontSize: 13 }}>{focusAction.title}</strong>
+                    {focusAction.doneWhen && <small style={{ display: 'block', marginTop: 4, color: 'var(--text-2)', fontSize: 11, lineHeight: 1.4 }}><strong>{l('Pronto quando:', 'Done when:')}</strong> {focusAction.doneWhen}</small>}
+                  </span>
+                </button>
+              ) : <p style={{ ...copyStyle, marginBottom: 0 }}>{l('Nenhuma ação está aberta agora.', 'No action is open right now.')}</p>}
+            </div>
             {reading?.focus?.reason && <p style={{ ...copyStyle, marginTop: 9, fontSize: 11 }}>{reading.focus.reason}</p>}
+            {(focusMilestones.length > 1 || focusGoal.subtasks.length > 1) && (
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ cursor: 'pointer', color: 'var(--text-3)', fontSize: 11, fontWeight: 750 }}>
+                  {l('Caminho', 'Path')} · {focusGoal.subtasks.filter((action) => action.done).length}/{focusGoal.subtasks.length}
+                </summary>
+                <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
+                  {focusMilestones.map((milestone) => (
+                    <div key={milestone.id} style={{ borderLeft: `2px solid ${milestone.id === focusMilestone?.id ? 'var(--menthe)' : 'rgba(99,152,169,.22)'}`, padding: '5px 0 5px 10px' }}>
+                      <strong style={{ display: 'block', color: 'var(--text-2)', fontSize: 12 }}>{milestone.title}</strong>
+                      {milestone.doneWhen && <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{milestone.doneWhen}</span>}
+                    </div>
+                  ))}
+                  {focusMilestones.length === 0 && <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{l('As ações deste objetivo aparecem aqui.', 'This goal’s actions appear here.')}</span>}
+                </div>
+              </details>
+            )}
           </>
         ) : (
           <p style={copyStyle}>{loading ? l('Lendo o contexto do seu dia…', 'Reading today’s context…') : l('A Airia ainda não tem uma direção segura para sugerir.', 'Airia does not yet have a safe direction to suggest.')}</p>

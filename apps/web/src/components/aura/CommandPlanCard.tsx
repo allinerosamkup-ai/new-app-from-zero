@@ -24,14 +24,16 @@ const TYPE_DESTINATION: Partial<Record<AuraCommandOperation["type"], string>> = 
   handoff_to_journal: "/journal",
 };
 
-function itemLabels(value: unknown): string[] {
+function itemDetails(value: unknown): Array<{ title: string; doneWhen: string | null }> {
   if (!Array.isArray(value)) return [];
   return value.map((item) => {
-    if (typeof item === "string") return item;
-    if (!item || typeof item !== "object") return "";
+    if (typeof item === "string") return { title: item, doneWhen: null };
+    if (!item || typeof item !== "object") return null;
     const record = item as Record<string, unknown>;
-    return typeof record.title === "string" ? record.title : typeof record.text === "string" ? record.text : "";
-  }).filter(Boolean);
+    const title = typeof record.title === "string" ? record.title : typeof record.text === "string" ? record.text : "";
+    if (!title) return null;
+    return { title, doneWhen: typeof record.doneWhen === "string" ? record.doneWhen : null };
+  }).filter((item): item is { title: string; doneWhen: string | null } => Boolean(item));
 }
 
 function operationTitle(operation: AuraCommandOperation, t: TFunction) {
@@ -108,8 +110,10 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
           const title = typeof payload.title === "string" ? payload.title : "";
           const dateKey = typeof payload.date === "string" ? "date" : typeof payload.localDate === "string" ? "localDate" : null;
           const timeKey = typeof payload.startTime === "string" ? "startTime" : typeof payload.reminderTime === "string" ? "reminderTime" : null;
-          const items = itemLabels(payload.subgoals ?? payload.items ?? payload.checklist);
+          const items = itemDetails(payload.subgoals ?? payload.items ?? payload.checklist);
           const destination = TYPE_DESTINATION[operation.type];
+          const resultDefinition = typeof payload.resultDefinition === "string" ? payload.resultDefinition : null;
+          const currentReality = typeof payload.currentReality === "string" ? payload.currentReality : null;
           return (
             <article key={operation.id} style={{ borderRadius: 14, border: "1px solid rgba(155,191,168,.18)", padding: 10, background: "rgba(255,250,247,.66)" }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -145,6 +149,14 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
                   </button>
                 )}
               </div>
+
+              {operation.type === "create_goal" && (resultDefinition || currentReality || items.length > 0) && (
+                <div style={{ marginTop: 8, borderRadius: 12, background: "rgba(150,199,179,.12)", padding: "8px 9px" }}>
+                  {resultDefinition && <p style={{ margin: 0, color: "var(--text-2)", fontSize: 11, lineHeight: 1.4 }}><strong>{t("aura.commandPlan.result", "Resultado")}: </strong>{resultDefinition}</p>}
+                  {currentReality && <p style={{ margin: "4px 0 0", color: "var(--text-3)", fontSize: 10, lineHeight: 1.4 }}><strong>{t("aura.commandPlan.currentReality", "Hoje")}: </strong>{currentReality}</p>}
+                  {items[0] && <p style={{ margin: "5px 0 0", color: "var(--text-1)", fontSize: 11, lineHeight: 1.4 }}><strong>{t("aura.commandPlan.now", "Agora")}: </strong>{items[0].title}{items[0].doneWhen ? ` · ${t("aura.commandPlan.doneWhen", "Pronto quando")}: ${items[0].doneWhen}` : ""}</p>}
+                </div>
+              )}
 
               {(dateKey || timeKey) && (
                 <div style={{ display: "flex", gap: 8, marginTop: 7 }}>
@@ -192,7 +204,12 @@ export function CommandPlanCard({ plan, applying, onChange, onApply }: Props) {
 
               {items.length > 0 && (
                 <ul style={{ margin: "7px 0 0 22px", padding: 0, color: "var(--text-2)", fontSize: 12 }}>
-                  {items.slice(0, 6).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                  {items.slice(0, 6).map((item, index) => (
+                    <li key={`${item.title}-${index}`}>
+                      {item.title}
+                      {item.doneWhen && <small style={{ display: "block", marginTop: 2, color: "var(--text-3)" }}>{t("aura.commandPlan.doneWhen", "Pronto quando")}: {item.doneWhen}</small>}
+                    </li>
+                  ))}
                 </ul>
               )}
 

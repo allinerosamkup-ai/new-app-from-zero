@@ -8,6 +8,7 @@ import {
 } from '../lib/objective-subgoals';
 import {
   GoalIntelligenceService,
+  buildFallbackGoalDecomposition,
   type GoalDecomposition,
   type GoalIntelligenceInput,
   type GoalMilestone,
@@ -55,6 +56,8 @@ export type ObjectivePathProposal = {
 };
 
 type Decompose = (input: GoalIntelligenceInput) => Promise<GoalDecomposition>;
+const DECOMPOSITION_DEADLINE_MS = 9_000;
+
 type PersistConfirmedPath = (
   transaction: TransactionClient,
   snapshot: {
@@ -163,7 +166,7 @@ export class ObjectivePathService {
     if (objective.pathStatus === 'ready' && existing.some((action) => action.userEdited || (action.done && isConcreteObjectiveSubgoal(action)))) {
       throw new ObjectivePathConflictError('revision_requires_proposal');
     }
-    const decomposition = await this.decompose({
+    const intelligenceInput: GoalIntelligenceInput = {
       goalTitle: objective.title,
       existingActions: concreteExisting.filter((action) => !action.done).map((action) => action.title),
       completedActions: [
@@ -181,7 +184,18 @@ export class ObjectivePathService {
       energyScore: input.energyScore,
       capacity: input.capacity,
       operationalProfile: input.operationalProfile,
-    });
+    };
+    const fallback = buildFallbackGoalDecomposition(intelligenceInput);
+    let decomposition: GoalDecomposition;
+    try {
+      const result = await Promise.race([
+        this.decompose(intelligenceInput),
+        new Promise<GoalDecomposition>((resolve) => setTimeout(() => resolve(fallback), DECOMPOSITION_DEADLINE_MS)),
+      ]);
+      decomposition = result;
+    } catch {
+      decomposition = fallback;
+    }
 
     if (decomposition.mode === 'question' || decomposition.steps.length === 0) {
       const question = decomposition.question;

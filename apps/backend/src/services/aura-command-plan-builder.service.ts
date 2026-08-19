@@ -10,6 +10,7 @@ import {
   CommandSchedulingService,
   type CommandBusyWindow,
 } from './command-scheduling.service';
+import { validateConcreteAction } from '../lib/action-quality';
 
 type BuildInput = {
   response: AuraCommandResponse;
@@ -171,15 +172,44 @@ export class AuraCommandPlanBuilderService {
         break;
       }
       case 'create_checklist': {
+        const content = text(payload.content) ?? '';
         const items = checklistItems(payload.items ?? payload.steps ?? payload.checklist);
-        const title = text(payload.title) ?? 'Checklist';
-        if (items.length === 0) missingFields.push('items');
-        else operations.push({
+        const title = text(payload.title) ?? (items[0]?.title ? `Organizar ${items[0].title}` : content.slice(0, 80));
+        if (!title && items.length === 0 && !content) {
+          missingFields.push('content');
+          break;
+        }
+        const goalTitle = title ?? 'Meu objetivo';
+        const subgoals = (items.length > 0 ? items : [{ id: 'item-1', title: content || goalTitle, done: false }]).map((item) => {
+          const rawTitle = item.title.trim();
+          const doneWhen = item.doneWhen ?? `“${rawTitle}” estiver concluído`;
+          const title = validateConcreteAction({ title: rawTitle, doneWhen }).ok
+            ? rawTitle
+            : `Anote a primeira ação para ${rawTitle}`;
+          return {
+            ...item,
+            title,
+            doneWhen,
+            basedOn: item.basedOn ?? 'stated' as const,
+          };
+        });
+        operations.push({
           id: makeId(),
-          type: 'create_capture',
+          type: 'create_goal',
           status: 'proposed',
           selected: true,
-          payload: { kind: 'checklist', title, content: text(payload.content) ?? '', items },
+          payload: {
+            title: goalTitle,
+            description: content || null,
+            category: text(payload.category) ?? 'geral',
+            subgoals,
+            resultDefinition: `as microtarefas de “${goalTitle}” estarem concluídas`,
+            currentReality: null,
+            milestones: [{ id: 'milestone-now', title: 'Agora', order: 0, doneWhen: 'As microtarefas essenciais estiverem concluídas' }],
+            pathStatus: 'ready',
+            pathQuestion: null,
+            firstAction: null,
+          },
         });
         break;
       }

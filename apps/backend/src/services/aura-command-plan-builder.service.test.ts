@@ -32,8 +32,13 @@ function run() {
     busyWindows: [],
     idFactory,
   });
-  assert.equal(checklist.operations[0]?.type, 'create_capture');
+  assert.equal(checklist.operations[0]?.type, 'create_goal');
   assert.equal(checklist.executionPolicy, 'auto_apply');
+  if (checklist.operations[0]?.type === 'create_goal') {
+    assert.equal(checklist.operations[0].payload.subgoals.length, 2);
+    assert.equal(checklist.operations[0].payload.subgoals[0]?.doneWhen, '“Passaporte” estiver concluído');
+    assert.equal(checklist.operations[0].payload.pathStatus, 'ready');
+  }
 
   const appointment = AuraCommandPlanBuilderService.build({
     response: {

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   buildContextText,
+  buildFallbackGoalDecomposition,
   buildGoalDecompositionPrompt,
   detectUnsupportedSpecificity,
   GoalIntelligenceService,
@@ -408,6 +409,20 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.equal(result.mode, 'actions');
     assert.doesNotMatch(result.steps[0].title, /site|anúncio|ferramenta/i);
     assert.match(result.steps[0].title, /portfólio|Instagram/i);
+  });
+
+  it('fallback converte uma lista em microtarefas acionáveis e observáveis', () => {
+    const result = buildFallbackGoalDecomposition({
+      goalTitle: 'Organizar a semana',
+      userStatements: ['Responder mensagens; separar documentos; marcar consulta'],
+      capacity: 'normal',
+    });
+
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.question, null);
+    assert.equal(result.steps.length, 3);
+    assert.ok(result.steps.every((step) => step.title.length > 0 && step.doneWhen.length > 0));
+    assert.ok(result.steps.every((step) => /registrado|escrito/i.test(step.doneWhen)));
   });
 
   it('contexto de mudança não preserva caixas, carro ou transportadora inventados', async () => {

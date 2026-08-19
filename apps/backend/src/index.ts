@@ -143,6 +143,7 @@ import {
 } from './services/objective-action-recovery.service';
 import {
   GoalIntelligenceService,
+  buildFallbackGoalDecomposition,
   type GoalDecomposition,
   type GoalIntelligenceInput,
 } from './services/goal-intelligence.service';
@@ -4383,7 +4384,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           : typeof responsePayload.goalTitle === 'string'
             ? responsePayload.goalTitle
             : '';
-        const goalDecomposition = await GoalIntelligenceService.decompose({
+        const goalIntelligenceInput: GoalIntelligenceInput = {
           goalTitle,
           locale: data.locale,
           userStatements: [
@@ -4400,7 +4401,14 @@ export function createApp(dependencies: AppDependencies = {}) {
             : null,
           operationalProfile: await OperationalProfileService.get(prisma, data.userId),
           patternContext: commandRagContext || null,
-        }).catch(() => null);
+        };
+        const fallbackGoalDecomposition = buildFallbackGoalDecomposition(goalIntelligenceInput);
+        const goalDecomposition = await Promise.race([
+          GoalIntelligenceService.decompose(goalIntelligenceInput),
+          new Promise<GoalDecomposition>((resolve) => setTimeout(() => resolve(fallbackGoalDecomposition), 9_000)),
+        ])
+          .then((result) => result.mode === 'actions' && result.steps.length > 0 ? result : fallbackGoalDecomposition)
+          .catch(() => fallbackGoalDecomposition);
         if (goalDecomposition?.mode === 'actions' && goalDecomposition.steps.length > 0) {
           responsePayload.subgoals = goalDecomposition.steps.map((step, index) => ({
             id: `goal-action-${Date.now()}-${index}`,
@@ -4437,6 +4445,11 @@ export function createApp(dependencies: AppDependencies = {}) {
       const commandResponse: AuraCommandResponse = {
         ...gatedCommandResponse,
         payload: responsePayload,
+        needsConfirmation: gatedCommandResponse.action === 'create_goal'
+          && Array.isArray(responsePayload.subgoals)
+          && responsePayload.subgoals.length > 0
+          ? false
+          : gatedCommandResponse.needsConfirmation,
       };
       const secondaryResponses = (gatedCommandResponse.actions ?? []).map((step): AuraCommandResponse => ({
         ...gatedCommandResponse,
@@ -5652,9 +5665,27 @@ export function createApp(dependencies: AppDependencies = {}) {
       category: z.string().default('geral'),
       deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       locale: z.string().default('pt-BR'),
+      resultDefinition: z.string().trim().max(2000).nullable().optional(),
+      currentReality: z.string().trim().max(2000).nullable().optional(),
+      subgoals: z.array(z.object({
+        id: z.string().trim().min(1).max(120).optional(),
+        title: z.string().trim().min(1).max(500),
+        done: z.boolean().optional().default(false),
+        milestoneId: z.string().trim().min(1).nullable().optional(),
+        doneWhen: z.string().trim().min(1).max(500).optional(),
+        effortSize: z.enum(['small', 'medium', 'large']).optional(),
+        aiGenerated: z.boolean().optional().default(true),
+        basedOn: z.enum(['stated', 'inferred']).optional(),
+      }).strict()).max(30).optional().default([]),
     }).strict();
     try {
       const data = Schema.parse(req.body);
+      const normalizedSubgoals = normalizeObjectiveSubgoals(data.subgoals.map((item, index) => ({
+        ...item,
+        id: item.id ?? `objective-${Date.now()}-${index}`,
+        doneWhen: item.doneWhen ?? `“${item.title}” estiver concluído`,
+        order: index,
+      })));
       const obj = await prisma.objective.create({
         data: {
           userId,
@@ -5662,9 +5693,11 @@ export function createApp(dependencies: AppDependencies = {}) {
           description: data.description,
           category: data.category,
           deadline: data.deadline ? new Date(`${data.deadline}T00:00:00.000Z`) : null,
-          subgoals: [],
-          pathStatus: 'not_started',
-          milestones: [],
+          subgoals: normalizedSubgoals as any,
+          resultDefinition: data.resultDefinition ?? (normalizedSubgoals.length > 0 ? `as microtarefas de “${data.title}” estarem concluídas` : null),
+          currentReality: data.currentReality ?? null,
+          pathStatus: normalizedSubgoals.length > 0 ? 'ready' : 'not_started',
+          milestones: normalizedSubgoals.length > 0 ? [{ id: 'milestone-now', title: 'Agora', order: 0, doneWhen: 'As microtarefas essenciais estiverem concluídas' }] : [],
         },
       });
       // Vetoriza a meta (fire-and-forget)
@@ -5676,16 +5709,18 @@ export function createApp(dependencies: AppDependencies = {}) {
         metadata: { category: data.category, objectiveId: obj.id, progress: obj.progress, archived: obj.archived },
       }).catch(() => {});
       let pathGenerationFailed = false;
-      try {
-        const context = await loadObjectiveIntelligenceContext(prisma, userId, obj.id);
-        await objectivePathService.generate({ userId, objectiveId: obj.id, locale: data.locale, ...context });
-      } catch (pathError) {
-        pathGenerationFailed = true;
-        console.warn(`[objectives/create] objetivo ${obj.id} preservado para nova tentativa:`, pathError);
-        await prisma.objective.updateMany({
-          where: { id: obj.id, userId },
-          data: { pathStatus: 'retrying', pathQuestion: null },
-        }).catch(() => ({ count: 0 }));
+      if (normalizedSubgoals.length === 0) {
+        try {
+          const context = await loadObjectiveIntelligenceContext(prisma, userId, obj.id);
+          await objectivePathService.generate({ userId, objectiveId: obj.id, locale: data.locale, ...context });
+        } catch (pathError) {
+          pathGenerationFailed = true;
+          console.warn(`[objectives/create] objetivo ${obj.id} preservado para nova tentativa:`, pathError);
+          await prisma.objective.updateMany({
+            where: { id: obj.id, userId },
+            data: { pathStatus: 'retrying', pathQuestion: null },
+          }).catch(() => ({ count: 0 }));
+        }
       }
       const created = await prisma.objective.findFirst({ where: { id: obj.id, userId } });
       return res.status(201).json(serializeObjective(pathGenerationFailed
@@ -6107,29 +6142,26 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   /**
    * DELETE /api/objectives/:id
-   * Arquiva (soft-delete) um objetivo.
+   * Exclui definitivamente um objetivo e suas referências auxiliares.
+   * Arquivamento continua sendo feito por PATCH { archived: true }.
    */
   app.delete('/api/objectives/:id', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     const { id } = req.params;
     try {
-      await prisma.objective.updateMany({
-        where: { id, userId },
-        data: { archived: true },
-      });
-      await prisma.memoryEmbedding.updateMany({
-        where: { userId, contentType: 'goal', contentId: id },
-        data: {
-          metadata: {
-            objectiveId: id,
-            archived: true,
-          },
-        },
-      }).catch(() => {});
+      const objective = await prisma.objective.findFirst({ where: { id, userId }, select: { id: true } });
+      if (!objective) return res.status(404).json({ error: 'Objective not found' });
+
+      await prisma.userPreference.updateMany({
+        where: { userId, primaryObjectiveId: id },
+        data: { primaryObjectiveId: null },
+      }).catch(() => ({ count: 0 }));
+      await prisma.memoryEmbedding.deleteMany({ where: { userId, contentType: 'goal', contentId: id } }).catch(() => ({ count: 0 }));
+      await prisma.objective.deleteMany({ where: { id, userId } });
       return res.status(204).send();
     } catch (error: any) {
       console.error('[objectives/delete] Error:', error);
-      return res.status(500).json({ error: 'Failed to archive objective' });
+      return res.status(500).json({ error: 'Failed to delete objective' });
     }
   });
 

@@ -353,19 +353,49 @@ export function AuraChatPage() {
   ) {
     const parsed = buildAuraObjectiveInput(payload);
     if (!parsed) return null;
+    const itemSources = ["subgoals", "checklist", "items", "steps", "tasks"];
+    const rawItems = itemSources
+      .map((key) => payload[key])
+      .find((value) => Array.isArray(value) && value.length > 0);
+    const sourceItems = Array.isArray(rawItems) ? rawItems : [];
+    const subgoals = (sourceItems.length > 0 ? sourceItems : [{ title: `Escreva o próximo passo para ${parsed.title}` }])
+      .map((item, index) => {
+        const record = isRecord(item) ? item : {};
+        const title = typeof item === "string"
+          ? item.trim()
+          : pickString(record, ["title", "text", "name", "label", "task"]) ?? "";
+        if (!title) return null;
+        const actionableTitle = /^(abra|anote|liste|escreva|copie|ligue|mande|envie|selecione|publique|edite|responda|pague|transfira|compare|reúna|separe|retire|coloque|fotografe|telefone|preencha|agende|cancele|confirme|acesse|entre|baixe|anexe|assine|entregue|registre|identifique|monte|crie|marque|leve|enxágue|passe|guarde|varra|abrir|anotar|listar|escrever|copiar|ligar|mandar|enviar|selecionar|publicar|editar|responder|pagar|transferir|comparar|reunir|separar|retirar|colocar|fotografar|telefonar|preencher|agendar|cancelar|confirmar|acessar|entrar|baixar|anexar|assinar|entregar|registrar|identificar|montar|criar|marcar|levar|enxaguar|passar|guardar|varrer)\\b/i.test(title)
+          ? title.charAt(0).toLocaleUpperCase() + title.slice(1)
+          : `Anote a primeira ação para ${title}`;
+        return {
+          id: typeof record.id === "string" ? record.id : `aura-${Date.now()}-${index}`,
+          title: actionableTitle,
+          done: record.done === true,
+          aiGenerated: true,
+          milestoneId: typeof record.milestoneId === "string" ? record.milestoneId : "milestone-now",
+          doneWhen: typeof record.doneWhen === "string" && record.doneWhen.trim()
+            ? record.doneWhen.trim()
+            : `“${title}” estiver concluído`,
+          effortSize: record.effortSize === "small" || record.effortSize === "medium" || record.effortSize === "large"
+            ? record.effortSize
+            : "small",
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item));
     const objective = {
       title: parsed.title,
-      subgoals: parsed.itemTitles.map((item, index) => ({
-        id: `aura-${Date.now()}-${index}`,
-        title: item,
-        done: false,
-        aiGenerated: true,
-      })),
+      subgoals,
     };
 
     await api.post("/objectives", {
       title: objective.title,
+      description: typeof payload.description === "string" ? payload.description : undefined,
       category: typeof payload.category === "string" ? payload.category : "geral",
+      resultDefinition: typeof payload.resultDefinition === "string"
+        ? payload.resultDefinition
+        : `as microtarefas de “${objective.title}” estarem concluídas`,
+      currentReality: typeof payload.currentReality === "string" ? payload.currentReality : null,
       subgoals: objective.subgoals,
     });
     await refreshData();

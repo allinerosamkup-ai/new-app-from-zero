@@ -16,6 +16,7 @@ import {
   Plus,
   Sparkles,
   Target,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -417,6 +418,7 @@ function GoalCard({
   onEditDeadline,
   onPause,
   onArchive,
+  onDelete,
 }: {
   goal: GoalLike;
   paused: boolean;
@@ -435,6 +437,7 @@ function GoalCard({
   onEditDeadline: (deadline: string | null) => Promise<void>;
   onPause: () => void;
   onArchive: () => Promise<void>;
+  onDelete: () => Promise<void>;
 }) {
   const l = useLocalizedCopy();
   const model = buildGoalCardModel(goal);
@@ -538,24 +541,32 @@ function GoalCard({
 
       {open && (
         <div style={{ padding: "0 16px 16px" }}>
+          <div style={{ marginBottom: 12, padding: "0 2px" }}>
+            <p style={{ margin: "0 0 5px", color: "var(--text-3)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>
+              {l("Resultado", "Outcome")}
+            </p>
+            <p style={{ margin: 0, color: "var(--text-1)", fontSize: 14, fontWeight: 750, lineHeight: 1.45 }}>
+              {goal.resultDefinition || goal.title}
+            </p>
+          </div>
+
           <div style={{
             borderRadius: 18,
             border: "1px solid rgba(150,199,179,.34)",
             background: "rgba(150,199,179,.10)",
             padding: "13px",
           }}>
-            <p style={{ margin: "0 0 6px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>
-              {currentMilestoneLabel ? `${l('Agora', 'Now')} · ${currentMilestoneLabel}` : l("O que você pode fazer agora", "What you can do now")}
+            <p style={{ margin: "0 0 3px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>
+              {l("Agora", "Now")}
             </p>
-
-            {goal.resultDefinition && (
-              <p style={{ margin: '0 0 8px', color: 'var(--text-2)', fontSize: 12, lineHeight: 1.45 }}>
-                <strong>{l('O que você quer ver acontecer:', 'What you want to see happen:')}</strong> {goal.resultDefinition}
+            {currentMilestoneLabel && (
+              <p style={{ margin: "0 0 9px", color: "var(--text-3)", fontSize: 11, lineHeight: 1.4 }}>
+                {l("Etapa atual", "Current stage")} · {currentMilestoneLabel}
               </p>
             )}
             {goal.currentReality && (
               <p style={{ margin: '0 0 11px', color: 'var(--text-3)', fontSize: 11, lineHeight: 1.45 }}>
-                <strong>{l('Onde você está hoje:', 'Where you are today:')}</strong> {goal.currentReality}
+                <strong>{l('Hoje:', 'Today:')}</strong> {goal.currentReality}
               </p>
             )}
 
@@ -590,9 +601,6 @@ function GoalCard({
                     <Check size={15} />
                   </button>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: "0 0 3px", color: "var(--text-3)", fontSize: 10, fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" }}>
-                      {l("O que cabe agora", "What fits now")}
-                    </p>
                     <p style={{ margin: 0, color: "var(--text-1)", fontSize: 14, fontWeight: 750, lineHeight: 1.45 }}>
                     {model.nextAction.title}
                     </p>
@@ -790,77 +798,89 @@ function GoalCard({
             )}
           </div>
 
-          {goal.subtasks.length > 1 && (
+          {(goal.subtasks.length > 1 || futureMilestones.length > 0 || currentMilestone) && (
             <details style={{ marginTop: 12 }}>
               <summary style={{ cursor: "pointer", color: "var(--text-3)", fontSize: 11, fontWeight: 750 }}>
-                {l("Ver todas as ações", "View all actions")} · {model.completedActions}/{model.totalActions}
+                {l("Caminho", "Path")} · {model.completedActions}/{model.totalActions}
               </summary>
-              <div style={{ display: "grid", gap: 7, marginTop: 9 }}>
-                {orderedActions.map((action) => {
-                  const active = !action.done && model.nextAction?.id === action.id;
-                  const actionable = active && completingActionId === null;
-                  return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    disabled={!actionable}
-                    onClick={() => actionable && onToggleAction(action.id)}
-                    style={{
-                      border: active ? "1px solid rgba(150,199,179,.55)" : 0,
-                      borderRadius: active ? 10 : 0,
-                      background: active ? "rgba(150,199,179,.14)" : "transparent",
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 9,
-                      padding: active ? "8px" : "4px 0",
-                      color: action.done ? "var(--text-3)" : "var(--text-2)",
-                      textAlign: "left",
-                      cursor: actionable ? "pointer" : "default",
-                      opacity: action.done || active ? 1 : 0.7,
-                    }}
-                  >
-                    <span style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 6,
-                      border: action.done ? "1px solid var(--menthe)" : "1px solid rgba(99,152,169,.30)",
-                      background: action.done ? "var(--menthe)" : "#fff",
-                      color: "#fff",
-                      display: "grid",
-                      placeItems: "center",
-                      flexShrink: 0,
-                    }}>
-                      {action.done && <Check size={12} />}
+              <div style={{ display: "grid", gap: 10, marginTop: 9 }}>
+                {currentMilestone && (
+                  <div style={{ borderLeft: "2px solid var(--menthe)", padding: "5px 0 5px 10px" }}>
+                    <span style={{ display: "block", marginBottom: 3, color: "var(--menthe)", fontSize: 10, fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                      {l("Etapa atual", "Current stage")}
                     </span>
-                    <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
-                      {action.title}
-                      {action.doneWhen && <small style={{ display: "block", marginTop: 3, color: "var(--text-3)", fontWeight: 500, textDecoration: "none" }}>{l("Pronto quando:", "Done when:")} {action.doneWhen}</small>}
-                      {active ? <small style={{ display: "block", marginTop: 2, color: "var(--menthe)", fontWeight: 800 }}>{l("Agora", "Now")}</small> : null}
-                      {action.patternBasis?.map((basis) => (
-                        <small key={`${action.id}-${basis.pattern}`} style={{ display: "block", marginTop: 5, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.45, textDecoration: "none" }}>
-                          {l("Base desta adaptação", "Basis for this adaptation")}: {basis.pattern} · {basis.evidenceCount} {l("evidências", "evidence")} em {basis.distinctDays} {l("dias", "days")}/{basis.windowDays} · {Math.round(basis.confidence * 100)}% {l("confiança", "confidence")}. {basis.impact} {basis.limitation}
-                        </small>
-                      ))}
-                    </span>
-                  </button>
-                  );
-                })}
-              </div>
-            </details>
-          )}
-
-          {futureMilestones.length > 0 && (
-            <details style={{ marginTop: 12 }}>
-              <summary style={{ cursor: 'pointer', color: 'var(--text-3)', fontSize: 11, fontWeight: 750 }}>
-                {l('O que vem depois', 'What comes next')} · {futureMilestones.length}
-              </summary>
-              <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
-                {futureMilestones.map((milestone) => (
-                  <div key={milestone.id} style={{ borderLeft: '2px solid rgba(99,152,169,.22)', padding: '5px 0 5px 10px' }}>
-                    <strong style={{ display: 'block', color: 'var(--text-2)', fontSize: 12 }}>{milestone.title}</strong>
-                    {milestone.doneWhen && <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{milestone.doneWhen}</span>}
+                    <strong style={{ display: "block", color: "var(--text-2)", fontSize: 12 }}>{currentMilestone.title}</strong>
+                    {currentMilestone.doneWhen && <span style={{ color: "var(--text-3)", fontSize: 11 }}>{currentMilestone.doneWhen}</span>}
                   </div>
-                ))}
+                )}
+
+                {goal.subtasks.length > 1 && (
+                  <div style={{ display: "grid", gap: 7 }}>
+                    {orderedActions.map((action) => {
+                      const active = !action.done && model.nextAction?.id === action.id;
+                      const actionable = active && completingActionId === null;
+                      return (
+                        <button
+                          key={action.id}
+                          type="button"
+                          disabled={!actionable}
+                          onClick={() => actionable && onToggleAction(action.id)}
+                          style={{
+                            border: active ? "1px solid rgba(150,199,179,.55)" : 0,
+                            borderRadius: active ? 10 : 0,
+                            background: active ? "rgba(150,199,179,.14)" : "transparent",
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 9,
+                            padding: active ? "8px" : "4px 0",
+                            color: action.done ? "var(--text-3)" : "var(--text-2)",
+                            textAlign: "left",
+                            cursor: actionable ? "pointer" : "default",
+                            opacity: action.done || active ? 1 : 0.7,
+                          }}
+                        >
+                          <span style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 6,
+                            border: action.done ? "1px solid var(--menthe)" : "1px solid rgba(99,152,169,.30)",
+                            background: action.done ? "var(--menthe)" : "#fff",
+                            color: "#fff",
+                            display: "grid",
+                            placeItems: "center",
+                            flexShrink: 0,
+                          }}>
+                            {action.done && <Check size={12} />}
+                          </span>
+                          <span style={{ fontSize: 12, lineHeight: 1.4, textDecoration: action.done ? "line-through" : "none" }}>
+                            {action.title}
+                            {action.doneWhen && <small style={{ display: "block", marginTop: 3, color: "var(--text-3)", fontWeight: 500, textDecoration: "none" }}>{l("Pronto quando:", "Done when:")} {action.doneWhen}</small>}
+                            {active ? <small style={{ display: "block", marginTop: 2, color: "var(--menthe)", fontWeight: 800 }}>{l("Agora", "Now")}</small> : null}
+                            {action.patternBasis?.map((basis) => (
+                              <small key={`${action.id}-${basis.pattern}`} style={{ display: "block", marginTop: 5, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.45, textDecoration: "none" }}>
+                                {l("Base desta adaptação", "Basis for this adaptation")}: {basis.pattern} · {basis.evidenceCount} {l("evidências", "evidence")} em {basis.distinctDays} {l("dias", "days")}/{basis.windowDays} · {Math.round(basis.confidence * 100)}% {l("confiança", "confidence")}. {basis.impact} {basis.limitation}
+                              </small>
+                            ))}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {futureMilestones.length > 0 && (
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <span style={{ color: "var(--text-3)", fontSize: 10, fontWeight: 850, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                      {l("Próximas etapas", "Next stages")}
+                    </span>
+                    {futureMilestones.map((milestone) => (
+                      <div key={milestone.id} style={{ borderLeft: "2px solid rgba(99,152,169,.22)", padding: "5px 0 5px 10px" }}>
+                        <strong style={{ display: "block", color: "var(--text-2)", fontSize: 12 }}>{milestone.title}</strong>
+                        {milestone.doneWhen && <span style={{ color: "var(--text-3)", fontSize: 11 }}>{milestone.doneWhen}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </details>
           )}
@@ -908,6 +928,9 @@ function GoalCard({
                 </button>
                 <button onClick={onArchive} style={{ ...quietButtonStyle, padding: "8px 6px", color: "var(--nectarine-11)" }}>
                   <Archive size={14} /> {l("Arquivar", "Archive")}
+                </button>
+                <button onClick={() => { void onDelete(); }} style={{ ...quietButtonStyle, gridColumn: '1 / -1', padding: "8px 6px", color: "#A6574B", borderColor: "rgba(166,87,75,.24)" }}>
+                  <Trash2 size={14} /> {l("Excluir definitivamente", "Delete permanently")}
                 </button>
                 <label style={{ ...quietButtonStyle, gridColumn: '1 / -1', padding: '8px 10px' }}>
                   <CalendarPlus size={14} />
@@ -1204,10 +1227,28 @@ export function GoalsPage() {
     if (!confirmed) return;
 
     try {
-      await removeGoal(goal.id);
+      await api.patch(`/objectives/${goal.id}`, { archived: true });
+      await refreshObjectives();
       showSuccess(l("Objetivo arquivado.", "Goal archived."));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível arquivar.", "Could not archive."));
+    }
+  }
+
+  async function deleteGoal(goal: GoalLike) {
+    const confirmed = window.confirm(
+      l(
+        `Excluir “${goal.title}” definitivamente? O objetivo, suas microtarefas e o histórico ligado a ele serão removidos.`,
+        `Delete “${goal.title}” permanently? The goal, its microtasks, and linked history will be removed.`,
+      ),
+    );
+    if (!confirmed) return;
+
+    try {
+      await removeGoal(goal.id);
+      showSuccess(l("Objetivo excluído.", "Goal deleted."));
+    } catch (error) {
+      showError(error instanceof Error ? error.message : l("Não foi possível excluir o objetivo.", "Could not delete the goal."));
     }
   }
 
@@ -1307,6 +1348,7 @@ export function GoalsPage() {
       }}
       onPause={() => { void togglePaused(goal.id); }}
       onArchive={() => archiveGoal(goal)}
+      onDelete={() => deleteGoal(goal)}
       onEditDeadline={async (deadline) => {
         try {
           await api.patch(`/objectives/${goal.id}`, { deadline });
