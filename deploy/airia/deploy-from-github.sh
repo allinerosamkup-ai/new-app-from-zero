@@ -143,15 +143,22 @@ if [ -z "$BUNDLE_MAIN" ]; then
   docker rm -f bundlecheck >/dev/null
   rollback_on_error
 fi
-# O vite minifica os identificadores importados, então a validação usa grep fixo:
-# aceita o termo original "createBrowserRouter" OU o array de rotas literal
-# '[{path:"*",element' que só aparece quando o data router está configurado.
-# O vite minifica os identificadores importados, então a validação aceita o termo
-# original "createBrowserRouter" OU o array de rotas literal '\[{path:"*",element'
-# que só aparece quando o data router está configurado (uma única leitura do stdin).
-if ! docker cp bundlecheck:"$BUNDLE_MAIN" - 2>/dev/null | head -c 400000 | grep -qE 'createBrowserRouter|\[{path:"\*",element'; then
+# O vite minifica os identificadores importados; o sinal inequívoco do data
+# router é o array de rotas literal '[{path:"*",element' (e, em alguns
+# toolchains, o identificador original "createBrowserRouter"). A extração vai
+# para arquivo primeiro: grep em pipe com `head -c` pode falhar silenciosamente
+# conforme a versão do grep/shell da máquina.
+BUNDLE_TMP="$(mktemp)"
+docker cp bundlecheck:"$BUNDLE_MAIN" "$BUNDLE_TMP" 2>/dev/null
+echo "tamanho do bundle: $(wc -c < "$BUNDLE_TMP") bytes"
+BUNDLE_HAS_DATA_ROUTER=0
+grep -qF 'createBrowserRouter' "$BUNDLE_TMP" && BUNDLE_HAS_DATA_ROUTER=1
+grep -qF '[{path:"*",element' "$BUNDLE_TMP" && BUNDLE_HAS_DATA_ROUTER=1
+grep -qF '(\[\{path:"\*",element' "$BUNDLE_TMP" && BUNDLE_HAS_DATA_ROUTER=1
+if [ "$BUNDLE_HAS_DATA_ROUTER" != "1" ]; then
   echo "FALHA: o bundle $BUNDLE_MAIN NÃO contém o roteador de dados (createBrowserRouter/[{path:\"*\",element]). O JavaScript construído não corresponde ao código versionado; deploy abortado."
   docker rm -f bundlecheck >/dev/null
+  rm -f "$BUNDLE_TMP"
   rollback_on_error
 fi
 echo "bundle construído contém o roteador de dados — ok"
