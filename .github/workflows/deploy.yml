@@ -32,6 +32,8 @@ jobs:
     timeout-minutes: 25
 
     steps:
+      - uses: actions/checkout@v4
+
       # Segredo ausente falha aqui, com o nome do segredo e onde cadastrar, em
       # vez de falhar dez linhas abaixo com "Permission denied (publickey)".
       - name: Conferir segredos
