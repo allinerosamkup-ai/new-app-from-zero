@@ -56,4 +56,15 @@ describe("canonical onboarding routing", () => {
     expect(layoutSource).toContain("location.pathname.startsWith('/comecar')");
     expect(layoutSource).toContain("location.pathname.startsWith('/onboarding')");
   });
+
+  it("uses one mandatory gate before every authenticated entry can reach Home", () => {
+    const appSource = source("src/App.tsx");
+    const layoutSource = source("src/routes/aura-layout.tsx");
+
+    expect(appSource).toContain("function AuthenticatedProductEntry()");
+    expect(appSource).toContain('return <Navigate to="/comecar" replace />;');
+    expect(appSource).toContain('path="/auth/callback" element={<AuthenticatedProductEntry />}');
+    expect(layoutSource).toContain("requiresMandatoryOnboarding(state)");
+    expect(layoutSource).toContain('return <Navigate to="/comecar" replace />;');
+  });
 });

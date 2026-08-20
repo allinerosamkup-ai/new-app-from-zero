@@ -447,7 +447,11 @@ export default function StoryOnboardingPage() {
       asked_question: Boolean(question),
     });
     try { await refreshData(); } catch { /* a Home também recarrega ao montar */ }
-    navigate("/home", { replace: true });
+    // O primeiro Check-in é o ponto de partida mensurável da Home: sem ele a
+    // pessoa chega a uma tela sem gráfico, sem leitura do dia e sem contexto
+    // suficiente para a Airia. O objetivo escolhido já foi persistido acima;
+    // agora a rota pede somente os sinais que a pessoa precisa informar.
+    navigate("/checkin", { replace: true });
   }
 
   async function retryCompletion() {

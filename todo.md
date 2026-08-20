@@ -109,4 +109,12 @@
 - [x] Reconciliar as expectativas de cópia dos testes de Padrões com a implementação recém-publicada, sem alterar a lógica funcional.
 - [x] Classificar as falhas de testes do backend integradas da base remota e confirmar se são externas ao tema de fase.
 - [x] Substituir os tipos `any` do cache de sessão e de GET no cliente de API por tipos explícitos, sem alterar o comportamento de rede.
-- [ ] Criar, enviar e publicar um único commit coordenado do tema de fase após a regressão combinada.
+- [x] Criar, enviar e publicar um único commit coordenado do tema de fase após a regressão combinada.
+- [x] Mapear e corrigir o destino pós-cadastro para que onboarding pendente abra Pra começar antes da Home.
+- [x] Proteger acesso direto e retomada de sessão para que onboarding pendente não mostre Home vazia.
+- [x] Cobrir e validar conta nova, onboarding parcial e onboarding concluído sem publicar ainda.
+- [x] Mapear e corrigir a passagem do objetivo inicial e do primeiro Check-in do Pra começar para a Home.
+- [x] Garantir CTA de Check-in visível e gráfico útil desde o primeiro registro, mantendo a Jornada.
+- [x] Cobrir e validar a Home de primeiro acesso com objetivo, Check-in e gráfico antes de publicar.
+- [ ] Revisar o diff e publicar somente as correções de onboarding e primeiro acesso autorizadas.
+- [x] Integrar as correções autorizadas à versão remota recém-atualizada antes do commit e deploy.

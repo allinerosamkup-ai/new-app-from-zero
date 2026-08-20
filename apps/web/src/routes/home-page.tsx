@@ -447,6 +447,12 @@ export function HomePage() {
     () => aggregateCheckinsByDay(state.checkinHistory || []),
     [state.checkinHistory]
   );
+  const firstCheckinPending = (state.checkinHistory || []).length === 0;
+  const firstActiveGoal = useMemo(
+    () => (state.goals || []).find((goal) => goal.completedPct < 100) ?? null,
+    [state.goals],
+  );
+  const isFirstRecordedCheckin = (state.checkinHistory || []).length === 1;
 
   // ── Relatório semanal (domingo) ──────────────────────────
   const weeklyReport = useMemo(() => {
@@ -670,9 +676,18 @@ export function HomePage() {
   // ── Today view: detalhes do dia colapsados por padrão (lembra a preferência) ──
   const DAY_DETAILS_KEY = "airia.home.dayDetailsOpen.v1";
   const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
+  const firstChartOpenedRef = useRef(false);
   useEffect(() => {
-    try { setDayDetailsOpen(localStorage.getItem(DAY_DETAILS_KEY) === "1"); } catch { /* ignore */ }
+    try { setDayDetailsOpen(localStorage.getItem(DAY_DETAILS_KEY) === "true"); } catch { /* ignore */ }
   }, []);
+  useEffect(() => {
+    if (!isFirstRecordedCheckin || firstChartOpenedRef.current) return;
+    // O primeiro ponto já é dado útil: o gráfico abre em Hoje para a pessoa ver
+    // imediatamente o registro que acabou de fazer, sem procurar um acordeão.
+    firstChartOpenedRef.current = true;
+    setHomeChartMode("day");
+    setDayDetailsOpen(true);
+  }, [isFirstRecordedCheckin]);
   function toggleDayDetails() {
     setDayDetailsOpen((open) => {
       const next = !open;
@@ -1307,6 +1322,31 @@ export function HomePage() {
         <div style={{ margin: "0 0 12px" }}>
           <ProgressStrip />
         </div>
+
+        {firstCheckinPending && (
+          <Card accent="sage" style={{ marginBottom: "calc(var(--a) * 1.1)" }}>
+            <SectionTitle
+              eyebrow={l("Pra começar", "To start")}
+              accent="sage"
+              icon="✓"
+            />
+            <p style={{ margin: "8px 0 3px", fontSize: 12, color: "var(--text-3)", fontWeight: 700, letterSpacing: ".03em", textTransform: "uppercase" }}>
+              {l("Seu foco inicial", "Your first focus")}
+            </p>
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.35 }}>
+              {firstActiveGoal?.title ?? l("Seu objetivo está sendo preparado", "Your goal is being prepared")}
+            </p>
+            <p style={{ margin: "8px 0 14px", fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.55 }}>
+              {l(
+                "Faça seu primeiro check-in para registrar como você está hoje. Depois, este espaço mostra seu gráfico de humor e energia.",
+                "Do your first check-in to record how you feel today. Then this space will show your mood and energy chart.",
+              )}
+            </p>
+            <AuraButtonV2 className="btn btn-primary btn-full" onClick={() => selectNextStep("checkin", "empty_state", "/checkin")}>
+              {l("Fazer meu primeiro check-in", "Do my first check-in")}
+            </AuraButtonV2>
+          </Card>
+        )}
 
         <JornadaHomeCard />
 

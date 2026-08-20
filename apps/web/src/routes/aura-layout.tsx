@@ -11,6 +11,7 @@ import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
 import { AuraIcon } from "../components/AuraIcon";
 import { useHabitReminders } from "../hooks/useHabitReminders";
 import { getActivationState } from "../features/aura/activation";
+import { requiresMandatoryOnboarding } from "../features/aura/onboarding-route-guard";
 import { resolveActiveBanner } from "./aura-layout.helpers";
 import { resolveUnlockedNav, type NavKey } from "./nav-access.helpers";
 import { FEATURES } from "../config/features";
@@ -127,18 +128,10 @@ const PHASE_ALERT_CONFIG: Record<string, { color: string; bg: string; border: st
   mixed: { color: "var(--phase-accent)", bg: "var(--phase-accent-soft)", border: "var(--phase-border)", emoji: "⚡" },
 };
 
-const ONBOARDING_PROMPT_WINDOW_DAYS = 7;
 const ONBOARDING_PROMPT_MAX_SHOWS = 2;
 
 function getOnboardingPromptKey(userId: string | null) {
   return userId ? `aura.onboardingPrompt.${userId}` : null;
-}
-
-function isWithinOnboardingPromptWindow(accountCreatedAt?: string | null) {
-  if (!accountCreatedAt) return false;
-  const createdAtMs = new Date(accountCreatedAt).getTime();
-  if (!Number.isFinite(createdAtMs)) return false;
-  return Date.now() - createdAtMs <= ONBOARDING_PROMPT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 }
 
 export function AuraLayout() {
@@ -185,7 +178,7 @@ export function AuraLayout() {
   }, [refreshData, navigate]);
 
   const onboardingPromptEligible = useMemo(
-    () => !state.onboardingDone && isWithinOnboardingPromptWindow(state.accountCreatedAt),
+    () => requiresMandatoryOnboarding(state),
     [state.accountCreatedAt, state.onboardingDone],
   );
 
@@ -289,6 +282,14 @@ export function AuraLayout() {
         <div className="aura-loader-spinner" />
       </div>
     );
+  }
+
+  // Conta recém-criada só entra na área autenticada depois do fluxo completo de
+  // Pra começar. A guarda fica acima do Outlet, então login, restauração de
+  // sessão, deep link e acesso direto a /home não conseguem mostrar uma Home
+  // vazia enquanto o perfil novo ainda não confirmou o onboarding.
+  if (onboardingPromptEligible) {
+    return <Navigate to="/comecar" replace />;
   }
 
   // Um banner por vez (prioridade: fase > onboarding > follow-up) para não empilhar avisos.

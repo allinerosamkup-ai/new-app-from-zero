@@ -3,6 +3,8 @@ import { Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react
 import { InstallPWA } from "./components/InstallPWA";
 import { trackInstallConversionOnce, trackMetaPixelPageView } from "./lib/meta-pixel";
 import { FEATURE_FALLBACK_ROUTE } from "./config/features";
+import { useAuraStore } from "./features/aura/store";
+import { requiresMandatoryOnboarding } from "./features/aura/onboarding-route-guard";
 import { supabase } from "./lib/supabase";
 
 const loadAuraLayout = () => import("./routes/aura-layout");
@@ -60,6 +62,17 @@ const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: 
 const StoryOnboardingPage = lazy(() => loadStoryOnboardingPage().then((module) => ({ default: module.default })));
 const RunPage = lazy(() => loadRunPage().then((module) => ({ default: module.RunPage })));
 const CapturesPage = lazy(() => loadCapturesPage().then((module) => ({ default: module.CapturesPage })));
+const loadDevOnlyModule = (path: string) => import(/* @vite-ignore */ path);
+const UsabilityPrototypePage = import.meta.env.DEV
+  ? lazy(() => loadDevOnlyModule("./routes/usability-prototype-page.tsx").then((module) => ({
+      default: (module as typeof import("./routes/usability-prototype-page")).UsabilityPrototypePage,
+    })))
+  : null;
+const ObjectivesPrototypePage = import.meta.env.DEV
+  ? lazy(() => loadDevOnlyModule("./routes/objectives-prototype-page.tsx").then((module) => ({
+      default: (module as typeof import("./routes/objectives-prototype-page")).ObjectivesPrototypePage,
+    })))
+  : null;
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
@@ -105,6 +118,8 @@ const DEV_SCREENS = [
   { path: "aura", label: "Airia" },
   { path: "captures", label: "Notas" },
   { path: "ui-kit", label: "UI Kit" },
+  { path: "usability-prototype", label: "Protótipo" },
+  { path: "objectives-prototype", label: "Obj. protótipo" },
 ];
 
 function DevLayout() {
@@ -144,6 +159,19 @@ function isRestorableProductRoute(pathname: string) {
   return RESTORABLE_PRODUCT_ROUTES.has(pathname);
 }
 
+/** Decide o primeiro destino privado sem expor a Home a uma conta ainda nova. */
+function AuthenticatedProductEntry() {
+  const { hydrated, state } = useAuraStore();
+
+  if (!hydrated) return <RouteLoader />;
+  if (requiresMandatoryOnboarding(state)) {
+    return <Navigate to="/comecar" replace />;
+  }
+
+  const savedRoute = typeof window === "undefined" ? null : sessionStorage.getItem(LAST_PRODUCT_ROUTE_KEY);
+  return <Navigate to={savedRoute && isRestorableProductRoute(savedRoute) ? savedRoute : "/home"} replace />;
+}
+
 /** A Splash apresenta o produto a visitantes; uma sessão válida retoma o produto. */
 function SplashEntry() {
   const [sessionState, setSessionState] = useState<"checking" | "authenticated" | "anonymous">("checking");
@@ -164,8 +192,7 @@ function SplashEntry() {
 
   if (sessionState === "checking") return <RouteLoader />;
   if (sessionState === "authenticated") {
-    const savedRoute = typeof window === "undefined" ? null : sessionStorage.getItem(LAST_PRODUCT_ROUTE_KEY);
-    return <Navigate to={savedRoute && isRestorableProductRoute(savedRoute) ? savedRoute : "/home"} replace />;
+    return <AuthenticatedProductEntry />;
   }
   return <SplashPage />;
 }
@@ -282,7 +309,7 @@ export default function App() {
         <Route path="/auth-v2" element={<AuthV2Page />} />
         {/* Pós-login cai na Home, não no Planner. Incondicional: mesmo se o
             Planner voltar, o destino de quem acabou de entrar é a Home. */}
-        <Route path="/auth/callback" element={<Navigate to={`/home${location.search}`} replace />} />
+        <Route path="/auth/callback" element={<AuthenticatedProductEntry />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/billing" element={<BillingPage />} />
@@ -309,6 +336,8 @@ export default function App() {
             <Route path="aura" element={<AuraChatPage />} />
             <Route path="captures" element={<CapturesPage />} />
             <Route path="ui-kit" element={<UIKitPage />} />
+            {UsabilityPrototypePage && <Route path="usability-prototype" element={<UsabilityPrototypePage />} />}
+            {ObjectivesPrototypePage && <Route path="objectives-prototype" element={<ObjectivesPrototypePage />} />}
           </Route>
         )}
 
