@@ -64,7 +64,19 @@ jobs:
           # A chave do host entra por `ssh-keyscan` em vez de
           # `StrictHostKeyChecking=no`: aceitar qualquer host é aceitar também o
           # errado, e este passo carrega uma chave com root.
-          ssh-keyscan -T 20 "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # O runner pode perder a primeira conexão TCP mesmo quando a VPS está
+          # saudável. Repetimos uma sondagem IPv4 em arquivo temporário, mas só
+          # aceitamos continuar depois de obter uma chave de host não vazia.
+          rm -f ~/.ssh/known_hosts
+          for tentativa in 1 2 3; do
+            if ssh-keyscan -4 -T 20 "$VPS_HOST" > ~/.ssh/known_hosts.tmp 2>/dev/null && test -s ~/.ssh/known_hosts.tmp; then
+              mv ~/.ssh/known_hosts.tmp ~/.ssh/known_hosts
+              break
+            fi
+            rm -f ~/.ssh/known_hosts.tmp
+            echo "A leitura da chave SSH não respondeu na tentativa ${tentativa}/3; aguardando para tentar novamente."
+            sleep $((tentativa * 5))
+          done
           test -s ~/.ssh/known_hosts || { echo "FALHA: não consegui ler a chave de host de $VPS_HOST"; exit 1; }
 
       # A VPS só é alcançável por SSH, e nem toda pessoa que precisa publicar
