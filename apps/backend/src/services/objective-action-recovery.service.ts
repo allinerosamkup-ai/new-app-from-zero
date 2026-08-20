@@ -6,6 +6,7 @@ import {
   normalizeObjectiveSubgoals,
   type ObjectiveSubgoal,
 } from '../lib/objective-subgoals';
+import { buildFallbackGoalDecomposition } from './goal-intelligence.service';
 
 type ObjectiveRecoveryRow = {
   id: string;
@@ -272,8 +273,9 @@ export class ObjectiveActionRecoveryService {
       return { status: 'deferred', attempted: false, retryAfterMs: 0 };
     }
 
+    let suggestion: unknown = null;
     try {
-      const suggestion = await this.generateWithLeaseTimeout({
+      suggestion = await this.generateWithLeaseTimeout({
         request: {
           type: 'goal-subtasks',
           context: {
@@ -286,37 +288,34 @@ export class ObjectiveActionRecoveryService {
         },
         leaseUntilMs: claim.leaseUntilMs,
       });
-      const actions = recoveredActions(input.objective.id, suggestionItems(suggestion));
-      const path = recoveredPath(suggestion);
-      if (actions.length < 2) {
-        await this.markFailure(input.userId, input.objective.id, claim.token, 'generation_returned_fewer_than_two_actions');
-        return { status: 'failed', attempted: true, retryAfterMs: this.backoffMs };
-      }
-
-      const committed = await this.commitWithFence({
-        objective: input.objective,
-        userId: input.userId,
-        token: claim.token,
-        titleSnapshot,
-        updatedAtSnapshot,
-        subgoalsSnapshot,
-        actions,
-        path,
-      });
-      if (!committed) {
-        return { status: 'deferred', attempted: true, retryAfterMs: 0 };
-      }
-      return { status: 'recovered', attempted: true, retryAfterMs: null };
     } catch (error) {
-      await this.markFailure(
-        input.userId,
-        input.objective.id,
-        claim.token,
-        error instanceof Error ? error.message : String(error),
-      );
-      console.warn(`[objective-action-recovery] objetivo ${input.objective.id} preservado após falha:`, error);
-      return { status: 'failed', attempted: true, retryAfterMs: this.backoffMs };
+      console.warn(`[objective-action-recovery] objetivo ${input.objective.id} usando fallback após falha da IA:`, error);
     }
+
+    const generatedActions = recoveredActions(input.objective.id, suggestionItems(suggestion));
+    const fallback = buildFallbackGoalDecomposition({ goalTitle: titleSnapshot, capacity: 'moderate' });
+    const fallbackActions = recoveredActions(
+      input.objective.id,
+      fallback.steps.map((step) => ({ title: step.title, metadata: step })),
+    );
+    const useFallback = generatedActions.length < 2;
+    const actions = useFallback ? fallbackActions : generatedActions;
+    const path = useFallback ? recoveredPath(fallback) : recoveredPath(suggestion);
+
+    const committed = await this.commitWithFence({
+      objective: input.objective,
+      userId: input.userId,
+      token: claim.token,
+      titleSnapshot,
+      updatedAtSnapshot,
+      subgoalsSnapshot,
+      actions,
+      path,
+    });
+    if (!committed) {
+      return { status: 'deferred', attempted: true, retryAfterMs: 0 };
+    }
+    return { status: 'recovered', attempted: true, retryAfterMs: null };
   }
 
   private async generateWithLeaseTimeout(input: {
@@ -357,6 +356,18 @@ export class ObjectiveActionRecoveryService {
     actions: ObjectiveSubgoal[];
     path: { resultDefinition?: string; currentReality?: string; milestones?: unknown[] };
   }): Promise<boolean> {
+    const updatedAtSnapshot = input.updatedAtSnapshot === undefined || input.updatedAtSnapshot === null
+      ? null
+      : new Date(input.updatedAtSnapshot);
+    const updatedAtFence = updatedAtSnapshot && !Number.isNaN(updatedAtSnapshot.getTime())
+      ? {
+        updatedAt: {
+          gte: updatedAtSnapshot,
+          lt: new Date(updatedAtSnapshot.getTime() + 1),
+        },
+      }
+      : {};
+
     return this.prisma.$transaction(async (transaction) => {
       const nowMs = this.now();
       const renewed = await transaction.objectiveActionRecoveryClaim.updateMany({
@@ -377,10 +388,10 @@ export class ObjectiveActionRecoveryService {
           title: input.titleSnapshot,
           archived: false,
           progress: { lt: 100 },
-          subgoals: { equals: input.subgoalsSnapshot },
-          ...(input.updatedAtSnapshot !== undefined
-            ? { updatedAt: input.updatedAtSnapshot }
+          ...(input.objective.pathVersion !== undefined
+            ? { pathVersion: input.objective.pathVersion }
             : {}),
+          ...updatedAtFence,
         },
         data: {
           subgoals: input.actions as any,

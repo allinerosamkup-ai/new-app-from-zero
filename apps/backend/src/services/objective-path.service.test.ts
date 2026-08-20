@@ -84,7 +84,7 @@ describe('ObjectivePathService', () => {
     assert.equal(projected.snapshot.subgoals[0].milestoneId, 'm-1');
   });
 
-  it('preserva o objetivo e guarda uma pergunta decisiva quando não há caminho válido', async () => {
+  it('converte uma pergunta decisiva em fallback executável sem persistir bloqueio', async () => {
     const state = repository(baseObjective);
     const service = new ObjectivePathService(state.prisma, async () => ({
       mode: 'question', resultDefinition: null, currentReality: null, currentMilestoneId: null,
@@ -93,10 +93,10 @@ describe('ObjectivePathService', () => {
 
     const result = await service.generate({ userId: 'user-1', objectiveId: 'goal-1', locale: 'pt-BR' });
 
-    assert.equal(result.status, 'needs_answer');
-    assert.equal(state.objective.subgoals.length, 0);
-    assert.match(state.objective.pathQuestion, /dívida/);
-    assert.equal(state.objective.pathStatus, 'needs_answer');
+    assert.equal(result.status, 'ready');
+    assert.ok(state.objective.subgoals.length >= 3);
+    assert.equal(state.objective.pathQuestion, null);
+    assert.equal(state.objective.pathStatus, 'ready');
   });
 
   it('obriga proposta de revisão quando já existe ação concluída ou editada pela pessoa', async () => {

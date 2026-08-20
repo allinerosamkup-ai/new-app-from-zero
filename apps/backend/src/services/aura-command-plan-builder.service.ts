@@ -191,7 +191,7 @@ export class AuraCommandPlanBuilderService {
           return {
             ...item,
             title,
-            ...(verdict.ok ? { doneWhen } : {}),
+            ...(doneWhen ? { doneWhen } : {}),
             basedOn: item.basedOn ?? 'stated' as const,
           };
         });

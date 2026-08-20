@@ -66,8 +66,8 @@ type Decompose = (input: GoalIntelligenceInput) => Promise<GoalDecomposition>;
  * os passos canônicos centrados na meta — nunca frases do contexto viradas de
  * ação.
  */
-const DECOMPOSITION_DEADLINE_MS = 15_000;
-const AI_RETRY_DELAY_MS = 1_500;
+const DECOMPOSITION_DEADLINE_MS = 8_000;
+const AI_RETRY_DELAY_MS = 500;
 
 /** Sanitiza as falas da pessoa antes de virarem material de geração: micro-frases
  *  de conversação ("Olá tudo bem", "Obrigada", "Sim") são diário, não intenção. */
@@ -211,46 +211,55 @@ export class ObjectivePathService {
       decomposition.assumptions.some((assumption) => String(assumption).includes('sem consulta completa à IA')) ? 'fallback_canonical' : 'ai';
 
     let decomposition: GoalDecomposition;
-    try {
-      // Tentativa 1: IA dentro da janela. Se a IA estourar, o timer entrega o
-      // fallback; mas antes de aceitar o fallback, retomamos a IA uma vez —
-      // timeout é transitório na maioria dos casos, e um caminho de IA vale
-      // mais que qualquer caminho de contingência.
-      const first = await Promise.race([
+    const decomposeWithinDeadline = async (): Promise<GoalDecomposition> => {
+      // A chamada original continua podendo terminar em segundo plano, mas a
+      // decisão do caminho nunca espera indefinidamente por ela. O fallback é
+      // um resultado válido e executável, não um estado de erro.
+      return Promise.race([
         this.decompose(cleanInput),
         new Promise<GoalDecomposition>((resolve) => setTimeout(() => resolve(fallback), DECOMPOSITION_DEADLINE_MS)),
       ]);
+    };
+    try {
+      // Uma tentativa principal e uma segunda tentativa curta, ambas limitadas.
+      // Assim, uma IA lenta ou indisponível não mantém o objetivo em
+      // `generating` sem prazo: no pior caso o caminho canônico é persistido.
+      const first = await decomposeWithinDeadline();
       if (sourceTier(first) === 'ai' || first.mode === 'question') {
         decomposition = first;
       } else {
         await new Promise((resolve) => setTimeout(resolve, AI_RETRY_DELAY_MS));
-        try {
-          const retry = await this.decompose(cleanInput);
-          decomposition = sourceTier(retry) === 'ai' ? retry : fallback;
-        } catch {
-          decomposition = fallback;
-        }
+        const retry = await decomposeWithinDeadline();
+        decomposition = sourceTier(retry) === 'ai' ? retry : fallback;
       }
     } catch {
       decomposition = fallback;
     }
 
     if (decomposition.mode === 'question' || decomposition.steps.length === 0) {
-      const question = decomposition.question;
-      const pathStatus = question ? 'needs_answer' : 'retrying';
-      const updated = await this.prisma.$transaction(async (transaction) => {
-        const write = await transaction.objective.updateMany({
-          where: { id: objective.id, userId: input.userId, pathVersion: objective.pathVersion },
-          data: { pathStatus, pathQuestion: question, pathProposal: null, pathProposalCreatedAt: null },
+      // Pergunta é raciocínio interno. Para todo objetivo com título, o fallback
+      // canônico é suficiente para começar sem inventar objetos ou circunstâncias.
+      const fallback = buildFallbackGoalDecomposition(cleanInput);
+      if (fallback.mode === 'actions' && fallback.steps.length > 0) {
+        decomposition = fallback;
+      } else {
+        // Única exceção: sem título não existe meta sobre a qual agir.
+        const question = decomposition.question;
+        const pathStatus = question ? 'needs_answer' : 'retrying';
+        const updated = await this.prisma.$transaction(async (transaction) => {
+          const write = await transaction.objective.updateMany({
+            where: { id: objective.id, userId: input.userId, pathVersion: objective.pathVersion },
+            data: { pathStatus, pathQuestion: question, pathProposal: null, pathProposalCreatedAt: null },
+          });
+          if (write.count !== 1) throw new ObjectivePathConflictError('objective_path_changed');
+          await transaction.eventLog.create({
+            data: { userId: input.userId, eventName: 'objective_path_questioned', properties: { objectiveId: objective.id, question, pathVersion: objective.pathVersion } },
+          });
+          return write;
         });
-        if (write.count !== 1) throw new ObjectivePathConflictError('objective_path_changed');
-        await transaction.eventLog.create({
-          data: { userId: input.userId, eventName: 'objective_path_questioned', properties: { objectiveId: objective.id, question, pathVersion: objective.pathVersion } },
-        });
-        return write;
-      });
-      void updated;
-      return { status: pathStatus, objectiveId: objective.id, pathVersion: objective.pathVersion, question };
+        void updated;
+        return { status: pathStatus, objectiveId: objective.id, pathVersion: objective.pathVersion, question };
+      }
     }
 
     const subgoals = actionRows(objective.id, decomposition);
@@ -380,17 +389,22 @@ export class ObjectivePathService {
       locale: input.locale,
     });
 
-    if (decomposition.mode !== 'actions' || decomposition.steps.length === 0) {
-      const pathStatus = decomposition.question ? 'needs_answer' : 'retrying';
+    const usableDecomposition = decomposition.mode === 'actions' && decomposition.steps.length > 0
+      ? decomposition
+      : buildFallbackGoalDecomposition({ goalTitle: objective.title, userStatements: input.userStatements, capacity: input.capacity });
+    if (usableDecomposition.mode !== 'actions' || usableDecomposition.steps.length === 0) {
+      // Só ocorre se o próprio objetivo não tiver título; não há ação honesta
+      // possível sem uma direção mínima.
+      const pathStatus = usableDecomposition.question ? 'needs_answer' : 'retrying';
       const write = await this.prisma.objective.updateMany({
         where: { id: objective.id, userId: input.userId, pathVersion: input.expectedVersion },
-        data: { pathStatus, pathQuestion: decomposition.question },
+        data: { pathStatus, pathQuestion: usableDecomposition.question },
       });
       if (write.count !== 1) throw new ObjectivePathConflictError('objective_path_changed');
-      return { status: pathStatus, pathVersion: input.expectedVersion, question: decomposition.question };
+      return { status: pathStatus, pathVersion: input.expectedVersion, question: usableDecomposition.question };
     }
 
-    const generated = actionRows(objective.id, decomposition).map((action, index) => ({
+    const generated = actionRows(objective.id, usableDecomposition).map((action, index) => ({
       ...action,
       order: existing.length + index,
       milestoneId: nextMilestone.id,

@@ -2470,6 +2470,10 @@ export function createApp(dependencies: AppDependencies = {}) {
         milestones: decomposition.milestones,
       };
     }),
+    // Recuperação legada é uma proteção de compatibilidade, não pode manter a
+    // tela sem ação por 90s. Se a IA não responder rapidamente, o serviço usa
+    // o fallback canônico e libera o objetivo para execução.
+    { generationTimeoutMs: 8_000 },
   );
   const projectObjectivePathToMemory = async (objective: any, source: string) => {
     if (!objective || objective.pathStatus !== 'ready') return;
@@ -5698,7 +5702,9 @@ export function createApp(dependencies: AppDependencies = {}) {
           subgoals: normalizedSubgoals as any,
           resultDefinition: data.resultDefinition ?? (normalizedSubgoals.length > 0 ? `as microtarefas de “${data.title}” estarem concluídas` : null),
           currentReality: data.currentReality ?? null,
-          pathStatus: normalizedSubgoals.length > 0 ? 'ready' : 'not_started',
+          // Objetivos sem ações entram em estado transitório; a interpretação
+          // acontece depois da resposta para que a criação nunca fique presa à IA.
+          pathStatus: normalizedSubgoals.length > 0 ? 'ready' : 'generating',
           milestones: normalizedSubgoals.length > 0 ? [{ id: 'milestone-now', title: 'Agora', order: 0, doneWhen: 'As microtarefas essenciais estiverem concluídas' }] : [],
         },
       });
@@ -5710,24 +5716,24 @@ export function createApp(dependencies: AppDependencies = {}) {
         content: `Meta: ${data.title}${data.description ? `. ${data.description}` : ''}`,
         metadata: { category: data.category, objectiveId: obj.id, progress: obj.progress, archived: obj.archived },
       }).catch(() => {});
-      let pathGenerationFailed = false;
       if (normalizedSubgoals.length === 0) {
-        try {
-          const context = await loadObjectiveIntelligenceContext(prisma, userId, obj.id);
-          await objectivePathService.generate({ userId, objectiveId: obj.id, locale: data.locale, ...context });
-        } catch (pathError) {
-          pathGenerationFailed = true;
-          console.warn(`[objectives/create] objetivo ${obj.id} preservado para nova tentativa:`, pathError);
-          await prisma.objective.updateMany({
-            where: { id: obj.id, userId },
-            data: { pathStatus: 'retrying', pathQuestion: null },
-          }).catch(() => ({ count: 0 }));
-        }
+        // Não bloqueia a criação nem o primeiro paint. O estado fica persistido
+        // para a tela acompanhar a decisão sem chamar a IA diretamente.
+        void (async () => {
+          try {
+            const context = await loadObjectiveIntelligenceContext(prisma, userId, obj.id);
+            await objectivePathService.generate({ userId, objectiveId: obj.id, locale: data.locale, ...context });
+          } catch (pathError) {
+            console.warn(`[objectives/create] objetivo ${obj.id} preservado para nova tentativa:`, pathError);
+            await prisma.objective.updateMany({
+              where: { id: obj.id, userId, pathStatus: 'generating' },
+              data: { pathStatus: 'retrying', pathQuestion: null },
+            }).catch(() => ({ count: 0 }));
+          }
+        })();
       }
       const created = await prisma.objective.findFirst({ where: { id: obj.id, userId } });
-      return res.status(201).json(serializeObjective(pathGenerationFailed
-        ? { ...(created ?? obj), pathStatus: 'retrying', pathQuestion: null }
-        : (created ?? obj)));
+      return res.status(201).json(serializeObjective(created ?? obj));
     } catch (error: any) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
       console.error('[objectives/create] Error:', error);

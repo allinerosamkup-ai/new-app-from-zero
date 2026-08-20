@@ -231,7 +231,7 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.ok(options.every((requestOptions) => requestOptions.timeout === 25_000));
   });
 
-  it('objetivo amplo sem contexto suficiente gera pergunta decisiva, não checklist genérico', async () => {
+  it('objetivo amplo sem contexto suficiente segue com fallback, sem pergunta na interface', async () => {
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: 'Organizar minhas finanças' },
       clientReturning({
@@ -240,9 +240,9 @@ describe('GoalIntelligenceService.decompose', () => {
       }),
     );
 
-    assert.equal(result.mode, 'question');
-    assert.match(result.question ?? '', /dívida, gasto mensal ou falta de controle/i);
-    assert.equal(result.steps.length, 0);
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.question, null);
+    assert.ok(result.steps.length >= 3);
   });
 
   it('devolve passos quando geração e validação concordam', async () => {
@@ -340,9 +340,9 @@ describe('GoalIntelligenceService.decompose', () => {
       ),
     );
 
-    assert.equal(result.mode, 'question');
-    assert.equal(result.steps.length, 0);
-    assert.match(result.question ?? '', /qual uso/i);
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.question, null);
+    assert.ok(result.steps.length >= 3);
   });
 
   it('usa o modelo alternativo depois de uma reprovação', async () => {
@@ -420,9 +420,11 @@ describe('GoalIntelligenceService.decompose', () => {
 
     assert.equal(result.mode, 'actions');
     assert.equal(result.question, null);
-    assert.equal(result.steps.length, 3);
+    assert.equal(result.steps.length, 4);
     assert.ok(result.steps.every((step) => step.title.length > 0 && Boolean(step.doneWhen)));
-    assert.ok(result.steps.every((step) => /registrado|escrito/i.test(step.doneWhen ?? '')));
+    assert.ok(result.steps.every((step) => step.basedOn === 'inferred'));
+    assert.match(result.steps[0].title, /organizar a semana/i);
+    assert.doesNotMatch(result.steps.map((step) => step.title).join(' '), /Responder mensagens|separar documentos|marcar consulta/i);
   });
 
   it('contexto de mudança não preserva caixas, carro ou transportadora inventados', async () => {
@@ -462,10 +464,9 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.equal(result.steps[0].effortSize, 'small');
   });
 
-  it('só pergunta depois que a decomposição falhou nas duas tentativas', async () => {
-    // Regressão de produção: enquanto passos e pergunta dividiam o mesmo
-    // contrato, o modelo escolhia perguntar mesmo com contexto suficiente. A
-    // pergunta agora é uma chamada separada, que só acontece no fim.
+  it('segue com fallback depois que a decomposição falha nas duas tentativas', async () => {
+    // Regressão de produto: a incerteza do modelo é raciocínio interno. Mesmo
+    // após duas reprovações, a pessoa recebe um começo honesto, não um modal.
     const result = await GoalIntelligenceService.decompose(
       { goalTitle: SALA },
       clientReturning(
@@ -475,9 +476,9 @@ describe('GoalIntelligenceService.decompose', () => {
       ),
     );
 
-    assert.equal(result.mode, 'question');
-    assert.equal(result.steps.length, 0);
-    assert.match(result.question ?? '', /o que ainda falta/i);
+    assert.equal(result.mode, 'actions');
+    assert.equal(result.question, null);
+    assert.ok(result.steps.length >= 3);
   });
 
   it('não gasta a chamada de pergunta quando os passos se sustentam', async () => {
@@ -553,12 +554,13 @@ describe('GoalIntelligenceService.decompose', () => {
     assert.ok(result.steps.every((step) => step.basedOn === 'inferred'));
   });
 
-  it('não devolve nada sem chave e sem cliente — não inventa lista genérica', async () => {
+  it('entrega fallback canônico sem chave e sem cliente, sem inventar contexto', async () => {
     const previous = process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     try {
       const result = await GoalIntelligenceService.decompose({ goalTitle: SALA });
-      assert.equal(result.steps.length, 0);
+      assert.ok(result.steps.length >= 3);
+      assert.equal(result.mode, 'actions');
       assert.equal(result.question, null);
     } finally {
       if (previous !== undefined) process.env.OPENAI_API_KEY = previous;

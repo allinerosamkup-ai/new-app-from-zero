@@ -202,7 +202,7 @@ function isChatStatement(statement: string): boolean {
   if (!clean) return true;
   if (CHAT_PHRASES.test(clean)) return true;
   const wordCount = clean.split(/\s+/).filter(Boolean).length;
-  if (wordCount < 5 && /[!?.]$/.test(clean) === false && !/\b(corr|trein|academi|exerc|cozinh|comer|beber|dorm|estud|trabalh|pag|limp|arrum|lig|mand|escrev|anot|l[êe]|verific|separ|escolh|defin|organ|mont|comec|sair|and|fic|sent|dizer)\b/i.test(clean)) {
+  if (wordCount < 5 && /[!?.]$/.test(clean) === false && !/\b(corr|trein|academi|exerc|cozinh|comer|beber|dorm|estud|trabalh|pag|limp|arrum|lig|mand|escrev|anot|l[êe]|verific|separ|escolh|defin|organ|mont|comec|sair|and|fic|sent|dizer|trav[a-zà-ÿ]*)\b/i.test(clean)) {
     return true;
   }
   return false;

@@ -60,7 +60,7 @@ type GoalLike = {
   currentReality?: string | null;
   milestones?: Array<{ id: string; title: string; order: number; doneWhen?: string | null }>;
   pathVersion?: number;
-  pathStatus?: 'not_started' | 'retrying' | 'needs_answer' | 'ready';
+  pathStatus?: 'not_started' | 'generating' | 'retrying' | 'needs_answer' | 'ready';
   pathQuestion?: string | null;
   needsActionReview?: boolean;
   deadline?: string | null;
@@ -686,6 +686,8 @@ function GoalCard({
                       ? l('Você retirou esta ação do caminho atual. Ela continua registrada, mas não conta como concluída.', 'You removed this action from the current path. It stays recorded, but does not count as completed.')
                     : futureMilestones.length > 0
                     ? l('Você concluiu o que estava em foco. Veja o próximo momento apenas quando quiser seguir.', 'You completed what was in focus. See what comes next only when you want to continue.')
+                    : goal.pathStatus === 'generating'
+                      ? l('Seu objetivo está salvo. A Airia está encontrando o primeiro movimento possível.', 'Your goal is saved. Airia is finding the first possible move.')
                     : goal.pathStatus === 'retrying'
                       ? l('Seu objetivo está salvo e é sério — a Airia está lendo de novo com mais calma para montar um caminho que faça sentido. Já já aparece algo aqui.', 'Your goal is saved and taken seriously — Airia is re-reading it carefully to build a path that makes sense. Something will appear here shortly.')
                     : goal.needsActionReview
@@ -1027,8 +1029,6 @@ export function GoalsPage() {
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoveringGoals, setRecoveringGoals] = useState(false);
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
-  const [pendingQuestion, setPendingQuestion] = useState<{ goalId?: string | number; goalTitle: string; question: string } | null>(null);
-  const [questionAnswer, setQuestionAnswer] = useState("");
 
   const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
   const goals = state.goals as unknown as GoalLike[];
@@ -1043,10 +1043,27 @@ export function GoalsPage() {
   }, [goals]);
 
   useEffect(() => {
-    if (pendingQuestion) return;
-    const waiting = goals.find((goal) => goal.pathStatus === 'needs_answer' && goal.pathQuestion);
-    if (waiting?.pathQuestion) setPendingQuestion({ goalId: waiting.id, goalTitle: waiting.title, question: waiting.pathQuestion });
-  }, [goals, pendingQuestion]);
+    // A criação já respondeu; só acompanhamos a decisão enquanto ela estiver
+    // realmente em andamento. Não há polling de agenda nem chamada contínua.
+    if (!goals.some((goal) => goal.pathStatus === 'generating')) return;
+    let stopped = false;
+    let inFlight = false;
+    const refreshWhenReady = async () => {
+      if (stopped || inFlight) return;
+      inFlight = true;
+      try {
+        await refreshObjectives();
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refreshWhenReady();
+    const timer = window.setInterval(() => { void refreshWhenReady(); }, 1800);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [goals, refreshObjectives]);
 
   // A fase vem do mesmo motor de sempre. O mascote não a calcula nem a infere:
   // se cada tela adivinhasse por conta própria, o mascote diria uma coisa e a
@@ -1115,13 +1132,9 @@ export function GoalsPage() {
   }, [focusedGoalId]);
 
   /**
-   * Cria o objetivo interpretando o que ele significa.
-   *
-   * A Airia pode responder com uma PERGUNTA em vez de um caminho — é o caso de
-   * objetivo amplo demais ("organizar minhas finanças" pode ser dívida, gasto
-   * mensal ou controle). Nesse caso o objetivo é criado do mesmo jeito, sem
-   * ações, e a pergunta aparece na tela. Bloquear a criação até a pessoa
-   * responder seria transferir para ela o custo de um problema que é nosso.
+   * Cria o objetivo e deixa a Airia decidir internamente o primeiro movimento.
+   * A criação nunca abre uma pergunta contextual; quando a IA não consegue
+   * validar um caminho, o backend entrega o fallback canônico.
    */
   async function createGoal(result: string, deadline: string | null) {
     setCreating(true);
@@ -1139,8 +1152,8 @@ export function GoalsPage() {
         creationMode: "manual",
         hasDeadline: Boolean(deadline),
       });
-      if (objective.pathQuestion) {
-        setPendingQuestion({ goalId: objective.id, goalTitle: objective.title, question: objective.pathQuestion });
+      if (objective.pathStatus === 'generating') {
+        showSuccess(l('Objetivo salvo. A Airia está encontrando o primeiro movimento possível.', 'Goal saved. Airia is finding the first possible move.'));
       } else if (objective.pathStatus === 'retrying') {
         showError(l('O objetivo foi salvo. A Airia vai tentar interpretar o caminho novamente.', 'The goal was saved. Airia will retry the path interpretation.'));
       } else {
@@ -1159,44 +1172,14 @@ export function GoalsPage() {
       const response = await api.post(`/objectives/${goal.id}/path/generate`, {
         locale: navigator.language || 'pt-BR',
         userStatements: clarifications,
-      }) as { status: string; question?: string | null; objective?: GoalLike };
+      }) as { status: string; objective?: GoalLike };
       await refreshObjectives();
-      if (response.question) setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: response.question });
-      else if (response.status === 'ready') showSuccess(l('O caminho foi atualizado.', 'The path was updated.'));
+      if (response.status === 'ready') showSuccess(l('O caminho foi atualizado.', 'The path was updated.'));
       else showError(l('O objetivo continua salvo; a Airia tentará novamente.', 'The goal remains saved; Airia will retry.'));
     } catch (error) {
       showError(error instanceof Error ? error.message : l("Não foi possível gerar opções agora.", "Could not generate options right now."));
     } finally {
       setLoadingSuggestion(null);
-    }
-  }
-
-  /**
-   * Resposta da pessoa vira contexto permanente do objetivo.
-   *
-   * Guardar na descrição é o que impede a mesma pergunta de voltar amanhã: o
-   * campo já viaja em toda leitura do objetivo e alimenta a próxima geração.
-   */
-  async function answerPendingQuestion() {
-    const answer = questionAnswer.trim();
-    if (!pendingQuestion || !answer) return;
-    setQuestionAnswer("");
-    const target = pendingQuestion;
-    setPendingQuestion(null);
-
-    const goalId = target.goalId
-      ?? (state.goals || []).find((goal) => goal.title === target.goalTitle)?.id;
-    if (goalId === undefined) return;
-
-    try {
-      const response = await api.post(`/objectives/${goalId}/path/answer`, {
-        answer,
-        locale: navigator.language || 'pt-BR',
-      }) as { status: string; question?: string | null };
-      await refreshObjectives();
-      if (response.question) setPendingQuestion({ goalId, goalTitle: target.goalTitle, question: response.question });
-    } catch (error) {
-      showError(error instanceof Error ? error.message : l('Não foi possível salvar a resposta.', 'Could not save the answer.'));
     }
   }
 
@@ -1341,9 +1324,8 @@ export function GoalsPage() {
       }}
       onAdvance={async () => {
         try {
-          const response = await api.post(`/objectives/${goal.id}/path/advance`, { expectedVersion: goal.pathVersion ?? 1, locale: navigator.language || 'pt-BR' }) as { question?: string | null };
+          await api.post(`/objectives/${goal.id}/path/advance`, { expectedVersion: goal.pathVersion ?? 1, locale: navigator.language || 'pt-BR' });
           await refreshObjectives();
-          if (response.question) setPendingQuestion({ goalId: goal.id, goalTitle: goal.title, question: response.question });
         } catch (error) {
           showError(error instanceof Error ? error.message : l('Não foi possível abrir a próxima etapa.', 'Could not open the next stage.'));
         }
@@ -1514,72 +1496,6 @@ export function GoalsPage() {
 
       <CreationSheet open={creationOpen} saving={creating} onClose={() => !creating && setCreationOpen(false)} onCreate={createGoal} />
 
-      {/* Pergunta em vez de tarefa inventada.
-          Quando a Airia não tem base para uma boa próxima ação, ela pergunta —
-          uma pergunta, curta e decisiva, não uma bateria. A resposta vira
-          contexto permanente do objetivo. */}
-      {pendingQuestion && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          style={{
-            position: "fixed", inset: 0, zIndex: 1200, display: "flex",
-            alignItems: "flex-end", justifyContent: "center", padding: 16,
-            background: "rgba(17,24,39,.32)", backdropFilter: "blur(6px)",
-          }}
-        >
-          <div style={{
-            width: "min(100%, 440px)", borderRadius: 22, padding: 18,
-            background: "rgba(255,253,249,.98)", border: "1px solid var(--warm-border)",
-            boxShadow: "0 24px 60px rgba(17,24,39,.18)",
-          }}>
-            <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--nectarine-11)" }}>
-              {l("Para eu te ajudar direito", "So I can actually help")}
-            </p>
-            <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: "var(--text-1)", lineHeight: 1.4 }}>
-              {pendingQuestion.question}
-            </p>
-            <p style={{ margin: "0 0 12px", fontSize: 11, color: "var(--text-3)" }}>
-              {l("Objetivo", "Goal")}: {pendingQuestion.goalTitle}
-            </p>
-            <textarea
-              value={questionAnswer}
-              onChange={(event) => setQuestionAnswer(event.target.value)}
-              rows={3}
-              maxLength={500}
-              autoFocus
-              placeholder={l("Responda com suas palavras", "Answer in your own words")}
-              style={{
-                width: "100%", boxSizing: "border-box", padding: 12, borderRadius: 12,
-                border: "1.5px solid var(--warm-border-2)", resize: "vertical", fontSize: 13,
-              }}
-            />
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button
-                type="button"
-                onClick={() => { setPendingQuestion(null); setQuestionAnswer(""); }}
-                style={{ ...quietButtonStyle, flex: 1, justifyContent: "center" }}
-              >
-                {l("Agora não", "Not now")}
-              </button>
-              <button
-                type="button"
-                onClick={() => { void answerPendingQuestion(); }}
-                disabled={!questionAnswer.trim()}
-                style={{
-                  flex: 2, minHeight: 44, borderRadius: 999, border: 0,
-                  background: "var(--accent-primary-strong, #8FC0A4)", color: "#2C5340",
-                  fontSize: 14, fontWeight: 800,
-                  cursor: questionAnswer.trim() ? "pointer" : "default",
-                  opacity: questionAnswer.trim() ? 1 : 0.6,
-                }}
-              >
-                {l("Responder", "Answer")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <RewardBurst reward={reward} onDone={() => setReward(null)} />
     </div>
   );

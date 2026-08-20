@@ -207,34 +207,34 @@ export function isConversationalPhrase(statement: string): boolean {
  * natural de começo. São genéricas de propósito (não citam objeto do contexto)
  * e escritas como coisa de gente: curta, direta, sem jargão.
  *
- * Ordem: primeiro o que dá contorno real à meta (o que significa, quando),
- * depois o preparo físico, depois o primeiro movimento pequeno, depois o
- * registro natural — registro é consequência do movimento, nunca o primeiro passo.
+ * Ordem: primeiro o que dá contorno real à meta, depois a preparação mínima,
+ * depois uma primeira versão pequena, e por fim o registro do que aconteceu.
+ * O fallback não presume que o objetivo seja exercício, rotina ou atividade física.
  */
 const CANONICAL_STARTERS: Array<{ title: string; doneWhen: string; effortSize: 'small' | 'medium' }> = [
   {
-    title: 'Decidir o que \'começado\' significa para você — duração, lugar e horário',
-    doneWhen: 'você souber, sem precisar pensar, o que é uma rodada completa disso na sua rotina',
+    title: 'Escreva o resultado que fará __GOAL__ avançar',
+    doneWhen: 'o resultado estiver descrito em uma frase que possa ser reconhecida na prática',
     effortSize: 'small',
   },
   {
-    title: 'Deixar o que for preciso separado e acessível para começar',
-    doneWhen: 'tudo o que você usa para começar estiver no lugar, sem depender de procurar nada',
+    title: 'Identifique o que já está disponível para iniciar __GOAL__',
+    doneWhen: 'o que já está disponível para começar estiver identificado, sem inventar recursos',
     effortSize: 'small',
   },
   {
-    title: 'Fazer a primeira rodada bem curta — só o suficiente para sentir que consegue',
-    doneWhen: 'a primeira rodada estiver feita, mesmo pequena',
+    title: 'Realizar uma primeira versão pequena de __GOAL__',
+    doneWhen: 'uma primeira versão ou teste pequeno de __GOAL__ estiver concluído',
     effortSize: 'small',
   },
   {
-    title: 'Registrar o que fez no check-in de hoje',
-    doneWhen: 'o registro de hoje refletir essa primeira rodada',
+    title: 'Registrar o que foi feito ao iniciar __GOAL__',
+    doneWhen: 'o que foi feito e o próximo ajuste estiverem claros',
     effortSize: 'small',
   },
   {
-    title: 'Ajustar o que não funcionou e repetir',
-    doneWhen: 'você souber o que manter e o que mudar na próxima rodada',
+    title: 'Ajustar a próxima etapa de __GOAL__',
+    doneWhen: 'a próxima etapa estiver definida com um critério de término',
     effortSize: 'medium',
   },
 ];
@@ -264,7 +264,8 @@ export function buildFallbackGoalDecomposition(
   const maxSteps = input.capacity === 'quick' ? 3 : 4;
   const steps = CANONICAL_STARTERS.slice(0, maxSteps).map((starter, index) => ({
     ...starter,
-    title: starter.title.replace("'começado'", `"${title.toLowerCase()}"`),
+    title: starter.title.replace('__GOAL__', title.toLowerCase()),
+    doneWhen: starter.doneWhen.replace('__GOAL__', title.toLowerCase()),
     basedOn: 'inferred' as const,
     rationale: 'sugerido sem consulta completa à IA: passos práticos de começo',
     milestoneId: 'milestone-now',
@@ -272,7 +273,7 @@ export function buildFallbackGoalDecomposition(
 
   return {
     mode: 'actions',
-    resultDefinition: `você ter feito ${title.toLowerCase()} pela primeira vez, do seu jeito`,
+    resultDefinition: `você ter produzido uma primeira evidência de avanço em ${title.toLowerCase()}`,
     currentReality: null,
     currentMilestoneId: 'milestone-now',
     milestones: [{
@@ -596,12 +597,12 @@ CONTRATO OBRIGATÓRIO DE CADA AÇÃO:
 - Exemplo de forma válida, quando o contexto cita banco e saldo: title "Abrir o app do banco e anotar o saldo atual"; doneWhen "o saldo estiver anotado".
 - Exemplo de forma válida, quando há contas citadas: title "Listar as três contas que vencem nesta semana"; doneWhen "as três contas estiverem em uma nota".
 - Nunca use esses exemplos para inventar banco, contas, app ou saldo em outro objetivo.
-- Prefira uma pergunta única a uma ação circular ou abstrata.
+- Prefira uma primeira ação segura e moderada a uma pergunta ou a uma ação circular/abstrata.
 
-PERGUNTA DECISIVA:
-- Use "decisiveQuestion" somente quando uma resposta curta muda materialmente o caminho ou quando falta o objeto seguro necessário para formular a primeira ação.
-- Faça uma pergunta curta e útil; não faça questionário e não pergunte o que já está acima.
-- Quando usar a pergunta, devolva milestones vazias. Caso contrário, "decisiveQuestion" é null.
+PERGUNTA DECISIVA — DIAGNÓSTICO INTERNO:
+- Não peça informação ao usuário para montar o primeiro passo. Para um objetivo com título, entregue ações executáveis; a aplicação possui fallback quando a IA não consegue validar o caminho.
+- Use "decisiveQuestion" somente como sinal interno quando uma informação absolutamente indispensável está ausente e a resposta muda materialmente o caminho; ela nunca deve ser apresentada nem persistida como bloqueio.
+- Se usar o sinal, ainda devolva o melhor caminho seguro possível; caso contrário, "decisiveQuestion" é null.
 
 FORMATO DO CAMINHO:
 - "currentReality" resume apenas o ponto de partida sustentado pelo contexto.
@@ -837,11 +838,13 @@ export class GoalIntelligenceService {
   }
 
   /**
-   * Devolve passos validados ou uma pergunta.
+   * Devolve passos validados ou um caminho canônico de contingência.
    *
-   * Nunca devolve "qualquer coisa para preencher o card": sem informação
-   * suficiente e sem modelo disponível, `mode` volta como `question` com a
-   * pergunta que destrava, ou vazio.
+   * A pergunta decisiva é raciocínio interno, não uma etapa da interface. Para
+   * objetivos com título, a Airia deve continuar avançando sem transferir a
+   * incerteza para a pessoa: se o modelo perguntar, reprovar ou não estiver
+   * disponível, usamos o fallback canônico, que pode ser editado depois.
+   * Pergunta só permanece para o caso realmente indispensável de objetivo vazio.
    */
   static async decompose(
     input: GoalIntelligenceInput,
@@ -859,10 +862,10 @@ export class GoalIntelligenceService {
     };
 
     if (!input.goalTitle?.trim()) return empty;
-    // Sem chave e sem cliente injetado não existe interpretação possível. Devolver
-    // lista genérica aqui seria exatamente o comportamento que este arquivo veio
-    // eliminar.
-    if (!client && !process.env.OPENAI_API_KEY) return empty;
+    // Sem chave e sem cliente injetado, a decisão não pode parar a execução.
+    // O fallback é centrado no próprio título e não transforma falas soltas em
+    // tarefas inventadas.
+    if (!client && !process.env.OPENAI_API_KEY) return buildFallbackGoalDecomposition(input);
     const chat = client ?? getOpenAI();
 
     try {
@@ -907,16 +910,9 @@ export class GoalIntelligenceService {
         lastAssumptions = assumptions.length > 0 ? assumptions : lastAssumptions;
 
         if (payload.decisiveQuestion) {
-          return {
-            mode: 'question',
-            resultDefinition: payload.resultDefinition || null,
-            currentReality: payload.currentReality || null,
-            currentMilestoneId: null,
-            milestones: [],
-            assumptions,
-            steps: [],
-            question: payload.decisiveQuestion,
-          };
+          // A pergunta é um artefato de raciocínio do modelo. Não a persista nem
+          // a mostre: para uma meta com título, siga com um começo honesto.
+          return buildFallbackGoalDecomposition(input);
         }
 
         const path = normalizePathPayload(payload);
@@ -961,24 +957,17 @@ export class GoalIntelligenceService {
         feedback = verdict.failures.join('\n') || 'reprovado pelo revisor sem motivo declarado';
       }
 
-      // Nenhuma tentativa produziu caminho semanticamente aprovado. Uma guarda
-      // determinística pode barrar invenção, mas nunca aprova sentido, sequência
-      // ou vínculo causal no lugar do revisor independente.
-      const question = await this.askClarifyingQuestion(input, chat);
+      // Nenhuma tentativa produziu caminho semanticamente aprovado. A guarda
+      // determinística continua proibindo invenções, mas não bloqueia a pessoa:
+      // entrega o começo canônico centrado na meta e registra as rejeições apenas
+      // para diagnóstico interno.
       return {
-        mode: 'question',
-        resultDefinition: lastResultDefinition,
-        currentReality: lastCurrentReality,
-        currentMilestoneId: null,
-        milestones: [],
-        assumptions: lastAssumptions,
-        steps: [],
-        question,
+        ...buildFallbackGoalDecomposition(input),
         rejectedSteps: lastRejections,
       };
     } catch (error) {
-      console.warn('[goal-intelligence] falhou, seguindo sem sugerir:', error);
-      return empty;
+      console.warn('[goal-intelligence] falhou, seguindo com fallback canônico:', error);
+      return buildFallbackGoalDecomposition(input);
     }
   }
 

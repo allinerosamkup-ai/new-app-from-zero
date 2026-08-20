@@ -57,8 +57,8 @@ function createRepository(initial: ObjectiveFixture[]) {
         const objective = objectives.find((item) => item.id === where.id && item.userId === where.userId);
         if (!objective || objective.archived || objective.progress >= 100) return { count: 0 };
         if (where.title !== undefined && objective.title !== where.title) return { count: 0 };
-        if (where.updatedAt !== undefined && objective.updatedAt?.getTime() !== where.updatedAt.getTime()) return { count: 0 };
-        if (JSON.stringify(objective.subgoals) !== JSON.stringify(where.subgoals.equals)) return { count: 0 };
+        if (where.updatedAt?.gte && (!objective.updatedAt || objective.updatedAt < where.updatedAt.gte || objective.updatedAt >= where.updatedAt.lt)) return { count: 0 };
+        if (where.pathVersion !== undefined && (objective as any).pathVersion !== where.pathVersion) return { count: 0 };
         objective.subgoals = structuredClone(data.subgoals);
         writes += 1;
         return { count: 1 };
@@ -217,10 +217,12 @@ async function run() {
     });
 
     assert.deepEqual(result, {
-      eligible: 1, attempted: 1, recovered: 0, failed: 1, deferred: 0, retryAfterMs: 60_000,
+      eligible: 1, attempted: 1, recovered: 1, failed: 0, deferred: 0, retryAfterMs: null,
     });
-    assert.equal(getWrites(), 0);
-    assert.deepEqual(objectives[0].subgoals, original, 'falha deve manter o registro original intacto');
+    assert.equal(getWrites(), 1);
+    const recoveredObjective = objectives[0] as { subgoals: unknown[] };
+    assert.ok(recoveredObjective.subgoals.length >= 3, 'a falha da IA deve cair no fallback executável');
+    assert.notDeepEqual(objectives[0].subgoals, original, 'o registro legado sem ação deve ser substituído pelo caminho seguro');
   }
 
   {
@@ -340,8 +342,9 @@ async function run() {
     console.warn = () => {};
     try {
       const result = await service.recover({ userId: USER_ID });
-      assert.equal(result.failed, 1, 'geração deve encerrar antes da lease e entrar em backoff');
-      assert.equal(getWrites(), 0);
+      assert.equal(result.failed, 0, 'timeout da IA deve cair no fallback sem marcar o objetivo como falho');
+      assert.equal(result.recovered, 1);
+      assert.equal(getWrites(), 1);
     } finally {
       console.warn = originalWarn;
     }
@@ -411,14 +414,14 @@ async function run() {
       const stillDeferred = await restartedService.recover({ userId: USER_ID });
 
       assert.deepEqual(failed, {
-        eligible: 1, attempted: 1, recovered: 0, failed: 1, deferred: 0, retryAfterMs: 60_000,
+        eligible: 1, attempted: 1, recovered: 1, failed: 0, deferred: 0, retryAfterMs: null,
       });
       assert.deepEqual(deferred, {
-        eligible: 1, attempted: 0, recovered: 0, failed: 0, deferred: 1, retryAfterMs: 60_000,
+        eligible: 0, attempted: 0, recovered: 0, failed: 0, deferred: 0, retryAfterMs: null,
       });
-      assert.equal(stillDeferred.retryAfterMs, 30_000);
-      assert.equal(aiCalls, 1, 'backoff não pode repetir custo enquanto ainda está ativo');
-      assert.equal(getWrites(), 0);
+      assert.deepEqual(stillDeferred, deferred);
+      assert.equal(aiCalls, 1, 'fallback persistido não pode repetir custo de IA');
+      assert.equal(getWrites(), 1);
     } finally {
       console.warn = originalWarn;
     }
@@ -462,7 +465,7 @@ async function run() {
   }
 
   {
-    const { repository, getWrites } = createRepository([{
+    const { repository, objectives, getWrites } = createRepository([{
       id: 'one-action', userId: USER_ID, title: 'Objetivo amplo', progress: 0, archived: false,
       subgoals: [],
     }]);
@@ -474,9 +477,11 @@ async function run() {
     console.warn = () => {};
     try {
       const result = await service.recover({ userId: USER_ID });
-      assert.equal(result.failed, 1, 'uma única microação não satisfaz o contrato de objetivo');
-      assert.equal(result.recovered, 0);
-      assert.equal(getWrites(), 0);
+      assert.equal(result.failed, 0);
+      assert.equal(result.recovered, 1, 'uma única microação deve cair no fallback canônico');
+      assert.equal(getWrites(), 1);
+      const recoveredObjective = objectives[0] as { subgoals: unknown[] };
+      assert.ok(recoveredObjective.subgoals.length >= 3);
     } finally {
       console.warn = originalWarn;
     }

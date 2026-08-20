@@ -7,6 +7,14 @@ import type { GoalDecomposition } from './services/goal-intelligence.service';
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 const OBJECTIVE_ID = '660e8400-e29b-41d4-a716-446655440000';
 
+async function waitFor(condition: () => boolean, timeoutMs = 1200) {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition() && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.equal(condition(), true, 'condition did not settle before timeout');
+}
+
 function repository() {
   let preference: any = null;
   let objective: any = null;
@@ -107,9 +115,11 @@ async function run() {
   });
   assert.equal(created.status, 201);
   assert.equal(created.body.id, OBJECTIVE_ID);
-  assert.equal(created.body.pathStatus, 'needs_answer');
-  assert.match(created.body.pathQuestion, /dívida/);
+  assert.equal(created.body.pathStatus, 'generating');
   assert.deepEqual(created.body.subgoals, []);
+  await waitFor(() => state.getObjective().pathStatus === 'ready');
+  assert.ok(state.getObjective().subgoals.length >= 3);
+  assert.equal(state.getObjective().pathQuestion, null);
 
   next = {
     mode: 'actions', resultDefinition: 'Dívida prioritária quitada',
@@ -129,7 +139,7 @@ async function run() {
   });
   assert.equal(answered.status, 200);
   assert.equal(answered.body.status, 'ready');
-  assert.equal(answered.body.objective.pathVersion, 2);
+  assert.equal(answered.body.objective.pathVersion, 3);
   assert.equal(answered.body.objective.subgoals[0].milestoneId, 'm-1');
   assert.equal(state.memories.some((memory) => memory.canonicalKey.includes('confirmed_path')), true);
 
@@ -139,23 +149,23 @@ async function run() {
 
   const action = state.getObjective().subgoals[0];
   const dated = await request(app).patch(`/api/objectives/${OBJECTIVE_ID}/actions/${action.id}`).send({
-    expectedVersion: 2, scheduledFor: '2026-08-20',
+    expectedVersion: 3, scheduledFor: '2026-08-20',
   });
   assert.equal(dated.status, 200);
   assert.equal(dated.body.action.scheduledFor, '2026-08-20');
-  assert.equal(state.getObjective().pathVersion, 3);
+  assert.equal(state.getObjective().pathVersion, 4);
   assert.equal(state.events.some((event) => event.eventName === 'objective_action_scheduled'), true);
   assert.equal(state.memories.some((memory) => memory.canonicalKey.endsWith('.scheduled') && String(memory.content).includes('2026-08-20')), true);
 
   const edited = await request(app).patch(`/api/objectives/${OBJECTIVE_ID}/actions/${action.id}`).send({
-    expectedVersion: 3, title: 'Registrar o valor total da dívida prioritária',
+    expectedVersion: 4, title: 'Registrar o valor total da dívida prioritária',
   });
   assert.equal(edited.status, 200);
-  assert.equal(edited.body.pathVersion, 4);
+  assert.equal(edited.body.pathVersion, 5);
   assert.equal(state.memories.some((memory) => memory.canonicalKey.endsWith('.edited')), true);
 
   const manualAction = await request(app).post(`/api/objectives/${OBJECTIVE_ID}/actions`).send({
-    expectedVersion: 4,
+    expectedVersion: 5,
     title: 'Abrir o app do banco e anotar o saldo atual',
     doneWhen: 'o saldo estiver anotado em uma nota',
   });
@@ -165,7 +175,7 @@ async function run() {
   assert.equal(state.getObjective().subgoals.at(-1).doneWhen, 'o saldo estiver anotado em uma nota');
 
   const abstractAction = await request(app).post(`/api/objectives/${OBJECTIVE_ID}/actions`).send({
-    expectedVersion: 5,
+    expectedVersion: 6,
     title: 'Separar uma decisão financeira reversível para hoje',
     doneWhen: 'a decisão estiver separada',
   });
@@ -194,8 +204,10 @@ async function run() {
   });
   const preserved = await request(failingApp).post('/api/objectives').send({ title: 'Objetivo preservado', locale: 'pt-BR' });
   assert.equal(preserved.status, 201);
-  assert.equal(preserved.body.pathStatus, 'ready');
+  assert.equal(preserved.body.pathStatus, 'generating');
+  await waitFor(() => failingState.getObjective().pathStatus === 'ready');
   assert.equal(failingState.getObjective().title, 'Objetivo preservado');
+  assert.equal(failingState.getObjective().subgoals.length > 0, true);
 }
 
 run().then(() => console.log('objective intelligence API tests passed'));
