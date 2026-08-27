@@ -8,7 +8,6 @@ import {
   ChevronUp,
   CirclePause,
   Plus,
-  Sparkles,
   Target,
 } from "lucide-react";
 
@@ -22,7 +21,6 @@ import { api, ApiRequestError } from "../../lib/api";
 import { trackProductEvent } from "../../lib/track";
 import { useAiriaReading } from "../../lib/airia-reading";
 import { SafetyProtocolCard } from "../../components/aura/SafetyProtocolCard";
-import { buildGoalCardModel } from "../../utils/goal-priority-actions";
 import { buildGoalNotePatch } from "../../utils/goal-workspace";
 import "../../styles/aura.css";
 import "../../styles/editorial.css";
@@ -97,7 +95,6 @@ export function GoalsPage() {
   const activeGoals = useMemo(() => goals.filter((goal) => goal.completedPct < 100 && !goal.pausedAt), [goals]);
   const pausedGoals = useMemo(() => goals.filter((goal) => goal.completedPct < 100 && Boolean(goal.pausedAt)), [goals]);
   const completedGoals = useMemo(() => goals.filter((goal) => goal.completedPct >= 100), [goals]);
-  const goalsWithAction = activeGoals.filter((goal) => buildGoalCardModel(goal).nextAction).length;
 
   async function executeGoalRecovery() {
     await recoverGoalActionsOnce(recoveryGuardRef.current, async () => {
