@@ -11,7 +11,7 @@ describe("telemetry instrumentation coverage", () => {
       ["src/routes/home-page.tsx", ["home.opened.v1", "home.next_step_selected.v1"]],
       ["src/routes/insights-page.tsx", ["patterns.opened.v1", "patterns.report_requested.v1", "patterns.report_resolved.v1"]],
       ["src/routes/journal-page.tsx", ["journal.opened.v1", "journal.entry_saved.v1"]],
-      ["src/routes/goals-page.tsx", ["goals.opened.v1", "goal.created.v1", "goal.action_changed.v1"]],
+      ["src/routes/goals/goals-page.tsx", ["goals.opened.v1", "goal.created.v1", "goal.action_changed.v1"]],
       ["src/lib/airia-reading.ts", ["decision.presented.v1", "decision.feedback_submitted.v1"]],
     ];
 
