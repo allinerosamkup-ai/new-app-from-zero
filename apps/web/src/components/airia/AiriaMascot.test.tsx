@@ -12,14 +12,13 @@ vi.mock("react-i18next", () => ({
 import { AiriaMascot, resolveAiriaMascotVisual } from "./AiriaMascot";
 
 const EXPECTED_PHASES = [
-  ["elevated", "airia-bolinha-high-flight", "Voo Alto"],
-  ["flowing", "airia-bolinha-flowing", "Fluindo"],
-  ["stable", "airia-bolinha-stable", "Estável"],
-  ["falling", "airia-bolinha-slowing-down", "Desacelerando"],
-  ["low", "airia-bolinha-withdrawal", "Recolhimento"],
-  ["depleted", "airia-bolinha-pause", "Pausa"],
-  ["recovering", "airia-bolinha-resuming", "Retomada"],
-  ["mixed", "airia-bolinha-turbulence", "Turbulência"],
+  ["elevated", "airia-orbital-high-flight", "Voo Alto"],
+  ["flowing", "airia-orbital-flowing", "Fluindo"],
+  ["falling", "airia-orbital-slowing-down", "Desacelerando"],
+  ["low", "airia-orbital-withdrawal", "Recolhimento"],
+  ["depleted", "airia-orbital-pause", "Pausa"],
+  ["recovering", "airia-orbital-resuming", "Retomada"],
+  ["mixed", "airia-orbital-turbulence", "Turbulência"],
 ] as const;
 
 const WEB_ROOT = resolve(import.meta.dirname, "../../..");
@@ -30,17 +29,17 @@ describe("AiriaMascot", () => {
     const visual = resolveAiriaMascotVisual(phase);
     const html = renderToStaticMarkup(<AiriaMascot phase={phase} />);
 
-    expect(visual.src).toContain(`${file}.svg`);
+    expect(visual.src).toContain(`${file}.webp`);
     expect(html).toContain(`data-phase="${phase}"`);
-    expect(html).toContain(`${file}.svg`);
+    expect(html).toContain(`${file}.webp`);
     expect(html).toContain(`alt="Airia — fase ${label}"`);
   });
 
-  it("uses the stable visual while there is not enough data", () => {
+  it("uses a valid stable visual while there is not enough data", () => {
     const visual = resolveAiriaMascotVisual("insufficient_data");
     const html = renderToStaticMarkup(<AiriaMascot phase="insufficient_data" />);
 
-    expect(visual.src).toContain("airia-bolinha-stable.svg");
+    expect(visual.src).toContain("airia-orbital-stable@640.webp");
     expect(html).toContain('data-phase="insufficient_data"');
     expect(html).toContain('alt="Airia — conhecendo seu ritmo"');
   });
@@ -52,8 +51,16 @@ describe("AiriaMascot", () => {
     }
   });
 
+  it("stable aponta para o @640 existente", () => {
+    const { src, srcRetina } = resolveAiriaMascotVisual("stable");
+    for (const asset of [src, srcRetina]) {
+      expect(() => statSync(resolve(PUBLIC_DIR, asset.replace(/^\//, ""))), `${asset} precisa existir`).not.toThrow();
+    }
+  });
+
   it("nenhum asset do mascote passa de 120 KB", () => {
-    for (const [phase] of EXPECTED_PHASES) {
+    const phases = ["elevated", "flowing", "stable", "falling", "low", "depleted", "recovering", "mixed"] as const;
+    for (const phase of phases) {
       const { src, srcRetina } = resolveAiriaMascotVisual(phase);
       for (const asset of [src, srcRetina]) {
         const bytes = statSync(resolve(PUBLIC_DIR, asset.replace(/^\//, ""))).size;
@@ -63,11 +70,11 @@ describe("AiriaMascot", () => {
   });
 
   it("carrega sob demanda e serve retina", () => {
-    const html = renderToStaticMarkup(<AiriaMascot phase="stable" />);
+    const html = renderToStaticMarkup(<AiriaMascot phase="flowing" />);
 
     expect(html).toContain('loading="lazy"');
     expect(html).toContain('decoding="async"');
-    expect(html).toContain("@640.svg 2x");
+    expect(html).toContain("@640.webp 2x");
   });
 
   it("some da leitura de tela quando a fase já está escrita ao lado", () => {

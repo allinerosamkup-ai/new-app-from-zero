@@ -6,16 +6,9 @@ import type { MoodPhase } from "../../utils/mood-cycle-engine";
 import "./airia-mascot.css";
 
 /**
- * A Airia em forma visual: a bolinha creme, uma cara por fase oficial.
- *
- * O componente **recebe a fase pronta** e nunca infere humor. Isso não é
- * preciosismo de arquitetura: a fase sai do `MoodCycleEngine`, que mede desvio
- * do baseline pessoal ao longo de dias. Um componente de UI adivinhando estado
- * a partir do que tem à mão produziria um mascote que contradiz a leitura do
- * app na tela ao lado — e é a leitura do app que a pessoa aprendeu a confiar.
- *
- * Sem dado suficiente, cai na cara estável da bolinha. É a escolha do documento de design:
- * ausência de leitura não vira cara triste nem alerta.
+ * A Airia em forma visual, uma imagem por fase oficial.
+ * TICKET-002: a cara aprovada é a bolinha. Os paths abaixo ainda
+ * apontam aos WebP orbitais até o push binário íntegro.
  */
 
 type AiriaMascotVisual = {
@@ -27,27 +20,33 @@ type AiriaMascotVisual = {
 
 function visual(file: string, labelKey: string, fallbackLabel: string): AiriaMascotVisual {
   return {
-    src: `/mascot/phases/${file}.svg`,
-    srcRetina: `/mascot/phases/${file}@640.svg`,
+    src: `/mascot/phases/${file}.webp`,
+    srcRetina: `/mascot/phases/${file}@640.webp`,
     labelKey,
     fallbackLabel,
   };
 }
 
 const PHASE_VISUALS: Record<MoodPhase, AiriaMascotVisual> = {
-  elevated: visual("airia-bolinha-high-flight", "mascot.phase.elevated", "Airia — fase Voo Alto"),
-  flowing: visual("airia-bolinha-flowing", "mascot.phase.flowing", "Airia — fase Fluindo"),
-  stable: visual("airia-bolinha-stable", "mascot.phase.stable", "Airia — fase Estável"),
-  falling: visual("airia-bolinha-slowing-down", "mascot.phase.falling", "Airia — fase Desacelerando"),
-  low: visual("airia-bolinha-withdrawal", "mascot.phase.low", "Airia — fase Recolhimento"),
-  depleted: visual("airia-bolinha-pause", "mascot.phase.depleted", "Airia — fase Pausa"),
-  recovering: visual("airia-bolinha-resuming", "mascot.phase.recovering", "Airia — fase Retomada"),
-  mixed: visual("airia-bolinha-turbulence", "mascot.phase.mixed", "Airia — fase Turbulência"),
-  insufficient_data: visual(
-    "airia-bolinha-stable",
-    "mascot.phase.insufficientData",
-    "Airia — conhecendo seu ritmo",
-  ),
+  elevated: visual("airia-orbital-high-flight", "mascot.phase.elevated", "Airia — fase Voo Alto"),
+  flowing: visual("airia-orbital-flowing", "mascot.phase.flowing", "Airia — fase Fluindo"),
+  stable: {
+    src: "/mascot/phases/airia-orbital-stable@640.webp",
+    srcRetina: "/mascot/phases/airia-orbital-stable@640.webp",
+    labelKey: "mascot.phase.stable",
+    fallbackLabel: "Airia — fase Estável",
+  },
+  falling: visual("airia-orbital-slowing-down", "mascot.phase.falling", "Airia — fase Desacelerando"),
+  low: visual("airia-orbital-withdrawal", "mascot.phase.low", "Airia — fase Recolhimento"),
+  depleted: visual("airia-orbital-pause", "mascot.phase.depleted", "Airia — fase Pausa"),
+  recovering: visual("airia-orbital-resuming", "mascot.phase.recovering", "Airia — fase Retomada"),
+  mixed: visual("airia-orbital-turbulence", "mascot.phase.mixed", "Airia — fase Turbulência"),
+  insufficient_data: {
+    src: "/mascot/phases/airia-orbital-stable@640.webp",
+    srcRetina: "/mascot/phases/airia-orbital-stable@640.webp",
+    labelKey: "mascot.phase.insufficientData",
+    fallbackLabel: "Airia — conhecendo seu ritmo",
+  },
 };
 
 export type AiriaMascotMotion = "rest" | "listen" | "understand" | "action" | "protect";
