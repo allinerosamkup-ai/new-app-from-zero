@@ -9,6 +9,7 @@ import { supabase } from "../lib/supabase";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { AutonomousAIEngine } from "../components/AutonomousAIEngine";
 import { AuraIcon } from "../components/AuraIcon";
+import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { useHabitReminders } from "../hooks/useHabitReminders";
 import { getActivationState } from "../features/aura/activation";
 import { requiresMandatoryOnboarding } from "../features/aura/onboarding-route-guard";
@@ -80,7 +81,7 @@ const NAV_ITEMS: NavItem[] = [
     center: true,
     labelKey: "nav.aura",
     route: "/aura",
-    icon: <AuraIcon size={88} variant="hybrid" />,
+    icon: <AuraIcon size={88} />,
   },
   {
     key: "insights",
@@ -145,8 +146,6 @@ export function AuraLayout() {
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [showOnboardingPrompt, setShowOnboardingPrompt] = useState(false);
 
-  // Hábitos e Planner não fazem parte do núcleo atual. Dados legados podem
-  // existir no perfil, mas não devem reviver lembretes locais invisíveis.
   useHabitReminders(
     FEATURES.habits ? state.habits ?? [] : [],
     FEATURES.planner ? state.tasks ?? [] : [],
@@ -161,9 +160,6 @@ export function AuraLayout() {
       if (session) refreshData();
     });
 
-    // Quem recarrega os dados quando a sessão chega depois é o próprio store
-    // (`features/aura/store.tsx`), que é o dono deles e está montado em todas as
-    // rotas. Aqui só interessa saber se há sessão.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) {
         setHasSession(true);
@@ -182,14 +178,11 @@ export function AuraLayout() {
     [state.accountCreatedAt, state.onboardingDone],
   );
 
-  // Camadas de onboarding: a barra revela Planner/Padrões conforme o uso.
   const activation = useMemo(() => getActivationState(state), [state]);
   const unlockedNav = useMemo(
     () => resolveUnlockedNav({ checkinCount: activation.checkinCount, isNewUser: activation.isNewUser }),
     [activation.checkinCount, activation.isNewUser],
   );
-  // Duas filtragens em série, com papéis diferentes: FEATURES decide o que
-  // existe no produto, unlockedNav decide o que a pessoa já destravou pelo uso.
   const visibleNavItems = NAV_ITEMS.filter((item) => (
     item.key === "planner" ? FEATURES.planner : true
   ));
@@ -284,15 +277,10 @@ export function AuraLayout() {
     );
   }
 
-  // Conta recém-criada só entra na área autenticada depois do fluxo completo de
-  // Pra começar. A guarda fica acima do Outlet, então login, restauração de
-  // sessão, deep link e acesso direto a /home não conseguem mostrar uma Home
-  // vazia enquanto o perfil novo ainda não confirmou o onboarding.
   if (onboardingPromptEligible) {
     return <Navigate to="/comecar" replace />;
   }
 
-  // Um banner por vez (prioridade: fase > onboarding > follow-up) para não empilhar avisos.
   const hasPhaseAlert = Boolean(state.phaseTransitionAlert && !state.phaseTransitionAlert.dismissed);
   const hasFollowUp = Boolean(state.pendingFollowUp?.followUpMessage && state.pendingFollowUp.response === null);
   const activeBanner = resolveActiveBanner({ hasPhaseAlert, showOnboarding: showOnboardingPrompt, hasFollowUp });
@@ -303,7 +291,6 @@ export function AuraLayout() {
       data-airia-phase={moodPhase}
       style={{ ...phaseThemeStyle, color: "var(--on-surface)" }}
     >
-      {/* Daemon IA proativa — invisível, roda após hydration */}
       <AutonomousAIEngine />
 
       {activeBanner === "onboarding" && (
@@ -360,7 +347,6 @@ export function AuraLayout() {
         </div>
       )}
 
-      {/* ── #2: Phase Transition Alert — banner fixo topo ── */}
       {activeBanner === "phase" && (() => {
         const alert = state.phaseTransitionAlert!;
         const cfg = PHASE_ALERT_CONFIG[alert.toPhase] ?? SEVERITY_CONFIG[alert.severity];
@@ -404,7 +390,6 @@ export function AuraLayout() {
         );
       })()}
 
-      {/* ── #7: Follow-up Card — banner fixo acima do bottom nav ── */}
       {activeBanner === "followup" && (() => {
         const followUp = state.pendingFollowUp!;
         return (
@@ -447,7 +432,6 @@ export function AuraLayout() {
         );
       })()}
 
-      {/* Conteúdo das rotas filhas */}
       <div className="aura-layout-content" style={{
         paddingTop: activeBanner === "phase"
           ? "calc(80px + env(safe-area-inset-top))"
@@ -458,7 +442,6 @@ export function AuraLayout() {
           <Outlet />
         </ErrorBoundary>
 
-        {/* Link de conformidade Google/Privacy */}
         <div style={{ padding: "40px 0 20px", textAlign: "center", opacity: 0.4 }}>
             <a href="https://airia.pro/privacy" target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "var(--text-3)", textDecoration: "none", fontWeight: 600, letterSpacing: "0.05em" }}>
                 {t("privacy")}
@@ -466,7 +449,6 @@ export function AuraLayout() {
         </div>
       </div>
 
-      {/* Bottom Nav — Floating Pill — Airia sempre no centro, laterais por camada */}
       <div className="bottom-nav airia-bottom-nav" style={{
         position: "fixed",
         bottom: "calc(16px + env(safe-area-inset-bottom))",
@@ -493,7 +475,7 @@ export function AuraLayout() {
           aria-label={t(centerNavItem.labelKey)}
           onClick={() => navigate(centerNavItem.route)}
         >
-          {centerNavItem.icon}
+          <AiriaMascot phase={moodPhase} size={88} decorative />
         </button>
         <div style={{ display: "flex", flex: 1, justifyContent: "space-around", alignItems: "center" }}>
           {rightNavItems.map(renderNavItem)}
