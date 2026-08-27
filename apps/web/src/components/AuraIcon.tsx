@@ -1,17 +1,13 @@
 import React from "react";
 
-const STABLE_SRC = "/mascot/phases/airia-orbital-stable.webp";
-const STABLE_SRC_RETINA = "/mascot/phases/airia-orbital-stable@640.webp";
+const STABLE_SRC = "/mascot/phases/airia-bolinha-stable.svg";
+const STABLE_SRC_RETINA = "/mascot/phases/airia-bolinha-stable@640.svg";
 
 /**
  * AuraIcon — marca oficial da Airia.
  *
  * A identidade visível é a bolinha creme (esfera, carinha, blush),
- * não o orbital de pétalas nem o cluster de círculos. O SVG e o orbital
- * ficaram no histórico; este componente aponta para o asset aprovado.
- *
- * < 18px → a mesma bolinha, só menor (botões).
- * variant="hybrid" → mesmo ser; o ripple antigo era o cluster.
+ * não o orbital de pétalas nem o cluster de círculos.
  */
 export function AuraIcon({
   size = 16,
@@ -46,9 +42,6 @@ export function AuraIcon({
   );
 }
 
-/**
- * AiriaLogoBg — bolinha em watermark.
- */
 export function AiriaLogoBg({ size = 400, opacity = 0.06 }: { size?: number; opacity?: number }) {
   return (
     <img
