@@ -1,14 +1,17 @@
 import React from "react";
 
+const STABLE_SRC = "/mascot/phases/airia-orbital-stable.webp";
+const STABLE_SRC_RETINA = "/mascot/phases/airia-orbital-stable@640.webp";
+
 /**
- * AuraIcon — Símbolo oficial da Airia.
- * < 18px → versão micro: 3 círculos compactos (legível em botões pequenos).
- * ≥ 18px → versão completa: 4 círculos pastel + centro champagne.
- * variant="hybrid" → círculos + anéis de ripple (mesma DNA do logo de fundo, mas interativo).
+ * AuraIcon — marca oficial da Airia.
  *
- * NÃO REPINTAR. Estas cores são a marca e ficaram de fora da virada da
- * identidade para verde de propósito — a logo mantém a paleta original mesmo
- * com o resto do app em verde. Varreduras de cor devem pular este arquivo.
+ * A identidade visível é o mascote orbital (núcleo, olhos, pétalas),
+ * não o cluster de círculos pastel. O SVG antigo ficou no histórico
+ * de git; este componente só aponta para o asset aprovado.
+ *
+ * < 18px → o mesmo orbital, só menor (botões).
+ * variant="hybrid" → mesmo ser; o ripple antigo era o cluster.
  */
 export function AuraIcon({
   size = 16,
@@ -21,109 +24,49 @@ export function AuraIcon({
   style?: React.CSSProperties;
   variant?: "default" | "hybrid";
 }) {
-  if (variant === "hybrid" && size >= 18) {
-    return (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 200 200"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className={className}
-        style={style}
-      >
-        {/* Anéis ripple (ordem: externo → interno) */}
-        {([0.95, 0.78, 0.60, 0.42] as number[]).map((s, i) => (
-          <circle
-            key={`ring-${i}`}
-            cx="100"
-            cy="100"
-            r={90 * s}
-            fill="none"
-            stroke="#F4A896"
-            strokeWidth="0.9"
-            strokeOpacity={0.18 + i * 0.16}
-          />
-        ))}
-        {/* Cluster de círculos do logo */}
-        <circle cx="90" cy="80" r="42" fill="#F4A896" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
-        <circle cx="130" cy="85" r="32" fill="#B8D9C8" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
-        <circle cx="75" cy="118" r="28" fill="#8FB8C4" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
-        <circle cx="122" cy="122" r="30" fill="#F0C4D4" fillOpacity="0.92" stroke="white" strokeWidth="2.5" />
-        <circle cx="100" cy="100" r="16" fill="#FDE8E3" fillOpacity="0.98" stroke="white" strokeWidth="3" />
-      </svg>
-    );
-  }
-
-  if (size < 18) {
-    // Versão micro: 3 círculos sobrepostos, mais compactos e reconhecíveis
-    return (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className={className}
-        style={style}
-      >
-        <circle cx="9.5" cy="9" r="6.5" fill="#F4A896" fillOpacity="0.92" stroke="white" strokeWidth="1" />
-        <circle cx="15.5" cy="9.5" r="5" fill="#B8D9C8" fillOpacity="0.92" stroke="white" strokeWidth="1" />
-        <circle cx="10" cy="15" r="5.5" fill="#F0C4D4" fillOpacity="0.92" stroke="white" strokeWidth="1" />
-        <circle cx="12" cy="12" r="3" fill="#FDE8E3" fillOpacity="0.98" stroke="white" strokeWidth="1.2" />
-      </svg>
-    );
-  }
-
+  void variant;
   return (
-    <svg
+    <img
+      src={STABLE_SRC}
+      srcSet={`${STABLE_SRC} 1x, ${STABLE_SRC_RETINA} 2x`}
       width={size}
       height={size}
-      viewBox="0 0 200 200"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+      alt=""
+      aria-hidden="true"
       className={className}
-      style={style}
-    >
-      <circle cx="90" cy="80" r="42" fill="#F4A896" fillOpacity="0.9" stroke="white" strokeWidth="2.5" />
-      <circle cx="130" cy="85" r="32" fill="#B8D9C8" fillOpacity="0.9" stroke="white" strokeWidth="2.5" />
-      <circle cx="75" cy="118" r="28" fill="#8FB8C4" fillOpacity="0.9" stroke="white" strokeWidth="2.5" />
-      <circle cx="122" cy="122" r="30" fill="#F0C4D4" fillOpacity="0.9" stroke="white" strokeWidth="2.5" />
-      <circle cx="100" cy="100" r="16" fill="#FDE8E3" fillOpacity="0.98" stroke="white" strokeWidth="3" />
-    </svg>
+      style={{
+        width: size,
+        height: size,
+        objectFit: "contain",
+        display: "block",
+        ...style,
+      }}
+      draggable={false}
+    />
   );
 }
 
 /**
- * AiriaLogoBg — Logo híbrida (círculos + ripple) para watermark de fundo.
+ * AiriaLogoBg — mascote orbital em watermark.
  */
 export function AiriaLogoBg({ size = 400, opacity = 0.06 }: { size?: number; opacity?: number }) {
   return (
-    <svg
+    <img
+      src={STABLE_SRC}
+      srcSet={`${STABLE_SRC} 1x, ${STABLE_SRC_RETINA} 2x`}
       width={size}
       height={size}
-      viewBox="0 0 200 200"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ opacity, pointerEvents: "none" }}
-    >
-      {([0.95, 0.78, 0.60, 0.42] as number[]).map((s, i) => (
-        <circle
-          key={i}
-          cx="100"
-          cy="100"
-          r={90 * s}
-          fill="none"
-          stroke="#F4A896"
-          strokeWidth="0.8"
-          strokeOpacity={0.15 + i * 0.18}
-        />
-      ))}
-      <circle cx="90" cy="80" r="42" fill="#F4A896" fillOpacity="0.85" stroke="white" strokeWidth="1.5" />
-      <circle cx="130" cy="85" r="32" fill="#B8D9C8" fillOpacity="0.85" stroke="white" strokeWidth="1.5" />
-      <circle cx="75" cy="118" r="28" fill="#8FB8C4" fillOpacity="0.85" stroke="white" strokeWidth="1.5" />
-      <circle cx="122" cy="122" r="30" fill="#F0C4D4" fillOpacity="0.85" stroke="white" strokeWidth="1.5" />
-      <circle cx="100" cy="100" r="16" fill="#FDE8E3" fillOpacity="0.95" stroke="white" strokeWidth="2" />
-    </svg>
+      alt=""
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        objectFit: "contain",
+        opacity,
+        pointerEvents: "none",
+        display: "block",
+      }}
+      draggable={false}
+    />
   );
 }
