@@ -1,7 +1,7 @@
 import { AuraIcon } from "./AuraIcon";
 
 /**
- * Marca da splash pública. O cluster de círculos saiu; o ser orbital
+ * Marca da splash pública. O cluster saiu; a bolinha
  * é a mesma identidade da Home, da nav e dos ícones do PWA.
  */
 export function AiriaConstellationLogo({

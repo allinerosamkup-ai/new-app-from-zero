@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { AiriaLogoBg, AuraIcon } from "./AuraIcon";
 
 describe("AuraIcon brand mark", () => {
-  it("renders the orbital mascot instead of the old circle cluster", () => {
+  it("renders the cream-ball mascot instead of the old circle cluster", () => {
     const html = renderToStaticMarkup(<AuraIcon size={32} />);
     expect(html).toContain("/mascot/phases/airia-orbital-stable.webp");
     expect(html).not.toContain("#F4A896");

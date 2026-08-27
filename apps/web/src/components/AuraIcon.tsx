@@ -6,11 +6,11 @@ const STABLE_SRC_RETINA = "/mascot/phases/airia-orbital-stable@640.webp";
 /**
  * AuraIcon — marca oficial da Airia.
  *
- * A identidade visível é o mascote orbital (núcleo, olhos, pétalas),
- * não o cluster de círculos pastel. O SVG antigo ficou no histórico
- * de git; este componente só aponta para o asset aprovado.
+ * A identidade visível é a bolinha creme (esfera, carinha, blush),
+ * não o orbital de pétalas nem o cluster de círculos. O SVG e o orbital
+ * ficaram no histórico; este componente aponta para o asset aprovado.
  *
- * < 18px → o mesmo orbital, só menor (botões).
+ * < 18px → a mesma bolinha, só menor (botões).
  * variant="hybrid" → mesmo ser; o ripple antigo era o cluster.
  */
 export function AuraIcon({
@@ -47,7 +47,7 @@ export function AuraIcon({
 }
 
 /**
- * AiriaLogoBg — mascote orbital em watermark.
+ * AiriaLogoBg — bolinha em watermark.
  */
 export function AiriaLogoBg({ size = 400, opacity = 0.06 }: { size?: number; opacity?: number }) {
   return (

@@ -6,7 +6,7 @@ import type { MoodPhase } from "../../utils/mood-cycle-engine";
 import "./airia-mascot.css";
 
 /**
- * A Airia em forma visual, uma imagem por fase oficial.
+ * A Airia em forma visual: a bolinha creme, uma cara por fase oficial.
  *
  * O componente **recebe a fase pronta** e nunca infere humor. Isso não é
  * preciosismo de arquitetura: a fase sai do `MoodCycleEngine`, que mede desvio
@@ -14,7 +14,7 @@ import "./airia-mascot.css";
  * a partir do que tem à mão produziria um mascote que contradiz a leitura do
  * app na tela ao lado — e é a leitura do app que a pessoa aprendeu a confiar.
  *
- * Sem dado suficiente, cai em Estável. É a escolha do documento de design:
+ * Sem dado suficiente, cai na cara estável da bolinha. É a escolha do documento de design:
  * ausência de leitura não vira cara triste nem alerta.
  */
 

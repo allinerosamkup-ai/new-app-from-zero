@@ -9,7 +9,7 @@ const constellation = readFileSync(
 );
 
 describe("splash brand mark", () => {
-  it("keeps the constellation wrapper on the orbital AuraIcon", () => {
+  it("keeps the constellation wrapper on the AuraIcon ball", () => {
     expect(constellation).toContain("from \"./AuraIcon\"");
     expect(constellation).toContain("return <AuraIcon size={size} />");
     expect(constellation).not.toContain("#F4A896");
