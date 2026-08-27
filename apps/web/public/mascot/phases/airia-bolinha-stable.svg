@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-label="Airia — fase Estável">
+  <defs><clipPath id="ball-stable"><circle cx="160" cy="158" r="92"/></clipPath></defs>
+  <ellipse cx="160" cy="268" rx="62" ry="14" fill="#5E876F" opacity="0.22"/>
+  <g transform="rotate(0 160 160)">
+    <circle cx="160" cy="158" r="92" fill="#F4EBDD"/>
+    <g clip-path="url(#ball-stable)">
+    <ellipse cx="168" cy="196" rx="70" ry="48" fill="#E2D3BE" opacity="0.35"/>
+    <ellipse cx="128" cy="122" rx="38" ry="28" fill="#FFFFFF" opacity="0.42"/>
+    </g>
+    <ellipse cx="124" cy="176" rx="16" ry="11" fill="#F3B7A8" opacity="0.85"/>
+    <ellipse cx="196" cy="176" rx="16" ry="11" fill="#F3B7A8" opacity="0.85"/>
+    <circle cx="124" cy="176" r="3.2" fill="#8FCBB3"/>
+    <circle cx="196" cy="176" r="3.2" fill="#8FCBB3"/>
+    <path d="M118 148c10-16 28-16 38 0" stroke="#5A3A2A" stroke-width="7.2" stroke-linecap="round" fill="none"/><path d="M164 148c10-16 28-16 38 0" stroke="#5A3A2A" stroke-width="7.2" stroke-linecap="round" fill="none"/>
+    <circle cx="160" cy="168" r="3.6" fill="#C4A08C"/>
+    <path d="M138 188c10 14 34 14 44 0" stroke="#5A3A2A" stroke-width="5.4" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>
