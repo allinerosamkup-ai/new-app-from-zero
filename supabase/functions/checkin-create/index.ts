@@ -4,9 +4,24 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+function supabaseServiceKey(): string {
+  const secret = Deno.env.get('SUPABASE_SECRET_KEY')
+  if (secret) return secret
+  const bundled = Deno.env.get('SUPABASE_SECRET_KEYS')
+  if (bundled) {
+    try {
+      const parsed = JSON.parse(bundled) as Record<string, string>
+      return parsed.default || parsed[Object.keys(parsed)[0]] || ''
+    } catch {
+      // fall through
+    }
+  }
+  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+}
+
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  supabaseServiceKey(),
 )
 
 Deno.serve(async (req) => {
@@ -14,7 +29,6 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) return error(401, 'unauthorized')
 
-    // Resolve usuário pelo JWT
     const { data: { user }, error: authErr } = await supabase.auth.getUser(
       authHeader.replace('Bearer ', '')
     )
@@ -22,13 +36,11 @@ Deno.serve(async (req) => {
 
     const body = await req.json()
 
-    // Validação básica de ranges (schema completo no contrato Zod do backend)
     const validated = validateCheckin(body)
     if (!validated.ok) return error(400, validated.message)
 
     const today = body.date ?? new Date().toISOString().split('T')[0]
 
-    // 1. Salva check-in imediatamente — sem aguardar IA
     const { data: checkin, error: insertErr } = await supabase
       .from('daily_checkins')
       .insert({
@@ -49,10 +61,8 @@ Deno.serve(async (req) => {
 
     if (insertErr) return error(500, insertErr.message)
 
-    // 2. Dispara IA em background — não bloqueia o response
     EdgeRuntime.waitUntil(processAiState(checkin.id, user.id, body))
 
-    // 3. Retorna check-in salvo imediatamente (sem aiEvaluation ainda)
     return new Response(
       JSON.stringify({ checkin, aiEvaluation: null, status: 'processing' }),
       { status: 201, headers: { 'Content-Type': 'application/json' } }
@@ -63,17 +73,14 @@ Deno.serve(async (req) => {
   }
 })
 
-// Processamento assíncrono da IA — atualiza o registro via Realtime
 async function processAiState(checkinId: string, userId: string, body: any) {
   try {
-    // Busca contexto de aprendizado do usuário
     const { data: tccCtx } = await supabase.rpc('get_tcc_learning_context', {
       p_days_back: 30
     })
 
     const prompt = buildStatePrompt(body, tccCtx)
 
-    // Chama OpenAI
     const aiRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -91,7 +98,6 @@ async function processAiState(checkinId: string, userId: string, body: any) {
     const aiJson = await aiRes.json()
     const evaluation = JSON.parse(aiJson.choices[0].message.content)
 
-    // Atualiza o registro — Realtime dispara update para o cliente
     await supabase
       .from('daily_checkins')
       .update({
@@ -108,7 +114,6 @@ async function processAiState(checkinId: string, userId: string, body: any) {
 
   } catch (err) {
     console.error('[processAiState] failed:', err.message)
-    // Falha silenciosa — check-in já foi salvo, IA tenta novamente na próxima
   }
 }
 
