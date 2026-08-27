@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-label="Airia — fase Fluindo">
+  <defs><clipPath id="ball-flowing"><circle cx="160" cy="158" r="92"/></clipPath></defs>
+  <ellipse cx="160" cy="268" rx="62" ry="14" fill="#D98274" opacity="0.22"/>
+  <circle cx="72" cy="168" r="6" fill="#D98274"/><circle cx="250" cy="96" r="5" fill="#D98274"/><circle cx="258" cy="176" r="3.5" fill="#D98274"/>
+  <g transform="rotate(3 160 160)">
+    <circle cx="160" cy="158" r="92" fill="#F7E8E3"/>
+    <g clip-path="url(#ball-flowing)">
+    <ellipse cx="168" cy="196" rx="70" ry="48" fill="#E8C9C1" opacity="0.35"/>
+    <ellipse cx="128" cy="122" rx="38" ry="28" fill="#FFFFFF" opacity="0.42"/>
+    </g>
+    <ellipse cx="124" cy="176" rx="16" ry="11" fill="#F0A89A" opacity="0.85"/>
+    <ellipse cx="196" cy="176" rx="16" ry="11" fill="#F0A89A" opacity="0.85"/>
+    <circle cx="124" cy="176" r="3.2" fill="#8FCBB3"/>
+    <circle cx="196" cy="176" r="3.2" fill="#8FCBB3"/>
+    <path d="M118 150c11-14 30-13 40 1" stroke="#5A3A2A" stroke-width="7.2" stroke-linecap="round" fill="none"/><path d="M162 149c12-15 31-14 42 2" stroke="#5A3A2A" stroke-width="7.2" stroke-linecap="round" fill="none"/>
+    <circle cx="160" cy="168" r="3.6" fill="#C4A08C"/>
+    <path d="M136 186c12 16 36 16 48 0" stroke="#5A3A2A" stroke-width="5.4" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

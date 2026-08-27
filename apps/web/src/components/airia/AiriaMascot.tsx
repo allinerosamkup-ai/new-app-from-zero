@@ -6,47 +6,33 @@ import type { MoodPhase } from "../../utils/mood-cycle-engine";
 import "./airia-mascot.css";
 
 /**
- * A Airia em forma visual, uma imagem por fase oficial.
- *
- * O componente **recebe a fase pronta** e nunca infere humor. Isso não é
- * preciosismo de arquitetura: a fase sai do `MoodCycleEngine`, que mede desvio
- * do baseline pessoal ao longo de dias. Um componente de UI adivinhando estado
- * a partir do que tem à mão produziria um mascote que contradiz a leitura do
- * app na tela ao lado — e é a leitura do app que a pessoa aprendeu a confiar.
- *
- * Sem dado suficiente, cai em Estável. É a escolha do documento de design:
- * ausência de leitura não vira cara triste nem alerta.
+ * A Airia em forma visual: a bolinha creme, uma cara por fase oficial.
+ * Recebe a fase pronta e nunca infere humor.
  */
 
 type AiriaMascotVisual = {
-  /** 320 px, o uso comum. */
   src: string;
-  /** 640 px para retina, entregue por `srcSet`. */
   srcRetina: string;
   labelKey: string;
   fallbackLabel: string;
 };
 
 function visual(file: string, labelKey: string, fallbackLabel: string): AiriaMascotVisual {
-  return {
-    src: `/mascot/phases/${file}.webp`,
-    srcRetina: `/mascot/phases/${file}@640.webp`,
-    labelKey,
-    fallbackLabel,
-  };
+  const src = `/mascot/phases/${file}.svg`;
+  return { src, srcRetina: src, labelKey, fallbackLabel };
 }
 
 const PHASE_VISUALS: Record<MoodPhase, AiriaMascotVisual> = {
-  elevated: visual("airia-orbital-high-flight", "mascot.phase.elevated", "Airia — fase Voo Alto"),
-  flowing: visual("airia-orbital-flowing", "mascot.phase.flowing", "Airia — fase Fluindo"),
-  stable: visual("airia-orbital-stable", "mascot.phase.stable", "Airia — fase Estável"),
-  falling: visual("airia-orbital-slowing-down", "mascot.phase.falling", "Airia — fase Desacelerando"),
-  low: visual("airia-orbital-withdrawal", "mascot.phase.low", "Airia — fase Recolhimento"),
-  depleted: visual("airia-orbital-pause", "mascot.phase.depleted", "Airia — fase Pausa"),
-  recovering: visual("airia-orbital-resuming", "mascot.phase.recovering", "Airia — fase Retomada"),
-  mixed: visual("airia-orbital-turbulence", "mascot.phase.mixed", "Airia — fase Turbulência"),
+  elevated: visual("airia-bolinha-high-flight", "mascot.phase.elevated", "Airia — fase Voo Alto"),
+  flowing: visual("airia-bolinha-flowing", "mascot.phase.flowing", "Airia — fase Fluindo"),
+  stable: visual("airia-bolinha-stable", "mascot.phase.stable", "Airia — fase Estável"),
+  falling: visual("airia-bolinha-slowing-down", "mascot.phase.falling", "Airia — fase Desacelerando"),
+  low: visual("airia-bolinha-withdrawal", "mascot.phase.low", "Airia — fase Recolhimento"),
+  depleted: visual("airia-bolinha-pause", "mascot.phase.depleted", "Airia — fase Pausa"),
+  recovering: visual("airia-bolinha-resuming", "mascot.phase.recovering", "Airia — fase Retomada"),
+  mixed: visual("airia-bolinha-turbulence", "mascot.phase.mixed", "Airia — fase Turbulência"),
   insufficient_data: visual(
-    "airia-orbital-stable",
+    "airia-bolinha-stable",
     "mascot.phase.insufficientData",
     "Airia — conhecendo seu ritmo",
   ),
@@ -59,13 +45,6 @@ export type AiriaMascotProps = {
   motion?: AiriaMascotMotion;
   size?: number | string;
   className?: string;
-  /**
-   * Marca o mascote como decoração para leitores de tela.
-   *
-   * Use quando a fase já estiver escrita em texto ao lado — repetir "Airia —
-   * fase Recolhimento" logo depois do título que diz a mesma coisa é ruído para
-   * quem navega por áudio.
-   */
   decorative?: boolean;
 };
 
@@ -84,14 +63,6 @@ export function AiriaMascot({
   const resolvedPhase = phase ?? "insufficient_data";
   const asset = resolveAiriaMascotVisual(resolvedPhase);
 
-  /**
-   * Troca de fase entra por transição, não por corte seco.
-   *
-   * O documento de design pede transição gradual, e há uma razão além do gosto:
-   * a fase muda enquanto a pessoa olha a tela, e um pulo de imagem lê como
-   * glitch — ou pior, como veredito repentino sobre ela. `key` no elemento faz
-   * o React remontar, e o CSS anima a entrada.
-   */
   const first = useRef(true);
   const [appear, setAppear] = useState(false);
   useEffect(() => {
@@ -124,7 +95,6 @@ export function AiriaMascot({
         aria-hidden={decorative || undefined}
         width={320}
         height={320}
-        // Só a fase atual precisa chegar junto com a tela.
         loading="lazy"
         decoding="async"
         draggable={false}
