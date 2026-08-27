@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-label="Airia — fase Retomada">
+  <defs><clipPath id="ball-resuming"><circle cx="160" cy="158" r="92"/></clipPath></defs>
+  <ellipse cx="160" cy="268" rx="62" ry="14" fill="#4F9DA6" opacity="0.22"/>
+  <path d="M246 78c12 10 8 28-6 32" fill="none" stroke="#4F9DA6" stroke-width="4" stroke-linecap="round"/><circle cx="74" cy="118" r="4.5" fill="#4F9DA6"/>
+  <g transform="rotate(-2 160 160)">
+    <circle cx="160" cy="158" r="92" fill="#E5F2F2"/>
+    <g clip-path="url(#ball-resuming)">
+    <ellipse cx="168" cy="196" rx="70" ry="48" fill="#C3DEE0" opacity="0.35"/>
+    <ellipse cx="128" cy="122" rx="38" ry="28" fill="#FFFFFF" opacity="0.42"/>
+    </g>
+    <ellipse cx="124" cy="176" rx="16" ry="11" fill="#E8B8B0" opacity="0.85"/>
+    <ellipse cx="196" cy="176" rx="16" ry="11" fill="#E8B8B0" opacity="0.85"/>
+    <circle cx="124" cy="176" r="3.2" fill="#8FCBB3"/>
+    <circle cx="196" cy="176" r="3.2" fill="#8FCBB3"/>
+    <path d="M118 150c10-14 28-15 38 1" stroke="#5A3A2A" stroke-width="7.2" stroke-linecap="round" fill="none"/><path d="M164 149c11-16 30-16 40 2" stroke="#5A3A2A" stroke-width="7.2" stroke-linecap="round" fill="none"/>
+    <circle cx="160" cy="168" r="3.6" fill="#C4A08C"/>
+    <path d="M142 186c8 11 28 12 36 1" stroke="#5A3A2A" stroke-width="5.4" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>
