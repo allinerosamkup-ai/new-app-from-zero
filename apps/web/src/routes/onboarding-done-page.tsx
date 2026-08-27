@@ -89,12 +89,10 @@ export function OnboardingDonePage() {
         justifyContent: "center", padding: "40px 28px", textAlign: "center",
         position: "relative", overflow: "hidden",
       }}>
-        {/* Confetti */}
         {show && Array.from({ length: 20 }, (_, i) => (
           <ConfettiPiece key={i} delay={i * 0.1} x={Math.random() * 100} />
         ))}
 
-        {/* Logo Airia oficial */}
         <div style={{
           width: 84, height: 84, borderRadius: 28,
           background: "linear-gradient(135deg, #FFFFFF 0%, #FAFBFB 100%)",
@@ -104,10 +102,9 @@ export function OnboardingDonePage() {
           border: "1px solid rgba(17,24,39,.04)",
           animation: "fade-up 0.6s ease both",
         }}>
-          <AuraIcon size={54} />
+          <AuraIcon size={64} />
         </div>
 
-        {/* Título */}
         <h1 style={{
           fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 26, fontWeight: 800,
           color: "var(--text-1)", marginBottom: 10, lineHeight: 1.25,
@@ -121,7 +118,6 @@ export function OnboardingDonePage() {
         }}>
           {t("onboarding.done.subtitle")}
         </p>
-        {/* Fechamento do ritual (design emocional P2): o app começa a aprender você */}
         <p style={{
           fontSize: 12.5, color: "var(--accent-peach-ink)", fontWeight: 700, lineHeight: 1.5,
           marginBottom: 32, maxWidth: 280,
@@ -130,7 +126,6 @@ export function OnboardingDonePage() {
           {t("onboarding.done.learningStarts", "A partir de agora, seu ritmo começa a ser aprendido.")}
         </p>
 
-        {/* Resumo do perfil */}
         <div style={{
           width: "100%", background: "rgba(255,255,255,.98)", backdropFilter: "blur(16px)",
           border: "1px solid rgba(17,24,39,.05)", borderRadius: 26,
@@ -175,7 +170,6 @@ export function OnboardingDonePage() {
           </p>
         )}
 
-        {/* CTA */}
         <button
           onClick={handleFinish}
           disabled={submitting}

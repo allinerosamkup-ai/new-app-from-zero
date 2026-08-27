@@ -28,7 +28,7 @@ export default defineConfig({
       // O SW navega clientes antigos para a release exata. O modo automático
       // também recarregaria no evento activated e poderia disputar essa navegação.
       registerType: 'prompt',
-      includeAssets: ['icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: ['icons/icon.svg', 'mascot/phases/airia-orbital-stable.webp', 'mascot/phases/airia-orbital-stable@640.webp'],
       manifest: {
         id: '/',
         name: 'Airia — Ciclagem de Humor',
@@ -47,15 +47,15 @@ export default defineConfig({
         categories: ['health', 'lifestyle', 'productivity'],
         icons: [
           {
-            src: '/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
+            src: '/mascot/phases/airia-orbital-stable.webp',
+            sizes: '320x320',
+            type: 'image/webp',
             purpose: 'any',
           },
           {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
+            src: '/mascot/phases/airia-orbital-stable@640.webp',
+            sizes: '640x640',
+            type: 'image/webp',
             purpose: 'any maskable',
           },
           {
@@ -71,28 +71,28 @@ export default defineConfig({
             short_name: 'Hoje',
             description: 'Ver o retrato e o próximo passo do seu dia',
             url: '/home',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+            icons: [{ src: '/icons/icon.svg', sizes: '192x192' }]
           },
           {
             name: 'Check-in',
             short_name: 'Check-in',
             description: 'Fazer meu check-in de humor e energia',
             url: '/checkin',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+            icons: [{ src: '/icons/icon.svg', sizes: '192x192' }]
           },
           {
             name: 'Diário',
             short_name: 'Diário',
             description: 'Conversar com a Airia no Journal',
             url: '/journal',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+            icons: [{ src: '/icons/icon.svg', sizes: '192x192' }]
           },
           {
             name: 'Padrões',
             short_name: 'Padrões',
             description: 'Explorar padrões a partir dos seus check-ins',
             url: '/insights',
-            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+            icons: [{ src: '/icons/icon.svg', sizes: '192x192' }]
           }
         ],
         screenshots: [
