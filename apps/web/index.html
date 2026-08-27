@@ -3,29 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <!-- Base estática em português: é o que crawler sem JS e prévia de link no
-         WhatsApp/Slack enxergam. A versão em inglês é aplicada em tempo de
-         execução por src/lib/seo.ts, que o Googlebot executa. -->
     <title>Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia</title>
     <meta name="description" content="Faça check-ins de humor e energia, observe padrões, registre seu diário e transforme objetivos em próximas ações possíveis. Feito para TDAH, ciclotimia e bipolaridade tipo II. Grátis no beta." />
     <meta name="keywords" content="app de humor, diário de humor, rastreador de humor, energia, padrões de humor, TDAH, ciclotimia, bipolaridade tipo 2, saúde mental, autoconhecimento" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
     <meta name="author" content="Airia" />
-
-    <!-- Uma URL canônica por idioma. Sem isso, / e /splash servem a mesma
-         página e disputam entre si na indexação. -->
     <link rel="canonical" href="https://airia.pro/" />
     <link rel="alternate" hreflang="pt-BR" href="https://airia.pro/" />
     <link rel="alternate" hreflang="en" href="https://airia.pro/?lang=en" />
     <link rel="alternate" hreflang="x-default" href="https://airia.pro/" />
-
-    <!-- PWA / Theme -->
     <meta name="theme-color" content="#FDF9F5" />
     <meta name="color-scheme" content="light" />
     <meta name="application-name" content="Airia" />
     <link rel="manifest" href="/manifest.webmanifest" />
-
-    <!-- Apple PWA — Otimizado iOS Safari -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-touch-fullscreen" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -38,13 +28,8 @@
     <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon.svg" />
     <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon.svg" />
-
-    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
-    <link rel="icon" type="image/webp" sizes="320x320" href="/mascot/phases/airia-orbital-stable.webp" />
-
-    <!-- Open Graph — imagem absoluta de propósito: caminho relativo não resolve
-         fora do site, e a prévia do link sai sem imagem justo onde ela importa. -->
+    <link rel="icon" type="image/svg+xml" sizes="320x320" href="/mascot/phases/airia-bolinha-stable.svg" />
     <meta property="og:title" content="Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia" />
     <meta property="og:description" content="Faça check-ins de humor e energia, observe padrões, registre seu diário e avance em objetivos com uma próxima ação possível. Grátis no beta." />
     <meta property="og:image" content="https://airia.pro/screenshots/home-page.png" />
@@ -54,52 +39,14 @@
     <meta property="og:site_name" content="Airia" />
     <meta property="og:locale" content="pt_BR" />
     <meta property="og:locale:alternate" content="en_US" />
-
-    <!-- Twitter/X -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia" />
     <meta name="twitter:description" content="Faça check-ins de humor e energia, observe padrões, registre seu diário e avance em objetivos com uma próxima ação possível." />
     <meta name="twitter:image" content="https://airia.pro/screenshots/home-page.png" />
-
-    <!-- Dados estruturados. Sem aggregateRating: nota inventada é penalidade
-         manual garantida, e mentira para quem instala achando que houve
-         avaliação. src/lib/seo.ts substitui este bloco no idioma ativo. -->
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Airia",
-        "applicationCategory": "HealthApplication",
-        "operatingSystem": "Web, iOS, Android",
-        "url": "https://airia.pro/",
-        "description": "Faça check-ins de humor e energia, observe padrões, registre seu diário e avance em objetivos com uma próxima ação possível. Feito para TDAH, ciclotimia e bipolaridade tipo II.",
-        "inLanguage": "pt-BR",
-        "image": "https://airia.pro/screenshots/home-page.png",
-        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
-        "author": { "@type": "Organization", "name": "Airia", "url": "https://airia.pro" }
-      }
-    </script>
-
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
-
-    <!-- Meta Pixel Code -->
-    <script>
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '1250738127257679');
-      fbq('track', 'PageView');
-    </script>
-    <!-- End Meta Pixel Code -->
+    <script type="module" src="/src/main.tsx"></script>
   </head>
   <body>
     <script>
@@ -111,24 +58,5 @@
       })();
     </script>
     <div id="root"></div>
-
-    <!-- Links estáticos para crawlers (Google OAuth Verification) -->
-    <!-- O crawler do Google não executa JS, então precisa ver esses links no HTML estático -->
-    <noscript>
-      <img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1250738127257679&ev=PageView&noscript=1" />
-      <nav style="text-align:center;padding:24px;font-family:sans-serif;font-size:14px;color:#666">
-        <p>Airia — Check-ins, padrões, diário e objetivos</p>
-        <a href="/privacy" style="color:#C5A593;margin:0 12px">Política de Privacidade</a>
-        <a href="/terms" style="color:#C5A593;margin:0 12px">Termos de Uso</a>
-      </nav>
-    </noscript>
-    <!-- Crawler-only: links semânticos visíveis para bots mas ocultos visualmente para users -->
-    <footer aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden">
-      <a href="/privacy">Política de Privacidade</a>
-      <a href="/terms">Termos de Uso</a>
-      <a href="https://airia.pro">Página Inicial</a>
-    </footer>
-
-    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
