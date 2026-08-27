@@ -62,24 +62,12 @@ const ContextoPage = lazy(() => loadContextoPage().then((module) => ({ default: 
 const StoryOnboardingPage = lazy(() => loadStoryOnboardingPage().then((module) => ({ default: module.default })));
 const RunPage = lazy(() => loadRunPage().then((module) => ({ default: module.RunPage })));
 const CapturesPage = lazy(() => loadCapturesPage().then((module) => ({ default: module.CapturesPage })));
-const loadDevOnlyModule = (path: string) => import(/* @vite-ignore */ path);
-const UsabilityPrototypePage = import.meta.env.DEV
-  ? lazy(() => loadDevOnlyModule("./routes/usability-prototype-page.tsx").then((module) => ({
-      default: (module as typeof import("./routes/usability-prototype-page")).UsabilityPrototypePage,
-    })))
-  : null;
-const ObjectivesPrototypePage = import.meta.env.DEV
-  ? lazy(() => loadDevOnlyModule("./routes/objectives-prototype-page.tsx").then((module) => ({
-      default: (module as typeof import("./routes/objectives-prototype-page")).ObjectivesPrototypePage,
-    })))
-  : null;
 
 const preloadByPath: Record<string, Array<() => Promise<unknown>>> = {
   "/": [loadSplashPage, loadLoginPage],
   "/splash": [loadLoginPage],
   "/login": [loadAuraLayout, loadHomePage, loadCheckinPage, loadGoalsPage],
   "/forgot-password": [loadResetPasswordPage, loadLoginPage],
-  // A home agora leva para Objetivos, não para o Planner.
   "/home": [loadCheckinPage, loadGoalsPage, loadJournalPage],
   "/checkin": [loadCheckinResultPage, loadHomePage],
   "/checkin-result": [loadHomePage, loadGoalsPage, loadJournalPage],
@@ -118,8 +106,6 @@ const DEV_SCREENS = [
   { path: "aura", label: "Airia" },
   { path: "captures", label: "Notas" },
   { path: "ui-kit", label: "UI Kit" },
-  { path: "usability-prototype", label: "Protótipo" },
-  { path: "objectives-prototype", label: "Obj. protótipo" },
 ];
 
 function DevLayout() {
@@ -159,7 +145,6 @@ function isRestorableProductRoute(pathname: string) {
   return RESTORABLE_PRODUCT_ROUTES.has(pathname);
 }
 
-/** Decide o primeiro destino privado sem expor a Home a uma conta ainda nova. */
 function AuthenticatedProductEntry() {
   const { hydrated, state } = useAuraStore();
 
@@ -172,7 +157,6 @@ function AuthenticatedProductEntry() {
   return <Navigate to={savedRoute && isRestorableProductRoute(savedRoute) ? savedRoute : "/home"} replace />;
 }
 
-/** A Splash apresenta o produto a visitantes; uma sessão válida retoma o produto. */
 function SplashEntry() {
   const [sessionState, setSessionState] = useState<"checking" | "authenticated" | "anonymous">("checking");
 
@@ -281,19 +265,11 @@ export default function App() {
       <div className="app-viewport">
       <div className="page-transition">
       <Routes>
-        {/* A raiz pública mantém a Splash para visitantes e indexação. O portão
-            verifica primeiro uma sessão válida e só então retoma a área do
-            produto, evitando que quem já conhece a Airia volte à apresentação.
-            `/splash` continua existindo como compatibilidade de links antigos. */}
         <Route path="/" element={<SplashEntry />} />
         <Route path="/splash" element={<Navigate to="/" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        {/* Fluxo guiado: tela cheia, sem bottom nav — a barra de ação é da própria etapa. */}
-        {/* O onboarding-história: introdução, clímax e conclusão num fluxo só.
-            Fica fora do AuraLayout de propósito — tela cheia, sem barra
-            competindo com o conteúdo. */}
         <Route path="/comecar" element={<StoryOnboardingPage />} />
         <Route path="/onboarding" element={<Navigate to="/comecar" replace />} />
         <Route path="/onboarding/guiado" element={<Navigate to="/comecar" replace />} />
@@ -302,26 +278,15 @@ export default function App() {
         <Route path="/onboarding/sleep" element={<Navigate to="/comecar" replace />} />
         <Route path="/onboarding/preferences" element={<Navigate to="/comecar" replace />} />
         <Route path="/onboarding/done" element={<Navigate to="/comecar" replace />} />
-        {/* Execução: tela cheia, sem bottom nav. Um passo por vez quer dizer
-            nada mais na tela competindo com o passo. */}
         <Route path="/run" element={<RunPage />} />
         <Route path="/editorial-showcase" element={<EditorialShowcase />} />
         <Route path="/auth-v2" element={<AuthV2Page />} />
-        {/* Pós-login cai na Home, não no Planner. Incondicional: mesmo se o
-            Planner voltar, o destino de quem acabou de entrar é a Home. */}
         <Route path="/auth/callback" element={<AuthenticatedProductEntry />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/billing" element={<BillingPage />} />
-        {/* O e-book saiu do produto. A rota fica redirecionando, como Planner e
-            Hábitos: anúncio já veiculado e link salvo não podem cair em 404. */}
         <Route path="/livro" element={<Navigate to="/" replace />} />
 
-        {/* Rotas de preview sem auth — só desenvolvimento.
-            `import.meta.env.DEV` é o portão, e ele não existia: a barra de
-            depuração ia inteira para produção, sem autenticação, e o botão
-            "Planner" dela abria o Planner desligado funcionando. Vite elimina
-            este bloco do bundle de produção em tempo de build. */}
         {import.meta.env.DEV && (
           <Route path="/dev" element={<DevLayout />}>
             <Route path="home" element={<HomePage />} />
@@ -336,8 +301,6 @@ export default function App() {
             <Route path="aura" element={<AuraChatPage />} />
             <Route path="captures" element={<CapturesPage />} />
             <Route path="ui-kit" element={<UIKitPage />} />
-            {UsabilityPrototypePage && <Route path="usability-prototype" element={<UsabilityPrototypePage />} />}
-            {ObjectivesPrototypePage && <Route path="objectives-prototype" element={<ObjectivesPrototypePage />} />}
           </Route>
         )}
 
@@ -345,9 +308,6 @@ export default function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/journal" element={<JournalPage />} />
           <Route path="/goals" element={<GoalsPage />} />
-          {/* Desligadas no produto, mas ainda registradas: notificação push já
-              entregue no celular de alguém e link salvo apontam para cá, e cair
-              em 404 é pior que cair na Home. */}
           <Route path="/habits" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
           <Route path="/profile" element={<Navigate to="/insights" replace />} />
           <Route path="/preferences" element={<PreferencesPage />} />
@@ -366,11 +326,6 @@ export default function App() {
           <Route path="/routine-builder" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
         </Route>
 
-        {/* URL que não existe cai na Home, não em tela branca.
-            Sem esta rota, qualquer erro de digitação, link antigo ou caminho
-            removido renderizava nada: sem navegação, sem mensagem e sem volta
-            a não ser pelo botão do navegador. É a mesma regra que já vale para
-            Planner e Hábitos — cair na Home é sempre melhor que cair no vazio. */}
         <Route path="*" element={<Navigate to={FEATURE_FALLBACK_ROUTE} replace />} />
       </Routes>
       </div>
