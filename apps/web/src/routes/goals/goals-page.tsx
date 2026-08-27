@@ -181,6 +181,11 @@ export function GoalsPage() {
     try {
       await api.post(`/objectives/${goalId}/actions`, { ...action, expectedVersion: goal.pathVersion ?? 1 });
       await refreshObjectives();
+      trackProductEvent("goal.action_changed.v1", "goals", {
+        goalId: String(goalId),
+        actionId: "created",
+        changeType: "created",
+      });
       setSuggestionDrafts((current) => ({ ...current, [String(goalId)]: [] }));
       showSuccess(l("Pr\u00f3xima a\u00e7\u00e3o adicionada.", "Next action added."));
     } catch (error) {
@@ -232,6 +237,11 @@ export function GoalsPage() {
         setCompletingActionId(actionId);
         try {
           const outcome = await toggleSubGoal(goal.id, actionId);
+          trackProductEvent("goal.action_changed.v1", "goals", {
+            goalId: String(goal.id),
+            actionId: String(actionId),
+            changeType: "completed",
+          });
           if (outcome?.completedNow) {
             setReward(outcome.reward ?? { headline: l("Feito.", "Done."), detail: null, animation: "spark", intensity: "small" });
           }
