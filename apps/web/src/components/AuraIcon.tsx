@@ -1,15 +1,9 @@
 import React from "react";
 
-const STABLE_SRC = "/mascot/phases/airia-orbital-stable@640.webp";
-const STABLE_SRC_RETINA = "/mascot/phases/airia-orbital-stable@640.webp";
+const STABLE_SRC = "/mascot/phases/airia-bolinha-stable.svg";
 
 /**
- * AuraIcon — marca oficial da Airia.
- *
- * A identidade aprovada pela titular é a bolinha creme.
- * Os assets da família v3 ainda não substituíram os WebP orbitais
- * neste commit (upload binário corrompe neste canal). O @640 cobre
- * o 1x enquanto o arquivo 320 quebrado não volta.
+ * AuraIcon — marca oficial da Airia: a bolinha creme.
  */
 export function AuraIcon({
   size = 16,
@@ -26,7 +20,7 @@ export function AuraIcon({
   return (
     <img
       src={STABLE_SRC}
-      srcSet={`${STABLE_SRC} 1x, ${STABLE_SRC_RETINA} 2x`}
+      srcSet={`${STABLE_SRC} 1x, ${STABLE_SRC} 2x`}
       width={size}
       height={size}
       alt=""
@@ -48,7 +42,7 @@ export function AiriaLogoBg({ size = 400, opacity = 0.06 }: { size?: number; opa
   return (
     <img
       src={STABLE_SRC}
-      srcSet={`${STABLE_SRC} 1x, ${STABLE_SRC_RETINA} 2x`}
+      srcSet={`${STABLE_SRC} 1x, ${STABLE_SRC} 2x`}
       width={size}
       height={size}
       alt=""
