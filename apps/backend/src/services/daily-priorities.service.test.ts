@@ -69,7 +69,21 @@ describe('DailyPrioritiesService', () => {
       canWait: [], readingVersion: 'v3',
     }));
 
-    assert.equal(result.status, 'retrying');
-    assert.equal(result.priorities.length, 0);
+    assert.equal(result.status, 'ready');
+    assert.equal(result.priorities.length, 1);
+    assert.equal(result.priorities[0].actionId, 'later-action');
+  });
+
+  it('mostra o Agora persistido quando a IA de ranking não responde', async () => {
+    const result = await DailyPrioritiesService.prioritize({
+      localDate: '2026-08-11',
+      objectives,
+      manualPrimaryObjectiveId: 'central',
+      contextStatements: [],
+    });
+
+    assert.equal(result.status, 'ready');
+    assert.equal(result.focus?.objectiveId, 'central');
+    assert.ok(result.priorities.some((item) => item.actionId === 'central-action'));
   });
 });

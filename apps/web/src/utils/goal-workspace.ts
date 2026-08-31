@@ -27,11 +27,11 @@ export function buildGoalNotePatch(note: string): { description: string } {
   return { description: note.trim() };
 }
 
-export function shouldShowGoalPathPane(goal: {
+export function shouldShowGoalPathPane(_goal: {
   subtasks?: unknown[];
   milestones?: unknown[];
 }): boolean {
-  return (goal.subtasks?.length ?? 0) > 1 || (goal.milestones?.length ?? 0) > 0;
+  return true;
 }
 
 export const GOAL_WORKSPACE_PANES: Array<{

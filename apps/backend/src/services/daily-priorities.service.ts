@@ -77,11 +77,13 @@ function dateOnly(value: string | Date | null | undefined): string | null {
 
 function candidates(input: DailyPrioritiesInput): CurrentCandidate[] {
   return input.objectives.flatMap((objective) => {
-    const current = normalizeObjectiveSubgoals(objective.subgoals).find((action) => (
+    const pending = normalizeObjectiveSubgoals(objective.subgoals).filter((action) => (
       !action.done && action.status !== 'rejected' && action.status !== 'deferred'
-      && validateConcreteAction(action).ok
+      && !(action.scheduledFor && action.scheduledFor > input.localDate)
+      && Boolean(action.title?.trim())
     ));
-    if (!current || (current.scheduledFor && current.scheduledFor > input.localDate)) return [];
+    const current = pending.find((action) => validateConcreteAction(action).ok) ?? pending[0];
+    if (!current) return [];
     return [{
       objectiveId: objective.id,
       objectiveTitle: objective.title,
@@ -107,31 +109,7 @@ export function buildDailyPrioritiesPrompt(input: DailyPrioritiesInput): string 
     progress: objective.progress,
     currentAction: current.find((item) => item.objectiveId === objective.id) ?? null,
   }));
-  return `Você decide prioridades reais do dia sem confundir urgente com importante.
-
-DATA LOCAL: ${input.localDate}
-OBJETIVO FIXADO PELA PESSOA: ${input.manualPrimaryObjectiveId ?? '(nenhum)'}
-CONTEXTO ATUAL DO DIÁRIO, CHECK-IN E AURA:
-${input.contextStatements.length > 0 ? input.contextStatements.map((item) => `- ${item}`).join('\n') : '(nenhum contexto adicional)'}
-
-OBJETIVOS E ÚNICAS AÇÕES CANDIDATAS:
-${JSON.stringify(objectiveContext)}
-
-REGRAS:
-- A estrela humana sempre define o foco; não tente substituí-la.
-- Sem estrela, sugira como foco o objetivo mais relevante pelo significado declarado,
-  consequências, recorrência, continuidade, progresso, prazo e data — nesta ordem de
-  leitura, sem transformar data no único critério.
-- Importante é o que sustenta direção e consequência. Urgente é o que perde valor ou
-  causa consequência concreta se não acontecer logo. Uma urgência de outro objetivo
-  pode liderar o dia sem apagar o objetivo em foco.
-- Use somente a ação candidata atual de cada objetivo. Nunca invente ação e nunca use
-  etapa futura.
-- Data não é permissão para antecipar nem adiar. Aqui você só ordena e recomenda.
-- Se o dia estiver cheio, mova o que pode esperar para canWait e explique.
-
-JSON APENAS:
-{"focusObjectiveId":"id|null","focusReason":"...","priorities":[{"objectiveId":"...","actionId":"...","reason":"...","urgency":"low|medium|high","importance":"low|medium|high"}],"canWait":[{"objectiveId":"...","actionId":"...","reason":"..."}],"readingVersion":"contexto-data-versoes"}`;
+  return `Você decide prioridades reais do dia sem confundir urgente com importante.\n\nDATA LOCAL: ${input.localDate}\nOBJETIVO FIXADO PELA PESSOA: ${input.manualPrimaryObjectiveId ?? '(nenhum)'}\nCONTEXTO ATUAL DO DIÁRIO, CHECK-IN E AURA:\n${input.contextStatements.length > 0 ? input.contextStatements.map((item) => `- ${item}`).join('\n') : '(nenhum contexto adicional)'}\n\nOBJETIVOS E ÚNICAS AÇÕES CANDIDATAS:\n${JSON.stringify(objectiveContext)}\n\nREGRAS:\n- A estrela humana sempre define o foco; não tente substituí-la.\n- Sem estrela, sugira como foco o objetivo mais relevante pelo significado declarado,\n  consequências, recorrência, continuidade, progresso, prazo e data — nesta ordem de\n  leitura, sem transformar data no único critério.\n- Importante é o que sustenta direção e consequência. Urgente é o que perde valor ou\n  causa consequência concreta se não acontecer logo. Uma urgência de outro objetivo\n  pode liderar o dia sem apagar o objetivo em foco.\n- Use somente a ação candidata atual de cada objetivo. Nunca invente ação e nunca use\n  etapa futura.\n- Data não é permissão para antecipar nem adiar. Aqui você só ordena e recomenda.\n- Se o dia estiver cheio, mova o que pode esperar para canWait e explique.\n\nJSON APENAS:\n{"focusObjectiveId":"id|null","focusReason":"...","priorities":[{"objectiveId":"...","actionId":"...","reason":"...","urgency":"low|medium|high","importance":"low|medium|high"}],"canWait":[{"objectiveId":"...","actionId":"...","reason":"..."}],"readingVersion":"contexto-data-versoes"}`;
 }
 
 let openai: OpenAI | null = null;
@@ -157,7 +135,35 @@ export class DailyPrioritiesService {
       readingVersion: null,
     });
 
-    if (current.length === 0 || (!client && !process.env.OPENAI_API_KEY)) return retrying();
+    const fromStore = (reason: string): DailyPrioritiesResult => {
+      const ordered = [...current].sort((left, right) => {
+        const leftPrimary = manual && left.objectiveId === manual ? 0 : 1;
+        const rightPrimary = manual && right.objectiveId === manual ? 0 : 1;
+        if (leftPrimary !== rightPrimary) return leftPrimary - rightPrimary;
+        return left.pathVersion - right.pathVersion;
+      });
+      const focusId = manual ?? ordered[0]?.objectiveId ?? null;
+      return {
+        status: 'ready',
+        localDate: input.localDate,
+        focus: focusId ? {
+          objectiveId: focusId,
+          source: manual ? 'manual' : 'airia',
+          reason: manual ? 'Escolhido por você' : reason,
+        } : null,
+        priorities: ordered.map((item) => ({
+          ...item,
+          reason,
+          urgency: item.deadline === input.localDate ? 'high' as const : 'low' as const,
+          importance: manual && item.objectiveId === manual ? 'high' as const : 'medium' as const,
+        })),
+        canWait: [],
+        readingVersion: `store:${input.localDate}:${ordered.map((item) => item.pathVersion).join('-')}`,
+      };
+    };
+
+    if (current.length === 0) return retrying();
+    if (!client && !process.env.OPENAI_API_KEY) return fromStore('Próximo passo já definido no objetivo');
     const chat = client ?? defaultClient();
     const models = [
       process.env.OPENAI_PRIORITIES_MODEL?.trim() || 'claude-sonnet-4-6',
@@ -201,6 +207,6 @@ export class DailyPrioritiesService {
         console.warn(`[daily-priorities] modelo ${model} falhou:`, error);
       }
     }
-    return retrying();
+    return fromStore('Próximo passo já definido no objetivo');
   }
 }

@@ -42,6 +42,21 @@ describe('contrato compartilhado de ação concreta', () => {
     assert.equal(verdict.ok ? '' : verdict.reason, 'abstract_or_circular_action');
   });
 
+  it('aceita o gesto físico dos splits de domínio', () => {
+    assert.equal(validateConcreteAction({
+      title: 'Separar o tênis e a roupa para a próxima corrida',
+      doneWhen: 'tênis e roupa estiverem separados e visíveis',
+    }).ok, true);
+    assert.equal(validateConcreteAction({
+      title: 'Colocar o livro no lugar onde você senta à noite',
+      doneWhen: 'o livro estiver no lugar de leitura',
+    }).ok, true);
+    assert.equal(validateConcreteAction({
+      title: 'Retirar da sala, por 15 minutos, o que não pertence ali',
+      doneWhen: 'o que não pertence à sala estiver fora do cômodo',
+    }).ok, true);
+  });
+
   it('protege o formato textual usado pelo Check-in', () => {
     const text = formatConcreteAction({
       title: 'Listar as três contas que vencem nesta semana',

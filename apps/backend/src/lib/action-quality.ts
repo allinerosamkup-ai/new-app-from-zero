@@ -16,11 +16,11 @@ export type ConcreteActionVerdict =
         | 'missing_done_when';
     };
 
-export const EXECUTABLE_VERB = /^(abra|abrir|anote|anotar|liste|listar|escreva|escrever|copie|copiar|meça|medir|ligue|ligar|mande|mandar|envie|enviar|selecione|selecionar|publique|publicar|edite|editar|responda|responder|pague|pagar|transfira|transferir|compare|comparar|reúna|reunir|separe|separar|retire|retirar|coloque|colocar|fotografe|fotografar|telefone|telefonar|preencha|preencher|agende|agendar|cancele|cancelar|confirme|confirmar|acesse|acessar|entre|entrar|baixe|baixar|anexe|anexar|assine|assinar|entregue|entregar|registre|registrar|identifique|identificar|monte|montar|crie|criar|marque|marcar|realize|realizar|leve|levar|enxágue|enxaguar|passe|passar|guarde|guardar|varra|varrer|open|write|copy|measure|list|call|send|select|publish|edit|reply|pay|transfer|compare|gather|remove|place|photograph|fill|schedule|cancel|confirm|access|download|attach|sign|deliver|record|identify|build|create|mark|take|rinse|wipe|store|sweep)\b/i;
+export const EXECUTABLE_VERB = /^(abra|abrir|anote|anotar|liste|listar|escreva|escrever|copie|copiar|meça|medir|ligue|ligar|mande|mandar|envie|enviar|selecione|selecionar|publique|publicar|edite|editar|responda|responder|pague|pagar|transfira|transferir|compare|comparar|reúna|reunir|separe|separar|retire|retirar|coloque|colocar|fotografe|fotografar|telefone|telefonar|preencha|preencher|agende|agendar|cancele|cancelar|confirme|confirmar|acesse|acessar|entre|entrar|baixe|baixar|anexe|anexar|assine|assinar|entregue|entregar|registre|registrar|identifique|identificar|monte|montar|crie|criar|marque|marcar|realize|realizar|leve|levar|enxágue|enxaguar|passe|passar|guarde|guardar|varra|varrer|corra|correr|caminhe|caminhar|cozinhe|cozinhar|leia|ler|saia|sair|deixe|deixar|tire|tirar|junte|juntar|open|write|copy|measure|list|call|send|select|publish|edit|reply|pay|transfer|compare|gather|remove|place|photograph|fill|schedule|cancel|confirm|access|download|attach|sign|deliver|record|identify|build|create|mark|take|rinse|wipe|store|sweep)\b/i;
 
 const ABSTRACT_OPENERS = /^(escolha|escolher|considere|considerar|pense|pensar|reflita|refletir|planeje|planejar|organize|organizar|revise|revisar|resolva|resolver|decida|decidir|verifique|verificar|confira|conferir|avalie|avaliar|prepare|preparar|trate|tratar|lide|lidar|faça|fazer|comece|começar|adiantar)\b/i;
 
-const ABSTRACT_OBJECT = /\b(uma?\s+)?(pend[eê]ncia|decis[aã]o|tarefa|coisa|algo|assunto|parte|passo|item|problema|situa[cç][aã]o|quest[aã]o|prioridade|vida|planejamento|revis[aá]vel|importante|necess[aá]rio)\b/i;
+const ABSTRACT_OBJECT = /\b(uma?\s+)?(pend[eê]ncia|decis[aã]o|tarefa|coisa|algo|assunto|parte|passo|item|problema|situa[cç][aã]o|quest[ão]|prioridade|vida|planejamento|revis[aá]vel|importante|necess[aá]rio)\b/i;
 
 const STOPWORDS = new Set([
   'a', 'o', 'as', 'os', 'um', 'uma', 'uns', 'umas', 'de', 'do', 'da', 'dos', 'das',
@@ -44,6 +44,8 @@ const OBJECTLESS_WORDS = new Set([
   'marque', 'marcar', 'leve', 'levar', 'enxague', 'enxaguar', 'passe', 'passar', 'guarde',
   'guardar', 'varra', 'varrer', 'sign', 'deliver', 'record', 'identify', 'build', 'create',
   'mark', 'take', 'rinse', 'wipe', 'store', 'sweep', 'copy', 'measure',
+  'corra', 'correr', 'caminhe', 'caminhar', 'cozinhe', 'cozinhar', 'leia', 'ler',
+  'saia', 'sair', 'deixe', 'deixar', 'tire', 'tirar', 'junte', 'juntar',
 ]);
 
 function cleanText(value: unknown): string {
@@ -67,15 +69,6 @@ function hasSpecificObject(title: string): boolean {
   return tokens.some((token) => !ABSTRACT_OBJECT.test(token));
 }
 
-/**
- * Contrato canônico das ações que a Airia cria ou republica.
- *
- * Uma ação não é uma intenção, uma categoria nem uma decisão sobre o que fazer.
- * Ela precisa começar com movimento executável, apontar para algo identificável e
- * declarar qual evidência permite considerá-la encerrada. A validação é deliberadamente
- * lexical e conservadora: ela bloqueia padrões sabidamente vagos, enquanto o prompt e
- * o revisor semântico preservam pertinência e verdade contextual.
- */
 export function validateConcreteAction(
   input: ConcreteActionInput,
   options: { requireDoneWhen?: boolean } = {},
@@ -94,17 +87,12 @@ export function validateConcreteAction(
   return { ok: true };
 }
 
-/** Formato único para superfícies que só aceitam uma string, como o Check-in. */
 export function formatConcreteAction(input: { title: unknown; doneWhen: unknown }): string {
   const title = cleanText(input.title).replace(/[.;]\s*$/, '');
   const doneWhen = cleanText(input.doneWhen).replace(/[.;]\s*$/, '');
   return title && doneWhen ? `${title}. Pronto quando: ${doneWhen}.` : title;
 }
 
-/**
- * Lê a forma visível "Ação. Pronto quando: evidência." sem aceitar uma frase
- * solta que esconda uma sugestão vaga na resposta do Check-in.
- */
 export function validateVisibleConcreteAction(value: unknown): ConcreteActionVerdict {
   const text = cleanText(value);
   const match = text.match(/^(.+?)[.。]?\s*(?:Pronto quando|Pare quando|Done when|Stop when)\s*:\s*(.+?)[.。]?$/i);
