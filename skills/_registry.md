@@ -4,7 +4,8 @@ Este registro lista skills locais do projeto Airia. Skills devem morar em `skill
 
 ## Produto
 
-- `airia-pr-review`: revisão obrigatoria de PRs da Airia antes de finalizar, aprovar, publicar ou fazer deploy de mudancas de produto.
+- `airia-governanca`: padrao obrigatorio de todo agente neste repositorio, sem a titular solicitar. Ticket, celulas, simulador humano, nota 8/10 e publicacao controlada.
+- `airia-pr-review`: revisao obrigatoria de PRs da Airia antes de finalizar, aprovar, publicar ou fazer deploy de mudancas de produto.
 - `airia-voice-capture`: captura por microfone sem repeticao e com sessao de transcricao confiavel.
 - `airia-command-execution`: interpretacao e execucao contextual do Comando Central.
 - `airia-code-integrity`: auditoria end-to-end de rotas, contratos e caminhos obsoletos.
@@ -16,4 +17,3 @@ Este registro lista skills locais do projeto Airia. Skills devem morar em `skill
 ## Infraestrutura
 
 - `notebooklm-bridge`: ponte Claude Code <-> NotebookLM via MCP para leitura pesada, pesquisa ancorada e memoria entre sessoes. Setup em `docs/notebooklm-mcp-setup.md`.
-
