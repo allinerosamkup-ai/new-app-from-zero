@@ -3262,3 +3262,38 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
   --airia-border-strong: color-mix(in srgb, var(--phase-accent) 54%, rgba(238,244,240,.22));
   background: linear-gradient(180deg, color-mix(in srgb, var(--phase-accent) 15%, #101716), #101716 48%) !important;
 }
+
+.goal-workspace-split {
+  display: grid;
+  gap: 12px;
+  grid-template-areas:
+    "agora"
+    "nota";
+}
+
+.goal-pane-agora { grid-area: agora; }
+.goal-pane-note { grid-area: nota; }
+
+.goals-master-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.goals-master-list {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+@media (min-width: 768px) {
+  .goal-workspace-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "nota agora";
+    align-items: start;
+  }
+
+  .goals-master-detail {
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    align-items: start;
+  }
+}

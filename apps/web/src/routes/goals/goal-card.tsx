@@ -19,11 +19,9 @@ import {
 import { useLocalizedCopy } from "../../i18n";
 import { buildGoalCardModel } from "../../utils/goal-priority-actions";
 import {
-  GOAL_WORKSPACE_PANES,
   buildGoalNotePatch,
   resolveGoalNoteDraft,
-  shouldShowGoalPathPane,
-  type GoalWorkspacePane,
+  resolveGoalWorkspaceLayout,
 } from "../../utils/goal-workspace";
 import {
   cardStyle,
@@ -77,7 +75,7 @@ export function GoalCard({
   const model = buildGoalCardModel(goal);
   const pathProposal = normalizeGoalPathProposal(goal.pathProposal);
   const [open, setOpen] = useState(focused || !paused);
-  const [workspacePane, setWorkspacePane] = useState<GoalWorkspacePane>("agora");
+  const workspace = resolveGoalWorkspaceLayout(goal);
   const [noteDraft, setNoteDraft] = useState(() => resolveGoalNoteDraft(goal));
   const [savingNote, setSavingNote] = useState(false);
   const [addingAction, setAddingAction] = useState(false);
@@ -122,81 +120,72 @@ export function GoalCard({
           <p style={{ margin: "0 0 5px", color: "var(--text-3)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>{l("Resultado", "Outcome")}</p>
           <p style={{ margin: "0 0 12px", color: "var(--text-1)", fontSize: 14, fontWeight: 750 }}>{goal.resultDefinition || goal.title}</p>
 
-          <div role="tablist" aria-label={l("Workspace do objetivo", "Goal workspace")} style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-            {GOAL_WORKSPACE_PANES.map((pane) => {
-              const active = workspacePane === pane.id;
-              const disabled = pane.id === "caminho" && !shouldShowGoalPathPane(goal);
-              return (
-                <button key={pane.id} type="button" role="tab" aria-selected={active} disabled={disabled} onClick={() => setWorkspacePane(pane.id)} style={{ flex: 1, minHeight: 36, borderRadius: 11, border: active ? "1px solid rgba(150,199,179,.55)" : "1px solid rgba(54,96,74,.12)", background: active ? "rgba(150,199,179,.18)" : "rgba(255,255,255,.72)", color: disabled ? "var(--text-3)" : "var(--text-1)", fontSize: 12, fontWeight: 800, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.55 : 1 }}>
-                  {l(pane.pt, pane.en)}
+          <div className="goal-workspace-split" aria-label={l("Workspace do objetivo", "Goal workspace")}>
+            {workspace.showAgora && (
+              <div className="goal-pane-agora" style={{ borderRadius: 18, border: "1px solid rgba(150,199,179,.34)", background: "rgba(150,199,179,.10)", padding: 13 }}>
+                <p style={{ margin: "0 0 8px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>{l("Agora", "Now")}</p>
+                {model.nextAction ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <button aria-label={l("Marcar ação como concluída", "Mark action as completed")} disabled={completingActionId !== null} onClick={() => onToggleAction(model.nextAction!.id)} style={{ width: 26, height: 26, borderRadius: 9, border: "1.5px solid var(--menthe)", background: "#fff", color: "var(--menthe)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                        <Check size={15} />
+                      </button>
+                      <div>
+                        <p style={{ margin: 0, color: "var(--text-1)", fontSize: 14, fontWeight: 750 }}>{model.nextAction.title}</p>
+                        {currentAction?.doneWhen && <p style={{ margin: "5px 0 0", color: "var(--text-2)", fontSize: 11 }}><strong>{l("Pronto quando:", "Done when:")}</strong> {currentAction.doneWhen}</p>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 9 }}>
+                      <button onClick={() => onUpdateAction(model.nextAction!.id, { state: "deferred" })} style={{ ...quietButtonStyle, flex: 1 }}><CirclePause size={13} /> {l("Deixar para depois", "Leave for later")}</button>
+                      <button onClick={() => { if (window.confirm(l("Remover esta ação do caminho futuro?", "Remove this action from the future path?"))) void onUpdateAction(model.nextAction!.id, { state: "rejected" }); }} style={{ ...quietButtonStyle, flex: 1 }}><X size={13} /> {l("Retirar", "Remove")}</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ margin: "0 0 11px", color: "var(--text-2)", fontSize: 13 }}>{l("Ainda falta escolher uma ação concreta.", "A concrete action still needs to be chosen.")}</p>
+                    {!addingAction && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <button onClick={() => setAddingAction(true)} style={{ ...quietButtonStyle, flex: 1 }}><Plus size={14} /> {l("Definir próxima ação", "Define next action")}</button>
+                        <button disabled={loadingSuggestion} onClick={onRequestSuggestion} style={{ ...quietButtonStyle, flex: 1 }}><Sparkles size={14} /> {loadingSuggestion ? l("Pensando…", "Thinking…") : l("Pedir opções à Airia", "Ask Airia for options")}</button>
+                      </div>
+                    )}
+                  </>
+                )}
+                {addingAction && (
+                  <div style={{ marginTop: 10 }}>
+                    <input value={actionTitle} onChange={(event) => setActionTitle(event.target.value)} placeholder={l("Verbo + objeto concreto", "Verb + concrete object")} style={{ width: "100%", minHeight: 44, boxSizing: "border-box", border: "1.5px solid rgba(150,199,179,.55)", borderRadius: 12, padding: "10px 12px" }} />
+                    <input value={actionDoneWhen} onChange={(event) => setActionDoneWhen(event.target.value)} placeholder={l("Pronto quando…", "Done when…")} style={{ width: "100%", minHeight: 44, boxSizing: "border-box", marginTop: 8, border: "1.5px solid rgba(150,199,179,.55)", borderRadius: 12, padding: "10px 12px" }} />
+                    <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
+                      <button disabled={actionTitle.trim().length < 3 || actionDoneWhen.trim().length < 3} onClick={async () => { await onAddAction({ title: actionTitle.trim(), doneWhen: actionDoneWhen.trim() }); setActionTitle(""); setActionDoneWhen(""); setAddingAction(false); }} style={{ ...quietButtonStyle, flex: 1, background: "var(--menthe)", borderColor: "var(--menthe)", color: "#fff" }}>{l("Salvar ação", "Save action")}</button>
+                      <button onClick={() => setAddingAction(false)} style={quietButtonStyle}>{l("Cancelar", "Cancel")}</button>
+                    </div>
+                  </div>
+                )}
+                {suggestionDraft.length > 0 && !model.nextAction && (
+                  <div style={{ display: "grid", gap: 7, marginTop: 12 }}>
+                    {suggestionDraft.slice(0, 3).map((suggestion) => (
+                      <button key={suggestion} onClick={() => onAcceptSuggestion(suggestion)} style={{ minHeight: 43, borderRadius: 12, border: "1px solid rgba(134,183,154,.30)", background: "#fff", padding: "9px 11px", textAlign: "left", fontSize: 12 }}>{suggestion}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {workspace.showNote && (
+              <div className="goal-pane-note" style={{ borderRadius: 18, border: "1px solid rgba(99,152,169,.28)", background: "rgba(255,255,255,.84)", padding: 13 }}>
+                <p style={{ margin: "0 0 8px", color: "var(--text-3)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>{l("Nota deste objetivo", "Note for this goal")}</p>
+                <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} aria-label={l("Nota ligada a este objetivo", "Note attached to this goal")} rows={3} style={{ width: "100%", border: "1px solid rgba(99,152,169,.28)", borderRadius: 12, padding: "10px 12px", fontSize: 13, resize: "vertical", boxSizing: "border-box" }} />
+                <button type="button" disabled={savingNote || noteDraft.trim() === resolveGoalNoteDraft(goal)} onClick={async () => { setSavingNote(true); try { await onSaveNote(buildGoalNotePatch(noteDraft).description); } finally { setSavingNote(false); } }} style={{ marginTop: 10, minHeight: 40, width: "100%", borderRadius: 12, border: "none", background: "var(--menthe)", color: "#fff", fontWeight: 800 }}>
+                  {savingNote ? l("Salvando…", "Saving…") : l("Guardar nota", "Save note")}
                 </button>
-              );
-            })}
+              </div>
+            )}
           </div>
 
-          {workspacePane === "nota" && (
-            <div style={{ borderRadius: 18, border: "1px solid rgba(99,152,169,.28)", background: "rgba(255,255,255,.84)", padding: 13 }}>
-              <p style={{ margin: "0 0 8px", color: "var(--text-3)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>{l("Nota deste objetivo", "Note for this goal")}</p>
-              <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} aria-label={l("Nota ligada a este objetivo", "Note attached to this goal")} rows={5} style={{ width: "100%", border: "1px solid rgba(99,152,169,.28)", borderRadius: 12, padding: "10px 12px", fontSize: 13, resize: "vertical", boxSizing: "border-box" }} />
-              <button type="button" disabled={savingNote || noteDraft.trim() === resolveGoalNoteDraft(goal)} onClick={async () => { setSavingNote(true); try { await onSaveNote(buildGoalNotePatch(noteDraft).description); } finally { setSavingNote(false); } }} style={{ marginTop: 10, minHeight: 40, width: "100%", borderRadius: 12, border: "none", background: "var(--menthe)", color: "#fff", fontWeight: 800 }}>
-                {savingNote ? l("Salvando…", "Saving…") : l("Guardar nota", "Save note")}
-              </button>
-            </div>
-          )}
-
-          {workspacePane === "agora" && (
-            <div style={{ borderRadius: 18, border: "1px solid rgba(150,199,179,.34)", background: "rgba(150,199,179,.10)", padding: 13 }}>
-              <p style={{ margin: "0 0 8px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>{l("Agora", "Now")}</p>
-              {model.nextAction ? (
-                <>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                    <button aria-label={l("Marcar ação como concluída", "Mark action as completed")} disabled={completingActionId !== null} onClick={() => onToggleAction(model.nextAction!.id)} style={{ width: 26, height: 26, borderRadius: 9, border: "1.5px solid var(--menthe)", background: "#fff", color: "var(--menthe)", display: "grid", placeItems: "center", flexShrink: 0 }}>
-                      <Check size={15} />
-                    </button>
-                    <div>
-                      <p style={{ margin: 0, color: "var(--text-1)", fontSize: 14, fontWeight: 750 }}>{model.nextAction.title}</p>
-                      {currentAction?.doneWhen && <p style={{ margin: "5px 0 0", color: "var(--text-2)", fontSize: 11 }}><strong>{l("Pronto quando:", "Done when:")}</strong> {currentAction.doneWhen}</p>}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 9 }}>
-                    <button onClick={() => onUpdateAction(model.nextAction!.id, { state: "deferred" })} style={{ ...quietButtonStyle, flex: 1 }}><CirclePause size={13} /> {l("Deixar para depois", "Leave for later")}</button>
-                    <button onClick={() => { if (window.confirm(l("Remover esta ação do caminho futuro?", "Remove this action from the future path?"))) void onUpdateAction(model.nextAction!.id, { state: "rejected" }); }} style={{ ...quietButtonStyle, flex: 1 }}><X size={13} /> {l("Retirar", "Remove")}</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p style={{ margin: "0 0 11px", color: "var(--text-2)", fontSize: 13 }}>{l("Ainda falta escolher uma ação concreta.", "A concrete action still needs to be chosen.")}</p>
-                  {!addingAction && (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button onClick={() => setAddingAction(true)} style={{ ...quietButtonStyle, flex: 1 }}><Plus size={14} /> {l("Definir próxima ação", "Define next action")}</button>
-                      <button disabled={loadingSuggestion} onClick={onRequestSuggestion} style={{ ...quietButtonStyle, flex: 1 }}><Sparkles size={14} /> {loadingSuggestion ? l("Pensando…", "Thinking…") : l("Pedir opções à Airia", "Ask Airia for options")}</button>
-                    </div>
-                  )}
-                </>
-              )}
-              {addingAction && (
-                <div style={{ marginTop: 10 }}>
-                  <input value={actionTitle} onChange={(event) => setActionTitle(event.target.value)} placeholder={l("Verbo + objeto concreto", "Verb + concrete object")} style={{ width: "100%", minHeight: 44, boxSizing: "border-box", border: "1.5px solid rgba(150,199,179,.55)", borderRadius: 12, padding: "10px 12px" }} />
-                  <input value={actionDoneWhen} onChange={(event) => setActionDoneWhen(event.target.value)} placeholder={l("Pronto quando…", "Done when…")} style={{ width: "100%", minHeight: 44, boxSizing: "border-box", marginTop: 8, border: "1.5px solid rgba(150,199,179,.55)", borderRadius: 12, padding: "10px 12px" }} />
-                  <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
-                    <button disabled={actionTitle.trim().length < 3 || actionDoneWhen.trim().length < 3} onClick={async () => { await onAddAction({ title: actionTitle.trim(), doneWhen: actionDoneWhen.trim() }); setActionTitle(""); setActionDoneWhen(""); setAddingAction(false); }} style={{ ...quietButtonStyle, flex: 1, background: "var(--menthe)", borderColor: "var(--menthe)", color: "#fff" }}>{l("Salvar ação", "Save action")}</button>
-                    <button onClick={() => setAddingAction(false)} style={quietButtonStyle}>{l("Cancelar", "Cancel")}</button>
-                  </div>
-                </div>
-              )}
-              {suggestionDraft.length > 0 && !model.nextAction && (
-                <div style={{ display: "grid", gap: 7, marginTop: 12 }}>
-                  {suggestionDraft.slice(0, 3).map((suggestion) => (
-                    <button key={suggestion} onClick={() => onAcceptSuggestion(suggestion)} style={{ minHeight: 43, borderRadius: 12, border: "1px solid rgba(134,183,154,.30)", background: "#fff", padding: "9px 11px", textAlign: "left", fontSize: 12 }}>{suggestion}</button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {workspacePane === "caminho" && shouldShowGoalPathPane(goal) && (
-            <div style={{ display: "grid", gap: 10 }}>
-              <p style={{ margin: 0, color: "var(--text-3)", fontSize: 11, fontWeight: 750 }}>{l("Caminho", "Path")} · {model.completedActions}/{model.totalActions}</p>
+          {workspace.showPath && (
+            <details style={{ marginTop: 12 }}>
+            <summary style={{ cursor: "pointer", color: "var(--text-3)", fontSize: 11, fontWeight: 750 }}>{l("Caminho", "Path")} · {model.completedActions}/{model.totalActions}</summary>
+            <div style={{ display: "grid", gap: 10, marginTop: 9 }}>
               {milestones.map((milestone) => (
                 <div key={milestone.id} style={{ borderLeft: "2px solid var(--menthe)", padding: "5px 0 5px 10px" }}>
                   <strong style={{ display: "block", color: "var(--text-2)", fontSize: 12 }}>{milestone.title}</strong>
@@ -212,6 +201,7 @@ export function GoalCard({
                 <button onClick={onAdvance} style={{ ...quietButtonStyle, width: "100%" }}>{l("Abrir próxima etapa", "Open next stage")}</button>
               )}
             </div>
+            </details>
           )}
 
           {pathProposal && (

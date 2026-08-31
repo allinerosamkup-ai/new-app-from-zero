@@ -1,5 +1,14 @@
 # CURRENT_STATE — trabalho em andamento
 
+## Objetivos Elisi split — 2026-08-31
+
+Branch `feat/goals-elisi-split` a partir de `origin/master` (`9073e21`). Papel: Coordenador Geral. Sem merge/deploy.
+
+- Local estava 41 commits atrás; pull feito. Stash: `wip-unrelated-checkin-package`.
+- Causa do split “ainda não”: GitHub tinha abas que escondem Nota ou Agora. Elisi exige as duas juntas.
+- Feito: nota + Agora simultâneos; desktop lista|detalhe; governança do PR #14 nesta pasta; 14 testes passaram.
+- Pendente: verificador independente, simulação no navegador, autorização para commit.
+
 ## Status
 
 `BLOQUEADO EXTERNAMENTE — código da Cakto meta-verificado e integrado na branch

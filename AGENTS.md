@@ -5,6 +5,19 @@ Airia não é planner genérico, chatbot terapêutico nem tracker menstrual. É 
 
 Alline é a pessoa das ideias. O agente técnico transforma ideias em produto, com tomada de decisão pragmática e cuidado para não quebrar mudanças recentes.
 
+## Governança multiagente (obrigatória)
+
+Vale para **qualquer agente** neste repositório (Claude, Grok, Cursor, Replit), em cada turno, sem a titular solicitar.
+
+1. Carregar `skills/airia-governanca/SKILL.md` antes de planejar, alterar, revisar, pontuar, commitar ou falar em deploy.
+2. Comportamento do produto continua em [`docs/product/PRODUCT_CONSTITUTION.md`](docs/product/PRODUCT_CONSTITUTION.md). Esta seção e a skill **não** criam segunda constituição.
+3. Pedido vago não vira código. Ticket em [`docs/quality/templates/ticket.md`](docs/quality/templates/ticket.md).
+4. Quem produz não verifica a própria entrega. Rubrica em [`docs/quality/rubrica-8.md`](docs/quality/rubrica-8.md).
+5. Superfície cotidiana exige simulador humano mínimo ([`docs/quality/cenarios-humanos.md`](docs/quality/cenarios-humanos.md)).
+6. Merge em `master` e Deploy VPS exigem autorização humana explícita + CI + nota ≥ 8. Overlay: [`docs/product/governanca-multiagente.md`](docs/product/governanca-multiagente.md).
+
+Núcleo ativo: `/comecar`, `/checkin`, `/home`, `/goals`, `/insights`, `/journal`, `/aura`, `/preferences`. Planner, Hábitos, Pomodoro e Agenda não voltam por rota, prompt, notificação ou copy.
+
 ## Prioridades Técnicas
 - Ler contexto e código antes de alterar.
 - Preservar mudanças já feitas pela usuária ou por outros agentes.

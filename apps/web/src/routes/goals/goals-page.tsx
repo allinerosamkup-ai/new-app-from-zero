@@ -21,7 +21,8 @@ import { api, ApiRequestError } from "../../lib/api";
 import { trackProductEvent } from "../../lib/track";
 import { useAiriaReading } from "../../lib/airia-reading";
 import { SafetyProtocolCard } from "../../components/aura/SafetyProtocolCard";
-import { buildGoalNotePatch } from "../../utils/goal-workspace";
+import { buildGoalCardModel } from "../../utils/goal-priority-actions";
+import { buildGoalNotePatch, pickActiveWorkspaceGoal, readOpenedGoalId, readWideGoalsLayout } from "../../utils/goal-workspace";
 import "../../styles/aura.css";
 import "../../styles/editorial.css";
 import { cardStyle, quietButtonStyle, type GoalLike } from "./goal-model";
@@ -58,9 +59,21 @@ export function GoalsPage() {
   const [recoveringGoals, setRecoveringGoals] = useState(false);
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
 
-  const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
+  const focusedGoalId = readOpenedGoalId(location.state as { openGoalId?: unknown; objectiveId?: unknown } | null);
   const goals = state.goals as unknown as GoalLike[];
   const goalsOpenedRef = useRef(false);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | number | null>(focusedGoalId ?? null);
+  const [wideLayout, setWideLayout] = useState(() => (
+    typeof window === "undefined" ? false : readWideGoalsLayout(window.matchMedia("(min-width: 768px)"))
+  ));
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 768px)");
+    const sync = () => setWideLayout(readWideGoalsLayout(media));
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
 
   useEffect(() => {
     if (goalsOpenedRef.current) return;
@@ -95,6 +108,20 @@ export function GoalsPage() {
   const activeGoals = useMemo(() => goals.filter((goal) => goal.completedPct < 100 && !goal.pausedAt), [goals]);
   const pausedGoals = useMemo(() => goals.filter((goal) => goal.completedPct < 100 && Boolean(goal.pausedAt)), [goals]);
   const completedGoals = useMemo(() => goals.filter((goal) => goal.completedPct >= 100), [goals]);
+  const selectedGoal = useMemo(
+    () => pickActiveWorkspaceGoal(activeGoals, selectedGoalId, focusedGoalId),
+    [activeGoals, selectedGoalId, focusedGoalId],
+  );
+
+  useEffect(() => {
+    if (focusedGoalId != null) setSelectedGoalId(focusedGoalId);
+  }, [focusedGoalId]);
+
+  useEffect(() => {
+    if (selectedGoal && String(selectedGoal.id) !== String(selectedGoalId)) {
+      setSelectedGoalId(selectedGoal.id);
+    }
+  }, [selectedGoal, selectedGoalId]);
 
   async function executeGoalRecovery() {
     await recoverGoalActionsOnce(recoveryGuardRef.current, async () => {
@@ -146,6 +173,7 @@ export function GoalsPage() {
       }) as GoalLike;
       await refreshObjectives();
       setCreationOpen(false);
+      setSelectedGoalId(objective.id);
       trackProductEvent("goal.created.v1", "goals", {
         goalId: String(objective.id),
         creationMode: "manual",
@@ -228,7 +256,7 @@ export function GoalsPage() {
       key={goal.id}
       goal={goal}
       paused={Boolean(goal.pausedAt)}
-      focused={focusedGoalId != null && String(focusedGoalId) === String(goal.id)}
+      focused={(focusedGoalId != null && String(focusedGoalId) === String(goal.id)) || (wideLayout && selectedGoal != null && String(selectedGoal.id) === String(goal.id))}
       loadingSuggestion={loadingSuggestion === goal.id}
       suggestionDraft={suggestionDrafts[String(goal.id)] ?? []}
       completingActionId={completingActionId}
@@ -315,7 +343,7 @@ export function GoalsPage() {
 
   return (
     <div className="page-shell" style={{ minHeight: "100%", background: "var(--warm-bg)" }}>
-      <div className="screen-content" style={{ maxWidth: 680, margin: "0 auto", paddingBottom: 118 }}>
+      <div className="screen-content" style={{ maxWidth: wideLayout ? 1080 : 680, margin: "0 auto", paddingBottom: 118 }}>
         <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="goals" />
         <header style={{ padding: "18px 2px 16px" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
@@ -340,7 +368,7 @@ export function GoalsPage() {
           />
         )}
 
-        <main style={{ display: "grid", gap: 12 }}>
+        <main className={wideLayout && activeGoals.length > 0 ? "goals-master-detail" : undefined} style={wideLayout && activeGoals.length > 0 ? undefined : { display: "grid", gap: 12 }}>
           {activeGoals.length === 0 ? (
             <section style={{ ...cardStyle, padding: "24px 18px", textAlign: "center" }}>
               <Target size={24} color="var(--nectarine)" />
@@ -349,6 +377,39 @@ export function GoalsPage() {
                 <Plus size={16} /> {l("Criar meu primeiro objetivo", "Create my first goal")}
               </button>
             </section>
+          ) : wideLayout ? (
+            <>
+              <nav className="goals-master-list" aria-label={l("Seus objetivos", "Your goals")}>
+                {activeGoals.map((goal) => {
+                  const selected = selectedGoal != null && String(selectedGoal.id) === String(goal.id);
+                  const nextTitle = buildGoalCardModel(goal).nextAction?.title;
+                  return (
+                    <button
+                      key={goal.id}
+                      type="button"
+                      onClick={() => setSelectedGoalId(goal.id)}
+                      aria-current={selected ? "true" : undefined}
+                      style={{
+                        ...cardStyle,
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "12px 13px",
+                        cursor: "pointer",
+                        outline: selected ? "2px solid rgba(99,152,169,.34)" : "none",
+                      }}
+                    >
+                      <span style={{ display: "block", color: "var(--text-1)", fontSize: 14, fontWeight: 800 }}>{goal.title}</span>
+                      {nextTitle && (
+                        <span style={{ display: "block", marginTop: 4, color: "var(--text-3)", fontSize: 11, lineHeight: 1.4 }}>
+                          {l("Agora", "Now")}: {nextTitle}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+              <div>{selectedGoal ? renderGoal(selectedGoal) : null}</div>
+            </>
           ) : activeGoals.map(renderGoal)}
         </main>
 
