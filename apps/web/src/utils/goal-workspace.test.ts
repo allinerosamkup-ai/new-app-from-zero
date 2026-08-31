@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildGoalNotePatch,
+  pickActiveWorkspaceGoal,
+  readWideGoalsLayout,
   resolveGoalNoteDraft,
+  resolveGoalWorkspaceLayout,
   shouldShowGoalPathPane,
 } from "./goal-workspace";
 
@@ -36,5 +39,30 @@ describe("goal workspace note + split", () => {
     expect(shouldShowGoalPathPane({ subtasks: [{ id: "a" }, { id: "b" }] })).toBe(true);
     expect(shouldShowGoalPathPane({ milestones: [{ id: "m" }] })).toBe(true);
     expect(shouldShowGoalPathPane({ subtasks: [{ id: "a" }] })).toBe(true);
+    expect(shouldShowGoalPathPane({ subtasks: [], milestones: [] })).toBe(false);
+  });
+
+  it("keeps note and now visible together instead of exclusive tabs", () => {
+    const layout = resolveGoalWorkspaceLayout({ subtasks: [{ id: "a" }] });
+    expect(layout.showNote).toBe(true);
+    expect(layout.showAgora).toBe(true);
+    expect(layout.showPath).toBe(true);
+    const empty = resolveGoalWorkspaceLayout({});
+    expect(empty.showNote).toBe(true);
+    expect(empty.showAgora).toBe(true);
+    expect(empty.showPath).toBe(false);
+  });
+
+  it("does not keep a paused goal selected in the active workspace", () => {
+    const active = [{ id: "alive" }, { id: "next" }];
+    expect(pickActiveWorkspaceGoal(active, "alive")).toEqual({ id: "alive" });
+    expect(pickActiveWorkspaceGoal(active, "paused-now")).toEqual({ id: "alive" });
+    expect(pickActiveWorkspaceGoal([], "alive")).toBeNull();
+  });
+
+  it("reads the wide layout from the first media match, not after a stacked paint", () => {
+    expect(readWideGoalsLayout({ matches: true })).toBe(true);
+    expect(readWideGoalsLayout({ matches: false })).toBe(false);
+    expect(readWideGoalsLayout(null)).toBe(false);
   });
 });

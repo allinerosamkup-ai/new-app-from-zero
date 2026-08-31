@@ -12,6 +12,14 @@ Formato: `### [TIPO] Título` + o que muda na prática.
 
 ---
 
+## Objetivos / split
+
+### [FATO] “Split” no GitHub era duas coisas diferentes
+O commit `21e9f33` corrige o **split de ações da IA** (decomposição). A página do GitHub depois ganhou abas Agora/Caminho/Nota. O Elisi exige **nota e tarefa visíveis juntas** (lista | detalhe). Abas que se excluem fazem o split “ainda não funcionar”, mesmo com a decomposição corrigida.
+
+### [FATO] Esta pasta estava 41 commits atrás do GitHub
+Implementar Objetivos no local atrasado seria retrabalho. Base: `origin/master`. Governança multiagente está no PR #14 (draft), não no master.
+
 ## Ferramentas e ambiente
 
 ### [FATO] Build Android exige SDK fixo no app e Health Connect travado no alpha08
