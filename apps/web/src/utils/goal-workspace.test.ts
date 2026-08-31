@@ -35,6 +35,6 @@ describe("goal workspace note + split", () => {
   it("shows the path pane when there is a split to inspect", () => {
     expect(shouldShowGoalPathPane({ subtasks: [{ id: "a" }, { id: "b" }] })).toBe(true);
     expect(shouldShowGoalPathPane({ milestones: [{ id: "m" }] })).toBe(true);
-    expect(shouldShowGoalPathPane({ subtasks: [{ id: "a" }] })).toBe(false);
+    expect(shouldShowGoalPathPane({ subtasks: [{ id: "a" }] })).toBe(true);
   });
 });
