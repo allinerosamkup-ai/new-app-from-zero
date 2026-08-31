@@ -53,6 +53,18 @@ export function readWideGoalsLayout(query?: { matches: boolean } | null): boolea
   return Boolean(query?.matches);
 }
 
+/** Home/Aura may open a goal with `openGoalId` or `objectiveId`. */
+export function readOpenedGoalId(state: {
+  openGoalId?: unknown;
+  objectiveId?: unknown;
+} | null | undefined): string | number | null {
+  if (!state) return null;
+  for (const value of [state.openGoalId, state.objectiveId]) {
+    if (typeof value === "string" || typeof value === "number") return value;
+  }
+  return null;
+}
+
 /** The workspace follows the active list. Paused/done ids do not stay selected. */
 export function pickActiveWorkspaceGoal<T extends { id: string | number }>(
   activeGoals: T[],

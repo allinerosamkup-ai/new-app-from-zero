@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGoalNotePatch,
   pickActiveWorkspaceGoal,
+  readOpenedGoalId,
   readWideGoalsLayout,
   resolveGoalNoteDraft,
   resolveGoalWorkspaceLayout,
@@ -58,6 +59,13 @@ describe("goal workspace note + split", () => {
     expect(pickActiveWorkspaceGoal(active, "alive")).toEqual({ id: "alive" });
     expect(pickActiveWorkspaceGoal(active, "paused-now")).toEqual({ id: "alive" });
     expect(pickActiveWorkspaceGoal([], "alive")).toBeNull();
+  });
+
+  it("opens the same goal whether Home sent openGoalId or objectiveId", () => {
+    expect(readOpenedGoalId({ openGoalId: "from-focus-card" })).toBe("from-focus-card");
+    expect(readOpenedGoalId({ objectiveId: "from-today-actions" })).toBe("from-today-actions");
+    expect(readOpenedGoalId({ openGoalId: "preferred", objectiveId: "other" })).toBe("preferred");
+    expect(readOpenedGoalId(null)).toBeNull();
   });
 
   it("reads the wide layout from the first media match, not after a stacked paint", () => {

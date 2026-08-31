@@ -22,7 +22,7 @@ import { trackProductEvent } from "../../lib/track";
 import { useAiriaReading } from "../../lib/airia-reading";
 import { SafetyProtocolCard } from "../../components/aura/SafetyProtocolCard";
 import { buildGoalCardModel } from "../../utils/goal-priority-actions";
-import { buildGoalNotePatch, pickActiveWorkspaceGoal, readWideGoalsLayout } from "../../utils/goal-workspace";
+import { buildGoalNotePatch, pickActiveWorkspaceGoal, readOpenedGoalId, readWideGoalsLayout } from "../../utils/goal-workspace";
 import "../../styles/aura.css";
 import "../../styles/editorial.css";
 import { cardStyle, quietButtonStyle, type GoalLike } from "./goal-model";
@@ -59,7 +59,7 @@ export function GoalsPage() {
   const [recoveringGoals, setRecoveringGoals] = useState(false);
   const [suggestionDrafts, setSuggestionDrafts] = useState<Record<string, string[]>>({});
 
-  const focusedGoalId = (location.state as { openGoalId?: string | number } | null)?.openGoalId;
+  const focusedGoalId = readOpenedGoalId(location.state as { openGoalId?: unknown; objectiveId?: unknown } | null);
   const goals = state.goals as unknown as GoalLike[];
   const goalsOpenedRef = useRef(false);
   const [selectedGoalId, setSelectedGoalId] = useState<string | number | null>(focusedGoalId ?? null);
