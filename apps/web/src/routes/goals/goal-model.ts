@@ -24,7 +24,7 @@ export type GoalLike = {
   currentReality?: string | null;
   milestones?: Array<{ id: string; title: string; order: number; doneWhen?: string | null }>;
   pathVersion?: number;
-  pathStatus?: 'not_started' | 'generating' | 'retrying' | 'needs_answer' | 'ready';
+  pathStatus?: 'not_started' | 'generating' | 'retrying' | 'needs_answer' | 'ready' | 'failed';
   pathQuestion?: string | null;
   needsActionReview?: boolean;
   deadline?: string | null;
