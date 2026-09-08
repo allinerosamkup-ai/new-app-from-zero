@@ -14,6 +14,14 @@ Formato: `### [TIPO] Título` + o que muda na prática.
 
 ## Deploy / dados
 
+### [FATO] `deploy.sh` não pode validar a imagem anterior
+A checagem de bundle lia `PREVIOUS_WEB_IMAGE` e os primeiros 400 KB de um
+`docker cp` em pipe. Em 2026-09-08 o build novo (`main-AHKoZbRK.js`) estava
+certo, a migração passou, e o script abortou no bundle velho
+(`main-CTOsMxK7.js`) com rollback. A versão que funciona é a de
+`deploy-from-github.sh`: criar `bundlecheck` a partir de `airia-web:current`,
+copiar assets para arquivo e `grep -F airia-data-router-v1`.
+
 ### [FATO] Health 200 da Airia não prova que o banco responde
 `https://airia.pro/api/health` devolve `{"status":"ok"}` com o Postgres
 inacessível. Em 2026-09-08 o Prisma no container vivo falhou com

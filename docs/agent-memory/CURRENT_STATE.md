@@ -1,5 +1,25 @@
 # CURRENT_STATE — trabalho em andamento
 
+## 2026-09-08 — Publicado na VPS após Resume do Supabase (`cfea363`)
+
+Pedido da titular: verificar o app e subir a última atualização. Autorização
+neste turno. O projeto Supabase estava **pausado**, não apagado; após o Resume
+o DNS voltou e o Prisma na VPS respondeu `LIVE_DB_OK`.
+
+Primeira tentativa com o banco restaurado buildou e migrou, mas o
+`deploy.sh` validava a **imagem anterior** (`main-CTOsMxK7.js`) e deu rollback.
+Corrigido em `cfea363`: a checagem lê `airia-web:current` e o marcador
+`airia-data-router-v1`.
+
+**No ar agora (conferido, não só pelo log):**
+- GitHub, checkout da VPS e label do `airia_web`: `cfea363`
+- `sw.js` público contém a release `cfea363`
+- bundle `main-AHKoZbRK.js` tem `airia-data-router-v1`
+- `/api/health`, `/home` e `www` → 200
+- Prisma no container: `LIVE_DB_OK`
+
+CI do `ca033de` (i18n) estava verde. O commit de deploy é só o script.
+
 ## 2026-09-08 — Verificar app e publicar na VPS
 
 Pedido da titular: verificar o app e subir a última atualização para a VPS.
