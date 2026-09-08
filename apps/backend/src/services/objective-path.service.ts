@@ -66,7 +66,7 @@ type Decompose = (input: GoalIntelligenceInput) => Promise<GoalDecomposition>;
  * os passos canônicos centrados na meta — nunca frases do contexto viradas de
  * ação.
  */
-const DECOMPOSITION_DEADLINE_MS = 8_000;
+const DECOMPOSITION_DEADLINE_MS = 15_000;
 const AI_RETRY_DELAY_MS = 500;
 
 /** Sanitiza as falas da pessoa antes de virarem material de geração: micro-frases

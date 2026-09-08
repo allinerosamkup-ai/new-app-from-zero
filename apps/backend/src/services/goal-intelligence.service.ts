@@ -211,33 +211,69 @@ export function isConversationalPhrase(statement: string): boolean {
  * depois uma primeira versão pequena, e por fim o registro do que aconteceu.
  * O fallback não presume que o objetivo seja exercício, rotina ou atividade física.
  */
-const CANONICAL_STARTERS: Array<{ title: string; doneWhen: string; effortSize: 'small' | 'medium' }> = [
-  {
-    title: 'Escreva o resultado que fará __GOAL__ avançar',
-    doneWhen: 'o resultado estiver descrito em uma frase que possa ser reconhecida na prática',
-    effortSize: 'small',
-  },
-  {
-    title: 'Identifique o que já está disponível para iniciar __GOAL__',
-    doneWhen: 'o que já está disponível para começar estiver identificado, sem inventar recursos',
-    effortSize: 'small',
-  },
-  {
-    title: 'Realizar uma primeira versão pequena de __GOAL__',
-    doneWhen: 'uma primeira versão ou teste pequeno de __GOAL__ estiver concluído',
-    effortSize: 'small',
-  },
-  {
-    title: 'Registrar o que foi feito ao iniciar __GOAL__',
-    doneWhen: 'o que foi feito e o próximo ajuste estiverem claros',
-    effortSize: 'small',
-  },
-  {
-    title: 'Ajustar a próxima etapa de __GOAL__',
-    doneWhen: 'a próxima etapa estiver definida com um critério de término',
-    effortSize: 'medium',
-  },
-];
+function getDomainStarters(title: string): Array<{ title: string; doneWhen: string; effortSize: 'small' | 'medium' }> {
+  const t = title.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  
+  if (t.match(/\b(ler|livro|leitura|estudar|curso|aula)\b/)) {
+    return [
+      { title: 'Separar o material necessário', doneWhen: 'material estiver à mão', effortSize: 'small' },
+      { title: 'Definir o tempo ou a quantidade da sessão', doneWhen: 'a meta da sessão estiver definida', effortSize: 'small' },
+      { title: 'Fazer a primeira sessão focada', doneWhen: 'a sessão terminar', effortSize: 'medium' },
+      { title: 'Anotar onde parou para a próxima vez', doneWhen: 'a marcação estiver feita', effortSize: 'small' },
+    ];
+  }
+  
+  if (t.match(/\b(treino|academia|correr|corrida|exercicio|caminhada|yoga)\b/)) {
+    return [
+      { title: 'Separar a roupa e o tênis', doneWhen: 'a roupa estiver separada', effortSize: 'small' },
+      { title: 'Definir o horário exato', doneWhen: 'o horário estiver agendado', effortSize: 'small' },
+      { title: 'Realizar o treino ou atividade física', doneWhen: 'a atividade for concluída', effortSize: 'medium' },
+      { title: 'Registrar que completou a atividade', doneWhen: 'o registro for feito', effortSize: 'small' },
+    ];
+  }
+  
+  if (t.match(/\b(comprar|compra|mercado|shopping)\b/)) {
+    return [
+      { title: 'Fazer a lista do que precisa comprar', doneWhen: 'a lista estiver pronta', effortSize: 'small' },
+      { title: 'Verificar o orçamento disponível', doneWhen: 'o valor máximo estiver definido', effortSize: 'small' },
+      { title: 'Ir ao local ou abrir o site para comprar', doneWhen: 'a compra for realizada', effortSize: 'medium' },
+    ];
+  }
+
+  if (t.match(/\b(cozinhar|comida|receita|refeicao|jantar|almoco|lanche)\b/)) {
+    return [
+      { title: 'Escolher a receita ou refeição', doneWhen: 'a escolha estiver feita', effortSize: 'small' },
+      { title: 'Separar os ingredientes e panelas', doneWhen: 'os itens estiverem na bancada', effortSize: 'small' },
+      { title: 'Preparar a primeira parte da refeição', doneWhen: 'a etapa inicial estiver pronta', effortSize: 'medium' },
+      { title: 'Registrar o que foi cozinhado', doneWhen: 'o registro for feito', effortSize: 'small' },
+    ];
+  }
+
+  if (t.match(/\b(limpar|arrumar|organizar|casa|quarto|sala|faxina)\b/)) {
+    return [
+      { title: 'Separar os materiais de limpeza ou organizadores', doneWhen: 'os materiais estiverem prontos', effortSize: 'small' },
+      { title: 'Recolher o que está fora do lugar', doneWhen: 'os itens soltos estiverem recolhidos', effortSize: 'medium' },
+      { title: 'Limpar ou organizar a primeira área', doneWhen: 'a primeira área estiver limpa', effortSize: 'medium' },
+    ];
+  }
+
+  if (t.match(/\b(projeto|trabalho|relatorio|apresentacao|reuniao)\b/)) {
+    return [
+      { title: 'Abrir o documento ou ambiente de trabalho', doneWhen: 'o ambiente de trabalho estiver pronto', effortSize: 'small' },
+      { title: 'Fazer um esboço ou rascunho inicial', doneWhen: 'o rascunho estiver pronto', effortSize: 'medium' },
+      { title: 'Trabalhar na primeira parte ou seção', doneWhen: 'a primeira parte for concluída', effortSize: 'medium' },
+      { title: 'Salvar e definir o próximo passo', doneWhen: 'o progresso estiver salvo', effortSize: 'small' },
+    ];
+  }
+
+  // Fallback genérico estruturado
+  return [
+    { title: 'Separar os itens ou ferramentas necessárias', doneWhen: 'tudo estiver pronto para começar', effortSize: 'small' },
+    { title: 'Definir um pequeno primeiro passo claro', doneWhen: 'o primeiro passo estiver definido', effortSize: 'small' },
+    { title: 'Realizar uma primeira versão de __GOAL__', doneWhen: 'a primeira versão estiver concluída', effortSize: 'medium' },
+    { title: 'Registrar o progresso alcançado', doneWhen: 'o registro for feito', effortSize: 'small' },
+  ];
+}
 
 /**
  * Saída digna para superfícies operacionais: quando a IA não responde, entrega
@@ -262,7 +298,8 @@ export function buildFallbackGoalDecomposition(
   }
 
   const maxSteps = input.capacity === 'quick' ? 3 : 4;
-  const steps = CANONICAL_STARTERS.slice(0, maxSteps).map((starter, index) => ({
+  const starters = getDomainStarters(title);
+  const steps = starters.slice(0, maxSteps).map((starter) => ({
     ...starter,
     title: starter.title.replace('__GOAL__', title.toLowerCase()),
     doneWhen: starter.doneWhen.replace('__GOAL__', title.toLowerCase()),
@@ -409,6 +446,15 @@ const INVENTION_PRONE_ARTIFACTS = [
   'drill', 'paint', 'brush', 'ladder', 'bucket', 'sponge', 'label',
 ];
 
+const COMMON_DOMAIN_OBJECTS = new Set([
+  'tenis', 'roupa', 'agua', 'garrafa', 'mochila', 'chaves', 'carteira', 'celular',
+  'computador', 'notebook', 'caderno', 'caneta', 'lapis', 'livro', 'panela', 'panelas',
+  'ingredientes', 'comida', 'prato', 'copo', 'talher', 'vassoura', 'rodo', 'pano',
+  'balde', 'lixo', 'sacola', 'sabao', 'detergente', 'esponja', 'toalha', 'shampoo',
+  'sabonete', 'escova', 'pasta', 'remedio', 'dinheiro', 'cartao', 'documento',
+  'carro', 'moto', 'bicicleta', 'onibus', 'trem', 'metro', 'passagem', 'ingresso'
+]);
+
 /** Cor ou medida grudada num objeto é detalhe que ninguém informou. */
 const ARBITRARY_DETAIL = /\b(azul|vermelh[oa]|verde|amarel[oa]|pret[oa]|branc[oa]|ros[a]|rox[oa]|laranja|cinza|bege|marrom|blue|red|green|yellow|black|white|pink|purple|orange|gray|grey|brown)\b|\b\d+\s?(cm|m|mm|litros?|ml|kg|g|metros?)\b/;
 
@@ -440,6 +486,7 @@ export function detectUnsupportedSpecificity(
       token.length >= 4
       && !isKnown(token)
       && !ACQUISITION_VERBS.test(token)
+      && !COMMON_DOMAIN_OBJECTS.has(token)
     ));
     if (unknownObject) {
       return {
@@ -726,7 +773,7 @@ async function completeJson(
 
 const GENERATOR_SYSTEM = 'Você interpreta objetivos e devolve o caminho real até eles. Nunca inventa fato, objeto ou defeito. Responde só JSON.';
 const VALIDATOR_SYSTEM = 'Você revisa recomendações e reprova o que não se sustenta em dado real. Responde só JSON.';
-const FALLBACK_MODEL = 'gpt-5-mini';
+const FALLBACK_MODEL = 'gpt-4o-mini';
 
 type ParsedPathPayload = z.infer<typeof StepsPayloadSchema>;
 
