@@ -13,8 +13,18 @@ export type ConcreteActionVerdict =
         | 'missing_executable_verb'
         | 'abstract_or_circular_action'
         | 'missing_specific_object'
-        | 'missing_done_when';
+        | 'missing_done_when'
+        | 'robot_fallback_phrase';
     };
+
+/** Frases-robô que a Airia gravou como caminho quando a IA falhou. Não são ação. */
+export const ROBOT_FALLBACK_PHRASE =
+  /escreva o resultado que fara|escreva o resultado que fará|analise o que impede|defina o menor (proximo |próximo )?passo|analyze what (is )?blocking|write the (result|outcome) that will/i;
+
+export function isRobotFallbackPhrase(value: unknown): boolean {
+  const title = typeof value === 'string' ? value : '';
+  return ROBOT_FALLBACK_PHRASE.test(title) || ROBOT_FALLBACK_PHRASE.test(normalizeActionText(title));
+}
 
 export const EXECUTABLE_VERB = /^(abra|abrir|anote|anotar|liste|listar|escreva|escrever|copie|copiar|meça|medir|ligue|ligar|mande|mandar|envie|enviar|selecione|selecionar|publique|publicar|edite|editar|responda|responder|pague|pagar|transfira|transferir|compare|comparar|reúna|reunir|separe|separar|retire|retirar|coloque|colocar|fotografe|fotografar|telefone|telefonar|preencha|preencher|agende|agendar|cancele|cancelar|confirme|confirmar|acesse|acessar|entre|entrar|baixe|baixar|anexe|anexar|assine|assinar|entregue|entregar|registre|registrar|identifique|identificar|monte|montar|crie|criar|marque|marcar|realize|realizar|leve|levar|enxágue|enxaguar|passe|passar|guarde|guardar|varra|varrer|corra|correr|caminhe|caminhar|cozinhe|cozinhar|leia|ler|saia|sair|deixe|deixar|tire|tirar|junte|juntar|open|write|copy|measure|list|call|send|select|publish|edit|reply|pay|transfer|compare|gather|remove|place|photograph|fill|schedule|cancel|confirm|access|download|attach|sign|deliver|record|identify|build|create|mark|take|rinse|wipe|store|sweep)\b/i;
 
@@ -79,6 +89,7 @@ export function validateConcreteAction(
   const requireDoneWhen = options.requireDoneWhen ?? true;
 
   if (!title) return { ok: false, reason: 'missing_title' };
+  if (isRobotFallbackPhrase(title)) return { ok: false, reason: 'robot_fallback_phrase' };
   if (ABSTRACT_OPENERS.test(normalizedTitle)) return { ok: false, reason: 'abstract_or_circular_action' };
   if (!EXECUTABLE_VERB.test(title)) return { ok: false, reason: 'missing_executable_verb' };
   if (ABSTRACT_OBJECT.test(normalizedTitle)) return { ok: false, reason: 'abstract_or_circular_action' };

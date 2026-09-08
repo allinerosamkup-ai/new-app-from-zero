@@ -18,6 +18,15 @@ describe('contrato compartilhado de ação concreta', () => {
     );
   });
 
+  it('rejeita a frase-robô que a falha da IA gravava como caminho', () => {
+    const verdict = validateConcreteAction({
+      title: 'Escreva o resultado que fará Organizar a semana avançar',
+      doneWhen: 'o resultado estiver escrito',
+    });
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.ok ? '' : verdict.reason, 'robot_fallback_phrase');
+  });
+
   it('rejeita a formulação abstrata e circular reportada pela usuária', () => {
     const verdict = validateConcreteAction({
       title: 'Escolher revisar uma pendência financeira revisável',
