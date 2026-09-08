@@ -161,29 +161,36 @@ echo "== Deploy =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --no-build
 
 echo "== Validate build content =="
-# O bundle em produção saiu diferente do que o Git manda: o main.js no ar não
-# contém o roteador de dados que o master exige. Esta checagem garante que o
-# código buildado na imagem é mesmo o código versionado — sem isso o deploy
-# pode subir JavaScript antigo silenciosamente (working tree sujo, cache de
-# build, clone atrasado), e a produção fica travada sem ninguém perceber.
-TMP_WEB_IMG="${PREVIOUS_WEB_IMAGE%%:*}:bundlecheck"
-# Copia a imagem recém-buildada para um nome temporário, inspeciona o bundle
-# por dentro e remove o container auxiliar em seguida.
-docker create --name bundlecheck "$PREVIOUS_WEB_IMAGE" >/dev/null
-docker cp bundlecheck:/usr/share/nginx/html/assets bundlecheck_assets 2>/dev/null
-BUNDLE_MAIN="$(ls bundlecheck_assets/ 2>/dev/null | grep '^main-' | head -1)"
-if [ -z "$BUNDLE_MAIN" ]; then
-  echo "FALHA: nenhum bundle main-*.js encontrado na imagem"
-  docker rm -f bundlecheck >/dev/null 2>&1
+# Inspeciona a imagem recém-buildada (airia-web:current), nunca a anterior.
+# A versão antiga lia PREVIOUS_WEB_IMAGE e os primeiros 400 KB do tar, então
+# um deploy saudável falhava no bundle velho e disparava rollback.
+docker rm -f bundlecheck >/dev/null 2>&1 || true
+docker create --name bundlecheck airia-web:current >/dev/null
+BUNDLE_TMP="$(mktemp -d)"
+if ! docker cp bundlecheck:/usr/share/nginx/html/assets/. "$BUNDLE_TMP/" 2>/dev/null; then
+  echo "FALHA: não foi possível extrair os assets da imagem airia-web:current"
+  docker rm -f bundlecheck >/dev/null 2>&1 || true
+  rm -rf "$BUNDLE_TMP"
   exit 1
 fi
-MAIN_CONTENT="$(docker cp bundlecheck:/usr/share/nginx/html/assets/$BUNDLE_MAIN - 2>/dev/null | head -c 400000)"
-case "$MAIN_CONTENT" in
-  *createBrowserRouter*|*RouterProvider*) echo "bundle $BUNDLE_MAIN contém o roteador de dados — ok" ;;
-  *) echo "FALHA: o bundle $BUNDLE_MAIN NÃO contém o roteador de dados (createBrowserRouter/RouterProvider). O JavaScript buildado na imagem não corresponde ao código versionado; deploy abortado para não subir código antigo." ; docker rm -f bundlecheck >/dev/null 2>&1 ; rm -rf bundlecheck_assets ; exit 1 ;;
-esac
-docker rm -f bundlecheck >/dev/null
-rm -rf bundlecheck_assets
+BUNDLE_MAIN="$(find "$BUNDLE_TMP" -maxdepth 1 -type f -name 'main-*.js' -print -quit)"
+if [ -z "$BUNDLE_MAIN" ]; then
+  echo "FALHA: nenhum bundle main-*.js encontrado na imagem"
+  docker rm -f bundlecheck >/dev/null 2>&1 || true
+  rm -rf "$BUNDLE_TMP"
+  exit 1
+fi
+echo "bundle encontrado: $(basename "$BUNDLE_MAIN")"
+echo "tamanho do bundle: $(wc -c < "$BUNDLE_MAIN") bytes"
+if ! grep -qF 'airia-data-router-v1' "$BUNDLE_MAIN"; then
+  echo "FALHA: o bundle $(basename "$BUNDLE_MAIN") NÃO contém o marcador exclusivo airia-data-router-v1; o build pode estar usando um entrypoint antigo. Deploy abortado."
+  docker rm -f bundlecheck >/dev/null 2>&1 || true
+  rm -rf "$BUNDLE_TMP"
+  exit 1
+fi
+echo "bundle construído contém o marcador exclusivo do Data Router — ok"
+docker rm -f bundlecheck >/dev/null 2>&1 || true
+rm -rf "$BUNDLE_TMP"
 
 echo "== Validate =="
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
