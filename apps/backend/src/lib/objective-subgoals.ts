@@ -5,8 +5,6 @@ const ObjectiveSubgoalInputSchema = z.object({
   id: z.string(),
   title: z.string(),
   done: z.boolean().optional(),
-  // Registros anteriores usavam `completed`. A leitura os migra para `done`;
-  // nenhuma escrita nova devolve esse campo legado.
   completed: z.boolean().optional(),
   order: z.number().int().min(0).optional(),
   plannerBlockId: z.string().nullable().optional(),
@@ -63,12 +61,10 @@ export const ObjectiveSubgoalSchema = z.object({
 export type ObjectiveSubgoalInput = z.input<typeof ObjectiveSubgoalInputSchema>;
 export type ObjectiveSubgoal = z.output<typeof ObjectiveSubgoalSchema>;
 
-/**
- * Um registro antigo pode continuar guardado para preservar o histórico, mas
- * só um passo que descreve movimento, objeto e evidência de término pode guiar
- * a pessoa, bloquear o caminho ou entrar no contexto operacional da Airia.
- */
+const ROBOT_CANONICAL_FALLBACK = /^(escreva o resultado que far[aá]|identifique o que j[aá] est[aá] dispon[ií]vel|realizar uma primeira vers[aã]o pequena de|registrar o que foi feito ao iniciar|ajustar a pr[oó]xima etapa de)\b/i;
+
 export function isConcreteObjectiveSubgoal(subgoal: Pick<ObjectiveSubgoal, 'title' | 'doneWhen'>): boolean {
+  if (ROBOT_CANONICAL_FALLBACK.test(String(subgoal.title ?? '').trim())) return false;
   return validateConcreteAction({ title: subgoal.title, doneWhen: subgoal.doneWhen }).ok;
 }
 
@@ -127,4 +123,3 @@ export function normalizeObjectiveSubgoals(subgoals: unknown): ObjectiveSubgoal[
 
 export const ObjectiveSubgoalsSchema = z.array(ObjectiveSubgoalInputSchema)
   .transform((subgoals) => normalizeObjectiveSubgoals(subgoals));
-
