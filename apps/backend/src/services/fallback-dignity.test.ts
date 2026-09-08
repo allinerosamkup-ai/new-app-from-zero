@@ -54,7 +54,7 @@ function titles(
   // Passos físicos efetivos: preparação, logística e a corrida em si.
   assert.ok(
     steps.some((step) =>
-      /t[eê]nis|rot?a|hor[aá]rio|treino|correr|caminhada|cal[eç]a/i.test(step),
+      /t[eê]nis|rot?a|hor[áa]rio|treino|correr|caminhada|cal[eç]a/i.test(step),
     ),
     `esperava passos físicos de corrida, recebi: ${steps.join('; ')}`,
   );
@@ -71,7 +71,7 @@ function titles(
   );
   assert.match(
     joined,
-    /receita|ingredient|despensa|fog[aã]o|mercado|refeiç[aã]o|cozinh/,
+    /receita|ingredient|despensa|fog[ãa]o|mercado|refeiç[ãa]o|cozinh/,
     'esperava passos de cozinha',
   );
   assert.ok(steps.length >= 3, 'pelo menos 3 passos práticos');
@@ -96,10 +96,22 @@ function titles(
   );
   assert.ok(
     steps.some((step) =>
-      /relat[oó]rio|reuni[aã]o|dados|responder|definir/i.test(step),
+      /relat[oó]rio|reuni[ãa]o|dados|responder|definir/i.test(step),
     ),
     'esperava passos práticos de trabalho',
   );
+})();
+
+// Regressão TICKET-004: "organizar X" não vira "escreva/analise" idêntico para toda meta.
+(() => {
+  const week = titles({ goalTitle: 'Organizar a semana', capacity: 'moderate' });
+  const money = titles({ goalTitle: 'Organizar minhas finanças', capacity: 'moderate' });
+  assert.equal(week.length, 4);
+  assert.match(week[0], /organizar a semana/i);
+  assert.match(money[0], /organizar minhas finanças/i);
+  assert.notEqual(week.join(' | '), money.join(' | '));
+  assert.ok(!week.some((step) => /^(escreva|analise|identifique)\b/i.test(step)));
+  assert.ok(!money.some((step) => /^(escreva|analise|identifique)\b/i.test(step)));
 })();
 
 // ---------------------------------------------------------------
