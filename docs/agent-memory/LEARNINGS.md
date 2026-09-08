@@ -12,6 +12,24 @@ Formato: `### [TIPO] Título` + o que muda na prática.
 
 ---
 
+## Deploy / dados
+
+### [FATO] Health 200 da Airia não prova que o banco responde
+`https://airia.pro/api/health` devolve `{"status":"ok"}` com o Postgres
+inacessível. Em 2026-09-08 o Prisma no container vivo falhou com
+`tenant/user postgres.ksdvzqvwhrmvgozobjbt not found` e o hostname
+`ksdvzqvwhrmvgozobjbt.supabase.co` deu `ENOTFOUND` na VPS e no Windows.
+O pooler `aws-1-sa-east-1.pooler.supabase.com` continuava resolvendo; o
+tenant é que tinha sumido. `deploy.sh` aplica migração com `DIRECT_URL`
+antes de trocar os containers: essa falha dispara rollback e deixa a
+imagem anterior no ar. Não tratar health 200 como aceite de persistência.
+
+### [FATO] Classe CSS com palavra do audit i18n quebra o CI
+`className="goal-pane-agora"` dentro de `{condição && (...)}` é string
+em JSX expression. O audit em `source-audit.test.ts` lê `agora` como
+copy em português. Renomear a classe (`goal-pane-now`) e manter
+`grid-area: agora` no CSS. O rótulo visível continua em `l("Agora","Now")`.
+
 ## Objetivos / split
 
 ### [FATO] “Split” no GitHub era duas coisas diferentes

@@ -1,5 +1,35 @@
 # CURRENT_STATE — trabalho em andamento
 
+## 2026-09-08 — Verificar app e publicar na VPS
+
+Pedido da titular: verificar o app e subir a última atualização para a VPS.
+Autorização humana neste turno. Papel: coordenador/executor. Sem merge novo
+além do conserto de CI no `master`.
+
+- GitHub `master` local e remoto: `ca033de` (PR #18 Elisi + rename da classe
+  `goal-pane-agora` → `goal-pane-now` para o audit i18n).
+- Produção **continua** em `243781f` (bolinha, 28/08). Rollback automático
+  restaurou essa imagem depois da migração falhar.
+- CI `ca033de` verde (run 184). Local: backend 119 suítes PASS; web 72
+  arquivos / 497 testes PASS; typecheck e builds backend/web PASS.
+- Build Docker na VPS concluiu. A migração abortou com
+  `FATAL: tenant/user postgres.ksdvzqvwhrmvgozobjbt not found`.
+- O backend que já estava no ar também não consulta o banco: o mesmo erro.
+  `/api/health` segue 200 porque não prova persistência.
+- DNS de `ksdvzqvwhrmvgozobjbt.supabase.co` é `ENOTFOUND` da máquina local e
+  da VPS. O pooler `aws-1-sa-east-1.pooler.supabase.com` resolve; o tenant
+  não. Auth/REST do projeto também não resolvem. Front e API apontam para
+  o mesmo projeto.
+
+**Estado: BLOQUEADO.** O código está no GitHub e o CI passou. Publicar de
+novo sem o projeto Supabase no ar só vai repetir o rollback.
+
+**Próxima ação da titular:** no painel do Supabase, restaurar ou reativar o
+projeto `mood-energy-mvp` (ref `ksdvzqvwhrmvgozobjbt`). Se o projeto foi
+apagado, apontar `DATABASE_URL`/`DIRECT_URL` e `VITE_SUPABASE_URL` para o
+projeto vivo e avisar para repetir o `deploy.sh`. Não dá para destravar
+isso pelo SSH da VPS.
+
 ## Objetivos Elisi split — 2026-08-31
 
 Branch `feat/goals-elisi-split` a partir de `origin/master` (`9073e21`). Papel: Coordenador Geral. Sem merge/deploy.
