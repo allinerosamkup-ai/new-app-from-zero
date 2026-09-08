@@ -21,14 +21,20 @@ além do conserto de CI no `master`.
   não. Auth/REST do projeto também não resolvem. Front e API apontam para
   o mesmo projeto.
 
-**Estado: BLOQUEADO.** O código está no GitHub e o CI passou. Publicar de
-novo sem o projeto Supabase no ar só vai repetir o rollback.
+**Estado: BLOQUEADO — projeto não apagado, compute/DNS desligados.**
+A titular confirmou que o projeto continua no painel. Rechecagem em
+2026-09-08: `ksdvzqvwhrmvgozobjbt.supabase.co` é NXDOMAIN no DNS local,
+Google (8.8.8.8), Cloudflare (1.1.1.1) e na VPS. O pooler
+`aws-1-sa-east-1.pooler.supabase.com` resolve, mas recusa o tenant
+`postgres.ksdvzqvwhrmvgozobjbt`. Isso casa com **projeto Free pausado por
+inatividade** (continua no dashboard, dados preservados, hostname e
+pooler tenant somem até o Resume). Não é falha de SSH nem do código.
 
-**Próxima ação da titular:** no painel do Supabase, restaurar ou reativar o
-projeto `mood-energy-mvp` (ref `ksdvzqvwhrmvgozobjbt`). Se o projeto foi
-apagado, apontar `DATABASE_URL`/`DIRECT_URL` e `VITE_SUPABASE_URL` para o
-projeto vivo e avisar para repetir o `deploy.sh`. Não dá para destravar
-isso pelo SSH da VPS.
+**Próxima ação da titular:** abrir
+https://supabase.com/dashboard/project/ksdvzqvwhrmvgozobjbt
+e clicar **Resume project**. Quando o hostname voltar a resolver, repetir
+o `deploy.sh`. Sem token de Management API neste ambiente, o Resume não
+dá para disparar daqui.
 
 ## Objetivos Elisi split — 2026-08-31
 

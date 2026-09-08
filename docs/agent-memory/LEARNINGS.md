@@ -17,12 +17,15 @@ Formato: `### [TIPO] Título` + o que muda na prática.
 ### [FATO] Health 200 da Airia não prova que o banco responde
 `https://airia.pro/api/health` devolve `{"status":"ok"}` com o Postgres
 inacessível. Em 2026-09-08 o Prisma no container vivo falhou com
-`tenant/user postgres.ksdvzqvwhrmvgozobjbt not found` e o hostname
-`ksdvzqvwhrmvgozobjbt.supabase.co` deu `ENOTFOUND` na VPS e no Windows.
-O pooler `aws-1-sa-east-1.pooler.supabase.com` continuava resolvendo; o
-tenant é que tinha sumido. `deploy.sh` aplica migração com `DIRECT_URL`
-antes de trocar os containers: essa falha dispara rollback e deixa a
-imagem anterior no ar. Não tratar health 200 como aceite de persistência.
+`tenant/user postgres.ksdvzqvwhrmvgozobjbt not found`. O hostname
+`ksdvzqvwhrmvgozobjbt.supabase.co` deu NXDOMAIN no DNS local, 8.8.8.8,
+1.1.1.1 e na VPS. O pooler `aws-1-sa-east-1.pooler.supabase.com`
+continuava resolvendo. A titular confirmou que o projeto **não foi
+apagado** — o padrão é Free pausado: o card permanece no dashboard, o
+compute/DNS/tenant do pooler somem até o Resume. `deploy.sh` aplica
+migração com `DIRECT_URL` antes de trocar os containers; essa falha
+dispara rollback. Não tratar health 200 como aceite de persistência, nem
+NXDOMAIN como “projeto deletado”.
 
 ### [FATO] Classe CSS com palavra do audit i18n quebra o CI
 `className="goal-pane-agora"` dentro de `{condição && (...)}` é string
