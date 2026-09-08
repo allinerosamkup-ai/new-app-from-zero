@@ -54,7 +54,7 @@ describe("GoalCard Elisi split", () => {
 
     const note = host.querySelector('textarea[aria-label="Nota ligada a este objetivo"]');
     const complete = host.querySelector('button[aria-label="Marcar ação como concluída"]');
-    const agora = host.querySelector(".goal-pane-agora");
+    const agora = host.querySelector(".goal-pane-now");
     const notePane = host.querySelector(".goal-pane-note");
     expect(note).not.toBeNull();
     expect(complete).not.toBeNull();

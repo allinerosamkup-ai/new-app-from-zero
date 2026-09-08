@@ -122,7 +122,7 @@ export function GoalCard({
 
           <div className="goal-workspace-split" aria-label={l("Workspace do objetivo", "Goal workspace")}>
             {workspace.showAgora && (
-              <div className="goal-pane-agora" style={{ borderRadius: 18, border: "1px solid rgba(150,199,179,.34)", background: "rgba(150,199,179,.10)", padding: 13 }}>
+              <div className="goal-pane-now" style={{ borderRadius: 18, border: "1px solid rgba(150,199,179,.34)", background: "rgba(150,199,179,.10)", padding: 13 }}>
                 <p style={{ margin: "0 0 8px", color: "var(--menthe)", fontSize: 10, fontWeight: 900, letterSpacing: ".09em", textTransform: "uppercase" }}>{l("Agora", "Now")}</p>
                 {model.nextAction ? (
                   <>

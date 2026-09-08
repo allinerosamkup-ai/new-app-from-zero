@@ -3271,7 +3271,7 @@ svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
     "nota";
 }
 
-.goal-pane-agora { grid-area: agora; }
+.goal-pane-now { grid-area: agora; }
 .goal-pane-note { grid-area: nota; }
 
 .goals-master-detail {
