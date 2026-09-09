@@ -29,6 +29,7 @@ $PROJECT_DIR/supabase/migrations/20260817233000_add_product_event_governance.sql
 $PROJECT_DIR/supabase/migrations/20260817234500_harden_internal_tables_and_views.sql
 $PROJECT_DIR/supabase/migrations/20260818004000_harden_function_search_path_and_execution.sql
 $PROJECT_DIR/supabase/migrations/20260818005000_move_vector_extension_to_extensions.sql
+$PROJECT_DIR/supabase/migrations/20260909120000_add_objective_notes.sql
 "
 export DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"

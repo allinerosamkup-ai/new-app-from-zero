@@ -47,6 +47,7 @@ type ApiGoal = {
   pausedAt?: string | null;
   isPrimary?: boolean;
   pathProposal?: unknown;
+  notes?: Goal['notes'];
 };
 type ApiTimelineTask = Partial<Task> & Pick<Task, 'id' | 'title'> & {
   startTime?: string;
@@ -214,6 +215,7 @@ function mapCanonicalObjectives(value: unknown): Goal[] {
       order: subgoal.order ?? index,
       plannerBlockId: subgoal.plannerBlockId ?? null,
       milestoneId: subgoal.milestoneId ?? null,
+      parentId: subgoal.parentId ?? null,
       scheduledFor: subgoal.scheduledFor ?? null,
       doneWhen: subgoal.doneWhen ?? null,
       effortSize: subgoal.effortSize ?? null,
@@ -235,6 +237,7 @@ function mapCanonicalObjectives(value: unknown): Goal[] {
     pausedAt: objective.pausedAt ?? null,
     isPrimary: objective.isPrimary ?? false,
     pathProposal: objective.pathProposal ?? null,
+    notes: Array.isArray(objective.notes) ? objective.notes : [],
     };
   });
 }

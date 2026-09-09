@@ -1,5 +1,13 @@
 # CURRENT_STATE — trabalho em andamento
 
+## 2026-09-09 — Página antiga de metas removida; workspace Elisi no `/goals`
+
+A pasta `apps/web/src/routes/goals/` e o barrel `goals-page.tsx` saíram.
+`/goals` carrega `apps/web/src/routes/objectives-workspace/`. A recuperação
+de ações legadas foi movida para a pasta nova (`goal-recovery.tsx`), não
+apagada. Planos históricos em `docs/plans/` continuam citando o arquivo velho
+de propósito — são registro, não rota viva.
+
 ## 2026-09-08 — Publicado na VPS após Resume do Supabase (`cfea363`)
 
 Pedido da titular: verificar o app e subir a última atualização. Autorização

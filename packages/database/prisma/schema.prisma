@@ -676,6 +676,7 @@ model Objective {
   pathStatus            String    @default("not_started") @map("path_status")
   pathQuestion          String?   @map("path_question") @db.Text
   archived              Boolean   @default(false)
+  notes                 Json      @default("[]")
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 

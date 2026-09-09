@@ -251,9 +251,9 @@ function getDomainStarters(title: string): Array<{ title: string; doneWhen: stri
 
   if (t.match(/\b(limpar|arrumar|organizar|casa|quarto|sala|faxina)\b/)) {
     return [
-      { title: 'Separar os materiais de limpeza ou organizadores', doneWhen: 'os materiais estiverem prontos', effortSize: 'small' },
-      { title: 'Recolher o que está fora do lugar', doneWhen: 'os itens soltos estiverem recolhidos', effortSize: 'medium' },
-      { title: 'Limpar ou organizar a primeira área', doneWhen: 'a primeira área estiver limpa', effortSize: 'medium' },
+      { title: 'Separar os materiais de limpeza da primeira área', doneWhen: 'os materiais estiverem na mão', effortSize: 'small' },
+      { title: 'Retirar o que está fora do lugar da primeira área', doneWhen: 'os itens soltos estiverem reunidos', effortSize: 'medium' },
+      { title: 'Guardar os itens da primeira área no lugar certo', doneWhen: 'a primeira área estiver arrumada', effortSize: 'medium' },
     ];
   }
 

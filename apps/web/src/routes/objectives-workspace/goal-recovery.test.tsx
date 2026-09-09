@@ -5,11 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   GoalRecoveryNotice,
   recoverGoalActionsOnce,
-} from './goals-page';
+} from './goal-recovery';
 import {
   GoalActionRecoveryError,
   recoverGoalActionsWithCanonicalHydration,
-} from '../features/aura/store';
+} from '../../features/aura/store';
 
 describe('Goals legacy action recovery', () => {
   it('runs once per page load and waits for the canonical objective refresh', async () => {

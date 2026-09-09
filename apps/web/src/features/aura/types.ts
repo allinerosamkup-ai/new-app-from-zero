@@ -37,6 +37,7 @@ export type SubGoal = {
   order?: number;
   plannerBlockId?: string | null;
   milestoneId?: string | null;
+  parentId?: string | null;
   scheduledFor?: string | null;
   doneWhen?: string | null;
   effortSize?: 'small' | 'medium' | 'large' | null;
@@ -44,6 +45,14 @@ export type SubGoal = {
   aiGenerated?: boolean;
   userEdited?: boolean;
   status?: 'pending' | 'done' | 'rejected' | 'deferred';
+};
+
+export type GoalNote = {
+  id: string;
+  content: string;
+  createdAt: string;
+  source?: 'manual' | 'journal' | 'origin';
+  sourceNoteId?: string;
 };
 
 export type Goal = {
@@ -57,12 +66,13 @@ export type Goal = {
   currentReality?: string | null;
   milestones?: Array<{ id: string; title: string; order: number; doneWhen?: string | null }>;
   pathVersion?: number;
-  pathStatus?: 'not_started' | 'retrying' | 'needs_answer' | 'ready';
+  pathStatus?: 'not_started' | 'generating' | 'retrying' | 'needs_answer' | 'ready';
   pathQuestion?: string | null;
   deadline?: string | null;
   pausedAt?: string | null;
   isPrimary?: boolean;
   pathProposal?: unknown;
+  notes?: GoalNote[];
 };
 
 export type CheckinEntry = {

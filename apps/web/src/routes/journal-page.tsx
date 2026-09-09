@@ -730,6 +730,20 @@ export function JournalPage() {
             Revisar dia
           </AuraButtonV2>
         </div>
+        <AuraButtonV2
+          className="btn btn-ghost"
+          onClick={() => {
+            setShowFinalizationModal(false);
+            navigate("/goals", {
+              state: {
+                composer: "note",
+                noteDraft: finalizationResult.summary?.text ?? "",
+              },
+            });
+          }}
+        >
+          {l("Transformar em objetivo", "Turn into a goal")}
+        </AuraButtonV2>
       </div>
     </div>
   ) : null;

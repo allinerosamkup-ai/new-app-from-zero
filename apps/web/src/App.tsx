@@ -11,7 +11,7 @@ const loadAuraLayout = () => import("./routes/aura-layout");
 const loadLoginPage = () => import("./routes/login-page");
 const loadHomePage = () => import("./routes/home-page");
 const loadJournalPage = () => import("./routes/journal-page");
-const loadGoalsPage = () => import("./routes/goals-page");
+const loadGoalsPage = () => import("./routes/objectives-workspace/objectives-workspace-page");
 const loadPreferencesPage = () => import("./routes/preferences-page");
 const loadEditorialShowcase = () => import("./routes/editorial-showcase");
 const loadAuthV2Page = () => import("./routes/auth-v2-page");

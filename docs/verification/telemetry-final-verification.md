@@ -36,7 +36,7 @@ As decisões canônicas agora possuem a dupla analítica `decision.presented.v1`
 | Contrato e endpoint | `event-log.contract.ts`, `product-event.service.ts`, `index.ts` | Validação, rate limit e deduplicação no limite do backend. |
 | Cliente | `track.ts`, `airia-reading.ts` | Fila offline idempotente e ciclo de decisões. |
 | Check-in | `checkin-page.tsx` | Cobertura dos nove estados sem envio de conteúdo sensível. |
-| Núcleo ativo | `home-page.tsx`, `insights-page.tsx`, `journal-page.tsx`, `goals-page.tsx` | Eventos de intenção e resultados confirmados. |
+| Núcleo ativo | `home-page.tsx`, `insights-page.tsx`, `journal-page.tsx`, `objectives-workspace/objectives-workspace-page.tsx` | Eventos de intenção e resultados confirmados. |
 | Banco | `20260817233000_add_product_event_governance.sql` | Colunas, índices, RLS e retenção. |
 | Segurança | `20260817234500_harden_internal_tables_and_views.sql` | Bloqueio explícito de tabelas internas e views com `security_invoker`. |
 

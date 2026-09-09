@@ -104,7 +104,7 @@ export function TodayGoalActionsCard({ capacity }: { capacity?: AiriaCapacity | 
         <div className="today-goal-actions__empty">
           <Target size={17} />
           <p>{l("Quando você tiver um objetivo ativo, organizo aqui o próximo passo possível.", "When you have an active goal, I’ll organize its next possible step here.")}</p>
-          <button type="button" onClick={() => navigate("/goals")}>{l("Criar objetivo", "Create goal")} <ArrowRight size={15} /></button>
+          <button type="button" onClick={() => navigate("/goals", { state: { composer: "ai-goal" } })}>{l("Criar objetivo", "Create goal")} <ArrowRight size={15} /></button>
         </div>
       )}
 

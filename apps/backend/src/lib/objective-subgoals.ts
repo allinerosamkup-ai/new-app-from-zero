@@ -12,6 +12,7 @@ const ObjectiveSubgoalInputSchema = z.object({
   plannerBlockId: z.string().nullable().optional(),
   aiGenerated: z.boolean().optional().default(false),
   milestoneId: z.string().trim().min(1).nullable().optional(),
+  parentId: z.string().trim().min(1).max(120).nullable().optional(),
   scheduledFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   doneWhen: z.string().trim().min(1).max(500).nullable().optional(),
   effortSize: z.enum(['small', 'medium', 'large']).nullable().optional(),
@@ -40,6 +41,7 @@ export const ObjectiveSubgoalSchema = z.object({
   plannerBlockId: z.string().nullable().optional(),
   aiGenerated: z.boolean().optional().default(false),
   milestoneId: z.string().nullable().optional(),
+  parentId: z.string().nullable().optional(),
   scheduledFor: z.string().nullable().optional(),
   doneWhen: z.string().nullable().optional(),
   effortSize: z.enum(['small', 'medium', 'large']).nullable().optional(),
@@ -110,6 +112,7 @@ export function normalizeObjectiveSubgoals(subgoals: unknown): ObjectiveSubgoal[
       };
       if (subgoal.plannerBlockId !== undefined) normalized.plannerBlockId = subgoal.plannerBlockId;
       if (subgoal.milestoneId !== undefined) normalized.milestoneId = subgoal.milestoneId;
+      if (subgoal.parentId !== undefined) normalized.parentId = subgoal.parentId;
       if (subgoal.scheduledFor !== undefined) normalized.scheduledFor = subgoal.scheduledFor;
       if (subgoal.doneWhen !== undefined) normalized.doneWhen = subgoal.doneWhen;
       if (subgoal.effortSize !== undefined) normalized.effortSize = subgoal.effortSize;

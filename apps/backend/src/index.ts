@@ -135,6 +135,12 @@ import {
   isConcreteObjectiveSubgoal,
   normalizeObjectiveSubgoals,
 } from './lib/objective-subgoals';
+import { normalizeObjectiveNotes, ObjectiveNoteSchema } from './lib/objective-notes';
+import {
+  mapDecompositionToPreview,
+  previewReschedule,
+  previewTasksToSubgoals,
+} from './services/objective-preview.service';
 import { validateConcreteAction } from './lib/action-quality';
 import { PRODUCT_CAPABILITIES, type ProductCapabilities } from './contracts/product-capabilities';
 import {
@@ -2163,6 +2169,7 @@ function serializeObjective(objective: any, primaryObjectiveId: string | null = 
       ? 'ready'
       : objective.pathStatus ?? 'not_started',
     pathQuestion: objective.pathQuestion ?? null,
+    notes: normalizeObjectiveNotes(objective.notes),
     isPrimary: primaryObjectiveId === objective.id,
     createdAt: objective.createdAt instanceof Date ? objective.createdAt.toISOString() : objective.createdAt,
   };
@@ -5645,6 +5652,74 @@ export function createApp(dependencies: AppDependencies = {}) {
    */
   app.get('/api/capabilities', (_req: Request, res: Response) => res.json(capabilities));
 
+  const decomposeGoal = dependencies.goalDecompose
+    ?? ((input: GoalIntelligenceInput) => GoalIntelligenceService.decompose(input));
+
+  app.post('/api/objectives/preview-breakdown', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({
+        title: z.string().trim().min(1).max(300).optional(),
+        note: z.string().trim().min(1).max(4000).optional(),
+        locale: z.string().default('pt-BR'),
+        existingActions: z.array(z.string().trim().min(1).max(300)).max(30).optional().default([]),
+        objectiveId: z.string().uuid().optional(),
+      }).refine((value) => Boolean(value.title || value.note), 'title or note required').parse(req.body ?? {});
+      const title = (data.title ?? data.note ?? '').trim();
+      const context = data.objectiveId
+        ? await loadObjectiveIntelligenceContext(prisma, userId, data.objectiveId)
+        : await loadObjectiveIntelligenceContext(prisma, userId, '00000000-0000-0000-0000-000000000000');
+      const decomposition = await decomposeGoal({
+        ...context,
+        goalTitle: title,
+        existingActions: data.existingActions,
+        locale: data.locale,
+        userStatements: data.note ? [data.note, ...context.userStatements] : context.userStatements,
+      });
+      const preview = mapDecompositionToPreview({ title, decomposition });
+      return res.json({
+        ...preview,
+        suggestedSubgoals: previewTasksToSubgoals(preview.tasks),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/preview-breakdown] Error:', error);
+      return res.status(500).json({ error: 'Failed to preview goal breakdown' });
+    }
+  });
+
+  app.post('/api/objectives/preview-reschedule', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({
+        naturalLanguage: z.string().trim().min(3).max(500),
+      }).parse(req.body ?? {});
+      const objectives = await prisma.objective.findMany({ where: { userId, archived: false } });
+      const actions = objectives.flatMap((objective: any) => (
+        normalizeObjectiveSubgoals(objective.subgoals).map((action) => ({
+          id: action.id,
+          title: action.title,
+          scheduledFor: action.scheduledFor ?? null,
+          effortSize: action.effortSize ?? null,
+          done: action.done,
+          objectiveId: objective.id,
+        }))
+      ));
+      const preview = previewReschedule({ naturalLanguage: data.naturalLanguage, actions });
+      return res.json({
+        ...preview,
+        moves: preview.moves.map((move) => ({
+          ...move,
+          objectiveId: actions.find((action) => action.id === move.actionId)?.objectiveId ?? null,
+        })),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/preview-reschedule] Error:', error);
+      return res.status(500).json({ error: 'Failed to preview reschedule' });
+    }
+  });
+
   app.get('/api/objectives', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
     try {
@@ -5678,11 +5753,13 @@ export function createApp(dependencies: AppDependencies = {}) {
         title: z.string().trim().min(1).max(500),
         done: z.boolean().optional().default(false),
         milestoneId: z.string().trim().min(1).nullable().optional(),
+        parentId: z.string().trim().min(1).max(120).nullable().optional(),
         doneWhen: z.string().trim().min(1).max(500).optional(),
         effortSize: z.enum(['small', 'medium', 'large']).optional(),
         aiGenerated: z.boolean().optional().default(true),
         basedOn: z.enum(['stated', 'inferred']).optional(),
       }).strict()).max(30).optional().default([]),
+      notes: z.array(ObjectiveNoteSchema).max(40).optional(),
     }).strict();
     try {
       const data = Schema.parse(req.body);
@@ -5700,6 +5777,7 @@ export function createApp(dependencies: AppDependencies = {}) {
           category: data.category,
           deadline: data.deadline ? new Date(`${data.deadline}T00:00:00.000Z`) : null,
           subgoals: normalizedSubgoals as any,
+          notes: (data.notes ?? []) as any,
           resultDefinition: data.resultDefinition ?? (normalizedSubgoals.length > 0 ? `as microtarefas de “${data.title}” estarem concluídas` : null),
           currentReality: data.currentReality ?? null,
           // Objetivos sem ações entram em estado transitório; a interpretação
@@ -5762,6 +5840,65 @@ export function createApp(dependencies: AppDependencies = {}) {
     console.error('[objective-path] Error:', error);
     return res.status(500).json({ error: 'objective_path_failed' });
   };
+
+  app.post('/api/objectives/:id/path/apply-preview', async (req: Request, res: Response) => {
+    const userId = (req as AuthRequest).userId;
+    try {
+      const data = z.object({
+        expectedVersion: z.number().int().positive(),
+        resultDefinition: z.string().trim().max(2000).nullable().optional(),
+        currentReality: z.string().trim().max(2000).nullable().optional(),
+        milestones: z.array(z.object({
+          id: z.string().trim().min(1).max(120),
+          title: z.string().trim().min(1).max(300),
+          order: z.number().int().min(0),
+          doneWhen: z.string().trim().min(1).max(500),
+        })).max(12).optional().default([]),
+        subgoals: z.array(z.object({
+          id: z.string().trim().min(1).max(120).optional(),
+          title: z.string().trim().min(1).max(500),
+          done: z.boolean().optional().default(false),
+          milestoneId: z.string().trim().min(1).nullable().optional(),
+          parentId: z.string().trim().min(1).max(120).nullable().optional(),
+          doneWhen: z.string().trim().min(1).max(500),
+          effortSize: z.enum(['small', 'medium', 'large']).optional(),
+          aiGenerated: z.boolean().optional().default(true),
+          basedOn: z.enum(['stated', 'inferred']).optional(),
+        }).strict()).min(1).max(30),
+      }).parse(req.body ?? {});
+      const objective = await prisma.objective.findFirst({ where: { id: req.params.id, userId, archived: false } });
+      if (!objective) return res.status(404).json({ error: 'objective_not_found' });
+      if (objective.pathVersion !== data.expectedVersion) return res.status(409).json({ error: 'objective_path_changed' });
+      const existing = normalizeObjectiveSubgoals(objective.subgoals);
+      const preserved = existing.filter((action) => action.done || action.userEdited);
+      const incoming = normalizeObjectiveSubgoals(data.subgoals.map((item, index) => ({
+        ...item,
+        id: item.id ?? `preview-${Date.now()}-${index}`,
+        order: preserved.length + index,
+      })));
+      const write = await prisma.objective.updateMany({
+        where: { id: objective.id, userId, pathVersion: data.expectedVersion },
+        data: {
+          subgoals: [...preserved, ...incoming] as any,
+          milestones: data.milestones,
+          resultDefinition: data.resultDefinition ?? objective.resultDefinition,
+          currentReality: data.currentReality ?? objective.currentReality,
+          pathStatus: 'ready',
+          pathQuestion: null,
+          pathProposal: null,
+          pathProposalCreatedAt: null,
+          pathVersion: { increment: 1 },
+        } as any,
+      });
+      if (write.count !== 1) return res.status(409).json({ error: 'objective_path_changed' });
+      const updated = await prisma.objective.findFirst({ where: { id: objective.id, userId } });
+      return res.json({ objective: updated ? serializeObjective(updated) : null });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      console.error('[objectives/apply-preview] Error:', error);
+      return res.status(500).json({ error: 'Failed to apply preview' });
+    }
+  });
 
   app.post('/api/objectives/:id/path/generate', async (req: Request, res: Response) => {
     const userId = (req as AuthRequest).userId;
@@ -5885,6 +6022,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         title: z.string().trim().min(1).max(300),
         doneWhen: z.string().trim().min(1).max(500),
         scheduledFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        parentId: z.string().trim().min(1).max(120).nullable().optional(),
       }).parse(req.body);
       const actionQuality = validateConcreteAction(data);
       if (!actionQuality.ok) return res.status(422).json({ error: actionQuality.reason });
@@ -5898,7 +6036,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       ))?.milestoneId ?? milestones[0]?.id ?? 'manual-current';
       const action = {
         id: randomUUID(), title: data.title, done: false, order: actions.length, aiGenerated: false, userEdited: true,
-        milestoneId: currentMilestoneId, scheduledFor: data.scheduledFor ?? null, doneWhen: data.doneWhen, status: 'pending' as const,
+        milestoneId: currentMilestoneId, parentId: data.parentId ?? null, scheduledFor: data.scheduledFor ?? null, doneWhen: data.doneWhen, status: 'pending' as const,
       };
       const committed = await prisma.$transaction(async (transaction) => {
         const write = await transaction.objective.updateMany({
@@ -6139,6 +6277,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       archived: z.boolean().optional(),
       deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
       pausedAt: z.string().datetime().nullable().optional(),
+      notes: z.array(ObjectiveNoteSchema).max(40).optional(),
     }).strict().refine((value) => Object.keys(value).length > 0, 'empty objective patch');
     try {
       const data = Schema.parse(req.body);

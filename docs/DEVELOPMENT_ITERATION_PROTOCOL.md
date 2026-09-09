@@ -307,7 +307,7 @@ npx ts-node-transpile-only apps/backend/src/lib/risk-safety.test.ts
 implementação e deixe a cadeia inteira para o fim.
 
 ```bash
-npx vitest run src/routes/goals-page.test.tsx --root apps/web
+npx vitest run src/routes/objectives-workspace --root apps/web
 ```
 Teste único do web.
 

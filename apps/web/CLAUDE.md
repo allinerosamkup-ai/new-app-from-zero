@@ -42,7 +42,7 @@ Planner agora.
 | `/checkin-result` | `checkin-result-page.tsx` | Release do dia + sugestões para Próximas ações |
 | `/journal` | `journal-page.tsx` | Diário com chat SSE; propõe check-in e meta |
 | `/insights` | `insights-page.tsx` | Padrões e relatórios por período |
-| `/goals` | `goals-page.tsx` | Objetivos com execução ordenada |
+| `/goals` | `objectives-workspace/objectives-workspace-page.tsx` | Split Elisi: caminho à esquerda, notas/detalhe à direita, IA com preview |
 | `/pomodoro` | `pomodoro-page.tsx` | Timer de foco |
 | `/run` | `run-page.tsx` | Execução passo a passo |
 | `/planner` | — | **Desligado.** Redireciona para `/home` |

@@ -46,7 +46,7 @@ export function GoalFocusCard() {
             "A goal here becomes a sequence of small steps, and the app shows only the next one.",
           )}
         </p>
-        <button type="button" onClick={() => navigate("/goals")} style={primaryButtonStyle}>
+        <button type="button" onClick={() => navigate("/goals", { state: { composer: "ai-goal" } })} style={primaryButtonStyle}>
           {l("Criar meu primeiro objetivo", "Create my first goal")}
           <ArrowRight size={16} aria-hidden="true" />
         </button>

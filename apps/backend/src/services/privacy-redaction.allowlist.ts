@@ -396,6 +396,7 @@ export const PRIVACY_EXPORT_ALLOWLIST: Record<string, ModelAllowlist> = {
       'pathProposalCreatedAt',
       'pathStatus',
       'pathQuestion',
+      'notes',
       'createdAt',
       'updatedAt',
     ],
