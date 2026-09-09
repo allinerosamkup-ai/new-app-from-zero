@@ -1,10 +1,12 @@
 .ow-root {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  height: calc(100dvh - 18px - env(safe-area-inset-top, 0px) - 132px - env(safe-area-inset-bottom, 0px));
-  max-height: calc(100dvh - 18px - env(safe-area-inset-top, 0px) - 132px - env(safe-area-inset-bottom, 0px));
   gap: 10px;
+  /* AuraLayout already pads chrome + safe-area. Binding height to
+     100dvh minus those values can resolve to 0 in standalone PWA. */
+  min-height: 28rem;
+  height: max(28rem, calc(100vh - 9rem));
+  height: max(28rem, calc(100svh - 9rem));
 }
 
 .ow-toolbar {
@@ -24,7 +26,7 @@
 }
 
 .ow-pane {
-  min-height: 0;
+  min-height: 10rem;
   overflow-y: auto;
   overflow-x: hidden;
   background: rgba(255, 255, 255, 0.92);
