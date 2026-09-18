@@ -1,16 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Detect environment and keys
 const isWeb = typeof window !== 'undefined';
-const supabaseUrl = isWeb 
+const supabaseUrl = isWeb
   ? (import.meta.env.VITE_SUPABASE_URL as string)
   : (process.env.EXPO_PUBLIC_SUPABASE_URL as string);
 
-const supabaseAnonKey = isWeb
-  ? (import.meta.env.VITE_SUPABASE_ANON_KEY as string)
-  : (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string);
+const supabasePublishableKey = isWeb
+  ? ((import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string)
+  : ((process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) as string);
 
-// Universal storage handler
 let storage: any;
 if (!isWeb) {
   try {
@@ -20,7 +18,7 @@ if (!isWeb) {
   }
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     storage: storage,
     autoRefreshToken: true,

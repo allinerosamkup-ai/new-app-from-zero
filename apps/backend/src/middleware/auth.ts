@@ -7,11 +7,14 @@ import { recordInitialConsents } from '../services/consent.service';
 let _client: SupabaseClient | null = null;
 function getClient(): SupabaseClient {
   if (!_client) {
-    // Always use ANON_KEY for user token verification (getUser).
-    // SERVICE_ROLE_KEY bypasses RLS and should NOT be used here.
+    // Publishable/anon para verificar o JWT do usuário (getUser).
+    // SECRET / SERVICE_ROLE bypassa RLS e não deve ser usado aqui.
+    const publishable =
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_ANON_KEY;
     _client = createClient(
       process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
+      publishable!,
     );
   }
   return _client;
@@ -75,9 +78,6 @@ let _bootstrapProfile: ReturnType<typeof createProfileBootstrapper> | null = nul
 
 function getProfileBootstrapper() {
   if (!_bootstrapProfile) {
-    // Usa o pool do processo. Um cliente próprio aqui era o pior dos nove: este
-    // caminho roda em **toda requisição autenticada**, então mantinha um pool
-    // inteiro ocupado em paralelo com o que servia as rotas.
     const prisma = sharedPrisma;
     _bootstrapProfile = createProfileBootstrapper(
       prisma.profile,
@@ -100,7 +100,6 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  // Ignora auth para o callback do Google, que é uma navegação do browser sem headers customizados
   if (req.path === '/gcal/callback' || req.originalUrl.includes('/api/gcal/callback')) {
     return next();
   }
