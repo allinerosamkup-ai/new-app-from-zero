@@ -592,3 +592,6 @@ criei usuário de teste.
 (`onboarding-*.tsx`, `guided-onboarding-page.tsx`, `features/guided-onboarding/`)
 continuam no repositório atrás dos redirects. As perguntas já migraram para
 `/comecar`; os arquivos é que não saíram.
+
+## 2026-10-02 — AIRIA-SI-20261002: dossiê de pesquisa em execução
+Branch codex/state-intelligence-dossier-2026-10-02; base 5dcf2ad; checkout principal, sem nova worktree. Escopo documental autorizado, sem código/publicação. Ticket/handoffs: docs/quality/state-intelligence-2026-10-02/ticket.md. Entrega em docs/product/state-intelligence/. Planejador e Rotinas explicitamente excluídos. Alterações alheias preservadas. Próxima ação: pesquisa primária, síntese dos 14 entregáveis e revisão independente.

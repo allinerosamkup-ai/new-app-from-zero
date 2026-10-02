@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "task": {
+    "id": "ciclo-como-efeito",
+    "objective": "Fronteiras do ciclo derivadas da duracao real, vocabulario unico de fases com efeito sobre humor e energia, e marcador de inicio de um toque",
+    "status": "approved",
+    "initializedAt": "2026-08-17T20:40:57.376Z",
+    "updatedAt": "2026-08-17T20:58:36.195Z"
+  },
+  "roles": {
+    "coordinator": {
+      "agent": "claude-coordenador",
+      "status": "pass",
+      "evidence": "F7 entregue em a10e053",
+      "updatedAt": "2026-08-17T20:58:35.952Z"
+    },
+    "executor": {
+      "agent": "claude-executor",
+      "status": "pass",
+      "evidence": "commit a10e053",
+      "updatedAt": "2026-08-17T20:58:36.069Z"
+    },
+    "verifier": {
+      "agent": "claude-verificador",
+      "status": "pass",
+      "evidence": "backend 116/116 e web 58/446 verdes; build e typecheck limpos; teste prova ovulacao no dia 21 para ciclo de 35 e no dia 10 para ciclo de 24, e que o mesmo dia 21 gera fase diferente em 24/28/35; teste proibe rotulo clinico; navegador confirma um botao unico sem par Sim/Nao",
+      "updatedAt": "2026-08-17T20:58:21.821Z",
+      "score": 9
+    },
+    "integration": {
+      "agent": "claude-integracao",
+      "status": "pass",
+      "evidence": "Um vocabulario de fases nos dois motores; context-grounding ajustado ao novo literal; contrato {label, cycleDay} preservado para grounding e prompt; teste integrado do check-in atualizado para a regra do toque unico",
+      "updatedAt": "2026-08-17T20:58:35.730Z",
+      "score": 9
+    },
+    "meta": {
+      "agent": "meta-verifier",
+      "status": "approved",
+      "evidence": "Bug de fronteira fixa em 28 dias corrigido nos dois motores, com teste provando inversao de sinal antes e acerto depois; vocabulario unico de fases; fase passou a carregar efeito sobre humor e energia em vez de rotulo clinico; marcador de inicio de um toque com zero toque valido. Backend 116/116, web 58/446, build e typecheck limpos, navegador conferido. NAO verificado: fluxo autenticado com historico real de ciclos, exige sessao.",
+      "score": 9,
+      "updatedAt": "2026-08-17T20:58:36.194Z"
+    }
+  },
+  "messages": [],
+  "metaApproval": {
+    "evidence": "Bug de fronteira fixa em 28 dias corrigido nos dois motores, com teste provando inversao de sinal antes e acerto depois; vocabulario unico de fases; fase passou a carregar efeito sobre humor e energia em vez de rotulo clinico; marcador de inicio de um toque com zero toque valido. Backend 116/116, web 58/446, build e typecheck limpos, navegador conferido. NAO verificado: fluxo autenticado com historico real de ciclos, exige sessao.",
+    "score": 9,
+    "approvedAt": "2026-08-17T20:58:36.194Z"
+  },
+  "agents": {
+    "ac8ef40710b5b9d54": {
+      "agentType": "Explore",
+      "startedAt": "2026-08-18T15:35:26.809Z",
+      "status": "running"
+    },
+    "a101fd03f4f2a7a3d": {
+      "agentType": "Explore",
+      "startedAt": "2026-08-18T15:35:38.679Z",
+      "status": "reported",
+      "stoppedAt": "2026-08-18T15:44:21.027Z",
+      "report": ".v1 { decisionId: uuid, feedback: 'accepted'|'corrected'|'rejected'|'done'|'substituted' }` (contract lines 105-106). Goal-specific: `goals.opened.v1 { activeGoalsCount }`, `goal.created.v1 { goalId, creationMode: 'manual'|'suggestion', hasDeadline }`, `goal.action_changed.v1 { goalId, actionId, changeType: 'created'|'completed'|'deferred'|'restored'|'edited' }` (contract lines 102-104).\n\nBackend contract (`event-log.contract.ts`, 124 lines) is the **strict Zod validation source of truth** — `ProductEventPayloadSchema` is a `z.discriminatedUnion('eventName', [...])` (lines 85-107) requiring `.strict()` properties per event, a `SurfaceSchema = z.enum(['checkin','home','patterns','journal','goals','checkin_result'])` (line 78), and `ProductEventCreateSchema` wraps it with `eventId` (uuid), `occurredAt` (ISO datetime, must be within last 31 days / not future by more than 10 min — lines 109-120), `path`. This means: **any new `proposal.viewed/renewed/adjusted/canceled` events must (a) be added to the `ProductEventName` union in `track.ts`, (b) get a matching `z.object({ eventName: z.literal(...), properties: z.object({...}).strict() })` entry in the backend `ProductEventPayloadSchema` discriminated union, and (c) either reuse the existing `'goals'` surface or extend `SurfaceSchema`.** Existing naming convention is strictly `<domain>.<past_or_verb_phrase>.v1` with a `.v1` suffix and dot-separated lowercase snake segments (regex on `EventLogCreateSchema.eventName`: `/^[A-Za-z][A-Za-z0-9._:-]*$/`, line 68, for the legacy free-form path; the discriminated union enforces exact literals for the new typed path). Also note the PII guardrail (`FORBIDDEN_PII_KEYS`, lines 8-13, and `validateEventLogValue`, lines 30-56) blocks free-text/PII-shaped property values — any new event's properties must stay id/enum/boolean/number, not raw proposal text.\n\n### 8. `apps/backend/src/services/action-equivalence.service.ts` (107 lines) — dedupe mechanism\n\nThis is the **second-layer, LLM-based** dedupe (per `apps/web/CLAUDE.md`'s documented two-layer scheme: layer 1 is client-side lexical `utils/action-similarity.ts`, layer 2 is this service, called via `POST /api/actions/check-equivalent` only when layer 1 finds no match).\n\n`findEquivalentActionWithLlm({ candidate, existing, openaiFactory? })` (line 38) returns `EquivalenceResult = { duplicateOf: string | null; reason: string | null; degraded: boolean }`. Mechanics:\n- Caps comparison list at `MAX_CANDIDATES = 40` (line 36).\n- Builds a numbered `[id] text` list and asks the model (via `getOpenAiModel()`/`openAiTemperature()`, `response_format: json_object`) whether the new candidate is semantically the same task as any existing one — explicit examples given (\"comprar pão\" ≈ \"passar na padaria\") and explicit non-matches (object changes, scope changes, \"is a step of\" ≠ \"fulfills\") (lines 74-76).\n- System prompt explicitly instructs: **\"Na dúvida, responda que NÃO é duplicata\"** (bias toward not blocking) (line 76).\n- Only accepts an `id` if it's actually present in the `existing` list sent (line 95) — guards against a hallucinated id silently discarding a real new action.\n- **Any failure (network, missing key, malformed JSON) returns `NOT_DUPLICATE` with `degraded: true`, never throws** (lines 88, 103-106) — i.e., the fail-open design: \"Falha é sempre para o lado de PERMITIR\" (line 17-18 comment).\n\nFor a future \"renovar proposta\" feature: since this service is stateless and purely compares a candidate string against a caller-supplied `existing: EquivalenceCandidate[]` list, avoiding duplicate/near-duplicate actions on renewal would require the caller (the new renew/adjust endpoint) to pass the goal's current pending/active action titles as `existing` before creating a renewed action — the service itself does not query the DB or know about goals/objectives; that's entirely the caller's responsibility. There's no goal-scoped or objective-scoped filtering built in — `existing` is whatever list is handed to it."
+    },
+    "a90aee82e1ab07564": {
+      "agentType": "Explore",
+      "startedAt": "2026-08-18T15:46:12.135Z",
+      "status": "running"
+    },
+    "01a0ed95-8864-7370-b7af-05ce8d014b9c": {
+      "agentType": "default",
+      "startedAt": "2026-09-29T14:33:31.760Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-29T15:17:29.268Z",
+      "report": "PASS na investigação; FAIL crítico confirmado no produto.\n\nCausa-raiz única: [home-page.tsx](C:\\Users\\allin\\.codex\\worktrees\\goals-global-repair\\new-app-fron-zero\\apps\\web\\src\\routes\\home-page.tsx:1488) abre um gate que só fecha na linha 2560. Ele oculta junto o gráfico, CTA de check-in, prioridades, atalhos, propostas, estatísticas e alertas.\n\nA falha é agravada por:\n\n- Estado inicial fechado na linha 678.\n- Toggle inexistente sem histórico na linha 1460.\n- Preferência lê `\"true\"` na linha 681, mas grava `\"1\"`/`\"0\"` na linha 694; após recarregar, volta sempre fechado.\n- O commit `7f89681` introduziu deliberadamente o recolhimento de “TODO o resto”; `9afece0` acrescentou o gate de histórico.\n- Não existe teste de renderização cobrindo a visibilidade desses blocos essenciais.\n\nCorreção mínima recomendada: retirar CTA, prioridades, atalhos, propostas e alertas do gate global; se o acordeão continuar, limitar seu alcance ao gráfico/detalhes. Criar regressão para perfis com e sem histórico e para recarga.\n\nNenhum arquivo foi alterado. Handoff registrado no protocolo e enviado ao coordenador."
+    },
+    "01a0ed96-2241-79e3-9c87-28aa85832c25": {
+      "agentType": "default",
+      "startedAt": "2026-09-29T14:34:14.440Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-29T15:19:47.749Z",
+      "report": "Handoff de release concluído e registrado no protocolo.\n\n- PASS: fluxo canônico identificado e produção atual comprovada no SHA `5dcf2ad`.\n- BLOCKED para deploy: faltam commit final, PR, CI verde, verificação independente e meta-aprovação.\n- Caminho obrigatório: commit → push da branch → PR → CI → merge em `master` → deploy manual pelo workflow com SHA exato → comprovação `GitHub = VPS = container = release.json = sw.js` → teste humano autenticado.\n- Não usar `deploy-airia.bat`; ele mistura mudanças e publica uma branch obsoleta.\n- Risco relevante: o workflow não impõe sozinho que o SHA seja o `master` nem valida toda a identidade pública após subir. Essas provas precisam ser executadas explicitamente.\n\nNenhum arquivo, branch, PR ou ambiente foi alterado."
+    },
+    "01a0ed96-aece-7472-bc2c-225232280ded": {
+      "agentType": "default",
+      "startedAt": "2026-09-29T14:34:53.758Z",
+      "status": "running"
+    },
+    "01a0edb8-68de-7132-a8e1-19eec2bf673f": {
+      "agentType": "default",
+      "startedAt": "2026-09-29T15:11:43.288Z",
+      "status": "running"
+    },
+    "01a0edbe-a562-7b41-83a1-a7364ec102f1": {
+      "agentType": "default",
+      "startedAt": "2026-09-29T15:18:31.155Z",
+      "status": "running"
+    },
+    "01a0ef53-3a21-77b2-89e5-85200ad6712b": {
+      "agentType": "default",
+      "startedAt": "2026-09-29T22:40:18.487Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-29T23:04:19.035Z",
+      "report": "Entrega do executor em `ready_verify`.\n\n- RED semântico: 2 falhas esperadas confirmaram o gate amplo e o formato divergente do `localStorage`.\n- Correção mínima: acordeão agora envolve somente gráfico/detalhes; prioridades, propostas e atalhos ficam sempre visíveis.\n- Persistência alinhada em `\"1\"`/`\"0\"`.\n- Testes focados: 30/30 PASS.\n- Typecheck web: PASS.\n- `git diff --check`: PASS.\n- Handoff registrado no protocolo.\n- Sem commit, push ou deploy. Próximo gate: verificação independente no navegador."
+    },
+    "01a0f311-3aa8-7db2-8de4-0de4e260d516": {
+      "agentType": "default",
+      "startedAt": "2026-09-30T16:06:32.674Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-30T16:14:42.613Z",
+      "report": "PASS no mapeamento; BLOCKED apenas na definição de “manifestação”.\n\nRecomendação: remover integralmente o acordeão do gráfico — botão, `dayDetailsOpen`, chave do `localStorage`, toggle e ref — e mostrar o gráfico sempre que houver histórico. O expansor separado de “detalhes do ritmo” deve permanecer.\n\nPara a futura mudança, preparar somente um handoff documental marcado `UNDEFINED / NÃO IMPLEMENTAR`. Não criar rota, schema, serviço ou contrato antes de esclarecer se “manifestação” significa presença visual ou um novo domínio de intenção e ação.\n\nA presença visual Airia Orbital já está implementada no código ativo, inclusive em Home, Insights, Diário e Aura. Reaproveitar a branch histórica agora criaria duplicação.\n\nO handoff completo, com arquivos, linhas, riscos semânticos e três opções, foi enviado ao coordenador e registrado pelo protocolo obrigatório. Nenhum arquivo foi alterado."
+    },
+    "01a0f326-ebb2-7eb3-98a2-11aafb8fc9b2": {
+      "agentType": "default",
+      "startedAt": "2026-09-30T16:30:13.116Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-30T16:39:27.229Z",
+      "report": "PASS — entrega do executor pronta para verificação independente.\n\n- Gráfico sempre visível quando existe histórico.\n- Botão “Ver meu dia/Recolher” e todo seu estado persistido removidos.\n- Expansor de detalhes do ritmo preservado.\n- RED confirmado com 2 falhas esperadas.\n- GREEN: 5/5.\n- Regressão Home: 30/30.\n- Typecheck e diff-check: PASS.\n- Protocolo atualizado para `ready_verify`.\n- Nenhuma estrutura de manifestação criada."
+    },
+    "01a0f330-44e6-78b3-9ad1-8ab05fe1a59e": {
+      "agentType": "default",
+      "startedAt": "2026-09-30T16:40:26.952Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-30T17:05:22.334Z",
+      "report": "FAIL — 8,1/10.\n\nA Home passou: gráfico condicionado apenas ao histórico, sem botão ou estado de recolhimento, conteúdo essencial fora do gate e expansor de ritmo preservado.\n\nA entrega integrada reprovou porque “Expandir com IA” pode persistir parte dos passos, falhar no meio e deixar a tela desatualizada. Um novo clique pode duplicar ações. É falha de funcionamento e dados, não detalhe visual.\n\nEvidência registrada no protocolo com próxima ação: corrigir a reconciliação após falha e adicionar teste de interrupção; preferencialmente tornar a expansão atômica ou idempotente. Nenhum deploy deve ocorrer antes da reverificação."
+    },
+    "01a0f348-031b-74a0-b363-e864c2f3f38d": {
+      "agentType": "default",
+      "startedAt": "2026-09-30T17:06:22.458Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-30T17:15:53.777Z",
+      "report": "PASS — correção pronta para verificação independente.\n\n- TDD: RED reproduziu falha parcial; GREEN com 33/33 testes.\n- Após falha intermediária, a tela recarrega o objetivo canônico, preserva a seleção, fecha o preview e mostra o erro real.\n- O retry cego não permanece disponível.\n- Typecheck e diff-check passaram.\n- Handoff e `ready_verify` registrados no protocolo.\n- Nenhum commit, push ou deploy realizado."
+    },
+    "01a0f351-4d9c-7853-8133-62d1cc5f9837": {
+      "agentType": "default",
+      "startedAt": "2026-09-30T17:16:31.922Z",
+      "status": "reported",
+      "stoppedAt": "2026-09-30T17:23:33.289Z",
+      "report": "PASS — 9,2/10.\n\nA correção impede duplicação após falha parcial: atualiza o estado canônico, mantém Objetivo/Ação selecionados, fecha o preview, bloqueia novo clique durante `busy` e preserva o erro original.\n\nEvidências:\n\n- Objetivos + Home focados: 38/38 PASS\n- Regressão completa da Home: 30/30 PASS\n- Web global fornecido: 76 arquivos / 545 testes PASS\n- Backend global fornecido: 122/122 suítes PASS\n- Builds, lint, typecheck, autenticação, quatro viewports e `diff-check`: PASS\n\nPontos extraordinários: recuperação segura mesmo após uma escrita já persistida; Home permanece completa, com gráfico sempre visível e sem reintroduzir o recolhimento defeituoso.\n\nProtocolo atualizado: `verifier = pass`, nota `9.2`, handoff vertical registrado. Próximo gate: verificação de integração; ainda não autoriza publicação sozinho."
+    },
+    "01a0f358-8448-7eb1-843c-cf0e20cc33e7": {
+      "agentType": "default",
+      "startedAt": "2026-09-30T17:24:33.042Z",
+      "status": "running"
+    },
+    "01a0fd67-02c6-7323-9373-89bd76e7a9c6": {
+      "agentType": "default",
+      "startedAt": "2026-10-02T16:16:31.042Z",
+      "status": "running"
+    },
+    "01a0fd67-735e-7771-9524-cce7ef86fbeb": {
+      "agentType": "default",
+      "startedAt": "2026-10-02T16:16:57.626Z",
+      "status": "reported",
+      "stoppedAt": "2026-10-02T16:22:31.480Z",
+      "report": "Entregues:\n\n- `docs/product/state-intelligence/interpretive-frameworks.md` — 150 linhas, fontes e decisões.\n- `docs/quality/state-intelligence-2026-10-02/framework-handoff.md` — contexto, limitações e próximo passo.\n\nRecomendação: experiência autoral opcional, sem mapa Hawkins, RH, níveis morais, Hz espiritual ou garantia externa.\n\nEstado: `READY_VERIFY`; aprovação independente pendente. O contrato operacional ainda aponta à tarefa antiga; coordenador informado. Sem commit ou alteração de código."
+    },
+    "01a0fd69-f0c5-7493-9ac7-4471fc6a9482": {
+      "agentType": "default",
+      "startedAt": "2026-10-02T16:19:39.191Z",
+      "status": "running"
+    }
+  }
+}

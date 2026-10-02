@@ -536,3 +536,9 @@ pare o backend antes.
 `prisma.x.findMany(...)` quando `findMany` é `undefined` estoura de forma
 síncrona; o `.catch()` encadeado nunca roda. Em caminho best-effort sobre Prisma,
 use `try/catch`.
+
+## 2026-10-02 — State Intelligence (pesquisa documental)
+### [FATO] Reuso exige distinguir cache diário, sensor e interpretação
+AiriaReading é cache único por usuário/data com upsert; version não é histórico intradia. Pre/post futuro exige snapshots imutáveis. Health Connect Android existe, mas ausência de sono pode virar 0 minutos/score 5 e a janela inclui ontem; não usar como medição atual sem cobertura/origem. HrvTestScreen histórico usa 3000/bpm: rejeitado como HRV real. O motor rastreado 5dcf2ad diverge da constituição em composto/estado misto/janelas; reconciliação é tarefa futura, não corrigida por este dossiê.
+### [DECISÃO] Dossiê antes de novo motor
+Pesquisa e plano em docs/product/state-intelligence/README.md e docs/plans/2026-10-02-state-intelligence.md. Quatro direções e linguagem espiritual opcional são candidatas de teste; sem score composto validado, sem Hz, mapa Hawkins/RH, Planejador ou Rotinas. Baseline 7–14 dias e câmera 60–90s não são certezas universais. Sensor e estudo humano não realizados.

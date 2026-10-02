@@ -102,3 +102,18 @@ Nenhuma entrada acima deve ser removida automaticamente. A limpeza é uma tarefa
 separada: revisar status/diff, confirmar que não há commit único, integrar ou
 descartar conscientemente, remover a cópia e atualizar esta tabela para
 `CLOSED`.
+
+## 2026-10-02 — AIRIA-SI-20261002 (checkout existente)
+| Campo | Valor |
+|---|---|
+| Tarefa | Dossiê de pesquisa State Intelligence; somente documentação |
+| Dono | Codex coordenador, executores ciência/referências e revisores independentes |
+| Branch | codex/state-intelligence-dossier-2026-10-02 |
+| Caminho | C:/Users/allin/Projetos/Apps/new-app-fron-zero |
+| Estado | ACTIVE até pareceres/commit; depois HANDOFF documental |
+| Base | 5dcf2ad |
+| Verificação | docs/quality/state-intelligence-2026-10-02/verification.md e pareceres |
+| Próxima ação | Concluir aprovação independente e commit local; sem push/merge/deploy |
+| Destino | Reutilizar esta branch para consultar/revisar o dossiê, sem criar outra worktree |
+
+Nenhuma nova worktree física criada. Inventário Git consultado antes da escolha; alterações alheias listadas em verification.md permanecem fora da tarefa.
