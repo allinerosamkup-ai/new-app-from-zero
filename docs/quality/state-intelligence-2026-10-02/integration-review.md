@@ -17,7 +17,7 @@ Lidos: ticket, skill local, constituição, protocolo, rubrica, memória local r
 | Qualidade de IA e conteúdo | 15% | 9,4 | IA interpreta sem alterar cálculo, contexto atual/âncora/veto, distinção científico/interpretativo, contraprovas e falha IA explícitas |
 | Manutenibilidade | 10% | 9,2 | Reuso auditado com candidatos rejeitados, seis células e gates, compatibilidade e rollback definidos em nível de pesquisa |
 
-Ponderada: 1,90 + 1,86 + 1,80 + 1,425 + 1,41 + 0,92 = **9,315/10**. 
+Ponderada: 1,90 + 1,86 + 1,80 + 1,425 + 1,41 + 0,92 = **9,315/10**.
 
 ## Achados, correções e reverificação
 
@@ -40,4 +40,3 @@ T01–T18 do plano foram confrontados com contratos e dossiê: nova/recorrente/b
 2. **Integridade do antes/depois e contraprova:** revisão corrigiu referência a cache diário mutável; plano agora exige histórico imutável com invalidação e privacidade, e outcomes negativos/externos contrários não são apagados para salvar doutrina. Isso protege dados, interpretação e confiança da usuária com teste verificável.
 
 Decisão: **PASS da integração documental, 9,315/10, sem falha crítica remanescente identificada.** Próxima ação: meta-verificador audita pareceres, fontes/links, diff, destino operacional e commit; somente ele registra meta-approve. Publicação não autorizada por este parecer.
-

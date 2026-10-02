@@ -593,5 +593,7 @@ criei usuário de teste.
 continuam no repositório atrás dos redirects. As perguntas já migraram para
 `/comecar`; os arquivos é que não saíram.
 
-## 2026-10-02 — AIRIA-SI-20261002: dossiê de pesquisa em execução
-Branch codex/state-intelligence-dossier-2026-10-02; base 5dcf2ad; checkout principal, sem nova worktree. Escopo documental autorizado, sem código/publicação. Ticket/handoffs: docs/quality/state-intelligence-2026-10-02/ticket.md. Entrega em docs/product/state-intelligence/. Planejador e Rotinas explicitamente excluídos. Alterações alheias preservadas. Próxima ação: pesquisa primária, síntese dos 14 entregáveis e revisão independente.
+## 2026-10-02 — AIRIA-SI-20261002: dossiê entregue, gate meta final
+Branch `codex/state-intelligence-dossier-2026-10-02`; base `5dcf2ad`; commit de entrega `fb806ce`; checkout `C:/Users/allin/Projetos/Apps/new-app-fron-zero`, sem nova worktree. Escopo documental autorizado, sem código/publicação. Ticket/handoffs: `docs/quality/state-intelligence-2026-10-02/ticket.md`; síntese `docs/product/state-intelligence/README.md`; plano `docs/plans/2026-10-02-state-intelligence.md`.
+14 entregáveis, 18 casos de mesa, 24 links locais e oito âncoras sem quebra; pesquisa PASS 9,275 e integração PASS 9,315. Sensores, eficácia e UX com pessoas não validados. Planejador e Rotinas excluídos; novos constructos são experimentais. Destino da branch/checkout: HANDOFF documental, leitura/revisão futura sem push/merge/deploy. Próxima ação neste fechamento: meta-verificador conferir commit/gates e registrar aprovação própria, seguida de commit do registro final.
+Mudanças alheias preservadas e fora do commit: `supabase/.temp/cli-latest`, `.agents/skills/mobile-app-ui-design/`, `.claude/skills/`, `.codex/`, `apps/backend/scripts/test-goal-fallback.ts`, `skills-lock.json`. Notion sem ferramenta disponível: ticket/handoffs locais persistidos; nenhum envio externo. Contrato antigo `ciclo-como-efeito` arquivado; aprovação não herdada.

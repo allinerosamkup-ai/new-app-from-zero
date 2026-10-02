@@ -110,10 +110,11 @@ descartar conscientemente, remover a cópia e atualizar esta tabela para
 | Dono | Codex coordenador, executores ciência/referências e revisores independentes |
 | Branch | codex/state-intelligence-dossier-2026-10-02 |
 | Caminho | C:/Users/allin/Projetos/Apps/new-app-fron-zero |
-| Estado | ACTIVE até pareceres/commit; depois HANDOFF documental |
+| Estado | HANDOFF documental; gate meta final registrado nos pareceres |
 | Base | 5dcf2ad |
 | Verificação | docs/quality/state-intelligence-2026-10-02/verification.md e pareceres |
-| Próxima ação | Concluir aprovação independente e commit local; sem push/merge/deploy |
+| Último commit de entrega | fb806ce; registro final em commit de fechamento subsequente |
+| Próxima ação | Consultar/revisar dossiê nesta branch; implementação exige novo ticket; sem push/merge/deploy |
 | Destino | Reutilizar esta branch para consultar/revisar o dossiê, sem criar outra worktree |
 
 Nenhuma nova worktree física criada. Inventário Git consultado antes da escolha; alterações alheias listadas em verification.md permanecem fora da tarefa.
