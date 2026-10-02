@@ -4,7 +4,7 @@ Meta-verificador: meta_review. Data: 2026-10-02. Autoria independente da síntes
 
 ## Decisão e limites
 
-**PASS de conteúdo documental; conclusão operacional pendente.** Não autoriza DONE antes de integração final, checks documentais e commit/destino. Nenhuma tela, sensor, efeito terapêutico, licença ou recurso runtime é aprovado por este parecer. Escopo é pesquisa fundamentada e plano posterior; merge/deploy dependem de autorização própria.
+**PASS documental final — 9,235/10 (9,24).** Autoriza DONE exclusivamente do dossiê após persistência/commit deste fechamento. Nenhuma tela, sensor, efeito terapêutico, licença ou recurso runtime é aprovado por este parecer. Escopo é pesquisa fundamentada e plano posterior; merge/deploy dependem de autorização própria.
 
 ## Auditoria independente
 
@@ -33,6 +33,10 @@ Dois diferenciais extraordinários, além de atender ao pedido: (1) a pesquisa e
 
 ## Checklist de fechamento proporcional
 
-airia-pr-review aplicada: produto sem demo; fluxo/API/erro futuros explicitamente candidatos; dados atuais, timezone e memória negativa preservados no plano; segurança e privacidade não terceirizadas ao LLM. Build, browser, testes clínicos e sensor: **N/A nesta mudança documental**, não declarados PASS. Release/publicação: **N/A, nenhuma autorização concedida**. Links/diff/commit e integração final: pendentes de evidência do coordenador e conferência independente.
+airia-pr-review aplicada: produto sem demo; fluxo/API/erro futuros explicitamente candidatos; dados atuais, timezone e memória negativa preservados no plano; segurança e privacidade não terceirizadas ao LLM. Build, browser, testes clínicos e sensor: **N/A nesta mudança documental**, não declarados PASS. Release/publicação: **N/A, nenhuma autorização concedida**.
 
-Próxima ação: conferir gates finais e registrar meta-approve via script somente após evidências. O conteúdo pode seguir para leitura; a conclusão operacional permanece pendente.
+Conferência final independente: commit `fb806ce86f3b734fba593ae4f58e1f65a31e2317` contém 19 arquivos somente em docs; branch `codex/state-intelligence-dossier-2026-10-02` tem destino HANDOFF explícito em WORKTREES. Arquivos alheios permanecem fora. Evidência do coordenador: cinco documentos, 24 links locais e oito âncoras, zero quebrados; aritmética conferida também pelo verificador de pesquisa. Integração PASS 9,315, pesquisa PASS 9,275, executor/coord pass no contrato ativo. Correções pre/post imutável e consentimento foram reverificadas. `git show --check` revelou dois itens de whitespace no parecer de integração; coordenador corrigiu exclusivamente espaço final/EOF, diff conferido por meta e `git diff --check` atual PASS. O commit final deve incluir essa higiene e o fechamento; não há crítico oculto.
+
+Reverificação cumulativa: correção e destino operacional commitados em `70fc14e`; `git diff --check 5dcf2ad..HEAD` PASS, nenhuma falha de whitespace remanescente.
+
+Decisão do meta: meta-approve registrado via script com 9,235; tarefa no contrato ativo `approved`. Próxima ação do coordenador: persistir snapshot do protocolo aprovado e commit de fechamento; conferir status final e informar SHA/destino. Não publicar e não chamar recursos futuros de implementados.

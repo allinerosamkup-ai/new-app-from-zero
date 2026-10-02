@@ -23,8 +23,8 @@ Documentos em `docs/product/`, `docs/plans/`, pareceres neste diretório e regis
 - [x] Fórmulas sem validação têm versão, hipótese, limite e protocolo; dados ausentes não são zero.
 - [x] Segurança prevalece sobre prontidão; não há Hz espiritual, diagnóstico, garantia ou culpa.
 - [x] Cenários: novos/recorrentes/baixa energia, ausência, sinal ruim, baseline imaturo, conflito, aceleração, piora e evidência contrária.
-- [ ] Revisão independente de pesquisa, integração e meta-processo, notas e correções registradas.
-- [ ] Links locais e diff documental conferidos; commit e branch com destino HANDOFF.
+- [x] Revisão independente de pesquisa, integração e meta-processo, notas e correções registradas.
+- [x] Links locais e diff documental conferidos; commit e branch com destino HANDOFF.
 
 ## Papéis e handoffs
 
@@ -44,3 +44,7 @@ Consultados: skill local, protocolo, constituição, dossiê operacional, matriz
 ## Verificação proporcional
 
 Mudança exclusivamente Markdown: revisão de fontes, contratos, casos de mesa e links; não executar builds do app como falsa prova de pesquisa. Não há teste clínico, de sensor, UX com pessoas ou comportamento runtime nesta entrega. Futuras validações são gates do plano de implementação.
+
+## Conclusão documental
+
+Pesquisa PASS 9,275; integração PASS 9,315 após correção de imutabilidade/consentimento; meta PASS 9,235 com autorização própria em `meta-review.md` e snapshot `protocol-final.json`. Entrega em `fb806ce`, higiene/handoff em `70fc14e`, fechamento registrado em commit subsequente. DONE somente do dossiê e plano; branch HANDOFF local, sem código/publicação. Limites: sensores/eficácia/UX real/direitos definitivos não validados, Notion sem ferramenta disponível.

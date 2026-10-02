@@ -26,4 +26,4 @@ Data: 2026-10-02. Escopo exclusivamente documental. Este arquivo registra contro
 ## Gate final
 
 Revisão de evidência: PASS 9,275/10 em `evidence-review.md`.
-Integração: PASS 9,315/10 em `integration-review.md`; achado de pre/post corrigido e reverificado. Meta: parecer próprio, gate de commit/destino pendente; não herdar nota do autor. Commit documental e destino HANDOFF serão conferidos pelo meta antes de DONE do dossiê. Motor/sensor/UX em produção continuam não implementados por esta tarefa.
+Integração: PASS 9,315/10 em `integration-review.md`; achado de pre/post corrigido e reverificado. Meta: PASS 9,235/10 independente, `meta-approve` próprio registrado. Snapshot final em `protocol-final.json`. Entrega commitada em `fb806ce`, higiene/handoff em `70fc14e`; diff cumulativo `5dcf2ad..HEAD` sem whitespace após correção. Fechamento registrado em commit subsequente. Destino HANDOFF documental local, sem push/merge/deploy. Motor/sensor/UX em produção continuam não implementados por esta tarefa.
