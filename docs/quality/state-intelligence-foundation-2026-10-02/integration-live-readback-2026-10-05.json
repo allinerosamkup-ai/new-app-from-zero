@@ -1,0 +1,561 @@
+{
+  "declaration": "synthetic in-memory fixture; no production writes",
+  "rows": [
+    {
+      "id": "fixture-3",
+      "createdAt": "2026-10-05T17:14:27.481Z",
+      "userId": "550e8400-e29b-41d4-a716-446655440000",
+      "localDate": "2026-10-05T00:00:00Z",
+      "checkinSlot": "midday-141427",
+      "checkinPurpose": "extra",
+      "moodScore": 2,
+      "energyScore": 2,
+      "source": "screen",
+      "idempotencyKey": "screen:2026-10-05:midday-141427",
+      "signalMetadata": {
+        "mood": {
+          "provenance": "reported",
+          "confidence": 1,
+          "evidence": [
+            "screen:mood"
+          ]
+        },
+        "energy": {
+          "provenance": "reported",
+          "confidence": 1,
+          "evidence": [
+            "screen:energy"
+          ]
+        }
+      },
+      "note": "Synthetic scenario only: quero morrer e me matar.",
+      "recordedAt": "2026-10-05T17:14:27.48Z",
+      "menstrualPhase": null,
+      "cycleDay": null,
+      "physicalSymptoms": [],
+      "aiState": {
+        "analysisStatus": "unavailable",
+        "riskSafety": {
+          "riskLevel": "crisis",
+          "signals": [
+            "linguagem de crise ou autoagressao",
+            "humor e energia muito baixos"
+          ],
+          "route": "crisis_protocol",
+          "message": "A Airia deve interromper recomendacoes comuns e mostrar recursos de crise e contato humano."
+        },
+        "sourceFingerprint": "543dc5451d86dce921614c44a97fa00cf822612053321c01caa8f46c848692af",
+        "sourceRevision": "581e1524-f838-4953-b34b-c22e7bf64912"
+      },
+      "factors": [],
+      "emotions": [],
+      "stateLabel": null,
+      "stateLabelType": null,
+      "stateSummary": null
+    },
+    {
+      "id": "fixture-2",
+      "createdAt": "2026-10-05T17:12:34.792Z",
+      "userId": "550e8400-e29b-41d4-a716-446655440000",
+      "localDate": "2026-10-05T00:00:00Z",
+      "checkinSlot": "midday-141234",
+      "checkinPurpose": "extra",
+      "moodScore": 4,
+      "energyScore": 3,
+      "source": "screen",
+      "idempotencyKey": "screen:2026-10-05:midday-141234",
+      "signalMetadata": {
+        "mood": {
+          "provenance": "reported",
+          "confidence": 1,
+          "evidence": [
+            "screen:mood"
+          ]
+        },
+        "energy": {
+          "provenance": "reported",
+          "confidence": 1,
+          "evidence": [
+            "screen:energy"
+          ]
+        }
+      },
+      "note": "Synthetic English integration check.",
+      "recordedAt": "2026-10-05T17:12:34.791Z",
+      "menstrualPhase": null,
+      "cycleDay": null,
+      "physicalSymptoms": [],
+      "aiState": {
+        "analysisStatus": "unavailable",
+        "riskSafety": {
+          "riskLevel": "none",
+          "signals": [],
+          "route": "self_support",
+          "message": "Sem sinal critico detectado; seguir com suporte funcional e agenda adaptativa."
+        },
+        "sourceFingerprint": "f3e76757870ea71d2751be0a28e0fb7875fd0a27896874a86904b807da45499f",
+        "sourceRevision": "8e244551-0755-4273-8711-45d53077ff5c"
+      },
+      "factors": [],
+      "emotions": [],
+      "stateLabel": null,
+      "stateLabelType": null,
+      "stateSummary": null
+    },
+    {
+      "id": "fixture-1",
+      "createdAt": "2026-10-05T17:09:21.205Z",
+      "userId": "550e8400-e29b-41d4-a716-446655440000",
+      "localDate": "2026-10-05T00:00:00Z",
+      "checkinSlot": "midday-140921",
+      "checkinPurpose": "window",
+      "moodScore": 5,
+      "energyScore": 4,
+      "source": "screen",
+      "idempotencyKey": "screen:2026-10-05:midday-140921",
+      "signalMetadata": {
+        "mood": {
+          "provenance": "reported",
+          "confidence": 1,
+          "evidence": [
+            "screen:mood"
+          ]
+        },
+        "energy": {
+          "provenance": "reported",
+          "confidence": 1,
+          "evidence": [
+            "screen:energy"
+          ]
+        }
+      },
+      "note": "Registro sintético de integração, análise indisponível.",
+      "recordedAt": "2026-10-05T17:09:21.198Z",
+      "menstrualPhase": null,
+      "cycleDay": null,
+      "physicalSymptoms": [],
+      "aiState": {
+        "analysisStatus": "unavailable",
+        "riskSafety": {
+          "riskLevel": "none",
+          "signals": [],
+          "route": "self_support",
+          "message": "Sem sinal critico detectado; seguir com suporte funcional e agenda adaptativa."
+        },
+        "sourceFingerprint": "04ede9ea868f33ca09ee925716a8615d815febc90c8ba1556a9e2dfc92d3fe6a",
+        "sourceRevision": "53de9c77-dd3e-423a-b232-b5113215234b"
+      },
+      "factors": [],
+      "emotions": [],
+      "stateLabel": null,
+      "stateLabelType": null,
+      "stateSummary": null
+    }
+  ],
+  "traffic": [
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "POST",
+      "path": "/api/checkins"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "POST",
+      "path": "/api/journal/external-message"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/api/airia/reading"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/api/airia/reading"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "POST",
+      "path": "/api/checkins"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "POST",
+      "path": "/api/journal/external-message"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/api/airia/reading"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "POST",
+      "path": "/api/checkins"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "POST",
+      "path": "/api/journal/external-message"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/api/airia/reading"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/api/airia/reading"
+    },
+    {
+      "method": "GET",
+      "path": "/api/checkins?days=90"
+    },
+    {
+      "method": "GET",
+      "path": "/api/objectives"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preferences"
+    },
+    {
+      "method": "GET",
+      "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/product"
+    },
+    {
+      "method": "GET",
+      "path": "/fixture/evidence"
+    }
+  ]
+}

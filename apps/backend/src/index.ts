@@ -2689,6 +2689,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         priorDiagnoses: runtimeContext.priorDiagnoses,
         ...adaptiveContext,
       });
+      if (aiState.analysisStatus === 'unavailable') throw new Error('CHECKIN_ANALYSIS_UNAVAILABLE');
       return {
         stateLabel: aiState.stateLabel,
         stateLabelType: aiState.stateLabelType,
@@ -3383,7 +3384,7 @@ export function createApp(dependencies: AppDependencies = {}) {
         periodFrom: requestedFrom,
         periodTo: requestedTo,
         surface: 'read',
-      }));
+      }).catch(() => airiaReadingService.get(userId, localDate)));
     } catch (error) {
       console.error('[airia/reading] Error:', error);
       return res.status(500).json({ error: 'Failed to build Airia reading' });
@@ -3423,6 +3424,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       }));
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      if (error instanceof Error && error.message === 'AIRIA_DECISION_STALE') return res.status(409).json({ error: 'Decision no longer matches the current check-in' });
       if (error instanceof Error && error.message === 'AIRIA_DECISION_NOT_FOUND') return res.status(404).json({ error: 'Decision not found' });
       console.error('[airia/decision-feedback] Error:', error);
       return res.status(500).json({ error: 'Failed to persist decision feedback' });
@@ -3439,7 +3441,7 @@ export function createApp(dependencies: AppDependencies = {}) {
       const result = await checkinApplicationService.record(data, {
         requestContext: req.body as Record<string, unknown>,
       });
-      const reading = await airiaReadingService.rebuild({ userId: data.userId, localDate: data.localDate, sourceCheckinId: result.checkinId, surface: 'checkin' });
+      const reading = result.analysisStatus === 'unavailable' ? null : await airiaReadingService.rebuild({ userId: data.userId, localDate: data.localDate, sourceCheckinId: result.checkinId, surface: 'checkin' }).catch(() => null);
       const checkinStatement = data.note?.trim() ?? '';
       if (checkinStatement) {
         void reviewObjectivePathsAfterContext(data.userId, checkinStatement, 'checkin')

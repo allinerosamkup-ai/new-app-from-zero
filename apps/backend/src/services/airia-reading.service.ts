@@ -172,6 +172,7 @@ export class AiriaReadingService {
     }
     const today = (byDate.get(input.localDate) ?? []).slice().sort((left, right) => new Date(left.recordedAt).getTime() - new Date(right.recordedAt).getTime());
     const latest = today.at(-1) ?? null;
+    if (latest?.aiState?.analysisStatus === 'unavailable') return this.sourceOnly(latest);
     const first = today[0] ?? null;
     const moodValues = today.map((entry) => numberOrNull(entry.moodScore)).filter((value): value is number => value !== null);
     const energyValues = today.map((entry) => numberOrNull(entry.energyScore)).filter((value): value is number => value !== null);
@@ -249,6 +250,8 @@ export class AiriaReadingService {
     };
     const currentState = latest ? {
       checkinId: latest.id,
+      analysisStatus: latest.aiState?.analysisStatus ?? 'available',
+      sourceRevision: latest.aiState?.sourceRevision ?? null,
       observedAt: new Date(latest.recordedAt).toISOString(),
       slot: slotOf(latest.checkinSlot),
       moodScore: latest.moodScore,
@@ -375,8 +378,24 @@ export class AiriaReadingService {
     await prisma.dailyCheckin.update({ where: { id: checkinId }, data: { signalMetadata: metadata } });
   }
 
+  private sourceOnly(latest: AnyRow): AiriaReadingEnvelope {
+    const riskSafety = parseRisk(latest.aiState?.riskSafety) ?? assessRiskSafety({ text: latest.note, moodScore: latest.moodScore, energyScore: latest.energyScore, sleepScore: latest.sleepScore, irritabilityScore: latest.irritabilityScore });
+    return { version: 'v1', generatedAt: new Date().toISOString(), capacity: null, currentState: { analysisStatus: 'unavailable', observedAt: new Date(latest.recordedAt).toISOString(), moodScore: latest.moodScore, energyScore: latest.energyScore }, period: {}, alerts: [], riskSafety, decision: null };
+  }
+
   async get(userId: string, localDate: string): Promise<AiriaReadingEnvelope> {
     const reading = await (this.prisma as any).airiaReading.findUnique({ where: { userId_localDate: { userId, localDate: dateOnly(localDate) } }, include: { decision: true } });
+    const observations = await (this.prisma as any).dailyCheckin.findMany({ where: { userId, localDate: dateOnly(localDate) }, orderBy: { recordedAt: 'desc' }, take: 1 });
+    const latest = observations.sort((a: AnyRow, b: AnyRow) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())[0];
+    const current = reading?.currentState as Record<string, any> | undefined;
+    const unavailable = latest?.aiState?.analysisStatus === 'unavailable';
+    const stale = latest && (current?.checkinId !== latest.id || current?.observedAt !== new Date(latest.recordedAt).toISOString() || current?.sourceRevision !== (latest.aiState?.sourceRevision ?? null));
+    if (unavailable || stale) {
+      if (!unavailable) {
+        try { return await this.rebuild({ userId, localDate }); } catch { /* Return only the durable source below. */ }
+      }
+      return this.sourceOnly(latest);
+    }
     return reading ? this.serialize(reading, reading.decision) : this.rebuild({ userId, localDate });
   }
 
@@ -384,6 +403,11 @@ export class AiriaReadingService {
     const prisma = this.prisma as any;
     const decision = await prisma.airiaDecision.findFirst({ where: { id: input.decisionId, userId: input.userId }, include: { reading: true } });
     if (!decision) throw new Error('AIRIA_DECISION_NOT_FOUND');
+    const sourceDate = dateKey(decision.reading.localDate);
+    const observations = await prisma.dailyCheckin.findMany({ where: { userId: input.userId, localDate: dateOnly(sourceDate) }, orderBy: { recordedAt: 'desc' }, take: 1 });
+    const latest = observations.sort((a: AnyRow, b: AnyRow) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())[0];
+    const current = decision.reading.currentState as Record<string, any>;
+    if (latest && (latest.aiState?.analysisStatus === 'unavailable' || current?.checkinId !== latest.id || current?.observedAt !== new Date(latest.recordedAt).toISOString() || current?.sourceRevision !== (latest.aiState?.sourceRevision ?? null))) throw new Error('AIRIA_DECISION_STALE');
     const previousCapacity = (decision.reading?.currentState as Record<string, any> | null)?.capacity as CapacityReading | undefined;
     const feedback = {
       ...(decision.feedback && typeof decision.feedback === 'object' ? decision.feedback : {}),
@@ -513,6 +537,7 @@ export class AiriaReadingService {
       generatedAt: new Date(reading.updatedAt).toISOString(),
       capacity,
       currentState: {
+        analysisStatus: current.analysisStatus ?? 'available',
         phase: current.stateLabel ?? null,
         confidence,
         observedAt: current.observedAt ?? null,
@@ -535,7 +560,7 @@ export class AiriaReadingService {
       },
       alerts,
       riskSafety,
-      decision: decision ? {
+      decision: current.analysisStatus !== 'unavailable' && decision ? {
         id: decision.id,
         status: statusMap[decision.status] ?? 'proposed',
         title: decisionData.title ?? 'Leitura atual',

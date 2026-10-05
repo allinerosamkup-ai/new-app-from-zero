@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuraStore } from "../features/aura/store";
 import { computeMoodCycle, getPhaseColor } from "../utils/mood-cycle-engine";
 import { useLocalizedCopy } from "../i18n";
 import { AiriaMascot } from "../components/airia/AiriaMascot";
 import { AuraButtonV2 } from "../components/editorial/AuraButtonV2";
 import { TodayGoalActionsCard } from "../components/aura/TodayGoalActionsCard";
-import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
+import { SafetyProtocolCard, type RiskSafety } from "../components/aura/SafetyProtocolCard";
 import { canShowContextualDecision, localizeAiriaCapacityReason, localizeAiriaPhase, localizeVisibleConcreteAction, sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
 import { successHaptic } from "../utils/haptics";
 import "../styles/aura.css";
@@ -18,8 +18,11 @@ import "../styles/aura.css";
 export function CheckinResultPage() {
   const l = useLocalizedCopy();
   const navigate = useNavigate();
+  const location = useLocation();
+  const savedReceipt = location.state as { analysisStatus?: string; riskSafety?: RiskSafety } | null;
   const { state, prepareJournalFromMood, refreshData } = useAuraStore();
   const { reading, loading, reload } = useAiriaReading();
+  const [feedbackError, setFeedbackError] = useState(false);
   const [feedbackPending, setFeedbackPending] = useState(false);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correction, setCorrection] = useState("");
@@ -29,9 +32,10 @@ export function CheckinResultPage() {
   const cycle = useMemo(() => computeMoodCycle(state.checkinHistory || []), [state.checkinHistory]);
   const phaseColor = getPhaseColor(cycle.phase);
   const latest = state.checkinHistory?.[0];
+  const analysisUnavailable = savedReceipt?.analysisStatus === "unavailable" || latest?.analysisStatus === "unavailable" || reading?.currentState.analysisStatus === "unavailable";
   const observedAt = reading?.currentState.observedAt ?? latest?.recordedAt;
   const decision = reading?.decision;
-  const showDecision = canShowContextualDecision(reading, "checkin_result");
+  const showDecision = !analysisUnavailable && canShowContextualDecision(reading, "checkin_result");
   const observedDays = Number(reading?.period.observedDays ?? 0);
   const readingConfidence = Number(reading?.period.confidence ?? 0);
   const isStillLearning = observedDays < 2 || readingConfidence < 0.35;
@@ -41,13 +45,16 @@ export function CheckinResultPage() {
   async function feedback(status: "accepted" | "rejected" | "corrected" | "done" | "substituted") {
     if (!decision || feedbackPending) return;
     setFeedbackPending(true);
+    setFeedbackError(false);
     const persisted = await sendAiriaDecisionFeedback(decision.id, status, "checkin_result", correction);
     if (persisted) {
       setCorrectionOpen(false);
       setCorrection("");
       await reload();
     }
+    if (!persisted) { setFeedbackError(true); await reload(); }
     setFeedbackPending(false);
+    return persisted;
   }
 
   return (
@@ -58,14 +65,16 @@ export function CheckinResultPage() {
         </div>
         <div className="result-header animate-fade-in delay-100">
           <p className="result-header-kicker" style={{ color: "var(--accent-primary-ink)" }}>{l("CHECK-IN REGISTRADO", "CHECK-IN RECORDED")}</p>
-          <h1 className="result-header-title">{l("Entendi como você está agora", "I understand how you are right now")}</h1>
+          <h1 className="result-header-title">{analysisUnavailable ? l("Seu check-in está salvo", "Your check-in is saved") : l("Entendi como você está agora", "I understand how you are right now")}</h1>
           <p className="result-header-copy">{l("A Airia junta este momento ao seu histórico antes de propor qualquer coisa.", "Airia joins this moment to your history before proposing anything.")}</p>
         </div>
+
+        {analysisUnavailable && <p role="status" className="aura-panel-soft" style={{ padding: 16 }}>{l("A análise está indisponível agora. Seu registro foi salvo e continua no histórico.", "Analysis is unavailable right now. Your record is saved and remains in your history.")}</p>}
 
         <section style={{ marginBottom: 14, padding: "16px", borderRadius: 18, background: "rgba(255,255,255,.78)", border: `1.5px solid ${phaseColor}40` }}>
           <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: phaseColor, textTransform: "uppercase", letterSpacing: ".1em" }}>{l("Estado agora", "Current state")}</p>
           <p style={{ margin: "5px 0 0", fontSize: 22, fontWeight: 800, color: "var(--text-1)" }}>
-            {isStillLearning
+            {analysisUnavailable ? l("Humor e energia registrados", "Mood and energy recorded") : isStillLearning
               ? l("Ainda conhecendo seu ritmo", "Still learning your rhythm")
               : localizedPhase}
           </p>
@@ -74,7 +83,7 @@ export function CheckinResultPage() {
               ? l("Este registro entra no seu histórico. Com mais momentos, eu comparo o que muda no seu dia.", "This record joins your history. With more moments, I can compare what changes through your day.")
               : l("Baseado nos seus registros confirmados neste período.", "Based on your confirmed records from this period.")}
           </p>}
-          {reading?.currentState.intraday && (
+          {!analysisUnavailable && reading?.currentState.intraday && (
             <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--text-2)", lineHeight: 1.45 }}>
               {(reading.currentState.intraday.observations ?? 0) === 1
                 ? l("1 registro confirmado hoje", "1 confirmed record today")
@@ -83,11 +92,12 @@ export function CheckinResultPage() {
           )}
         </section>
 
-        <SafetyProtocolCard riskSafety={reading?.riskSafety} surface="checkin_result" />
+        <SafetyProtocolCard riskSafety={analysisUnavailable ? savedReceipt?.riskSafety ?? latest?.riskSafety ?? reading?.riskSafety : reading?.riskSafety} surface="checkin_result" />
 
-        <TodayGoalActionsCard capacity={reading?.capacity} />
+        {!analysisUnavailable && <TodayGoalActionsCard capacity={reading?.capacity} />}
 
         {loading && <div className="aura-panel-soft" style={{ padding: 16, textAlign: "center", marginBottom: 12 }}><p style={{ margin: 0, color: "var(--text-3)", fontSize: 12 }}>{l("Cruzando este registro com seu contexto…", "Connecting this record with your context…")}</p></div>}
+        {feedbackError && <p role="alert">{l("Não consegui confirmar esta ação. Atualizei sua leitura para você tentar novamente.", "I could not confirm this action. I refreshed your reading so you can try again.")}</p>}
         {showDecision && decision && (
           <section style={{ padding: 16, borderRadius: 16, marginTop: 12, marginBottom: 12, background: "rgba(255,253,250,.95)", border: "1.5px solid rgba(143,192,164,.36)" }}>
             <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 800, color: "var(--accent-primary-ink)", textTransform: "uppercase", letterSpacing: ".12em" }}>{l("Próximo passo que cabe hoje", "A next step that fits today")}</p>
@@ -101,8 +111,9 @@ export function CheckinResultPage() {
                 className="btn btn-primary"
                 disabled={feedbackPending}
                 onClick={() => {
-                  void feedback("accepted");
-                  navigate("/goals", { state: { objectiveId: decision.objectiveId, actionId: decision.actionId } });
+                  void feedback("accepted").then((saved) => {
+                    if (saved) navigate("/goals", { state: { objectiveId: decision.objectiveId, actionId: decision.actionId } });
+                  });
                 }}
               >
                 {l("Fazer agora", "Do it now")}

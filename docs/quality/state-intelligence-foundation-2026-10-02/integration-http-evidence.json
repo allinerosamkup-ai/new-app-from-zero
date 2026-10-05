@@ -1,0 +1,456 @@
+{
+  "declaration": "synthetic in-memory fixture; no production writes",
+  "checks": {
+    "genuineUiInitialSubmit": "PASS",
+    "identicalRetryOneRecord": "PASS",
+    "changedSameKeyPreservesSafety": "PASS",
+    "explicitSourceReadback": "PASS",
+    "writeFailureDoesNotClaimPersisted": "PASS"
+  },
+  "retry": {
+    "id": "fixture-1",
+    "createdAt": "2026-10-02T19:26:57.396Z",
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "localDate": "2026-10-02T00:00:00.000Z",
+    "checkinSlot": "midday-162657",
+    "checkinPurpose": "window",
+    "moodScore": 7,
+    "energyScore": 7,
+    "source": "screen",
+    "idempotencyKey": "screen:2026-10-02:midday-162657",
+    "signalMetadata": {
+      "mood": {
+        "provenance": "reported",
+        "confidence": 1,
+        "evidence": [
+          "screen:mood"
+        ]
+      },
+      "energy": {
+        "provenance": "reported",
+        "confidence": 1,
+        "evidence": [
+          "screen:energy"
+        ]
+      }
+    },
+    "note": "Registro sintético de integração sem contexto privado.",
+    "recordedAt": "2026-10-02T19:32:03.123Z",
+    "menstrualPhase": null,
+    "cycleDay": null,
+    "physicalSymptoms": [],
+    "aiState": {
+      "analysisStatus": "unavailable",
+      "riskSafety": {
+        "riskLevel": "none",
+        "signals": [],
+        "route": "self_support",
+        "message": "Sem sinal critico detectado; seguir com suporte funcional e agenda adaptativa."
+      },
+      "sourceFingerprint": "b51c6244c6e9574a8f860ab7c363bc23463541f982abd486f238779ca3ce01c2",
+      "sourceRevision": "4509d4bf-8124-4237-8bc2-e89b593b6013"
+    },
+    "factors": [],
+    "emotions": [],
+    "stateLabel": null,
+    "stateLabelType": null,
+    "stateSummary": null,
+    "status": "persisted",
+    "analysisStatus": "unavailable",
+    "checkinId": "fixture-1",
+    "persistedAt": "2026-10-02T19:32:03.123Z",
+    "riskSafety": {
+      "riskLevel": "none",
+      "signals": [],
+      "route": "self_support",
+      "message": "Sem sinal critico detectado; seguir com suporte funcional e agenda adaptativa."
+    },
+    "reading": null,
+    "objectivePathProposals": []
+  },
+  "changed": {
+    "id": "fixture-1",
+    "createdAt": "2026-10-02T19:26:57.396Z",
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "localDate": "2026-10-02T00:00:00.000Z",
+    "checkinSlot": "midday-162657",
+    "checkinPurpose": "window",
+    "moodScore": 7,
+    "energyScore": 7,
+    "source": "screen",
+    "idempotencyKey": "screen:2026-10-02:midday-162657",
+    "signalMetadata": {
+      "mood": {
+        "provenance": "reported",
+        "confidence": 1,
+        "evidence": [
+          "screen:mood"
+        ]
+      },
+      "energy": {
+        "provenance": "reported",
+        "confidence": 1,
+        "evidence": [
+          "screen:energy"
+        ]
+      }
+    },
+    "note": "Cenário sintético: não quero mais viver.",
+    "recordedAt": "2026-10-02T19:32:03.491Z",
+    "menstrualPhase": null,
+    "cycleDay": null,
+    "physicalSymptoms": [],
+    "aiState": {
+      "analysisStatus": "unavailable",
+      "riskSafety": {
+        "riskLevel": "crisis",
+        "signals": [
+          "linguagem de crise ou autoagressao"
+        ],
+        "route": "crisis_protocol",
+        "message": "A Airia deve interromper recomendacoes comuns e mostrar recursos de crise e contato humano."
+      },
+      "sourceFingerprint": "cb23aec9628193bee8c457ba7dadd212b4f596a38212878cd6ded600020551d3",
+      "sourceRevision": "667dcf0b-0736-4ecc-8a88-15b180e5ae3b"
+    },
+    "factors": [],
+    "emotions": [],
+    "stateLabel": null,
+    "stateLabelType": null,
+    "stateSummary": null,
+    "status": "persisted",
+    "analysisStatus": "unavailable",
+    "checkinId": "fixture-1",
+    "persistedAt": "2026-10-02T19:32:03.491Z",
+    "riskSafety": {
+      "riskLevel": "crisis",
+      "signals": [
+        "linguagem de crise ou autoagressao"
+      ],
+      "route": "crisis_protocol",
+      "message": "A Airia deve interromper recomendacoes comuns e mostrar recursos de crise e contato humano."
+    },
+    "reading": null,
+    "objectivePathProposals": []
+  },
+  "writeFailure": {
+    "status": 500,
+    "body": {
+      "error": "Failed to process check-in"
+    }
+  },
+  "final": {
+    "declaration": "synthetic in-memory fixture; no production writes",
+    "rows": [
+      {
+        "id": "fixture-1",
+        "createdAt": "2026-10-02T19:26:57.396Z",
+        "userId": "550e8400-e29b-41d4-a716-446655440000",
+        "localDate": "2026-10-02T00:00:00.000Z",
+        "checkinSlot": "midday-162657",
+        "checkinPurpose": "window",
+        "moodScore": 7,
+        "energyScore": 7,
+        "source": "screen",
+        "idempotencyKey": "screen:2026-10-02:midday-162657",
+        "signalMetadata": {
+          "mood": {
+            "provenance": "reported",
+            "confidence": 1,
+            "evidence": [
+              "screen:mood"
+            ]
+          },
+          "energy": {
+            "provenance": "reported",
+            "confidence": 1,
+            "evidence": [
+              "screen:energy"
+            ]
+          }
+        },
+        "note": "Cenário sintético: não quero mais viver.",
+        "recordedAt": "2026-10-02T19:32:03.491Z",
+        "menstrualPhase": null,
+        "cycleDay": null,
+        "physicalSymptoms": [],
+        "aiState": {
+          "analysisStatus": "unavailable",
+          "riskSafety": {
+            "riskLevel": "crisis",
+            "signals": [
+              "linguagem de crise ou autoagressao"
+            ],
+            "route": "crisis_protocol",
+            "message": "A Airia deve interromper recomendacoes comuns e mostrar recursos de crise e contato humano."
+          },
+          "sourceFingerprint": "cb23aec9628193bee8c457ba7dadd212b4f596a38212878cd6ded600020551d3",
+          "sourceRevision": "667dcf0b-0736-4ecc-8a88-15b180e5ae3b"
+        },
+        "factors": [],
+        "emotions": [],
+        "stateLabel": null,
+        "stateLabelType": null,
+        "stateSummary": null
+      }
+    ],
+    "traffic": [
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "GET",
+        "path": "/fixture/evidence"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "POST",
+        "path": "/api/checkins"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "POST",
+        "path": "/api/journal/external-message"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "GET",
+        "path": "/api/airia/reading"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/api/airia/reading"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/api/airia/reading"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "GET",
+        "path": "/api/objectives"
+      },
+      {
+        "method": "GET",
+        "path": "/api/preferences"
+      },
+      {
+        "method": "GET",
+        "path": "/rest/v1/profiles?select=cycle_start%2Ccycle_length%2Cluteal_length%2Conboarding_done%2Ccreated_at&id=eq.550e8400-e29b-41d4-a716-446655440000"
+      },
+      {
+        "method": "POST",
+        "path": "/api/events/product"
+      },
+      {
+        "method": "GET",
+        "path": "/fixture/evidence"
+      },
+      {
+        "method": "POST",
+        "path": "/api/checkins"
+      },
+      {
+        "method": "POST",
+        "path": "/api/checkins"
+      },
+      {
+        "method": "GET",
+        "path": "/api/checkins?days=90"
+      },
+      {
+        "method": "POST",
+        "path": "/fixture/mode"
+      },
+      {
+        "method": "POST",
+        "path": "/api/checkins"
+      },
+      {
+        "method": "POST",
+        "path": "/fixture/mode"
+      },
+      {
+        "method": "GET",
+        "path": "/fixture/evidence"
+      }
+    ]
+  }
+}

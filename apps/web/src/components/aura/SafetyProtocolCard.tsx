@@ -1,6 +1,7 @@
 import { AuraButtonV2 } from "../editorial/AuraButtonV2";
 import { trackEvent } from "../../lib/track";
 import { useTranslation } from "react-i18next";
+import { safetySignalLabel } from "./safety-signal-label";
 
 export type RiskSafety = {
   riskLevel: "none" | "low" | "moderate" | "high" | "crisis";
@@ -16,7 +17,7 @@ type SafetyProtocolCardProps = {
 };
 
 export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyProtocolCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   if (!riskSafety || riskSafety.route === "self_support") return null;
 
   const isCrisis = riskSafety.route === "crisis_protocol";
@@ -63,7 +64,7 @@ export function SafetyProtocolCard({ riskSafety, surface, onAdaptDay }: SafetyPr
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
           {riskSafety.signals.slice(0, 3).map((signal) => (
             <span key={signal} style={{ fontSize: 10.5, fontWeight: 750, color: "#3E6B54", borderRadius: 999, padding: "4px 8px", background: "rgba(255,255,255,.58)", border: "1px solid rgba(74,107,91,.14)" }}>
-              {signal}
+              {safetySignalLabel(signal, i18n.resolvedLanguage ?? i18n.language)}
             </span>
           ))}
         </div>

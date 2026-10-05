@@ -1,6 +1,8 @@
 import type { AuraCommandExecution } from "./command-types";
 
 export type AppliedCheckinReceipt = {
+  analysisStatus?: "available" | "unavailable";
+  riskSafety?: import("../../components/aura/SafetyProtocolCard").RiskSafety;
   checkinId: string;
   moodScore: number;
   energyScore: number;
@@ -20,6 +22,7 @@ export function checkinReceiptFromExecution(execution: AuraCommandExecution | nu
   if (!result || typeof result.checkinId !== "string") return null;
   if (typeof result.moodScore !== "number" || typeof result.energyScore !== "number") return null;
   return {
+    ...(result.analysisStatus === "unavailable" ? { analysisStatus: "unavailable" as const, riskSafety: result.riskSafety as AppliedCheckinReceipt["riskSafety"] } : {}),
     checkinId: result.checkinId,
     moodScore: result.moodScore,
     energyScore: result.energyScore,

@@ -32,6 +32,9 @@ function reading(overrides: Partial<AiriaReadingEnvelope> = {}): AiriaReadingEnv
 }
 
 describe("canShowContextualDecision", () => {
+  it("withholds suggestions when the newest analysis is unavailable", () => {
+    expect(canShowContextualDecision(reading({ currentState: { analysisStatus: "unavailable" } }), "checkin_result")).toBe(false);
+  });
   it("não repete uma proposta operacional dentro do Diário", () => {
     expect(canShowContextualDecision(reading(), "journal")).toBe(false);
   });

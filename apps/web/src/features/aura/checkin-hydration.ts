@@ -33,6 +33,8 @@ export function hydrateCheckinEntry(raw: Record<string, unknown>): CheckinEntry 
   const symptomLevels = colica || dorCabeca ? { ...(colica ? { colica } : {}), ...(dorCabeca ? { dorCabeca } : {}) } : undefined;
 
   return {
+    analysisStatus: aiState?.analysisStatus === "available" || (aiState?.analysisStatus !== "unavailable" && Boolean(raw.stateSummary)) ? "available" : "unavailable",
+    riskSafety: (asRecord(aiState?.riskSafety) ?? undefined) as CheckinEntry["riskSafety"],
     date: dateKey(raw.localDate ?? raw.recordedAt ?? raw.date),
     recordedAt: typeof raw.recordedAt === "string" ? raw.recordedAt : undefined,
     checkinSlot: typeof raw.checkinSlot === "string" ? raw.checkinSlot : undefined,

@@ -63,6 +63,7 @@ type ApiPreferences = {
   medicationCurrentlyUsing?: AuraState['medicationCurrentlyUsing'];
 };
 type ApiCheckinResponse = {
+  analysisStatus?: "available" | "unavailable";
   checkinId?: string | number;
   id?: string | number;
   stateLabel?: string | null;
@@ -280,6 +281,7 @@ type AuraStoreContextValue = {
   prepareJournalFromMood: () => void;
   addCheckin: (entry: Omit<CheckinEntry, "date">) => Promise<QueuedCheckinReceipt | {
     status: "persisted";
+    analysisStatus: "available" | "unavailable";
     checkinId: string;
     stateLabel: string | null;
     analysis: string | null;
@@ -850,6 +852,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         // Retorna dados ricos da IA para uso na tela de resultado
         return {
           status: "persisted" as const,
+          analysisStatus: checkinResponse.analysisStatus ?? (checkinResponse.stateSummary || checkinResponse.aiState?.analysis ? "available" : "unavailable"),
           checkinId: String(checkinResponse?.checkinId ?? checkinResponse?.id),
           stateLabel: checkinResponse?.stateLabel ?? null,
           analysis: checkinResponse?.stateSummary ?? checkinResponse?.aiState?.analysis ?? null,

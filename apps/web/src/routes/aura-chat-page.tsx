@@ -273,7 +273,8 @@ export function AuraChatPage() {
   const recognitionRef = useRef<BrowserRecognitionLike | null>(null);
   const voiceInputBaseRef = useRef("");
   const [isRecording, setIsRecording] = useState(false);
-  const sharedRiskSafety = canonicalReading?.riskSafety ?? lastRiskSafety;
+  const safetyLevels = ["none", "low", "moderate", "high", "crisis"];
+  const sharedRiskSafety = safetyLevels.indexOf(lastRiskSafety?.riskLevel ?? "none") > safetyLevels.indexOf(canonicalReading?.riskSafety?.riskLevel ?? "none") ? lastRiskSafety : canonicalReading?.riskSafety ?? lastRiskSafety;
 
   useEffect(() => {
     return () => {
@@ -689,13 +690,14 @@ export function AuraChatPage() {
   function showAppliedCheckinReceipt(execution: AuraCommandExecution | null | undefined) {
     const receipt = checkinReceiptFromExecution(execution);
     if (!receipt) return;
+    if (receipt.riskSafety) setLastRiskSafety(receipt.riskSafety);
     setActionCard({
       eyebrow: l("CHECK-IN REGISTRADO", "CHECK-IN LOGGED"),
       title: receipt.stateLabel ?? l("Anotei como você está agora", "I saved how you are right now"),
       items: [
         l(`Humor ${receipt.moodScore}/10`, `Mood ${receipt.moodScore}/10`),
         l(`Energia ${receipt.energyScore}/10`, `Energy ${receipt.energyScore}/10`),
-        receipt.stateSummary ?? "",
+        receipt.analysisStatus === "unavailable" ? l("Seu registro foi salvo. A análise está indisponível agora.", "Your record is saved. Analysis is unavailable right now.") : receipt.stateSummary ?? "",
       ].filter(Boolean),
       ctaLabel: l("Ajustar check-in", "Adjust check-in"),
       ctaPath: "/checkin",

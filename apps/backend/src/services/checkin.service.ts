@@ -260,7 +260,7 @@ export class CheckinService {
     forecast7dSummary?: string | null;
     taskMomentum7d?: number | null;
     priorDiagnoses?: string[] | null;
-  }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState> {
+  }, client: Pick<OpenAI, 'chat'> = openai): Promise<CheckinState & { analysisStatus?: 'available' | 'unavailable' }> {
     const checkinMoment = data.checkinSlot?.split('-')[0] || 'não informado';
     const currentLocalTime = extractClockFromCheckinSlot(data.checkinSlot);
 
@@ -367,8 +367,8 @@ JSON APENAS:
       const response = await client.chat.completions.create(request as any);
       const content = response.choices?.[0]?.message?.content;
       if (!content) {
-        console.warn('[checkin] provedor não devolveu estado estruturado; usando leitura proporcional');
-        return fallback();
+        console.warn('[checkin] provedor não devolveu estado estruturado; análise indisponível');
+        return { ...fallback(), analysisStatus: 'unavailable' };
       }
 
       const parsed = CheckinStateSchema.parse(extractJsonValue(content));
@@ -381,8 +381,8 @@ JSON APENAS:
         ).slice(0, 1),
       };
     } catch {
-      console.warn('[checkin] falha ao gerar estado estruturado; usando leitura proporcional');
-      return fallback();
+      console.warn('[checkin] falha ao gerar estado estruturado; análise indisponível');
+      return { ...fallback(), analysisStatus: 'unavailable' };
     }
   }
 }

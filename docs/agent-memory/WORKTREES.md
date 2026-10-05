@@ -102,3 +102,29 @@ Nenhuma entrada acima deve ser removida automaticamente. A limpeza é uma tarefa
 separada: revisar status/diff, confirmar que não há commit único, integrar ou
 descartar conscientemente, remover a cópia e atualizar esta tabela para
 `CLOSED`.
+
+## 2026-10-02 — AIRIA-SI-20261002 (checkout existente)
+| Campo | Valor |
+|---|---|
+| Tarefa | Dossiê de pesquisa State Intelligence; somente documentação |
+| Dono | Codex coordenador, executores ciência/referências e revisores independentes |
+| Branch | codex/state-intelligence-dossier-2026-10-02 |
+| Caminho | C:/Users/allin/Projetos/Apps/new-app-fron-zero |
+| Estado | HANDOFF documental; gate meta final registrado nos pareceres |
+| Base | 5dcf2ad |
+| Verificação | docs/quality/state-intelligence-2026-10-02/verification.md e pareceres |
+| Último commit de entrega | fb806ce; registro final em commit de fechamento subsequente |
+| Próxima ação | Consultar/revisar dossiê nesta branch; implementação exige novo ticket; sem push/merge/deploy |
+| Destino | Reutilizar esta branch para consultar/revisar o dossiê, sem criar outra worktree |
+
+Nenhuma nova worktree física criada. Inventário Git consultado antes da escolha; alterações alheias listadas em verification.md permanecem fora da tarefa.
+
+## 2026-10-02 — AIRIA-SI-01 (primeiro fundamento)
+
+Branch `codex/state-intelligence-foundation-2026-10-02`, base `a20500d`, checkout principal `C:/Users/allin/Projetos/Apps/new-app-fron-zero`. Dono: coordenador root; retomada com resume_executor, resume_integration e resume_meta; verificador técnico foundation_verifier. Estado: HANDOFF, gates finais em 2026-10-05. Sem nova worktree física; inventário Git consultado, dossiê preservado na branch anterior. Destino: entrega local commitada nesta branch, meta antes de DONE, próximos itens em `docs/plans/state-intelligence-tasks.md`; sem push, merge ou deploy. Mudanças alheias permanecem fora desta tarefa.
+
+SI-01 DONE LOCAL após meta 9,25 em 2026-10-05; implementação72f206f, aprovação em commit de fechamento subsequente. Fixture de validação encerrado; scripts e artefatos preservados na branch. HANDOFF válido para SI-02/SI-03, sem recriar checkout ou herdar aprovação para novo escopo.
+
+## 2026-10-05 — AIRIA-SI-01-RELEASE
+
+Mesmo checkout principal e branch codex/state-intelligence-foundation-2026-10-02, base de publicação ab5f5ae. Estado ACTIVE. Dono root/release_executor com release_review e release_meta independentes. Destino: PR/CI → master → Deploy VPS SHA exato por autorização da titular neste turno. Sem nova worktree; inventário consultado no início. Arquivos alheios preservados. Registros em docs/quality/state-intelligence-release-2026-10-05; fechar com commit/snapshot e handoff da release verificada.

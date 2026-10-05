@@ -42,6 +42,13 @@ const prisma: any = {
 };
 
 void (async () => {
+  const unavailableSource = { ...checkins[2], aiState: { analysisStatus: 'unavailable', riskSafety: { route: 'crisis_protocol', riskLevel: 'crisis', signals: ['crisis'] } } };
+  const unavailablePrisma = { ...prisma, dailyCheckin: { ...prisma.dailyCheckin, findMany: async () => [unavailableSource] }, airiaReading: { ...prisma.airiaReading, findUnique: async () => ({ currentState: { checkinId: 'old', observedAt: 'old', stateLabel: 'Old phase' }, decision: { id: 'old' } }) } };
+  const sourceOnly = await new AiriaReadingService(unavailablePrisma as any).get(userId, date);
+  assert.equal(sourceOnly.currentState.analysisStatus, 'unavailable');
+  assert.equal(sourceOnly.currentState.phase, undefined);
+  assert.equal(sourceOnly.decision, null);
+  assert.equal(sourceOnly.riskSafety.route, 'crisis_protocol');
   const reading = await new AiriaReadingService(prisma).rebuild({ userId, localDate: date, surface: 'checkin' });
   assert.equal(reading.version, 'v1');
   assert.equal(reading.currentState.phase, 'Retomada');
