@@ -3,9 +3,9 @@
   "task": {
     "id": "AIRIA-SI-01-RELEASE-20261005",
     "objective": "Publicar entrega Airia no GitHub master e VPS com CI e mesmo SHA, autorizacao humana 2026-10-05",
-    "status": "active",
+    "status": "approved",
     "initializedAt": "2026-10-05T17:31:03.100Z",
-    "updatedAt": "2026-10-05T18:03:31.016Z"
+    "updatedAt": "2026-10-05T18:27:39.789Z"
   },
   "roles": {
     "coordinator": {
@@ -29,17 +29,17 @@
     },
     "integration": {
       "agent": "release_review",
-      "status": "blocked",
-      "evidence": "Operational review9.10: SHA source/images/public and health verified independently. Required public browser visual proof BLOCKED: CUA timeouts, recovery and available surfaces exhausted; no authenticated session. integration-review.md; no DONE.",
-      "updatedAt": "2026-10-05T18:02:05.428Z",
+      "status": "pass",
+      "evidence": "docs/quality/state-intelligence-release-2026-10-05/integration-review.md",
+      "updatedAt": "2026-10-05T18:26:50.885Z",
       "score": 9.1
     },
     "meta": {
       "agent": "release_meta",
-      "status": "blocked",
+      "status": "approved",
       "evidence": "docs/quality/state-intelligence-release-2026-10-05/meta-review.md",
-      "updatedAt": "2026-10-05T18:03:01.277Z",
-      "score": 9.15
+      "score": 9.15,
+      "updatedAt": "2026-10-05T18:27:39.657Z"
     }
   },
   "messages": [
@@ -53,9 +53,24 @@
       "evidence": "docs/quality/state-intelligence-release-2026-10-05/meta-review.md",
       "action": "Persistir destino Git; retomar integracao com navegador autorizado funcional, depois nova decisao meta.",
       "createdAt": "2026-10-05T18:03:31.014Z"
+    },
+    {
+      "id": "1776f9d2-b310-40cb-8761-b95bc98b17b8",
+      "channel": "vertical",
+      "type": "pass",
+      "from": "release_meta",
+      "to": "codex-root",
+      "fact": "PASS META9.15: publicacao operacional concluida com dispensa humana explicita do gate visual; UI e auth continuam nao verificados, producao SHA7a2acc960a12a99955300581f7dc2ca0b8d438ba.",
+      "evidence": "docs/quality/state-intelligence-release-2026-10-05/meta-review.md",
+      "action": "Fechar ticket e memoria com autorizacao manual e limites; commit/push documental suplementar sem redeploy.",
+      "createdAt": "2026-10-05T18:27:39.788Z"
     }
   ],
-  "metaApproval": null,
+  "metaApproval": {
+    "evidence": "docs/quality/state-intelligence-release-2026-10-05/meta-review.md",
+    "score": 9.15,
+    "approvedAt": "2026-10-05T18:27:39.657Z"
+  },
   "agents": {
     "01a10d1e-d99a-7063-9650-e5277fe0aa7b": {
       "agentType": "default",
@@ -68,8 +83,8 @@
       "agentType": "default",
       "startedAt": "2026-10-05T17:31:52.903Z",
       "status": "reported",
-      "stoppedAt": "2026-10-05T18:02:09.946Z",
-      "report": "PASS operacional **9,10/10**: GitHub, fonte VPS, containers, release.json e service worker no SHA `7a2acc9`; health/Home HTTP 200.\n\n**PUBLICADO_VERIFICACAO_UI_BLOQUEADA**: navegador falhou após recuperação; fluxo autenticado não verificado. Não autoriza DONE.\n\nParecer persistido em `docs/quality/state-intelligence-release-2026-10-05/integration-review.md`."
+      "stoppedAt": "2026-10-05T18:27:19.361Z",
+      "report": "Integração operacional **PASS 9,10/10**, com a dispensa humana registrada. GitHub e VPS seguem no mesmo SHA; serviços respondem 200.\n\nUI visual e fluxo autenticado continuam **não verificados**. Protocolo atualizado e parecer encaminhado ao meta-verificador."
     },
     "01a10d1f-6dd2-78a0-8812-fe34ad3f9daa": {
       "agentType": "default",

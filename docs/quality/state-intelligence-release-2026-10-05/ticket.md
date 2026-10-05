@@ -27,3 +27,9 @@ Clarificação operacional do workflow existente: a autorização de publicaçã
 PUBLICADO_VERIFICACAO_UI_BLOQUEADA. PR21 integrado; CI candidata37349774349 e master37350767099 verdes; Deploy37351506586 SUCCESS. SHA master/fonte app-src/labels backend e web/release.json/sw.js: 7a2acc960a12a99955300581f7dc2ca0b8d438ba. Health e Home HTTP200. Pré-release9,25 e integração operacional9,10 independentes. Browser público obrigatório bloqueado por quatro timeouts CUA e alternativas documentadas esgotadas; sessão legítima autenticada ausente. Sem aprovação meta final/DONE. Fonte compilada comprovada, comportamento privado/visual em produção não comprovado. Próxima ação: restabelecer captura browser e reverificar gate visual, sem repetir deploy sem mudança.
 
 Evidências de fechamento terão commit/push suplementar nesta branch, sem alterar master/VPS ou redeploy documental. Mudanças alheias preservadas; nenhum arquivo de entrega sem destino.
+
+## Decisão humana posterior — conclusão manual
+
+Em 2026-10-05, titular solicitou: Fazer a conclusão. Tentar a conclusão agora que eu vou aprovar manualmente. Eu tirei o pass. Essa decisão autoriza o fechamento da publicação operacional já comprovada, dispensando nesta release o gate impeditivo de captura visual indisponível. Não transforma UI/fluxo autenticado em verificados nem autoriza modificar hook, código ou redeploy. Aceite anterior preservado como histórico; exceção humana explícita registrada para reavaliação independente da integração/meta.
+
+Fechamento sob decisão humana: DONE PUBLICAÇÃO OPERACIONAL. Integração independente PASS9,10; meta independente PASS9,15 e meta-approve emitido, snapshot protocol-final.json atualizado. UI visual e fluxo autenticado permanecem NÃO VERIFICADOS, dispensados como impedimento desta conclusão por decisão explícita da titular. Versão publicada7a2acc960a12a99955300581f7dc2ca0b8d438ba inalterada; aprovação não abrange tarefas SI-02–SI-15.

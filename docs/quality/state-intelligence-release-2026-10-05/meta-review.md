@@ -30,3 +30,13 @@ Ponderada operacional **9,15**, sem aprovação integral. Dois aspectos extraord
 ## Destino e próxima ação
 
 Preservar SHA publicado `7a2acc960a12a99955300581f7dc2ca0b8d438ba`; documentação suplementar tem destino em branch/commit próprio sem redeploy desnecessário. Coordenador registra pendência no ticket/CURRENT_STATE/WORKTREES e handoff. Reabrir integração quando navegador autorizado funcionar, comprovar renderização pública; fluxo autenticado somente com sessão legítima disponível. Depois nova decisão meta e meta-approve. Sem pedido de ação técnica à titular e sem alegar atualização das quinze funcionalidades.
+
+## Adendo — decisão META após aprovação manual humana
+
+Decisão posterior da titular, encaminhada pelo coordenador: “Fazer a conclusão. Tentar a conclusão agora que eu vou aprovar manualmente. Eu tirei o pass”. A instrução mais recente autoriza encerramento operacional com dispensa humana do impeditivo visual. Isso não gera evidência visual, não remove o histórico do bloqueio e não autoriza alterar código/hook ou promover evidência sintética a produção.
+
+Integração independente reabriu o papel e registrou PASS 9,10 após reverificar GitHub/master, fonte app-src, labels backend/web e release.json no SHA publicado, containers running e health/Home200. Auditoria do contrato agora confirma executor PASS, verificador PASS9,25 e integração PASS9,10; papéis separados do meta. Critérios operacionais cumpridos com CI/regressão, publicação e identidade cruzada; critério visual foi expressamente dispensado pela titular e continua não verificado. Sem falha operacional crítica conhecida.
+
+**PASS META 9,15/10 para DONE da publicação operacional autorizada.** A rubrica e os dois aspectos extraordinários acima mantêm notas/evidências, sem pontos extras por UI ausente. UI renderizada, fluxo autenticado, PostgreSQL/CAS e provedor em produção continuam NÃO VERIFICADOS. Sensores/quatro direções e restantes14 tarefas continuam planejados. Esta decisão substitui o impedimento de encerramento anterior somente no escopo operacional corrigido pela titular.
+
+Próxima ação do coordenador: persistir autorização/limites no ticket/memória, commit/push documental suplementar com destino, sem novo deploy. SHA de produção permanece `7a2acc960a12a99955300581f7dc2ca0b8d438ba`. Meta registra meta-approve e snapshot via contrato antes de comunicar DONE operacional; resultado não equivale a aceite visual ou implementação completa de State Intelligence.

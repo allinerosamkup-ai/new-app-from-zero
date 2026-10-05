@@ -23,3 +23,11 @@ Auth real, persistência PostgreSQL/CAS e comportamento do provedor em produçã
 Nota operacional 9,10: alinhamento GitHub → fonte VPS → dois containers → release público → service worker e asset de produto é extraordinário porque detecta tanto drift de checkout operacional quanto bundle antigo/cache e não extrapola evidência. Pré-release incluiu harness adversarial independente; CI remoto do SHA publicado acrescenta regressão completa. Sem divergência crítica operacional encontrada.
 
 Gate visual permanece BLOCKED, autenticação não disponível. Próxima ação: coordenador registra identidade/limites e destino dos artefatos; meta decide publicação operacional e status final sem declarar aceite visual completo. Se prova browser for critério impeditivo, manter pendência explícita em vez de inventar validação.
+
+## Adendo — encerramento operacional autorizado pela titular
+
+Decisão humana posterior em 2026-10-05: “Fazer a conclusão. Tentar a conclusão agora que eu vou aprovar manualmente. Eu tirei o pass”. Coordenador encaminhou dispensa explícita do gate impeditivo visual para encerrar a publicação operacional. Esta decisão altera o critério de encerramento; não produz evidência de UI ou autenticação.
+
+Reverificação independente após essa decisão: API GitHub master, fonte `/opt/airia/app-src`, labels dos containers backend/web e `/release.json` continuam no SHA `7a2acc960a12a99955300581f7dc2ca0b8d438ba`; ambos containers running, `/api/health` e `/home` HTTP200. Não houve escrita privada nem alteração de produto nesta reverificação.
+
+**PASS integração da publicação operacional, 9,10/10**, no escopo humano corrigido. A nota e justificativa extraordinária acima permanecem baseadas na identidade cruzada de fonte/build/runtime/artefatos e no CI do SHA; nenhum ponto foi adicionado por prova ausente. **UI visual e fluxo autenticado continuam NÃO VERIFICADOS**; indisponibilidade CUA registrada e dispensada como impeditivo pela titular, sem alegar aceite visual completo. Este papel aprova o gate de integração operacional; somente meta pode autorizar DONE. Próxima ação: registrar transição do papel e encaminhar este adendo ao meta/coordenador para encerramento documental com os limites preservados.
