@@ -124,3 +124,7 @@ Nenhuma nova worktree física criada. Inventário Git consultado antes da escolh
 Branch `codex/state-intelligence-foundation-2026-10-02`, base `a20500d`, checkout principal `C:/Users/allin/Projetos/Apps/new-app-fron-zero`. Dono: coordenador root; retomada com resume_executor, resume_integration e resume_meta; verificador técnico foundation_verifier. Estado: HANDOFF, gates finais em 2026-10-05. Sem nova worktree física; inventário Git consultado, dossiê preservado na branch anterior. Destino: entrega local commitada nesta branch, meta antes de DONE, próximos itens em `docs/plans/state-intelligence-tasks.md`; sem push, merge ou deploy. Mudanças alheias permanecem fora desta tarefa.
 
 SI-01 DONE LOCAL após meta 9,25 em 2026-10-05; implementação72f206f, aprovação em commit de fechamento subsequente. Fixture de validação encerrado; scripts e artefatos preservados na branch. HANDOFF válido para SI-02/SI-03, sem recriar checkout ou herdar aprovação para novo escopo.
+
+## 2026-10-05 — AIRIA-SI-01-RELEASE
+
+Mesmo checkout principal e branch codex/state-intelligence-foundation-2026-10-02, base de publicação ab5f5ae. Estado ACTIVE. Dono root/release_executor com release_review e release_meta independentes. Destino: PR/CI → master → Deploy VPS SHA exato por autorização da titular neste turno. Sem nova worktree; inventário consultado no início. Arquivos alheios preservados. Registros em docs/quality/state-intelligence-release-2026-10-05; fechar com commit/snapshot e handoff da release verificada.
