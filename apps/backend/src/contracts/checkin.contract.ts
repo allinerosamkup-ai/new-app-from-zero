@@ -47,6 +47,10 @@ export const CheckinCreateSchema = z.object({
 export type CheckinCreateInput = z.infer<typeof CheckinCreateSchema>;
 
 export const CheckinResponseSchema = z.object({
+  analysisStatus: z.enum(['available', 'unavailable']).optional(),
+  status: z.literal('persisted').optional(),
+  checkinId: z.string().uuid().optional(),
+  persistedAt: z.string().datetime().optional(),
   id: z.string().uuid(),
   stateLabel: z.string().nullable().optional(),
   stateLabelType: z.string().nullable().optional(),

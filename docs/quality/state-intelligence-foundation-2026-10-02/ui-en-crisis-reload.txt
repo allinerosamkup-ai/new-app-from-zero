@@ -1,0 +1,32 @@
+Browser tab: 2, Title: "Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia", URL: "http://127.0.0.1:4190/checkin-result".
+1 AXWebArea Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia, URL: 127.0.0.1:4190/checkin-result
+	2 container root
+		3 container
+			22 text CHECK-IN RECORDED
+			4 heading Your check-in is saved, Value: 1
+				23 text Your check-in is saved
+			24 text Airia joins this moment to your history before proposing anything. Analysis is unavailable right now. Your record is saved and remains in your history.
+			25 text CURRENT STATE
+			26 text Mood and energy recorded
+			27 text Based on your confirmed records from this period.
+			28 text CRISIS PROTOCOL Airia will not treat this as productivity. Human safety and immediate support are the priority now. language indicating crisis or self-harm very low mood and energy CVV 188 24/7 emotional support in Brazil SAMU 192 medical risk or emergency 190 immediate risk of violence If there is an immediate risk to you or someone else, contact local emergency services now. Airia does not replace a psychologist, psychiatrist, medical care, or your support network.
+			9 button Register protocol
+			29 text If something important sits behind this change, record it in Journal. It adds context — it never becomes a check-in without your confirmation.
+			10 button Add context in Journal
+			11 button Go to home
+			12 link Description: PRIVACY POLICY, Value: airia.pro/privacy
+			13 button Today
+				14 image
+				30 text Today
+			15 button Goals
+				16 image
+				31 text Goals
+			17 button Airia
+			18 button Patterns
+				19 image
+				32 text Patterns
+			20 button Journal
+				21 image
+				33 text Journal
+
+The focused UI element is 1 AXWebArea Airia — App de humor e energia para TDAH, bipolaridade e ciclotimia, URL: 127.0.0.1:4190/checkin-result

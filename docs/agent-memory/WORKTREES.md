@@ -118,3 +118,7 @@ descartar conscientemente, remover a cópia e atualizar esta tabela para
 | Destino | Reutilizar esta branch para consultar/revisar o dossiê, sem criar outra worktree |
 
 Nenhuma nova worktree física criada. Inventário Git consultado antes da escolha; alterações alheias listadas em verification.md permanecem fora da tarefa.
+
+## 2026-10-02 — AIRIA-SI-01 (primeiro fundamento)
+
+Branch `codex/state-intelligence-foundation-2026-10-02`, base `a20500d`, checkout principal `C:/Users/allin/Projetos/Apps/new-app-fron-zero`. Dono: coordenador root; retomada com resume_executor, resume_integration e resume_meta; verificador técnico foundation_verifier. Estado: HANDOFF, gates finais em 2026-10-05. Sem nova worktree física; inventário Git consultado, dossiê preservado na branch anterior. Destino: entrega local commitada nesta branch, meta antes de DONE, próximos itens em `docs/plans/state-intelligence-tasks.md`; sem push, merge ou deploy. Mudanças alheias permanecem fora desta tarefa.

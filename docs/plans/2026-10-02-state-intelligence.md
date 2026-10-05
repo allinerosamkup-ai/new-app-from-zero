@@ -3,6 +3,8 @@
 Data: 2026-10-02 · Ticket de pesquisa AIRIA-SI-20261002 · Base `5dcf2ad`.
 Este plano é parte da entrega documental; **não foi executado**. Fonte: [dossiê e decisões](../product/state-intelligence/README.md), [ciência](../product/state-intelligence/scientific-evidence.md), [autores](../product/state-intelligence/interpretive-frameworks.md) e [plataformas/privacidade](../product/state-intelligence/platforms-and-privacy.md). Não altera a constituição.
 
+**Atualização operacional:** após autorização de começar a implementação em 2026-10-02, o [backlog de tarefas](state-intelligence-tasks.md) passa a registrar execução e aceite por fatia. O texto acima descreve o estado no fechamento do dossiê; as etapas deste plano não ficam prontas por essa nova autorização. Primeira tarefa: SI-01, persistência do Check-in independente da análise.
+
 ## 1. Sequência e gates
 
 | Etapa/célula | Entrega implementável após nova tarefa | Gate para avançar |

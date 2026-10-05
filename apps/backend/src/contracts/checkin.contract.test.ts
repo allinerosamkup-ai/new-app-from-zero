@@ -174,4 +174,6 @@ const validCheckin = {
   assert.equal(result.success, true, 'a superfície de origem precisa caber em signalMetadata');
 }
 
+assert.equal(CheckinResponseSchema.safeParse({ id: '11111111-1111-4111-8111-111111111111', analysisStatus: 'unavailable', status: 'persisted' }).success, true);
+assert.equal(CheckinResponseSchema.safeParse({ id: '11111111-1111-4111-8111-111111111111', analysisStatus: 'invented' }).success, false);
 console.log('checkin.contract tests passed');

@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import { hydrateCheckinEntry } from "./checkin-hydration";
 
 describe("persisted check-in hydration", () => {
+  it("keeps unavailable analysis and independent safety on readback", () => {
+    const entry = hydrateCheckinEntry({ moodScore: 2, energyScore: 2, aiState: { analysisStatus: "unavailable", riskSafety: { route: "crisis_protocol", riskLevel: "crisis", signals: [] } } });
+    expect(entry.analysisStatus).toBe("unavailable");
+    expect(entry.riskSafety?.route).toBe("crisis_protocol");
+  });
   it("keeps every reported context signal without replacing missing values", () => {
     const entry = hydrateCheckinEntry({
       localDate: "2026-08-01T00:00:00.000Z",

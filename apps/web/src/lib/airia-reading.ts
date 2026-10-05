@@ -31,6 +31,7 @@ export type AiriaReadingEnvelope = {
   generatedAt: string;
   capacity?: AiriaCapacity | null;
   currentState: {
+    analysisStatus?: "available" | "unavailable";
     phase?: string;
     confidence?: number;
     observedAt?: string;
@@ -136,6 +137,7 @@ export function canShowContextualDecision(
 
   return Boolean(
     decision
+      && reading?.currentState.analysisStatus !== "unavailable"
       && decision.status === "proposed"
       && decision.requiresConfirmation
       && decision.objectiveId

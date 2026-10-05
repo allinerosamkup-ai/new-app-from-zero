@@ -76,6 +76,8 @@ export type Goal = {
 };
 
 export type CheckinEntry = {
+  analysisStatus?: "available" | "unavailable";
+  riskSafety?: import("../../components/aura/SafetyProtocolCard").RiskSafety;
   date: string;
   humor: number;
   energia: number;
