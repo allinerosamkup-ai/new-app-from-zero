@@ -8,11 +8,11 @@ Governança, constituição, protocolo e skills airia-governanca/airia-pr-review
 
 ## Aceite
 
-- [ ] Branch publicada e PR anexado à tarefa; diff restrito à entrega e registro desta release.
-- [ ] Parecer independente pré-release nota ≥8 e CI verde antes de merge.
-- [ ] Merge autorizado em master; SHA publicado congelado e CI confirmado.
-- [ ] Deploy VPS conclui, com rollback existente disponível; sem segredos em evidências.
-- [ ] GitHub/master, código VPS, imagens/containers e release.json/sw.js correspondem ao mesmo SHA.
+- [x] Branch publicada e PR anexado à tarefa; diff restrito à entrega e registro desta release.
+- [x] Parecer independente pré-release nota ≥8 e CI verde antes de merge.
+- [x] Merge autorizado em master; SHA publicado congelado e CI confirmado.
+- [x] Deploy VPS conclui, com rollback existente disponível; sem segredos em evidências.
+- [x] GitHub/master, código VPS, imagens/containers e release.json/sw.js correspondem ao mesmo SHA.
 - [ ] /api/health e /home respondem 200; browser público e autenticado quando sessão legítima disponível, sem inventar prova privada ou provocar crise/provedor artificial em produção.
 - [ ] Verificador/integrador/meta independentes emitem notas/evidência; estado e limites persistidos, commits locais/remotos com destino.
 
@@ -21,3 +21,9 @@ Governança, constituição, protocolo e skills airia-governanca/airia-pr-review
 Mesmo checkout/branch existente, sem nova worktree; preservados supabase/.temp/cli-latest, diretórios untracked de skills/.claude/.codex, backend/scripts/test-goal-fallback.ts, skills-lock.json. Notion sem conector; ticket persistido local. Aprovação publica somente recurso implementado SI-01; quatro direções/sensores/piloto não estão prontos. Não mudar credenciais, dados pessoais ou outro serviço na VPS. DONE exige fatos vivos e revisão meta de release própria.
 
 Clarificação operacional do workflow existente: a autorização de publicação abrange a sincronização automática de configuração já versionada em deploy.yml com os valores já existentes nos secrets do GitHub, além das migrações legadas idempotentes do script. Isso é manutenção do caminho de produção atual, não autorização para criar, emitir, rotacionar ou introduzir novos valores de credenciais; nenhuma alteração manual de secrets/banco ou outro serviço. Valores não serão exibidos nos registros. O trecho acima veda alteração nova/manual, não essa etapa existente do workflow. Rollback de imagens e verificação pública permanecem obrigatórios.
+
+## Resultado operacional 2026-10-05
+
+PUBLICADO_VERIFICACAO_UI_BLOQUEADA. PR21 integrado; CI candidata37349774349 e master37350767099 verdes; Deploy37351506586 SUCCESS. SHA master/fonte app-src/labels backend e web/release.json/sw.js: 7a2acc960a12a99955300581f7dc2ca0b8d438ba. Health e Home HTTP200. Pré-release9,25 e integração operacional9,10 independentes. Browser público obrigatório bloqueado por quatro timeouts CUA e alternativas documentadas esgotadas; sessão legítima autenticada ausente. Sem aprovação meta final/DONE. Fonte compilada comprovada, comportamento privado/visual em produção não comprovado. Próxima ação: restabelecer captura browser e reverificar gate visual, sem repetir deploy sem mudança.
+
+Evidências de fechamento terão commit/push suplementar nesta branch, sem alterar master/VPS ou redeploy documental. Mudanças alheias preservadas; nenhum arquivo de entrega sem destino.
