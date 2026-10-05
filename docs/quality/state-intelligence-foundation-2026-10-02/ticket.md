@@ -19,7 +19,7 @@ Primeira fatia do backlog. Reusar CheckinApplicationService, contratos, riskSafe
 - [x] Falha de escrita não retorna persisted; erro de persistência da avaliação não produz falso status definitivo.
 - [x] Contratos e consumidores recebem distinção salva/analise indisponível, PT/EN; sem instruções de implementação na UI (código/testes; prova de tela ainda no item seguinte).
 - [x] Prova integrada da entrada à resposta/UI e readback com ambiente isolado/fixtures declaradas, sem conta ou banco privado; parecer integração PASS 9,2 em 2026-10-05.
-- [ ] Testes focados, regressão proporcional, builds dos apps alterados; pareceres independentes com notas, meta e commit/handoff.
+- [x] Testes focados, regressão proporcional, builds dos apps alterados; verificador 9,30, integração 9,2, meta 9,25; commit de implementação 72f206f e fechamento/handoff nesta branch.
 
 ## Busca e reuso
 
@@ -28,3 +28,5 @@ Consultados antes de código: dossiê/plano/constituição/protocolo; git status
 ## Gates e destino
 
 Branch proprietária e checkout existentes, sem worktree adicional. Commit local autorizado pelo pedido/protocolo; sem push/merge/deploy. Notion sem ferramenta disponível, backlog local explícito. Documentar qualquer limitação de browser/IA real; fixture isolada não valida provedor ou produção. Estado inicial: EM_EXECUÇÃO.
+
+Estado final 2026-10-05: DONE LOCAL autorizado pelo meta independente, restrito SI-01 e decomposição em tarefas. Snapshot protocol-final.json. Nenhuma direção/sensor/eficácia/produção aprovado. Fixture encerrado; branch HANDOFF para SI-02–SI-15.

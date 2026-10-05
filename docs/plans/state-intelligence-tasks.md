@@ -6,7 +6,7 @@ Cada tarefa é uma fatia de comportamento verificável com executor, verificador
 
 | ID | Tarefa e resultado observável | Dependência | Aceite principal | Estado |
 |---|---|---|---|---|
-| SI-01 | Check-in salvo apesar de análise indisponível, com aviso explícito e risco preservado | Nenhuma; reusar contrato atual | Falha de avaliação não vira falha/sucesso falso de escrita; sem análise antiga; reload/idempotência; PT/EN e consumidores consistentes | EM_EXECUÇÃO |
+| SI-01 | Check-in salvo apesar de análise indisponível, com aviso explícito e risco preservado | Nenhuma; reusar contrato atual | Falha de avaliação não vira falha/sucesso falso de escrita; sem análise antiga; reload/idempotência; PT/EN e consumidores consistentes | DONE LOCAL 2026-10-05; meta 9,25; sem publicação |
 | SI-02 | Reconciliar fases, baseline e janelas entre motor/constituição | Auditoria do dossiê | Decisão sobre divergência documentada; cálculo compartilhado/regressões; não mapear fases em níveis espirituais | PLANEJADA; decisão de comportamento antes do código |
 | SI-03 | Observações versionadas com fonte, momento, ausência e lineage | SI-01 | Relatado/inferido/medido/interpretativo distintos; correção invalida derivados; API compatível | PLANEJADA |
 | SI-04 | Segurança contextual impede amplificar aceleração e impulsividade | SI-01, critérios de segurança | Energia alta com pouco sono não expande carga; risco humano/crise prevalece; negação/citação/contexto sem diagnóstico | PLANEJADA |
@@ -27,6 +27,8 @@ Cada tarefa é uma fatia de comportamento verificável com executor, verificador
 SI-01 remove uma falha de fundamento: persistência do sinal não pode depender de disponibilidade de interpretação. A mudança não substitui IA por orientação determinística fingindo IA. Mantém o registro real, informa indisponibilidade e conserva segurança; continua sem novos scores/sensores ou ritual consumidor.
 
 Contrato e evidências: [ticket SI-01](../quality/state-intelligence-foundation-2026-10-02/ticket.md). Próximas tarefas não são automaticamente consideradas aprovadas pela aprovação do dossiê. Busca de reuso e destino operacional são registrados por tarefa; nenhum código experimental fica solto.
+
+Fechamento: commit de implementação `72f206f`; verificador 9,30, integração 9,2 e [meta 9,25](../quality/state-intelligence-foundation-2026-10-02/meta-review.md). Testes e UI local com dados sintéticos, sem validação de banco/provedor/produção. Próxima fatia: SI-02, reconciliar fases/baseline/janelas antes do núcleo novo; SI-03 acompanha proveniência e histórico imutável. Demais 14 tarefas permanecem planejadas.
 
 ## Cobertura do dossiê e ordem de execução
 

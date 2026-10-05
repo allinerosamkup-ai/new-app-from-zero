@@ -1,6 +1,6 @@
 # Verificação — AIRIA-SI-01
 
-Estado: READY_META (2026-10-05). Este registro não aprova a entrega; meta permanece gate. Branch `codex/state-intelligence-foundation-2026-10-02`, base `a20500d`.
+Estado: DONE LOCAL (2026-10-05), autorizado por meta independente 9,25. Branch `codex/state-intelligence-foundation-2026-10-02`, base `a20500d`, commit de implementação `72f206f`. Não autoriza publicação nem as demais tarefas.
 
 ## Escopo e evidência
 
@@ -18,8 +18,8 @@ Dependências: manifests root/web/backend/shared/database e schema Prisma compar
 
 ## Gates restantes
 
-Meta e commit/handoff finais. Sem publicação. Mudanças alheias: `supabase/.temp/cli-latest`, `.agents/skills/mobile-app-ui-design/`, `.claude/skills/`, `.codex/`, `apps/backend/scripts/test-goal-fallback.ts`, `skills-lock.json`; preservar e excluir do staging.
+Gates encerrados: meta 9,25, contrato aprovado e snapshot protocol-final.json. Sem publicação. Mudanças alheias: `supabase/.temp/cli-latest`, `.agents/skills/mobile-app-ui-design/`, `.claude/skills/`, `.codex/`, `apps/backend/scripts/test-goal-fallback.ts`, `skills-lock.json`; preservadas e excluídas do staging.
 
 ## Resultados finais da retomada
 
-Backend 22/22 suítes proporcionais (rotas Check-in/leitura/Aura, serviços, contratos, segurança e feedback); web 74 arquivos/508 testes com dois workers; typecheck web e builds backend/web/PWA/SEO PASS. Comandos/resultados no handoff do executor. Technical verifier PASS 9,30; integração PASS 9,2. Prova final pelo formulário real local PT/EN, três observações recuperadas via GET, reload e crise mobile; etiquetas EN traduzidas sem alterar detecção. Capturas PNG e JSON de readback persistidos. Limites sintéticos permanecem: não valida PostgreSQL, provedor real ou produção. Aprovação meta ainda pendente nesta atualização.
+Backend 22/22 suítes proporcionais (rotas Check-in/leitura/Aura, serviços, contratos, segurança e feedback); web 74 arquivos/508 testes com dois workers; typecheck web e builds backend/web/PWA/SEO PASS. Comandos/resultados no handoff do executor. Technical verifier PASS 9,30; integração PASS 9,2; meta PASS 9,25. Prova final pelo formulário real local PT/EN, três observações recuperadas via GET, reload e crise mobile; etiquetas EN traduzidas sem alterar detecção. Capturas PNG e JSON de readback persistidos. Limites sintéticos permanecem: não valida PostgreSQL, provedor real ou produção. Fixture encerrado; scripts CJS específicos rastreados explicitamente apesar do ignore genérico, para manter provas reexecutáveis.
