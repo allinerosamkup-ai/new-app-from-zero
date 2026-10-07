@@ -1,12 +1,12 @@
 # State Intelligence — tarefas executáveis
 
-Pedido de execução: 2026-10-02. Fontes: [dossiê](../product/state-intelligence/README.md) e [plano técnico](2026-10-02-state-intelligence.md). Branch inicial: `codex/state-intelligence-foundation-2026-10-02`, base `a20500d`. Não há autorização de merge/deploy. Planejador, Rotinas, Hábitos, Pomodoro, Agenda e Corrida excluídos.
+Pedido de execução: 2026-10-02. Fontes: [dossiê](../product/state-intelligence/README.md) e [plano técnico](2026-10-02-state-intelligence.md). Branch inicial: `codex/state-intelligence-foundation-2026-10-02`, base `a20500d`. Autorização de publicação concedida em 2026-10-05 para dossiê/backlog/SI-01; demais tarefas continuam sem implementação ou publicação. Planejador, Rotinas, Hábitos, Pomodoro, Agenda e Corrida excluídos.
 
 Cada tarefa é uma fatia de comportamento verificável com executor, verificador, integração e meta separados. Código escrito não muda status para DONE; dependências e validações reais prevalecem. Não há conector Notion disponível neste ambiente: este arquivo é o backlog operacional persistido no projeto, sem alegar sincronização externa.
 
 | ID | Tarefa e resultado observável | Dependência | Aceite principal | Estado |
 |---|---|---|---|---|
-| SI-01 | Check-in salvo apesar de análise indisponível, com aviso explícito e risco preservado | Nenhuma; reusar contrato atual | Falha de avaliação não vira falha/sucesso falso de escrita; sem análise antiga; reload/idempotência; PT/EN e consumidores consistentes | DONE LOCAL 2026-10-05; meta 9,25; sem publicação |
+| SI-01 | Check-in salvo apesar de análise indisponível, com aviso explícito e risco preservado | Nenhuma; reusar contrato atual | Falha de avaliação não vira falha/sucesso falso de escrita; sem análise antiga; reload/idempotência; PT/EN e consumidores consistentes | PUBLICADA 2026-10-05 via PR21; master/VPS 7a2acc9; fechamento de release em docs/quality/state-intelligence-release-2026-10-05 |
 | SI-02 | Reconciliar fases, baseline e janelas entre motor/constituição | Auditoria do dossiê | Decisão sobre divergência documentada; cálculo compartilhado/regressões; não mapear fases em níveis espirituais | PLANEJADA; decisão de comportamento antes do código |
 | SI-03 | Observações versionadas com fonte, momento, ausência e lineage | SI-01 | Relatado/inferido/medido/interpretativo distintos; correção invalida derivados; API compatível | PLANEJADA |
 | SI-04 | Segurança contextual impede amplificar aceleração e impulsividade | SI-01, critérios de segurança | Energia alta com pouco sono não expande carga; risco humano/crise prevalece; negação/citação/contexto sem diagnóstico | PLANEJADA |

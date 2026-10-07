@@ -5,8 +5,8 @@ import { useLocalizedCopy } from "../i18n";
 interface WeeklyShareCardProps {
   phaseName: string;
   phaseColor: string;
-  avgMood: number;
-  avgEnergy: number;
+  avgMood: number | null;
+  avgEnergy: number | null;
   insight?: string;
   weekLabel?: string;
 }
@@ -22,15 +22,17 @@ export function WeeklyShareCard({
   const l = useLocalizedCopy();
   const [shared, setShared] = useState(false);
 
-  const moodBar = Math.round((avgMood / 5) * 100);
-  const energyBar = Math.round((avgEnergy / 5) * 100);
+  const validScore = (value: number | null) => value !== null && Number.isFinite(value) && value >= 1 && value <= 10 ? value : null;
+  const mood = validScore(avgMood);
+  const energy = validScore(avgEnergy);
+  const formatScore = (value: number | null) => value === null ? l("Indisponível", "Unavailable") : `${value.toFixed(1)}/10`;
 
   const shareText = [
-    `📊 Minha semana com Airia`,
+    l("📊 Meu resumo com Airia", "📊 My summary with Airia"),
     weekLabel ? `🗓 ${weekLabel}` : "",
-    `✨ Ritmo observado: ${phaseName}`,
-    `💛 Humor médio: ${avgMood.toFixed(1)}/5`,
-    `⚡ Energia média: ${avgEnergy.toFixed(1)}/5`,
+    l(`✨ Ritmo observado: ${phaseName}`, `✨ Observed rhythm: ${phaseName}`),
+    l(`💛 Humor médio: ${formatScore(mood)}`, `💛 Average mood: ${formatScore(mood)}`),
+    l(`⚡ Energia média: ${formatScore(energy)}`, `⚡ Average energy: ${formatScore(energy)}`),
     insight ? `\n"${insight}"` : "",
     `\n→ airia.pro`,
   ].filter(Boolean).join("\n");
@@ -60,7 +62,7 @@ export function WeeklyShareCard({
         background: `linear-gradient(135deg, ${phaseColor}18 0%, rgba(255,253,249,0) 60%)`,
       }}>
         <p style={{ margin: "0 0 4px", fontSize: 10, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--text-3)" }}>
-          {weekLabel ?? "Esta semana"}
+          {weekLabel ?? l("Período observado", "Observed period")}
         </p>
         <p style={{ margin: "0 0 14px", fontSize: 20, fontWeight: 900, color: "var(--text-1)" }}>
           {l(`Seu ritmo: ${phaseName}`, `Your rhythm: ${phaseName}`)}
@@ -68,16 +70,16 @@ export function WeeklyShareCard({
 
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
           {[
-            { label: l("Humor", "Mood"), value: avgMood, bar: moodBar, color: "var(--accent-sage)" },
-            { label: l("Energia", "Energy"), value: avgEnergy, bar: energyBar, color: "var(--accent-sky)" },
-          ].map(({ label, value, bar, color }) => (
+            { label: l("Humor", "Mood"), value: mood, color: "var(--accent-sage)" },
+            { label: l("Energia", "Energy"), value: energy, color: "var(--accent-sky)" },
+          ].map(({ label, value, color }) => (
             <div key={label}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)" }}>{label}</span>
-                <span style={{ fontSize: 11, fontWeight: 900, color: "var(--text-1)" }}>{value.toFixed(1)}</span>
+                <span style={{ fontSize: 11, fontWeight: 900, color: "var(--text-1)" }}>{formatScore(value)}</span>
               </div>
               <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,0.06)" }}>
-                <div style={{ height: "100%", width: `${bar}%`, borderRadius: 999, background: color, transition: "width .6s ease" }} />
+                {value !== null && <div style={{ height: "100%", width: `${Math.round(value * 10)}%`, borderRadius: 999, background: color, transition: "width .6s ease" }} />}
               </div>
             </div>
           ))}
@@ -111,7 +113,7 @@ export function WeeklyShareCard({
             transition: "all .2s",
           }}
         >
-          {shared ? <><Check size={14} /> {l("Compartilhado!", "Shared!")}</> : <><Share2 size={14} /> {l("Compartilhar semana", "Share week")}</>}
+          {shared ? <><Check size={14} /> {l("Compartilhado!", "Shared!")}</> : <><Share2 size={14} /> {l("Compartilhar resumo", "Share summary")}</>}
         </button>
       </div>
     </div>

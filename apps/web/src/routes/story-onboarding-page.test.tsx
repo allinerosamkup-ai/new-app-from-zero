@@ -8,6 +8,8 @@ import {
   OnboardingCompletionOffer,
   completeStoryOnboarding,
   finalizeStoryOnboarding,
+  persistStoryGoals,
+  persistStoryProfile,
   type BillingAccessSummary,
 } from "./story-onboarding-page";
 import { STORY_STEPS } from "../features/story-onboarding/steps";
@@ -136,5 +138,74 @@ describe("story onboarding completion", () => {
     retry?.click();
     expect(onRetry).toHaveBeenCalledTimes(1);
     await act(async () => root.unmount());
+  });
+});
+
+
+describe("story goal persistence", () => {
+  it.each(["/onboarding/operational-profile", "/onboarding/profile-traits"])("never completes after %s fails", async (endpoint) => {
+    const complete = vi.fn(async () => trial14);
+    const post = vi.fn(async (path: string) => {
+      if (path === endpoint) throw new Error("save_failed");
+      return { profile: {}, saved: true };
+    });
+    await expect(finalizeStoryOnboarding({ persist: () => persistStoryProfile({ operational: {}, traits: { biologicalSex: null }, post }), complete, refresh: async () => {} })).rejects.toThrow("save_failed");
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("rejects unconfirmed profile responses and preserves optional answers", async () => {
+    await expect(persistStoryProfile({ operational: {}, traits: {}, post: async () => null })).rejects.toThrow("onboarding_profile_unconfirmed");
+    const post = vi.fn(async (_endpoint: string, _body: unknown) => ({ profile: {}, saved: true }));
+    const traits = { biologicalSex: null, medicationCurrentlyUsing: null, priorDiagnoses: [] };
+    await persistStoryProfile({ operational: {}, traits, post });
+    expect(post.mock.calls[1]).toEqual(["/onboarding/profile-traits", traits]);
+  });
+  it("shows partial save failure honestly and keeps retry available in both languages", async () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const onEnter = vi.fn();
+    const onRetry = vi.fn();
+    for (const language of ["pt", "en"] as const) {
+      await setLanguage(language);
+      await act(async () => root.render(<OnboardingCompletionOffer billing={null} error="onboarding_save_failed" retrying={false} onRetry={onRetry} onEnter={onEnter} onPlans={vi.fn()} />));
+      expect(host.textContent).toContain(language === "pt" ? "Ainda não consegui salvar tudo desta etapa" : "I could not save everything in this step yet");
+      expect(host.textContent).not.toContain(language === "pt" ? "Seu caminho está salvo" : "Your path is saved");
+      const enter = host.querySelector(".story-cta") as HTMLButtonElement;
+      expect(enter.disabled).toBe(true);
+      enter.click();
+      const retry = [...host.querySelectorAll("button")].find(button => button.textContent?.includes(language === "pt" ? "Tentar novamente" : "Try again"));
+      expect(retry?.disabled).toBe(false);
+      retry?.click();
+    }
+    expect(onEnter).not.toHaveBeenCalled();
+    expect(onRetry).toHaveBeenCalledTimes(2);
+    await act(async () => root.unmount());
+  });
+
+  it("writes strict subgoals without order and preserves selected sequence", async () => {
+    const confirmed = new Set<string>();
+    const post = vi.fn(async (_endpoint: string, _body: unknown) => ({ id: "new-goal" }));
+    await persistStoryGoals({ plans: [{ title: "New goal", steps: ["First", "Second"], resultDefinition: null }], confirmed, post });
+    const body = post.mock.calls[0][1] as any;
+    expect(body.subgoals.map((item: any) => item.title)).toEqual(["First", "Second"]);
+    expect(body.subgoals.every((item: any) => !("order" in item))).toBe(true);
+    expect(confirmed.has("New goal")).toBe(true);
+  });
+  it("stops completion after a failed goal and retries only unconfirmed goals", async () => {
+    const confirmed = new Set<string>();
+    let fail = true;
+    const writes: string[] = [];
+    const post = async (_endpoint: string, body: any) => {
+      writes.push(body.title);
+      if (body.title === "Second" && fail) throw new Error("400");
+      return { id: body.title };
+    };
+    const plans = ["First", "Second"].map(title => ({ title, steps: [], resultDefinition: null }));
+    const complete = vi.fn(async () => trial14);
+    await expect(finalizeStoryOnboarding({ persist: () => persistStoryGoals({ plans, confirmed, post }), complete, refresh: async () => {} })).rejects.toThrow("400");
+    expect(complete).not.toHaveBeenCalled();
+    fail = false;
+    await persistStoryGoals({ plans, confirmed, post });
+    expect(writes).toEqual(["First", "Second", "Second"]);
   });
 });

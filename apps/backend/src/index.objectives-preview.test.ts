@@ -3,6 +3,9 @@ import request from 'supertest';
 
 import { createApp } from './index';
 import type { GoalDecomposition } from './services/goal-intelligence.service';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import ts from 'typescript';
 
 const USER_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -81,6 +84,32 @@ async function run() {
   assert.equal(reschedule.status, 200, reschedule.text);
   assert.equal(reschedule.body.moves.length, 2);
   assert.equal(reschedule.body.moves[0].objectiveId, '660e8400-e29b-41d4-a716-446655440000');
+
+  // Execute the real UI adapter against the actual strict HTTP route, rather
+  // than duplicating its shape in a test-only schema.
+  const helpersSource = readFileSync(path.resolve(__dirname, '../../web/src/routes/objectives-workspace/helpers.ts'), 'utf8');
+  const compiled = ts.transpileModule(helpersSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const uiHelpers: any = {};
+  new Function('exports', compiled)(uiHelpers);
+  const rawActions = [...breakdown.body.suggestedSubgoals, { ...breakdown.body.suggestedSubgoals[0], id: 'second-contract-action', title: 'Escrever o roteiro de teste', order: 5 }].reverse();
+  const originalPreviewOrder = rawActions.map((item: any) => item.order);
+  assert.ok(rawActions.every((item: any) => Number.isInteger(item.order)));
+  let createdObjective: any = null;
+  state.prisma.objective.create = async ({ data }: any) => {
+    createdObjective = { ...data, id: '770e8400-e29b-41d4-a716-446655440000', archived: false, progress: 0, createdAt: new Date(), updatedAt: new Date(), pathVersion: 1 };
+    return createdObjective;
+  };
+  state.prisma.objective.findFirst = async () => createdObjective;
+  const invalidPreviewWrite = await request(app).post('/api/objectives').send({ title: 'Publish test app', subgoals: rawActions });
+  assert.equal(invalidPreviewWrite.status, 400, 'raw preview metadata must remain rejected by strict validation');
+  assert.equal(createdObjective, null, 'invalid input must not create a goal');
+  const writeActions = uiHelpers.previewToWriteSubgoals(rawActions);
+  const createdFromUi = await request(app).post('/api/objectives').send({ title: 'Publish test app', subgoals: writeActions });
+  assert.equal(createdFromUi.status, 201, createdFromUi.text);
+  const persisted = await state.prisma.objective.findFirst();
+  assert.deepEqual(persisted.subgoals.map((item: any) => item.id), [...rawActions].sort((a: any, b: any) => a.order - b.order).map((item: any) => item.id));
+  assert.deepEqual(persisted.subgoals.map((item: any) => item.order), writeActions.map((_item: any, index: number) => index));
+  assert.deepEqual(rawActions.map((item: any) => item.order), originalPreviewOrder, 'adapter must not mutate preview');
 
   console.log('objective preview HTTP tests passed');
 }

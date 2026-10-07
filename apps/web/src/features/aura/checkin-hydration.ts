@@ -1,5 +1,10 @@
 import type { CheckinEntry } from "./types";
 
+/** A successful empty read is authoritative; transport failure is not an empty read. */
+export function reconcileCheckinHistory(current: CheckinEntry[], refreshed: CheckinEntry[] | null): CheckinEntry[] {
+  return refreshed ?? current;
+}
+
 function dateKey(value: unknown): string {
   return typeof value === "string" ? value.slice(0, 10) : "";
 }

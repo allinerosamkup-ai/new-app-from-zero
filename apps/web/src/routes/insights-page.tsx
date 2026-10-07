@@ -1771,14 +1771,12 @@ export function InsightsPage() {
         {/* ── Compartilhamento semanal ── */}
         {insightTab === "agora" && insightPhase === "done" && aiInsight && (
           <WeeklyShareCard
-            phaseName={cycleReport.phase}
+            phaseName={currentPhaseLabel}
             phaseColor={getPhaseColor(cycleReport.phase)}
-            avgMood={cycleReport.avgMood7d}
-            avgEnergy={cycleReport.avgEnergy7d}
+            avgMood={periodData.avgMood}
+            avgEnergy={periodData.avgEnergy}
             insight={aiInsight.insight.slice(0, 120)}
-            weekLabel={t("insights.weekOf", {
-              date: new Date().toLocaleDateString(resolveIntlLocale(i18n.language), { day: "numeric", month: "short" }),
-            })}
+            weekLabel={`${toLocalNoon(periodRange.start).toLocaleDateString(locale, { day: "numeric", month: "short" })} – ${toLocalNoon(periodRange.end).toLocaleDateString(locale, { day: "numeric", month: "short" })}`}
           />
         )}
 

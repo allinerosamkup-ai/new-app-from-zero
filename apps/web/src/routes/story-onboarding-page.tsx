@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "../lib/api";
+import { previewToWriteSubgoals } from "./objectives-workspace/helpers";
 import { trackEvent } from "../lib/track";
 import { successHaptic, tapHaptic } from "../utils/haptics";
 import { useAuraStore } from "../features/aura/store";
@@ -106,6 +107,40 @@ export async function completeStoryOnboarding({
   return billing;
 }
 
+export async function persistStoryProfile(input: {
+  operational: unknown;
+  traits: unknown;
+  post: (endpoint: string, body: unknown) => Promise<unknown>;
+}) {
+  const operational = await input.post("/onboarding/operational-profile", input.operational) as { profile?: unknown } | null;
+  if (!operational?.profile) throw new Error("onboarding_profile_unconfirmed");
+  const traits = await input.post("/onboarding/profile-traits", input.traits) as { saved?: boolean } | null;
+  if (traits?.saved !== true) throw new Error("onboarding_traits_unconfirmed");
+}
+
+export async function persistStoryGoals(input: {
+  plans: Array<{ title: string; steps: string[]; resultDefinition: string | null }>;
+  confirmed: Set<string>;
+  post: (endpoint: string, body: unknown) => Promise<unknown>;
+}) {
+  for (const [index, plan] of input.plans.entries()) {
+    if (input.confirmed.has(plan.title)) continue;
+    const response = await input.post("/objectives", {
+      title: plan.title,
+      category: "geral",
+      ...(plan.resultDefinition ? { description: plan.resultDefinition } : {}),
+      subgoals: previewToWriteSubgoals(plan.steps.map((title, order) => ({
+        id: `story-${Date.now()}-${index}-${order}`,
+        title, done: false, order, aiGenerated: true,
+      }))),
+    }) as { objective?: { id?: unknown }; id?: unknown } | null;
+    if (!response || !(response.objective?.id || response.id)) {
+      throw new Error("objective_save_unconfirmed");
+    }
+    input.confirmed.add(plan.title);
+  }
+}
+
 export async function finalizeStoryOnboarding(input: {
   persist: () => Promise<void>;
   complete: () => Promise<BillingAccessSummary>;
@@ -173,17 +208,19 @@ export function OnboardingCompletionOffer({
         <p className="story-body" style={{ textAlign: "center" }}>{l("Seu caminho já está salvo.", "Your path is already saved.")}</p>
       </>)}
       {error && (<>
-        <h1 className="story-title" style={{ textAlign: "center" }}>{l("Seu caminho está salvo.", "Your path is saved.")}</h1>
+        <h1 className="story-title" style={{ textAlign: "center" }}>{error === "onboarding_save_failed"
+          ? l("Ainda não consegui salvar tudo desta etapa.", "I could not save everything in this step yet.")
+          : retrying ? l("Salvando esta etapa...", "Saving this step...") : l("Seu caminho está salvo.", "Your path is saved.")}</h1>
         <p className="story-body" style={{ textAlign: "center" }}>
           {l(
-            "Não consegui confirmar seu período Pro agora. Você pode tentar de novo ou entrar sem perder o que fez.",
-            "I could not confirm your Pro period right now. You can retry or enter without losing your work.",
+            error === "onboarding_save_failed" ? "Tente novamente. Os objetivos já confirmados nesta etapa serão preservados." : "Não consegui confirmar seu período Pro agora. Você pode tentar de novo ou entrar sem perder o que fez.",
+            error === "onboarding_save_failed" ? "Try again. Goals already confirmed in this step will be preserved." : "I could not confirm your Pro period right now. You can retry or enter without losing your work.",
           )}
         </p>
       </>)}
 
       <div className="story-offer-actions">
-        <button type="button" className="story-cta" onClick={onEnter}>
+        <button type="button" className="story-cta" disabled={error === "onboarding_save_failed" || retrying} onClick={onEnter}>
           {l("Entrar na minha Airia", "Enter my Airia")}
         </button>
         <button type="button" className="story-plan-action" onClick={onPlans}>
@@ -237,6 +274,7 @@ export default function StoryOnboardingPage() {
   const [completionLoading, setCompletionLoading] = useState(false);
   const startedRef = useRef(false);
   const persistStartedRef = useRef(false);
+  const confirmedGoalsRef = useRef(new Set<string>());
 
   const step = STORY_STEPS[index];
   const progress = ((index + 1) / STORY_STEPS.length) * 100;
@@ -341,6 +379,8 @@ export default function StoryOnboardingPage() {
    */
   const persist = useCallback(async () => {
     setWorkDone(0);
+    setCompletionError(null);
+    setCompletionLoading(true);
     setBuildingReady(false);
     const marcar = (n: number) => setWorkDone((current) => Math.max(current, n));
     const comPrazo = <T,>(promessa: Promise<T>, ms = 7000) => Promise.race([
@@ -349,27 +389,22 @@ export default function StoryOnboardingPage() {
     ]);
 
     const persistCore = async () => {
-      try {
-        await comPrazo(api.post("/onboarding/operational-profile", {
+      await persistStoryProfile({ post: api.post, operational: {
           blockers: answers.blockers,
           openFronts: answers.openFronts,
           listPreference: answers.listPreference,
-        }));
-      } catch { /* perfil é personalização; sem ele o app funciona sem calibragem */ }
+      }, traits: {
 
       // Os traços permanentes vão numa chamada própria porque respondem outra
       // pergunta: o perfil operacional diz COMO entregar, estes decidem O QUE
       // perguntar. "Prefiro não dizer" grava `null` de propósito — é diferente
       // de "não", e a regra de `null` é manter a pergunta diária visível.
-      try {
-        await comPrazo(api.post("/onboarding/profile-traits", {
           biologicalSex: answers.biologicalSex === "female" || answers.biologicalSex === "male"
             ? answers.biologicalSex
             : null,
           medicationCurrentlyUsing: answers.medication === "yes" ? true : answers.medication === "no" ? false : null,
           priorDiagnoses: answers.diagnoses,
-        }));
-      } catch { /* mesma política: sem os traços o app pergunta mais, não quebra */ }
+      } });
       marcar(1);
 
       // Todos os objetivos escolhidos, cada um já com as ações interpretadas: ela
@@ -378,22 +413,11 @@ export default function StoryOnboardingPage() {
         ? goalTitles.map((title) => plans.find((plan) => plan.title === title) ?? { title, steps: [], resultDefinition: null })
         : [];
 
-      await Promise.all(paraCriar.map(async (plan, indice) => {
-        try {
-          await comPrazo(api.post("/objectives", {
-            title: plan.title,
-            category: "geral",
-            ...(plan.resultDefinition ? { description: plan.resultDefinition } : {}),
-            subgoals: plan.steps.map((title, order) => ({
-              id: `story-${Date.now()}-${indice}-${order}`,
-              title,
-              done: false,
-              order,
-              aiGenerated: true,
-            })),
-          }), 10000);
-        } catch { /* segue: o objetivo pode ser recriado na tela de Objetivos */ }
-      }));
+      await persistStoryGoals({
+        plans: paraCriar,
+        confirmed: confirmedGoalsRef.current,
+        post: api.post,
+      });
       marcar(2);
 
       // Onboarding gera contexto de perfil, não um check-in. Uma sensação
@@ -402,17 +426,18 @@ export default function StoryOnboardingPage() {
       marcar(3);
     };
 
+    let sourceConfirmed = false;
     try {
       await finalizeStoryOnboarding({
-        persist: persistCore,
+        persist: async () => { await persistCore(); sourceConfirmed = true; },
         complete: requestCompletion,
         refresh: async () => { await comPrazo(refreshData(), 5000); },
       });
       marcar(4);
     } catch {
-      // A oferta final mostra o erro real e permite tentar novamente sem perder
-      // perfil, objetivos ou check-in já gravados.
+      if (!sourceConfirmed) setCompletionError("onboarding_save_failed");
     } finally {
+      setCompletionLoading(false);
       setBuildingReady(true);
     }
   }, [answers, goalTitles, plans, refreshData, requestCompletion]);
@@ -455,11 +480,7 @@ export default function StoryOnboardingPage() {
   }
 
   async function retryCompletion() {
-    try {
-      await requestCompletion();
-      setWorkDone(4);
-      await refreshData();
-    } catch { /* a mensagem de erro permanece no card */ }
+    await persist();
   }
 
   const canAdvance = (() => {

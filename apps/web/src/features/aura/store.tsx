@@ -25,7 +25,7 @@ import { successHaptic, tapHaptic } from "../../utils/haptics";
 import { postNativeShellMessage } from "../../utils/native-shell";
 import { buildCheckinSubmission, type CheckinSubmission } from "./checkin-submission";
 import { resolveMoodFromCheckin } from "./checkin-mood";
-import { hydrateCheckinEntry } from "./checkin-hydration";
+import { hydrateCheckinEntry, reconcileCheckinHistory } from "./checkin-hydration";
 import { FEATURES } from "../../config/features";
 import { computeMoodCycle, type MoodPhase } from "../../utils/mood-cycle-engine";
 
@@ -262,6 +262,7 @@ type AuraStoreContextValue = {
   moodPhase: MoodPhase;
   hydrated: boolean;
   loading: boolean;
+  checkinSyncUnavailable: boolean;
   setName: (value: string) => void;
   setEmail: (value: string) => void;
   setMood: (value: MoodOption) => void;
@@ -399,6 +400,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
   }));
   const [hydrated, setHydrated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkinSyncUnavailable, setCheckinSyncUnavailable] = useState(false);
   const refreshInFlightRef = useRef<Promise<void> | null>(null);
   const objectiveCommitResolversRef = useRef<Array<() => void>>([]);
   const moodPhase = useMemo(
@@ -455,6 +457,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
         ]);
 
         const checkins = Array.isArray(checkinsRaw) ? checkinsRaw : null;
+        setCheckinSyncUnavailable(checkins === null);
         const mappedCheckins = checkins
           ? checkins.map((checkin) => hydrateCheckinEntry(checkin as Record<string, unknown>)).filter((entry) => Boolean(entry.date))
           : null;
@@ -470,9 +473,8 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
           name: preferences?.fullName ?? session.user.user_metadata?.full_name ?? session.user.user_metadata?.name ?? current.name,
           email: session.user.email ?? current.email,
           accountCreatedAt: profile?.created_at ?? session.user.created_at ?? current.accountCreatedAt ?? null,
-          checkinHistory: mappedCheckins && mappedCheckins.length > 0
-            ? mappedCheckins
-            : current.checkinHistory,
+          checkinHistory: reconcileCheckinHistory(current.checkinHistory, mappedCheckins),
+          autonomousInsight: mappedCheckins?.length === 0 ? null : current.autonomousInsight,
           mood: mappedCheckins && mappedCheckins.length > 0
             ? resolveMoodFromCheckin(mappedCheckins[0], current.mood)
             : current.mood,
@@ -624,6 +626,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       moodPhase,
       hydrated,
       loading,
+      checkinSyncUnavailable,
       setName: (value) => setState((current) => ({ ...current, name: value })),
       setEmail: (value) => setState((current) => ({ ...current, email: value })),
       setMood: (value) => setState((current) => ({ ...current, mood: value })),
@@ -1073,7 +1076,7 @@ export function AuraStoreProvider({ children }: { children: ReactNode }) {
       refreshData,
       refreshObjectives,
     }),
-    [state, moodPhase, hydrated, loading, refreshObjectives]
+    [state, moodPhase, hydrated, loading, checkinSyncUnavailable, refreshObjectives]
   );
 
   return (
