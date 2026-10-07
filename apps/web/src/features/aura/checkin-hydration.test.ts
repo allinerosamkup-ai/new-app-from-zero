@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { hydrateCheckinEntry } from "./checkin-hydration";
+import { hydrateCheckinEntry, reconcileCheckinHistory } from "./checkin-hydration";
 
 describe("persisted check-in hydration", () => {
+  it("clears cached entries on a successful empty read while preserving them on transport failure", () => {
+    const cached = [hydrateCheckinEntry({ localDate: "2026-08-01", moodScore: 5, energyScore: 6 })];
+    expect(reconcileCheckinHistory(cached, [])).toEqual([]);
+    expect(reconcileCheckinHistory(cached, null)).toBe(cached);
+    const refreshed = [hydrateCheckinEntry({ localDate: "2026-10-05", moodScore: 4, energyScore: 4 })];
+    expect(reconcileCheckinHistory(cached, refreshed)).toBe(refreshed);
+  });
   it("keeps unavailable analysis and independent safety on readback", () => {
     const entry = hydrateCheckinEntry({ moodScore: 2, energyScore: 2, aiState: { analysisStatus: "unavailable", riskSafety: { route: "crisis_protocol", riskLevel: "crisis", signals: [] } } });
     expect(entry.analysisStatus).toBe("unavailable");

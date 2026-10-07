@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import dotenv from 'dotenv';
 
-import { createApp } from './index';
+// This route also calls global cognitive/KG clients. Never inherit private endpoints.
+const originalDotenvConfig = dotenv.config;
+dotenv.config = () => ({ parsed: {} });
+process.env.DATABASE_URL = 'postgresql://synthetic:synthetic@127.0.0.1:1/synthetic';
+process.env.OPENAI_API_KEY = 'synthetic-test-key';
+process.env.OPENAI_BASE_URL = 'http://127.0.0.1:1/v1';
+
+const { createApp } = require('./index') as typeof import('./index');
+dotenv.config = originalDotenvConfig;
+assert.equal(process.env.DATABASE_URL, 'postgresql://synthetic:synthetic@127.0.0.1:1/synthetic');
+assert.equal(process.env.OPENAI_BASE_URL, 'http://127.0.0.1:1/v1');
 
 async function readResponseText(response: Response): Promise<string> {
   return await response.text();
@@ -9,6 +20,9 @@ async function readResponseText(response: Response): Promise<string> {
 
 async function run() {
   const savedMessages: any[] = [];
+  let newSession = false;
+  let checkinNote: string | null = null;
+  let sessionLocalDate = new Date('2026-03-13T00:00:00.000Z');
   const retrievedQueries: string[] = [];
   let capturedJournalContext = '';
   let capturedPlannerContext = '';
@@ -47,8 +61,14 @@ async function run() {
       findMany: async () => [],
     },
     journalMessage: {
+      findFirst: async ({ where }: any) => {
+        assert.equal(where.userId, '550e8400-e29b-41d4-a716-446655440000');
+        assert.equal(where.session.localDate.getTime(), sessionLocalDate.getTime());
+        return savedMessages.find(m => m.userId === where.userId && m.role === where.role && m.content === where.content
+          && m.testLocalDate?.getTime() === where.session.localDate.getTime()) ?? null;
+      },
       create: async ({ data }: any) => {
-        savedMessages.push(data);
+        savedMessages.push({ ...data, testLocalDate: sessionLocalDate });
         return { id: String(savedMessages.length), ...data };
       },
       findMany: async () => savedMessages,
@@ -82,12 +102,12 @@ async function run() {
     } as any,
     journalService: {
       startOrResumeSession: async () => ({
-        created: false,
+        created: newSession,
         session: {
           id: sessionId,
           userId: '550e8400-e29b-41d4-a716-446655440000',
           status: 'active',
-          localDate: new Date('2026-03-13T00:00:00.000Z'),
+          localDate: sessionLocalDate,
         },
       }),
       buildRoutineContext: async () => ({
@@ -101,6 +121,7 @@ async function run() {
           moodScore: 3,
           energyScore: 2,
           stateLabel: 'Dia sensível',
+          note: checkinNote,
         },
       }),
       getSessionMessages: async () => [],
@@ -208,6 +229,23 @@ async function run() {
     const finalizeJson = await finalizeResponse.json();
     assert.equal(finalizeJson.sessionStatus, 'completed');
     assert.equal(finalizeJson.suggestedTasks[0].title, 'Separar uma tarefa pequena');
+
+    newSession = true;
+    checkinNote = 'Synthetic note';
+    const start = () => fetch(`${baseUrl}/api/journal/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const before = savedMessages.length;
+    savedMessages.push({ userId: 'another-user', role: 'user', content: checkinNote, testLocalDate: sessionLocalDate });
+    assert.equal((await start()).status, 200);
+    assert.equal(savedMessages.length, before + 2, 'another user note must not prevent importing current note');
+    assert.equal((await start()).status, 200);
+    assert.equal(savedMessages.length, before + 2, 'new session must not replay already imported note');
+    checkinNote = 'New synthetic note';
+    assert.equal((await start()).status, 200);
+    assert.equal(savedMessages.length, before + 3, 'a changed note can be imported');
+    sessionLocalDate = new Date('2026-03-14T00:00:00.000Z');
+    assert.equal((await start()).status, 200);
+    assert.equal(savedMessages.length, before + 4, 'same note on another local day remains a new source');
+
   } finally {
     await new Promise<void>((resolve, reject) => {
       server.close((error) => {

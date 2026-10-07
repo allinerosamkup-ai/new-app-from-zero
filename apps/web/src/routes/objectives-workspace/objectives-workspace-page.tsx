@@ -12,6 +12,7 @@ import {
   isAiBrokenDown,
   pickActiveGoal,
   previewToSubgoals,
+  previewToWriteSubgoals,
   readComposerMode,
   readWideLayout,
   resolveNotes,
@@ -20,6 +21,7 @@ import {
   type TreeNode,
 } from "./helpers";
 import { SplitLayout } from "./split-layout";
+import { ObjectivesModal } from "./objectives-modal";
 import "./objectives-workspace.css";
 
 export function GoalsPage() {
@@ -61,6 +63,7 @@ export function ObjectivesWorkspacePage() {
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [previewIntent, setPreviewIntent] = useState<"create" | "replace" | "expand">("create");
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const recoveryGuard = useRef<{ status: "idle" | "inFlight" | "completed" }>({ status: "idle" });
   const openedRef = useRef(false);
@@ -103,6 +106,7 @@ export function ObjectivesWorkspacePage() {
   }, [l, recoverGoalActions]);
 
   async function runBreakdown(title: string, extra?: { note?: string; objectiveId?: string; intent?: "create" | "replace" | "expand" }) {
+    setPreviewError(null);
     setPreviewIntent(extra?.intent ?? "create");
     setBusy("preview");
     try {
@@ -123,6 +127,7 @@ export function ObjectivesWorkspacePage() {
 
   async function confirmCreate() {
     if (!preview) return;
+    setPreviewError(null);
     setBusy("save");
     try {
       const created = await api.post("/objectives", {
@@ -131,7 +136,7 @@ export function ObjectivesWorkspacePage() {
         locale: navigator.language || "pt-BR",
         resultDefinition: preview.resultDefinition,
         currentReality: preview.currentReality,
-        subgoals: preview.suggestedSubgoals ?? previewToSubgoals(preview.tasks),
+        subgoals: previewToWriteSubgoals(preview.suggestedSubgoals ?? previewToSubgoals(preview.tasks)),
         notes: composer === "note" && draft.trim()
           ? [{ id: `origin-${Date.now()}`, content: draft.trim(), createdAt: new Date().toISOString(), source: "origin" }]
           : undefined,
@@ -144,7 +149,9 @@ export function ObjectivesWorkspacePage() {
       trackProductEvent("goal.created.v1", "goals", { goalId: String(created.id), creationMode: "ai", hasDeadline: Boolean(deadline) });
       showSuccess(l("Objetivo criado com o caminho visivel.", "Goal created with a visible path."));
     } catch (error) {
-      showError(error instanceof Error ? error.message : l("Nao foi possivel criar o objetivo.", "Could not create the goal."));
+      const message = error instanceof Error ? error.message : l("Nao foi possivel criar o objetivo.", "Could not create the goal.");
+      setPreviewError(message);
+      showError(message);
     } finally {
       setBusy(null);
     }
@@ -152,6 +159,7 @@ export function ObjectivesWorkspacePage() {
 
   async function confirmBreakdownOnSelected() {
     if (!preview || !selected) return;
+    setPreviewError(null);
     setBusy("save");
     try {
       await api.post(`/objectives/${selected.id}/path/apply-preview`, {
@@ -159,13 +167,15 @@ export function ObjectivesWorkspacePage() {
         resultDefinition: preview.resultDefinition,
         currentReality: preview.currentReality,
         milestones: preview.milestones,
-        subgoals: preview.suggestedSubgoals ?? previewToSubgoals(preview.tasks),
+        subgoals: previewToWriteSubgoals(preview.suggestedSubgoals ?? previewToSubgoals(preview.tasks)),
       });
       await refreshObjectives();
       setPreview(null);
       showSuccess(l("Caminho aplicado.", "Path applied."));
     } catch (error) {
-      showError(error instanceof Error ? error.message : l("Nao foi possivel aplicar o desdobramento.", "Could not apply the breakdown."));
+      const message = error instanceof Error ? error.message : l("Nao foi possivel aplicar o desdobramento.", "Could not apply the breakdown.");
+      setPreviewError(message);
+      showError(message);
     } finally {
       setBusy(null);
     }
@@ -377,8 +387,7 @@ export function ObjectivesWorkspacePage() {
       />
 
       {composer && !preview && !reschedule ? (
-        <div className="ow-modal" role="dialog" aria-modal="true">
-          <div className="ow-modal__card">
+        <ObjectivesModal label={composer === "reschedule" ? l("Reagendar com IA", "Reschedule with AI") : composer === "note" ? l("Anotar", "Note") : l("Objetivo com IA", "Goal with AI")} onClose={() => { if (!busy) setComposer(null); }}>
             <strong>{composer === "reschedule" ? l("Reagendar com IA", "Reschedule with AI") : composer === "note" ? l("Anotar", "Note") : l("Objetivo com IA", "Goal with AI")}</strong>
             <textarea className="ow-field" rows={4} value={draft} onChange={(event) => setDraft(event.target.value)} />
             {composer !== "reschedule" && composer !== "note" ? (
@@ -409,14 +418,13 @@ export function ObjectivesWorkspacePage() {
                 {composer === "reschedule" ? l("Ver datas", "See dates") : l("Desdobrar", "Break down")}
               </button>
             </div>
-          </div>
-        </div>
+        </ObjectivesModal>
       ) : null}
 
       {preview ? (
-        <div className="ow-modal" role="dialog" aria-modal="true">
-          <div className="ow-modal__card">
+        <ObjectivesModal label={preview.suggestedTitle} onClose={() => { if (!busy) setPreview(null); }}>
             <strong>{preview.suggestedTitle}</strong>
+            {previewError ? <p className="ow-conflict" role="alert">{previewError}</p> : null}
             {preview.question ? <p className="ow-empty">{preview.question}</p> : null}
             {preview.tasks.filter((task) => task.level !== 1).map((task) => (
               <label key={task.id} className="ow-item">
@@ -443,13 +451,11 @@ export function ObjectivesWorkspacePage() {
                 {l("Confirmar", "Confirm")}
               </button>
             </div>
-          </div>
-        </div>
+        </ObjectivesModal>
       ) : null}
 
       {reschedule ? (
-        <div className="ow-modal" role="dialog" aria-modal="true">
-          <div className="ow-modal__card">
+        <ObjectivesModal label={l("Novo calendario", "New dates")} onClose={() => { if (!busy) setReschedule(null); }}>
             <strong>{l("Novo calendario", "New dates")}</strong>
             {reschedule.moves.length === 0 ? <p className="ow-empty">{l("Nao encontrei essas acoes. Tente o nome exatamente como esta no caminho.", "Those actions were not found. Try the name as it appears on the path.")}</p> : reschedule.moves.map((move) => (
               <p key={move.actionId}>{move.title}: {move.from ?? l("sem data", "no date")} → {move.to}</p>
@@ -459,8 +465,7 @@ export function ObjectivesWorkspacePage() {
               <button type="button" className="ow-btn" onClick={() => setReschedule(null)}>{l("Cancelar", "Cancel")}</button>
               <button type="button" className="ow-btn ow-btn--primary" disabled={busy !== null || reschedule.moves.length === 0} onClick={() => void confirmReschedule()}>{l("Confirmar", "Confirm")}</button>
             </div>
-          </div>
-        </div>
+        </ObjectivesModal>
       ) : null}
     </div>
   );

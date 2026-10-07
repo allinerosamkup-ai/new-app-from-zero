@@ -204,7 +204,7 @@ export function AuraLayout() {
         onClick={() => { tapHaptic(); navigate(item.route); }}
       >
         <span className="mb-0.5">{item.icon}</span>
-        <span className="text-[10px] font-bold tracking-normal">{t(item.labelKey)}</span>
+        <span className="airia-nav-label text-[10px] font-bold tracking-normal">{t(item.labelKey)}</span>
       </button>
     );
   }
@@ -463,9 +463,9 @@ export function AuraLayout() {
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        padding: "10px 16px 12px",
+        padding: "10px 8px 12px",
       }}>
-        <div style={{ display: "flex", flex: 1, justifyContent: "space-around", alignItems: "center" }}>
+        <div style={{ display: "flex", flex: 1, minWidth: 0, justifyContent: "space-around", alignItems: "center" }}>
           {leftNavItems.map(renderNavItem)}
         </div>
         <button
@@ -477,7 +477,7 @@ export function AuraLayout() {
         >
           <AiriaMascot phase={moodPhase} size={88} decorative />
         </button>
-        <div style={{ display: "flex", flex: 1, justifyContent: "space-around", alignItems: "center" }}>
+        <div style={{ display: "flex", flex: 1, minWidth: 0, justifyContent: "space-around", alignItems: "center" }}>
           {rightNavItems.map(renderNavItem)}
         </div>
       </div>

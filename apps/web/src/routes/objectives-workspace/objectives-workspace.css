@@ -128,24 +128,34 @@
 .ow-modal {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 1000;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   background: rgba(17, 24, 39, 0.32);
-  padding: 16px;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .ow-modal__card {
   width: min(560px, 100%);
-  max-height: 86dvh;
+  max-height: 100%;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  min-height: 0;
   background: #fff;
   border-radius: 20px;
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.ow-modal__card :is(button, input, textarea, select, a):focus-visible {
+  outline: 2px solid #26688F;
+  outline-offset: 2px;
 }
 
 .ow-field {

@@ -2072,6 +2072,36 @@ body {
 .nav-label { font-size: 9.5px; font-weight: 600; color: var(--text-3); }
 .nav-item.active .nav-label { color: #4E6B57; font-weight: 700; }
 
+/* Four destinations and the central Aura control must fit a 320px viewport. */
+.bottom-nav.airia-bottom-nav .airia-nav-item {
+  flex: 1 1 0;
+  min-width: 44px;
+  min-height: 48px;
+  padding: 4px 2px;
+}
+.bottom-nav.airia-bottom-nav .airia-nav-center {
+  flex: 0 0 88px;
+  width: 88px;
+  padding: 0;
+  box-sizing: border-box;
+}
+.bottom-nav.airia-bottom-nav .airia-nav-label {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.aura-layout-root .bottom-nav.airia-bottom-nav .airia-nav-item:not(.active) {
+  color: var(--text-2) !important;
+}
+.mini-chart-area .chart-legend .legend-item {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
 /* ─── SVG icons ─── */
 svg { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 

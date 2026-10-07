@@ -89,10 +89,10 @@ export function ProgressStrip() {
           dia leria como cobrança, e a regra da casa é celebrar o que aconteceu
           e calar sobre o que não aconteceu. */}
       {counters && counters.actionsCompleted > 0 && (
-        <Counter value={counters.actionsCompleted} label={l("ações", "actions")} />
+        <Counter value={counters.actionsCompleted} label={l("ações concluídas", "completed actions")} />
       )}
       {counters && counters.goalsCompleted > 0 && (
-        <Counter value={counters.goalsCompleted} label={l("objetivos", "goals")} />
+        <Counter value={counters.goalsCompleted} label={l("objetivos concluídos", "completed goals")} />
       )}
 
       {(streak.current > 0 || streak.isProtectedToday) && (

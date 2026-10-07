@@ -1,0 +1,15 @@
+# Handoff — Insights resumo compartilhável
+Task AIRIA-BROWSER-TOTAL-20261005. Executor home_chart_diagnosis; destino coordenador /root, release_meta e browser_integration. Arquivos próprios desta fatia: insights-page.tsx, WeeklyShareCard.tsx e WeeklyShareCard.test.tsx. Home anterior permaneceu congelada. Produção não alterada; sem commit/deploy por este papel.
+
+Evidência do coordenador: semana com um registro real5/5; análise corretamente declara pouca evidência; cartão mostrava enum insufficient_data e números0.0/0.0.
+Diagnóstico: props vinham do motor de fase, cujo ramo insuficiente retorna0 sentinela; componente ainda assumia escala5. Correção: usa periodData.avgMood/avgEnergy nullable já existentes e currentPhaseLabel traduzido. Rótulo acompanha intervalo selecionado; número/barra/share usam escala1–10. Valor ausente, não finito ou fora1–10 aparece Indisponível/Unavailable, sem barra numérica. Texto do compartilhamento localiza UI mas preserva conteúdo original do insight.
+Reuso e fontes em insights-share-search-reuse.md. Nenhum motor, limiar, serviço, dependência ou dado persistido foi alterado.
+
+Testes: SSR conecta motor insuficiente (sentinela0) com periodData real e renderer5/5 em PT/EN; valoresnull/0/NaN/Infinity/11 indisponíveis e10/10 limita barra100%; DOM click com navigator.share mock verifica textoEN, escala/10 e insight original. Primeira execução falhou por asserção ampla de0.0 que também detectava corRGBA0.06; ajustada para valor0.0/10, sem alteração no produto motivada por esse falso positivo. Reteste em andamento. Typecheck desta fatia PASS exit0; diffcheck PASS.
+Estado PRONTA_PARA_VERIFICAÇÃO após reteste. Sem autoaprovação. Browser real da correção permanece responsabilidade do coordenador e integração independente; compartilhamento externo real não foi executado pelos testes.
+
+Reteste final Insights: três arquivos, dez testes PASS exit0; typecheck PASS exit0. Arquivos desta fatia congelados para revisão independente e build global. PASS técnico do executor, não aprovação de qualidade.
+
+# Auditoria adicional — rótulo7D da Home (sem alteração nesta etapa)
+O motor mood-cycle-engine.ts usa sorted.slice(-7): até sete dias COM REGISTRO, não os últimos sete dias corridos. A Home recebe aggregateCheckinsByDay e exibe avgMood7d/avgEnergy7d como “Humor7d/Energia7d”. O texto de autonomia também recebe history.slice(-7), podendo interpretar registros históricos legítimos e ser gerado hoje. Portanto generatedAt recente não prova janela recente; a falha confirmada é de apresentação/proveniência temporal. A evidência do coordenador (média do gráfico semanal5/5 vs histórico5,3/4,4) é compatível com janelas diferentes, não prova corrupção de dados.
+Proposta enviada ao coordenador antes de nova alteração: identificar cartão fallback como ritmo registrado; rotular médias como últimos dias com registro e mostrar janela exata, separando motivo canônico atual de contexto histórico. Nenhum limiar nem motor novo. Home permanece congelada até direção explícita.

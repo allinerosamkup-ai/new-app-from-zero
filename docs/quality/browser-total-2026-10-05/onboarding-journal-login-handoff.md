@@ -1,0 +1,27 @@
+# Handoff executor — onboarding, Diário e login
+
+Retomada 2026-10-06; coordenador root, executor resume_executor. Ticket AIRIA-BROWSER-TOTAL; busca/reuso em onboarding-search-reuse.md. Não toca Home/Insights, não publica, não altera protocolo e não aprova a própria entrega.
+
+## Entrega e decisão
+
+Onboarding reutiliza previewToWriteSubgoals: POST strict sem order, sequência preservada. Escrita precisa confirmar id antes de marcar objetivo confirmado nesta passagem. Falha interrompe completion; retry regrava apenas títulos ainda não confirmados. Auditoria do patch interrompido identificou catch sem sinal de falha e loading que ficava ativo antes de requestCompletion. Corrigidos estado onboarding_save_failed, finalmente loading=false e oferta honesta PT/EN, entrada bloqueada enquanto fonte incompleta e retry disponível. Não alegar idempotência entre reloads ou atomicidade para resposta perdida; Set é memória desta passagem, não chave de banco.
+
+Diário importa nota atual somente se não há mensagem idêntica da mesma pessoa em sessão do mesmo dia local. Nota alterada/outro dia continuam fontes novas; mensagem de outra pessoa não impede importação. Não altera conteúdo original, schema ou serviços. Consulta+create não garantem exclusão concorrente atômica; limitação mantida explícita. Botão Enviar do Diário preserva patch prévio sem alteração nesta retomada.
+
+Login usa Airia, labels associados aos inputs, guard de campos vazios/email inválido/loading, email trim ao provider e alert acessível. Erro desconhecido não expõe detalhe bruto. Teste usa provider/store/auth/referral sintéticos; não comprova credenciais reais, cadastro/logout ou sessão autenticada de produção.
+
+## Evidência e limites
+
+Web focado PASS: 4 arquivos / 20 testes, sessão65144, 41,64s, Vitest local singleworker threads. Arquivos story-onboarding-page.test.tsx (payload, parcial/retry e oferta PT/EN), login-page.test.tsx (brand/labels/empty/provider-error), journal-page.helpers.test.ts, objectives-workspace/helpers.test.ts. Execução anterior forks2 sofreu timeout de worker, não usada como aprovação. Primeiro teste login encontrou localStorage incompleto do Node25; fixture local explícita corrigida, sem modificar storage do produto. Typecheck segue na mesma sessão; atualizar desfecho abaixo.
+
+Backend journal + objectives-preview HTTP PASS e emit build PASS, sessão42657 exit0. Primeira execução herdou env local e caminhos globais KG/IA tentaram acesso externo, mas conexões falharam; não há evidência de escrita privada. Corrigido isolamento no próprio journal.test antes de importar app: DATABASE_URL loopback inválido, OPENAI_BASE_URL loopback inválido e chave sintética. Reexecução isolada sessão12438 pendente neste registro. Nenhuma segurança TLS desativada. Logs de falha dos globais são esperados nesta fixture e não prova IA/DB operacional.
+
+Código web foi alterado após build coordenador86710 por reparo obrigatório do verificador: perfil operacional e traços não podem falhar silenciosamente/retornar null de timeout e receber checkmark. persistStoryProfile aguarda os dois endpoints reais, confere response.profile e traits.saved=true; falha bloqueia completion com erro visível e retry. Campos opcionais/null não obrigam relato de saúde. Durante persistência pendente, oferta diz Salvando esta etapa em vez de afirmar salvo. Esse último reparo invalida build86710 como evidência da fonte final. Source freeze informado ao coordenador; não editar Home/Insights.
+
+Reverificação de perfil/login: PASS 2 arquivos / 13 testes, sessão8705, duração59,02s, singleworker threads; inclui falha separada nos dois endpoints, resposta sem confirmação e preservação de respostas opcionais, além da oferta PT/EN e retry parcial de objetivos. Typecheck final pendente na mesma sessão. Journal final isolado: PASS, sessão12438 exit0, confirmadas conexões exclusivamente 127.0.0.1:1 para KG/IA no log; injeção de repositório mantém mensagens sintéticas. A tentativa intermediária de isolamento com env vazio não isolava OpenAI porque PowerShell removia a variável e dotenv a restaurava; substituído por chave sintética+baseURL local no próprio teste antes do import. Nunca alegar ausência de tentativas externas na primeira execução.
+
+Próxima ação: typecheck final, build web final pelo coordenador e revisão independente/backend+browser; aprovação/meta/commit reservados ao coordenador e revisores. Sem CUA neste executor.
+
+Fechamento: typecheck web final sessão8705 **PASS exit0**, depois dos patches de perfil e oferta. Revisão independente apontou dotenv override no teste; variável apenas não oferece garantia. Journal.test agora intercepta dotenv.config antes do require explícito de index, restaura a função após carregar e afirma os dois endpoints locais antes de qualquer request. Reexecução desse reforço será repassada ao coordenador; source de produto permanece congelada, só teste de isolamento alterado. Não declarar fonte hermética por env-only.
+
+Reexecução com interceptação dotenv: sessão50150 **PASS exit0**, endpoints no log 127.0.0.1:1. Load explícito com require substituiu import estático durante a inicialização da sessão; ambas formas sob ts-node/CommonJS mantiveram spy anterior ao load e assertions. Revisor pode reexecutar a fonte final com require para eliminar essa ambiguidade de horário. Sem nova mutação após este handoff; papel executor pronto para verificação independente, nunca autoaprovação.

@@ -70,20 +70,29 @@ export function LoginPage() {
   };
 
   const handleLogin = async () => {
+    if (loading) return;
     setError(null);
+    if (!state.email.trim() || !password || (tab === "criar" && !state.name.trim())) {
+      setError(t("auth.errors.required"));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email.trim())) {
+      setError(t("auth.errors.invalidEmail"));
+      return;
+    }
     setLoading(true);
     try {
       let authenticated = false;
       if (tab === "entrar") {
         const { data, error: err } = await supabase.auth.signInWithPassword({
-          email: state.email,
+          email: state.email.trim(),
           password,
         });
         if (err) throw err;
         authenticated = Boolean(data.session);
       } else {
         const { data, error: err } = await supabase.auth.signUp({
-          email: state.email,
+          email: state.email.trim(),
           password,
           options: { data: { full_name: state.name } },
         });
@@ -111,7 +120,7 @@ export function LoginPage() {
       if (msg.includes("Invalid login credentials")) setError(t("auth.errors.credentials"));
       else if (msg.includes("already registered")) setError(t("auth.errors.registered"));
       else if (msg.includes("Password should be")) setError(t("auth.errors.shortPassword"));
-      else setError(msg);
+      else setError(t("auth.errors.generic"));
     } finally {
       setLoading(false);
     }
@@ -149,7 +158,7 @@ export function LoginPage() {
       <div className="screen-content" style={{ flex: 1 }}>
         {/* Hero card */}
         <div className="auth-hero">
-          <div className="auth-hero-eyebrow">Mood Energy</div>
+          <div className="auth-hero-eyebrow">Airia</div>
           <h1>{t("auth.heroTitle")}</h1>
           <p>{t("auth.heroSubtitle")}</p>
         </div>
@@ -174,7 +183,7 @@ export function LoginPage() {
         {tab === "entrar" && (
           <>
             <div className="aura-input-wrap">
-              <label className="aura-input-label">{t("auth.email")}</label>
+              <label className="aura-input-label" htmlFor="auth-email">{t("auth.email")}</label>
               <div className="aura-input aura-inline-field">
                 {/* Ícone email */}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -182,6 +191,7 @@ export function LoginPage() {
                   <path d="m2 7 10 7 10-7" />
                 </svg>
                 <input
+                  id="auth-email"
                   type="email"
                   value={state.email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -193,7 +203,7 @@ export function LoginPage() {
             </div>
 
             <div className="aura-input-wrap" style={{ marginBottom: 20 }}>
-              <label className="aura-input-label">{t("auth.password")}</label>
+              <label className="aura-input-label" htmlFor="auth-password">{t("auth.password")}</label>
               <div
                 className="aura-input"
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
@@ -205,6 +215,7 @@ export function LoginPage() {
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                   <input
+                    id="auth-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -245,7 +256,7 @@ export function LoginPage() {
             </div>
 
             {error && (
-              <p className="aura-banner-error">
+              <p className="aura-banner-error" role="alert">
                 {error}
               </p>
             )}
@@ -273,7 +284,7 @@ export function LoginPage() {
         {tab === "criar" && (
           <>
             <div className="aura-input-wrap">
-              <label className="aura-input-label">{t("auth.name")}</label>
+              <label className="aura-input-label" htmlFor="auth-name">{t("auth.name")}</label>
               <div className="aura-input aura-inline-field">
                 {/* Ícone user */}
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -282,6 +293,7 @@ export function LoginPage() {
                 </svg>
                 <input
                   type="text"
+                  id="auth-name"
                   value={state.name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={handleEnterSubmit}
@@ -292,13 +304,14 @@ export function LoginPage() {
             </div>
 
             <div className="aura-input-wrap">
-              <label className="aura-input-label">{t("auth.email")}</label>
+              <label className="aura-input-label" htmlFor="auth-email">{t("auth.email")}</label>
               <div className="aura-input aura-inline-field">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <rect x="2" y="4" width="20" height="16" rx="3" />
                   <path d="m2 7 10 7 10-7" />
                 </svg>
                 <input
+                  id="auth-email"
                   type="email"
                   value={state.email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -310,7 +323,7 @@ export function LoginPage() {
             </div>
 
             <div className="aura-input-wrap" style={{ marginBottom: 20 }}>
-              <label className="aura-input-label">{t("auth.password")}</label>
+              <label className="aura-input-label" htmlFor="auth-password">{t("auth.password")}</label>
               <div
                 className="aura-input"
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
@@ -321,6 +334,7 @@ export function LoginPage() {
                     <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                   <input
+                    id="auth-password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -345,7 +359,7 @@ export function LoginPage() {
             </div>
 
             {error && (
-              <p className="aura-banner-error">
+              <p className="aura-banner-error" role="alert">
                 {error}
               </p>
             )}

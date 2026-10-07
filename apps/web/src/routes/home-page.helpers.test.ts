@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   HOME_AUTONOMY_FEEDBACK_KEY,
@@ -17,9 +17,77 @@ import {
   resolveGroundedHomeCare,
   resolveHomeAgendaSuggestionDate,
   shouldRefreshHomeSuggestionAfterAction,
+  resolveHomeDayDetailsOpen,
+  hasHomeChartHistory,
+  homeChartEmptyCopy,
+  homeDisplayName,
+  homeGreeting,
+  homeRhythmHistoryWindow,
+  homeRhythmWindowCopy,
+  homeCanonicalObservationIsToday,
+  summarizeHomeChartValues,
 } from "./home-page.helpers.ts";
 
 describe("home page helpers", () => {
+  it("summarizes only valid mood and energy values from the chart's own window", () => {
+    expect(summarizeHomeChartValues([{ humor: 5, energia: 6 }])).toEqual({ mood: 5, energy: 6 });
+    expect(summarizeHomeChartValues([{ humor: 5, energia: 6 }, { humor: 7, energia: 8 }])).toEqual({ mood: 6, energy: 7 });
+    expect(summarizeHomeChartValues([{ humor: 0, energia: NaN }, { humor: Infinity, energia: 11 }])).toEqual({ mood: null, energy: null });
+    expect(summarizeHomeChartValues([{ humor: 5 }])).toEqual({ mood: 5, energy: null });
+    expect(summarizeHomeChartValues([])).toEqual({ mood: null, energy: null });
+  });
+  it("shows the actual recorded-day window across old entries and today's entry without changing calendar keys", () => {
+    const window = homeRhythmHistoryWindow([{ date: "2026-08-19" }, { date: "2026-10-05" }, { date: "2026-08-20" }]);
+    expect(window).toEqual({ start: "2026-08-19", end: "2026-10-05", days: 3 });
+    const [pt, en] = homeRhythmWindowCopy(window);
+    expect(pt).toContain("últimos 3 dias com registro");
+    expect(en).toContain("last 3 recorded days");
+    expect(pt).toContain("2026-08-19 a 2026-10-05");
+    expect(en).toContain("2026-08-19 to 2026-10-05");
+    expect(pt).not.toContain("7d");
+    expect(homeRhythmHistoryWindow(Array.from({ length: 9 }, (_, i) => ({ date: `2026-08-${String(11 + i).padStart(2, "0")}` })))).toEqual({ start: "2026-08-13", end: "2026-08-19", days: 7 });
+    expect(homeRhythmHistoryWindow([])).toBeNull();
+    expect(homeRhythmWindowCopy(null)[1]).toContain("no recorded days");
+    expect(homeRhythmWindowCopy(homeRhythmHistoryWindow([{ date: "2026-10-05" }]))[0]).toContain("último dia com registro");
+  });
+
+  it("labels a canonical observation as today only when the actual observation belongs to the local day", () => {
+    expect(homeCanonicalObservationIsToday("2026-10-05", "2026-10-05")).toBe(true);
+    expect(homeCanonicalObservationIsToday("2026-08-19", "2026-10-05")).toBe(false);
+    expect(homeCanonicalObservationIsToday("2026-10-05T00:15:00", "2026-10-05")).toBe(true);
+    expect(homeCanonicalObservationIsToday(undefined, "2026-10-05")).toBe(false);
+    expect(homeCanonicalObservationIsToday("invalid", "2026-10-05")).toBe(false);
+  });
+  it("greets without a dangling comma or empty name when profile name is missing", () => {
+    expect(homeDisplayName("  airia   Teste  ")).toBe("Airia");
+    for (const name of ["", "   ", "\t\n"]) {
+      expect(homeDisplayName(name)).toBe("");
+      expect(homeGreeting("Good evening", homeDisplayName(name))).toBe("Good evening");
+      expect(homeGreeting("Boa noite", homeDisplayName(name))).toBe("Boa noite");
+    }
+    expect(homeGreeting("Good evening", homeDisplayName("airia"))).toBe("Good evening,");
+  });
+  it("describes the empty selected period without claiming the user has never checked in", () => {
+    const [pt, en] = homeChartEmptyCopy("week");
+    assert.match(pt, /últimos 7 dias/);
+    assert.match(en, /last 7 days/);
+    assert.doesNotMatch(pt, /primeiro/);
+    assert.doesNotMatch(en, /first/);
+    assert.match(homeChartEmptyCopy("day")[0], /Hoje/);
+    assert.match(homeChartEmptyCopy("day")[1], /today/);
+  });
+  it("keeps old check-ins available even when the current week has no entries", () => {
+    assert.equal(hasHomeChartHistory([{ humor: 5, energia: 6 }]), true);
+    assert.equal(hasHomeChartHistory([{ humor: NaN, energia: 4 }]), true);
+    assert.equal(hasHomeChartHistory([]), false);
+    assert.equal(hasHomeChartHistory([{ humor: NaN, energia: NaN }]), false);
+  });
+
+  it("shows details by default and restores explicit choices across both storage formats", () => {
+    for (const value of [null, "1", "true"]) assert.equal(resolveHomeDayDetailsOpen(value), true);
+    for (const value of ["0", "false"]) assert.equal(resolveHomeDayDetailsOpen(value), false);
+  });
+
   it("changes the AI request key by quarter-hour refresh bucket", () => {
     const keyA = buildHomeAiRequestKey({
       localDate: "2026-04-06",

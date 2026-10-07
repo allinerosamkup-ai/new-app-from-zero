@@ -42,6 +42,15 @@ import {
   isHomeAutonomyTitleBlocked,
   readHomeAutonomyFeedback,
   rememberHomeAutonomyActionFeedback,
+  resolveHomeDayDetailsOpen,
+  hasHomeChartHistory,
+  homeChartEmptyCopy,
+  homeDisplayName,
+  homeGreeting,
+  homeRhythmHistoryWindow,
+  homeRhythmWindowCopy,
+  homeCanonicalObservationIsToday,
+  summarizeHomeChartValues,
 } from "./home-page.helpers";
 import { sendAiriaDecisionFeedback, useAiriaReading } from "../lib/airia-reading";
 import { SafetyProtocolCard } from "../components/aura/SafetyProtocolCard";
@@ -87,11 +96,11 @@ type ChartPoint = {
 
 type HomeChartMode = "week" | "monthly" | "day" | "forecast";
 
-const HOME_CHART_TABS: Array<{ id: HomeChartMode; label: string }> = [
-  { id: "week", label: "Semana" },
-  { id: "monthly", label: "Mensal" },
-  { id: "day", label: "Hoje" },
-  { id: "forecast", label: "7 dias" },
+const HOME_CHART_TABS: Array<{ id: HomeChartMode; labelKey: string }> = [
+  { id: "week", labelKey: "home.weekTab" },
+  { id: "monthly", labelKey: "home.monthlyTab" },
+  { id: "day", labelKey: "home.todayTab" },
+  { id: "forecast", labelKey: "home.forecastTab" },
 ];
 
 const EMPTY_HOME_TASK_TITLES: string[] = [];
@@ -368,7 +377,7 @@ function LiveClock() {
 export function HomePage() {
   const { t, i18n } = useTranslation();
   const l = useLocalizedCopy();
-  const { state, refreshData, setProactiveNudge, hydrated } = useAuraStore();
+  const { state, refreshData, setProactiveNudge, hydrated, checkinSyncUnavailable } = useAuraStore();
   const { reading: canonicalReading, reload: reloadCanonicalReading } = useAiriaReading();
   const [canonicalFeedbackPending, setCanonicalFeedbackPending] = useState(false);
   const [phaseLegendOpen, setPhaseLegendOpen] = useState(false);
@@ -675,10 +684,10 @@ export function HomePage() {
 
   // ── Today view: detalhes do dia colapsados por padrão (lembra a preferência) ──
   const DAY_DETAILS_KEY = "airia.home.dayDetailsOpen.v1";
-  const [dayDetailsOpen, setDayDetailsOpen] = useState(false);
+  const [dayDetailsOpen, setDayDetailsOpen] = useState(true);
   const firstChartOpenedRef = useRef(false);
   useEffect(() => {
-    try { setDayDetailsOpen(localStorage.getItem(DAY_DETAILS_KEY) === "true"); } catch { /* ignore */ }
+    try { setDayDetailsOpen(resolveHomeDayDetailsOpen(localStorage.getItem(DAY_DETAILS_KEY))); } catch { /* keep visible */ }
   }, []);
   useEffect(() => {
     if (!isFirstRecordedCheckin || firstChartOpenedRef.current) return;
@@ -758,9 +767,7 @@ export function HomePage() {
   const hasActiveChartData = activeChartData.some(
     (point) => point.humorY !== null || point.energiaY !== null,
   );
-  const hasCheckinHistoryForChart = weeklyCheckinData.some(
-    (point) => point.humorY !== null || point.energiaY !== null,
-  );
+  const hasCheckinHistoryForChart = hasHomeChartHistory(state.checkinHistory || []);
   const homeChartSubtitle = (() => {
     if (homeChartMode === "monthly") return l("Histórico — últimos 30 dias", "History — last 30 days");
     if (homeChartMode === "forecast") return l("Previsão — próximos 7 dias", "Forecast — next 7 days");
@@ -1106,9 +1113,7 @@ export function HomePage() {
     state.goals,
     state.tasks,
   ]);
-  const displayName = state.name
-    ? state.name.split(/\s+/)[0].charAt(0).toUpperCase() + state.name.split(/\s+/)[0].slice(1).toLowerCase()
-    : l("você", "you");
+  const displayName = homeDisplayName(state.name);
   const quickAccessSection = (
     <>
             <p className="aura-section-kicker">{t("home.quickAccess")}</p>
@@ -1156,6 +1161,12 @@ export function HomePage() {
       )}
       <div className="screen-content" style={{ position: "relative", zIndex: 1 }}>
         <SafetyProtocolCard riskSafety={canonicalReading?.riskSafety} surface="home" />
+        {checkinSyncUnavailable && (
+          <Card accent="sky" style={{ marginBottom: "calc(var(--a))" }}>
+            <p role="status">{l("Não foi possível atualizar seus check-ins. Os últimos registros disponíveis podem estar desatualizados.", "Your check-ins could not be refreshed. The last available entries may be outdated.")}</p>
+            <AuraButtonV2 onClick={() => void refreshData()}>{l("Tentar novamente", "Try again")}</AuraButtonV2>
+          </Card>
+        )}
 
         {/* A caixa "O que cabe hoje" mora só no resultado do check-in.
             Aqui ela errava o lugar: a Home responde "o que eu faço agora", e uma
@@ -1168,9 +1179,9 @@ export function HomePage() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
             <div>
               <p className="home-header-eyebrow">
-                {getGreetingEmoji(clockTime.getHours())} {t(getGreetingKey(clockTime.getHours()))},
+                {getGreetingEmoji(clockTime.getHours())} {homeGreeting(t(getGreetingKey(clockTime.getHours())), displayName)}
               </p>
-              <h1 style={{ marginBottom: 4 }}>{displayName}</h1>
+              {displayName && <h1 style={{ marginBottom: 4 }}>{displayName}</h1>}
               <p style={{ fontSize: "11px", color: "var(--text-2)", margin: 0 }}>
                 {dayContext.dateWithWeekdayLabel}
               </p>
@@ -1510,7 +1521,7 @@ export function HomePage() {
                     </span>
                   )}
                 </div>
-                <p style={{ margin: "2px 0 0", fontSize: 10, color: "var(--text-3)" }}>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--text-2)" }}>
                   {homeChartSubtitle}
                 </p>
               </div>
@@ -1529,12 +1540,12 @@ export function HomePage() {
                         color: active ? "#fff" : "var(--text-2)",
                         borderRadius: 999,
                         padding: "5px 8px",
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 700,
                         cursor: "pointer",
                       }}
                     >
-                      {option.label}
+                      {t(option.labelKey)}
                     </button>
                   );
                 })}
@@ -1591,15 +1602,18 @@ export function HomePage() {
           {(homeChartMode === "week" || homeChartMode === "day") && (
             !hasActiveChartData ? (
               <div style={{
-                height: 72, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+                minHeight: 90, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
                 color: "var(--text-3)", fontSize: "0.82rem",
               }}>
                 <span style={{ fontSize: 20 }}>{homeChartMode === "day" ? "🌅" : "📊"}</span>
                 <span style={{ fontStyle: "italic" }}>
-                  {homeChartMode === "day"
-                    ? l("Isso aparece depois do check-in de hoje.", "This appears after today's check-in.")
-                    : l("Isso aparece depois do seu primeiro check-in.", "This appears after your first check-in.")}
+                  {l(...homeChartEmptyCopy(homeChartMode))}
                 </span>
+                {homeChartMode === "week" && (
+                  <button type="button" onClick={() => setHomeChartMode("monthly")} className="btn btn-secondary">
+                    {l("Ver histórico de 30 dias", "View 30-day history")}
+                  </button>
+                )}
               </div>
             ) : (
               <>
@@ -1708,7 +1722,7 @@ export function HomePage() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 8, paddingInline: 6 }}>
                   {activeChartData.map((point, index) => (
                     <div key={`${point.label}-${index}`} style={{ flex: 1, textAlign: "center" }}>
-                      <span style={{ fontSize: 10, fontWeight: point.isHighlight || chartFocusIdx === index ? 700 : 500, color: chartFocusIdx === index ? phaseColor : point.isHighlight ? "var(--text-1)" : "var(--text-3)", transition: "color .15s" }}>
+                      <span style={{ fontSize: 12, fontWeight: point.isHighlight || chartFocusIdx === index ? 700 : 500, color: point.isHighlight || chartFocusIdx === index ? "var(--text-1)" : "var(--text-2)", transition: "color .15s" }}>
                         {point.label}
                       </span>
                       {point.phase && (
@@ -1734,7 +1748,9 @@ export function HomePage() {
             }
 
             const DAY_NAMES = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-            const MW = 300, MH = 140, MPX = 22, MPY = 14, MBOT = 38;
+            const monthlySummary = summarizeHomeChartValues(monthlyHistory);
+            const formatRecordedScore = (score: number | null) => score === null ? l("Sem registro", "No entry") : `${score.toFixed(1)}/10`;
+            const MW = 300, MH = 174, MPX = 22, MPY = 14, MBOT = 72;
             const mh = MH - MPY - MBOT;
             const n = monthlyHistory.length;
             const mxToX = (i: number) => MPX + (n > 1 ? (i / (n - 1)) : 0.5) * (MW - MPX * 2);
@@ -1798,13 +1814,11 @@ export function HomePage() {
                   {monthlyHistory.map((e, i) => {
                     if (!keyIdxs.has(i)) return null;
                     const x = mxToX(i), y = mToY(e.humor);
-                    const phase: MoodPhase = monthlyPointPhaseMap[e.date] ?? phaseFromMoodValue(e.humor);
                     const emoji = getMoodFaceEmoji(e.humor);
-                    const scoreColor = PHASE_CONFIG[phase].color;
                     return (
                       <g key={`key-${i}`}>
                         <text x={x} y={y + 6} textAnchor="middle" fontSize={15} style={{ userSelect: "none" }}>{emoji}</text>
-                        <text x={x} y={y + 20} textAnchor="middle" fontSize={8.5} fill={scoreColor}
+                        <text x={x} y={y > MPY + mh / 2 ? y - 14 : y + 28} textAnchor="middle" fontSize={15} fill="var(--text-2)"
                           fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{e.humor.toFixed(1)}</text>
                       </g>
                     );
@@ -1818,15 +1832,19 @@ export function HomePage() {
                     const secondaryLabel = DAY_NAMES[dt.getDay()];
                     return (
                       <g key={`tick-${i}`}>
-                        <text x={x} y={MH - 23} textAnchor="middle" fontSize={8.5} fill="var(--text-2)"
+                        <text x={x} y={MH - 42} textAnchor="middle" fontSize={15} fill="var(--text-2)"
                           fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">{primaryLabel}</text>
-                        <text x={x} y={MH - 13} textAnchor="middle" fontSize={7} fill="var(--text-3)"
+                        <text x={x} y={MH - 24} textAnchor="middle" fontSize={15} fill="var(--text-2)"
                           fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">{secondaryLabel}</text>
                         <text x={x} y={MH - 1} textAnchor="middle" fontSize={10} style={{ userSelect: "none" }}>{PHASE_CONFIG[phase].emoji}</text>
                       </g>
                     );
                   })}
                 </svg>
+
+                <p style={{ fontSize: 12, color: "var(--text-2)", textAlign: "center", margin: "10px 0 0", lineHeight: 1.5, fontWeight: 700 }}>
+                  {l(`Médias na janela: Humor ${formatRecordedScore(monthlySummary.mood)} · Energia ${formatRecordedScore(monthlySummary.energy)}`, `Window averages: Mood ${formatRecordedScore(monthlySummary.mood)} · Energy ${formatRecordedScore(monthlySummary.energy)}`)}
+                </p>
 
                 {(() => {
                   // Conta fases visíveis no período mensal
@@ -1858,7 +1876,7 @@ export function HomePage() {
                           onClick={() => setPhaseLegendOpen(true)}
                           style={{
                             display: "flex", alignItems: "center", gap: 4,
-                            fontSize: 9.5, color: PHASE_CONFIG[p].color, fontWeight: 800,
+                            fontSize: 12, color: "var(--text-2)", fontWeight: 800,
                             background: "transparent",
                             border: "none",
                             padding: "2px 4px", borderRadius: 999,
@@ -1872,8 +1890,8 @@ export function HomePage() {
                     </div>
                   );
                 })()}
-                <p style={{ fontSize: 10, color: "var(--text-3)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
-                  {monthlyWindowDailyHistory.length} check-in{monthlyWindowDailyHistory.length !== 1 ? "s" : ""} · carinhas por humor, fase abaixo da data
+                <p style={{ fontSize: 12, color: "var(--text-2)", textAlign: "center", margin: "8px 0 0", lineHeight: 1.5, fontStyle: "italic" }}>
+                  {l(`${monthlyWindowDailyHistory.length} dia${monthlyWindowDailyHistory.length !== 1 ? "s" : ""} com registro · carinhas por humor, fase abaixo da data`, `${monthlyWindowDailyHistory.length} recorded day${monthlyWindowDailyHistory.length !== 1 ? "s" : ""} · faces show mood, phase appears below the date`)}
                 </p>
               </>
             );
@@ -2011,7 +2029,10 @@ export function HomePage() {
           })()}
 
           <div className="aura-divider" style={{ marginTop: "14px" }} />
-          <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
+        </div>
+        </>)}
+
+          {!firstCheckinPending && <div style={{ marginTop: "12px", marginBottom: "12px", display: "flex", justifyContent: "center" }}>
             <AuraButtonV2
               variant="primary"
               size="md"
@@ -2029,8 +2050,7 @@ export function HomePage() {
             >
               Check-in
             </AuraButtonV2>
-          </div>
-        </div>
+          </div>}
 
         {/* ── Objetivo em foco → Próximas ações ──
             A ordem é a hierarquia: primeiro o objetivo prioritário com a UMA
@@ -2057,6 +2077,8 @@ export function HomePage() {
           const ins = state.autonomousInsight;
           const canonicalDecision = canonicalReading?.decision;
           const usesCanonicalDecision = Boolean(canonicalDecision);
+          const currentCanonicalObservation = usesCanonicalDecision && homeCanonicalObservationIsToday(canonicalReading?.currentState.observedAt, dayContext.localDate);
+          const rhythmWindow = homeRhythmHistoryWindow(aggregatedCheckinHistory);
           const hasInsight = Boolean(ins);
           const cfg = hasInsight ? (STATE_CONFIG[ins!.state] ?? STATE_CONFIG.stable) : STATE_CONFIG.stable;
           const score = hasInsight ? ins!.stabilityScore : cycleReport.stabilityScore;
@@ -2080,7 +2102,7 @@ export function HomePage() {
               <div className="home-cycle-content">
                 <div className="home-cycle-header" style={{ alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0 }}>
-                    <span className="home-cycle-kicker">{t("home.rhythmToday")}</span>
+                    <span className="home-cycle-kicker">{currentCanonicalObservation ? t("home.rhythmToday") : l("Seu ritmo registrado", "Your recorded rhythm")}</span>
                     <div className="home-cycle-phase" style={{ marginTop: 8, marginBottom: 0 }}>
                       <span className="home-cycle-emoji">{hasCycleData ? cycleReport.phaseEmoji : mood.emoji}</span>
                       <div style={{ minWidth: 0 }}>
@@ -2141,6 +2163,9 @@ export function HomePage() {
                 <p className="home-cycle-copy" style={{ marginTop: 10 }}>
                   {rhythmCopy}
                 </p>
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-3)", lineHeight: 1.5 }}>
+                  {l(...homeRhythmWindowCopy(rhythmWindow))}
+                </p>
 
                 {isUrgent && (
                   <div className="home-cycle-warning">
@@ -2185,9 +2210,9 @@ export function HomePage() {
                     {hasCycleData && (
                       <div className="home-cycle-metrics" style={{ marginBottom: 10 }}>
                         {[
-                          { label: "Humor 7d", val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
-                          { label: "Energia 7d", val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
-                          ...(cycleReport.avgSleep7d ? [{ label: "Sono 7d", val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
+                          { label: l("Humor · registros", "Mood · entries"), val: cycleReport.avgMood7d, color: "var(--accent-sage)" },
+                          { label: l("Energia · registros", "Energy · entries"), val: cycleReport.avgEnergy7d, color: "var(--accent-sky)" },
+                          ...(cycleReport.avgSleep7d ? [{ label: l("Sono · registros", "Sleep · entries"), val: cycleReport.avgSleep7d, color: "var(--accent-peach)" }] : []),
                         ].map(m => (
                           <div key={m.label} className="home-cycle-metric">
                             <p className="home-cycle-metric-label">{m.label}</p>
@@ -2556,8 +2581,6 @@ export function HomePage() {
             </div>
           </Card>
         )}
-
-        </>)}
 
       </div>
       <PhaseLegendSheet

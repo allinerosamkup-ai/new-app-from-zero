@@ -161,3 +161,11 @@ export function previewToSubgoals(tasks: PreviewTask[]) {
       order: index,
     }));
 }
+
+// The strict write contract uses array position for order; preview order is
+// read metadata. Keep its sequence without sending the read-only field.
+export function previewToWriteSubgoals<T extends { order: number }>(subgoals: T[]) {
+  return [...subgoals]
+    .sort((left, right) => left.order - right.order)
+    .map(({ order: _order, ...action }) => action);
+}

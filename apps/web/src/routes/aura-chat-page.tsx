@@ -1513,6 +1513,9 @@ export function AuraChatPage() {
           </AuraButtonV2>
           <AuraButtonV2
             onClick={() => send(input)}
+            type="button"
+            aria-label={l("Enviar mensagem", "Send message")}
+            aria-busy={isTyping}
             disabled={!input.trim() || isTyping || !sessionId}
             variant="primary"
             size="sm"
@@ -1531,6 +1534,7 @@ export function AuraChatPage() {
             }}
           >
             <svg
+              aria-hidden="true"
               width="14"
               height="14"
               viewBox="0 0 24 24"

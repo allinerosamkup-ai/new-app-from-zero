@@ -22,6 +22,7 @@ function getWeekDays(): string[] {
 }
 
 const DAY_LABELS = ["S", "T", "Q", "Q", "S", "S", "D"];
+const DAY_LABELS_EN = ["M", "T", "W", "T", "F", "S", "S"];
 
 export function PresenceCard({ checkinHistory }: PresenceCardProps) {
   const l = useLocalizedCopy();
@@ -34,12 +35,12 @@ export function PresenceCard({ checkinHistory }: PresenceCardProps) {
 
   // Label baseado em total de dias
   function presenceLabel(n: number): string {
-    if (n === 0) return "Bem-vinda";
-    if (n === 1) return "Primeira presença";
-    if (n < 7) return `${n} dias de presença`;
-    if (n < 30) return `${n} dias com você`;
-    if (n < 90) return `${n} dias juntas`;
-    return `${n} dias de história`;
+    if (n === 0) return l("Bem-vinda", "Welcome");
+    if (n === 1) return l("Primeira presença", "First day present");
+    if (n < 7) return l(`${n} dias de presença`, `${n} days present`);
+    if (n < 30) return l(`${n} dias com você`, `${n} days with you`);
+    if (n < 90) return l(`${n} dias juntas`, `${n} days together`);
+    return l(`${n} dias de história`, `${n} days of history`);
   }
 
   return (
@@ -99,7 +100,7 @@ export function PresenceCard({ checkinHistory }: PresenceCardProps) {
                 fontSize: 9, fontWeight: 700, letterSpacing: ".06em",
                 color: isToday ? "var(--accent-peach)" : "var(--text-3)",
               }}>
-                {DAY_LABELS[i]}
+                {l(DAY_LABELS[i], DAY_LABELS_EN[i])}
               </span>
             </div>
           );

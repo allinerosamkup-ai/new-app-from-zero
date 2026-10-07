@@ -1,3 +1,58 @@
+import { getLocalDateKey } from "../utils/day-context";
+
+/** Missing preference means visible; retain both historical storage formats. */
+export function resolveHomeDayDetailsOpen(value: string | null): boolean {
+  return value !== "0" && value !== "false";
+}
+
+export function homeRhythmHistoryWindow(entries: readonly { date: string }[]): { start: string; end: string; days: number } | null {
+  const days = [...new Set(entries.map((entry) => entry.date.slice(0, 10)).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)))].sort().slice(-7);
+  return days.length ? { start: days[0], end: days[days.length - 1], days: days.length } : null;
+}
+
+export function homeRhythmWindowCopy(window: ReturnType<typeof homeRhythmHistoryWindow>): [string, string] {
+  if (!window) return ["Ainda não há dias com registro.", "There are no recorded days yet."];
+  return [
+    `${window.days === 1 ? "Médias do último dia com registro" : `Médias dos últimos ${window.days} dias com registro`} · ${window.start} a ${window.end}. A janela segue os registros disponíveis, não uma duração fixa.`,
+    `Averages of the ${window.days === 1 ? "last recorded day" : `last ${window.days} recorded days`} · ${window.start} to ${window.end}. The window follows available entries, rather than a fixed duration.`,
+  ];
+}
+
+export function homeCanonicalObservationIsToday(observedAt: string | undefined, localDate: string): boolean {
+  if (!observedAt) return false;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(observedAt)) return observedAt === localDate;
+  const parsed = new Date(observedAt);
+  if (!Number.isFinite(parsed.getTime())) return false;
+  return getLocalDateKey(parsed) === localDate;
+}
+
+export function hasHomeChartHistory(history: readonly { humor?: number; energia?: number }[]): boolean {
+  return history.some((entry) => Number.isFinite(entry.humor) || Number.isFinite(entry.energia));
+}
+
+export function summarizeHomeChartValues(entries: readonly { humor?: number; energia?: number }[]): { mood: number | null; energy: number | null } {
+  const average = (field: "humor" | "energia") => {
+    const values = entries.map((entry) => entry[field]).filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 10);
+    return values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
+  };
+  return { mood: average("humor"), energy: average("energia") };
+}
+
+export function homeChartEmptyCopy(period: "day" | "week"): [string, string] {
+  return period === "day"
+    ? ["Hoje ainda não há registros de humor e energia.", "There are no mood and energy entries today yet."]
+    : ["Não há registros de humor e energia nos últimos 7 dias.", "There are no mood and energy entries in the last 7 days."];
+}
+
+export function homeDisplayName(name: string): string {
+  const first = name.trim().split(/\s+/)[0] ?? "";
+  return first ? first.charAt(0).toUpperCase() + first.slice(1).toLowerCase() : "";
+}
+
+export function homeGreeting(greeting: string, displayName: string): string {
+  return displayName ? `${greeting},` : greeting;
+}
+
 export type AgendaBlock = {
   horario_inicio: string;
   horario_fim: string;

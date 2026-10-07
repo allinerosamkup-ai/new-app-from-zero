@@ -3699,7 +3699,13 @@ export function createApp(dependencies: AppDependencies = {}) {
 
       // Se sessão recém-criada e sem mensagens, injeta nota do check-in como primeira mensagem
       if (created && messages.length === 0 && context.checkinToday?.note) {
-       await prisma.journalMessage.create({
+       // Reopening the diary must not replay today's note as a new user message.
+       const previousNote = await prisma.journalMessage.findFirst({
+         where: { userId: data.userId, role: 'user', content: context.checkinToday.note,
+           session: { localDate: session.localDate } },
+         select: { id: true },
+       });
+       if (!previousNote) await prisma.journalMessage.create({
          data: {
            sessionId: session.id,
            userId: data.userId,

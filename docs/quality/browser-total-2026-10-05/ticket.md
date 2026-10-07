@@ -1,0 +1,5 @@
+# AIRIA-BROWSER-TOTAL-20261005
+Pedido: verificação completa humana diretamente no navegador, cadastro, UX/UI, entrada, saída, respostas e script. Falha relatada e observada: gráficos ausentes na Home de produção.
+Escopo: navegador real airia.pro, dados existentes preservados; fixtures sintéticas somente em conta teste autorizada. Sem reativar Planejador/Rotinas. Não registrar credenciais/dados privados. Aceite: matriz entrada→ação→resposta→persistência/reload→saída, evidência visual; cadastro/login/logout, onboarding, Home/gráficos, Check-in, Objetivos, Diário, Insights, Aura e Preferências; desktop/mobile; erros/sem dados; roteiro reproduzível e revisores independentes. PASS só em casos efetivamente exercitados. Termos/CAPTCHA e credenciais novas seguem confirmação obrigatória do navegador.
+Primeira observação: Home exibe Começando a calibrar, nível4,3ações,1objetivo,jornada0/13; não há gráficos nem CTA Check-in na árvore completa. Screenshot CUA obtido; não concluir causa antes de diagnóstico.
+Estado EM_EXECUÇÃO. Fonte existente: scripts/evidências SI-01 e docs/quality/cenarios-humanos.md; adaptação do roteiro, sem simular produção.

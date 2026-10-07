@@ -1345,27 +1345,32 @@ export function JournalPage() {
                 </svg>
               </button>
               )}
-              <div
+              <button
+                type="button"
                 className="journal-send"
+                aria-label={l("Enviar mensagem", "Send message")}
+                aria-busy={isTyping}
+                disabled={!input.trim() || !sessionId || isTyping || isFinalizing}
                 onClick={() => void sendMessage()}
                 style={{
                   width: "36px",
                   height: "36px",
                   borderRadius: "50%",
+                  border: "none",
                   background: "var(--primary)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  cursor: "pointer",
+                  cursor: (!input.trim() || !sessionId || isTyping || isFinalizing) ? "default" : "pointer",
                   boxShadow: "var(--shadow-primary)",
-                  opacity: (!input.trim() || isTyping || isFinalizing) ? 0.4 : 1,
+                  opacity: (!input.trim() || !sessionId || isTyping || isFinalizing) ? 0.4 : 1,
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-1)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13" />
                   <polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>
-              </div>
+              </button>
             </div>
           </div>
 
